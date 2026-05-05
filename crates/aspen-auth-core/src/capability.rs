@@ -320,6 +320,20 @@ pub enum Capability {
     },
 
     // ==========================================================================
+    // KV Metadata Capabilities
+    // ==========================================================================
+    /// Read KV metadata resources such as vault key lists or secondary index metadata.
+    KvMetadataRead {
+        /// KV metadata resource prefix. Empty prefix matches all KV metadata resources.
+        resource_prefix: String,
+    },
+    /// Mutate KV metadata resources such as secondary index definitions.
+    KvMetadataWrite {
+        /// KV metadata resource prefix. Empty prefix matches all KV metadata resources.
+        resource_prefix: String,
+    },
+
+    // ==========================================================================
     // Coordination Primitive Capabilities
     // ==========================================================================
     /// Read coordination primitive state matching a resource prefix.
@@ -330,6 +344,15 @@ pub enum Capability {
     /// Mutate coordination primitive state matching a resource prefix.
     CoordinationWrite {
         /// Coordination resource prefix.
+        resource_prefix: String,
+    },
+
+    // ==========================================================================
+    // SQL Capabilities
+    // ==========================================================================
+    /// Execute SQL queries matching a resource prefix.
+    SqlRead {
+        /// SQL resource prefix. Empty prefix matches all SQL resources.
         resource_prefix: String,
     },
 
@@ -477,6 +500,8 @@ impl Capability {
             .or_else(|| self.authorizes_net(op))
             .or_else(|| self.authorizes_ci_jobs(op))
             .or_else(|| self.authorizes_blob_docs_hooks(op))
+            .or_else(|| self.authorizes_kv_metadata(op))
+            .or_else(|| self.authorizes_sql(op))
             .or_else(|| self.authorizes_coordination(op))
             .or_else(|| self.authorizes_observability(op))
             .or_else(|| self.authorizes_automerge(op))
@@ -704,6 +729,31 @@ impl Capability {
         }
     }
 
+    fn authorizes_kv_metadata(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::KvMetadataRead { resource_prefix }, Operation::KvMetadataRead { resource })
+            | (Capability::KvMetadataWrite { resource_prefix }, Operation::KvMetadataWrite { resource }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: resource_prefix,
+                    candidate: resource,
+                }))
+            }
+            _ => None,
+        }
+    }
+
+    fn authorizes_sql(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::SqlRead { resource_prefix }, Operation::SqlRead { resource }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: resource_prefix,
+                    candidate: resource,
+                }))
+            }
+            _ => None,
+        }
+    }
+
     fn authorizes_coordination(&self, op: &Operation) -> Option<bool> {
         match (self, op) {
             (Capability::CoordinationRead { resource_prefix }, Operation::CoordinationRead { resource })
@@ -807,6 +857,8 @@ impl Capability {
             .or_else(|| self.contains_net(other))
             .or_else(|| self.contains_ci_jobs(other))
             .or_else(|| self.contains_blob_docs_hooks(other))
+            .or_else(|| self.contains_kv_metadata(other))
+            .or_else(|| self.contains_sql(other))
             .or_else(|| self.contains_coordination(other))
             .or_else(|| self.contains_observability(other))
             .or_else(|| self.contains_automerge(other))
@@ -1096,6 +1148,42 @@ impl Capability {
                     resource_prefix: parent,
                 },
                 Capability::HooksWrite { resource_prefix: child },
+            ) => Some(matches_prefix_scope(PrefixScope {
+                prefix: parent,
+                candidate: child,
+            })),
+            _ => None,
+        }
+    }
+
+    fn contains_kv_metadata(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (
+                Capability::KvMetadataRead {
+                    resource_prefix: parent,
+                },
+                Capability::KvMetadataRead { resource_prefix: child },
+            )
+            | (
+                Capability::KvMetadataWrite {
+                    resource_prefix: parent,
+                },
+                Capability::KvMetadataWrite { resource_prefix: child },
+            ) => Some(matches_prefix_scope(PrefixScope {
+                prefix: parent,
+                candidate: child,
+            })),
+            _ => None,
+        }
+    }
+
+    fn contains_sql(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (
+                Capability::SqlRead {
+                    resource_prefix: parent,
+                },
+                Capability::SqlRead { resource_prefix: child },
             ) => Some(matches_prefix_scope(PrefixScope {
                 prefix: parent,
                 candidate: child,
@@ -1447,6 +1535,29 @@ pub enum Operation {
     },
 
     // ==========================================================================
+    // KV Metadata Operations
+    // ==========================================================================
+    /// Read KV metadata such as vault key lists or secondary index metadata.
+    KvMetadataRead {
+        /// KV metadata resource identifier.
+        resource: String,
+    },
+    /// Mutate KV metadata such as secondary index definitions.
+    KvMetadataWrite {
+        /// KV metadata resource identifier.
+        resource: String,
+    },
+
+    // ==========================================================================
+    // SQL Operations
+    // ==========================================================================
+    /// Execute a SQL query over KV-backed tables.
+    SqlRead {
+        /// SQL resource identifier.
+        resource: String,
+    },
+
+    // ==========================================================================
     // Coordination Primitive Operations
     // ==========================================================================
     /// Read coordination primitive state.
@@ -1571,6 +1682,11 @@ impl fmt::Display for Operation {
             Operation::DocsWrite { resource } => write!(f, "DocsWrite({resource})"),
             Operation::HooksRead { resource } => write!(f, "HooksRead({resource})"),
             Operation::HooksWrite { resource } => write!(f, "HooksWrite({resource})"),
+            // KV metadata operations
+            Operation::KvMetadataRead { resource } => write!(f, "KvMetadataRead({resource})"),
+            Operation::KvMetadataWrite { resource } => write!(f, "KvMetadataWrite({resource})"),
+            // SQL operations
+            Operation::SqlRead { resource } => write!(f, "SqlRead({resource})"),
             // Coordination operations
             Operation::CoordinationRead { resource } => write!(f, "CoordinationRead({resource})"),
             Operation::CoordinationWrite { resource } => write!(f, "CoordinationWrite({resource})"),

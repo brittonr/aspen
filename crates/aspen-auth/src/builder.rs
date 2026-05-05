@@ -251,6 +251,15 @@ pub fn generate_root_token(secret_key: &SecretKey, lifetime: Duration) -> Result
         .with_capability(Capability::BlobWrite {
             resource_prefix: String::new(),
         })
+        .with_capability(Capability::KvMetadataRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::KvMetadataWrite {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::SqlRead {
+            resource_prefix: String::new(),
+        })
         .with_capability(Capability::DocsRead {
             resource_prefix: String::new(),
         })

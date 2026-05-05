@@ -1,14 +1,11 @@
 {
-  "generated": "2026-05-05T01:41:36Z",
+  "generated": "2026-05-05T01:55:21Z",
   "change": "full-aspen-hardening-audit",
   "phase": "Phase 3 domain-specific capability cleanup",
   "summary": {
-    "remaining": 4,
-    "remaining_by_file": {
-      "kv_ops.rs": 3,
-      "sql_ops.rs": 1
-    },
-    "latest_slice": "Automerge document/sync authorization converted to AutomergeRead/AutomergeWrite"
+    "remaining": 0,
+    "remaining_by_file": {},
+    "latest_slice": "KV vault/index metadata converted to KvMetadataRead/KvMetadataWrite and SQL queries converted to SqlRead"
   },
   "completed_slices": [
     "Secrets/trust",
@@ -20,42 +17,24 @@
     "Coordination primitives and leases",
     "Observability",
     "Nix binary cache",
-    "Automerge documents and sync"
+    "Automerge documents and sync",
+    "KV metadata and SQL"
   ],
-  "automerge_slice": {
+  "kv_sql_slice": {
     "source_handles": [
-      "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
-      "crates/aspen-client-api/src/messages/automerge.rs",
+      "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+      "crates/aspen-client-api/src/messages/to_operation/sql_ops.rs",
       "crates/aspen-auth-core/src/capability.rs",
       "crates/aspen-auth/src/builder.rs",
       "crates/aspen-auth/src/tests.rs"
     ],
     "negative_tests": [
-      "automerge_requests_use_domain_specific_capabilities",
-      "generic_automerge_prefixes_do_not_authorize_automerge_requests"
+      "kv_metadata_requests_use_domain_specific_capabilities",
+      "generic_kv_metadata_prefixes_do_not_authorize_metadata_requests",
+      "sql_queries_use_domain_specific_capability",
+      "generic_sql_prefix_does_not_authorize_sql_queries"
     ],
-    "root_token_coverage": "Root token generation includes broad AutomergeRead and AutomergeWrite capabilities."
+    "root_token_coverage": "Root token generation includes broad KvMetadataRead, KvMetadataWrite, and SqlRead capabilities."
   },
-  "remaining_mappings": [
-    {
-      "file": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
-      "line": 20,
-      "snippet": "ClientRpcRequest::GetVaultKeys { vault_name: key } => Some(Some(Operation::Read { key: key.clone() })),"
-    },
-    {
-      "file": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
-      "line": 32,
-      "snippet": "ClientRpcRequest::IndexScan { .. } | ClientRpcRequest::IndexList => Some(Some(Operation::Read {"
-    },
-    {
-      "file": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
-      "line": 38,
-      "snippet": "Some(Some(Operation::Write {"
-    },
-    {
-      "file": "crates/aspen-client-api/src/messages/to_operation/sql_ops.rs",
-      "line": 10,
-      "snippet": "ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {"
-    }
-  ]
+  "remaining_mappings": []
 }

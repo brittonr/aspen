@@ -623,6 +623,15 @@ fn test_generate_root_token() {
     assert!(token.capabilities.contains(&Capability::BlobWrite {
         resource_prefix: String::new(),
     }));
+    assert!(token.capabilities.contains(&Capability::KvMetadataRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::KvMetadataWrite {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::SqlRead {
+        resource_prefix: String::new(),
+    }));
     assert!(token.capabilities.contains(&Capability::DocsRead {
         resource_prefix: String::new(),
     }));
