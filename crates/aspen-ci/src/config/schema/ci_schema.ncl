@@ -41,6 +41,34 @@ let ArtifactStorage = [| 'blobs, 'local, 'none |] in
 
 let Priority = [| 'high, 'normal, 'low |] in
 
+let DeployStatefulness = [| 'stateless, 'stateful, 'requires_quorum |] in
+
+let CachePolicy = {
+  enabled | Bool | default = true,
+  key | String | optional,
+  restore_keys | Array String | default = [],
+  upload | Bool | default = true,
+  publish_to_binary_cache | Bool | default = false,
+  ttl_secs | DurationSeconds | default = 86400,
+} in
+
+let ArtifactSpec = {
+  name | NonEmptyString,
+  path | NonEmptyString,
+  storage | ArtifactStorage | default = 'blobs,
+  required | Bool | default = true,
+  retention_days | RetentionDays | default = 30,
+} in
+
+let DeployConfig = {
+  artifact_from | NonEmptyString,
+  strategy | String | default = "rolling",
+  statefulness | DeployStatefulness | default = 'stateless,
+  health_check_timeout_secs | DurationSeconds | default = 300,
+  max_concurrent | PositiveNumber | default = 1,
+  require_quorum | Bool | default = true,
+} in
+
 # === Job Configuration ===
 
 let JobConfig = {
@@ -69,9 +97,11 @@ let JobConfig = {
 
   # Caching
   cache_key | String | optional,
+  cache | CachePolicy | default = {},
 
-  # Artifacts to collect (glob patterns)
+  # Artifacts to collect (glob patterns or typed artifact specs)
   artifacts | Array String | default = [],
+  artifact_specs | Array ArtifactSpec | default = [],
 
   # Job dependencies (names of other jobs in same stage)
   depends_on | Array String | default = [],
@@ -97,9 +127,11 @@ let JobConfig = {
   # Deployment strategy (e.g., "rolling")
   strategy | String | optional,
   # Health check timeout in seconds for deployment
-  health_check_timeout_secs | Number | optional,
+  health_check_timeout_secs | DurationSeconds | optional,
   # Maximum nodes to upgrade concurrently during rolling deploy
-  max_concurrent | Number | optional,
+  max_concurrent | PositiveNumber | optional,
+  # Fully typed deploy policy for validation-only config review
+  deploy | DeployConfig | optional,
 } in
 
 # === Stage Configuration ===
@@ -155,6 +187,9 @@ let PipelineConfig = {
 
   # Optional description
   description | String | optional,
+
+  # Schema validation mode. Rust still owns execution behavior; Nickel only validates shape and bounds.
+  validation_only | Bool | default = true,
 
   # Trigger configuration
   triggers | TriggerConfig | default = {},

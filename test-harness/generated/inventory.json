@@ -10,7 +10,7 @@
       "test-harness/suites/vm/multi-node-blob.ncl",
       "test-harness/suites/vm/multi-node-kv.ncl"
     ],
-    "inputs_sha256": "674fda5c16b6579623ee79cc2db78463810bef1b2a61aae315ac3ca0caecc1c6"
+    "inputs_sha256": "9f386b98ab0b624e2213daae412704fb8cda8aa849c1be9c1de90c9ed740b088"
   },
   "suites": [
     {

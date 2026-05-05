@@ -1,13 +1,44 @@
 # Typed dependency policy for Aspen crate-extraction readiness.
 # This file is data consumed by scripts/check-crate-extraction-readiness.rs.
 
-let ReadinessState = String in
-let CandidateClass = String in
-let FeatureSetName = String in
-let CrateName = String in
-let RepoPath = String in
-let Owner = String in
-let Reason = String in
+let contains = fun values value =>
+  std.array.fold_left (fun found item => found || item == value) false values in
+
+let enum_string = fun field allowed =>
+  std.contract.from_validator (fun value =>
+    if std.is_string value && contains allowed value then
+      'Ok
+    else
+      'Error { message = "%{field} must be one of %{std.serialize 'Json allowed}" }
+  ) in
+
+let NonEmptyString = std.contract.from_validator (fun value =>
+  if std.is_string value && std.string.length value > 0 then
+    'Ok
+  else
+    'Error { message = "expected non-empty string" }
+) in
+
+let ReadinessState = enum_string "readiness_state" [
+  "workspace-internal",
+  "extraction-ready-in-workspace",
+  "blocked-pending-license/publication-policy",
+  "publishable from monorepo",
+  "future repository split candidate",
+] in
+let CandidateClass = enum_string "candidate.class" [
+  "leaf type/helper",
+  "protocol/wire",
+  "storage/backend",
+  "runtime adapter",
+  "service library",
+  "binary shell",
+] in
+let FeatureSetName = NonEmptyString in
+let CrateName = NonEmptyString in
+let RepoPath = NonEmptyString in
+let Owner = NonEmptyString in
+let Reason = NonEmptyString in
 
 let Exception = {
   candidate | CrateName,
@@ -15,6 +46,19 @@ let Exception = {
   dependency_path | String,
   owner | Owner,
   reason | Reason,
+} in
+
+let PublicationMetadata = {
+  publishable | Bool | default = false,
+  crate_name | CrateName | optional,
+  license_policy | String | default = "blocked-until-decision",
+  repository | String | optional,
+} in
+
+let EvidenceRequirement = {
+  kind | String,
+  path | RepoPath,
+  required | Bool | default = true,
 } in
 
 let Candidate = {
@@ -28,6 +72,8 @@ let Candidate = {
   reexporters | Array CrateName,
   forbidden_unless_feature | Array CrateName,
   exceptions | Array Exception,
+  publication | PublicationMetadata | default = {},
+  required_evidence | Array EvidenceRequirement | default = [],
 } in
 
 {

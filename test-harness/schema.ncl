@@ -48,6 +48,33 @@ let run_ignored_contract = enum_string "target.run_ignored" [
   "ignored-only",
 ] in
 
+let timeout_class_contract = enum_string "timeout_class" [
+  "quick",
+  "standard",
+  "extended",
+  "soak",
+] in
+
+let fault_dimension_contract = enum_string "fault.dimension" [
+  "latency",
+  "loss",
+  "partition",
+  "nat",
+  "jitter",
+] in
+
+let ArtifactExpectation = {
+  path | String,
+  required | Bool | default = true,
+  kind | String | default = "file",
+} in
+
+let FaultDimension = {
+  dimension | fault_dimension_contract,
+  bound | String,
+  expected_convergence | String | optional,
+} in
+
 {
   SuiteManifest = {
     id | String,
@@ -58,6 +85,12 @@ let run_ignored_contract = enum_string "target.run_ignored" [
     runtime_class | runtime_class_contract,
     prerequisites | Array prerequisite_contract | default = [],
     tags | Array String | default = [],
+    capabilities | Array String | default = [],
+    isolation_assumptions | Array String | default = [],
+    timeout_class | timeout_class_contract | default = "standard",
+    expected_artifacts | Array ArtifactExpectation | default = [],
+    faults | Array FaultDimension | default = [],
+    convergence_assertions | Array String | default = [],
     target | {
       kind | target_kind_contract,
       package | String | optional,

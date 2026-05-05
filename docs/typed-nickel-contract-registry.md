@@ -12,18 +12,18 @@ This registry records the source-of-truth decision for Aspen's typed Nickel cont
 
 | Family | Class | Owner source | Artifact/status |
 | --- | --- | --- | --- |
-| CI pipeline config | `nickel-authored` | `crates/aspen-ci/src/config/schema/ci_schema.ncl` | Existing embedded Nickel schema; needs continued typecheck/config tests. |
+| CI pipeline config | `nickel-authored` | `crates/aspen-ci/src/config/schema/ci_schema.ncl` | Existing embedded Nickel schema expanded with typed cache, artifact, deploy, retry/timeout, and validation-only policy contracts. |
 | Deploy protocol DTOs | `rust-derived` | `crates/aspen-ci/src/orchestrator/deploy_executor.rs` | Generated `schemas/deploy-protocol.ncl`; snapshot/freshness checked by `cargo test -p aspen-ci test_deploy_protocol_schema_snapshot` and Nickel typechecked. |
 | Dogfood run receipt | `rust-derived` | `crates/aspen-dogfood/src/receipt.rs` | Generated `schemas/dogfood-run-receipt.ncl`; freshness checked by `scripts/generate-typed-nickel-contracts.py --check`. |
 | Native CI run receipt | `rust-derived` | `crates/aspen-client-api/src/messages/ci.rs` | Generated `schemas/ci-run-receipt.ncl`; freshness checked by `scripts/generate-typed-nickel-contracts.py --check`. |
-| Node/cluster/profile config | `nickel-authored` | `crates/aspen-nickel/src/schema/node_config.ncl` | Existing schema; needs profile/feature/trust hardening. |
-| Test harness suite manifests | `nickel-authored` | `test-harness/schema.ncl` | Existing schema + generated inventory freshness gate. |
-| Patchbay fault scenarios | `nickel-authored` | `test-harness/suites/patchbay/patchbay-fault.ncl` | Existing suite manifests; needs bounded fault-dimension contracts. |
-| Crate-extraction readiness policy | `nickel-authored` | `docs/crate-extraction/policy.ncl` | Existing policy; needs deeper readiness/evidence contracts. |
-| Feature bundle policy | `nickel-authored` | `Cargo.toml` / release profile policy | Planned `schemas/feature-bundles.ncl`. |
-| Snix build executor policy | `nickel-authored` | `crates/aspen-cluster/src/config/snix.rs` | Planned `schemas/snix-build-executor-policy.ncl`. |
-| Trust/bootstrap policy | `nickel-authored` | `docs/trust-quorum.md` | Planned `schemas/trust-bootstrap-policy.ncl`. |
-| Operator diagnostics evidence | `rust-derived` | promoted Rust diagnostic/receipt DTOs | Planned generated evidence contracts. |
+| Node/cluster/profile config | `nickel-authored` | `crates/aspen-nickel/src/schema/node_config.ncl` | Existing schema expanded with typed bootstrap peers, feature bundle refs, metrics/OTLP, and trust references. |
+| Test harness suite manifests | `nickel-authored` | `test-harness/schema.ncl` | Existing schema + generated inventory freshness gate, expanded with capabilities, isolation assumptions, timeout classes, expected artifacts, faults, and convergence assertions. |
+| Patchbay fault scenarios | `nickel-authored` | `test-harness/suites/patchbay/patchbay-fault.ncl` | Existing suite manifests covered by shared bounded fault-dimension contracts. |
+| Crate-extraction readiness policy | `nickel-authored` | `docs/crate-extraction/policy.ncl` | Existing policy deepened with readiness/class enums, publication metadata, and required evidence contracts. |
+| Feature bundle policy | `nickel-authored` | `schemas/feature-bundles.ncl` | Existing profile/bundle contract for minimal, dogfood, CI worker, Forge, snix, and full profiles. |
+| Snix build executor policy | `nickel-authored` | `schemas/snix-build-executor-policy.ncl` | Existing bounded sandbox/cache/fallback policy contract; build behavior remains Rust-owned. |
+| Trust/bootstrap policy | `nickel-authored` | `schemas/trust-bootstrap-policy.ncl` | Existing secret-free quorum/bootstrap policy contract with raw-secret rejection fixtures. |
+| Operator diagnostics evidence | `rust-derived` | `schemas/operator-diagnostics-evidence.ncl` | Existing common diagnostic-envelope boundary contract; promoted DTO-specific contracts remain Rust-derived follow-up. |
 
 ## Crunch prior-art classification
 
@@ -60,12 +60,13 @@ The following remain Rust-owned or out-of-scope for Nickel contracts:
 Run:
 
 ```bash
-nix run nixpkgs#nickel -- typecheck schemas/deploy-protocol.ncl
-cargo test -p aspen-ci test_deploy_protocol_schema_snapshot
+python3 scripts/check-typed-nickel-contract-fixtures.py
 python3 scripts/check-typed-nickel-contract-registry.py
 python3 scripts/generate-typed-nickel-contracts.py --check
-nix run nixpkgs#nickel -- typecheck schemas/dogfood-run-receipt.ncl
-nix run nixpkgs#nickel -- typecheck schemas/ci-run-receipt.ncl
+nix run nixpkgs#nickel -- typecheck schemas/deploy-protocol.ncl
+cargo test -p aspen-ci test_deploy_protocol_schema_snapshot
+cargo nextest run -p aspen-ci test_deploy_protocol_schema_snapshot
+cargo test -p aspen-client-api ci_receipt_schema_and_status_labels_are_documented --features ci
 openspec validate type-nickel-contract-boundaries --strict --json
 git diff --check
 ```

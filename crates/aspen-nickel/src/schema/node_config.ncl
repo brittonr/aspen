@@ -35,6 +35,33 @@ let ControlBackend = [| 'deterministic, 'raft |] in
 
 let RelayMode = [| 'default, 'custom, 'disabled |] in
 
+let FeatureBundleName = [| 'minimal, 'dogfood, 'ci_worker, 'forge, 'snix, 'full |] in
+
+let BootstrapPeer = {
+  node_id | NonZeroU64,
+  endpoint | String,
+  role | String | default = "voter",
+} in
+
+let FeatureBundleRef = {
+  name | FeatureBundleName,
+  enabled | Bool | default = true,
+  reason | String | optional,
+} in
+
+let MetricsConfig = {
+  prometheus | Bool | default = true,
+  otlp_endpoint | String | optional,
+  scrape_interval_secs | PositiveNumber | default = 10,
+} in
+
+let TrustReference = {
+  policy_id | String,
+  participant | String | optional,
+  threshold | NonZeroU64 | optional,
+  secret_ref | String | optional,
+} in
+
 # === Nested Config Contracts ===
 
 # Iroh P2P networking configuration
@@ -190,6 +217,10 @@ let NodeConfig = {
   federation | FederationConfig | default = {},
   sharding | ShardingConfig | default = {},
   peers | Array String | default = [],
+  bootstrap_peers | Array BootstrapPeer | default = [],
+  feature_bundles | Array FeatureBundleRef | default = [],
+  metrics | MetricsConfig | default = {},
+  trust | TrustReference | optional,
 
   # Optional subsystems
   batch_config | BatchConfig | optional,
@@ -200,20 +231,45 @@ let NodeConfig = {
 } in
 
 # Export all contracts
+let NodeConfigContract = NodeConfig in
+let IrohConfigContract = IrohConfig in
+let DocsConfigContract = DocsConfig in
+let BlobConfigContract = BlobConfig in
+let PeerSyncConfigContract = PeerSyncConfig in
+let ShardingConfigContract = ShardingConfig in
+let FederationConfigContract = FederationConfig in
+let DnsServerConfigContract = DnsServerConfig in
+let ContentDiscoveryConfigContract = ContentDiscoveryConfig in
+let WorkerConfigContract = WorkerConfig in
+let HooksConfigContract = HooksConfig in
+let BatchConfigContract = BatchConfig in
+let StorageBackendContract = StorageBackend in
+let ControlBackendContract = ControlBackend in
+let RelayModeContract = RelayMode in
+let FeatureBundleNameContract = FeatureBundleName in
+let BootstrapPeerContract = BootstrapPeer in
+let FeatureBundleRefContract = FeatureBundleRef in
+let MetricsConfigContract = MetricsConfig in
+let TrustReferenceContract = TrustReference in
 {
-  NodeConfig,
-  IrohConfig,
-  DocsConfig,
-  BlobConfig,
-  PeerSyncConfig,
-  ShardingConfig,
-  FederationConfig,
-  DnsServerConfig,
-  ContentDiscoveryConfig,
-  WorkerConfig,
-  HooksConfig,
-  BatchConfig,
-  StorageBackend,
-  ControlBackend,
-  RelayMode,
+  NodeConfig = NodeConfigContract,
+  IrohConfig = IrohConfigContract,
+  DocsConfig = DocsConfigContract,
+  BlobConfig = BlobConfigContract,
+  PeerSyncConfig = PeerSyncConfigContract,
+  ShardingConfig = ShardingConfigContract,
+  FederationConfig = FederationConfigContract,
+  DnsServerConfig = DnsServerConfigContract,
+  ContentDiscoveryConfig = ContentDiscoveryConfigContract,
+  WorkerConfig = WorkerConfigContract,
+  HooksConfig = HooksConfigContract,
+  BatchConfig = BatchConfigContract,
+  StorageBackend = StorageBackendContract,
+  ControlBackend = ControlBackendContract,
+  RelayMode = RelayModeContract,
+  FeatureBundleName = FeatureBundleNameContract,
+  BootstrapPeer = BootstrapPeerContract,
+  FeatureBundleRef = FeatureBundleRefContract,
+  MetricsConfig = MetricsConfigContract,
+  TrustReference = TrustReferenceContract,
 }
