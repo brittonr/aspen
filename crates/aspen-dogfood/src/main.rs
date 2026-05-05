@@ -714,19 +714,25 @@ fn load_receipt_file(path: &Path) -> DogfoodResult<receipt::DogfoodRunReceipt> {
 }
 
 fn print_receipt_summary(receipt: &receipt::DogfoodRunReceipt, path: &Path) {
-    println!("Dogfood receipt: {}", receipt.run_id);
-    println!("  schema: {}", receipt.schema);
-    println!("  command: {}", receipt.command);
-    println!("  created_at: {}", receipt.created_at);
-    println!("  mode: federation={}, vm_ci={}", receipt.mode.federation, receipt.mode.vm_ci);
-    println!("  project_dir: {}", receipt.project_dir);
-    println!("  cluster_dir: {}", receipt.cluster_dir);
-    println!("  path: {}", path.display());
-    println!("  stages:");
+    print!("{}", render_receipt_summary(receipt, path));
+}
+
+fn render_receipt_summary(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> String {
+    let mut output = String::new();
+    let _ = writeln!(output, "Dogfood receipt: {}", receipt.run_id);
+    let _ = writeln!(output, "  schema: {}", receipt.schema);
+    let _ = writeln!(output, "  command: {}", receipt.command);
+    let _ = writeln!(output, "  created_at: {}", receipt.created_at);
+    let _ = writeln!(output, "  mode: federation={}, vm_ci={}", receipt.mode.federation, receipt.mode.vm_ci);
+    let _ = writeln!(output, "  project_dir: {}", receipt.project_dir);
+    let _ = writeln!(output, "  cluster_dir: {}", receipt.cluster_dir);
+    let _ = writeln!(output, "  path: {}", path.display());
+    let _ = writeln!(output, "  stages:");
     for stage in &receipt.stages {
         let finished_at = stage.finished_at.as_deref().unwrap_or("-");
         let elapsed_ms = stage.elapsed_ms.map(|elapsed| elapsed.to_string()).unwrap_or_else(|| "-".to_string());
-        println!(
+        let _ = writeln!(
+            output,
             "    - {}: {} ({} → {}, elapsed_ms={})",
             stage.stage.as_str(),
             stage.status.as_str(),
@@ -735,7 +741,8 @@ fn print_receipt_summary(receipt: &receipt::DogfoodRunReceipt, path: &Path) {
             elapsed_ms
         );
         for artifact in &stage.artifacts {
-            println!(
+            let _ = writeln!(
+                output,
                 "        artifact {} [{}] store_id={} blob_id={} digest={} size={} path={}",
                 artifact.name,
                 artifact.kind.as_str(),
@@ -748,9 +755,10 @@ fn print_receipt_summary(receipt: &receipt::DogfoodRunReceipt, path: &Path) {
         }
         if let Some(failure) = &stage.failure {
             let message = crate::error::redact_credential_fragments(&failure.message);
-            println!("        failure {} [{}]: {}", failure.operation, failure.category, message);
+            let _ = writeln!(output, "        failure {} [{}]: {}", failure.operation, failure.category, message);
         }
     }
+    output
 }
 
 fn diagnose_receipt(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> String {
@@ -1411,6 +1419,39 @@ mod tests {
     }
 
     #[test]
+    fn render_receipt_summary_is_operator_stable_and_redacted() {
+        let secret_marker = "synthetic-dogfood-ticket-marker-0123456789";
+        let mut receipt = sample_receipt("dogfood-failed", "2026-05-03T01:00:00Z", receipt::DogfoodStageStatus::Failed);
+        receipt.stages[0].failure = Some(receipt::DogfoodFailureSummary {
+            operation: "Build".to_string(),
+            category: "ci_pipeline".to_string(),
+            message: format!("push failed for aspen://{secret_marker}/repo-123"),
+        });
+        receipt.stages[0].artifacts.push(receipt::DogfoodArtifactReceipt {
+            name: "node-log".to_string(),
+            kind: receipt::DogfoodArtifactKind::LogExcerpt,
+            store_id: Some("kv://logs/node-1".to_string()),
+            blob_id: Some("blob-123".to_string()),
+            digest: Some("sha256:abc123".to_string()),
+            size_bytes: Some(4096),
+            relative_path: Some("logs/node-1.log".to_string()),
+        });
+
+        let output = render_receipt_summary(&receipt, Path::new("/tmp/dogfood-failed.json"));
+
+        assert!(output.contains("Dogfood receipt: dogfood-failed"));
+        assert!(output.contains("schema: aspen.dogfood.run-receipt.v1"));
+        assert!(output.contains("path: /tmp/dogfood-failed.json"));
+        assert!(output.contains("- build: failed (2026-05-03T01:00:00Z → 2026-05-03T01:01:00Z, elapsed_ms=60000)"));
+        assert!(output.contains("artifact ci-run [ci_run] store_id=run-123"));
+        assert!(output.contains(
+            "artifact node-log [log_excerpt] store_id=kv://logs/node-1 blob_id=blob-123 digest=sha256:abc123 size=4096 path=logs/node-1.log"
+        ));
+        assert!(output.contains("failure Build [ci_pipeline]: push failed for aspen://<cluster-ticket>/repo-123"));
+        assert!(!output.contains(secret_marker));
+    }
+
+    #[test]
     fn diagnose_receipt_reports_success_without_live_cluster() {
         let receipt = sample_receipt("dogfood-ok", "2026-05-03T02:00:00Z", receipt::DogfoodStageStatus::Succeeded);
 
@@ -1422,15 +1463,23 @@ mod tests {
     }
 
     #[test]
-    fn diagnose_receipt_reports_failed_stage_and_checks() {
-        let receipt = sample_receipt("dogfood-failed", "2026-05-03T01:00:00Z", receipt::DogfoodStageStatus::Failed);
+    fn diagnose_receipt_reports_failed_stage_and_checks_with_redaction() {
+        let secret_marker = "synthetic-dogfood-ticket-marker-0123456789";
+        let mut receipt = sample_receipt("dogfood-failed", "2026-05-03T01:00:00Z", receipt::DogfoodStageStatus::Failed);
+        receipt.stages[0].failure = Some(receipt::DogfoodFailureSummary {
+            operation: "Build".to_string(),
+            category: "ci_pipeline".to_string(),
+            message: format!("failed to push aspen://{secret_marker}/repo-123"),
+        });
 
         let output = diagnose_receipt(&receipt, Path::new("/tmp/dogfood-failed.json"));
 
         assert!(output.contains("status: failed"));
         assert!(output.contains("failed_stage: build"));
         assert!(output.contains("failure_category: ci_pipeline"));
+        assert!(output.contains("failure_message: failed to push aspen://<cluster-ticket>/repo-123"));
         assert!(output.contains("Use the CI run artifact from the receipt"));
+        assert!(!output.contains(secret_marker));
     }
 
     #[test]
