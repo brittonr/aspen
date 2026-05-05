@@ -227,6 +227,47 @@ mod tests {
         variants
     }
 
+    fn public_no_auth_variant_names() -> Vec<String> {
+        let mut variants = Vec::with_capacity(32);
+
+        for source in AUTHORIZATION_SOURCES {
+            let mut arm = String::new();
+            for line in source.lines() {
+                let trimmed = line.trim_start();
+                let is_request_arm = trimmed.starts_with("ClientRpcRequest::");
+                if is_request_arm {
+                    arm.clear();
+                }
+                if is_request_arm || (!arm.is_empty() && trimmed.starts_with('|')) {
+                    arm.push_str(trimmed);
+                    arm.push(' ');
+                }
+                if !arm.is_empty() && trimmed.contains("=> Some(None)") {
+                    arm.push_str(trimmed);
+                    let mut rest = arm.as_str();
+                    while let Some(index) = rest.find("ClientRpcRequest::") {
+                        let start = index.checked_add("ClientRpcRequest::".len());
+                        assert!(start.is_some());
+                        let candidate = &rest[start.unwrap_or(rest.len())..];
+                        let name_len =
+                            candidate.bytes().take_while(|byte| byte.is_ascii_alphanumeric() || *byte == b'_').count();
+                        assert!(name_len > 0);
+                        let name = candidate[..name_len].to_string();
+                        if !variants.contains(&name) {
+                            assert!(variants.len() < 32);
+                            variants.push(name);
+                        }
+                        rest = &candidate[name_len..];
+                    }
+                    arm.clear();
+                }
+            }
+        }
+
+        variants.sort_unstable();
+        variants
+    }
+
     #[test]
     fn every_client_request_variant_has_authorization_classification() {
         let missing: Vec<_> = request_variant_names()
@@ -240,6 +281,48 @@ mod tests {
         assert!(
             missing.is_empty(),
             "ClientRpcRequest variants must be explicitly classified by messages/to_operation/*.rs; missing: {missing:?}"
+        );
+    }
+
+    #[test]
+    fn public_no_auth_request_variants_match_audited_allowlist() {
+        let expected: Vec<String> = [
+            "GetClientTicket",
+            "GetClusterState",
+            "GetClusterTicket",
+            "GetClusterTicketCombined",
+            "GetDiscoveredCluster",
+            "GetDocsTicket",
+            "GetFederationStatus",
+            "GetHealth",
+            "GetKeyOrigin",
+            "GetLeader",
+            "GetMetrics",
+            "GetNetworkMetrics",
+            "GetNodeInfo",
+            "GetPeerClusterStatus",
+            "GetRaftMetrics",
+            "GetTopology",
+            "ListDiscoveredClusters",
+            "ListFederatedRepositories",
+            "ListPeerClusters",
+            "ListVaults",
+            "NostrAuthChallenge",
+            "NostrAuthVerify",
+            "Ping",
+            "WatchCancel",
+            "WatchStatus",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+
+        let actual = public_no_auth_variant_names();
+        assert_eq!(expected.len(), 25);
+        assert_eq!(actual.len(), expected.len());
+        assert_eq!(
+            actual, expected,
+            "public/no-auth ClientRpcRequest variants must be reviewed explicitly; update the audit evidence before changing this allowlist"
         );
     }
 }

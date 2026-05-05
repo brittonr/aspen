@@ -24,7 +24,7 @@
   - Nix binary-cache slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; cache narinfo lookup/download, cache stats, public signing key lookup, and migration status/validation now require `CacheRead` instead of generic `_cache:` or `_sys:nix-cache:` data prefixes.
   - Automerge slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; document create/read/update/delete/merge/list and sync message exchange now require `AutomergeRead`/`AutomergeWrite` instead of generic `_automerge:` data prefixes.
   - KV metadata/SQL slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; vault key listing, secondary-index metadata operations, and SQL queries now require `KvMetadataRead`/`KvMetadataWrite`/`SqlRead` instead of generic vault-name, `_sys:index:`, or `_sql:` data prefixes. The audited generic internal-domain mapping count is zero.
-- [ ] Add or update negative drift tests for every high-risk bypass class discovered by the matrix.
+- [x] Add or update negative drift tests for every high-risk bypass class discovered by the matrix. Evidence: `evidence/negative-drift-tests.md`, `evidence/negative-drift-tests.json`; added an exact public/no-auth `ClientRpcRequest` allowlist drift test so new `Some(None)` classifications fail until reviewed against the audited authorization matrix.
 
 ## Phase 4: Credential, Redaction, and Evidence Audit
 
