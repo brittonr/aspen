@@ -1926,6 +1926,25 @@ mod tests {
     }
 
     #[test]
+    fn repo_overview_clone_command_redacts_ticket_value() {
+        let repo = test_repo_info();
+        let synthetic_ticket = "aspen-ticket-synthetic-secret-marker-0123456789";
+        let branch_ci = std::collections::HashMap::new();
+        let html = templates::repo_overview(&repo, &templates::RepoOverviewParams {
+            branches: &[],
+            recent_commits: &[],
+            readme_html: None,
+            ticket: synthetic_ticket,
+            ci_status: None,
+            branch_ci: &branch_ci,
+        })
+        .into_string();
+        assert!(!html.contains(synthetic_ticket));
+        assert!(!html.contains("synthetic-secret-marker"));
+        assert!(html.contains("aspen://&lt;cluster-ticket&gt;/"));
+    }
+
+    #[test]
     fn ci_status_badge_variants() {
         let run = aspen_client_api::messages::CiRunInfo {
             run_id: "r1".into(),

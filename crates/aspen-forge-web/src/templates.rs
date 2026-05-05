@@ -213,7 +213,7 @@ pub struct RepoOverviewParams<'a> {
 pub fn repo_overview(repo: &ForgeRepoInfo, params: &RepoOverviewParams<'_>) -> Markup {
     debug_assert!(!params.ticket.is_empty());
     debug_assert!(params.branch_ci.keys().all(|branch_name| !branch_name.is_empty()));
-    let clone_cmd = format!("git clone aspen://{}/{} {}", params.ticket, repo.id, repo.name);
+    let clone_cmd = format!("git clone aspen://<cluster-ticket>/{} {}", repo.id, repo.name);
     base_layout(&repo.name, html! {
         h1 {
             (&repo.name)

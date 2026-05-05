@@ -1,0 +1,41 @@
+{
+  "generated": "2026-05-05T02:41:00Z",
+  "change": "full-aspen-hardening-audit",
+  "phase": "Phase 4",
+  "task": "Audit CLI output, logs, errors, debug formatting, receipts, test fixtures, and docs for credential leakage using synthetic secret-like fixtures only.",
+  "real_secret_files_read": false,
+  "synthetic_fixtures": [
+    "aspen-ticket-synthetic-secret-marker-0123456789"
+  ],
+  "source_handles": [
+    "crates/aspen-forge-web/src/templates.rs:213-230",
+    "crates/aspen-forge-web/src/routes.rs:1928-1945",
+    "crates/aspen-fuse/src/main.rs:126",
+    "crates/aspen-fuse/src/bin/aspen-cluster-virtiofs-server.rs:66",
+    "crates/aspen-fuse/src/bin/aspen-ci-workspace-server.rs:104",
+    "crates/aspen-dogfood/src/cluster.rs:304-310",
+    "crates/aspen-dogfood/src/error.rs:138-142",
+    "crates/aspen-client/src/watch.rs:428-447",
+    "crates/aspen-raft/src/log_subscriber.rs:521",
+    "crates/aspen-transport/src/log_subscriber/connection.rs:136"
+  ],
+  "remediations": [
+    {
+      "surface": "forge web repository overview clone command",
+      "before": "rendered live RepoOverviewParams::ticket in aspen:// clone URL",
+      "after": "renders aspen://<cluster-ticket>/<repo_id> <repo_name>",
+      "test": "repo_overview_clone_command_redacts_ticket_value"
+    }
+  ],
+  "observations": [
+    "dogfood errors and receipts use ticket_preview redaction labels for inspected ticket targets",
+    "fuse ticket command paths log ticket length/byte count rather than the argument value",
+    "dogfood git remote URLs still carry tickets internally for clone/push execution; receipt/artifact identifier audit remains a separate open task",
+    "log-subscriber auth diagnostics inspected in this slice do not include cluster-ticket or token strings"
+  ],
+  "verification_commands": [
+    "rustfmt crates/aspen-forge-web/src/templates.rs crates/aspen-forge-web/src/routes.rs",
+    "cargo test -p aspen-forge-web repo_overview_clone_command_redacts_ticket_value -- --nocapture",
+    "source scans for aspen://{...ticket}, ticket_preview, ticket_len, ticket_bytes, auth_token: Some, auth-result debug formatting, and synthetic markers"
+  ]
+}
