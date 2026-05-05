@@ -58,6 +58,7 @@ use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
 use alloc::vec::Vec;
+use core::fmt;
 use core::result::Result as CoreResult;
 #[cfg(feature = "std")]
 use std::time::SystemTime;
@@ -200,7 +201,7 @@ pub enum HookTicketError {
 }
 
 /// Aspen hook trigger ticket for external programs.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AspenHookTicket {
     /// Protocol version for forward compatibility.
     pub version: u8,
@@ -228,6 +229,23 @@ pub struct AspenHookTicket {
 
     /// Priority hint for connection ordering (`0` = highest).
     pub priority: u8,
+}
+
+impl fmt::Debug for AspenHookTicket {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("AspenHookTicket")
+            .field("version", &self.version)
+            .field("cluster_id", &self.cluster_id)
+            .field("bootstrap_peer_count", &self.bootstrap_peers.len())
+            .field("event_type", &self.event_type)
+            .field("has_default_payload", &self.default_payload.is_some())
+            .field("has_auth_token", &self.auth_token.is_some())
+            .field("expires_at_secs", &self.expires_at_secs)
+            .field("has_relay_url", &self.relay_url.is_some())
+            .field("priority", &self.priority)
+            .finish()
+    }
 }
 
 impl AspenHookTicket {
@@ -564,6 +582,27 @@ mod tests {
         assert_eq!(ticket.auth_token, Some(token));
         assert_eq!(ticket.priority, 1);
         assert_eq!(ticket.relay_url, Some("https://relay.example.com".to_string()));
+    }
+
+    #[test]
+    fn hook_ticket_debug_redacts_payload_and_auth_token() {
+        let addr = create_test_node_address(9);
+        let ticket = AspenHookTicket::new("prod-cluster", vec![addr])
+            .with_event_type("write_committed")
+            .with_default_payload(r#"{"credential":"synthetic-secret-marker"}"#)
+            .with_auth_token([42u8; 32])
+            .with_relay_url("https://relay.example.com");
+
+        let debug = format!("{ticket:?}");
+
+        assert!(debug.contains("AspenHookTicket"));
+        assert!(debug.contains("has_default_payload: true"));
+        assert!(debug.contains("has_auth_token: true"));
+        assert!(!debug.contains("synthetic-secret-marker"));
+        assert!(!debug.contains("default_payload: Some"));
+        assert!(!debug.contains("auth_token: Some"));
+        assert!(!debug.contains("[42"));
+        assert!(!debug.contains("relay.example.com"));
     }
 
     #[test]

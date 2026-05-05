@@ -1,5 +1,6 @@
 //! Initialization of iroh-docs resources (in-memory and persistent).
 
+use std::io::Write;
 use std::path::Path;
 
 use anyhow::Context;
@@ -169,9 +170,39 @@ fn load_or_create_namespace_secret(path: &Path, config_hex: Option<&str>) -> Res
     // Priority 3: Generate new
     let secret = NamespaceSecret::new(&mut rand::rng());
     let hex = hex::encode(secret.to_bytes());
-    std::fs::write(path, &hex).with_context(|| format!("failed to write namespace secret to {}", path.display()))?;
+    write_secret_hex_file(path, &hex, "namespace secret")?;
     info!(path = %path.display(), "generated and persisted new namespace secret");
     Ok(secret)
+}
+
+/// Persist a generated hex-encoded secret with owner-only permissions.
+fn write_secret_hex_file(path: &Path, hex: &str, label: &str) -> Result<()> {
+    let contents = format!("{}\n", hex);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(path)
+            .with_context(|| format!("failed to create {label} file: {}", path.display()))?;
+        file.write_all(contents.as_bytes())
+            .with_context(|| format!("failed to write {label} file: {}", path.display()))?;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))
+            .with_context(|| format!("failed to restrict {label} file permissions: {}", path.display()))?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        std::fs::write(path, contents).with_context(|| format!("failed to write {label} file: {}", path.display()))?;
+    }
+
+    Ok(())
 }
 
 /// Load or create an author.
@@ -200,7 +231,7 @@ fn load_or_create_author(path: &Path, config_hex: Option<&str>) -> Result<Author
     // Priority 3: Generate new
     let author = Author::new(&mut rand::rng());
     let hex = hex::encode(author.to_bytes());
-    std::fs::write(path, &hex).with_context(|| format!("failed to write author secret to {}", path.display()))?;
+    write_secret_hex_file(path, &hex, "author secret")?;
     info!(path = %path.display(), "generated and persisted new author");
     Ok(author)
 }
@@ -227,6 +258,9 @@ fn parse_author_secret(hex_str: &str) -> Result<Author> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
     use tempfile::TempDir;
 
     use super::*;
@@ -280,6 +314,38 @@ mod tests {
         // Should have same IDs
         assert_eq!(resources2.namespace_id, ns_id1);
         assert_eq!(resources2.author.id(), author_id1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_persistent_secrets_are_owner_only() {
+        let temp_dir = TempDir::new().unwrap();
+        let docs_dir = temp_dir.path().join("docs");
+
+        init_persistent_resources(&docs_dir, None, None).unwrap();
+
+        let namespace_mode =
+            std::fs::metadata(docs_dir.join(NAMESPACE_SECRET_FILE)).unwrap().permissions().mode() & 0o777;
+        let author_mode = std::fs::metadata(docs_dir.join(AUTHOR_SECRET_FILE)).unwrap().permissions().mode() & 0o777;
+        assert_eq!(namespace_mode, 0o600);
+        assert_eq!(author_mode, 0o600);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_persistent_secret_restricts_existing_wide_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let secret_path = temp_dir.path().join("namespace.hex");
+        std::fs::write(&secret_path, "stale\n").unwrap();
+        std::fs::set_permissions(&secret_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+
+        let secret = NamespaceSecret::new(&mut rand::rng());
+        let hex = hex::encode(secret.to_bytes());
+        write_secret_hex_file(&secret_path, &hex, "test secret").unwrap();
+
+        let mode = std::fs::metadata(&secret_path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+        assert_eq!(std::fs::read_to_string(&secret_path).unwrap(), format!("{}\n", hex));
     }
 
     #[test]

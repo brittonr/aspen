@@ -28,7 +28,7 @@
 
 ## Phase 4: Credential, Redaction, and Evidence Audit
 
-- [ ] Audit token/ticket generation, delegation, persistence, file permissions, revocation/rotation, and root/bootstrap semantics.
+- [x] Audit token/ticket generation, delegation, persistence, file permissions, revocation/rotation, and root/bootstrap semantics. Evidence: `evidence/token-ticket-persistence-permissions.md`, `evidence/token-ticket-persistence-permissions.json`; audited token CLI output, cluster secret-key persistence, docs namespace/author secret persistence, and hook ticket surfaces; hardened generated docs secrets to owner-only `0600` on Unix and added hook-ticket debug redaction for payload/auth-token/relay material.
 - [ ] Audit CLI output, logs, errors, debug formatting, receipts, test fixtures, and docs for credential leakage using synthetic secret-like fixtures only.
 - [ ] Verify dogfood, CI, deploy, and diagnostic receipts identify artifacts/runs without log scraping or credential values.
 - [x] Add redaction regressions for any output surface that handles token/ticket/secret-like material. Evidence: `evidence/token-ticket-redaction.md`, `evidence/token-ticket-redaction.json`; added custom `Debug` implementations and negative regressions for capability tokens, client tickets, and signed cluster tickets so reconstructable nonce/proof/facts/signature/auth-token material is not printed.

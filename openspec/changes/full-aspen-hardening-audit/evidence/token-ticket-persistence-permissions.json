@@ -1,0 +1,43 @@
+{
+  "generated": "2026-05-05T02:30:22Z",
+  "change": "full-aspen-hardening-audit",
+  "phase": "Phase 4: Credential, Redaction, and Evidence Audit",
+  "scope": [
+    "token generation and delegation CLI output",
+    "cluster secret-key file persistence",
+    "docs namespace and author secret persistence",
+    "hook trigger ticket debug output"
+  ],
+  "source_handles": [
+    "crates/aspen-cli/src/bin/aspen-cli/commands/token.rs",
+    "crates/aspen-cluster/src/endpoint_manager.rs",
+    "crates/aspen-docs/src/store/initialization.rs",
+    "crates/aspen-hooks-ticket/src/lib.rs",
+    "crates/aspen-cli/src/bin/aspen-cli/commands/hooks.rs"
+  ],
+  "remediations": [
+    {
+      "path": "crates/aspen-docs/src/store/initialization.rs",
+      "summary": "generated namespace and author secrets now use owner-only 0600 Unix permissions and repair existing wide files"
+    },
+    {
+      "path": "crates/aspen-hooks-ticket/src/lib.rs",
+      "summary": "AspenHookTicket Debug now exposes only safe metadata and redacts payload/auth-token/relay URL material"
+    },
+    {
+      "path": "crates/aspen-docs/src/importer.rs",
+      "summary": "restored test-scope KvRead import needed for aspen-docs test compilation during the focused gate"
+    }
+  ],
+  "regressions": [
+    "generated_persistent_secrets_are_owner_only",
+    "generated_persistent_secret_restricts_existing_wide_file",
+    "hook_ticket_debug_redacts_payload_and_auth_token"
+  ],
+  "verified_commands": [
+    "rustfmt crates/aspen-hooks-ticket/src/lib.rs crates/aspen-docs/src/store/initialization.rs crates/aspen-docs/src/importer.rs",
+    "cargo test -p aspen-hooks-ticket hook_ticket_debug_redacts_payload_and_auth_token -- --nocapture",
+    "cargo test -p aspen-docs generated_persistent -- --nocapture"
+  ],
+  "secret_handling": "synthetic marker strings and repeated test bytes only; no live credential files read or credential values preserved"
+}
