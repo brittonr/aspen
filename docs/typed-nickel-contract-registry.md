@@ -14,8 +14,8 @@ This registry records the source-of-truth decision for Aspen's typed Nickel cont
 | --- | --- | --- | --- |
 | CI pipeline config | `nickel-authored` | `crates/aspen-ci/src/config/schema/ci_schema.ncl` | Existing embedded Nickel schema; needs continued typecheck/config tests. |
 | Deploy protocol DTOs | `rust-derived` | `crates/aspen-ci/src/orchestrator/deploy_executor.rs` | Existing generated `schemas/deploy-protocol.ncl`; needs freshness hardening. |
-| Dogfood run receipt | `rust-derived` | `crates/aspen-dogfood/src/receipt.rs` | Planned generated `schemas/dogfood-run-receipt.ncl`. |
-| Native CI run receipt | `rust-derived` | `crates/aspen-client-api/src/messages/ci.rs` | Planned generated `schemas/ci-run-receipt.ncl`. |
+| Dogfood run receipt | `rust-derived` | `crates/aspen-dogfood/src/receipt.rs` | Generated `schemas/dogfood-run-receipt.ncl`; freshness checked by `scripts/generate-typed-nickel-contracts.py --check`. |
+| Native CI run receipt | `rust-derived` | `crates/aspen-client-api/src/messages/ci.rs` | Generated `schemas/ci-run-receipt.ncl`; freshness checked by `scripts/generate-typed-nickel-contracts.py --check`. |
 | Node/cluster/profile config | `nickel-authored` | `crates/aspen-nickel/src/schema/node_config.ncl` | Existing schema; needs profile/feature/trust hardening. |
 | Test harness suite manifests | `nickel-authored` | `test-harness/schema.ncl` | Existing schema + generated inventory freshness gate. |
 | Patchbay fault scenarios | `nickel-authored` | `test-harness/suites/patchbay/patchbay-fault.ncl` | Existing suite manifests; needs bounded fault-dimension contracts. |
@@ -61,6 +61,9 @@ Run:
 
 ```bash
 python3 scripts/check-typed-nickel-contract-registry.py
+python3 scripts/generate-typed-nickel-contracts.py --check
+nix run nixpkgs#nickel -- typecheck schemas/dogfood-run-receipt.ncl
+nix run nixpkgs#nickel -- typecheck schemas/ci-run-receipt.ncl
 openspec validate type-nickel-contract-boundaries --strict --json
 git diff --check
 ```

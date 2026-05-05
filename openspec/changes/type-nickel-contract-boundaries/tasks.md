@@ -11,9 +11,9 @@
 
 ## Phase 2: Rust-to-Nickel Generation
 
-- [ ] I4 Implement or extend a generator that maps selected Serde/schema-bearing Rust structs/enums into Nickel contracts.
+- [x] I4 Implement or extend a generator that maps selected Serde/schema-bearing Rust structs/enums into Nickel contracts. Evidence: `scripts/generate-typed-nickel-contracts.py`, `openspec/changes/type-nickel-contract-boundaries/evidence/rust-derived-receipt-contracts-verification.md`.
 - [ ] I5 Generate Nickel contracts for operator-facing receipt/protocol DTOs where Rust owns serialized shape, starting with dogfood/CI receipts and deploy protocol DTOs.
-- [ ] I6 Add freshness checks that fail when generated Nickel contracts differ from current Rust type/schema metadata.
+- [x] I6 Add freshness checks that fail when generated Nickel contracts differ from current Rust type/schema metadata. Evidence: `scripts/generate-typed-nickel-contracts.py --check`, negative mutation in `openspec/changes/type-nickel-contract-boundaries/evidence/rust-derived-receipt-contracts-verification.md`.
 
 ## Phase 3: Nickel-Authored Config Contracts
 
