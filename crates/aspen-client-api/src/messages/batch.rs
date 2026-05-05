@@ -61,7 +61,7 @@ impl BatchRequest {
             }),
             Self::ConditionalBatchWrite { conditions, operations } => {
                 let keys = conditional_batch_write_keys(conditions, operations);
-                (!keys.is_empty()).then(|| Operation::BatchWrite { keys })
+                (!keys.is_empty()).then_some(Operation::BatchWrite { keys })
             }
         }
     }

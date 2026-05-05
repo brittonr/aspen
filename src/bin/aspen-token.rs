@@ -763,9 +763,36 @@ fn format_capability(cap: &Capability) -> String {
         Capability::NetConnect { service_prefix } => format!("net-connect:{}", service_prefix),
         Capability::NetPublish { service_prefix } => format!("net-publish:{}", service_prefix),
         Capability::NetAdmin => "net-admin".to_string(),
+        // CI and job capabilities
+        Capability::CiRead { resource_prefix } => format!("ci-read:{}", resource_prefix),
+        Capability::CiWrite { resource_prefix } => format!("ci-write:{}", resource_prefix),
+        Capability::JobsRead { resource_prefix } => format!("jobs-read:{}", resource_prefix),
+        Capability::JobsWrite { resource_prefix } => format!("jobs-write:{}", resource_prefix),
+        // Blob, docs, and hook capabilities
+        Capability::BlobRead { resource_prefix } => format!("blob-read:{}", resource_prefix),
+        Capability::BlobWrite { resource_prefix } => format!("blob-write:{}", resource_prefix),
+        Capability::DocsRead { resource_prefix } => format!("docs-read:{}", resource_prefix),
+        Capability::DocsWrite { resource_prefix } => format!("docs-write:{}", resource_prefix),
+        Capability::HooksRead { resource_prefix } => format!("hooks-read:{}", resource_prefix),
+        Capability::HooksWrite { resource_prefix } => format!("hooks-write:{}", resource_prefix),
+        // KV metadata and coordination capabilities
+        Capability::KvMetadataRead { resource_prefix } => format!("kv-metadata-read:{}", resource_prefix),
+        Capability::KvMetadataWrite { resource_prefix } => format!("kv-metadata-write:{}", resource_prefix),
+        Capability::CoordinationRead { resource_prefix } => format!("coordination-read:{}", resource_prefix),
+        Capability::CoordinationWrite { resource_prefix } => format!("coordination-write:{}", resource_prefix),
+        // SQL and observability capabilities
+        Capability::SqlRead { resource_prefix } => format!("sql-read:{}", resource_prefix),
+        Capability::ObservabilityRead { resource_prefix } => format!("observability-read:{}", resource_prefix),
+        Capability::ObservabilityWrite { resource_prefix } => format!("observability-write:{}", resource_prefix),
+        // Automerge capabilities
+        Capability::AutomergeRead { resource_prefix } => format!("automerge-read:{}", resource_prefix),
+        Capability::AutomergeWrite { resource_prefix } => format!("automerge-write:{}", resource_prefix),
         // Federation sync capabilities
         Capability::FederationPull { repo_prefix } => format!("federation-pull:{}", repo_prefix),
         Capability::FederationPush { repo_prefix } => format!("federation-push:{}", repo_prefix),
+        // Nix cache capabilities
+        Capability::CacheRead { resource_prefix } => format!("cache-read:{}", resource_prefix),
+        Capability::CacheWrite { resource_prefix } => format!("cache-write:{}", resource_prefix),
         // SNIX store capabilities
         Capability::SnixRead { resource_prefix } => format!("snix-read:{}", resource_prefix),
         Capability::SnixWrite { resource_prefix } => format!("snix-write:{}", resource_prefix),
@@ -826,6 +853,34 @@ fn write_output(content: &str, path: Option<&std::path::Path>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn format_capability_extended_resource_variants() {
+        assert_eq!(
+            format_capability(&Capability::CiRead {
+                resource_prefix: "repo:aspen".to_string()
+            }),
+            "ci-read:repo:aspen"
+        );
+        assert_eq!(
+            format_capability(&Capability::BlobWrite {
+                resource_prefix: "blob:".to_string()
+            }),
+            "blob-write:blob:"
+        );
+        assert_eq!(
+            format_capability(&Capability::CacheWrite {
+                resource_prefix: "nar:".to_string()
+            }),
+            "cache-write:nar:"
+        );
+        assert_eq!(
+            format_capability(&Capability::AutomergeRead {
+                resource_prefix: "doc:".to_string()
+            }),
+            "automerge-read:doc:"
+        );
+    }
 
     #[test]
     fn token_output_files_are_owner_only() {
