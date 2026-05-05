@@ -1,0 +1,74 @@
+{
+  "generated": "2026-05-05T10:06:08Z",
+  "scope": "dogfood CI/deploy/diagnostic receipt paths",
+  "live_credentials_read": false,
+  "synthetic_marker": "synthetic-dogfood-ticket-marker-0123456789",
+  "source_handles": [
+    "crates/aspen-dogfood/src/receipt.rs",
+    "crates/aspen-dogfood/src/main.rs",
+    "crates/aspen-dogfood/src/forge.rs",
+    "crates/aspen-dogfood/src/ci.rs",
+    "crates/aspen-dogfood/src/deploy.rs",
+    "crates/aspen-dogfood/src/cluster.rs",
+    "crates/aspen-dogfood/src/federation.rs"
+  ],
+  "safe_identifiers": [
+    {
+      "path": "crates/aspen-dogfood/src/main.rs",
+      "function": "ci_run_artifact",
+      "field": "DogfoodArtifactReceipt.store_id",
+      "identifier": "CI run id"
+    },
+    {
+      "path": "crates/aspen-dogfood/src/main.rs",
+      "function": "cluster_receipt_artifact",
+      "field": "DogfoodArtifactReceipt.store_id",
+      "identifier": "cluster receipt key"
+    }
+  ],
+  "remediations": [
+    {
+      "path": "crates/aspen-dogfood/src/main.rs",
+      "surface": "single-node start log",
+      "change": "replace live ticket prefix logging with redacted ticket preview"
+    },
+    {
+      "path": "crates/aspen-dogfood/src/error.rs",
+      "surface": "dogfood error/receipt message helper",
+      "change": "redact aspen:// credential segment while preserving identifier path"
+    },
+    {
+      "path": "crates/aspen-dogfood/src/forge.rs",
+      "surface": "git push stdout/stderr captured into failures",
+      "change": "sanitize captured subprocess output before GitPush error construction"
+    },
+    {
+      "path": "crates/aspen-dogfood/src/main.rs",
+      "surface": "receipt failure summaries",
+      "change": "sanitize error strings before persisting failure summaries"
+    },
+    {
+      "path": "crates/aspen-dogfood/src/main.rs",
+      "surface": "receipts show/diagnose",
+      "change": "sanitize persisted failure messages before operator output"
+    }
+  ],
+  "regressions": [
+    "error::tests::redacts_aspen_remote_credentials_without_removing_identifiers",
+    "error::tests::redacts_trailing_aspen_remote_credentials",
+    "tests::dogfood_failure_summary_redacts_aspen_remote_credentials",
+    "tests::diagnose_receipt_redacts_legacy_failure_messages"
+  ],
+  "verification_commands": [
+    "rustfmt crates/aspen-dogfood/src/error.rs crates/aspen-dogfood/src/main.rs crates/aspen-dogfood/src/forge.rs",
+    "cargo test -p aspen-dogfood credentials -- --nocapture",
+    "cargo test -p aspen-dogfood diagnose_receipt_redacts_legacy_failure_messages -- --nocapture",
+    "python -m json.tool openspec/changes/full-aspen-hardening-audit/evidence/dogfood-receipt-redaction.json >/dev/null",
+    "cargo check -p aspen-dogfood",
+    "scripts/tigerstyle-check.sh",
+    "openspec validate full-aspen-hardening-audit --strict --json",
+    "python ~/.hermes/skills/agentkit-port/openspec/scripts/openspec_helper.py verify full-aspen-hardening-audit --json || true",
+    "git diff --check"
+  ],
+  "openspec_helper_warning": "tasks incomplete: {'done': 14, 'todo': 8, 'in_progress': 0}"
+}

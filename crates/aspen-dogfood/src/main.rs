@@ -274,10 +274,8 @@ async fn cmd_start_single(config: &RunConfig) -> DogfoodResult<()> {
     );
     state::write_state(&config.state_file_path(), &state)?;
 
-    info!(
-        "✅ Single-node cluster running (ticket: {}...)",
-        &node_info.ticket[..20.min(node_info.ticket.len())]
-    );
+    let preview = crate::cluster::ticket_preview(&node_info.ticket);
+    info!("✅ Single-node cluster running (ticket: {preview})");
     Ok(())
 }
 
@@ -740,7 +738,8 @@ fn print_receipt_summary(receipt: &receipt::DogfoodRunReceipt, path: &Path) {
             );
         }
         if let Some(failure) = &stage.failure {
-            println!("        failure {} [{}]: {}", failure.operation, failure.category, failure.message);
+            let message = crate::error::redact_credential_fragments(&failure.message);
+            println!("        failure {} [{}]: {}", failure.operation, failure.category, message);
         }
     }
 }
@@ -774,7 +773,8 @@ fn diagnose_receipt(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> String
     if let Some(failure) = &stage.failure {
         let _ = writeln!(output, "  failure_category: {}", failure.category);
         let _ = writeln!(output, "  failure_operation: {}", failure.operation);
-        let _ = writeln!(output, "  failure_message: {}", failure.message);
+        let message = crate::error::redact_credential_fragments(&failure.message);
+        let _ = writeln!(output, "  failure_message: {message}");
         let _ = writeln!(output, "  first_checks:");
         for check in dogfood_diagnosis_checks(stage.stage, &failure.category) {
             let _ = writeln!(output, "    - {check}");
@@ -1064,7 +1064,7 @@ fn dogfood_failure_summary(stage: receipt::DogfoodStageKind, error: &DogfoodErro
     receipt::DogfoodFailureSummary {
         operation: format!("{stage:?}"),
         category: dogfood_error_category(error).to_string(),
-        message: error.to_string(),
+        message: crate::error::redact_credential_fragments(&error.to_string()),
     }
 }
 
@@ -1420,6 +1420,39 @@ mod tests {
         assert_eq!(artifact.name, "ci-run");
         assert_eq!(artifact.kind, receipt::DogfoodArtifactKind::CiRun);
         assert_eq!(artifact.store_id.as_deref(), Some("run-123"));
+    }
+
+    #[test]
+    fn dogfood_failure_summary_redacts_aspen_remote_credentials() {
+        let marker = "synthetic-dogfood-ticket-marker-0123456789";
+        let error = DogfoodError::GitPush {
+            exit_code: 128,
+            stderr: format!("fatal: unable to access aspen://{marker}/repo-123"),
+        };
+
+        let summary = dogfood_failure_summary(receipt::DogfoodStageKind::Push, &error);
+
+        assert_eq!(summary.category, "git_push");
+        assert!(!summary.message.contains(marker));
+        assert!(!summary.message.contains("synthetic-dogfood-ticket-marker"));
+        assert!(summary.message.contains("aspen://<cluster-ticket>/repo-123"));
+    }
+
+    #[test]
+    fn diagnose_receipt_redacts_legacy_failure_messages() {
+        let marker = "synthetic-dogfood-ticket-marker-0123456789";
+        let mut receipt = sample_receipt("dogfood-leak", "2026-05-03T01:00:00Z", receipt::DogfoodStageStatus::Failed);
+        receipt.stages[0].failure = Some(receipt::DogfoodFailureSummary {
+            operation: "Push".to_string(),
+            category: "git_push".to_string(),
+            message: format!("fatal: remote aspen://{marker}/repo-123 rejected update"),
+        });
+
+        let output = diagnose_receipt(&receipt, Path::new("/tmp/dogfood-leak.json"));
+
+        assert!(!output.contains(marker));
+        assert!(!output.contains("synthetic-dogfood-ticket-marker"));
+        assert!(output.contains("aspen://<cluster-ticket>/repo-123"));
     }
 
     #[test]

@@ -4,6 +4,30 @@ use snafu::Snafu;
 
 pub type DogfoodResult<T> = Result<T, DogfoodError>;
 
+pub(crate) fn redact_credential_fragments(message: &str) -> String {
+    const ASPEN_SCHEME: &str = "aspen://";
+    const TICKET_PLACEHOLDER: &str = "<cluster-ticket>";
+
+    let mut redacted = String::with_capacity(message.len());
+    let mut remaining = message;
+    while let Some(index) = remaining.find(ASPEN_SCHEME) {
+        let before = &remaining[..index];
+        redacted.push_str(before);
+        redacted.push_str(ASPEN_SCHEME);
+
+        let after_scheme = &remaining[index + ASPEN_SCHEME.len()..];
+        if let Some(slash_index) = after_scheme.find('/') {
+            redacted.push_str(TICKET_PLACEHOLDER);
+            remaining = &after_scheme[slash_index..];
+        } else {
+            redacted.push_str(TICKET_PLACEHOLDER);
+            remaining = "";
+        }
+    }
+    redacted.push_str(remaining);
+    redacted
+}
+
 #[derive(Debug, Snafu)]
 #[snafu(visibility(pub))]
 pub enum DogfoodError {
@@ -89,6 +113,29 @@ pub enum DogfoodError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn redacts_aspen_remote_credentials_without_removing_identifiers() {
+        let marker = "synthetic-dogfood-ticket-marker-0123456789";
+        let message = format!(
+            "stderr: failed to push to aspen://{marker}/repo-123\nstdout: retry aspen://{marker}/fed:node:repo-123 main"
+        );
+
+        let redacted = redact_credential_fragments(&message);
+
+        assert!(!redacted.contains(marker));
+        assert!(!redacted.contains("synthetic-dogfood-ticket-marker"));
+        assert!(redacted.contains("aspen://<cluster-ticket>/repo-123"));
+        assert!(redacted.contains("aspen://<cluster-ticket>/fed:node:repo-123"));
+    }
+
+    #[test]
+    fn redacts_trailing_aspen_remote_credentials() {
+        let marker = "synthetic-dogfood-ticket-marker-0123456789";
+        let redacted = redact_credential_fragments(&format!("remote aspen://{marker}"));
+
+        assert_eq!(redacted, "remote aspen://<cluster-ticket>");
+    }
 
     #[test]
     fn error_display_client_rpc() {

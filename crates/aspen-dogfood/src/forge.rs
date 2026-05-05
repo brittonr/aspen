@@ -188,8 +188,10 @@ pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> Dogfoo
         })?;
 
     if !push_output.status.success() {
-        let stderr = String::from_utf8_lossy(&push_output.stderr);
-        let stdout = String::from_utf8_lossy(&push_output.stdout);
+        let raw_stderr = String::from_utf8_lossy(&push_output.stderr);
+        let raw_stdout = String::from_utf8_lossy(&push_output.stdout);
+        let stderr = crate::error::redact_credential_fragments(&raw_stderr);
+        let stdout = crate::error::redact_credential_fragments(&raw_stdout);
         return GitPushSnafu {
             exit_code: push_output.status.code().unwrap_or(-1),
             stderr: format!("stderr:\n{stderr}\nstdout:\n{stdout}"),
