@@ -32,6 +32,8 @@ fn operator_receipts_doc_tracks_receipt_schemas_and_commands() {
         assert!(operator_receipts.contains("aspen-cli --json ci receipt <run-id>"));
         assert!(operator_receipts.contains("elapsed_ms"));
         assert!(operator_receipts.contains("artifact metadata"));
+        assert!(operator_receipts.contains("Acceptance evidence trail"));
+        assert!(operator_receipts.contains("dogfood-20260505T202756Z"));
     }
 
     assert!(DOGFOOD_RECEIPT.contains("DOGFOOD_RUN_RECEIPT_SCHEMA"));

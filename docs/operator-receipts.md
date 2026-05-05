@@ -175,6 +175,29 @@ aspen-cli --json ci receipt <run-id> \
 
 Use each `job_id` with the CI log/output commands when deeper diagnosis is needed.
 
+## Acceptance evidence trail
+
+The operator-receipt hardening slice is intentionally backed by both focused guardrails and full dogfood acceptance evidence:
+
+- `789f099fd` (`Test CI receipt artifact evidence`) proves `CiGetRunReceipt` reads artifact metadata from KV and attaches it to the producing job.
+- `10bb6fb38` (`Document operator receipt evidence`) adds this operator guide and the documentation/schema anchor guardrail.
+- `b2ff3e75e` (`Fix operator receipt doc guardrail in Nix`) keeps the docs guardrail compatible with Nix cleaned Cargo sources.
+- `9549b37dc` (`Guard dogfood receipt operator output`) pins dogfood receipt summary/diagnose output, including `elapsed_ms`, artifact metadata, failure display, and secret redaction.
+- `ead4bd0a7` (`Guard CI receipt artifact output`) pins native `aspen-cli ci receipt` artifact display in human output.
+
+The latest full self-hosting acceptance run covering the operator-output guardrails is:
+
+```text
+run_id: dogfood-20260505T202756Z
+local receipt: /tmp/aspen-dogfood-receipts/dogfood-20260505T202756Z.json
+cluster key: dogfood/receipts/dogfood-20260505T202756Z.json
+commit: ead4bd0a7
+result: deploy completed; node 1 healthy; verification passed; all stages succeeded
+ci_run_artifact: 497775a3-9bb7-461b-8d17-d0147b956e18
+```
+
+Treat this section as a historical trail, not a live status endpoint. For current evidence, rerun `nix run .#dogfood-local -- full` at the commit you want to cite and record the new receipt path/key.
+
 ## Operator checklist
 
 Before citing a dogfood or CI receipt as evidence:
