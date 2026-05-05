@@ -85,25 +85,13 @@ The dogfood orchestrator MUST provide a read-only CLI command that lists valid d
 
 ### Requirement: Dogfood Receipt Show [r[dogfood-evidence.receipt-inspection.show]]
 
-The dogfood orchestrator MUST provide a read-only CLI command that displays one validated dogfood run receipt by run id or explicit path.
+The dogfood orchestrator MUST provide a read-only CLI command that displays one validated dogfood run receipt by run id or explicit path, including per-stage elapsed duration when present.
 
 #### Scenario: Show receipt by run id [r[dogfood-evidence.receipt-inspection.show.run-id]]
 
-- **GIVEN** a receipt exists in the configured receipts directory for a run id
-- **WHEN** an operator runs `aspen-dogfood receipts show <run-id>`
-- **THEN** the command prints run identity, mode, receipt path, and every stage with status, timestamps, artifacts, and failure summary when present
-
-#### Scenario: Show receipt as JSON [r[dogfood-evidence.receipt-inspection.show.json]]
-
-- **GIVEN** a valid receipt exists
-- **WHEN** an operator runs `aspen-dogfood receipts show <run-id-or-path> --json`
-- **THEN** the command emits validated canonical JSON for that receipt
-
-#### Scenario: Show rejects invalid receipt evidence [r[dogfood-evidence.receipt-inspection.show.invalid]]
-
-- **GIVEN** the selected receipt file is missing, malformed, or uses an unexpected schema
-- **WHEN** an operator runs `aspen-dogfood receipts show <run-id-or-path>`
-- **THEN** the command fails with an operator-visible receipt error instead of printing partial evidence
+- GIVEN a receipt exists in the configured receipts directory for a run id
+- WHEN an operator runs `aspen-dogfood receipts show <run-id>`
+- THEN the command prints run identity, mode, receipt path, and every stage with status, timestamps, elapsed duration when present, artifacts, and failure summary when present
 
 ### Requirement: Dogfood Receipt Diagnosis [r[dogfood-evidence.receipt-inspection.diagnose]]
 
@@ -228,3 +216,21 @@ Aspen MUST expose a native CI run receipt that operators can query by pipeline r
 - WHEN Aspen renders the CI run receipt
 - THEN jobs MUST be ordered deterministically by job name
 - AND JSON output MUST be machine parseable without log prefixes on stdout
+
+### Requirement: Dogfood Stage Duration Receipts [r[dogfood-evidence.stage-receipts.elapsed-ms]]
+
+Dogfood stage receipts MUST support explicit elapsed millisecond evidence for completed or failed stages while preserving compatibility with receipts that do not include the field.
+
+#### Scenario: New full-run stage records elapsed milliseconds [r[dogfood-evidence.stage-receipts.elapsed-ms.recorded]]
+
+- GIVEN a dogfood `full` stage finishes successfully or fails
+- WHEN the dogfood run receipt is written
+- THEN the stage receipt includes an `elapsed_ms` value measured by the orchestrator
+- AND the value is serialized as a non-negative integer
+
+#### Scenario: Legacy receipt remains valid [r[dogfood-evidence.stage-receipts.elapsed-ms.legacy-compatible]]
+
+- GIVEN a valid v1 dogfood receipt created before `elapsed_ms` existed
+- WHEN an operator runs `receipts show` or `receipts diagnose`
+- THEN the receipt MUST still parse and validate
+- AND the missing duration MUST render as unavailable rather than making the receipt invalid

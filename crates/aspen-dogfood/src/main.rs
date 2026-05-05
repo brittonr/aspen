@@ -19,6 +19,7 @@ use std::future::Future;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
+use std::time::Instant;
 
 use aspen_client::AspenClient;
 use aspen_client_api::ClientRpcRequest;
@@ -724,7 +725,15 @@ fn print_receipt_summary(receipt: &receipt::DogfoodRunReceipt, path: &Path) {
     println!("  stages:");
     for stage in &receipt.stages {
         let finished_at = stage.finished_at.as_deref().unwrap_or("-");
-        println!("    - {}: {} ({} → {})", stage.stage.as_str(), stage.status.as_str(), stage.started_at, finished_at);
+        let elapsed_ms = stage.elapsed_ms.map(|elapsed| elapsed.to_string()).unwrap_or_else(|| "-".to_string());
+        println!(
+            "    - {}: {} ({} → {}, elapsed_ms={})",
+            stage.stage.as_str(),
+            stage.status.as_str(),
+            stage.started_at,
+            finished_at,
+            elapsed_ms
+        );
         for artifact in &stage.artifacts {
             println!(
                 "        artifact {} [{}] store_id={} blob_id={} digest={} size={} path={}",
@@ -972,6 +981,7 @@ impl DogfoodReceiptRecorder {
         Fut: Future<Output = DogfoodResult<(T, Vec<receipt::DogfoodArtifactReceipt>)>>,
     {
         let started_at = current_timestamp_utc();
+        let started_instant = Instant::now();
         match operation().await {
             Ok((value, artifacts)) => {
                 self.receipt.stages.push(receipt::DogfoodStageReceipt {
@@ -979,6 +989,7 @@ impl DogfoodReceiptRecorder {
                     status: receipt::DogfoodStageStatus::Succeeded,
                     started_at,
                     finished_at: Some(current_timestamp_utc()),
+                    elapsed_ms: Some(elapsed_ms_since(started_instant)),
                     failure: None,
                     artifacts,
                 });
@@ -992,6 +1003,7 @@ impl DogfoodReceiptRecorder {
                     status: receipt::DogfoodStageStatus::Failed,
                     started_at,
                     finished_at: Some(current_timestamp_utc()),
+                    elapsed_ms: Some(elapsed_ms_since(started_instant)),
                     failure: Some(failure),
                     artifacts: Vec::new(),
                 });
@@ -1013,6 +1025,7 @@ impl DogfoodReceiptRecorder {
     async fn publish_final_receipt_to_cluster(&mut self, config: &RunConfig) -> DogfoodResult<()> {
         let stage = receipt::DogfoodStageKind::PublishReceipt;
         let started_at = current_timestamp_utc();
+        let started_instant = Instant::now();
         let key = receipt_cluster_key(&self.receipt.run_id);
         validate_cluster_receipt_run_id(&self.receipt.run_id, "auto-publish")?;
 
@@ -1022,6 +1035,7 @@ impl DogfoodReceiptRecorder {
             status: receipt::DogfoodStageStatus::Succeeded,
             started_at: started_at.clone(),
             finished_at: Some(current_timestamp_utc()),
+            elapsed_ms: Some(elapsed_ms_since(started_instant)),
             failure: None,
             artifacts: vec![cluster_receipt_artifact(&key)],
         });
@@ -1044,6 +1058,7 @@ impl DogfoodReceiptRecorder {
                     status: receipt::DogfoodStageStatus::Failed,
                     started_at,
                     finished_at: Some(current_timestamp_utc()),
+                    elapsed_ms: Some(elapsed_ms_since(started_instant)),
                     failure: Some(dogfood_failure_summary(stage, &error)),
                     artifacts: vec![cluster_receipt_artifact(&key)],
                 });
@@ -1113,6 +1128,14 @@ fn dogfood_error_category(error: &DogfoodError) -> &'static str {
     }
 }
 
+fn elapsed_ms_since(started_at: Instant) -> u64 {
+    let elapsed = started_at.elapsed().as_millis();
+    match u64::try_from(elapsed) {
+        Ok(value) => value,
+        Err(_) => u64::MAX,
+    }
+}
+
 fn dogfood_run_id() -> String {
     format!("dogfood-{}", current_timestamp_utc().replace([':', '-'], ""))
 }
@@ -1163,6 +1186,7 @@ mod tests {
                 status,
                 started_at: "2026-05-03T01:00:00Z".to_string(),
                 finished_at: Some("2026-05-03T01:01:00Z".to_string()),
+                elapsed_ms: Some(60_000),
                 failure: if status == receipt::DogfoodStageStatus::Failed {
                     Some(receipt::DogfoodFailureSummary {
                         operation: "Build".to_string(),
@@ -1245,6 +1269,7 @@ mod tests {
             status: receipt::DogfoodStageStatus::Succeeded,
             started_at: "2026-05-03T01:02:00Z".to_string(),
             finished_at: Some("2026-05-03T01:03:00Z".to_string()),
+            elapsed_ms: Some(60_000),
             failure: None,
             artifacts: Vec::new(),
         });
@@ -1266,6 +1291,7 @@ mod tests {
             status: receipt::DogfoodStageStatus::Running,
             started_at: "2026-05-03T01:02:00Z".to_string(),
             finished_at: None,
+            elapsed_ms: None,
             failure: None,
             artifacts: Vec::new(),
         });

@@ -119,6 +119,8 @@ pub struct DogfoodStageReceipt {
     pub status: DogfoodStageStatus,
     pub started_at: String,
     pub finished_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub elapsed_ms: Option<u64>,
     pub failure: Option<DogfoodFailureSummary>,
     pub artifacts: Vec<DogfoodArtifactReceipt>,
 }
@@ -420,6 +422,7 @@ mod tests {
                 status: DogfoodStageStatus::Succeeded,
                 started_at: "2026-05-03T04:08:00Z".to_string(),
                 finished_at: Some("2026-05-03T04:09:00Z".to_string()),
+                elapsed_ms: Some(60_000),
                 failure: None,
                 artifacts: vec![DogfoodArtifactReceipt {
                     name: "aspen-node".to_string(),
@@ -444,6 +447,7 @@ mod tests {
         assert!(json.contains("\"command\":\"full\""));
         assert!(json.contains("\"stages\""));
         assert!(json.contains("\"artifacts\""));
+        assert!(json.contains("\"elapsed_ms\":60000"));
         assert!(json.contains("\"status\":\"succeeded\""));
     }
 
@@ -454,6 +458,15 @@ mod tests {
         let parsed = DogfoodRunReceipt::from_canonical_json_bytes(&bytes).unwrap();
 
         assert_eq!(receipt, parsed);
+    }
+
+    #[test]
+    fn legacy_receipt_without_elapsed_ms_round_trips_as_none() {
+        let json = br#"{"schema":"aspen.dogfood.run-receipt.v1","run_id":"dogfood-legacy","command":"full","created_at":"2026-05-03T04:07:09Z","mode":{"federation":false,"vm_ci":false},"project_dir":"/repo","cluster_dir":"/tmp/aspen-dogfood","stages":[{"stage":"build","status":"succeeded","started_at":"2026-05-03T04:08:00Z","finished_at":"2026-05-03T04:09:00Z","failure":null,"artifacts":[]}]}"#;
+
+        let parsed = DogfoodRunReceipt::from_canonical_json_bytes(json).unwrap();
+
+        assert_eq!(parsed.stages[0].elapsed_ms, None);
     }
 
     #[test]
