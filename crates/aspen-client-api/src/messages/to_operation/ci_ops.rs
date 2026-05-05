@@ -62,15 +62,15 @@ fn ci_repo_resource(repo_id: Option<&str>) -> String {
 fn to_operation_cache_snix(request: &ClientRpcRequest) -> Option<Option<Operation>> {
     match request {
         ClientRpcRequest::CacheQuery { store_hash } | ClientRpcRequest::CacheDownload { store_hash } => {
-            Some(Some(Operation::Read {
-                key: format!("_cache:narinfo:{store_hash}"),
+            Some(Some(Operation::CacheRead {
+                resource: format!("narinfo:{store_hash}"),
             }))
         }
-        ClientRpcRequest::CacheStats => Some(Some(Operation::Read {
-            key: "_cache:stats".to_string(),
+        ClientRpcRequest::CacheStats => Some(Some(Operation::CacheRead {
+            resource: "stats".to_string(),
         })),
-        ClientRpcRequest::NixCacheGetPublicKey => Some(Some(Operation::Read {
-            key: "_sys:nix-cache:public-key".to_string(),
+        ClientRpcRequest::NixCacheGetPublicKey => Some(Some(Operation::CacheRead {
+            resource: "public-key".to_string(),
         })),
 
         #[cfg(feature = "ci")]
@@ -81,8 +81,8 @@ fn to_operation_cache_snix(request: &ClientRpcRequest) -> Option<Option<Operatio
         }
         #[cfg(feature = "ci")]
         ClientRpcRequest::CacheMigrationStatus | ClientRpcRequest::CacheMigrationValidate { .. } => {
-            Some(Some(Operation::Read {
-                key: "_cache:migration:".to_string(),
+            Some(Some(Operation::CacheRead {
+                resource: "migration:".to_string(),
             }))
         }
 
@@ -164,6 +164,53 @@ mod tests {
         });
         assert!(!generic_write.authorizes(&trigger));
         assert!(ci_write.authorizes(&trigger));
+    }
+
+    #[test]
+    fn cache_requests_require_cache_scoped_operations() {
+        let query = operation_for(&ClientRpcRequest::CacheQuery {
+            store_hash: "abc123".to_string(),
+        });
+        assert!(matches!(query, Operation::CacheRead { resource } if resource == "narinfo:abc123"));
+
+        let download = operation_for(&ClientRpcRequest::CacheDownload {
+            store_hash: "abc123".to_string(),
+        });
+        assert!(matches!(download, Operation::CacheRead { resource } if resource == "narinfo:abc123"));
+
+        let stats = operation_for(&ClientRpcRequest::CacheStats);
+        assert!(matches!(stats, Operation::CacheRead { resource } if resource == "stats"));
+
+        let public_key = operation_for(&ClientRpcRequest::NixCacheGetPublicKey);
+        assert!(matches!(public_key, Operation::CacheRead { resource } if resource == "public-key"));
+    }
+
+    #[test]
+    fn generic_cache_prefixes_do_not_authorize_cache_requests() {
+        let generic_cache_read = Capability::Read {
+            prefix: "_cache:".to_string(),
+        };
+        let generic_sys_read = Capability::Read {
+            prefix: "_sys:nix-cache:".to_string(),
+        };
+        let cache_read = Capability::CacheRead {
+            resource_prefix: "narinfo:".to_string(),
+        };
+
+        let query = operation_for(&ClientRpcRequest::CacheQuery {
+            store_hash: "abc123".to_string(),
+        });
+        assert!(!generic_cache_read.authorizes(&query));
+        assert!(cache_read.authorizes(&query));
+
+        let public_key = operation_for(&ClientRpcRequest::NixCacheGetPublicKey);
+        assert!(!generic_sys_read.authorizes(&public_key));
+        assert!(
+            Capability::CacheRead {
+                resource_prefix: "public-key".to_string(),
+            }
+            .authorizes(&public_key)
+        );
     }
 
     #[test]

@@ -1,5 +1,5 @@
 {
-  "generated": "2026-05-05T01:06:02Z",
+  "generated": "2026-05-05T01:29:22Z",
   "scanner": "production to_operation files before #[cfg(test)] modules; generic data operations on known remaining internal-domain files/prefix windows",
   "completed_slices": [
     {
@@ -33,25 +33,27 @@
     {
       "surface": "Observability",
       "evidence": "ObservabilityRead/ObservabilityWrite mappings for traces, metrics, and alerts; generic _sys:metrics: negative tests"
+    },
+    {
+      "surface": "Nix binary cache",
+      "evidence": "CacheRead mappings for narinfo lookup/download, cache stats, public signing key, and migration status/validation; generic _cache:/_sys:nix-cache: negative tests"
     }
   ],
-  "observability_slice": {
+  "cache_slice": {
     "generic_prefixes": [
-      "_sys:traces:",
-      "_sys:metrics:",
-      "_sys:metrics_meta:",
-      "_sys:alerts:"
+      "_cache:narinfo:",
+      "_cache:stats",
+      "_cache:migration:",
+      "_sys:nix-cache:public-key"
     ],
     "mappings": {
-      "trace reads": "Operation::ObservabilityRead { resource: \"trace:\" }",
-      "trace ingest": "Operation::ObservabilityWrite { resource: \"trace:\" }",
-      "metric reads": "Operation::ObservabilityRead { resource: \"metric:\" }",
-      "metric ingest": "Operation::ObservabilityWrite { resource: \"metric:\" }",
-      "alert reads": "Operation::ObservabilityRead { resource: \"alert:\" }",
-      "alert create/delete/evaluate": "Operation::ObservabilityWrite { resource: \"alert:rule:\" | \"alert:state:\" }"
+      "narinfo query/download": "Operation::CacheRead { resource: \"narinfo:<store_hash>\" }",
+      "cache stats": "Operation::CacheRead { resource: \"stats\" }",
+      "nix cache public signing key": "Operation::CacheRead { resource: \"public-key\" }",
+      "cache migration status/validation": "Operation::CacheRead { resource: \"migration:\" }"
     },
     "generic_prefix_capabilities_rejected": true,
-    "root_token_includes_observability_capabilities": true
+    "root_token_includes_cache_capabilities": true
   },
   "regressions": [
     "secrets_kv_requests_use_secrets_capabilities_not_generic_prefixes",
@@ -74,7 +76,9 @@
     "coordination_requests_use_domain_specific_capabilities",
     "lease_requests_use_domain_specific_capabilities",
     "observability_requests_use_domain_specific_capabilities",
-    "generic_sys_prefixes_do_not_authorize_observability_requests"
+    "generic_sys_prefixes_do_not_authorize_observability_requests",
+    "cache_requests_require_cache_scoped_operations",
+    "generic_cache_prefixes_do_not_authorize_cache_requests"
   ],
   "remaining_generic_internal_domain_mappings": [
     {
@@ -86,26 +90,6 @@
       "path": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
       "line": 27,
       "text": "| ClientRpcRequest::AutomergeGenerateSyncMessage { .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 65,
-      "text": "Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 69,
-      "text": "ClientRpcRequest::CacheStats => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 72,
-      "text": "ClientRpcRequest::NixCacheGetPublicKey => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 84,
-      "text": "Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
@@ -128,5 +112,5 @@
       "text": "ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {"
     }
   ],
-  "remaining_count": 10
+  "remaining_count": 6
 }

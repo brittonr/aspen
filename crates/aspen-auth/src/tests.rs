@@ -653,6 +653,12 @@ fn test_generate_root_token() {
     assert!(token.capabilities.contains(&Capability::FederationPush {
         repo_prefix: String::new(),
     }));
+    assert!(token.capabilities.contains(&Capability::CacheRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::CacheWrite {
+        resource_prefix: String::new(),
+    }));
     assert!(token.capabilities.contains(&Capability::SnixRead {
         resource_prefix: String::new(),
     }));
@@ -730,6 +736,26 @@ fn test_generate_root_token() {
             None,
         )
         .expect("root token should authorize observability writes");
+
+    verifier
+        .authorize(
+            &token,
+            &Operation::CacheRead {
+                resource: "narinfo:abc".into(),
+            },
+            None,
+        )
+        .expect("root token should authorize cache reads");
+
+    verifier
+        .authorize(
+            &token,
+            &Operation::CacheWrite {
+                resource: "migration:".into(),
+            },
+            None,
+        )
+        .expect("root token should authorize cache writes");
 
     verifier
         .authorize(

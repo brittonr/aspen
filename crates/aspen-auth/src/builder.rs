@@ -279,6 +279,12 @@ pub fn generate_root_token(secret_key: &SecretKey, lifetime: Duration) -> Result
         .with_capability(Capability::FederationPush {
             repo_prefix: String::new(),
         })
+        .with_capability(Capability::CacheRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::CacheWrite {
+            resource_prefix: String::new(),
+        })
         .with_capability(Capability::SnixRead {
             resource_prefix: String::new(),
         })

@@ -179,14 +179,14 @@ impl CiRequest {
     fn to_operation_cache_snix(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::CacheQuery { store_hash } | Self::CacheDownload { store_hash } => Some(Operation::Read {
-                key: format!("_cache:narinfo:{store_hash}"),
+            Self::CacheQuery { store_hash } | Self::CacheDownload { store_hash } => Some(Operation::CacheRead {
+                resource: format!("narinfo:{store_hash}"),
             }),
-            Self::CacheStats => Some(Operation::Read {
-                key: "_cache:stats".to_string(),
+            Self::CacheStats => Some(Operation::CacheRead {
+                resource: "stats".to_string(),
             }),
-            Self::NixCacheGetPublicKey => Some(Operation::Read {
-                key: "_sys:nix-cache:public-key".to_string(),
+            Self::NixCacheGetPublicKey => Some(Operation::CacheRead {
+                resource: "public-key".to_string(),
             }),
 
             Self::SnixDirectoryGet { digest } => Some(Operation::SnixRead {
@@ -207,8 +207,8 @@ impl CiRequest {
                 action: "cache_migration".to_string(),
             }),
             #[cfg(feature = "ci")]
-            Self::CacheMigrationStatus | Self::CacheMigrationValidate { .. } => Some(Operation::Read {
-                key: "_cache:migration:".to_string(),
+            Self::CacheMigrationStatus | Self::CacheMigrationValidate { .. } => Some(Operation::CacheRead {
+                resource: "migration:".to_string(),
             }),
 
             _ => None,

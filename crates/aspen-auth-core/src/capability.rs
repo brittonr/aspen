@@ -369,6 +369,20 @@ pub enum Capability {
     },
 
     // ==========================================================================
+    // Nix Cache Capabilities
+    // ==========================================================================
+    /// Read binary-cache metadata, tickets, or migration status matching a resource prefix.
+    CacheRead {
+        /// Cache resource prefix. Empty prefix matches all cache resources.
+        resource_prefix: String,
+    },
+    /// Mutate binary-cache state matching a resource prefix.
+    CacheWrite {
+        /// Cache resource prefix. Empty prefix matches all cache resources.
+        resource_prefix: String,
+    },
+
+    // ==========================================================================
     // SNIX Store Capabilities
     // ==========================================================================
     /// Read SNIX store resources matching a resource prefix.
@@ -452,6 +466,7 @@ impl Capability {
             .or_else(|| self.authorizes_coordination(op))
             .or_else(|| self.authorizes_observability(op))
             .or_else(|| self.authorizes_federation(op))
+            .or_else(|| self.authorizes_cache(op))
             .or_else(|| self.authorizes_snix(op))
             .unwrap_or(false)
     }
@@ -713,6 +728,19 @@ impl Capability {
         }
     }
 
+    fn authorizes_cache(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::CacheRead { resource_prefix }, Operation::CacheRead { resource })
+            | (Capability::CacheWrite { resource_prefix }, Operation::CacheWrite { resource }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: resource_prefix,
+                    candidate: resource,
+                }))
+            }
+            _ => None,
+        }
+    }
+
     fn authorizes_snix(&self, op: &Operation) -> Option<bool> {
         match (self, op) {
             (Capability::SnixRead { resource_prefix }, Operation::SnixRead { resource })
@@ -754,6 +782,7 @@ impl Capability {
             .or_else(|| self.contains_coordination(other))
             .or_else(|| self.contains_observability(other))
             .or_else(|| self.contains_federation(other))
+            .or_else(|| self.contains_cache(other))
             .or_else(|| self.contains_snix(other))
             .unwrap_or(false)
     }
@@ -1101,6 +1130,27 @@ impl Capability {
         }
     }
 
+    fn contains_cache(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (
+                Capability::CacheRead {
+                    resource_prefix: parent,
+                },
+                Capability::CacheRead { resource_prefix: child },
+            )
+            | (
+                Capability::CacheWrite {
+                    resource_prefix: parent,
+                },
+                Capability::CacheWrite { resource_prefix: child },
+            ) => Some(matches_prefix_scope(PrefixScope {
+                prefix: parent,
+                candidate: child,
+            })),
+            _ => None,
+        }
+    }
+
     fn contains_snix(&self, other: &Capability) -> Option<bool> {
         match (self, other) {
             (
@@ -1387,6 +1437,16 @@ pub enum Operation {
         /// Federated resource ID (short form).
         fed_id: String,
     },
+    /// Read binary-cache metadata, tickets, or migration status.
+    CacheRead {
+        /// Cache resource identifier.
+        resource: String,
+    },
+    /// Mutate binary-cache state.
+    CacheWrite {
+        /// Cache resource identifier.
+        resource: String,
+    },
     /// Read a SNIX store resource.
     SnixRead {
         /// SNIX resource ID, e.g. `dir:<digest>` or `pathinfo:<digest>`.
@@ -1456,6 +1516,9 @@ impl fmt::Display for Operation {
             // Federation operations
             Operation::FederationPull { fed_id } => write!(f, "FederationPull({fed_id})"),
             Operation::FederationPush { fed_id } => write!(f, "FederationPush({fed_id})"),
+            // Cache operations
+            Operation::CacheRead { resource } => write!(f, "CacheRead({resource})"),
+            Operation::CacheWrite { resource } => write!(f, "CacheWrite({resource})"),
             // SNIX operations
             Operation::SnixRead { resource } => write!(f, "SnixRead({resource})"),
             Operation::SnixWrite { resource } => write!(f, "SnixWrite({resource})"),
