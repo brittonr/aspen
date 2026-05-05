@@ -8,6 +8,7 @@ Aspen already uses Nickel for CI configuration, node examples, deploy protocol c
 - **Rust-to-Nickel generation policy**: for schema-bearing Rust structs/enums that are serialized, persisted, or operator-facing, generate Nickel contracts from Rust-derived schema metadata rather than maintaining parallel hand-written schemas.
 - **Nickel-authored configuration policy**: for human-authored modular config, keep Nickel as the source of truth and have Rust consume validated exported JSON/TOML values.
 - **Drift gates**: add freshness checks proving generated Nickel contracts match Rust types and generated inventories match Nickel manifests.
+- **Crunch prior art**: require the contract registry to classify reusable `../crunch/crunch` Nickel/Rust schema patterns as vendored, adapted, or rejected before Aspen implementation work.
 - **Security boundary**: prevent Nickel configs/contracts from embedding secret material; validate secret references and capability handles instead.
 
 ## Scope

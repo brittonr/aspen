@@ -141,9 +141,27 @@ Aspen MUST use typed Nickel contracts for snix/build executor policy, trust/quor
 - WHEN the readiness policy contract and checker run
 - THEN readiness state, dependency rails, publication metadata, no-std/alloc/std class, and required evidence files MUST be validated from the Nickel policy rather than duplicated in multiple unchecked scripts
 
+### Requirement: Crunch Prior-Art Classification [r[typed-nickel-contracts.crunch-prior-art]]
+
+Aspen MUST evaluate `../crunch/crunch` Nickel and Rust schema patterns before implementing typed Nickel contract families, and the contract registry MUST classify each reusable Crunch pattern as vendored, adapted, or rejected with rationale.
+
+#### Scenario: Generic Nickel contract helpers are classified [r[typed-nickel-contracts.crunch-prior-art.generic-helpers]]
+
+- GIVEN Crunch provides generic Nickel helper patterns such as `lib/contracts.ncl`, `lib/project.ncl`, `lib/project_outputs.ncl`, `builders/mk_derivation.ncl`, `lib/inventory.ncl`, and `lib/system_module.ncl`
+- WHEN Aspen creates or updates its typed Nickel contract registry
+- THEN the registry MUST state whether each helper family is vendored directly, adapted into Aspen-specific contracts, or rejected
+- AND the rationale MUST distinguish reusable shape/default/topology contracts from Crunch-owned build semantics
+
+#### Scenario: Rust/Nickel boundary patterns are classified [r[typed-nickel-contracts.crunch-prior-art.rust-boundaries]]
+
+- GIVEN Crunch provides Rust-side schema and evidence patterns such as `crates/crunch-glue/src/types.rs`, `crates/crunch-project-core/src/manifest.rs`, `src/build_report.rs`, `src/operator_diagnostics.rs`, `src/witness_rebuild.rs`, and `crates/crunch-attestation-core/src/schema.rs`
+- WHEN Aspen selects a `rust-derived` or `nickel-authored` contract family
+- THEN the implementation plan MUST identify which Crunch Rust/Nickel boundary conventions are being reused
+- AND it MUST reject direct reuse of Crunch derivation semantics, store-path hashing behavior, witness/bootstrap workflows, and runtime build behavior unless a later Aspen-specific OpenSpec explicitly adopts them
+
 ### Requirement: Non-Candidate Boundary [r[typed-nickel-contracts.non-candidates]]
 
-Aspen MUST NOT move distributed behavior, cryptographic internals, wire discriminant compatibility ownership, raw secret material, or hot-path runtime constants into Nickel contracts.
+Aspen MUST NOT move distributed behavior, cryptographic internals, wire discriminant compatibility ownership, raw secret material, hot-path runtime constants, or Crunch-owned runtime build semantics into Nickel contracts.
 
 #### Scenario: Runtime behavior remains in Rust [r[typed-nickel-contracts.non-candidates.runtime-behavior]]
 
