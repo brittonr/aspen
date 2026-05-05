@@ -725,78 +725,7 @@ fn parse_capability(s: &str) -> Result<Capability> {
 
 /// Format a capability for display.
 fn format_capability(cap: &Capability) -> String {
-    match cap {
-        Capability::Read { prefix } => format!("read:{}", prefix),
-        Capability::Write { prefix } => format!("write:{}", prefix),
-        Capability::Delete { prefix } => format!("delete:{}", prefix),
-        Capability::Full { prefix } => format!("full:{}", prefix),
-        Capability::Watch { prefix } => format!("watch:{}", prefix),
-        Capability::ClusterAdmin => "cluster-admin".to_string(),
-        Capability::Delegate => "delegate".to_string(),
-        Capability::ShellExecute {
-            command_pattern,
-            working_dir,
-        } => match working_dir {
-            Some(wd) => format!("shell:{}@{}", command_pattern, wd),
-            None => format!("shell:{}", command_pattern),
-        },
-        // Secrets engine capabilities
-        Capability::SecretsRead { mount, prefix } => format!("secrets-read:{}:{}", mount, prefix),
-        Capability::SecretsWrite { mount, prefix } => format!("secrets-write:{}:{}", mount, prefix),
-        Capability::SecretsDelete { mount, prefix } => format!("secrets-delete:{}:{}", mount, prefix),
-        Capability::SecretsList { mount, prefix } => format!("secrets-list:{}:{}", mount, prefix),
-        Capability::SecretsFull { mount, prefix } => format!("secrets-full:{}:{}", mount, prefix),
-        // Transit engine capabilities
-        Capability::TransitEncrypt { key_prefix } => format!("transit-encrypt:{}", key_prefix),
-        Capability::TransitDecrypt { key_prefix } => format!("transit-decrypt:{}", key_prefix),
-        Capability::TransitSign { key_prefix } => format!("transit-sign:{}", key_prefix),
-        Capability::TransitVerify { key_prefix } => format!("transit-verify:{}", key_prefix),
-        Capability::TransitKeyManage { key_prefix } => format!("transit-manage:{}", key_prefix),
-        // PKI engine capabilities
-        Capability::PkiIssue { role_prefix } => format!("pki-issue:{}", role_prefix),
-        Capability::PkiRevoke => "pki-revoke".to_string(),
-        Capability::PkiReadCa => "pki-read-ca".to_string(),
-        Capability::PkiManage => "pki-manage".to_string(),
-        // Secrets admin
-        Capability::SecretsAdmin => "secrets-admin".to_string(),
-        // Net service mesh capabilities
-        Capability::NetConnect { service_prefix } => format!("net-connect:{}", service_prefix),
-        Capability::NetPublish { service_prefix } => format!("net-publish:{}", service_prefix),
-        Capability::NetAdmin => "net-admin".to_string(),
-        // CI and job capabilities
-        Capability::CiRead { resource_prefix } => format!("ci-read:{}", resource_prefix),
-        Capability::CiWrite { resource_prefix } => format!("ci-write:{}", resource_prefix),
-        Capability::JobsRead { resource_prefix } => format!("jobs-read:{}", resource_prefix),
-        Capability::JobsWrite { resource_prefix } => format!("jobs-write:{}", resource_prefix),
-        // Blob, docs, and hook capabilities
-        Capability::BlobRead { resource_prefix } => format!("blob-read:{}", resource_prefix),
-        Capability::BlobWrite { resource_prefix } => format!("blob-write:{}", resource_prefix),
-        Capability::DocsRead { resource_prefix } => format!("docs-read:{}", resource_prefix),
-        Capability::DocsWrite { resource_prefix } => format!("docs-write:{}", resource_prefix),
-        Capability::HooksRead { resource_prefix } => format!("hooks-read:{}", resource_prefix),
-        Capability::HooksWrite { resource_prefix } => format!("hooks-write:{}", resource_prefix),
-        // KV metadata and coordination capabilities
-        Capability::KvMetadataRead { resource_prefix } => format!("kv-metadata-read:{}", resource_prefix),
-        Capability::KvMetadataWrite { resource_prefix } => format!("kv-metadata-write:{}", resource_prefix),
-        Capability::CoordinationRead { resource_prefix } => format!("coordination-read:{}", resource_prefix),
-        Capability::CoordinationWrite { resource_prefix } => format!("coordination-write:{}", resource_prefix),
-        // SQL and observability capabilities
-        Capability::SqlRead { resource_prefix } => format!("sql-read:{}", resource_prefix),
-        Capability::ObservabilityRead { resource_prefix } => format!("observability-read:{}", resource_prefix),
-        Capability::ObservabilityWrite { resource_prefix } => format!("observability-write:{}", resource_prefix),
-        // Automerge capabilities
-        Capability::AutomergeRead { resource_prefix } => format!("automerge-read:{}", resource_prefix),
-        Capability::AutomergeWrite { resource_prefix } => format!("automerge-write:{}", resource_prefix),
-        // Federation sync capabilities
-        Capability::FederationPull { repo_prefix } => format!("federation-pull:{}", repo_prefix),
-        Capability::FederationPush { repo_prefix } => format!("federation-push:{}", repo_prefix),
-        // Nix cache capabilities
-        Capability::CacheRead { resource_prefix } => format!("cache-read:{}", resource_prefix),
-        Capability::CacheWrite { resource_prefix } => format!("cache-write:{}", resource_prefix),
-        // SNIX store capabilities
-        Capability::SnixRead { resource_prefix } => format!("snix-read:{}", resource_prefix),
-        Capability::SnixWrite { resource_prefix } => format!("snix-write:{}", resource_prefix),
-    }
+    cap.to_string()
 }
 
 /// Format an audience for display.

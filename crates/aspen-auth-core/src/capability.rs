@@ -38,6 +38,9 @@ struct ShellPatternContainment<'a> {
     child_pattern: &'a str,
 }
 
+/// Human-readable capability display used by operator-facing CLI output.
+pub struct CapabilityDisplayLabel<'a>(&'a Capability);
+
 /// Simple glob pattern matching for shell command authorization.
 ///
 /// Supports only `*` wildcards at the end of patterns (e.g., "pg_*").
@@ -488,6 +491,11 @@ fn shell_pattern_contains(input: ShellPatternContainment<'_>) -> bool {
 }
 
 impl Capability {
+    /// Return a human-readable display label for operator-facing CLI output.
+    pub fn display_label(&self) -> CapabilityDisplayLabel<'_> {
+        CapabilityDisplayLabel(self)
+    }
+
     /// Check if this capability authorizes the given operation.
     ///
     /// Returns true if this capability grants permission for the operation.
@@ -1634,6 +1642,145 @@ pub enum Operation {
     },
 }
 
+impl fmt::Display for Capability {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Capability::Read { prefix } => write!(f, "read:{prefix}"),
+            Capability::Write { prefix } => write!(f, "write:{prefix}"),
+            Capability::Delete { prefix } => write!(f, "delete:{prefix}"),
+            Capability::Full { prefix } => write!(f, "full:{prefix}"),
+            Capability::Watch { prefix } => write!(f, "watch:{prefix}"),
+            Capability::ClusterAdmin => write!(f, "cluster-admin"),
+            Capability::Delegate => write!(f, "delegate"),
+            Capability::ShellExecute {
+                command_pattern,
+                working_dir,
+            } => match working_dir {
+                Some(working_dir) => write!(f, "shell:{command_pattern}@{working_dir}"),
+                None => write!(f, "shell:{command_pattern}"),
+            },
+            Capability::SecretsRead { mount, prefix } => write!(f, "secrets-read:{mount}:{prefix}"),
+            Capability::SecretsWrite { mount, prefix } => write!(f, "secrets-write:{mount}:{prefix}"),
+            Capability::SecretsDelete { mount, prefix } => write!(f, "secrets-delete:{mount}:{prefix}"),
+            Capability::SecretsList { mount, prefix } => write!(f, "secrets-list:{mount}:{prefix}"),
+            Capability::SecretsFull { mount, prefix } => write!(f, "secrets-full:{mount}:{prefix}"),
+            Capability::TransitEncrypt { key_prefix } => write!(f, "transit-encrypt:{key_prefix}"),
+            Capability::TransitDecrypt { key_prefix } => write!(f, "transit-decrypt:{key_prefix}"),
+            Capability::TransitSign { key_prefix } => write!(f, "transit-sign:{key_prefix}"),
+            Capability::TransitVerify { key_prefix } => write!(f, "transit-verify:{key_prefix}"),
+            Capability::TransitKeyManage { key_prefix } => write!(f, "transit-manage:{key_prefix}"),
+            Capability::PkiIssue { role_prefix } => write!(f, "pki-issue:{role_prefix}"),
+            Capability::PkiRevoke => write!(f, "pki-revoke"),
+            Capability::PkiReadCa => write!(f, "pki-read-ca"),
+            Capability::PkiManage => write!(f, "pki-manage"),
+            Capability::SecretsAdmin => write!(f, "secrets-admin"),
+            Capability::NetConnect { service_prefix } => write!(f, "net-connect:{service_prefix}"),
+            Capability::NetPublish { service_prefix } => write!(f, "net-publish:{service_prefix}"),
+            Capability::NetAdmin => write!(f, "net-admin"),
+            Capability::CiRead { resource_prefix } => write!(f, "ci-read:{resource_prefix}"),
+            Capability::CiWrite { resource_prefix } => write!(f, "ci-write:{resource_prefix}"),
+            Capability::JobsRead { resource_prefix } => write!(f, "jobs-read:{resource_prefix}"),
+            Capability::JobsWrite { resource_prefix } => write!(f, "jobs-write:{resource_prefix}"),
+            Capability::BlobRead { resource_prefix } => write!(f, "blob-read:{resource_prefix}"),
+            Capability::BlobWrite { resource_prefix } => write!(f, "blob-write:{resource_prefix}"),
+            Capability::DocsRead { resource_prefix } => write!(f, "docs-read:{resource_prefix}"),
+            Capability::DocsWrite { resource_prefix } => write!(f, "docs-write:{resource_prefix}"),
+            Capability::HooksRead { resource_prefix } => write!(f, "hooks-read:{resource_prefix}"),
+            Capability::HooksWrite { resource_prefix } => write!(f, "hooks-write:{resource_prefix}"),
+            Capability::KvMetadataRead { resource_prefix } => write!(f, "kv-metadata-read:{resource_prefix}"),
+            Capability::KvMetadataWrite { resource_prefix } => write!(f, "kv-metadata-write:{resource_prefix}"),
+            Capability::CoordinationRead { resource_prefix } => write!(f, "coordination-read:{resource_prefix}"),
+            Capability::CoordinationWrite { resource_prefix } => write!(f, "coordination-write:{resource_prefix}"),
+            Capability::SqlRead { resource_prefix } => write!(f, "sql-read:{resource_prefix}"),
+            Capability::ObservabilityRead { resource_prefix } => write!(f, "observability-read:{resource_prefix}"),
+            Capability::ObservabilityWrite { resource_prefix } => write!(f, "observability-write:{resource_prefix}"),
+            Capability::AutomergeRead { resource_prefix } => write!(f, "automerge-read:{resource_prefix}"),
+            Capability::AutomergeWrite { resource_prefix } => write!(f, "automerge-write:{resource_prefix}"),
+            Capability::FederationPull { repo_prefix } => write!(f, "federation-pull:{repo_prefix}"),
+            Capability::FederationPush { repo_prefix } => write!(f, "federation-push:{repo_prefix}"),
+            Capability::CacheRead { resource_prefix } => write!(f, "cache-read:{resource_prefix}"),
+            Capability::CacheWrite { resource_prefix } => write!(f, "cache-write:{resource_prefix}"),
+            Capability::SnixRead { resource_prefix } => write!(f, "snix-read:{resource_prefix}"),
+            Capability::SnixWrite { resource_prefix } => write!(f, "snix-write:{resource_prefix}"),
+        }
+    }
+}
+
+impl fmt::Display for CapabilityDisplayLabel<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0 {
+            Capability::Full { prefix } if prefix.is_empty() => write!(f, "Full (all keys)"),
+            Capability::Full { prefix } => write!(f, "Full (prefix: {prefix})"),
+            Capability::Read { prefix } => write!(f, "Read (prefix: {prefix})"),
+            Capability::Write { prefix } => write!(f, "Write (prefix: {prefix})"),
+            Capability::Delete { prefix } => write!(f, "Delete (prefix: {prefix})"),
+            Capability::Watch { prefix } => write!(f, "Watch (prefix: {prefix})"),
+            Capability::ClusterAdmin => write!(f, "ClusterAdmin"),
+            Capability::Delegate => write!(f, "Delegate"),
+            Capability::ShellExecute {
+                command_pattern,
+                working_dir,
+            } => match working_dir {
+                Some(working_dir) => write!(f, "ShellExecute (pattern: {command_pattern}, dir: {working_dir})"),
+                None => write!(f, "ShellExecute (pattern: {command_pattern})"),
+            },
+            Capability::SecretsRead { mount, prefix } => write!(f, "SecretsRead (mount: {mount}, prefix: {prefix})"),
+            Capability::SecretsWrite { mount, prefix } => write!(f, "SecretsWrite (mount: {mount}, prefix: {prefix})"),
+            Capability::SecretsDelete { mount, prefix } => {
+                write!(f, "SecretsDelete (mount: {mount}, prefix: {prefix})")
+            }
+            Capability::SecretsList { mount, prefix } => write!(f, "SecretsList (mount: {mount}, prefix: {prefix})"),
+            Capability::SecretsFull { mount, prefix } => write!(f, "SecretsFull (mount: {mount}, prefix: {prefix})"),
+            Capability::SecretsAdmin => write!(f, "SecretsAdmin"),
+            Capability::TransitEncrypt { key_prefix } => write!(f, "TransitEncrypt (key_prefix: {key_prefix})"),
+            Capability::TransitDecrypt { key_prefix } => write!(f, "TransitDecrypt (key_prefix: {key_prefix})"),
+            Capability::TransitSign { key_prefix } => write!(f, "TransitSign (key_prefix: {key_prefix})"),
+            Capability::TransitVerify { key_prefix } => write!(f, "TransitVerify (key_prefix: {key_prefix})"),
+            Capability::TransitKeyManage { key_prefix } => write!(f, "TransitKeyManage (key_prefix: {key_prefix})"),
+            Capability::PkiIssue { role_prefix } => write!(f, "PkiIssue (role: {role_prefix})"),
+            Capability::PkiRevoke => write!(f, "PkiRevoke"),
+            Capability::PkiReadCa => write!(f, "PkiReadCa"),
+            Capability::PkiManage => write!(f, "PkiManage"),
+            Capability::NetConnect { service_prefix } => write!(f, "NetConnect (prefix: {service_prefix})"),
+            Capability::NetPublish { service_prefix } => write!(f, "NetPublish (prefix: {service_prefix})"),
+            Capability::NetAdmin => write!(f, "NetAdmin"),
+            Capability::CiRead { resource_prefix } => write!(f, "CiRead (prefix: {resource_prefix})"),
+            Capability::CiWrite { resource_prefix } => write!(f, "CiWrite (prefix: {resource_prefix})"),
+            Capability::JobsRead { resource_prefix } => write!(f, "JobsRead (prefix: {resource_prefix})"),
+            Capability::JobsWrite { resource_prefix } => write!(f, "JobsWrite (prefix: {resource_prefix})"),
+            Capability::BlobRead { resource_prefix } => write!(f, "BlobRead (prefix: {resource_prefix})"),
+            Capability::BlobWrite { resource_prefix } => write!(f, "BlobWrite (prefix: {resource_prefix})"),
+            Capability::DocsRead { resource_prefix } => write!(f, "DocsRead (prefix: {resource_prefix})"),
+            Capability::DocsWrite { resource_prefix } => write!(f, "DocsWrite (prefix: {resource_prefix})"),
+            Capability::HooksRead { resource_prefix } => write!(f, "HooksRead (prefix: {resource_prefix})"),
+            Capability::HooksWrite { resource_prefix } => write!(f, "HooksWrite (prefix: {resource_prefix})"),
+            Capability::KvMetadataRead { resource_prefix } => write!(f, "KvMetadataRead (prefix: {resource_prefix})"),
+            Capability::KvMetadataWrite { resource_prefix } => write!(f, "KvMetadataWrite (prefix: {resource_prefix})"),
+            Capability::CoordinationRead { resource_prefix } => {
+                write!(f, "CoordinationRead (prefix: {resource_prefix})")
+            }
+            Capability::CoordinationWrite { resource_prefix } => {
+                write!(f, "CoordinationWrite (prefix: {resource_prefix})")
+            }
+            Capability::SqlRead { resource_prefix } => write!(f, "SqlRead (prefix: {resource_prefix})"),
+            Capability::ObservabilityRead { resource_prefix } => {
+                write!(f, "ObservabilityRead (prefix: {resource_prefix})")
+            }
+            Capability::ObservabilityWrite { resource_prefix } => {
+                write!(f, "ObservabilityWrite (prefix: {resource_prefix})")
+            }
+            Capability::AutomergeRead { resource_prefix } => write!(f, "AutomergeRead (prefix: {resource_prefix})"),
+            Capability::AutomergeWrite { resource_prefix } => write!(f, "AutomergeWrite (prefix: {resource_prefix})"),
+            Capability::FederationPull { repo_prefix } => write!(f, "FederationPull (prefix: {repo_prefix})"),
+            Capability::FederationPush { repo_prefix } => write!(f, "FederationPush (prefix: {repo_prefix})"),
+            Capability::CacheRead { resource_prefix } => write!(f, "CacheRead (prefix: {resource_prefix})"),
+            Capability::CacheWrite { resource_prefix } => write!(f, "CacheWrite (prefix: {resource_prefix})"),
+            Capability::SnixRead { resource_prefix } => write!(f, "SnixRead (prefix: {resource_prefix})"),
+            Capability::SnixWrite { resource_prefix } => write!(f, "SnixWrite (prefix: {resource_prefix})"),
+        }
+    }
+}
+
 impl fmt::Display for Operation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -1714,6 +1861,75 @@ mod tests {
     use alloc::vec;
 
     use super::*;
+
+    #[test]
+    fn capability_display_uses_token_capability_syntax() {
+        assert_eq!(
+            Capability::ShellExecute {
+                command_pattern: "nix-*".to_string(),
+                working_dir: Some("/repo".to_string()),
+            }
+            .to_string(),
+            "shell:nix-*@/repo"
+        );
+        assert_eq!(
+            Capability::CiRead {
+                resource_prefix: "repo:aspen".to_string(),
+            }
+            .to_string(),
+            "ci-read:repo:aspen"
+        );
+        assert_eq!(
+            Capability::BlobWrite {
+                resource_prefix: "blob:".to_string(),
+            }
+            .to_string(),
+            "blob-write:blob:"
+        );
+        assert_eq!(
+            Capability::CacheWrite {
+                resource_prefix: "nar:".to_string(),
+            }
+            .to_string(),
+            "cache-write:nar:"
+        );
+        assert_eq!(
+            Capability::AutomergeRead {
+                resource_prefix: "doc:".to_string(),
+            }
+            .to_string(),
+            "automerge-read:doc:"
+        );
+    }
+
+    #[test]
+    fn capability_display_label_uses_operator_friendly_syntax() {
+        assert_eq!(Capability::Full { prefix: String::new() }.display_label().to_string(), "Full (all keys)");
+        assert_eq!(
+            Capability::CiRead {
+                resource_prefix: "run:".to_string(),
+            }
+            .display_label()
+            .to_string(),
+            "CiRead (prefix: run:)"
+        );
+        assert_eq!(
+            Capability::BlobWrite {
+                resource_prefix: "blob:".to_string(),
+            }
+            .display_label()
+            .to_string(),
+            "BlobWrite (prefix: blob:)"
+        );
+        assert_eq!(
+            Capability::CacheRead {
+                resource_prefix: "narinfo:".to_string(),
+            }
+            .display_label()
+            .to_string(),
+            "CacheRead (prefix: narinfo:)"
+        );
+    }
 
     #[test]
     fn read_capability_requires_every_batch_read_key_in_scope() {
