@@ -196,9 +196,10 @@ INSTA_UPDATE=always cargo test                     # Auto-accept new snapshots
 # Linting and formatting
 cargo clippy --all-targets -- --deny warnings
 nix run .#rustfmt                        # Format Rust (IMPORTANT: use this, not cargo fmt)
-# Tiger Style: all 32 lints enabled workspace-wide via cargo-tigerstyle.
+# Tiger Style: cargo-tigerstyle enforces the lint catalog workspace-wide.
 # In devShell: `cargo tigerstyle check` runs all lints.
-# CI: `nix flake check` includes `checks.tigerstyle-check`.
+# CI: `nix flake check` includes `checks.tigerstyle-check` and
+# `checks.tigerstyle-policy-artifacts` for the generated-artifact structural policy seam.
 # Script: `scripts/tigerstyle-check.sh` wraps cargo-tigerstyle with fallback.
 # Lint levels and thresholds are configured in `dylint.toml`.
 # Allow-by-default lints are promoted to warn for full coverage.

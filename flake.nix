@@ -2637,6 +2637,23 @@
                   touch $out
                 '';
 
+              # Tiger Style structural policy check via generated Nickel artifacts.
+              # This gates the consumer seam used by downstream Tigerstyle policy artifacts.
+              tigerstyle-policy-artifacts = tigerstyle.lib.mkPolicyArtifactConsumerCheck {
+                inherit system;
+                src = ./.;
+                family = "embedded";
+                sourceSubdirs = [
+                  "crates/aspen-core"
+                  "crates/aspen-coordination"
+                  "crates/aspen-rpc-handlers"
+                ];
+                expectedDiagnostics = 0;
+                requiredPolicyIds = [
+                  "tigerstyle.embedded.bounded-queues"
+                ];
+              };
+
               # Tiger Style lints via cargo-tigerstyle.
               # Uses ciSrc with vendored deps and fails on any Tiger Style violation.
               tigerstyle-check = let
