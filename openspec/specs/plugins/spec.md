@@ -1,4 +1,4 @@
-# Plugins Specification
+# plugins Specification
 
 ## Purpose
 

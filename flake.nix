@@ -2558,6 +2558,19 @@
                 echo "ciSrc has no unvendored git deps" > $out
               '';
 
+              openspec-canonical-hygiene =
+                pkgs.runCommand "openspec-canonical-hygiene" {
+                  nativeBuildInputs = [pkgs.python3];
+                } ''
+                  mkdir -p source/openspec source/scripts
+                  cp -r ${./openspec/specs} source/openspec/specs
+                  cp ${./scripts/check-openspec-canonical-hygiene.py} source/scripts/check-openspec-canonical-hygiene.py
+                  chmod +x source/scripts/check-openspec-canonical-hygiene.py
+                  cd source
+                  python3 scripts/check-openspec-canonical-hygiene.py --json > report.json
+                  cp report.json $out
+                '';
+
               forge-web-demo-prep =
                 pkgs.runCommand "forge-web-demo-prep" {
                   nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.git pkgs.gnugrep pkgs.gawk pkgs.shellcheck rustToolChain];

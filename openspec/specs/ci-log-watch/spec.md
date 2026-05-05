@@ -1,4 +1,4 @@
-# CI Log Watch Specification
+# ci-log-watch Specification
 
 ## Purpose
 

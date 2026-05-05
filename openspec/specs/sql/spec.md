@@ -1,4 +1,4 @@
-# SQL Specification
+# sql Specification
 
 ## Purpose
 

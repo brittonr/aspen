@@ -1,4 +1,4 @@
-# Proxy Specification
+# proxy Specification
 
 ## Purpose
 

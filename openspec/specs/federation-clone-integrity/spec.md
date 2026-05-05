@@ -1,4 +1,4 @@
-# Federation Clone Integrity
+# federation-clone-integrity Specification
 
 ## Purpose
 

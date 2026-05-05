@@ -1,4 +1,4 @@
-# dogfood-local-connectivity
+# dogfood-local-connectivity Specification
 
 ## Purpose
 

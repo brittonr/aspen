@@ -1,4 +1,4 @@
-# Blob & Docs Specification
+# blob Specification
 
 ## Purpose
 

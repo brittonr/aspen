@@ -1,3 +1,5 @@
+# openspec-governance Specification
+
 ## Purpose
 
 Govern OpenSpec authoring, validation, and archival workflows so active changes remain reviewable, traceable, and deterministic before implementation and archive.

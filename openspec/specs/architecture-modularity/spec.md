@@ -1,3 +1,5 @@
+# architecture-modularity Specification
+
 ## Purpose
 Aspen maintains explicit crate boundaries, feature topology, and extraction contracts so reusable library surfaces stay independent from app/runtime shells unless explicitly opted in.
 ## Requirements

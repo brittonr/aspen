@@ -1,4 +1,4 @@
-# Worker Readiness Specification
+# worker-readiness Specification
 
 ## Purpose
 

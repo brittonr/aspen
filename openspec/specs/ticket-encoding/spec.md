@@ -1,4 +1,4 @@
-# Ticket Encoding Specification
+# ticket-encoding Specification
 
 ## Purpose
 

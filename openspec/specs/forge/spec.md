@@ -1,4 +1,4 @@
-# Forge Specification
+# forge Specification
 
 ## Purpose
 
