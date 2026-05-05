@@ -1,116 +1,61 @@
 {
-  "generated": "2026-05-05T01:29:22Z",
-  "scanner": "production to_operation files before #[cfg(test)] modules; generic data operations on known remaining internal-domain files/prefix windows",
-  "completed_slices": [
-    {
-      "surface": "Secrets/trust",
-      "evidence": "domain-specific secrets/transit/PKI operations; generic _secrets: Read/Write negative tests"
+  "generated": "2026-05-05T01:41:36Z",
+  "change": "full-aspen-hardening-audit",
+  "phase": "Phase 3 domain-specific capability cleanup",
+  "summary": {
+    "remaining": 4,
+    "remaining_by_file": {
+      "kv_ops.rs": 3,
+      "sql_ops.rs": 1
     },
-    {
-      "surface": "SNIX store",
-      "evidence": "SnixRead/SnixWrite mappings and generic snix: negative tests"
-    },
-    {
-      "surface": "Net service mesh",
-      "evidence": "NetPublish/NetUnpublish/NetConnect/NetAdmin mappings; generic /_sys/net/svc/ negative tests"
-    },
-    {
-      "surface": "CI pipeline",
-      "evidence": "CiRead/CiWrite mappings and generic _ci: negative tests"
-    },
-    {
-      "surface": "Jobs/workers",
-      "evidence": "JobsRead/JobsWrite mappings and generic _jobs:/__worker: negative tests"
-    },
-    {
-      "surface": "Blob/docs/hooks",
-      "evidence": "BlobRead/BlobWrite, DocsRead/DocsWrite, and HooksRead/HooksWrite mappings; generic _blob:/_docs:/_hooks: negative tests"
-    },
-    {
-      "surface": "Coordination primitives and leases",
-      "evidence": "CoordinationRead/CoordinationWrite mappings and generic coordination-prefix negative tests for queues and leases"
-    },
-    {
-      "surface": "Observability",
-      "evidence": "ObservabilityRead/ObservabilityWrite mappings for traces, metrics, and alerts; generic _sys:metrics: negative tests"
-    },
-    {
-      "surface": "Nix binary cache",
-      "evidence": "CacheRead mappings for narinfo lookup/download, cache stats, public signing key, and migration status/validation; generic _cache:/_sys:nix-cache: negative tests"
-    }
-  ],
-  "cache_slice": {
-    "generic_prefixes": [
-      "_cache:narinfo:",
-      "_cache:stats",
-      "_cache:migration:",
-      "_sys:nix-cache:public-key"
-    ],
-    "mappings": {
-      "narinfo query/download": "Operation::CacheRead { resource: \"narinfo:<store_hash>\" }",
-      "cache stats": "Operation::CacheRead { resource: \"stats\" }",
-      "nix cache public signing key": "Operation::CacheRead { resource: \"public-key\" }",
-      "cache migration status/validation": "Operation::CacheRead { resource: \"migration:\" }"
-    },
-    "generic_prefix_capabilities_rejected": true,
-    "root_token_includes_cache_capabilities": true
+    "latest_slice": "Automerge document/sync authorization converted to AutomergeRead/AutomergeWrite"
   },
-  "regressions": [
-    "secrets_kv_requests_use_secrets_capabilities_not_generic_prefixes",
-    "transit_and_nix_cache_requests_use_transit_capabilities",
-    "pki_requests_use_pki_capabilities_not_generic_prefixes",
-    "snix_requests_require_snix_scoped_operations",
-    "generic_kv_scopes_do_not_authorize_snix_put_operations",
-    "net_registry_requests_use_net_capabilities_not_sys_prefixes",
-    "generic_sys_prefixes_do_not_authorize_net_registry_requests",
-    "ci_requests_require_ci_scoped_operations",
-    "generic_ci_prefixes_do_not_authorize_ci_requests",
-    "job_requests_use_jobs_capabilities_not_generic_prefixes",
-    "generic_jobs_prefixes_do_not_authorize_job_requests",
-    "blob_requests_use_blob_capabilities_not_generic_prefixes",
-    "generic_blob_prefixes_do_not_authorize_blob_requests",
-    "docs_requests_use_docs_capabilities_not_generic_prefixes",
-    "generic_docs_prefixes_do_not_authorize_docs_requests",
-    "hook_requests_use_hook_capabilities_not_generic_prefixes",
-    "generic_hook_prefixes_do_not_authorize_hook_requests",
-    "coordination_requests_use_domain_specific_capabilities",
-    "lease_requests_use_domain_specific_capabilities",
-    "observability_requests_use_domain_specific_capabilities",
-    "generic_sys_prefixes_do_not_authorize_observability_requests",
-    "cache_requests_require_cache_scoped_operations",
-    "generic_cache_prefixes_do_not_authorize_cache_requests"
+  "completed_slices": [
+    "Secrets/trust",
+    "SNIX store",
+    "Net service mesh",
+    "CI pipeline",
+    "Jobs/workers",
+    "Blob/docs/hooks",
+    "Coordination primitives and leases",
+    "Observability",
+    "Nix binary cache",
+    "Automerge documents and sync"
   ],
-  "remaining_generic_internal_domain_mappings": [
+  "automerge_slice": {
+    "source_handles": [
+      "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
+      "crates/aspen-client-api/src/messages/automerge.rs",
+      "crates/aspen-auth-core/src/capability.rs",
+      "crates/aspen-auth/src/builder.rs",
+      "crates/aspen-auth/src/tests.rs"
+    ],
+    "negative_tests": [
+      "automerge_requests_use_domain_specific_capabilities",
+      "generic_automerge_prefixes_do_not_authorize_automerge_requests"
+    ],
+    "root_token_coverage": "Root token generation includes broad AutomergeRead and AutomergeWrite capabilities."
+  },
+  "remaining_mappings": [
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
-      "line": 16,
-      "text": "| ClientRpcRequest::AutomergeReceiveSyncMessage { .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
-      "line": 27,
-      "text": "| ClientRpcRequest::AutomergeGenerateSyncMessage { .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+      "file": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
       "line": 20,
-      "text": "ClientRpcRequest::GetVaultKeys { vault_name: key } => Some(Some(Operation::Read { key: key.clone() })),"
+      "snippet": "ClientRpcRequest::GetVaultKeys { vault_name: key } => Some(Some(Operation::Read { key: key.clone() })),"
     },
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+      "file": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
       "line": 32,
-      "text": "ClientRpcRequest::IndexScan { .. } | ClientRpcRequest::IndexList => Some(Some(Operation::Read {"
+      "snippet": "ClientRpcRequest::IndexScan { .. } | ClientRpcRequest::IndexList => Some(Some(Operation::Read {"
     },
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+      "file": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
       "line": 38,
-      "text": "Some(Some(Operation::Write {"
+      "snippet": "Some(Some(Operation::Write {"
     },
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/sql_ops.rs",
+      "file": "crates/aspen-client-api/src/messages/to_operation/sql_ops.rs",
       "line": 10,
-      "text": "ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {"
+      "snippet": "ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {"
     }
-  ],
-  "remaining_count": 6
+  ]
 }

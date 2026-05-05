@@ -65,26 +65,60 @@ pub enum AutomergeRequest {
 }
 
 #[cfg(feature = "auth")]
+fn document_resource(document_id: &str) -> String {
+    alloc::format!("doc:{document_id}")
+}
+
+#[cfg(feature = "auth")]
+fn create_resource(document_id: Option<&str>, namespace: Option<&str>) -> String {
+    if let Some(document_id) = document_id {
+        return document_resource(document_id);
+    }
+    if let Some(namespace) = namespace {
+        return alloc::format!("namespace:{namespace}");
+    }
+    "document:".to_string()
+}
+
+#[cfg(feature = "auth")]
+fn list_resource(namespace: Option<&str>, tag: Option<&str>) -> String {
+    if let Some(namespace) = namespace {
+        return alloc::format!("namespace:{namespace}");
+    }
+    if let Some(tag) = tag {
+        return alloc::format!("tag:{tag}");
+    }
+    "document:".to_string()
+}
+
+#[cfg(feature = "auth")]
 impl AutomergeRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::Create { .. }
-            | Self::Save { .. }
-            | Self::Delete { .. }
-            | Self::ApplyChanges { .. }
-            | Self::Merge { .. }
-            | Self::ReceiveSyncMessage { .. } => Some(Operation::Write {
-                key: "_automerge:".to_string(),
-                value: vec![],
+            Self::Create {
+                document_id, namespace, ..
+            } => Some(Operation::AutomergeWrite {
+                resource: create_resource(document_id.as_deref(), namespace.as_deref()),
             }),
-            Self::Get { .. }
-            | Self::List { .. }
-            | Self::GetMetadata { .. }
-            | Self::Exists { .. }
-            | Self::GenerateSyncMessage { .. } => Some(Operation::Read {
-                key: "_automerge:".to_string(),
+            Self::Save { document_id, .. }
+            | Self::Delete { document_id }
+            | Self::ApplyChanges { document_id, .. }
+            | Self::ReceiveSyncMessage { document_id, .. } => Some(Operation::AutomergeWrite {
+                resource: document_resource(document_id),
+            }),
+            Self::Merge { target_document_id, .. } => Some(Operation::AutomergeWrite {
+                resource: document_resource(target_document_id),
+            }),
+            Self::Get { document_id }
+            | Self::GetMetadata { document_id }
+            | Self::Exists { document_id }
+            | Self::GenerateSyncMessage { document_id, .. } => Some(Operation::AutomergeRead {
+                resource: document_resource(document_id),
+            }),
+            Self::List { namespace, tag, .. } => Some(Operation::AutomergeRead {
+                resource: list_resource(namespace.as_deref(), tag.as_deref()),
             }),
         }
     }

@@ -348,6 +348,20 @@ pub enum Capability {
     },
 
     // ==========================================================================
+    // Automerge Capabilities
+    // ==========================================================================
+    /// Read Automerge document resources matching a resource prefix.
+    AutomergeRead {
+        /// Automerge resource prefix. Empty prefix matches all Automerge resources.
+        resource_prefix: String,
+    },
+    /// Mutate Automerge document resources matching a resource prefix.
+    AutomergeWrite {
+        /// Automerge resource prefix. Empty prefix matches all Automerge resources.
+        resource_prefix: String,
+    },
+
+    // ==========================================================================
     // Federation Sync Capabilities
     // ==========================================================================
     /// Pull (read) federated resources matching a repo prefix.
@@ -465,6 +479,7 @@ impl Capability {
             .or_else(|| self.authorizes_blob_docs_hooks(op))
             .or_else(|| self.authorizes_coordination(op))
             .or_else(|| self.authorizes_observability(op))
+            .or_else(|| self.authorizes_automerge(op))
             .or_else(|| self.authorizes_federation(op))
             .or_else(|| self.authorizes_cache(op))
             .or_else(|| self.authorizes_snix(op))
@@ -715,6 +730,19 @@ impl Capability {
         }
     }
 
+    fn authorizes_automerge(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::AutomergeRead { resource_prefix }, Operation::AutomergeRead { resource })
+            | (Capability::AutomergeWrite { resource_prefix }, Operation::AutomergeWrite { resource }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: resource_prefix,
+                    candidate: resource,
+                }))
+            }
+            _ => None,
+        }
+    }
+
     fn authorizes_federation(&self, op: &Operation) -> Option<bool> {
         match (self, op) {
             (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id })
@@ -781,6 +809,7 @@ impl Capability {
             .or_else(|| self.contains_blob_docs_hooks(other))
             .or_else(|| self.contains_coordination(other))
             .or_else(|| self.contains_observability(other))
+            .or_else(|| self.contains_automerge(other))
             .or_else(|| self.contains_federation(other))
             .or_else(|| self.contains_cache(other))
             .or_else(|| self.contains_snix(other))
@@ -1117,6 +1146,27 @@ impl Capability {
         }
     }
 
+    fn contains_automerge(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (
+                Capability::AutomergeRead {
+                    resource_prefix: parent,
+                },
+                Capability::AutomergeRead { resource_prefix: child },
+            )
+            | (
+                Capability::AutomergeWrite {
+                    resource_prefix: parent,
+                },
+                Capability::AutomergeWrite { resource_prefix: child },
+            ) => Some(matches_prefix_scope(PrefixScope {
+                prefix: parent,
+                candidate: child,
+            })),
+            _ => None,
+        }
+    }
+
     fn contains_federation(&self, other: &Capability) -> Option<bool> {
         match (self, other) {
             (Capability::FederationPull { repo_prefix: parent }, Capability::FederationPull { repo_prefix: child })
@@ -1425,6 +1475,20 @@ pub enum Operation {
     },
 
     // ==========================================================================
+    // Automerge Operations
+    // ==========================================================================
+    /// Read an Automerge document resource.
+    AutomergeRead {
+        /// Automerge resource identifier.
+        resource: String,
+    },
+    /// Mutate an Automerge document resource.
+    AutomergeWrite {
+        /// Automerge resource identifier.
+        resource: String,
+    },
+
+    // ==========================================================================
     // Federation Sync Operations
     // ==========================================================================
     /// Pull (read) a federated resource.
@@ -1513,6 +1577,9 @@ impl fmt::Display for Operation {
             // Observability operations
             Operation::ObservabilityRead { resource } => write!(f, "ObservabilityRead({resource})"),
             Operation::ObservabilityWrite { resource } => write!(f, "ObservabilityWrite({resource})"),
+            // Automerge operations
+            Operation::AutomergeRead { resource } => write!(f, "AutomergeRead({resource})"),
+            Operation::AutomergeWrite { resource } => write!(f, "AutomergeWrite({resource})"),
             // Federation operations
             Operation::FederationPull { fed_id } => write!(f, "FederationPull({fed_id})"),
             Operation::FederationPush { fed_id } => write!(f, "FederationPush({fed_id})"),

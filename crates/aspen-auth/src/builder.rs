@@ -200,6 +200,8 @@ impl TokenBuilder {
 /// - `Full { prefix: "" }` - read/write/delete all keys
 /// - `ClusterAdmin` - cluster management operations
 /// - `Delegate` - ability to create child tokens
+/// - `AutomergeRead { resource_prefix: "" }` - read any Automerge resource
+/// - `AutomergeWrite { resource_prefix: "" }` - write any Automerge resource
 /// - `FederationPull { repo_prefix: "" }` - pull any federated resource
 /// - `FederationPush { repo_prefix: "" }` - push any federated resource
 /// - `SnixRead { resource_prefix: "" }` - read any SNIX store resource
@@ -271,6 +273,12 @@ pub fn generate_root_token(secret_key: &SecretKey, lifetime: Duration) -> Result
             resource_prefix: String::new(),
         })
         .with_capability(Capability::ObservabilityWrite {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::AutomergeRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::AutomergeWrite {
             resource_prefix: String::new(),
         })
         .with_capability(Capability::FederationPull {

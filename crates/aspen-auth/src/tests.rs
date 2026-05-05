@@ -647,6 +647,12 @@ fn test_generate_root_token() {
     assert!(token.capabilities.contains(&Capability::ObservabilityWrite {
         resource_prefix: String::new(),
     }));
+    assert!(token.capabilities.contains(&Capability::AutomergeRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::AutomergeWrite {
+        resource_prefix: String::new(),
+    }));
     assert!(token.capabilities.contains(&Capability::FederationPull {
         repo_prefix: String::new(),
     }));
@@ -736,6 +742,16 @@ fn test_generate_root_token() {
             None,
         )
         .expect("root token should authorize observability writes");
+
+    verifier
+        .authorize(
+            &token,
+            &Operation::AutomergeWrite {
+                resource: "doc:doc-1".into(),
+            },
+            None,
+        )
+        .expect("root token should authorize automerge writes");
 
     verifier
         .authorize(
