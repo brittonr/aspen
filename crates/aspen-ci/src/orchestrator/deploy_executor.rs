@@ -848,8 +848,10 @@ mod tests {
         crate::schema_gen::schemas_to_nickel("Deploy protocol contracts", &[
             ("DeployRequest", &request_schema),
             ("DeployInitResult", &init_result_schema),
-            ("DeployStatusResult", &status_result_schema),
+            // DeployStatusResult references DeployNodeStatus, so emit the node
+            // status contract first. Nickel let-bindings are not recursive.
             ("DeployNodeStatus", &node_status_schema),
+            ("DeployStatusResult", &status_result_schema),
         ])
     }
 

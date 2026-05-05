@@ -13,7 +13,7 @@ This registry records the source-of-truth decision for Aspen's typed Nickel cont
 | Family | Class | Owner source | Artifact/status |
 | --- | --- | --- | --- |
 | CI pipeline config | `nickel-authored` | `crates/aspen-ci/src/config/schema/ci_schema.ncl` | Existing embedded Nickel schema; needs continued typecheck/config tests. |
-| Deploy protocol DTOs | `rust-derived` | `crates/aspen-ci/src/orchestrator/deploy_executor.rs` | Existing generated `schemas/deploy-protocol.ncl`; needs freshness hardening. |
+| Deploy protocol DTOs | `rust-derived` | `crates/aspen-ci/src/orchestrator/deploy_executor.rs` | Generated `schemas/deploy-protocol.ncl`; snapshot/freshness checked by `cargo test -p aspen-ci test_deploy_protocol_schema_snapshot` and Nickel typechecked. |
 | Dogfood run receipt | `rust-derived` | `crates/aspen-dogfood/src/receipt.rs` | Generated `schemas/dogfood-run-receipt.ncl`; freshness checked by `scripts/generate-typed-nickel-contracts.py --check`. |
 | Native CI run receipt | `rust-derived` | `crates/aspen-client-api/src/messages/ci.rs` | Generated `schemas/ci-run-receipt.ncl`; freshness checked by `scripts/generate-typed-nickel-contracts.py --check`. |
 | Node/cluster/profile config | `nickel-authored` | `crates/aspen-nickel/src/schema/node_config.ncl` | Existing schema; needs profile/feature/trust hardening. |
@@ -60,6 +60,8 @@ The following remain Rust-owned or out-of-scope for Nickel contracts:
 Run:
 
 ```bash
+nix run nixpkgs#nickel -- typecheck schemas/deploy-protocol.ncl
+cargo test -p aspen-ci test_deploy_protocol_schema_snapshot
 python3 scripts/check-typed-nickel-contract-registry.py
 python3 scripts/generate-typed-nickel-contracts.py --check
 nix run nixpkgs#nickel -- typecheck schemas/dogfood-run-receipt.ncl

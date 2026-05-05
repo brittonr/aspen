@@ -31,6 +31,16 @@ let DeployInitResult = {
   is_accepted | Bool,
 }in
 
+# Per-node deployment status entry.
+let DeployNodeStatus = {
+  # Error if node failed.
+  error | String | optional,
+  # Node ID.
+  node_id | Number,
+  # Status string (pending, draining, upgrading, healthy, failed).
+  status | String,
+}in
+
 # Status of an in-progress deployment.
 let DeployStatusResult = {
   # Elapsed milliseconds since deployment started.
@@ -45,19 +55,9 @@ let DeployStatusResult = {
   overall_status | String | optional,
 }in
 
-# Per-node deployment status entry.
-let DeployNodeStatus = {
-  # Error if node failed.
-  error | String | optional,
-  # Node ID.
-  node_id | Number,
-  # Status string (pending, draining, upgrading, healthy, failed).
-  status | String,
-}in
-
 {
   DeployRequest,
   DeployInitResult,
-  DeployStatusResult,
   DeployNodeStatus,
+  DeployStatusResult,
 }

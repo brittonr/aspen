@@ -104,13 +104,13 @@ let ContractRegistry = {
       source_path = "crates/aspen-ci/src/orchestrator/deploy_executor.rs",
       artifact_path = "schemas/deploy-protocol.ncl",
       generated = true,
-      generation_command = "cargo run -p aspen-ci --bin generate-deploy-schema > schemas/deploy-protocol.ncl",
+      generation_command = "UPDATE_SNAPSHOTS=1 cargo test -p aspen-ci test_deploy_protocol_schema_snapshot",
       validation_commands = [
         "nix run nixpkgs#nickel -- typecheck schemas/deploy-protocol.ncl",
-        "cargo test -p aspen-ci schema_gen",
+        "cargo test -p aspen-ci test_deploy_protocol_schema_snapshot",
       ],
-      freshness_gate = "Generated schemas/deploy-protocol.ncl must match JsonSchema metadata for DeployRequest, DeployInitResult, DeployNodeStatus, and DeployStatusResult.",
-      status = "needs-hardening",
+      freshness_gate = "cargo test -p aspen-ci test_deploy_protocol_schema_snapshot rejects stale schemas/deploy-protocol.ncl after DeployRequest, DeployInitResult, DeployNodeStatus, or DeployStatusResult schema changes.",
+      status = "existing",
       notes = "Rust owns the serialized deploy request/status DTOs; Nickel validates generated operator/protocol shape only.",
     },
     {
