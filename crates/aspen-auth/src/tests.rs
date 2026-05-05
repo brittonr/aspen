@@ -641,6 +641,12 @@ fn test_generate_root_token() {
     assert!(token.capabilities.contains(&Capability::CoordinationWrite {
         resource_prefix: String::new(),
     }));
+    assert!(token.capabilities.contains(&Capability::ObservabilityRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::ObservabilityWrite {
+        resource_prefix: String::new(),
+    }));
     assert!(token.capabilities.contains(&Capability::FederationPull {
         repo_prefix: String::new(),
     }));
@@ -714,6 +720,16 @@ fn test_generate_root_token() {
             None,
         )
         .expect("root token should authorize coordination writes");
+
+    verifier
+        .authorize(
+            &token,
+            &Operation::ObservabilityWrite {
+                resource: "metric:".into(),
+            },
+            None,
+        )
+        .expect("root token should authorize observability writes");
 
     verifier
         .authorize(

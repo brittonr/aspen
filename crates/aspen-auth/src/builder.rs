@@ -267,6 +267,12 @@ pub fn generate_root_token(secret_key: &SecretKey, lifetime: Duration) -> Result
         .with_capability(Capability::CoordinationWrite {
             resource_prefix: String::new(),
         })
+        .with_capability(Capability::ObservabilityRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::ObservabilityWrite {
+            resource_prefix: String::new(),
+        })
         .with_capability(Capability::FederationPull {
             repo_prefix: String::new(),
         })

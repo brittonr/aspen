@@ -1,34 +1,39 @@
-# Domain capability audit evidence
+# Domain Capability Audit Evidence
 
 Generated: 2026-05-05T01:06:02Z
 
+## Summary
+
+Phase 3 has converted the highest-risk internal-domain request families from generic data-prefix authorization to domain-specific capabilities in focused verified slices. The latest slice converted observability traces, metrics, and alerts to `ObservabilityRead` / `ObservabilityWrite`.
+
 ## Completed focused slices
 
-- **Secrets/trust**: domain-specific secrets/transit/PKI operations; generic _secrets: Read/Write negative tests
-- **SNIX store**: SnixRead/SnixWrite mappings and generic snix: negative tests
-- **Net service mesh**: NetPublish/NetUnpublish/NetConnect/NetAdmin mappings; generic /_sys/net/svc/ negative tests
-- **CI pipeline**: CiRead/CiWrite mappings and generic _ci: negative tests
-- **Jobs/workers**: JobsRead/JobsWrite mappings and generic _jobs:/__worker: negative tests
-- **Blob/docs/hooks**: BlobRead/BlobWrite, DocsRead/DocsWrite, and HooksRead/HooksWrite mappings; generic _blob:/_docs:/_hooks: negative tests
-- **Coordination primitives and leases**: CoordinationRead/CoordinationWrite mappings and generic coordination-prefix negative tests for queues and leases
+- **Secrets/trust** — domain-specific secrets/transit/PKI operations; generic _secrets: Read/Write negative tests.
+- **SNIX store** — SnixRead/SnixWrite mappings and generic snix: negative tests.
+- **Net service mesh** — NetPublish/NetUnpublish/NetConnect/NetAdmin mappings; generic /_sys/net/svc/ negative tests.
+- **CI pipeline** — CiRead/CiWrite mappings and generic _ci: negative tests.
+- **Jobs/workers** — JobsRead/JobsWrite mappings and generic _jobs:/__worker: negative tests.
+- **Blob/docs/hooks** — BlobRead/BlobWrite, DocsRead/DocsWrite, and HooksRead/HooksWrite mappings; generic _blob:/_docs:/_hooks: negative tests.
+- **Coordination primitives and leases** — CoordinationRead/CoordinationWrite mappings and generic coordination-prefix negative tests for queues and leases.
+- **Observability** — ObservabilityRead/ObservabilityWrite mappings for traces, metrics, and alerts; generic _sys:metrics: negative tests.
 
-## Current slice: coordination primitives and leases
+## Observability slice
 
-Converted coordination and lease request authorization from generic internal storage prefixes to domain-specific `Operation::CoordinationRead` / `Operation::CoordinationWrite` with scoped `Capability::CoordinationRead` / `Capability::CoordinationWrite`.
-
-Generic data capabilities over `_queue:` and `_lease:` are covered by negative regressions and no longer authorize the audited requests. Root token generation now includes broad coordination read/write capabilities so root remains able to authorize the domain-specific operations.
+- Converted trace ingest/list/get/search, metric ingest/list/query, and alert create/delete/evaluate/list/get request mappings away from `_sys:*` generic `Read` / `Write` operations.
+- Added `Capability::ObservabilityRead` / `Capability::ObservabilityWrite` and matching `Operation` variants with prefix containment for delegation.
+- Updated root token generation to include broad observability read/write capabilities.
+- Added regressions `observability_requests_use_domain_specific_capabilities` and `generic_sys_prefixes_do_not_authorize_observability_requests`.
 
 ## Remaining generic internal-domain mappings
 
-Remaining count: 17
+Remaining count: **10**
 
-- `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs`: 7
-- `crates/aspen-client-api/src/messages/to_operation/ci_ops.rs`: 4
-- `crates/aspen-client-api/src/messages/to_operation/kv_ops.rs`: 3
-- `crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs`: 2
-- `crates/aspen-client-api/src/messages/to_operation/sql_ops.rs`: 1
+- `automerge_ops.rs`: 2
+- `ci_ops.rs`: 4
+- `kv_ops.rs`: 3
+- `sql_ops.rs`: 1
 
-## Remaining handles
+### Remaining mapping handles
 
 - `crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs:16` — `| ClientRpcRequest::AutomergeReceiveSyncMessage { .. } => Some(Some(Operation::Write {`
 - `crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs:27` — `| ClientRpcRequest::AutomergeGenerateSyncMessage { .. } => Some(Some(Operation::Read {`
@@ -39,11 +44,4 @@ Remaining count: 17
 - `crates/aspen-client-api/src/messages/to_operation/kv_ops.rs:20` — `ClientRpcRequest::GetVaultKeys { vault_name: key } => Some(Some(Operation::Read { key: key.clone() })),`
 - `crates/aspen-client-api/src/messages/to_operation/kv_ops.rs:32` — `ClientRpcRequest::IndexScan { .. } | ClientRpcRequest::IndexList => Some(Some(Operation::Read {`
 - `crates/aspen-client-api/src/messages/to_operation/kv_ops.rs:38` — `Some(Some(Operation::Write {`
-- `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs:10` — `ClientRpcRequest::TraceIngest { .. } => Some(Some(Operation::Write {`
-- `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs:17` — `| ClientRpcRequest::TraceSearch { .. } => Some(Some(Operation::Read {`
-- `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs:21` — `ClientRpcRequest::MetricIngest { .. } => Some(Some(Operation::Write {`
-- `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs:26` — `ClientRpcRequest::MetricList { .. } | ClientRpcRequest::MetricQuery { .. } => Some(Some(Operation::Read {`
-- `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs:30` — `ClientRpcRequest::AlertCreate { .. } | ClientRpcRequest::AlertDelete { .. } => Some(Some(Operation::Write {`
-- `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs:35` — `ClientRpcRequest::AlertEvaluate { .. } => Some(Some(Operation::Write {`
-- `crates/aspen-client-api/src/messages/to_operation/observability_ops.rs:40` — `ClientRpcRequest::AlertList | ClientRpcRequest::AlertGet { .. } => Some(Some(Operation::Read {`
 - `crates/aspen-client-api/src/messages/to_operation/sql_ops.rs:10` — `ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {`

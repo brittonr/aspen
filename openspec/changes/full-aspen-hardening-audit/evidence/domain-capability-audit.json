@@ -29,28 +29,29 @@
     {
       "surface": "Coordination primitives and leases",
       "evidence": "CoordinationRead/CoordinationWrite mappings and generic coordination-prefix negative tests for queues and leases"
+    },
+    {
+      "surface": "Observability",
+      "evidence": "ObservabilityRead/ObservabilityWrite mappings for traces, metrics, and alerts; generic _sys:metrics: negative tests"
     }
   ],
-  "coordination_slice": {
+  "observability_slice": {
     "generic_prefixes": [
-      "_lock:",
-      "_counter:",
-      "_ratelimit:",
-      "_barrier:",
-      "_semaphore:",
-      "_rwlock:",
-      "_queue:",
-      "_service:",
-      "_lease:"
+      "_sys:traces:",
+      "_sys:metrics:",
+      "_sys:metrics_meta:",
+      "_sys:alerts:"
     ],
     "mappings": {
-      "lock/counter/sequence/rate-limit/barrier/semaphore/rwlock/queue/service reads": "Operation::CoordinationRead",
-      "lock/counter/sequence/rate-limit/barrier/semaphore/rwlock/queue/service writes": "Operation::CoordinationWrite",
-      "lease reads": "Operation::CoordinationRead",
-      "lease writes": "Operation::CoordinationWrite"
+      "trace reads": "Operation::ObservabilityRead { resource: \"trace:\" }",
+      "trace ingest": "Operation::ObservabilityWrite { resource: \"trace:\" }",
+      "metric reads": "Operation::ObservabilityRead { resource: \"metric:\" }",
+      "metric ingest": "Operation::ObservabilityWrite { resource: \"metric:\" }",
+      "alert reads": "Operation::ObservabilityRead { resource: \"alert:\" }",
+      "alert create/delete/evaluate": "Operation::ObservabilityWrite { resource: \"alert:rule:\" | \"alert:state:\" }"
     },
     "generic_prefix_capabilities_rejected": true,
-    "root_token_includes_coordination_capabilities": true
+    "root_token_includes_observability_capabilities": true
   },
   "regressions": [
     "secrets_kv_requests_use_secrets_capabilities_not_generic_prefixes",
@@ -71,7 +72,9 @@
     "hook_requests_use_hook_capabilities_not_generic_prefixes",
     "generic_hook_prefixes_do_not_authorize_hook_requests",
     "coordination_requests_use_domain_specific_capabilities",
-    "lease_requests_use_domain_specific_capabilities"
+    "lease_requests_use_domain_specific_capabilities",
+    "observability_requests_use_domain_specific_capabilities",
+    "generic_sys_prefixes_do_not_authorize_observability_requests"
   ],
   "remaining_generic_internal_domain_mappings": [
     {
@@ -120,45 +123,10 @@
       "text": "Some(Some(Operation::Write {"
     },
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
-      "line": 10,
-      "text": "ClientRpcRequest::TraceIngest { .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
-      "line": 17,
-      "text": "| ClientRpcRequest::TraceSearch { .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
-      "line": 21,
-      "text": "ClientRpcRequest::MetricIngest { .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
-      "line": 26,
-      "text": "ClientRpcRequest::MetricList { .. } | ClientRpcRequest::MetricQuery { .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
-      "line": 30,
-      "text": "ClientRpcRequest::AlertCreate { .. } | ClientRpcRequest::AlertDelete { .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
-      "line": 35,
-      "text": "ClientRpcRequest::AlertEvaluate { .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
-      "line": 40,
-      "text": "ClientRpcRequest::AlertList | ClientRpcRequest::AlertGet { .. } => Some(Some(Operation::Read {"
-    },
-    {
       "path": "crates/aspen-client-api/src/messages/to_operation/sql_ops.rs",
       "line": 10,
       "text": "ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {"
     }
   ],
-  "remaining_count": 17
+  "remaining_count": 10
 }

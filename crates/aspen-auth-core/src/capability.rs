@@ -334,6 +334,20 @@ pub enum Capability {
     },
 
     // ==========================================================================
+    // Observability Capabilities
+    // ==========================================================================
+    /// Read traces, metrics, or alerts matching a resource prefix.
+    ObservabilityRead {
+        /// Observability resource prefix.
+        resource_prefix: String,
+    },
+    /// Ingest or mutate traces, metrics, or alerts matching a resource prefix.
+    ObservabilityWrite {
+        /// Observability resource prefix.
+        resource_prefix: String,
+    },
+
+    // ==========================================================================
     // Federation Sync Capabilities
     // ==========================================================================
     /// Pull (read) federated resources matching a repo prefix.
@@ -436,6 +450,7 @@ impl Capability {
             .or_else(|| self.authorizes_ci_jobs(op))
             .or_else(|| self.authorizes_blob_docs_hooks(op))
             .or_else(|| self.authorizes_coordination(op))
+            .or_else(|| self.authorizes_observability(op))
             .or_else(|| self.authorizes_federation(op))
             .or_else(|| self.authorizes_snix(op))
             .unwrap_or(false)
@@ -672,6 +687,19 @@ impl Capability {
         }
     }
 
+    fn authorizes_observability(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::ObservabilityRead { resource_prefix }, Operation::ObservabilityRead { resource })
+            | (Capability::ObservabilityWrite { resource_prefix }, Operation::ObservabilityWrite { resource }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: resource_prefix,
+                    candidate: resource,
+                }))
+            }
+            _ => None,
+        }
+    }
+
     fn authorizes_federation(&self, op: &Operation) -> Option<bool> {
         match (self, op) {
             (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id })
@@ -724,6 +752,7 @@ impl Capability {
             .or_else(|| self.contains_ci_jobs(other))
             .or_else(|| self.contains_blob_docs_hooks(other))
             .or_else(|| self.contains_coordination(other))
+            .or_else(|| self.contains_observability(other))
             .or_else(|| self.contains_federation(other))
             .or_else(|| self.contains_snix(other))
             .unwrap_or(false)
@@ -1038,6 +1067,27 @@ impl Capability {
         }
     }
 
+    fn contains_observability(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (
+                Capability::ObservabilityRead {
+                    resource_prefix: parent,
+                },
+                Capability::ObservabilityRead { resource_prefix: child },
+            )
+            | (
+                Capability::ObservabilityWrite {
+                    resource_prefix: parent,
+                },
+                Capability::ObservabilityWrite { resource_prefix: child },
+            ) => Some(matches_prefix_scope(PrefixScope {
+                prefix: parent,
+                candidate: child,
+            })),
+            _ => None,
+        }
+    }
+
     fn contains_federation(&self, other: &Capability) -> Option<bool> {
         match (self, other) {
             (Capability::FederationPull { repo_prefix: parent }, Capability::FederationPull { repo_prefix: child })
@@ -1311,6 +1361,20 @@ pub enum Operation {
     },
 
     // ==========================================================================
+    // Observability Operations
+    // ==========================================================================
+    /// Read traces, metrics, or alert state.
+    ObservabilityRead {
+        /// Observability resource identifier.
+        resource: String,
+    },
+    /// Ingest or mutate traces, metrics, or alert state.
+    ObservabilityWrite {
+        /// Observability resource identifier.
+        resource: String,
+    },
+
+    // ==========================================================================
     // Federation Sync Operations
     // ==========================================================================
     /// Pull (read) a federated resource.
@@ -1386,6 +1450,9 @@ impl fmt::Display for Operation {
             // Coordination operations
             Operation::CoordinationRead { resource } => write!(f, "CoordinationRead({resource})"),
             Operation::CoordinationWrite { resource } => write!(f, "CoordinationWrite({resource})"),
+            // Observability operations
+            Operation::ObservabilityRead { resource } => write!(f, "ObservabilityRead({resource})"),
+            Operation::ObservabilityWrite { resource } => write!(f, "ObservabilityWrite({resource})"),
             // Federation operations
             Operation::FederationPull { fed_id } => write!(f, "FederationPull({fed_id})"),
             Operation::FederationPush { fed_id } => write!(f, "FederationPush({fed_id})"),
