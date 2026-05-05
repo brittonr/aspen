@@ -414,9 +414,36 @@ fn format_capability(cap: &Capability) -> String {
         Capability::NetConnect { service_prefix } => format!("NetConnect (prefix: {service_prefix})"),
         Capability::NetPublish { service_prefix } => format!("NetPublish (prefix: {service_prefix})"),
         Capability::NetAdmin => "NetAdmin".to_string(),
+        // CI and job capabilities
+        Capability::CiRead { resource_prefix } => format!("CiRead (prefix: {resource_prefix})"),
+        Capability::CiWrite { resource_prefix } => format!("CiWrite (prefix: {resource_prefix})"),
+        Capability::JobsRead { resource_prefix } => format!("JobsRead (prefix: {resource_prefix})"),
+        Capability::JobsWrite { resource_prefix } => format!("JobsWrite (prefix: {resource_prefix})"),
+        // Blob, docs, and hook capabilities
+        Capability::BlobRead { resource_prefix } => format!("BlobRead (prefix: {resource_prefix})"),
+        Capability::BlobWrite { resource_prefix } => format!("BlobWrite (prefix: {resource_prefix})"),
+        Capability::DocsRead { resource_prefix } => format!("DocsRead (prefix: {resource_prefix})"),
+        Capability::DocsWrite { resource_prefix } => format!("DocsWrite (prefix: {resource_prefix})"),
+        Capability::HooksRead { resource_prefix } => format!("HooksRead (prefix: {resource_prefix})"),
+        Capability::HooksWrite { resource_prefix } => format!("HooksWrite (prefix: {resource_prefix})"),
+        // KV metadata and coordination capabilities
+        Capability::KvMetadataRead { resource_prefix } => format!("KvMetadataRead (prefix: {resource_prefix})"),
+        Capability::KvMetadataWrite { resource_prefix } => format!("KvMetadataWrite (prefix: {resource_prefix})"),
+        Capability::CoordinationRead { resource_prefix } => format!("CoordinationRead (prefix: {resource_prefix})"),
+        Capability::CoordinationWrite { resource_prefix } => format!("CoordinationWrite (prefix: {resource_prefix})"),
+        // SQL and observability capabilities
+        Capability::SqlRead { resource_prefix } => format!("SqlRead (prefix: {resource_prefix})"),
+        Capability::ObservabilityRead { resource_prefix } => format!("ObservabilityRead (prefix: {resource_prefix})"),
+        Capability::ObservabilityWrite { resource_prefix } => format!("ObservabilityWrite (prefix: {resource_prefix})"),
+        // Automerge capabilities
+        Capability::AutomergeRead { resource_prefix } => format!("AutomergeRead (prefix: {resource_prefix})"),
+        Capability::AutomergeWrite { resource_prefix } => format!("AutomergeWrite (prefix: {resource_prefix})"),
         // Federation sync capabilities
         Capability::FederationPull { repo_prefix } => format!("FederationPull (prefix: {repo_prefix})"),
         Capability::FederationPush { repo_prefix } => format!("FederationPush (prefix: {repo_prefix})"),
+        // Nix cache capabilities
+        Capability::CacheRead { resource_prefix } => format!("CacheRead (prefix: {resource_prefix})"),
+        Capability::CacheWrite { resource_prefix } => format!("CacheWrite (prefix: {resource_prefix})"),
         // SNIX store capabilities
         Capability::SnixRead { resource_prefix } => format!("SnixRead (prefix: {resource_prefix})"),
         Capability::SnixWrite { resource_prefix } => format!("SnixWrite (prefix: {resource_prefix})"),
@@ -715,6 +742,28 @@ mod tests {
     fn test_parse_capability_invalid_type() {
         let err = parse_capability("unknown:foo").unwrap_err();
         assert!(err.to_string().contains("unknown capability type"));
+    }
+
+    #[test]
+    fn test_format_capability_extended_resource_variants() {
+        assert_eq!(
+            format_capability(&Capability::CiRead {
+                resource_prefix: "run:".to_string(),
+            }),
+            "CiRead (prefix: run:)"
+        );
+        assert_eq!(
+            format_capability(&Capability::BlobWrite {
+                resource_prefix: "blob:".to_string(),
+            }),
+            "BlobWrite (prefix: blob:)"
+        );
+        assert_eq!(
+            format_capability(&Capability::CacheRead {
+                resource_prefix: "narinfo:".to_string(),
+            }),
+            "CacheRead (prefix: narinfo:)"
+        );
     }
 
     #[test]
