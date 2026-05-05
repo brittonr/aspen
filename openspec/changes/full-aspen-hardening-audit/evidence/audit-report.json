@@ -1,0 +1,281 @@
+{
+  "change": "full-aspen-hardening-audit",
+  "findings": [
+    {
+      "affected_requirements": [
+        "authorization-matrix"
+      ],
+      "evidence_handles": [
+        "evidence/authorization-matrix.md",
+        "evidence/authorization-matrix.json"
+      ],
+      "follow_up": {
+        "commit": "0019561ff",
+        "summary": "Capture Aspen authorization matrix",
+        "type": "direct_commit"
+      },
+      "id": "F-001",
+      "remediation_owner": "Aspen maintainers",
+      "severity": "medium",
+      "source_handles": [
+        "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+        "crates/aspen-client-api/src/messages/to_operation/mod.rs"
+      ],
+      "status": "remediated",
+      "summary": "CiRequest::CiGetRefStatus was added to the capability matrix and request count drift bounds were raised so future enum changes require review.",
+      "title": "CI request status classification drift"
+    },
+    {
+      "affected_requirements": [
+        "authorization-matrix",
+        "dispatch-proxy-evidence"
+      ],
+      "evidence_handles": [
+        "evidence/reserved-prefix-audit.md",
+        "evidence/reserved-prefix-audit.json"
+      ],
+      "follow_up": {
+        "commit": "c6d659225",
+        "summary": "Harden generic KV reserved prefixes",
+        "type": "direct_commit"
+      },
+      "id": "F-002",
+      "remediation_owner": "Aspen maintainers",
+      "severity": "high",
+      "source_handles": [
+        "crates/aspen-client-api/src/messages/to_operation/mod.rs",
+        "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+        "crates/aspen-client-api/src/messages/to_operation/batch_ops.rs",
+        "crates/aspen-client-api/src/messages/to_operation/watch_ops.rs"
+      ],
+      "status": "remediated",
+      "summary": "Generic exact KV, scan/watch, batch, and conditional-batch condition-key paths now fail closed to ClusterAdmin for internal prefixes.",
+      "title": "Generic KV access over reserved internal prefixes"
+    },
+    {
+      "affected_requirements": [
+        "authorization-matrix",
+        "remediation"
+      ],
+      "evidence_handles": [
+        "evidence/domain-capability-audit.md",
+        "evidence/domain-capability-audit.json"
+      ],
+      "follow_up": {
+        "commits": [
+          "6ddc9433a",
+          "682cb782a",
+          "f17166360",
+          "15e02c84d",
+          "86a236dc4",
+          "bb3b323cb",
+          "67e014c9a",
+          "2838b8c22",
+          "4aa1b12e5"
+        ],
+        "summary": "Domain-specific capability cleanup slices",
+        "type": "direct_commits"
+      },
+      "id": "F-003",
+      "remediation_owner": "Aspen maintainers",
+      "severity": "high",
+      "source_handles": [
+        "crates/aspen-client-api/src/messages/to_operation/*_ops.rs",
+        "crates/aspen-auth-core/src/capability.rs"
+      ],
+      "status": "remediated",
+      "summary": "Secrets/trust, net, CI/jobs, blob/docs/hooks, coordination/leases, observability, cache, automerge, KV metadata, and SQL mappings were converted to domain-specific operations; audit remaining count is zero.",
+      "title": "Domain APIs using generic internal-prefix capabilities"
+    },
+    {
+      "affected_requirements": [
+        "authorization-matrix",
+        "dispatch-proxy-evidence"
+      ],
+      "evidence_handles": [
+        "evidence/negative-drift-tests.md",
+        "evidence/negative-drift-tests.json"
+      ],
+      "follow_up": {
+        "commit": "63fb46887",
+        "summary": "Add public auth drift guard",
+        "type": "direct_commit"
+      },
+      "id": "F-004",
+      "remediation_owner": "Aspen maintainers",
+      "severity": "high",
+      "source_handles": [
+        "crates/aspen-client-api/src/messages/to_operation/mod.rs",
+        "crates/aspen-client-api/src/messages/to_operation/*_ops.rs"
+      ],
+      "status": "guarded",
+      "summary": "An exact 25-variant public/no-auth allowlist now fails when a new Some(None) request classification appears without audit-matrix review.",
+      "title": "Public/no-auth classification drift risk"
+    },
+    {
+      "affected_requirements": [
+        "credential-redaction"
+      ],
+      "evidence_handles": [
+        "evidence/token-ticket-redaction.md",
+        "evidence/token-ticket-redaction.json"
+      ],
+      "follow_up": {
+        "commit": "a550b5a47",
+        "summary": "Redact token ticket debug output",
+        "type": "direct_commit"
+      },
+      "id": "F-005",
+      "remediation_owner": "Aspen maintainers",
+      "severity": "high",
+      "source_handles": [
+        "crates/aspen-auth-core/src/token.rs",
+        "crates/aspen-client/src/ticket.rs",
+        "crates/aspen-ticket/src/signed.rs"
+      ],
+      "status": "remediated",
+      "summary": "Custom Debug implementations preserve safe metadata and omit nonce/proof/facts/signature/auth-token material.",
+      "title": "Token and ticket debug output exposed reconstructable material"
+    },
+    {
+      "affected_requirements": [
+        "credential-redaction"
+      ],
+      "evidence_handles": [
+        "evidence/token-ticket-persistence-permissions.md",
+        "evidence/token-ticket-persistence-permissions.json"
+      ],
+      "follow_up": {
+        "commit": "7c39843e5",
+        "summary": "Harden token ticket persistence surfaces",
+        "type": "direct_commit"
+      },
+      "id": "F-006",
+      "remediation_owner": "Aspen maintainers",
+      "severity": "high",
+      "source_handles": [
+        "crates/aspen-docs/src/store/initialization.rs",
+        "crates/aspen-hooks-ticket/src/lib.rs"
+      ],
+      "status": "remediated",
+      "summary": "Generated docs secrets are written/repaired to Unix 0600 and hook-ticket Debug redacts payload/auth-token/relay material.",
+      "title": "Persistent generated secrets and hook-ticket debug surfaces needed redaction/owner-only permissions"
+    },
+    {
+      "affected_requirements": [
+        "credential-redaction",
+        "remediation"
+      ],
+      "evidence_handles": [
+        "evidence/cli-log-output-redaction.md",
+        "evidence/cli-log-output-redaction.json",
+        "evidence/dogfood-receipt-redaction.md",
+        "evidence/dogfood-receipt-redaction.json"
+      ],
+      "follow_up": {
+        "commits": [
+          "8fd8417f9",
+          "5a0dc1cda"
+        ],
+        "summary": "Redact Forge web clone tickets and dogfood receipt credentials",
+        "type": "direct_commits"
+      },
+      "id": "F-007",
+      "remediation_owner": "Aspen maintainers",
+      "severity": "high",
+      "source_handles": [
+        "crates/aspen-forge-web/src/templates.rs",
+        "crates/aspen-forge-web/src/routes.rs",
+        "crates/aspen-dogfood/src/error.rs",
+        "crates/aspen-dogfood/src/forge.rs",
+        "crates/aspen-dogfood/src/main.rs"
+      ],
+      "status": "remediated",
+      "summary": "Rendered clone commands and dogfood logs/errors/receipts now use cluster-ticket placeholders while preserving safe repo/run identifiers.",
+      "title": "Forge/dogfood operator output could reveal Aspen ticket URL credentials"
+    },
+    {
+      "affected_requirements": [
+        "execution-network-supply-chain",
+        "remediation"
+      ],
+      "evidence_handles": [
+        "evidence/execution-sandbox-command-boundaries.md",
+        "evidence/execution-sandbox-command-boundaries.json"
+      ],
+      "follow_up": {
+        "commit": "a385ff78b",
+        "summary": "Harden CI shell executor workspace validation",
+        "type": "direct_commit"
+      },
+      "id": "F-008",
+      "remediation_owner": "Aspen maintainers",
+      "severity": "medium",
+      "source_handles": [
+        "crates/aspen-ci-executor-shell/src/agent/executor.rs"
+      ],
+      "status": "remediated",
+      "summary": "Shell executor working directories are absolute, existing, canonicalized, and rejected when canonical targets escape the workspace or bounded tmpfs fallback.",
+      "title": "CI shell executor working-directory symlink escape"
+    },
+    {
+      "affected_requirements": [
+        "execution-network-supply-chain",
+        "remediation"
+      ],
+      "evidence_handles": [
+        "evidence/transport-boundary-audit.md",
+        "evidence/transport-boundary-audit.json"
+      ],
+      "follow_up": {
+        "commit": "5f2eacd30",
+        "summary": "Register authenticated Raft ALPN in node router",
+        "type": "direct_commit"
+      },
+      "id": "F-009",
+      "remediation_owner": "Aspen maintainers",
+      "severity": "high",
+      "source_handles": [
+        "src/bin/aspen_node/setup/router.rs",
+        "src/bin/aspen_node/args.rs",
+        "crates/aspen-transport/src/lib.rs",
+        "crates/aspen-raft/src/membership_watcher.rs"
+      ],
+      "status": "remediated",
+      "summary": "Production node router registers RAFT_AUTH_ALPN when enable_raft_auth is set, seeds trusted peers, and starts the membership watcher.",
+      "title": "Authenticated Raft outbound ALPN lacked matching production inbound router registration"
+    },
+    {
+      "affected_requirements": [
+        "execution-network-supply-chain"
+      ],
+      "evidence_handles": [
+        "evidence/supply-chain-boundary-audit.md",
+        "evidence/supply-chain-boundary-audit.json"
+      ],
+      "follow_up": {
+        "summary": "No high-risk child change opened; RustSec/cargo-deny, vendored patch review, and release signing/attestation remain explicit non-claims for this audit.",
+        "type": "residual_risk"
+      },
+      "id": "F-010",
+      "remediation_owner": "Aspen maintainers",
+      "severity": "low",
+      "source_handles": [
+        "flake.lock",
+        "Cargo.lock",
+        "scripts/audit-supply-chain-boundaries.py"
+      ],
+      "status": "accepted_residual_risk",
+      "summary": "The new supply-chain checker passes pinned-input, fixed-output-hash, public-unsafe, and build-script inventory invariants, but does not claim vulnerability or attestation coverage.",
+      "title": "Supply-chain residual review scope remains manual beyond pin/hash invariants"
+    }
+  ],
+  "generated": "2026-05-05T13:04:07Z",
+  "summary": {
+    "accepted_residual_risk": 1,
+    "open_findings": 0,
+    "open_high_risk_findings": 0,
+    "remediated_or_guarded": 9,
+    "total_findings": 10
+  }
+}

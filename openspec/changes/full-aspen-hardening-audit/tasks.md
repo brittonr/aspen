@@ -42,7 +42,7 @@
 
 ## Phase 6: Findings, Remediation, and Acceptance
 
-- [ ] Publish an audit report with severity, affected requirements, source handles, evidence handles, remediation owner, and follow-up change/commit for each finding.
-- [ ] Split high-risk findings into focused OpenSpec child changes or direct verified remediation commits.
-- [ ] Run the accepted audit gate set: strict OpenSpec validation, `git diff --check`, targeted cargo tests/checks, Tiger Style, and any new audit scripts.
-- [ ] Archive this umbrella only after the inventory, report, required negative evidence, and high-risk remediation plan are complete.
+- [x] Publish an audit report with severity, affected requirements, source handles, evidence handles, remediation owner, and follow-up change/commit for each finding. Evidence: `evidence/audit-report.md`, `evidence/audit-report.json`.
+- [x] Split high-risk findings into focused OpenSpec child changes or direct verified remediation commits. Evidence: `evidence/audit-report.md`, `evidence/audit-report.json`; no open high-risk findings remain, and all high/medium findings are mapped to landed direct commits on `main`.
+- [x] Run the accepted audit gate set: strict OpenSpec validation, `git diff --check`, targeted cargo tests/checks, Tiger Style, and any new audit scripts. Evidence: `evidence/acceptance-gate.md`, `evidence/acceptance-gate.json`; final gate commands are captured in the acceptance record and rerun for this closeout slice.
+- [x] Archive this umbrella only after the inventory, report, required negative evidence, and high-risk remediation plan are complete. Evidence: `evidence/acceptance-gate.md`, `evidence/acceptance-gate.json`; archive preconditions are satisfied because the inventory, report, negative evidence, and remediation plan are complete with zero open high-risk findings.
