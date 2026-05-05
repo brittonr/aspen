@@ -320,6 +320,20 @@ pub enum Capability {
     },
 
     // ==========================================================================
+    // Coordination Primitive Capabilities
+    // ==========================================================================
+    /// Read coordination primitive state matching a resource prefix.
+    CoordinationRead {
+        /// Coordination resource prefix.
+        resource_prefix: String,
+    },
+    /// Mutate coordination primitive state matching a resource prefix.
+    CoordinationWrite {
+        /// Coordination resource prefix.
+        resource_prefix: String,
+    },
+
+    // ==========================================================================
     // Federation Sync Capabilities
     // ==========================================================================
     /// Pull (read) federated resources matching a repo prefix.
@@ -421,6 +435,7 @@ impl Capability {
             .or_else(|| self.authorizes_net(op))
             .or_else(|| self.authorizes_ci_jobs(op))
             .or_else(|| self.authorizes_blob_docs_hooks(op))
+            .or_else(|| self.authorizes_coordination(op))
             .or_else(|| self.authorizes_federation(op))
             .or_else(|| self.authorizes_snix(op))
             .unwrap_or(false)
@@ -644,6 +659,19 @@ impl Capability {
         }
     }
 
+    fn authorizes_coordination(&self, op: &Operation) -> Option<bool> {
+        match (self, op) {
+            (Capability::CoordinationRead { resource_prefix }, Operation::CoordinationRead { resource })
+            | (Capability::CoordinationWrite { resource_prefix }, Operation::CoordinationWrite { resource }) => {
+                Some(matches_prefix_scope(PrefixScope {
+                    prefix: resource_prefix,
+                    candidate: resource,
+                }))
+            }
+            _ => None,
+        }
+    }
+
     fn authorizes_federation(&self, op: &Operation) -> Option<bool> {
         match (self, op) {
             (Capability::FederationPull { repo_prefix }, Operation::FederationPull { fed_id })
@@ -695,6 +723,7 @@ impl Capability {
             .or_else(|| self.contains_net(other))
             .or_else(|| self.contains_ci_jobs(other))
             .or_else(|| self.contains_blob_docs_hooks(other))
+            .or_else(|| self.contains_coordination(other))
             .or_else(|| self.contains_federation(other))
             .or_else(|| self.contains_snix(other))
             .unwrap_or(false)
@@ -988,6 +1017,27 @@ impl Capability {
         }
     }
 
+    fn contains_coordination(&self, other: &Capability) -> Option<bool> {
+        match (self, other) {
+            (
+                Capability::CoordinationRead {
+                    resource_prefix: parent,
+                },
+                Capability::CoordinationRead { resource_prefix: child },
+            )
+            | (
+                Capability::CoordinationWrite {
+                    resource_prefix: parent,
+                },
+                Capability::CoordinationWrite { resource_prefix: child },
+            ) => Some(matches_prefix_scope(PrefixScope {
+                prefix: parent,
+                candidate: child,
+            })),
+            _ => None,
+        }
+    }
+
     fn contains_federation(&self, other: &Capability) -> Option<bool> {
         match (self, other) {
             (Capability::FederationPull { repo_prefix: parent }, Capability::FederationPull { repo_prefix: child })
@@ -1247,6 +1297,20 @@ pub enum Operation {
     },
 
     // ==========================================================================
+    // Coordination Primitive Operations
+    // ==========================================================================
+    /// Read coordination primitive state.
+    CoordinationRead {
+        /// Coordination resource identifier.
+        resource: String,
+    },
+    /// Mutate coordination primitive state.
+    CoordinationWrite {
+        /// Coordination resource identifier.
+        resource: String,
+    },
+
+    // ==========================================================================
     // Federation Sync Operations
     // ==========================================================================
     /// Pull (read) a federated resource.
@@ -1319,6 +1383,9 @@ impl fmt::Display for Operation {
             Operation::DocsWrite { resource } => write!(f, "DocsWrite({resource})"),
             Operation::HooksRead { resource } => write!(f, "HooksRead({resource})"),
             Operation::HooksWrite { resource } => write!(f, "HooksWrite({resource})"),
+            // Coordination operations
+            Operation::CoordinationRead { resource } => write!(f, "CoordinationRead({resource})"),
+            Operation::CoordinationWrite { resource } => write!(f, "CoordinationWrite({resource})"),
             // Federation operations
             Operation::FederationPull { fed_id } => write!(f, "FederationPull({fed_id})"),
             Operation::FederationPush { fed_id } => write!(f, "FederationPush({fed_id})"),

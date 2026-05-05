@@ -599,10 +599,48 @@ fn test_generate_root_token() {
     // Should be a bearer token
     assert!(matches!(token.audience, Audience::Bearer));
 
-    // Should have Full, ClusterAdmin, Delegate, federation sync, and SNIX store capabilities
+    // Should have generic root, cluster-admin, delegation, and all domain root capabilities.
     assert!(token.capabilities.contains(&Capability::Full { prefix: String::new() }));
     assert!(token.capabilities.contains(&Capability::ClusterAdmin));
     assert!(token.capabilities.contains(&Capability::Delegate));
+    assert!(token.capabilities.contains(&Capability::SecretsAdmin));
+    assert!(token.capabilities.contains(&Capability::NetAdmin));
+    assert!(token.capabilities.contains(&Capability::CiRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::CiWrite {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::JobsRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::JobsWrite {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::BlobRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::BlobWrite {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::DocsRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::DocsWrite {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::HooksRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::HooksWrite {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::CoordinationRead {
+        resource_prefix: String::new(),
+    }));
+    assert!(token.capabilities.contains(&Capability::CoordinationWrite {
+        resource_prefix: String::new(),
+    }));
     assert!(token.capabilities.contains(&Capability::FederationPull {
         repo_prefix: String::new(),
     }));
@@ -666,6 +704,16 @@ fn test_generate_root_token() {
             None,
         )
         .expect("root token should authorize federation push");
+
+    verifier
+        .authorize(
+            &token,
+            &Operation::CoordinationWrite {
+                resource: "queue:build".into(),
+            },
+            None,
+        )
+        .expect("root token should authorize coordination writes");
 
     verifier
         .authorize(

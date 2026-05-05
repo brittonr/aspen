@@ -31,12 +31,11 @@ impl LeaseRequest {
     pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
         use aspen_auth_core::Operation;
         match self {
-            Self::Grant { .. } | Self::Revoke { .. } | Self::Keepalive { .. } => Some(Operation::Write {
-                key: "_lease:".to_string(),
-                value: vec![],
+            Self::Grant { .. } | Self::Revoke { .. } | Self::Keepalive { .. } => Some(Operation::CoordinationWrite {
+                resource: "lease:".to_string(),
             }),
-            Self::TimeToLive { .. } | Self::List => Some(Operation::Read {
-                key: "_lease:".to_string(),
+            Self::TimeToLive { .. } | Self::List => Some(Operation::CoordinationRead {
+                resource: "lease:".to_string(),
             }),
         }
     }

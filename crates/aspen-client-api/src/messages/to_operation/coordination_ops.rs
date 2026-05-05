@@ -13,6 +13,14 @@ fn canonical_lockset_token_member(member_tokens: &[LockSetMemberTokenWire]) -> O
     member_tokens.iter().map(|token| token.member.as_str()).min()
 }
 
+fn coordination_read(resource: String) -> Operation {
+    Operation::CoordinationRead { resource }
+}
+
+fn coordination_write(resource: String) -> Operation {
+    Operation::CoordinationWrite { resource }
+}
+
 pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operation>> {
     to_operation_lock_counter(request)
         .or_else(|| to_operation_ratelimiter_barrier(request))
@@ -26,33 +34,18 @@ fn to_operation_lock_counter(request: &ClientRpcRequest) -> Option<Option<Operat
         ClientRpcRequest::LockAcquire { key, .. }
         | ClientRpcRequest::LockTryAcquire { key, .. }
         | ClientRpcRequest::LockRelease { key, .. }
-        | ClientRpcRequest::LockRenew { key, .. } => Some(Some(Operation::Write {
-            key: format!("_lock:{key}"),
-            value: vec![],
-        })),
+        | ClientRpcRequest::LockRenew { key, .. } => Some(Some(coordination_write(format!("lock:{key}")))),
         ClientRpcRequest::LockSetAcquire { members, .. } | ClientRpcRequest::LockSetTryAcquire { members, .. } => {
-            canonical_lockset_member(members).map(|member| {
-                Some(Operation::Write {
-                    key: format!("_lock:{member}"),
-                    value: vec![],
-                })
-            })
+            canonical_lockset_member(members).map(|member| Some(coordination_write(format!("lock:{member}"))))
         }
         ClientRpcRequest::LockSetRelease { member_tokens, .. }
-        | ClientRpcRequest::LockSetRenew { member_tokens, .. } => {
-            canonical_lockset_token_member(member_tokens).map(|member| {
-                Some(Operation::Write {
-                    key: format!("_lock:{member}"),
-                    value: vec![],
-                })
-            })
-        }
+        | ClientRpcRequest::LockSetRenew { member_tokens, .. } => canonical_lockset_token_member(member_tokens)
+            .map(|member| Some(coordination_write(format!("lock:{member}")))),
 
-        ClientRpcRequest::CounterGet { key }
-        | ClientRpcRequest::SignedCounterGet { key }
-        | ClientRpcRequest::SequenceCurrent { key } => Some(Some(Operation::Read {
-            key: format!("_counter:{key}"),
-        })),
+        ClientRpcRequest::CounterGet { key } | ClientRpcRequest::SignedCounterGet { key } => {
+            Some(Some(coordination_read(format!("counter:{key}"))))
+        }
+        ClientRpcRequest::SequenceCurrent { key } => Some(Some(coordination_read(format!("sequence:{key}")))),
 
         ClientRpcRequest::CounterIncrement { key }
         | ClientRpcRequest::CounterDecrement { key }
@@ -60,12 +53,10 @@ fn to_operation_lock_counter(request: &ClientRpcRequest) -> Option<Option<Operat
         | ClientRpcRequest::CounterSubtract { key, .. }
         | ClientRpcRequest::CounterSet { key, .. }
         | ClientRpcRequest::CounterCompareAndSet { key, .. }
-        | ClientRpcRequest::SignedCounterAdd { key, .. }
-        | ClientRpcRequest::SequenceNext { key }
-        | ClientRpcRequest::SequenceReserve { key, .. } => Some(Some(Operation::Write {
-            key: format!("_counter:{key}"),
-            value: vec![],
-        })),
+        | ClientRpcRequest::SignedCounterAdd { key, .. } => Some(Some(coordination_write(format!("counter:{key}")))),
+        ClientRpcRequest::SequenceNext { key } | ClientRpcRequest::SequenceReserve { key, .. } => {
+            Some(Some(coordination_write(format!("sequence:{key}"))))
+        }
 
         _ => None,
     }
@@ -75,23 +66,13 @@ fn to_operation_ratelimiter_barrier(request: &ClientRpcRequest) -> Option<Option
     match request {
         ClientRpcRequest::RateLimiterTryAcquire { key, .. }
         | ClientRpcRequest::RateLimiterAcquire { key, .. }
-        | ClientRpcRequest::RateLimiterReset { key, .. } => Some(Some(Operation::Write {
-            key: format!("_ratelimit:{key}"),
-            value: vec![],
-        })),
-        ClientRpcRequest::RateLimiterAvailable { key, .. } => Some(Some(Operation::Read {
-            key: format!("_ratelimit:{key}"),
-        })),
+        | ClientRpcRequest::RateLimiterReset { key, .. } => Some(Some(coordination_write(format!("ratelimit:{key}")))),
+        ClientRpcRequest::RateLimiterAvailable { key, .. } => Some(Some(coordination_read(format!("ratelimit:{key}")))),
 
         ClientRpcRequest::BarrierEnter { name, .. } | ClientRpcRequest::BarrierLeave { name, .. } => {
-            Some(Some(Operation::Write {
-                key: format!("_barrier:{name}"),
-                value: vec![],
-            }))
+            Some(Some(coordination_write(format!("barrier:{name}"))))
         }
-        ClientRpcRequest::BarrierStatus { name } => Some(Some(Operation::Read {
-            key: format!("_barrier:{name}"),
-        })),
+        ClientRpcRequest::BarrierStatus { name } => Some(Some(coordination_read(format!("barrier:{name}")))),
 
         _ => None,
     }
@@ -101,13 +82,10 @@ fn to_operation_semaphore_rwlock(request: &ClientRpcRequest) -> Option<Option<Op
     match request {
         ClientRpcRequest::SemaphoreAcquire { name, .. }
         | ClientRpcRequest::SemaphoreTryAcquire { name, .. }
-        | ClientRpcRequest::SemaphoreRelease { name, .. } => Some(Some(Operation::Write {
-            key: format!("_semaphore:{name}"),
-            value: vec![],
-        })),
-        ClientRpcRequest::SemaphoreStatus { name } => Some(Some(Operation::Read {
-            key: format!("_semaphore:{name}"),
-        })),
+        | ClientRpcRequest::SemaphoreRelease { name, .. } => {
+            Some(Some(coordination_write(format!("semaphore:{name}"))))
+        }
+        ClientRpcRequest::SemaphoreStatus { name } => Some(Some(coordination_read(format!("semaphore:{name}")))),
 
         ClientRpcRequest::RWLockAcquireRead { name, .. }
         | ClientRpcRequest::RWLockTryAcquireRead { name, .. }
@@ -115,13 +93,8 @@ fn to_operation_semaphore_rwlock(request: &ClientRpcRequest) -> Option<Option<Op
         | ClientRpcRequest::RWLockTryAcquireWrite { name, .. }
         | ClientRpcRequest::RWLockReleaseRead { name, .. }
         | ClientRpcRequest::RWLockReleaseWrite { name, .. }
-        | ClientRpcRequest::RWLockDowngrade { name, .. } => Some(Some(Operation::Write {
-            key: format!("_rwlock:{name}"),
-            value: vec![],
-        })),
-        ClientRpcRequest::RWLockStatus { name } => Some(Some(Operation::Read {
-            key: format!("_rwlock:{name}"),
-        })),
+        | ClientRpcRequest::RWLockDowngrade { name, .. } => Some(Some(coordination_write(format!("rwlock:{name}")))),
+        ClientRpcRequest::RWLockStatus { name } => Some(Some(coordination_read(format!("rwlock:{name}")))),
 
         _ => None,
     }
@@ -138,15 +111,14 @@ fn to_operation_queue(request: &ClientRpcRequest) -> Option<Option<Operation>> {
         | ClientRpcRequest::QueueAck { queue_name, .. }
         | ClientRpcRequest::QueueNack { queue_name, .. }
         | ClientRpcRequest::QueueExtendVisibility { queue_name, .. }
-        | ClientRpcRequest::QueueRedriveDLQ { queue_name, .. } => Some(Some(Operation::Write {
-            key: format!("_queue:{queue_name}"),
-            value: vec![],
-        })),
+        | ClientRpcRequest::QueueRedriveDLQ { queue_name, .. } => {
+            Some(Some(coordination_write(format!("queue:{queue_name}"))))
+        }
         ClientRpcRequest::QueuePeek { queue_name, .. }
         | ClientRpcRequest::QueueStatus { queue_name }
-        | ClientRpcRequest::QueueGetDLQ { queue_name, .. } => Some(Some(Operation::Read {
-            key: format!("_queue:{queue_name}"),
-        })),
+        | ClientRpcRequest::QueueGetDLQ { queue_name, .. } => {
+            Some(Some(coordination_read(format!("queue:{queue_name}"))))
+        }
 
         _ => None,
     }
@@ -158,17 +130,14 @@ fn to_operation_service(request: &ClientRpcRequest) -> Option<Option<Operation>>
         | ClientRpcRequest::ServiceDeregister { service_name, .. }
         | ClientRpcRequest::ServiceHeartbeat { service_name, .. }
         | ClientRpcRequest::ServiceUpdateHealth { service_name, .. }
-        | ClientRpcRequest::ServiceUpdateMetadata { service_name, .. } => Some(Some(Operation::Write {
-            key: format!("_service:{service_name}"),
-            value: vec![],
-        })),
+        | ClientRpcRequest::ServiceUpdateMetadata { service_name, .. } => {
+            Some(Some(coordination_write(format!("service:{service_name}"))))
+        }
         ClientRpcRequest::ServiceDiscover { service_name, .. }
-        | ClientRpcRequest::ServiceGetInstance { service_name, .. } => Some(Some(Operation::Read {
-            key: format!("_service:{service_name}"),
-        })),
-        ClientRpcRequest::ServiceList { prefix, .. } => Some(Some(Operation::Read {
-            key: format!("_service:{prefix}"),
-        })),
+        | ClientRpcRequest::ServiceGetInstance { service_name, .. } => {
+            Some(Some(coordination_read(format!("service:{service_name}"))))
+        }
+        ClientRpcRequest::ServiceList { prefix, .. } => Some(Some(coordination_read(format!("service:{prefix}")))),
 
         _ => None,
     }
@@ -176,19 +145,22 @@ fn to_operation_service(request: &ClientRpcRequest) -> Option<Option<Operation>>
 
 #[cfg(test)]
 mod tests {
+    use alloc::string::ToString;
+
+    use aspen_auth_core::Capability;
     use aspen_auth_core::Operation;
 
     use super::*;
 
     fn assert_canonical_lock_operation(operation_a: Operation, operation_b: Operation) {
-        let Operation::Write { key: key_a, .. } = operation_a else {
-            panic!("expected write operation for canonical lock member (left)");
+        let Operation::CoordinationWrite { resource: resource_a } = operation_a else {
+            panic!("expected coordination write operation for canonical lock member (left)");
         };
-        let Operation::Write { key: key_b, .. } = operation_b else {
-            panic!("expected write operation for canonical lock member (right)");
+        let Operation::CoordinationWrite { resource: resource_b } = operation_b else {
+            panic!("expected coordination write operation for canonical lock member (right)");
         };
-        assert_eq!(key_a, "_lock:pipeline:42");
-        assert_eq!(key_a, key_b);
+        assert_eq!(resource_a, "lock:pipeline:42");
+        assert_eq!(resource_a, resource_b);
     }
 
     #[test]
@@ -262,6 +234,51 @@ mod tests {
         assert_canonical_lock_operation(
             to_operation(&renew_a).flatten().unwrap(),
             to_operation(&renew_b).flatten().unwrap(),
+        );
+    }
+
+    #[test]
+    fn coordination_requests_use_domain_specific_capabilities() {
+        let status = to_operation(&ClientRpcRequest::QueueStatus {
+            queue_name: "build".to_string(),
+        })
+        .flatten()
+        .unwrap();
+        let enqueue = to_operation(&ClientRpcRequest::QueueEnqueue {
+            queue_name: "build".to_string(),
+            payload: vec![],
+            ttl_ms: None,
+            message_group_id: None,
+            deduplication_id: None,
+        })
+        .flatten()
+        .unwrap();
+
+        assert!(matches!(&status, Operation::CoordinationRead { resource } if resource == "queue:build"));
+        assert!(matches!(&enqueue, Operation::CoordinationWrite { resource } if resource == "queue:build"));
+        assert!(
+            Capability::CoordinationRead {
+                resource_prefix: "queue:".to_string(),
+            }
+            .authorizes(&status)
+        );
+        assert!(
+            Capability::CoordinationWrite {
+                resource_prefix: "queue:".to_string(),
+            }
+            .authorizes(&enqueue)
+        );
+        assert!(
+            !Capability::Read {
+                prefix: "_queue:".to_string(),
+            }
+            .authorizes(&status)
+        );
+        assert!(
+            !Capability::Write {
+                prefix: "_queue:".to_string(),
+            }
+            .authorizes(&enqueue)
         );
     }
 }

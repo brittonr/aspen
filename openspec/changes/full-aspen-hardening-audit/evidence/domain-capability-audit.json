@@ -1,6 +1,6 @@
 {
-  "generated": "2026-05-05T00:50:05Z",
-  "scanner": "production to_operation files before #[cfg(test)] modules; generic data operations on known internal-domain files/prefix windows",
+  "generated": "2026-05-05T01:06:02Z",
+  "scanner": "production to_operation files before #[cfg(test)] modules; generic data operations on known remaining internal-domain files/prefix windows",
   "completed_slices": [
     {
       "surface": "Secrets/trust",
@@ -25,24 +25,32 @@
     {
       "surface": "Blob/docs/hooks",
       "evidence": "BlobRead/BlobWrite, DocsRead/DocsWrite, and HooksRead/HooksWrite mappings; generic _blob:/_docs:/_hooks: negative tests"
+    },
+    {
+      "surface": "Coordination primitives and leases",
+      "evidence": "CoordinationRead/CoordinationWrite mappings and generic coordination-prefix negative tests for queues and leases"
     }
   ],
-  "blob_docs_hooks_slice": {
+  "coordination_slice": {
     "generic_prefixes": [
-      "_blob:",
-      "_docs:",
-      "_hooks:"
+      "_lock:",
+      "_counter:",
+      "_ratelimit:",
+      "_barrier:",
+      "_semaphore:",
+      "_rwlock:",
+      "_queue:",
+      "_service:",
+      "_lease:"
     ],
     "mappings": {
-      "blob reads": "Operation::BlobRead",
-      "blob writes": "Operation::BlobWrite",
-      "docs reads": "Operation::DocsRead",
-      "docs writes": "Operation::DocsWrite",
-      "hook reads": "Operation::HooksRead",
-      "hook writes": "Operation::HooksWrite"
+      "lock/counter/sequence/rate-limit/barrier/semaphore/rwlock/queue/service reads": "Operation::CoordinationRead",
+      "lock/counter/sequence/rate-limit/barrier/semaphore/rwlock/queue/service writes": "Operation::CoordinationWrite",
+      "lease reads": "Operation::CoordinationRead",
+      "lease writes": "Operation::CoordinationWrite"
     },
     "generic_prefix_capabilities_rejected": true,
-    "docs_delete_requires_write": true
+    "root_token_includes_coordination_capabilities": true
   },
   "regressions": [
     "secrets_kv_requests_use_secrets_capabilities_not_generic_prefixes",
@@ -61,7 +69,9 @@
     "docs_requests_use_docs_capabilities_not_generic_prefixes",
     "generic_docs_prefixes_do_not_authorize_docs_requests",
     "hook_requests_use_hook_capabilities_not_generic_prefixes",
-    "generic_hook_prefixes_do_not_authorize_hook_requests"
+    "generic_hook_prefixes_do_not_authorize_hook_requests",
+    "coordination_requests_use_domain_specific_capabilities",
+    "lease_requests_use_domain_specific_capabilities"
   ],
   "remaining_generic_internal_domain_mappings": [
     {
@@ -95,96 +105,6 @@
       "text": "Some(Some(Operation::Read {"
     },
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 29,
-      "text": "| ClientRpcRequest::LockRenew { key, .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 35,
-      "text": "Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 44,
-      "text": "Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 53,
-      "text": "| ClientRpcRequest::SequenceCurrent { key } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 65,
-      "text": "| ClientRpcRequest::SequenceReserve { key, .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 78,
-      "text": "| ClientRpcRequest::RateLimiterReset { key, .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 82,
-      "text": "ClientRpcRequest::RateLimiterAvailable { key, .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 87,
-      "text": "Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 92,
-      "text": "ClientRpcRequest::BarrierStatus { name } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 104,
-      "text": "| ClientRpcRequest::SemaphoreRelease { name, .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 108,
-      "text": "ClientRpcRequest::SemaphoreStatus { name } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 118,
-      "text": "| ClientRpcRequest::RWLockDowngrade { name, .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 122,
-      "text": "ClientRpcRequest::RWLockStatus { name } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 141,
-      "text": "| ClientRpcRequest::QueueRedriveDLQ { queue_name, .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 147,
-      "text": "| ClientRpcRequest::QueueGetDLQ { queue_name, .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 161,
-      "text": "| ClientRpcRequest::ServiceUpdateMetadata { service_name, .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 166,
-      "text": "| ClientRpcRequest::ServiceGetInstance { service_name, .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
-      "line": 169,
-      "text": "ClientRpcRequest::ServiceList { prefix, .. } => Some(Some(Operation::Read {"
-    },
-    {
       "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
       "line": 20,
       "text": "ClientRpcRequest::GetVaultKeys { vault_name: key } => Some(Some(Operation::Read { key: key.clone() })),"
@@ -198,16 +118,6 @@
       "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
       "line": 38,
       "text": "Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/lease_ops.rs",
-      "line": 12,
-      "text": "| ClientRpcRequest::LeaseKeepalive { .. } => Some(Some(Operation::Write {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/lease_ops.rs",
-      "line": 16,
-      "text": "ClientRpcRequest::LeaseTimeToLive { .. } | ClientRpcRequest::LeaseList => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
@@ -250,5 +160,5 @@
       "text": "ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {"
     }
   ],
-  "remaining_count": 37
+  "remaining_count": 17
 }

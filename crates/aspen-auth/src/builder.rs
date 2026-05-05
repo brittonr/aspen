@@ -229,6 +229,44 @@ pub fn generate_root_token(secret_key: &SecretKey, lifetime: Duration) -> Result
         .with_capability(Capability::Full { prefix: String::new() })
         .with_capability(Capability::ClusterAdmin)
         .with_capability(Capability::Delegate)
+        .with_capability(Capability::SecretsAdmin)
+        .with_capability(Capability::NetAdmin)
+        .with_capability(Capability::CiRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::CiWrite {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::JobsRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::JobsWrite {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::BlobRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::BlobWrite {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::DocsRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::DocsWrite {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::HooksRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::HooksWrite {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::CoordinationRead {
+            resource_prefix: String::new(),
+        })
+        .with_capability(Capability::CoordinationWrite {
+            resource_prefix: String::new(),
+        })
         .with_capability(Capability::FederationPull {
             repo_prefix: String::new(),
         })

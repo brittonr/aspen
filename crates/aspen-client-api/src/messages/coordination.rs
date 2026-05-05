@@ -409,6 +409,16 @@ fn canonical_lockset_token_member(member_tokens: &[LockSetMemberTokenWire]) -> O
 }
 
 #[cfg(feature = "auth")]
+fn coordination_read(resource: String) -> aspen_auth_core::Operation {
+    aspen_auth_core::Operation::CoordinationRead { resource }
+}
+
+#[cfg(feature = "auth")]
+fn coordination_write(resource: String) -> aspen_auth_core::Operation {
+    aspen_auth_core::Operation::CoordinationWrite { resource }
+}
+
+#[cfg(feature = "auth")]
 impl CoordinationRequest {
     /// Convert to an authorization operation.
     pub fn to_operation(&self) -> Option<aspen_auth_core::Operation> {
@@ -420,87 +430,59 @@ impl CoordinationRequest {
     }
 
     fn to_operation_lock_counter(&self) -> Option<aspen_auth_core::Operation> {
-        use aspen_auth_core::Operation;
         match self {
             Self::LockAcquire { key, .. }
             | Self::LockTryAcquire { key, .. }
             | Self::LockRelease { key, .. }
-            | Self::LockRenew { key, .. } => Some(Operation::Write {
-                key: format!("_lock:{key}"),
-                value: vec![],
-            }),
+            | Self::LockRenew { key, .. } => Some(coordination_write(format!("lock:{key}"))),
             Self::LockSetAcquire { members, .. } | Self::LockSetTryAcquire { members, .. } => {
-                canonical_lockset_member(members).map(|member| Operation::Write {
-                    key: format!("_lock:{member}"),
-                    value: vec![],
-                })
+                canonical_lockset_member(members).map(|member| coordination_write(format!("lock:{member}")))
             }
             Self::LockSetRelease { member_tokens, .. } | Self::LockSetRenew { member_tokens, .. } => {
-                canonical_lockset_token_member(member_tokens).map(|member| Operation::Write {
-                    key: format!("_lock:{member}"),
-                    value: vec![],
-                })
+                canonical_lockset_token_member(member_tokens).map(|member| coordination_write(format!("lock:{member}")))
             }
 
-            Self::CounterGet { key } | Self::SignedCounterGet { key } | Self::SequenceCurrent { key } => {
-                Some(Operation::Read {
-                    key: format!("_counter:{key}"),
-                })
+            Self::CounterGet { key } | Self::SignedCounterGet { key } => {
+                Some(coordination_read(format!("counter:{key}")))
             }
+            Self::SequenceCurrent { key } => Some(coordination_read(format!("sequence:{key}"))),
             Self::CounterIncrement { key }
             | Self::CounterDecrement { key }
             | Self::CounterAdd { key, .. }
             | Self::CounterSubtract { key, .. }
             | Self::CounterSet { key, .. }
             | Self::CounterCompareAndSet { key, .. }
-            | Self::SignedCounterAdd { key, .. }
-            | Self::SequenceNext { key }
-            | Self::SequenceReserve { key, .. } => Some(Operation::Write {
-                key: format!("_counter:{key}"),
-                value: vec![],
-            }),
+            | Self::SignedCounterAdd { key, .. } => Some(coordination_write(format!("counter:{key}"))),
+            Self::SequenceNext { key } | Self::SequenceReserve { key, .. } => {
+                Some(coordination_write(format!("sequence:{key}")))
+            }
 
             _ => None,
         }
     }
 
     fn to_operation_ratelimiter_barrier(&self) -> Option<aspen_auth_core::Operation> {
-        use aspen_auth_core::Operation;
         match self {
             Self::RateLimiterTryAcquire { key, .. }
             | Self::RateLimiterAcquire { key, .. }
-            | Self::RateLimiterReset { key, .. } => Some(Operation::Write {
-                key: format!("_ratelimit:{key}"),
-                value: vec![],
-            }),
-            Self::RateLimiterAvailable { key, .. } => Some(Operation::Read {
-                key: format!("_ratelimit:{key}"),
-            }),
+            | Self::RateLimiterReset { key, .. } => Some(coordination_write(format!("ratelimit:{key}"))),
+            Self::RateLimiterAvailable { key, .. } => Some(coordination_read(format!("ratelimit:{key}"))),
 
-            Self::BarrierEnter { name, .. } | Self::BarrierLeave { name, .. } => Some(Operation::Write {
-                key: format!("_barrier:{name}"),
-                value: vec![],
-            }),
-            Self::BarrierStatus { name } => Some(Operation::Read {
-                key: format!("_barrier:{name}"),
-            }),
+            Self::BarrierEnter { name, .. } | Self::BarrierLeave { name, .. } => {
+                Some(coordination_write(format!("barrier:{name}")))
+            }
+            Self::BarrierStatus { name } => Some(coordination_read(format!("barrier:{name}"))),
 
             _ => None,
         }
     }
 
     fn to_operation_semaphore_rwlock(&self) -> Option<aspen_auth_core::Operation> {
-        use aspen_auth_core::Operation;
         match self {
             Self::SemaphoreAcquire { name, .. }
             | Self::SemaphoreTryAcquire { name, .. }
-            | Self::SemaphoreRelease { name, .. } => Some(Operation::Write {
-                key: format!("_semaphore:{name}"),
-                value: vec![],
-            }),
-            Self::SemaphoreStatus { name } => Some(Operation::Read {
-                key: format!("_semaphore:{name}"),
-            }),
+            | Self::SemaphoreRelease { name, .. } => Some(coordination_write(format!("semaphore:{name}"))),
+            Self::SemaphoreStatus { name } => Some(coordination_read(format!("semaphore:{name}"))),
 
             Self::RWLockAcquireRead { name, .. }
             | Self::RWLockTryAcquireRead { name, .. }
@@ -508,20 +490,14 @@ impl CoordinationRequest {
             | Self::RWLockTryAcquireWrite { name, .. }
             | Self::RWLockReleaseRead { name, .. }
             | Self::RWLockReleaseWrite { name, .. }
-            | Self::RWLockDowngrade { name, .. } => Some(Operation::Write {
-                key: format!("_rwlock:{name}"),
-                value: vec![],
-            }),
-            Self::RWLockStatus { name } => Some(Operation::Read {
-                key: format!("_rwlock:{name}"),
-            }),
+            | Self::RWLockDowngrade { name, .. } => Some(coordination_write(format!("rwlock:{name}"))),
+            Self::RWLockStatus { name } => Some(coordination_read(format!("rwlock:{name}"))),
 
             _ => None,
         }
     }
 
     fn to_operation_queue(&self) -> Option<aspen_auth_core::Operation> {
-        use aspen_auth_core::Operation;
         match self {
             Self::QueueCreate { queue_name, .. }
             | Self::QueueDelete { queue_name }
@@ -532,39 +508,28 @@ impl CoordinationRequest {
             | Self::QueueAck { queue_name, .. }
             | Self::QueueNack { queue_name, .. }
             | Self::QueueExtendVisibility { queue_name, .. }
-            | Self::QueueRedriveDLQ { queue_name, .. } => Some(Operation::Write {
-                key: format!("_queue:{queue_name}"),
-                value: vec![],
-            }),
+            | Self::QueueRedriveDLQ { queue_name, .. } => Some(coordination_write(format!("queue:{queue_name}"))),
             Self::QueuePeek { queue_name, .. }
             | Self::QueueStatus { queue_name }
-            | Self::QueueGetDLQ { queue_name, .. } => Some(Operation::Read {
-                key: format!("_queue:{queue_name}"),
-            }),
+            | Self::QueueGetDLQ { queue_name, .. } => Some(coordination_read(format!("queue:{queue_name}"))),
 
             _ => None,
         }
     }
 
     fn to_operation_service(&self) -> Option<aspen_auth_core::Operation> {
-        use aspen_auth_core::Operation;
         match self {
             Self::ServiceRegister { service_name, .. }
             | Self::ServiceDeregister { service_name, .. }
             | Self::ServiceHeartbeat { service_name, .. }
             | Self::ServiceUpdateHealth { service_name, .. }
-            | Self::ServiceUpdateMetadata { service_name, .. } => Some(Operation::Write {
-                key: format!("_service:{service_name}"),
-                value: vec![],
-            }),
-            Self::ServiceDiscover { service_name, .. } | Self::ServiceGetInstance { service_name, .. } => {
-                Some(Operation::Read {
-                    key: format!("_service:{service_name}"),
-                })
+            | Self::ServiceUpdateMetadata { service_name, .. } => {
+                Some(coordination_write(format!("service:{service_name}")))
             }
-            Self::ServiceList { prefix, .. } => Some(Operation::Read {
-                key: format!("_service:{prefix}"),
-            }),
+            Self::ServiceDiscover { service_name, .. } | Self::ServiceGetInstance { service_name, .. } => {
+                Some(coordination_read(format!("service:{service_name}")))
+            }
+            Self::ServiceList { prefix, .. } => Some(coordination_read(format!("service:{prefix}"))),
 
             _ => None,
         }
@@ -578,14 +543,14 @@ mod tests {
     use super::*;
 
     fn assert_canonical_lock_operation(operation_a: Operation, operation_b: Operation) {
-        let Operation::Write { key: key_a, .. } = operation_a else {
-            panic!("expected write operation for canonical lock member (left)");
+        let Operation::CoordinationWrite { resource: resource_a } = operation_a else {
+            panic!("expected coordination write operation for canonical lock member (left)");
         };
-        let Operation::Write { key: key_b, .. } = operation_b else {
-            panic!("expected write operation for canonical lock member (right)");
+        let Operation::CoordinationWrite { resource: resource_b } = operation_b else {
+            panic!("expected coordination write operation for canonical lock member (right)");
         };
-        assert_eq!(key_a, "_lock:pipeline:42");
-        assert_eq!(key_a, key_b);
+        assert_eq!(resource_a, "lock:pipeline:42");
+        assert_eq!(resource_a, resource_b);
     }
 
     #[test]
