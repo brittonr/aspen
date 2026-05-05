@@ -257,11 +257,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1778009266,
-        "narHash": "sha256-pyd09Sb6QfxllXOi71GucO57oPOQFUlcCfIp/youxEs=",
+        "lastModified": 1778023325,
+        "narHash": "sha256-yBrTeIBGu4NisBLa4+n5Gc8jCj/0bn77rqaw1l5VVBA=",
         "owner": "brittonr",
         "repo": "tigerstyle-rs",
-        "rev": "a27180d5b6b15c23233423fea6bf85d4611485e0",
+        "rev": "8deed8e5c30b8f1be046465aeebb594b0c651b77",
         "type": "github"
       },
       "original": {
