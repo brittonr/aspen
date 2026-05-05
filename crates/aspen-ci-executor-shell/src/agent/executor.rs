@@ -70,6 +70,12 @@ fn elapsed_ms_u64(start: Instant) -> u64 {
     u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
+fn canonical_working_dir(path: &Path) -> Result<std::path::PathBuf> {
+    path.canonicalize().map_err(|_| AgentError::InvalidWorkingDir {
+        path: path.display().to_string(),
+    })
+}
+
 /// Handle to a running job, used for cancellation.
 pub struct JobHandle {
     /// Cancellation sender.
@@ -209,29 +215,35 @@ impl Executor {
 
     /// Validate that working directory is safe.
     fn validate_working_dir(&self, path: &Path) -> Result<()> {
-        // Must be under the configured workspace root, or under /tmp/ci-workspace-
-        // (the tmpfs fallback used when virtiofs has I/O issues with nix)
-        let is_under_workspace = path.starts_with(&self.workspace_root);
-        // Path::starts_with does component-level matching, so "/tmp/ci-workspace-abc"
-        // does NOT start_with "/tmp/ci-workspace-". Use string prefix instead.
-        let path_str = path.to_string_lossy();
-        let is_tmpfs_workspace = path_str.starts_with("/tmp/ci-workspace-");
-        if !is_under_workspace && !is_tmpfs_workspace {
+        if !path.is_absolute() {
             return error::WorkingDirNotUnderWorkspaceSnafu {
                 path: path.display().to_string(),
             }
             .fail();
         }
 
-        // Check it exists
-        if !path.exists() {
-            return error::InvalidWorkingDirSnafu {
-                path: path.display().to_string(),
-            }
-            .fail();
+        let canonical_path = canonical_working_dir(path)?;
+        if self.is_allowed_canonical_working_dir(path, &canonical_path)? {
+            return Ok(());
         }
 
-        Ok(())
+        error::WorkingDirNotUnderWorkspaceSnafu {
+            path: path.display().to_string(),
+        }
+        .fail()
+    }
+
+    fn is_allowed_canonical_working_dir(&self, path: &Path, canonical_path: &Path) -> Result<bool> {
+        let path_str = path.to_string_lossy();
+        let canonical_str = canonical_path.to_string_lossy();
+        if path_str.starts_with("/tmp/ci-workspace-") && canonical_str.starts_with("/tmp/ci-workspace-") {
+            return Ok(true);
+        }
+
+        let Ok(workspace_root) = self.workspace_root.canonicalize() else {
+            return Ok(false);
+        };
+        Ok(canonical_path.starts_with(&workspace_root))
     }
 
     /// Inner execution logic.
@@ -703,7 +715,7 @@ mod tests {
     async fn test_validate_working_dir_rejects_outside_workspace() {
         let executor = Executor::new();
 
-        let result = executor.validate_working_dir(Path::new("/tmp/evil"));
+        let result = executor.validate_working_dir(Path::new("/tmp"));
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("/workspace"));
     }
@@ -722,6 +734,31 @@ mod tests {
 
         let result = executor.validate_working_dir(Path::new("workspace/project"));
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_validate_working_dir_accepts_canonical_workspace_child() {
+        let workspace = tempfile::tempdir().unwrap();
+        let checkout = workspace.path().join("checkout");
+        std::fs::create_dir(&checkout).unwrap();
+        let executor = Executor::with_workspace_root(workspace.path().to_path_buf());
+
+        let result = executor.validate_working_dir(&checkout);
+        assert!(result.is_ok());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_validate_working_dir_rejects_symlink_escape() {
+        let workspace = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let link = workspace.path().join("escape");
+        std::os::unix::fs::symlink(outside.path(), &link).unwrap();
+        let executor = Executor::with_workspace_root(workspace.path().to_path_buf());
+
+        let result = executor.validate_working_dir(&link);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("/workspace"));
     }
 
     #[tokio::test]

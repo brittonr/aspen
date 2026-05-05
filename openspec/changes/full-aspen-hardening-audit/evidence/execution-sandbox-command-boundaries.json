@@ -1,0 +1,48 @@
+{
+  "generated": "2026-05-05T12:10:48Z",
+  "scope": "jobs/CI executors/native build/SNIX fallback command boundaries",
+  "live_credentials_read": false,
+  "source_handles": [
+    "crates/aspen-ci/src/orchestrator/pipeline/executor.rs:148-318",
+    "crates/aspen-ci/src/orchestrator/pipeline/executor.rs:320-388",
+    "crates/aspen-ci/src/orchestrator/pipeline/executor.rs:390-435",
+    "crates/aspen-ci/src/agent/executor/validation.rs:10-45",
+    "crates/aspen-ci-executor-shell/src/agent/executor.rs:122-185",
+    "crates/aspen-ci-executor-shell/src/agent/executor.rs:210-249",
+    "crates/aspen-ci-executor-shell/src/agent/executor.rs:252-275",
+    "crates/aspen-ci-executor-shell/src/agent/executor.rs:286-420",
+    "crates/aspen-ci-executor-nix/src/executor.rs:94-106",
+    "crates/aspen-ci-executor-nix/src/executor.rs:182-253",
+    "crates/aspen-ci-executor-nix/src/executor.rs:255-325"
+  ],
+  "finding": {
+    "severity": "medium",
+    "surface": "aspen-ci-executor-shell working directory validation",
+    "description": "Legacy shell executor validation used lexical prefix checks and did not canonicalize a workspace child before current_dir, allowing symlink-based workspace escape if an attacker could place or select such a path.",
+    "remediated": true
+  },
+  "remediation": [
+    "Require absolute existing working-directory paths before execution.",
+    "Canonicalize requested path before workspace-prefix comparison.",
+    "Canonicalize configured workspace root before comparison when available.",
+    "Preserve tmpfs fallback only when both request spelling and canonical target remain under /tmp/ci-workspace-*.",
+    "Add positive canonical workspace child and negative symlink-escape regressions."
+  ],
+  "observations": [
+    "CI shell payloads preserve structured command/args except when the pipeline explicitly configures a shell expression requiring sh -c.",
+    "VM payloads do not pass host checkout paths; source_hash is used for guest checkout recovery.",
+    "The split aspen-ci agent already canonicalized working directories before prefix checks.",
+    "Nix/SNIX fallback subprocesses inspected in this slice use Command::new and positional args rather than shell interpolation, and native SNIX build is preferred when available."
+  ],
+  "verification_commands": [
+    "rustfmt crates/aspen-ci-executor-shell/src/agent/executor.rs",
+    "cargo test -p aspen-ci-executor-shell validate_working_dir -- --nocapture",
+    "cargo check -p aspen-ci-executor-shell",
+    "scripts/tigerstyle-check.sh",
+    "openspec validate full-aspen-hardening-audit --strict --json",
+    "python ~/.hermes/skills/agentkit-port/openspec/scripts/openspec_helper.py verify full-aspen-hardening-audit --json || true",
+    "git diff --check",
+    "python -m json.tool openspec/changes/full-aspen-hardening-audit/evidence/execution-sandbox-command-boundaries.json >/dev/null"
+  ],
+  "expected_helper_warning": "umbrella tasks remain incomplete"
+}
