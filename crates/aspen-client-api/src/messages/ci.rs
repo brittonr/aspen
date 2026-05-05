@@ -298,6 +298,8 @@ pub struct CiRunReceiptJob {
     pub completed_at_ms: Option<u64>,
     /// Error message if the job failed.
     pub error: Option<String>,
+    /// Operator-safe artifact metadata produced by this job.
+    pub artifacts: Vec<CiArtifactInfo>,
 }
 
 /// A stage entry in a schema-versioned CI run receipt.
@@ -804,7 +806,9 @@ mod tests {
         .to_operation()
         .expect("CI ref status should require auth");
 
-        assert!(matches!(operation, aspen_auth_core::Operation::Read { key } if key == "_ci:ref-status:repo:main"));
+        assert!(
+            matches!(operation, aspen_auth_core::Operation::CiRead { resource } if resource == "repo:repo:ref:main")
+        );
     }
 
     #[test]

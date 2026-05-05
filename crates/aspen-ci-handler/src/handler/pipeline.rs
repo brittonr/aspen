@@ -1,10 +1,12 @@
 //! Pipeline operations: trigger, get_status, list_runs, cancel.
 
+use std::collections::BTreeMap;
 #[cfg(all(feature = "forge", feature = "blob"))]
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use aspen_client_api::CI_RUN_RECEIPT_SCHEMA;
+use aspen_client_api::CiArtifactInfo;
 use aspen_client_api::CiCancelRunResponse;
 use aspen_client_api::CiGetRunReceiptResponse;
 use aspen_client_api::CiGetStatusResponse;
@@ -313,7 +315,61 @@ fn optional_timestamp_ms(time: Option<chrono::DateTime<chrono::Utc>>) -> Option<
     time.map(timestamp_ms)
 }
 
-fn pipeline_run_to_receipt(run: &aspen_ci::orchestrator::PipelineRun) -> CiRunReceipt {
+fn artifact_info_from_metadata(metadata: super::artifacts::ArtifactMetadata) -> CiArtifactInfo {
+    CiArtifactInfo {
+        blob_hash: metadata.blob_hash,
+        name: metadata.name,
+        size_bytes: metadata.size_bytes,
+        content_type: metadata.content_type,
+        created_at: metadata.created_at,
+        metadata: metadata.extra.into_iter().collect(),
+    }
+}
+
+async fn collect_receipt_artifacts_for_job(
+    kv_store: &dyn aspen_core::KeyValueStore,
+    job_id: &str,
+) -> anyhow::Result<Vec<CiArtifactInfo>> {
+    let entries = kv_store
+        .scan(aspen_core::ScanRequest {
+            prefix: format!("_ci:artifacts:{job_id}:"),
+            limit_results: Some(100),
+            continuation_token: None,
+        })
+        .await?
+        .entries;
+
+    let mut artifacts = Vec::with_capacity(entries.len());
+    for entry in entries {
+        if let Ok(metadata) = serde_json::from_str::<super::artifacts::ArtifactMetadata>(&entry.value) {
+            artifacts.push(artifact_info_from_metadata(metadata));
+        }
+    }
+    artifacts.sort_by(|left, right| left.name.cmp(&right.name).then_with(|| left.blob_hash.cmp(&right.blob_hash)));
+    Ok(artifacts)
+}
+
+async fn collect_receipt_artifacts(
+    kv_store: &dyn aspen_core::KeyValueStore,
+    run: &aspen_ci::orchestrator::PipelineRun,
+) -> anyhow::Result<BTreeMap<String, Vec<CiArtifactInfo>>> {
+    let mut artifacts_by_job_id = BTreeMap::new();
+    for stage in &run.stages {
+        for job in stage.jobs.values() {
+            if let Some(job_id) = &job.job_id {
+                let job_id = job_id.to_string();
+                let artifacts = collect_receipt_artifacts_for_job(kv_store, &job_id).await?;
+                artifacts_by_job_id.insert(job_id, artifacts);
+            }
+        }
+    }
+    Ok(artifacts_by_job_id)
+}
+
+fn pipeline_run_to_receipt_with_artifacts(
+    run: &aspen_ci::orchestrator::PipelineRun,
+    artifacts_by_job_id: &BTreeMap<String, Vec<CiArtifactInfo>>,
+) -> CiRunReceipt {
     let stages = run
         .stages
         .iter()
@@ -321,13 +377,22 @@ fn pipeline_run_to_receipt(run: &aspen_ci::orchestrator::PipelineRun) -> CiRunRe
             let mut jobs: Vec<CiRunReceiptJob> = stage
                 .jobs
                 .iter()
-                .map(|(name, job)| CiRunReceiptJob {
-                    name: name.clone(),
-                    job_id: job.job_id.as_ref().map(|id| id.to_string()),
-                    status: job.status.as_str().to_string(),
-                    started_at_ms: optional_timestamp_ms(job.started_at),
-                    completed_at_ms: optional_timestamp_ms(job.completed_at),
-                    error: job.error.clone(),
+                .map(|(name, job)| {
+                    let job_id = job.job_id.as_ref().map(|id| id.to_string());
+                    let mut artifacts =
+                        job_id.as_ref().and_then(|id| artifacts_by_job_id.get(id)).cloned().unwrap_or_default();
+                    artifacts.sort_by(|left, right| {
+                        left.name.cmp(&right.name).then_with(|| left.blob_hash.cmp(&right.blob_hash))
+                    });
+                    CiRunReceiptJob {
+                        name: name.clone(),
+                        job_id,
+                        status: job.status.as_str().to_string(),
+                        started_at_ms: optional_timestamp_ms(job.started_at),
+                        completed_at_ms: optional_timestamp_ms(job.completed_at),
+                        error: job.error.clone(),
+                        artifacts,
+                    }
                 })
                 .collect();
             jobs.sort_by(|left, right| left.name.cmp(&right.name));
@@ -441,6 +506,7 @@ pub async fn handle_get_status(
 /// Handle CiGetRunReceipt request.
 pub async fn handle_get_run_receipt(
     orchestrator: Option<&Arc<aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>>>,
+    kv_store: &dyn aspen_core::KeyValueStore,
     run_id: String,
 ) -> anyhow::Result<ClientRpcResponse> {
     let Some(orchestrator) = orchestrator else {
@@ -460,9 +526,20 @@ pub async fn handle_get_run_receipt(
         }));
     };
 
+    let artifacts_by_job_id = match collect_receipt_artifacts(kv_store, &run).await {
+        Ok(artifacts) => artifacts,
+        Err(error) => {
+            return Ok(ClientRpcResponse::CiGetRunReceiptResult(CiGetRunReceiptResponse {
+                was_found: true,
+                receipt: None,
+                error: Some(format!("Failed to collect CI receipt artifacts: {error}")),
+            }));
+        }
+    };
+
     Ok(ClientRpcResponse::CiGetRunReceiptResult(CiGetRunReceiptResponse {
         was_found: true,
-        receipt: Some(pipeline_run_to_receipt(&run)),
+        receipt: Some(pipeline_run_to_receipt_with_artifacts(&run, &artifacts_by_job_id)),
         error: None,
     }))
 }
@@ -769,7 +846,7 @@ mod tests {
             error: None,
         });
         jobs.insert("alpha".to_string(), JobStatus {
-            job_id: None,
+            job_id: Some(serde_json::from_value(serde_json::json!("job-alpha")).unwrap()),
             status: PipelineStatus::Failed,
             started_at: Some(started_at),
             completed_at: Some(completed_at),
@@ -805,7 +882,27 @@ mod tests {
             has_pending_deploys: false,
         };
 
-        let receipt = pipeline_run_to_receipt(&run);
+        let mut artifacts_by_job_id = BTreeMap::new();
+        artifacts_by_job_id.insert("job-alpha".to_string(), vec![
+            CiArtifactInfo {
+                blob_hash: "bbb".to_string(),
+                name: "z-result".to_string(),
+                size_bytes: 20,
+                content_type: "application/octet-stream".to_string(),
+                created_at: "2026-05-03T20:02:00Z".to_string(),
+                metadata: BTreeMap::new(),
+            },
+            CiArtifactInfo {
+                blob_hash: "aaa".to_string(),
+                name: "a-result".to_string(),
+                size_bytes: 10,
+                content_type: "text/plain".to_string(),
+                created_at: "2026-05-03T20:02:00Z".to_string(),
+                metadata: BTreeMap::new(),
+            },
+        ]);
+
+        let receipt = pipeline_run_to_receipt_with_artifacts(&run, &artifacts_by_job_id);
 
         assert_eq!(receipt.schema, CI_RUN_RECEIPT_SCHEMA);
         assert_eq!(receipt.run_id, "run-1");
@@ -815,5 +912,9 @@ mod tests {
         assert_eq!(receipt.stages[0].jobs[0].name, "alpha");
         assert_eq!(receipt.stages[0].jobs[1].name, "zeta");
         assert_eq!(receipt.stages[0].jobs[0].error.as_deref(), Some("boom"));
+        assert_eq!(receipt.stages[0].jobs[0].artifacts.len(), 2);
+        assert_eq!(receipt.stages[0].jobs[0].artifacts[0].name, "a-result");
+        assert_eq!(receipt.stages[0].jobs[0].artifacts[0].blob_hash, "aaa");
+        assert!(receipt.stages[0].jobs[1].artifacts.is_empty());
     }
 }

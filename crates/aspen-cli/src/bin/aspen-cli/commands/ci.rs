@@ -472,8 +472,10 @@ impl Outputable for CiRunReceiptOutput {
         let total_jobs: usize = receipt.stages.iter().map(|stage| stage.jobs.len()).sum();
         let jobs_with_ids =
             receipt.stages.iter().flat_map(|stage| stage.jobs.iter()).filter(|job| job.job_id.is_some()).count();
+        let artifact_count: usize =
+            receipt.stages.iter().flat_map(|stage| stage.jobs.iter()).map(|job| job.artifacts.len()).sum();
         let mut output = format!(
-            "CI receipt: {}\nSchema: {}\nPipeline: {}\nRepository: {}\nRef: {}\nCommit: {}\nStatus: {}\nStages: {}/{} succeeded\nJobs: {} ({} with log handles)",
+            "CI receipt: {}\nSchema: {}\nPipeline: {}\nRepository: {}\nRef: {}\nCommit: {}\nStatus: {}\nStages: {}/{} succeeded\nJobs: {} ({} with log handles)\nArtifacts: {}",
             receipt.run_id,
             receipt.schema,
             receipt.pipeline_name,
@@ -485,6 +487,7 @@ impl Outputable for CiRunReceiptOutput {
             receipt.stages.len(),
             total_jobs,
             jobs_with_ids,
+            artifact_count,
         );
         if let Some(error) = &receipt.error {
             output.push_str(&format!("\nError: {error}"));

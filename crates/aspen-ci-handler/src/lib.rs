@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_handles_count() {
-        assert_eq!(CI_HANDLES.len(), 12, "CI handler should handle 12 operations");
+        assert_eq!(CI_HANDLES.len(), 13, "CI handler should handle 13 operations");
     }
 
     #[test]
@@ -162,6 +162,7 @@ mod tests {
         assert!(CI_HANDLES.contains(&"CiGetRefStatus"));
         assert!(CI_HANDLES.contains(&"CiListRuns"));
         assert!(CI_HANDLES.contains(&"CiCancelRun"));
+        assert!(CI_HANDLES.contains(&"CiGetRunReceipt"));
     }
 
     #[test]

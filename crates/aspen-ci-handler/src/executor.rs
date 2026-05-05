@@ -119,7 +119,7 @@ impl ServiceExecutor for CiServiceExecutor {
             ClientRpcRequest::CiGetStatus { run_id } => handle_get_status(self.ci_orchestrator.as_ref(), run_id).await,
 
             ClientRpcRequest::CiGetRunReceipt { run_id } => {
-                handle_get_run_receipt(self.ci_orchestrator.as_ref(), run_id).await
+                handle_get_run_receipt(self.ci_orchestrator.as_ref(), self.kv_store.as_ref(), run_id).await
             }
 
             ClientRpcRequest::CiGetRefStatus { repo_id, ref_name } => {
