@@ -1,0 +1,64 @@
+{
+  "generated": "2026-05-05T12:33:52Z",
+  "scope": "Iroh ALPN routing, Raft auth negotiation, proxy/federation handshakes, blob/DAG/docs/snapshot-style streaming assumptions, rate limits, and metrics drift",
+  "live_credentials_read": false,
+  "source_handles": [
+    "src/bin/aspen_node/setup/router.rs",
+    "src/node/mod.rs",
+    "crates/aspen-raft/src/connection_pool/pool_management.rs",
+    "crates/aspen-raft/src/membership_watcher.rs",
+    "crates/aspen-rpc-handlers/src/proxy.rs",
+    "crates/aspen-transport/src/lib.rs"
+  ],
+  "finding": {
+    "id": "transport-raft-auth-alpn-drift",
+    "severity": "high",
+    "status": "remediated",
+    "summary": "The production aspen-node router did not register RAFT_AUTH_ALPN when config.iroh.enable_raft_auth was set, while the Raft network factory selects authenticated outbound ALPN under the same config.",
+    "affected_source": "src/bin/aspen_node/setup/router.rs",
+    "remediation": [
+      "Register RAFT_AUTH_ALPN for NodeMode::Single when config.iroh.enable_raft_auth is true.",
+      "Register RAFT_AUTH_ALPN for primary-shard NodeMode::Sharded when config.iroh.enable_raft_auth is true.",
+      "Seed TrustedPeersRegistry with local Iroh public key and start spawn_membership_watcher for membership-derived peer keys.",
+      "Add source-level regression enable_raft_auth_registers_authenticated_alpn."
+    ]
+  },
+  "audited_assumptions": [
+    {
+      "surface": "outgoing Raft connections",
+      "status": "verified",
+      "evidence": "connection_pool/pool_management.rs selects RAFT_AUTH_ALPN when use_auth_alpn is true and warns for legacy RAFT_ALPN fallback."
+    },
+    {
+      "surface": "incoming Raft ALPN registration",
+      "status": "remediated",
+      "evidence": "setup_router now gates RAFT_AUTH_ALPN registration on config.iroh.enable_raft_auth in both single and primary-shard modes."
+    },
+    {
+      "surface": "proxy handoff",
+      "status": "audited-no-change",
+      "evidence": "proxy.rs is reached through client RPC handler context and uses verified-token handoff rather than a standalone unauthenticated ALPN."
+    },
+    {
+      "surface": "federation ALPN",
+      "status": "audited-no-change",
+      "evidence": "registration remains feature/config gated with explicit cluster identity and TrustManager setup before accept."
+    },
+    {
+      "surface": "blob/DAG/docs/castore/cache ALPN",
+      "status": "audited-follow-up",
+      "evidence": "registration is feature/resource gated; deeper bulk-stream rate-limit and authorization semantics remain follow-up scope."
+    }
+  ],
+  "verification": [
+    "cargo test --bin aspen-node enable_raft_auth_registers_authenticated_alpn --features node-runtime-apps,blob,automerge,forge,federation -- --nocapture",
+    "cargo check --bin aspen-node --features node-runtime-apps,blob,automerge,forge,federation"
+  ],
+  "known_unrelated_failures": [
+    "cargo check --bin aspen-node --features full currently fails in aspen-wasm-plugin due to missing aspen_core::app_registry and aspen_core::ServiceExecutor API paths."
+  ],
+  "residual_risk": [
+    "Legacy RAFT_ALPN remains registered for backward compatibility even when auth is enabled.",
+    "Bulk transfer rate limiting for snapshot/blob/DAG streams needs a deeper follow-up slice."
+  ]
+}

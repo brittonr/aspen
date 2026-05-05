@@ -40,17 +40,20 @@ pub fn setup_router(
     >,
     #[cfg(feature = "forge")] dag_sync_handler: Option<impl iroh::protocol::ProtocolHandler>,
 ) -> iroh::protocol::Router {
+    use aspen::AuthenticatedRaftProtocolHandler;
     use aspen::CLIENT_ALPN;
     use aspen::LOG_SUBSCRIBER_ALPN;
     use aspen::LogSubscriberProtocolHandler;
     #[allow(deprecated)]
     use aspen::RAFT_ALPN;
+    use aspen::RAFT_AUTH_ALPN;
     use aspen::RAFT_SHARDED_ALPN;
     use aspen::RaftProtocolHandler;
     #[cfg(feature = "trust")]
     use aspen::TRUST_ALPN;
     #[cfg(feature = "trust")]
     use aspen::TrustProtocolHandler;
+    use aspen::TrustedPeersRegistry;
     use iroh::protocol::Router;
     use iroh_gossip::ALPN as GOSSIP_ALPN;
 
@@ -59,11 +62,24 @@ pub fn setup_router(
     // Register Raft protocol handler(s) based on mode
     match &node_mode {
         NodeMode::Single(handle) => {
-            // Legacy mode: single Raft handler
-            let raft_handler = RaftProtocolHandler::new(handle.storage.raft_node.raft().as_ref().clone());
+            let raft = handle.storage.raft_node.raft();
+            let raft_handler = RaftProtocolHandler::new(raft.as_ref().clone());
             #[allow(deprecated)]
             {
                 builder = builder.accept(RAFT_ALPN, raft_handler);
+            }
+
+            if config.iroh.enable_raft_auth {
+                let our_public_key = node_mode.iroh_manager().endpoint().id();
+                let trusted_peers = TrustedPeersRegistry::with_peers([our_public_key]);
+                let _watcher_cancel =
+                    aspen::raft::membership_watcher::spawn_membership_watcher(raft.clone(), trusted_peers.clone());
+                let auth_handler = AuthenticatedRaftProtocolHandler::new(raft.as_ref().clone(), trusted_peers);
+                builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
+                info!(
+                    our_public_key = %our_public_key,
+                    "authenticated Raft protocol handler registered (ALPN: raft-auth)"
+                );
             }
         }
         NodeMode::Sharded(handle) => {
@@ -78,6 +94,22 @@ pub fn setup_router(
                     builder = builder.accept(RAFT_ALPN, legacy_handler);
                 }
                 info!("Legacy RAFT_ALPN routing to shard 0 for backward compatibility");
+
+                if config.iroh.enable_raft_auth {
+                    let our_public_key = node_mode.iroh_manager().endpoint().id();
+                    let trusted_peers = TrustedPeersRegistry::with_peers([our_public_key]);
+                    let _watcher_cancel = aspen::raft::membership_watcher::spawn_membership_watcher(
+                        shard_0.raft().clone(),
+                        trusted_peers.clone(),
+                    );
+                    let auth_handler =
+                        AuthenticatedRaftProtocolHandler::new(shard_0.raft().as_ref().clone(), trusted_peers);
+                    builder = builder.accept(RAFT_AUTH_ALPN, auth_handler);
+                    info!(
+                        our_public_key = %our_public_key,
+                        "authenticated Raft protocol handler registered for primary shard (ALPN: raft-auth)"
+                    );
+                }
             }
         }
     }
@@ -450,6 +482,16 @@ mod tests {
     fn shell_quote_path_handles_spaces_and_quotes() {
         let path = std::path::Path::new("/tmp/aspen dogfood/o'clock/cluster-ticket.txt");
         assert_eq!(shell_quote_path(path), "'/tmp/aspen dogfood/o'\\''clock/cluster-ticket.txt'");
+    }
+
+    #[test]
+    fn enable_raft_auth_registers_authenticated_alpn() {
+        let source = include_str!("router.rs");
+        let auth_flag = source.find("config.iroh.enable_raft_auth").expect("raft auth flag gate");
+        let auth_accept = source.find("builder.accept(RAFT_AUTH_ALPN").expect("authenticated raft ALPN registration");
+        assert!(auth_flag < auth_accept);
+        assert!(source.contains("spawn_membership_watcher"));
+        assert!(source.contains("TrustedPeersRegistry::with_peers"));
     }
 
     #[test]

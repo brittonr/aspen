@@ -36,7 +36,7 @@
 ## Phase 5: Execution, Network, and Supply-Chain Audit
 
 - [x] Audit jobs, CI executors, native build paths, SNIX build/eval/cache paths, and fallback subprocess gates for sandbox and command-boundary enforcement. Evidence: `evidence/execution-sandbox-command-boundaries.md`, `evidence/execution-sandbox-command-boundaries.json`; audited CI shell/VM/Nix payload boundaries, shell-agent process spawning, SNIX/native-build fallback gates, and hardened standalone shell-executor working-directory validation against symlink workspace escapes.
-- [ ] Audit Iroh ALPN routing, proxy/federation handshakes, blob/snapshot transfer assumptions, rate limiting, and metrics for security-sensitive drift.
+- [x] Audit Iroh ALPN routing, proxy/federation handshakes, blob/snapshot transfer assumptions, rate limiting, and metrics for security-sensitive drift. Evidence: `evidence/transport-boundary-audit.md`, `evidence/transport-boundary-audit.json`; audited production/router ALPN registration, Raft auth negotiation, proxy/federation gating, and representative bulk-stream assumptions; fixed production `aspen-node` `--enable-raft-auth` drift so incoming `RAFT_AUTH_ALPN` is registered with membership-synchronized trusted peers.
 - [ ] Audit Nix flake inputs, vendored dependencies, unsafe/public unsafe surfaces, feature-gated dependency graphs, and release/build artifact identity.
 - [ ] Add focused verification commands or fixtures for any missing sandbox, transport, or supply-chain guarantee.
 
