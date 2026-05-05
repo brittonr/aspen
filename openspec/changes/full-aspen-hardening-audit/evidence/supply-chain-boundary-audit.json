@@ -1,0 +1,52 @@
+{
+  "audit_script": "scripts/audit-supply-chain-boundaries.py",
+  "findings": [],
+  "generated": "2026-05-05T12:49:08Z",
+  "residual_risk": [
+    "This slice verifies pin/hash/public-unsafe/build-script invariants; it does not replace RustSec/cargo-deny vulnerability review.",
+    "Vendored code is inventoried separately from Aspen-owned code; deeper vendored patch review remains manual/source-specific.",
+    "Release artifact signing/attestation is not claimed beyond Nix/Cargo identity pins and build-script inventory."
+  ],
+  "scope": [
+    "flake.lock locked nodes and narHash/rev material",
+    "Cargo workspace git dependencies and Cargo.lock git package revs",
+    "production Nix fetchers with nearby fixed-output hashes",
+    "Aspen-owned Rust public unsafe APIs and unsafe block inventory",
+    "owned and vendored build.rs inventory"
+  ],
+  "source_handles": [
+    "flake.nix:4-67",
+    "flake.lock",
+    "Cargo.toml:245-924",
+    "Cargo.lock",
+    "scripts/audit-supply-chain-boundaries.py"
+  ],
+  "status": "pass",
+  "summary": {
+    "hashed_nix_fetches": 8,
+    "hashed_nodes": 16,
+    "locked_git_packages": 20,
+    "locked_nodes": 16,
+    "nix_fetches": 8,
+    "owned_build_scripts": [
+      "build.rs",
+      "crates/aspen-ci/build.rs",
+      "crates/aspen-ci-executor-nix/build.rs",
+      "crates/aspen-cli/build.rs",
+      "crates/aspen-nickel/build.rs"
+    ],
+    "owned_public_unsafe_apis": 0,
+    "owned_rust_files": 1750,
+    "owned_unsafe_blocks": 50,
+    "revision_nodes": 16,
+    "vendored_build_scripts": [
+      "vendor/cargo-hyperlight/build.rs",
+      "vendor/snix-glue/build.rs"
+    ],
+    "vendored_public_unsafe_apis": 0,
+    "workspace_git_deps": 11
+  },
+  "verification_commands": [
+    "python scripts/audit-supply-chain-boundaries.py --json"
+  ]
+}
