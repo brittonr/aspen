@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-token-lifecycle Specification
+
+## Purpose
+
+Defines the Federation Token Lifecycle capability requirements preserved by Aspen's archived OpenSpec records, including issue federation tokens, token refresh protocol, token revocation.
+
+## Requirements
 
 ### Requirement: Issue federation tokens
 
@@ -112,7 +118,6 @@ The system SHALL allow administrators to list active federation tokens issued by
 - **WHEN** an administrator inspects a token by its hash
 - **THEN** the system SHALL display the full token details including issuer, audience, capabilities, facts, proof chain status, and time until expiry
 
-## MODIFIED Requirements
 
 ### Requirement: Issue federation tokens
 

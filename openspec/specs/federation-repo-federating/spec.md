@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-repo-federating Specification
+
+## Purpose
+
+Defines the Federation Repo Federating capability requirements preserved by Aspen's archived OpenSpec records, including federate repository via RPC.
+
+## Requirements
 
 ### Requirement: Federate repository via RPC
 

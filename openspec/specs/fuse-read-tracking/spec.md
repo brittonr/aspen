@@ -1,4 +1,10 @@
-## ADDED Requirements
+# fuse-read-tracking Specification
+
+## Purpose
+
+Defines the Fuse Read Tracking capability requirements preserved by Aspen's archived OpenSpec records, including per-PID read set tracking, session lifecycle management, child process inheritance.
+
+## Requirements
 
 ### Requirement: Per-PID read set tracking
 

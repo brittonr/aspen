@@ -1,4 +1,10 @@
-## ADDED Requirements
+# tree-diff Specification
+
+## Purpose
+
+Defines the Tree Diff capability requirements preserved by Aspen's archived OpenSpec records, including structural tree diff, commit-to-commit diff, diff result ordering.
+
+## Requirements
 
 ### Requirement: Structural tree diff
 

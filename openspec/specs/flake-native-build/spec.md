@@ -1,4 +1,10 @@
-## ADDED Requirements
+# flake-native-build Specification
+
+## Purpose
+
+Defines the Flake Native Build capability requirements preserved by Aspen's archived OpenSpec records, including flake eval via embedded flake-compat, flake-compat embedded as pinned resource, fallback to subprocess on unsupported input types.
+
+## Requirements
 
 ### Requirement: Flake eval via embedded flake-compat
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federated-git-clone Specification
+
+## Purpose
+
+Defines the Federated Git Clone capability requirements preserved by Aspen's archived OpenSpec records, including federated URL parsing, federated list refs, federated fetch objects.
+
+## Requirements
 
 ### Requirement: Federated URL parsing
 

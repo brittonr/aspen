@@ -1,4 +1,10 @@
-## ADDED Requirements
+# circuit-breaker Specification
+
+## Purpose
+
+Defines the Circuit Breaker capability requirements preserved by Aspen's archived OpenSpec records, including generic circuit breaker state machine, circuit breaker observability, circuit breaker on snix service calls.
+
+## Requirements
 
 ### Requirement: Generic circuit breaker state machine
 

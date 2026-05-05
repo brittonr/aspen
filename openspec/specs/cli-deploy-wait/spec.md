@@ -1,4 +1,10 @@
-## ADDED Requirements
+# cli-deploy-wait Specification
+
+## Purpose
+
+Defines the Cli Deploy Wait capability requirements preserved by Aspen's archived OpenSpec records, including deploy wait flag blocks until terminal state, deploy timeout flag caps wait duration, deploy wait emits streaming status.
+
+## Requirements
 
 ### Requirement: Deploy wait flag blocks until terminal state
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-clone-polish Specification
+
+## Purpose
+
+Defines the Federation Clone Polish capability requirements preserved by Aspen's archived OpenSpec records, including incremental federation sync deduplicates objects, multi-branch ref translation, clean production logging.
+
+## Requirements
 
 ### Requirement: Incremental federation sync deduplicates objects
 

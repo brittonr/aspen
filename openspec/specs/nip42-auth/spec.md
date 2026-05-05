@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nip42-auth Specification
+
+## Purpose
+
+Defines the Nip42 Auth capability requirements preserved by Aspen's archived OpenSpec records, including relay sends AUTH challenge on WebSocket connect, client authenticates with kind 22242 signed event, write policy controls EVENT acceptance.
+
+## Requirements
 
 ### Requirement: Relay sends AUTH challenge on WebSocket connect
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# code-search Specification
+
+## Purpose
+
+Defines the Code Search capability requirements preserved by Aspen's archived OpenSpec records, including code search page, search bounds, search box in repo navigation.
+
+## Requirements
 
 ### Requirement: Code search page
 

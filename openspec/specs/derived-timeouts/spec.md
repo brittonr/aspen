@@ -1,4 +1,10 @@
-## ADDED Requirements
+# derived-timeouts Specification
+
+## Purpose
+
+Defines the Derived Timeouts capability requirements preserved by Aspen's archived OpenSpec records, including coupled timeouts derived from base values, compile-time assertions on derived values.
+
+## Requirements
 
 ### Requirement: Coupled timeouts derived from base values
 

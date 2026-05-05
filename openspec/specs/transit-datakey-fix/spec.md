@@ -1,4 +1,10 @@
-## ADDED Requirements
+# transit-datakey-fix Specification
+
+## Purpose
+
+Defines the Transit Datakey Fix capability requirements preserved by Aspen's archived OpenSpec records, including transit datakey returns plaintext by default, sOPS client sends correct datakey return mode, sops-transit VM test passes end-to-end.
+
+## Requirements
 
 ### Requirement: Transit datakey returns plaintext by default
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-build-integration-tests Specification
+
+## Purpose
+
+Defines the Snix Build Integration Tests capability requirements preserved by Aspen's archived OpenSpec records, including full eval→build→upload pipeline runs in-memory, nixEvaluator in-memory flake eval, nativeBuildService construction with FakeBuildService.
+
+## Requirements
 
 ### Requirement: Full eval→build→upload pipeline runs in-memory
 

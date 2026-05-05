@@ -1,4 +1,10 @@
-## ADDED Requirements
+# c2e-sha1-index Specification
+
+## Purpose
+
+Defines the C2e Sha1 Index capability requirements preserved by Aspen's archived OpenSpec records, including c2e index keyed by SHA-1, have_set uses SHA-1 domain for git objects.
+
+## Requirements
 
 ### Requirement: c2e index keyed by SHA-1
 

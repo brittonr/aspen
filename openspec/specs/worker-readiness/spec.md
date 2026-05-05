@@ -1,5 +1,9 @@
 # Worker Readiness Specification
 
+## Purpose
+
+Defines the Worker Readiness capability requirements preserved by Aspen's archived OpenSpec records, including workers start as not ready, workers become ready after Raft catchup, readiness resets on health loss.
+
 ## Requirements
 
 ### Requirement: Workers start as not ready

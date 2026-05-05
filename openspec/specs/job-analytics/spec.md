@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change fix-job-analytics-sql-generation. Update Purpose after archive.
+Defines the Job Analytics capability requirements preserved by Aspen's archived OpenSpec records, including analytics sql builders generate valid predicate syntax, analytics sql coverage includes optional-filter combinations.
 
 ## Requirements
 

@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# patchbay-harness Specification
+
+## Purpose
+
+Defines the Patchbay Harness capability requirements preserved by Aspen's archived OpenSpec records, including crate structure and dependencies.
+
+## Requirements
 
 ### Requirement: Crate structure and dependencies
 

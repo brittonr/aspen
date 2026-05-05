@@ -1,4 +1,10 @@
-## ADDED Requirements
+# profile-fetch Specification
+
+## Purpose
+
+Defines the Profile Fetch capability requirements preserved by Aspen's archived OpenSpec records, including resolve npub to display name, profile cache.
+
+## Requirements
 
 ### Requirement: Resolve npub to display name
 

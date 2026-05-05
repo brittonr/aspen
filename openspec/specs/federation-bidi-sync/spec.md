@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-bidi-sync Specification
+
+## Purpose
+
+Defines the Federation Bidi Sync capability requirements preserved by Aspen's archived OpenSpec records, including bidirectional sync transfers objects in both directions, conflict resolution on divergent refs, ref diff computation is a pure function.
+
+## Requirements
 
 ### Requirement: Bidirectional sync transfers objects in both directions
 

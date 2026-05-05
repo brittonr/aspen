@@ -1,4 +1,10 @@
-## ADDED Requirements
+# service-registration Specification
+
+## Purpose
+
+Defines the Service Registration capability requirements preserved by Aspen's archived OpenSpec records, including auto-register with service mesh on startup, deregister on shutdown.
+
+## Requirements
 
 ### Requirement: Auto-register with service mesh on startup
 

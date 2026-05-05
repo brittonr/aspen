@@ -1,4 +1,10 @@
-## ADDED Requirements
+# fetchgit-builtin Specification
+
+## Purpose
+
+Defines the Fetchgit Builtin capability requirements preserved by Aspen's archived OpenSpec records, including fetchGit accepts url as string argument, fetchGit accepts attrset argument with url, fetchGit returns Nix-compatible attrset.
+
+## Requirements
 
 ### Requirement: fetchGit accepts url as string argument
 

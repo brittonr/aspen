@@ -1,20 +1,79 @@
-## write-forwarding
+# write-forwarding Specification
 
-### Requirements
+## Purpose
 
-1. When `RaftNode::write()` receives `ForwardToLeader` and a `WriteForwarder` is set, it MUST forward the write to the indicated leader
-2. Forwarding MUST use the existing iroh QUIC connections (connection pool or direct connect)
-3. If the forwarding target is also not the leader, return `NotLeader` — do not chain-forward
-4. Forwarding MUST NOT hold any local locks across the network call
-5. Forwarding timeout MUST be bounded (30s max)
-6. When no `WriteForwarder` is set, behavior MUST be unchanged (return `NotLeader`)
-7. The write batcher on the follower MUST be bypassed for forwarded writes
-8. Worker stats KV write failures MUST log at DEBUG, not WARN
+Defines the Write Forwarding capability requirements preserved by Aspen's archived OpenSpec records.
 
-### Acceptance Criteria
+## Requirements
 
-- 3-node cluster survives leader change during long-running CI job: job ack succeeds on follower
-- Worker stats writes succeed after leader change (forwarded to new leader)
-- No infinite forwarding loops
-- Unit test: `test_write_forwarding_on_leader_change`
-- Integration test: re-run multi-node dogfood with forced leader change during build stage
+### Requirement: Write forwarding rule 1
+
+Write forwarding MUST forward writes to the indicated leader when `RaftNode::write()` receives `ForwardToLeader` and a `WriteForwarder` is set.
+
+#### Scenario: Rule 1 is enforced
+
+- **WHEN** a follower processes a write-forwarding path covered by this rule
+- **THEN** write forwarding MUST forward writes to the indicated leader when `RaftNode::write()` receives `ForwardToLeader` and a `WriteForwarder` is set.
+
+### Requirement: Write forwarding rule 2
+
+Write forwarding MUST use existing iroh QUIC connections through the connection pool or direct connect path for forwarding.
+
+#### Scenario: Rule 2 is enforced
+
+- **WHEN** a follower processes a write-forwarding path covered by this rule
+- **THEN** write forwarding MUST use existing iroh QUIC connections through the connection pool or direct connect path for forwarding.
+
+### Requirement: Write forwarding rule 3
+
+Write forwarding MUST return `NotLeader` without chain-forwarding when the forwarding target is also not the leader.
+
+#### Scenario: Rule 3 is enforced
+
+- **WHEN** a follower processes a write-forwarding path covered by this rule
+- **THEN** write forwarding MUST return `NotLeader` without chain-forwarding when the forwarding target is also not the leader.
+
+### Requirement: Write forwarding rule 4
+
+Write forwarding MUST avoid holding local locks across the network forwarding call.
+
+#### Scenario: Rule 4 is enforced
+
+- **WHEN** a follower processes a write-forwarding path covered by this rule
+- **THEN** write forwarding MUST avoid holding local locks across the network forwarding call.
+
+### Requirement: Write forwarding rule 5
+
+Write forwarding MUST bound the forwarding timeout to at most 30 seconds.
+
+#### Scenario: Rule 5 is enforced
+
+- **WHEN** a follower processes a write-forwarding path covered by this rule
+- **THEN** write forwarding MUST bound the forwarding timeout to at most 30 seconds.
+
+### Requirement: Write forwarding rule 6
+
+Write forwarding MUST preserve existing `NotLeader` behavior when no `WriteForwarder` is set.
+
+#### Scenario: Rule 6 is enforced
+
+- **WHEN** a follower processes a write-forwarding path covered by this rule
+- **THEN** write forwarding MUST preserve existing `NotLeader` behavior when no `WriteForwarder` is set.
+
+### Requirement: Write forwarding rule 7
+
+Write forwarding MUST bypass the follower write batcher for forwarded writes.
+
+#### Scenario: Rule 7 is enforced
+
+- **WHEN** a follower processes a write-forwarding path covered by this rule
+- **THEN** write forwarding MUST bypass the follower write batcher for forwarded writes.
+
+### Requirement: Write forwarding rule 8
+
+Write forwarding MUST log worker stats KV write failures at DEBUG rather than WARN.
+
+#### Scenario: Rule 8 is enforced
+
+- **WHEN** a follower processes a write-forwarding path covered by this rule
+- **THEN** write forwarding MUST log worker stats KV write failures at DEBUG rather than WARN.

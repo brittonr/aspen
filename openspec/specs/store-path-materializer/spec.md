@@ -1,4 +1,10 @@
-## ADDED Requirements
+# store-path-materializer Specification
+
+## Purpose
+
+Defines the Store Path Materializer capability requirements preserved by Aspen's archived OpenSpec records, including materialize store paths from castore to local filesystem, walk castore Node tree for filesystem materialization, resource bounds on materialization.
+
+## Requirements
 
 ### Requirement: Materialize store paths from castore to local filesystem
 

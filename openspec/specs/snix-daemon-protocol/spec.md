@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-daemon-protocol Specification
+
+## Purpose
+
+Defines the Snix Daemon Protocol capability requirements preserved by Aspen's archived OpenSpec records, including expose nix-daemon Unix socket, query path info via daemon protocol, validate paths via daemon protocol.
+
+## Requirements
 
 ### Requirement: Expose nix-daemon Unix socket
 

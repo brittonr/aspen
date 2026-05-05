@@ -1,4 +1,10 @@
-## ADDED Requirements
+# vm-speculative-execution Specification
+
+## Purpose
+
+Defines the VM Speculative Execution capability requirements preserved by Aspen's archived OpenSpec records, including speculative fork group, first-success-wins semantics, speculative group resource cleanup.
+
+## Requirements
 
 ### Requirement: Speculative fork group
 

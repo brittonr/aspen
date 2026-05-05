@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-tracing-adoption Specification
+
+## Purpose
+
+Defines the Snix Tracing Adoption capability requirements preserved by Aspen's archived OpenSpec records, including use snix-tracing in snix-facing binaries, scoped adoption, clap integration.
+
+## Requirements
 
 ### Requirement: Use snix-tracing in snix-facing binaries
 

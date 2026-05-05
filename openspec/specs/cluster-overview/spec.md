@@ -1,4 +1,10 @@
-## ADDED Requirements
+# cluster-overview Specification
+
+## Purpose
+
+Defines the Cluster Overview capability requirements preserved by Aspen's archived OpenSpec records, including cluster overview page.
+
+## Requirements
 
 ### Requirement: Cluster overview page
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-policy-tests Specification
+
+## Purpose
+
+Defines the Federation Policy Tests capability requirements preserved by Aspen's archived OpenSpec records, including resource policy unit test coverage, verification module unit test coverage, selection module unit test coverage.
+
+## Requirements
 
 ### Requirement: Resource policy unit test coverage
 

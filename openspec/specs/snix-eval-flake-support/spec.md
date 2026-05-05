@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-eval-flake-support Specification
+
+## Purpose
+
+Defines the Snix Eval Flake Support capability requirements preserved by Aspen's archived OpenSpec records, including generate flake.lock when missing, unit test for flake.lock detection, integration test for eval with lock generation.
+
+## Requirements
 
 ### Requirement: Generate flake.lock when missing
 

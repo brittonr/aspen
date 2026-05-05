@@ -1,4 +1,10 @@
-## ADDED Requirements
+# dogfood-full-loop-vm-test Specification
+
+## Purpose
+
+Defines the Dogfood Full Loop VM Test capability requirements preserved by Aspen's archived OpenSpec records, including dogfood-local.sh full-loop completes without errors, nixOS VM integration test for full self-build loop, dogfood-local.sh error handling hardened.
+
+## Requirements
 
 ### Requirement: dogfood-local.sh full-loop completes without errors
 

@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# snix-eval-integration Specification
+
+## Purpose
+
+Defines the Snix Eval Integration capability requirements preserved by Aspen's archived OpenSpec records, including evaluator resolves flake input.
+
+## Requirements
 
 ### Requirement: Evaluator resolves flake input
 

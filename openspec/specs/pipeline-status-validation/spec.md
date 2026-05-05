@@ -1,4 +1,10 @@
-## ADDED Requirements
+# pipeline-status-validation Specification
+
+## Purpose
+
+Defines the Pipeline Status Validation capability requirements preserved by Aspen's archived OpenSpec records, including job-not-found treated as incomplete.
+
+## Requirements
 
 ### Requirement: Job-not-found treated as incomplete
 

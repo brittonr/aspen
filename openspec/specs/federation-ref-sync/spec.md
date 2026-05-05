@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-ref-sync Specification
+
+## Purpose
+
+Defines the Federation Ref Sync capability requirements preserved by Aspen's archived OpenSpec records, including sync fetches remote ref heads, synced refs persisted to local KV.
+
+## Requirements
 
 ### Requirement: Sync fetches remote ref heads
 

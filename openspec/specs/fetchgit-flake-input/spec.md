@@ -1,4 +1,10 @@
-## ADDED Requirements
+# fetchgit-flake-input Specification
+
+## Purpose
+
+Defines the Fetchgit Flake Input capability requirements preserved by Aspen's archived OpenSpec records, including flake_lock resolver handles git input type, fetch_and_clone_git function, git fetch uses FetchCache.
+
+## Requirements
 
 ### Requirement: flake_lock resolver handles git input type
 

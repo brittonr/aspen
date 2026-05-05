@@ -1,4 +1,10 @@
-## ADDED Requirements
+# ci-observability-actions Specification
+
+## Purpose
+
+Defines the CI Observability Actions capability requirements preserved by Aspen's archived OpenSpec records, including cancel a running pipeline from the web UI, re-trigger a pipeline from the web UI.
+
+## Requirements
 
 ### Requirement: Cancel a running pipeline from the web UI
 

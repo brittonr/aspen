@@ -1,7 +1,7 @@
 # jj-remote-aspen Specification
 
 ## Purpose
-TBD - created by archiving change jj-native-forge-wasm-plugin. Update Purpose after archive.
+Defines the JJ Remote Aspen capability requirements preserved by Aspen's archived OpenSpec records, including jj clients can talk to aspen natively, jj-native access is exposed through a standalone helper, jj remote operations enforce repo authorization.
 ## Requirements
 ### Requirement: JJ clients can talk to Aspen natively
 

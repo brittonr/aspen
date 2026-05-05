@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federated-dogfood-script Specification
+
+## Purpose
+
+Defines the Federated Dogfood Script capability requirements preserved by Aspen's archived OpenSpec records, including two independent clusters on localhost, push source to alice's Forge, federate alice's repo.
+
+## Requirements
 
 ### Requirement: Two independent clusters on localhost
 

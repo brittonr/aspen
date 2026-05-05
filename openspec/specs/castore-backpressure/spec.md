@@ -1,4 +1,10 @@
-## ADDED Requirements
+# castore-backpressure Specification
+
+## Purpose
+
+Defines the Castore Backpressure capability requirements preserved by Aspen's archived OpenSpec records, including queue-depth hysteresis on castore server, backpressure observability, backpressure error propagation.
+
+## Requirements
 
 ### Requirement: Queue-depth hysteresis on castore server
 

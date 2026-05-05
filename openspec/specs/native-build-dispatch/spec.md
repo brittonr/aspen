@@ -1,4 +1,10 @@
-## ADDED Requirements
+# native-build-dispatch Specification
+
+## Purpose
+
+Defines the Native Build Dispatch capability requirements preserved by Aspen's archived OpenSpec records, including native build dispatch in execute_build, derivation path resolution, native build output upload.
+
+## Requirements
 
 ### Requirement: Native build dispatch in execute_build
 

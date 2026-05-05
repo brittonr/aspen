@@ -1,4 +1,10 @@
-## ADDED Requirements
+# build-phase-timing Specification
+
+## Purpose
+
+Defines the Build Phase Timing capability requirements preserved by Aspen's archived OpenSpec records, including nix build jobs report per-phase timing, phase timings aggregate per worker.
+
+## Requirements
 
 ### Requirement: Nix build jobs report per-phase timing
 

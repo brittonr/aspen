@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-subscription Specification
+
+## Purpose
+
+Defines the Federation Subscription capability requirements preserved by Aspen's archived OpenSpec records, including publish KV prefix for federation, subscribe to remote prefix, sync KV entries for subscribed prefix.
+
+## Requirements
 
 ### Requirement: Publish KV prefix for federation
 

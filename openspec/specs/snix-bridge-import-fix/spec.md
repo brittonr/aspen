@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-bridge-import-fix Specification
+
+## Purpose
+
+Defines the Snix Bridge Import Fix capability requirements preserved by Aspen's archived OpenSpec records, including snix bridge import works with in-memory backends, microVM reads imported data via virtiofs, snix-bridge-virtiofs VM test passes.
+
+## Requirements
 
 ### Requirement: Snix bridge import works with in-memory backends
 

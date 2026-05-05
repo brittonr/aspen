@@ -1,4 +1,10 @@
-## ADDED Requirements
+# tree-merge Specification
+
+## Purpose
+
+Defines the Tree Merge capability requirements preserved by Aspen's archived OpenSpec records, including three-way tree merge, three-way classification is symmetric, merge result invariants.
+
+## Requirements
 
 ### Requirement: Three-way tree merge
 

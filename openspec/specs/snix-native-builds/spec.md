@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# snix-native-builds Specification
+
+## Purpose
+
+Defines the Snix Native Builds capability requirements preserved by Aspen's archived OpenSpec records, including subprocess fallback, native build is the default execution path, cache operations use PathInfoService.
+
+## Requirements
 
 ### Requirement: Subprocess fallback
 
@@ -11,7 +17,6 @@ The executor SHALL retain the `nix build` subprocess execution path as a runtime
 - **THEN** the executor SHALL fall back to spawning `nix build` as a subprocess
 - **AND** the executor SHALL log a warning indicating fallback was triggered
 
-## MODIFIED Requirements
 
 ### Requirement: Native build is the default execution path
 

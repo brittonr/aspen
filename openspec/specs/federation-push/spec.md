@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-push Specification
+
+## Purpose
+
+Defines the Federation Push capability requirements preserved by Aspen's archived OpenSpec records, including origin cluster can push objects to a remote cluster, push requires receiver trust, push respects object limits.
+
+## Requirements
 
 ### Requirement: Origin cluster can push objects to a remote cluster
 
@@ -56,7 +62,6 @@ The CLI SHALL provide `aspen-cli federation push --peer <key> --repo <id>` to pu
 - **THEN** the CLI exports the repo's objects and refs, connects to Bob's cluster, and pushes them
 - **AND** the CLI prints the number of objects imported and refs updated
 
-## MODIFIED Requirements
 
 ### Requirement: Push requires explicit authorization
 

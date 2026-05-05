@@ -1,7 +1,7 @@
 # transport-rpc-extraction Specification
 
 ## Purpose
-TBD - created by archiving change split-transport-rpc-core. Update Purpose after archive.
+Defines the Transport RPC Extraction capability requirements preserved by Aspen's archived OpenSpec records, including transport reusable surface avoids aspen runtime shells, rpc core reusable surface avoids concrete aspen service graph, downstream fixtures prove generic transport and rpc usage.
 ## Requirements
 ### Requirement: Transport reusable surface avoids Aspen runtime shells
 The reusable transport surface MUST expose Iroh/IRPC protocol-handler and stream/connection helpers without requiring root Aspen, cluster bootstrap, runtime auth, trust, sharding, Raft compatibility, handler registries, or domain services by default.

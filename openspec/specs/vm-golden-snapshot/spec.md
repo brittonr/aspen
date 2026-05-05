@@ -1,4 +1,10 @@
-## ADDED Requirements
+# vm-golden-snapshot Specification
+
+## Purpose
+
+Defines the VM Golden Snapshot capability requirements preserved by Aspen's archived OpenSpec records, including automatic golden snapshot creation, golden snapshot validation, snapshot storage structure.
+
+## Requirements
 
 ### Requirement: Automatic golden snapshot creation
 

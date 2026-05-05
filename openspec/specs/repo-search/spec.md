@@ -1,4 +1,10 @@
-## ADDED Requirements
+# repo-search Specification
+
+## Purpose
+
+Defines the Repo Search capability requirements preserved by Aspen's archived OpenSpec records, including repo list has a filter input.
+
+## Requirements
 
 ### Requirement: Repo list has a filter input
 

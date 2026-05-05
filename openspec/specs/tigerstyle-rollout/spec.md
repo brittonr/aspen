@@ -1,12 +1,16 @@
-## ADDED Requirements
+# tigerstyle-rollout Specification
+
+## Purpose
+
+Defines the Tigerstyle Rollout capability requirements preserved by Aspen's archived OpenSpec records, including clippy policy rollout scope is explicit.
+
+## Requirements
 
 ### Requirement: Clippy policy rollout scope is explicit
-ID: tigerstyle-rollout.clippy-policy-rollout-scope-is-explicit
 
 The system SHALL roll out enforced Clippy deny policy through an explicit, reviewable crate inventory rather than an implicit workspace-wide assumption.
 
 #### Scenario: Initial enforcement pass names participating crates
-ID: tigerstyle-rollout.clippy-policy-rollout-scope-is-explicit.initial-enforcement-pass-names-participating-crates
 
 - **GIVEN** a change that converts Clippy from advisory warnings to executable repository policy
 - **WHEN** the first enforcement pass is prepared
@@ -15,7 +19,6 @@ ID: tigerstyle-rollout.clippy-policy-rollout-scope-is-explicit.initial-enforceme
 - **AND** reviewers SHALL be able to tell which crates remain outside the first enforcement pass
 
 #### Scenario: Deferred crates stay explicit
-ID: tigerstyle-rollout.clippy-policy-rollout-scope-is-explicit.deferred-crates-stay-explicit
 
 - **GIVEN** some workspace crates are not yet in the first enforcement pass
 - **WHEN** the rollout inventory is reviewed

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# ci-stage-timeline Specification
+
+## Purpose
+
+Defines the CI Stage Timeline capability requirements preserved by Aspen's archived OpenSpec records, including stage progress bar on pipeline detail page, stage segments are equal width.
+
+## Requirements
 
 ### Requirement: Stage progress bar on pipeline detail page
 

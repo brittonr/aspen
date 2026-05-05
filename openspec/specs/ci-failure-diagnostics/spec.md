@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change fix-dogfood-ci-clippy. Update Purpose after archive.
+Defines the CI Failure Diagnostics capability requirements preserved by Aspen's archived OpenSpec records, including ci job failures include build stderr, dogfood pipeline prints failure details, log streaming reliability.
 
 ## Requirements
 

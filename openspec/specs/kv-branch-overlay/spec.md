@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# kv-branch-overlay Specification
+
+## Purpose
+
+Defines the KV Branch Overlay capability requirements preserved by Aspen's archived OpenSpec records, including atomic commit via Raft batch, branch tracks parent commit.
+
+## Requirements
 
 ### Requirement: Atomic commit via Raft batch
 

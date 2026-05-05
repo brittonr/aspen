@@ -1,4 +1,10 @@
-## ADDED Requirements
+# deploy-resource-statefulness Specification
+
+## Purpose
+
+Defines the Deploy Resource Statefulness capability requirements preserved by Aspen's archived OpenSpec records, including statefulness flag on deploy requests, stateful lifecycle tracking in KV, stateless deploy skips KV writes.
+
+## Requirements
 
 ### Requirement: Statefulness flag on deploy requests
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-nar-bridge-adoption Specification
+
+## Purpose
+
+Defines the Snix Nar Bridge Adoption capability requirements preserved by Aspen's archived OpenSpec records, including serve binary cache via nar-bridge, support NAR upload via PUT, signing key integration.
+
+## Requirements
 
 ### Requirement: Serve binary cache via nar-bridge
 

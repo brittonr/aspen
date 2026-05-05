@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-credential Specification
+
+## Purpose
+
+Defines the Federation Credential capability requirements preserved by Aspen's archived OpenSpec records, including self-contained credential type, offline credential verification, capability attenuation across delegation levels.
+
+## Requirements
 
 ### Requirement: Self-contained credential type
 
@@ -113,7 +119,6 @@ The `CapabilityToken` SHALL support an optional `facts` field containing arbitra
 - **THEN** deserialization SHALL succeed with an empty facts array
 - **AND** the token SHALL verify and authorize identically to before
 
-## MODIFIED Requirements
 
 ### Requirement: Self-contained credential type
 

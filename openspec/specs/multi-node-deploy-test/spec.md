@@ -1,4 +1,10 @@
-## ADDED Requirements
+# multi-node-deploy-test Specification
+
+## Purpose
+
+Defines the Multi Node Deploy Test capability requirements preserved by Aspen's archived OpenSpec records, including 3-node cluster formation, forge push and CI build on multi-node cluster, rolling deploy across 3 nodes.
+
+## Requirements
 
 ### Requirement: 3-node cluster formation
 

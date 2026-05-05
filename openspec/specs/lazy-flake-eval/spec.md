@@ -1,4 +1,10 @@
-## ADDED Requirements
+# lazy-flake-eval Specification
+
+## Purpose
+
+Defines the Lazy Flake Eval capability requirements preserved by Aspen's archived OpenSpec records, including lazy eval mode for flake derivation resolution, strict eval mode preserved for validation, lazy result value extraction.
+
+## Requirements
 
 ### Requirement: Lazy eval mode for flake derivation resolution
 

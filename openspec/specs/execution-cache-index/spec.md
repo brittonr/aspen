@@ -1,4 +1,10 @@
-## ADDED Requirements
+# execution-cache-index Specification
+
+## Purpose
+
+Defines the Execution Cache Index capability requirements preserved by Aspen's archived OpenSpec records, including cache entry storage format, cache key determinism, cache lookup by key.
+
+## Requirements
 
 ### Requirement: Cache entry storage format
 

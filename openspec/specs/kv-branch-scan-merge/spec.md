@@ -1,4 +1,10 @@
-## ADDED Requirements
+# kv-branch-scan-merge Specification
+
+## Purpose
+
+Defines the KV Branch Scan Merge capability requirements preserved by Aspen's archived OpenSpec records, including sorted merge of branch and parent scan results, prefix filtering for branch entries, deterministic pure function.
+
+## Requirements
 
 ### Requirement: Sorted merge of branch and parent scan results
 

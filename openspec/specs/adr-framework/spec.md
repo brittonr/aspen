@@ -1,4 +1,10 @@
-## ADDED Requirements
+# adr-framework Specification
+
+## Purpose
+
+Defines the ADR Framework capability requirements preserved by Aspen's archived OpenSpec records, including aDR directory structure, aDR format, retroactive foundational ADRs.
+
+## Requirements
 
 ### Requirement: ADR directory structure
 

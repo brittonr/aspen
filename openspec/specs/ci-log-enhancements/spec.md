@@ -1,4 +1,10 @@
-## ADDED Requirements
+# ci-log-enhancements Specification
+
+## Purpose
+
+Defines the CI Log Enhancements capability requirements preserved by Aspen's archived OpenSpec records, including line numbers in job log viewer, full output mode, stderr separation in full output mode.
+
+## Requirements
 
 ### Requirement: Line numbers in job log viewer
 

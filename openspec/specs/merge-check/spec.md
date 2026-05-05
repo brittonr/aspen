@@ -1,4 +1,10 @@
-## ADDED Requirements
+# merge-check Specification
+
+## Purpose
+
+Defines the Merge Check capability requirements preserved by Aspen's archived OpenSpec records, including pre-merge check endpoint, available strategies reflect branch state, no side effects from check.
+
+## Requirements
 
 ### Requirement: Pre-merge check endpoint
 

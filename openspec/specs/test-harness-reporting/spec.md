@@ -1,4 +1,10 @@
-## ADDED Requirements
+# test-harness-reporting Specification
+
+## Purpose
+
+Defines the Test Harness Reporting capability requirements preserved by Aspen's archived OpenSpec records, including test runs emit machine-readable harness health reports, harness reports summarize coverage by layer.
+
+## Requirements
 
 ### Requirement: Test runs emit machine-readable harness health reports
 

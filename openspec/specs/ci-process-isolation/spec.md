@@ -1,4 +1,10 @@
-## ADDED Requirements
+# ci-process-isolation Specification
+
+## Purpose
+
+Defines the CI Process Isolation capability requirements preserved by Aspen's archived OpenSpec records, including nixBuildSupervisor process manager, build timeout enforcement, orchestrator survives build process death.
+
+## Requirements
 
 ### Requirement: NixBuildSupervisor process manager
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# upstream-cache-client Specification
+
+## Purpose
+
+Defines the Upstream Cache Client capability requirements preserved by Aspen's archived OpenSpec records, including query upstream binary cache narinfo, fetch NAR archive from upstream cache, populate closure from upstream cache.
+
+## Requirements
 
 ### Requirement: Query upstream binary cache narinfo
 

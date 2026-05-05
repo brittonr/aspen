@@ -1,4 +1,10 @@
-## ADDED Requirements
+# chunked-blob-storage Specification
+
+## Purpose
+
+Defines the Chunked Blob Storage capability requirements preserved by Aspen's archived OpenSpec records, including content-defined chunking on blob write, chunk-level deduplication, chunk metadata via BlobService::chunks().
+
+## Requirements
 
 ### Requirement: Content-defined chunking on blob write
 

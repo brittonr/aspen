@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-derivation-analysis Specification
+
+## Purpose
+
+Defines the Snix Derivation Analysis capability requirements preserved by Aspen's archived OpenSpec records, including parse derivation files, build graph construction from derivations, cache invalidation via input hashing.
+
+## Requirements
 
 ### Requirement: Parse derivation files
 

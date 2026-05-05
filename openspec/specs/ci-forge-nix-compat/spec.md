@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change fix-dogfood-ci-clippy. Update Purpose after archive.
+Defines the CI Forge Nix Compat capability requirements preserved by Aspen's archived OpenSpec records, including forge checkout produces valid flake directory, ci nix jobs work without network access.
 
 ## Requirements
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# sans-io-protocol Specification
+
+## Purpose
+
+Defines the Sans Io Protocol capability requirements preserved by Aspen's archived OpenSpec records, including protocol context trait boundary, in-memory test context, envelope-based message routing.
+
+## Requirements
 
 ### Requirement: Protocol context trait boundary
 

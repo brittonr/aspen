@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-build-unit-tests Specification
+
+## Purpose
+
+Defines the Snix Build Unit Tests capability requirements preserved by Aspen's archived OpenSpec records, including derivation_to_build_request is fully tested without subprocess, parse_closure_output handles all edge cases, output_sandbox_path_to_store_path extracts store paths correctly.
+
+## Requirements
 
 ### Requirement: derivation_to_build_request is fully tested without subprocess
 

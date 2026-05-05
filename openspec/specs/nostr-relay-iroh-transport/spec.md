@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nostr-relay-iroh-transport Specification
+
+## Purpose
+
+Defines the Nostr Relay Iroh Transport capability requirements preserved by Aspen's archived OpenSpec records, including aLPN registration for Nostr relay, length-prefixed framing over QUIC streams, iroh transport coexists with TCP WebSocket.
+
+## Requirements
 
 ### Requirement: ALPN registration for Nostr relay
 

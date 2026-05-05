@@ -1,4 +1,10 @@
-## ADDED Requirements
+# merge-strategy Specification
+
+## Purpose
+
+Defines the Merge Strategy capability requirements preserved by Aspen's archived OpenSpec records, including merge strategy enum, merge commit strategy creates merge commit, fast-forward-only strategy rejects diverged branches.
+
+## Requirements
 
 ### Requirement: Merge strategy enum
 

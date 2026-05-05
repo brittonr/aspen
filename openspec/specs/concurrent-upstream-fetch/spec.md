@@ -1,4 +1,10 @@
-## ADDED Requirements
+# concurrent-upstream-fetch Specification
+
+## Purpose
+
+Defines the Concurrent Upstream Fetch capability requirements preserved by Aspen's archived OpenSpec records, including concurrent NAR fetching in populate_closure, transient error retry for NAR fetches.
+
+## Requirements
 
 ### Requirement: Concurrent NAR fetching in populate_closure
 

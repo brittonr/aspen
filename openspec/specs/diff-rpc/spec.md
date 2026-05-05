@@ -1,4 +1,10 @@
-## ADDED Requirements
+# diff-rpc Specification
+
+## Purpose
+
+Defines the Diff RPC capability requirements preserved by Aspen's archived OpenSpec records, including commit-to-commit diff via RPC, ref-to-ref diff via RPC, rename detection.
+
+## Requirements
 
 ### Requirement: Commit-to-commit diff via RPC
 

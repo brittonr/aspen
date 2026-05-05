@@ -1,4 +1,10 @@
-## ADDED Requirements
+# commit-diff Specification
+
+## Purpose
+
+Defines the Commit Diff capability requirements preserved by Aspen's archived OpenSpec records, including commit detail page shows file-level changes, unified diff for text files, diff limits for safety.
+
+## Requirements
 
 ### Requirement: Commit detail page shows file-level changes
 

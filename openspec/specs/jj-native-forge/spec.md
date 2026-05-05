@@ -1,7 +1,7 @@
 # jj-native-forge Specification
 
 ## Purpose
-TBD - created by archiving change jj-native-forge-wasm-plugin. Update Purpose after archive.
+Defines the JJ Native Forge capability requirements preserved by Aspen's archived OpenSpec records, including jj-native forge backend is delivered as a wasm plugin, jj objects are stored natively in forge, jj payloads are validated before publish.
 ## Requirements
 ### Requirement: JJ-native Forge backend is delivered as a WASM plugin
 

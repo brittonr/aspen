@@ -1,4 +1,10 @@
-## ADDED Requirements
+# ci-cache-publish Specification
+
+## Purpose
+
+Defines the CI Cache Publish capability requirements preserved by Aspen's archived OpenSpec records, including nix builds publish to distributed cache, cache publish is configurable.
+
+## Requirements
 
 ### Requirement: Nix builds publish to distributed cache
 

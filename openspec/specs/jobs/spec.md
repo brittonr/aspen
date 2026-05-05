@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# jobs Specification
+
+## Purpose
+
+Defines the Jobs capability requirements preserved by Aspen's archived OpenSpec records, including job Submission and Scheduling.
+
+## Requirements
 
 ### Requirement: Job Submission and Scheduling
 

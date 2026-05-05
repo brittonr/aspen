@@ -1,4 +1,10 @@
-## ADDED Requirements
+# fault-injection-coverage Specification
+
+## Purpose
+
+Defines the Fault Injection Coverage capability requirements preserved by Aspen's archived OpenSpec records, including fault injection at redb write boundaries, fault injection at Iroh connection boundaries, fault injection at blob transfer boundaries.
+
+## Requirements
 
 ### Requirement: Fault injection at redb write boundaries
 

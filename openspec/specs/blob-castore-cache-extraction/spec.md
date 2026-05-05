@@ -1,7 +1,7 @@
 # blob-castore-cache-extraction Specification
 
 ## Purpose
-TBD - created by archiving change extract-blob-castore-cache. Update Purpose after archive.
+Defines the Blob Castore Cache Extraction capability requirements preserved by Aspen's archived OpenSpec records, including blob default graph exposes reusable iroh-backed storage without aspen app shells, castore and cache reusable apis avoid aspen shells, downstream fixtures prove blob/castore/cache standalone use.
 ## Requirements
 ### Requirement: Blob default graph exposes reusable iroh-backed storage without Aspen app shells
 `aspen-blob` MUST expose reusable blob storage APIs over iroh/iroh-blobs without requiring root Aspen app crates, handler registries, node bootstrap, client RPC schemas, trust/secrets/SQL services, UI/web/binary shells, Raft compatibility crates, or root `aspen-core` where leaf KV trait/type crates are sufficient.

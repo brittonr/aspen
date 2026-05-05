@@ -1,4 +1,10 @@
-## ADDED Requirements
+# cli-auth Specification
+
+## Purpose
+
+Defines the Cli Auth capability requirements preserved by Aspen's archived OpenSpec records, including cLI login with local signing, token persistence.
+
+## Requirements
 
 ### Requirement: CLI login with local signing
 

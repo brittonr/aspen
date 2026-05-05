@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# federation-bootstrap Specification
+
+## Purpose
+
+Defines the Federation Bootstrap capability requirements preserved by Aspen's archived OpenSpec records, including federation services start at boot when configured.
+
+## Requirements
 
 ### Requirement: Federation services start at boot when configured
 

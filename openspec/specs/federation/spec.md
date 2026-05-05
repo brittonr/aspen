@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# federation Specification
+
+## Purpose
+
+Defines the Federation capability requirements preserved by Aspen's archived OpenSpec records, including federation Links.
+
+## Requirements
 
 ### Requirement: Federation Links
 

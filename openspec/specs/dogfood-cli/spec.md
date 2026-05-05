@@ -1,4 +1,10 @@
-## ADDED Requirements
+# dogfood-cli Specification
+
+## Purpose
+
+Defines the Dogfood Cli capability requirements preserved by Aspen's archived OpenSpec records, including subcommand interface matching existing scripts, mode selection via flags, nix flake integration.
+
+## Requirements
 
 ### Requirement: Subcommand interface matching existing scripts
 

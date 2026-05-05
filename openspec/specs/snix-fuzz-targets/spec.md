@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-fuzz-targets Specification
+
+## Purpose
+
+Defines the Snix Fuzz Targets capability requirements preserved by Aspen's archived OpenSpec records, including fuzz targets for snix parsers, two-tier fuzz schedule, seed corpus for fuzz targets.
+
+## Requirements
 
 ### Requirement: Fuzz targets for snix parsers
 

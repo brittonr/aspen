@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-flakeref-parsing Specification
+
+## Purpose
+
+Defines the Snix Flakeref Parsing capability requirements preserved by Aspen's archived OpenSpec records, including parse flake references with FlakeRef, normalize flake references for caching, extract rev/ref for build deduplication.
+
+## Requirements
 
 ### Requirement: Parse flake references with FlakeRef
 

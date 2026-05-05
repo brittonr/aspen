@@ -1,4 +1,10 @@
-## ADDED Requirements
+# flake-modularization Specification
+
+## Purpose
+
+Defines the Flake Modularization capability requirements preserved by Aspen's archived OpenSpec records, including flake-parts module system, per-concern module files, build output equivalence.
+
+## Requirements
 
 ### Requirement: flake-parts module system
 

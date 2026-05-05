@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federated-dogfood-vm Specification
+
+## Purpose
+
+Defines the Federated Dogfood VM capability requirements preserved by Aspen's archived OpenSpec records, including bootable serial VM image with two clusters, helper scripts in VM, flake integration.
+
+## Requirements
 
 ### Requirement: Bootable serial VM image with two clusters
 

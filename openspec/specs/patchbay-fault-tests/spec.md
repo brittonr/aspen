@@ -1,4 +1,10 @@
-## ADDED Requirements
+# patchbay-fault-tests Specification
+
+## Purpose
+
+Defines the Patchbay Fault Tests capability requirements preserved by Aspen's archived OpenSpec records, including network partition via region link break, latency injection on active cluster, packet loss on active cluster.
+
+## Requirements
 
 ### Requirement: Network partition via region link break
 

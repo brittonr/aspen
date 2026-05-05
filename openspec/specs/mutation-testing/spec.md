@@ -1,4 +1,10 @@
-## ADDED Requirements
+# mutation-testing Specification
+
+## Purpose
+
+Defines the Mutation Testing capability requirements preserved by Aspen's archived OpenSpec records, including mutation testing infrastructure, mutation score baselines, cI integration for mutation testing.
+
+## Requirements
 
 ### Requirement: Mutation testing infrastructure
 

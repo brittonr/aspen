@@ -1,4 +1,10 @@
-## ADDED Requirements
+# shamir-secret-sharing Specification
+
+## Purpose
+
+Defines the Shamir Secret Sharing capability requirements preserved by Aspen's archived OpenSpec records, including secret splitting, share digest validation, memory safety for secret data.
+
+## Requirements
 
 ### Requirement: Secret splitting
 

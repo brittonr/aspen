@@ -1,8 +1,14 @@
-## ADDED Requirements
+# cluster-discovery Specification
+
+## Purpose
+
+Defines the Cluster Discovery capability requirements preserved by Aspen's archived OpenSpec records, including discovery trait implementation, startup address seeding, restart recovery.
+
+## Requirements
 
 ### Requirement: Discovery trait implementation
 
-`ClusterDiscovery` implements `iroh::Discovery` with file-based persistence.
+`ClusterDiscovery` SHALL implement `iroh::Discovery` with file-based persistence.
 
 #### Scenario: Publish on address change
 
@@ -21,7 +27,7 @@
 
 ### Requirement: Startup address seeding
 
-Nodes pre-populate iroh's address book on startup.
+Nodes SHALL pre-populate iroh's address book on startup.
 
 #### Scenario: Seed from discovery files
 
@@ -35,7 +41,7 @@ Nodes pre-populate iroh's address book on startup.
 
 ### Requirement: Restart recovery
 
-Three-node cluster recovers quorum after simultaneous restart without relay.
+Three-node clusters SHALL recover quorum after simultaneous restart without relay.
 
 #### Scenario: Air-gapped restart recovery
 
@@ -44,7 +50,7 @@ Three-node cluster recovers quorum after simultaneous restart without relay.
 
 ### Requirement: Shutdown persistence
 
-Clean shutdown flushes current addresses to disk.
+Clean shutdown SHALL flush current addresses to disk.
 
 #### Scenario: Graceful shutdown saves addresses
 
@@ -53,7 +59,7 @@ Clean shutdown flushes current addresses to disk.
 
 ### Requirement: Additive discovery
 
-`ClusterDiscovery` works alongside existing discovery mechanisms.
+`ClusterDiscovery` SHALL work alongside existing discovery mechanisms.
 
 #### Scenario: Coexists with mDNS and DNS
 

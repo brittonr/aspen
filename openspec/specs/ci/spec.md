@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# ci Specification
+
+## Purpose
+
+Defines the CI capability requirements preserved by Aspen's archived OpenSpec records, including executor Backends, job spec snapshot options, dogfood deploy uses cluster deploy RPC.
+
+## Requirements
 
 ### Requirement: Executor Backends
 
@@ -38,7 +44,6 @@ The system SHALL support multiple executor backends for running CI jobs. The she
 - THEN the `NixBuildSupervisor` SHALL kill the child process
 - AND the job SHALL be marked as failed with a timeout error
 
-## ADDED Requirements
 
 ### Requirement: Job spec snapshot options
 
@@ -56,7 +61,6 @@ The CI job spec SHALL include optional fields for controlling VM snapshot behavi
 - **AND** all 3 SHALL run the same job
 - **AND** the first success SHALL be committed
 
-## ADDED Requirements
 
 ### Requirement: Dogfood deploy uses cluster deploy RPC
 

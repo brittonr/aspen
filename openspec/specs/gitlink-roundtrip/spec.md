@@ -1,4 +1,10 @@
-## ADDED Requirements
+# gitlink-roundtrip Specification
+
+## Purpose
+
+Defines the Gitlink Roundtrip capability requirements preserved by Aspen's archived OpenSpec records, including gitlink entries preserved during tree import, gitlink entries exported with correct SHA-1, dAG walk skips gitlink references.
+
+## Requirements
 
 ### Requirement: Gitlink entries preserved during tree import
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nostr-identity-mapping Specification
+
+## Purpose
+
+Defines the Nostr Identity Mapping capability requirements preserved by Aspen's archived OpenSpec records, including npub to ed25519 keypair mapping, challenge-response authentication, keypair encryption at rest.
+
+## Requirements
 
 ### Requirement: npub to ed25519 keypair mapping
 

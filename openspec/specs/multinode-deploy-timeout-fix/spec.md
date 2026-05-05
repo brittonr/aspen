@@ -1,4 +1,10 @@
-## ADDED Requirements
+# multinode-deploy-timeout-fix Specification
+
+## Purpose
+
+Defines the Multinode Deploy Timeout Fix capability requirements preserved by Aspen's archived OpenSpec records, including multinode deploy test uses validate_only mode, cluster health survives deploy pipeline, ci-dogfood-deploy-multinode VM test passes.
+
+## Requirements
 
 ### Requirement: Multinode deploy test uses validate_only mode
 

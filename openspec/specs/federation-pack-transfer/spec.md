@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-pack-transfer Specification
+
+## Purpose
+
+Defines the Federation Pack Transfer capability requirements preserved by Aspen's archived OpenSpec records, including server serves git objects via SyncObjects, git objects are BLAKE3 verified, dAG walk respects depth limits.
+
+## Requirements
 
 ### Requirement: Server serves git objects via SyncObjects
 

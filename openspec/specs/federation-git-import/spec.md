@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-git-import Specification
+
+## Purpose
+
+Defines the Federation Git Import capability requirements preserved by Aspen's archived OpenSpec records, including federation import uses topological ordering, importResult carries per-object hash mappings, federated clone produces working git repo.
+
+## Requirements
 
 ### Requirement: Federation import uses topological ordering
 

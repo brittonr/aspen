@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-ref-fetch Specification
+
+## Purpose
+
+Defines the Federation Ref Fetch capability requirements preserved by Aspen's archived OpenSpec records, including federation fetch retrieves content, forgeResourceResolver returns ref entries as SyncObjects, federationFetchRefs RPC message.
+
+## Requirements
 
 ### Requirement: Federation fetch retrieves content
 

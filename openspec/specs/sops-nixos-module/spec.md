@@ -1,4 +1,10 @@
-## ADDED Requirements
+# sops-nixos-module Specification
+
+## Purpose
+
+Defines the Sops Nixos Module capability requirements preserved by Aspen's archived OpenSpec records, including nixOS module overlay, cluster ticket configuration, nix package for aspen-sops-install-secrets.
+
+## Requirements
 
 ### Requirement: NixOS module overlay
 

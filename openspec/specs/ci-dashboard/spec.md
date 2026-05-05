@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# ci-dashboard Specification
+
+## Purpose
+
+Defines the CI Dashboard capability requirements preserved by Aspen's archived OpenSpec records, including pipeline run list page, pipeline run detail page, cI status per branch on repo overview.
+
+## Requirements
 
 ### Requirement: Pipeline run list page
 
@@ -77,7 +83,6 @@ The repo overview page SHALL display CI status indicators next to each branch in
 - **WHEN** user views the repo overview and branch "feature-x" has no CI runs
 - **THEN** no CI indicator SHALL appear next to "feature-x"
 
-## ADDED Requirements
 
 ### Requirement: Duration column in pipeline list
 

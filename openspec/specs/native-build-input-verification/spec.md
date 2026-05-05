@@ -1,4 +1,10 @@
-## ADDED Requirements
+# native-build-input-verification Specification
+
+## Purpose
+
+Defines the Native Build Input Verification capability requirements preserved by Aspen's archived OpenSpec records, including local store ingestion replaces placeholder nodes, pre-build input verification, input derivation resolution reports missing derivations.
+
+## Requirements
 
 ### Requirement: Local store ingestion replaces placeholder nodes
 

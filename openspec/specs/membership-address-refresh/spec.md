@@ -1,8 +1,14 @@
-## ADDED Requirements
+# membership-address-refresh Specification
+
+## Purpose
+
+Defines the Membership Address Refresh capability requirements preserved by Aspen's archived OpenSpec records, including gossip-triggered membership address update, debounced updates.
+
+## Requirements
 
 ### Requirement: Gossip-triggered membership address update
 
-When gossip discovers a peer with the same endpoint ID but different socket addresses compared to the current Raft membership, the leader updates the membership with the new addresses.
+When gossip discovers a peer with the same endpoint ID but different socket addresses compared to the current Raft membership, the leader SHALL update the membership with the new addresses.
 
 #### Scenario: Node restarts with new port
 
@@ -28,7 +34,7 @@ When gossip discovers a peer with the same endpoint ID but different socket addr
 
 ### Requirement: Debounced updates
 
-Address updates to Raft membership are debounced to prevent log spam during rapid gossip announcements.
+Address updates to Raft membership SHALL be debounced to prevent log spam during rapid gossip announcements.
 
 #### Scenario: Multiple gossip ticks for same address
 

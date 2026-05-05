@@ -1,4 +1,10 @@
-## ADDED Requirements
+# gossip-rate-limiter Specification
+
+## Purpose
+
+Defines the Gossip Rate Limiter capability requirements preserved by Aspen's archived OpenSpec records, including gossip limiter preserves global budget on per-peer rejection, gossip limiter uses deterministic timestamp-driven transitions, gossip limiter state is module-owned.
+
+## Requirements
 
 ### Requirement: Gossip limiter preserves global budget on per-peer rejection
 

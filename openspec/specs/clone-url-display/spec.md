@@ -1,4 +1,10 @@
-## ADDED Requirements
+# clone-url-display Specification
+
+## Purpose
+
+Defines the Clone Url Display capability requirements preserved by Aspen's archived OpenSpec records, including clone URL on repo overview, markdown rendering in issues and patches.
+
+## Requirements
 
 ### Requirement: Clone URL on repo overview
 

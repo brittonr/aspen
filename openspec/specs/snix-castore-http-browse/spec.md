@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-castore-http-browse Specification
+
+## Purpose
+
+Defines the Snix Castore Http Browse capability requirements preserved by Aspen's archived OpenSpec records, including hTTP browsing of castore contents, debug feature flag.
+
+## Requirements
 
 ### Requirement: HTTP browsing of castore contents
 

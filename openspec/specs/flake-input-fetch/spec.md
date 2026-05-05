@@ -1,4 +1,10 @@
-## ADDED Requirements
+# flake-input-fetch Specification
+
+## Purpose
+
+Defines the Flake Input Fetch capability requirements preserved by Aspen's archived OpenSpec records, including fetch GitHub archive inputs, fetch GitLab archive inputs, fetch tarball inputs.
+
+## Requirements
 
 ### Requirement: Fetch GitHub archive inputs
 
@@ -119,7 +125,6 @@ GitHub archive tarballs contain a single top-level directory named `{repo}-{rev}
 - **WHEN** a tarball contains multiple top-level entries (not a single directory)
 - **THEN** the resolver SHALL use the unpack directory directly as the `outPath`
 
-## MODIFIED Requirements
 
 ### Requirement: Evaluator resolves flake input
 
@@ -136,7 +141,6 @@ The evaluator SHALL use `snix-glue`'s `SnixStoreIO` to resolve store paths from 
 - **THEN** the resolver SHALL fetch the input over HTTPS before starting evaluation
 - **AND** the call-flake.nix expression SHALL receive the fetched path as an `outPath` override
 
-## MODIFIED Requirements
 
 ### Requirement: HTTP fetching uses in-process client
 

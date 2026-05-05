@@ -1,4 +1,10 @@
-## ADDED Requirements
+# vm-snapshot-restore-pool Specification
+
+## Purpose
+
+Defines the VM Snapshot Restore Pool capability requirements preserved by Aspen's archived OpenSpec records, including snapshot-based VM acquisition, per-fork VirtioFS socket setup, post-restore VirtioFS health probe.
+
+## Requirements
 
 ### Requirement: Snapshot-based VM acquisition
 

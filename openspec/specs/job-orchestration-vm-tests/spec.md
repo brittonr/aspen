@@ -1,4 +1,10 @@
-## ADDED Requirements
+# job-orchestration-vm-tests Specification
+
+## Purpose
+
+Defines the Job Orchestration VM Tests capability requirements preserved by Aspen's archived OpenSpec records, including job dependency DAG execution test, distributed worker pool routing test, cron and delayed scheduling test.
+
+## Requirements
 
 ### Requirement: Job dependency DAG execution test
 

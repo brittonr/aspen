@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nostr-plugin-bridge Specification
+
+## Purpose
+
+Defines the Nostr Plugin Bridge capability requirements preserved by Aspen's archived OpenSpec records, including nostr_publish_event host function, nostr_publish permission in PluginPermissions, event validation at host boundary.
+
+## Requirements
 
 ### Requirement: nostr_publish_event host function
 

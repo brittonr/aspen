@@ -1,4 +1,10 @@
-## ADDED Requirements
+# wire-git-exporter-federation Specification
+
+## Purpose
+
+Defines the Wire Git Exporter Federation capability requirements preserved by Aspen's archived OpenSpec records, including federation sync returns git objects.
+
+## Requirements
 
 ### Requirement: Federation sync returns git objects
 

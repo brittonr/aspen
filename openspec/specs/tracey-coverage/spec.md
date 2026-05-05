@@ -1,4 +1,10 @@
-## ADDED Requirements
+# tracey-coverage Specification
+
+## Purpose
+
+Defines the Tracey Coverage capability requirements preserved by Aspen's archived OpenSpec records, including spec markers in snix documentation, implementation annotations in Rust source, verification annotations in tests.
+
+## Requirements
 
 ### Requirement: Spec markers in snix documentation
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# test-suite-metadata Specification
+
+## Purpose
+
+Defines the Test Suite Metadata capability requirements preserved by Aspen's archived OpenSpec records, including nickel suite manifests are authoritative, generated inventory drives suite grouping and registration.
+
+## Requirements
 
 ### Requirement: Nickel suite manifests are authoritative
 

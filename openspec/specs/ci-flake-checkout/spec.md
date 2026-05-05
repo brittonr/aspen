@@ -1,4 +1,10 @@
-## ADDED Requirements
+# ci-flake-checkout Specification
+
+## Purpose
+
+Defines the CI Flake Checkout capability requirements preserved by Aspen's archived OpenSpec records, including cI checkout directories SHALL be valid git repositories, git initialization SHALL be bounded, missing git binary SHALL produce actionable error.
+
+## Requirements
 
 ### Requirement: CI checkout directories SHALL be valid git repositories
 

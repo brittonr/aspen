@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nix-cache-gateway Specification
+
+## Purpose
+
+Defines the Nix Cache Gateway capability requirements preserved by Aspen's archived OpenSpec records, including serve nix-cache-info, serve narinfo by store hash, serve NAR archive by blob hash.
+
+## Requirements
 
 ### Requirement: Serve nix-cache-info
 

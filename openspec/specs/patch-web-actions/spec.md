@@ -1,4 +1,10 @@
-## ADDED Requirements
+# patch-web-actions Specification
+
+## Purpose
+
+Defines the Patch Web Actions capability requirements preserved by Aspen's archived OpenSpec records, including merge button on patch detail page, merge action via form POST, approve button on patch detail page.
+
+## Requirements
 
 ### Requirement: Merge button on patch detail page
 

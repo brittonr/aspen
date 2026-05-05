@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nostr-relay-rate-limiting Specification
+
+## Purpose
+
+Defines the Nostr Relay Rate Limiting capability requirements preserved by Aspen's archived OpenSpec records, including per-IP rate limiting for EVENT submissions, per-pubkey rate limiting for EVENT submissions, rate limit configuration.
+
+## Requirements
 
 ### Requirement: Per-IP rate limiting for EVENT submissions
 

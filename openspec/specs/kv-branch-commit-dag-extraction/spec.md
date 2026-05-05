@@ -1,7 +1,7 @@
 # kv-branch-commit-dag-extraction Specification
 
 ## Purpose
-TBD - created by archiving change extract-kv-branch-commit-dag. Update Purpose after archive.
+Defines the KV Branch Commit Dag Extraction capability requirements preserved by Aspen's archived OpenSpec records, including commit dag avoids raft compatibility dependencies, kv branch feature topology stays explicit, downstream consumer proof covers branch and dag apis.
 ## Requirements
 ### Requirement: Commit DAG avoids Raft compatibility dependencies
 `aspen-commit-dag` MUST expose and use its commit-hash helper surface without depending on `aspen-raft`, root `aspen`, handler crates, binary shells, concrete transport crates, trust, secrets, SQL, or cluster bootstrap crates in its reusable feature sets.

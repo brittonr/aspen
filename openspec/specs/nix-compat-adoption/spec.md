@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nix-compat-adoption Specification
+
+## Purpose
+
+Defines the Nix Compat Adoption capability requirements preserved by Aspen's archived OpenSpec records, including nixbase32 encoding uses nix-compat, store path parsing uses nix-compat StorePath, narinfo rendering uses nix-compat NarInfo.
+
+## Requirements
 
 ### Requirement: nixbase32 encoding uses nix-compat
 

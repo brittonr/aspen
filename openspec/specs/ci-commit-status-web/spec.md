@@ -1,4 +1,10 @@
-## ADDED Requirements
+# ci-commit-status-web Specification
+
+## Purpose
+
+Defines the CI Commit Status Web capability requirements preserved by Aspen's archived OpenSpec records, including cI status badges on commit detail page, appState method for commit statuses.
+
+## Requirements
 
 ### Requirement: CI status badges on commit detail page
 

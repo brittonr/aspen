@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-node-id-exposure Specification
+
+## Purpose
+
+Defines the Federation Node Id Exposure capability requirements preserved by Aspen's archived OpenSpec records, including health response includes iroh node ID, federation sync uses iroh node ID for peer addressing.
+
+## Requirements
 
 ### Requirement: Health response includes iroh node ID
 

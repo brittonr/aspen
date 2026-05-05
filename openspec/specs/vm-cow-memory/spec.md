@@ -1,4 +1,10 @@
-## ADDED Requirements
+# vm-cow-memory Specification
+
+## Purpose
+
+Defines the VM Cow Memory capability requirements preserved by Aspen's archived OpenSpec records, including shared memory backing file, cOW memory overlay per fork, memory backing file management.
+
+## Requirements
 
 ### Requirement: Shared memory backing file
 

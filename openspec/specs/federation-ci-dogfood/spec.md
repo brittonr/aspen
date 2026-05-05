@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-ci-dogfood Specification
+
+## Purpose
+
+Defines the Federation CI Dogfood capability requirements preserved by Aspen's archived OpenSpec records, including two-cluster federation CI dogfood VM test.
+
+## Requirements
 
 ### Requirement: Two-cluster federation CI dogfood VM test
 

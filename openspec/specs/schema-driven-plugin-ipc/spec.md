@@ -1,4 +1,10 @@
-## ADDED Requirements
+# schema-driven-plugin-ipc Specification
+
+## Purpose
+
+Defines the Schema Driven Plugin Ipc capability requirements preserved by Aspen's archived OpenSpec records, including jSON Schema derivation for CI agent protocol, nickel contract snapshot test, nickel contract coverage for deploy protocol.
+
+## Requirements
 
 ### Requirement: JSON Schema derivation for CI agent protocol
 

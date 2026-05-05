@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-build-vm-test Specification
+
+## Purpose
+
+Defines the Snix Build VM Test capability requirements preserved by Aspen's archived OpenSpec records, including native build succeeds without nix CLI in PATH, fallback subprocess paths produce clear errors when nix absent, vM test registered in flake checks.
+
+## Requirements
 
 ### Requirement: Native build succeeds without nix CLI in PATH
 

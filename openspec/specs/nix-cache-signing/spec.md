@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nix-cache-signing Specification
+
+## Purpose
+
+Defines the Nix Cache Signing capability requirements preserved by Aspen's archived OpenSpec records, including generate cache signing keypair, sign narinfo responses, distribute public key via RPC.
+
+## Requirements
 
 ### Requirement: Generate cache signing keypair
 

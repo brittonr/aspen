@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# federation-auth-enforcement Specification
+
+## Purpose
+
+Defines the Federation Auth Enforcement capability requirements preserved by Aspen's archived OpenSpec records, including sync client sends credential in handshake.
+
+## Requirements
 
 ### Requirement: Sync client sends credential in handshake
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# test-harness-runtime Specification
+
+## Purpose
+
+Defines the Test Harness Runtime capability requirements preserved by Aspen's archived OpenSpec records, including shared harness facade across test layers, wait-driven readiness helpers cover critical test flows.
+
+## Requirements
 
 ### Requirement: Shared harness facade across test layers
 

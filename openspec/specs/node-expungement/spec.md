@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change node-expungement-protocol. Update Purpose after archive.
+Defines the Node Expungement capability requirements preserved by Aspen's archived OpenSpec records, including persistent expungement marker, protocol rejection on expungement, peer-enforced expungement.
 
 ## Requirements
 

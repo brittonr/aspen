@@ -1,4 +1,10 @@
-## ADDED Requirements
+# git-object-roundtrip Specification
+
+## Purpose
+
+Defines the Git Object Roundtrip capability requirements preserved by Aspen's archived OpenSpec records, including tree objects round-trip with identical bytes, commit messages round-trip without loss, round-trip test coverage.
+
+## Requirements
 
 ### Requirement: Tree objects round-trip with identical bytes
 

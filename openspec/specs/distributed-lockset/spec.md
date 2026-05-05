@@ -1,4 +1,10 @@
-## ADDED Requirements
+# distributed-lockset Specification
+
+## Purpose
+
+Defines the Distributed Lockset capability requirements preserved by Aspen's archived OpenSpec records, including atomic lock-set acquisition, canonicalized member ordering and validation, per-resource fencing tokens.
+
+## Requirements
 
 ### Requirement: Atomic lock-set acquisition
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# ci-artifacts-web Specification
+
+## Purpose
+
+Defines the CI Artifacts Web capability requirements preserved by Aspen's archived OpenSpec records, including artifact listing on job log page, artifact CLI download hint.
+
+## Requirements
 
 ### Requirement: Artifact listing on job log page
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nix-substituter-config Specification
+
+## Purpose
+
+Defines the Nix Substituter Config capability requirements preserved by Aspen's archived OpenSpec records, including cI executor auto-configures substituter, in-process cache proxy for CI, narinfo rendering from CacheEntry.
+
+## Requirements
 
 ### Requirement: CI executor auto-configures substituter
 

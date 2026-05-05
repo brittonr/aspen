@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nip34-bridge Specification
+
+## Purpose
+
+Defines the Nip34 Bridge capability requirements preserved by Aspen's archived OpenSpec records, including publish repo announcement on create, publish push event, bridge is decoupled from forge.
+
+## Requirements
 
 ### Requirement: Publish repo announcement on create
 

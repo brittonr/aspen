@@ -1,4 +1,10 @@
-## ADDED Requirements
+# length-framed-forwarding Specification
+
+## Purpose
+
+Defines the Length Framed Forwarding capability requirements preserved by Aspen's archived OpenSpec records, including length-prefix framing on forwarded RPC responses.
+
+## Requirements
 
 ### Requirement: Length-prefix framing on forwarded RPC responses
 

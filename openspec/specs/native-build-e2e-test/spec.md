@@ -1,4 +1,10 @@
-## ADDED Requirements
+# native-build-e2e-test Specification
+
+## Purpose
+
+Defines the Native Build E2e Test capability requirements preserved by Aspen's archived OpenSpec records, including native build e2e VM test.
+
+## Requirements
 
 ### Requirement: Native build e2e VM test
 

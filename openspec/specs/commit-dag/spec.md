@@ -1,4 +1,10 @@
-## ADDED Requirements
+# commit-dag Specification
+
+## Purpose
+
+Defines the Commit Dag capability requirements preserved by Aspen's archived OpenSpec records, including commitId is a chain hash, commit struct captures mutation snapshot, commits stored in KV with system prefix.
+
+## Requirements
 
 ### Requirement: CommitId is a chain hash
 

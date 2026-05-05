@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-sync-cli Specification
+
+## Purpose
+
+Defines the Federation Sync Cli capability requirements preserved by Aspen's archived OpenSpec records, including cLI federation sync command, federationSyncPeer RPC request.
+
+## Requirements
 
 ### Requirement: CLI federation sync command
 

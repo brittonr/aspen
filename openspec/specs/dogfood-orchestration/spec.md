@@ -1,4 +1,10 @@
-## ADDED Requirements
+# dogfood-orchestration Specification
+
+## Purpose
+
+Defines the Dogfood Orchestration capability requirements preserved by Aspen's archived OpenSpec records, including cluster lifecycle management, forge push via typed client API, cI pipeline monitoring via typed client API.
+
+## Requirements
 
 ### Requirement: Cluster lifecycle management
 

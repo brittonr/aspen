@@ -1,4 +1,10 @@
-## ADDED Requirements
+# patch-merge Specification
+
+## Purpose
+
+Defines the Patch Merge capability requirements preserved by Aspen's archived OpenSpec records, including merge patch operation, merge commit message, rPC handler delegates to ForgeNode::merge_patch.
+
+## Requirements
 
 ### Requirement: Merge patch operation
 
@@ -67,7 +73,6 @@ The system SHALL generate a default merge commit message in the format `"Merge p
 - **WHEN** `merge_patch()` is called with custom message `"Land the OOM fix for v2.1"`
 - **THEN** the merge commit message SHALL be `"Land the OOM fix for v2.1"`
 
-## ADDED Requirements
 
 ### Requirement: RPC handler delegates to ForgeNode::merge_patch
 

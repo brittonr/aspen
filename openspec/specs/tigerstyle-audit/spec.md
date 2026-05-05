@@ -1,4 +1,10 @@
-## ADDED Requirements
+# tigerstyle-audit Specification
+
+## Purpose
+
+Defines the Tigerstyle Audit capability requirements preserved by Aspen's archived OpenSpec records, including tiger Style audits produce committed audit reports, tiger Style audit tooling is reproducible, audit parser regressions are captured as fixtures.
+
+## Requirements
 
 ### Requirement: Tiger Style audits produce committed audit reports
 

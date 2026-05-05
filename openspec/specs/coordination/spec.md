@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# coordination Specification
+
+## Purpose
+
+Defines the Coordination capability requirements preserved by Aspen's archived OpenSpec records, including distributed Locks, proptest model-based queue verification, proptest model-based barrier verification.
+
+## Requirements
 
 ### Requirement: Distributed Locks
 
@@ -17,7 +23,6 @@ The system SHALL provide linearizable distributed locks with fencing tokens, TTL
 - **THEN** holder B SHALL receive a fencing token strictly greater than holder A's token
 - **AND** holder A's stale token SHALL no longer authorize release or renewal
 
-## ADDED Requirements
 
 ### Requirement: Proptest model-based queue verification
 

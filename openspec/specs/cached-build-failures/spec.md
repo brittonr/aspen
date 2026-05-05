@@ -1,4 +1,10 @@
-## ADDED Requirements
+# cached-build-failures Specification
+
+## Purpose
+
+Defines the Cached Build Failures capability requirements preserved by Aspen's archived OpenSpec records, including failed derivation paths are cached, cached failures are checked before dispatch, manual retry clears failure cache.
+
+## Requirements
 
 ### Requirement: Failed derivation paths are cached
 

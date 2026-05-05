@@ -1,7 +1,7 @@
 # dogfood-evidence Specification
 
 ## Purpose
-TBD - created by archiving change dogfood-evidence-receipts. Update Purpose after archive.
+Defines the Dogfood Evidence capability requirements preserved by Aspen's archived OpenSpec records, including dogfood run receipt schema, dogfood stage receipts, dogfood artifact receipts.
 ## Requirements
 ### Requirement: Dogfood Run Receipt Schema [r[dogfood-evidence.receipt-schema]]
 

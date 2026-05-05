@@ -1,4 +1,10 @@
-## ADDED Requirements
+# convergent-import Specification
+
+## Purpose
+
+Defines the Convergent Import capability requirements preserved by Aspen's archived OpenSpec records, including convergent retry loop imports all reachable objects, partial-success import semantics, import result reports failures.
+
+## Requirements
 
 ### Requirement: Convergent retry loop imports all reachable objects
 

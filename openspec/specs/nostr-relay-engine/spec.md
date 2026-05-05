@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nostr-relay-engine Specification
+
+## Purpose
+
+Defines the Nostr Relay Engine capability requirements preserved by Aspen's archived OpenSpec records, including webSocket listener accepts Nostr client connections, nIP-01 EVENT message handling, nIP-01 REQ subscription handling.
+
+## Requirements
 
 ### Requirement: WebSocket listener accepts Nostr client connections
 

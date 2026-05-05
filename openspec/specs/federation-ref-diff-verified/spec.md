@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-ref-diff-verified Specification
+
+## Purpose
+
+Defines the Federation Ref Diff Verified capability requirements preserved by Aspen's archived OpenSpec records, including verus spec for compute_ref_diff, verus spec for resolve_conflicts.
+
+## Requirements
 
 ### Requirement: Verus spec for compute_ref_diff
 

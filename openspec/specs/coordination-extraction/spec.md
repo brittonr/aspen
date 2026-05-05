@@ -1,7 +1,7 @@
 # coordination-extraction Specification
 
 ## Purpose
-TBD - created by archiving change extract-coordination-crate. Update Purpose after archive.
+Defines the Coordination Extraction capability requirements preserved by Aspen's archived OpenSpec records, including coordination crate has no aspen app-bundle dependency, coordination protocol crate is standalone, coordination has extraction manifest.
 ## Requirements
 ### Requirement: Coordination crate has no Aspen app-bundle dependency
 `aspen-coordination` default features SHALL NOT depend on Aspen app bundles, handler registries, node binaries, dogfood, UI/TUI/web, trust/secrets, SQL, or concrete transport endpoints.

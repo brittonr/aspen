@@ -1,4 +1,10 @@
-## ADDED Requirements
+# sops-install-secrets Specification
+
+## Purpose
+
+Defines the Sops Install Secrets capability requirements preserved by Aspen's archived OpenSpec records, including manifest parsing, check mode validation, secret decryption with Aspen Transit.
+
+## Requirements
 
 ### Requirement: Manifest parsing
 

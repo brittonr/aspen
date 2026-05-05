@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-mirror-repo Specification
+
+## Purpose
+
+Defines the Federation Mirror Repo capability requirements preserved by Aspen's archived OpenSpec records, including mirror repo creation from fetched federation data, mirror repos are read-only, mirror repos are discoverable.
+
+## Requirements
 
 ### Requirement: Mirror repo creation from fetched federation data
 

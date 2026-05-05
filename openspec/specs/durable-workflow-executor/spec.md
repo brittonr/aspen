@@ -1,4 +1,10 @@
-## ADDED Requirements
+# durable-workflow-executor Specification
+
+## Purpose
+
+Defines the Durable Workflow Executor capability requirements preserved by Aspen's archived OpenSpec records, including durable workflow start and completion, activity memoization during replay, durable sleep via persisted timers.
+
+## Requirements
 
 ### Requirement: Durable workflow start and completion
 

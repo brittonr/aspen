@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-subprocess-firewall Specification
+
+## Purpose
+
+Defines the Snix Subprocess Firewall capability requirements preserved by Aspen's archived OpenSpec records, including test harness blocks nix CLI subprocess spawning, subprocess firewall is test-only.
+
+## Requirements
 
 ### Requirement: Test harness blocks nix CLI subprocess spawning
 

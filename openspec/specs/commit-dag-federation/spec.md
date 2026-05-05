@@ -1,4 +1,10 @@
-## ADDED Requirements
+# commit-dag-federation Specification
+
+## Purpose
+
+Defines the Commit Dag Federation capability requirements preserved by Aspen's archived OpenSpec records, including docsExporter includes commit metadata, docsImporter verifies commit chain integrity, batch atomicity via commit grouping.
+
+## Requirements
 
 ### Requirement: DocsExporter includes commit metadata
 

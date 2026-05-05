@@ -1,4 +1,10 @@
-## ADDED Requirements
+# cached-process-execution Specification
+
+## Purpose
+
+Defines the Cached Process Execution capability requirements preserved by Aspen's archived OpenSpec records, including cache lookup before execution, output materialization from cache, output capture on cache miss.
+
+## Requirements
 
 ### Requirement: Cache lookup before execution
 

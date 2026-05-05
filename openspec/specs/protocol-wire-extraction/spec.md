@@ -1,7 +1,7 @@
 # protocol-wire-extraction Specification
 
 ## Purpose
-TBD - created by archiving change extract-protocol-wire-crates. Update Purpose after archive.
+Defines the Protocol Wire Extraction capability requirements preserved by Aspen's archived OpenSpec records, including protocol defaults avoid runtime shells, wire compatibility is append-only and reviewable, portable auth and ticket references avoid runtime shells.
 ## Requirements
 ### Requirement: Protocol defaults avoid runtime shells
 Protocol/wire crates MUST compile with reusable default feature sets that exclude root Aspen app crates, handler registries, node bootstrap, concrete transports, runtime auth shells, trust/secrets services, SQL engines, and UI/web/binary shells.

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# worker-health-psi Specification
+
+## Purpose
+
+Defines the Worker Health Psi capability requirements preserved by Aspen's archived OpenSpec records, including workers report PSI pressure metrics, workers report disk free percentages, scheduler rejects workers under pressure.
+
+## Requirements
 
 ### Requirement: Workers report PSI pressure metrics
 

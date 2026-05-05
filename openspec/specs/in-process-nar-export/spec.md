@@ -1,4 +1,10 @@
-## ADDED Requirements
+# in-process-nar-export Specification
+
+## Purpose
+
+Defines the In Process Nar Export capability requirements preserved by Aspen's archived OpenSpec records, including nAR serialization from castore nodes, pathInfo lookup replaces nix path-info, upload store paths via castore.
+
+## Requirements
 
 ### Requirement: NAR serialization from castore nodes
 

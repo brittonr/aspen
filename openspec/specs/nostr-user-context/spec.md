@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nostr-user-context Specification
+
+## Purpose
+
+Defines the Nostr User Context capability requirements preserved by Aspen's archived OpenSpec records, including per-user signing context for ForgeNode operations, rPC handlers extract user identity from auth token, web UI login via Nostr.
+
+## Requirements
 
 ### Requirement: Per-user signing context for ForgeNode operations
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-build-property-tests Specification
+
+## Purpose
+
+Defines the Snix Build Property Tests capability requirements preserved by Aspen's archived OpenSpec records, including derivation_to_build_request never panics on arbitrary input, parse_closure_output never panics on arbitrary input, nixBuildPayload validation covers edge cases.
+
+## Requirements
 
 ### Requirement: derivation_to_build_request never panics on arbitrary input
 

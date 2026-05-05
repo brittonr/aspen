@@ -1,4 +1,10 @@
-## MODIFIED Requirements
+# kv-branch-fuse Specification
+
+## Purpose
+
+Defines the KV Branch Fuse capability requirements preserved by Aspen's archived OpenSpec records, including virtual @branch path routing.
+
+## Requirements
 
 ### Requirement: Virtual @branch path routing
 

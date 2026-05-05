@@ -1,4 +1,10 @@
-## ADDED Requirements
+# kv-branch-saga Specification
+
+## Purpose
+
+Defines the KV Branch Saga capability requirements preserved by Aspen's archived OpenSpec records, including branch-backed saga step execution, per-step branch opt-in, commit includes journal write.
+
+## Requirements
 
 ### Requirement: Branch-backed saga step execution
 

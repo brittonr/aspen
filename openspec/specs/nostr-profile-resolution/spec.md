@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nostr-profile-resolution Specification
+
+## Purpose
+
+Defines the Nostr Profile Resolution capability requirements preserved by Aspen's archived OpenSpec records, including author display resolves to Nostr profile, profile cache, author field carries npub.
+
+## Requirements
 
 ### Requirement: Author display resolves to Nostr profile
 

@@ -1,4 +1,10 @@
-## ADDED Requirements
+# ci-pipeline-dedup Specification
+
+## Purpose
+
+Defines the CI Pipeline Dedup capability requirements preserved by Aspen's archived OpenSpec records, including single pipeline per push event.
+
+## Requirements
 
 ### Requirement: Single pipeline per push event
 

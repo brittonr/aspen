@@ -1,4 +1,10 @@
-## ADDED Requirements
+# in-process-closure-walk Specification
+
+## Purpose
+
+Defines the In Process Closure Walk capability requirements preserved by Aspen's archived OpenSpec records, including compute input closure via PathInfoService references, closure walk resource bounds, fallback to nix-store -qR.
+
+## Requirements
 
 ### Requirement: Compute input closure via PathInfoService references
 

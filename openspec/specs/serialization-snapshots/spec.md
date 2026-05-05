@@ -1,4 +1,10 @@
-## ADDED Requirements
+# serialization-snapshots Specification
+
+## Purpose
+
+Defines the Serialization Snapshots capability requirements preserved by Aspen's archived OpenSpec records, including rPC message serialization snapshots, cLI output format snapshots, error chain snapshots.
+
+## Requirements
 
 ### Requirement: RPC message serialization snapshots
 

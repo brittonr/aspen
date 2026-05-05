@@ -1,4 +1,10 @@
-## ADDED Requirements
+# eval-error-chain Specification
+
+## Purpose
+
+Defines the Eval Error Chain capability requirements preserved by Aspen's archived OpenSpec records, including full error chain reporting.
+
+## Requirements
 
 ### Requirement: Full error chain reporting
 

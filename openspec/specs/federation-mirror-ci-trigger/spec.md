@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-mirror-ci-trigger Specification
+
+## Purpose
+
+Defines the Federation Mirror CI Trigger capability requirements preserved by Aspen's archived OpenSpec records, including manual CI trigger resolves config from federation-sourced repo, tree walk logs reason when config not found, auto-trigger fires for watched repo on push.
+
+## Requirements
 
 ### Requirement: Manual CI trigger resolves config from federation-sourced repo
 

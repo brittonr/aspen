@@ -1,4 +1,10 @@
-## ADDED Requirements
+# include-str-rebuild Specification
+
+## Purpose
+
+Defines the Include Str Rebuild capability requirements preserved by Aspen's archived OpenSpec records, including non-Rust include_str files trigger Nix rebuilds, build.rs tracks include_str dependencies.
+
+## Requirements
 
 ### Requirement: Non-Rust include_str files trigger Nix rebuilds
 

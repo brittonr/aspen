@@ -1,4 +1,10 @@
-## ADDED Requirements
+# patchbay-nat-tests Specification
+
+## Purpose
+
+Defines the Patchbay Nat Tests capability requirements preserved by Aspen's archived OpenSpec records, including cluster formation through Home NAT, cluster formation through Corporate NAT, cluster formation through CGNAT.
+
+## Requirements
 
 ### Requirement: Cluster formation through Home NAT
 

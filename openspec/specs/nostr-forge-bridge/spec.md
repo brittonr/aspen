@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nostr-forge-bridge Specification
+
+## Purpose
+
+Defines the Nostr Forge Bridge capability requirements preserved by Aspen's archived OpenSpec records, including forge push generates NIP-34 repo state event, forge repo creation generates NIP-34 repo announcement, forge issues generate NIP-34 issue events.
+
+## Requirements
 
 ### Requirement: Forge push generates NIP-34 repo state event
 

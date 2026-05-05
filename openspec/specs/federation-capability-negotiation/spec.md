@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-capability-negotiation Specification
+
+## Purpose
+
+Defines the Federation Capability Negotiation capability requirements preserved by Aspen's archived OpenSpec records, including handshake returns actual peer capabilities, single connect function replaces dual API, capability-gated operations.
+
+## Requirements
 
 ### Requirement: Handshake returns actual peer capabilities
 

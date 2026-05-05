@@ -1,4 +1,10 @@
-## ADDED Requirements
+# nostr-key-management Specification
+
+## Purpose
+
+Defines the Nostr Key Management capability requirements preserved by Aspen's archived OpenSpec records, including cluster Nostr keypair generation, nostr key stored alongside cluster identity, nostr event signing.
+
+## Requirements
 
 ### Requirement: Cluster Nostr keypair generation
 

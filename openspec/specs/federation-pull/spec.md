@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-pull Specification
+
+## Purpose
+
+Defines the Federation Pull capability requirements preserved by Aspen's archived OpenSpec records, including cold pull from remote cluster, incremental pull updates, mirror metadata persistence.
+
+## Requirements
 
 ### Requirement: Cold pull from remote cluster
 

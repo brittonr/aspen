@@ -1,4 +1,10 @@
-## ADDED Requirements
+# forge-ci-hooks Specification
+
+## Purpose
+
+Defines the Forge CI Hooks capability requirements preserved by Aspen's archived OpenSpec records, including forge hook event types, cI hook event types, hook handlers can register for CI events.
+
+## Requirements
 
 ### Requirement: Forge hook event types
 

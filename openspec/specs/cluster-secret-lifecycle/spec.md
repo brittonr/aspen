@@ -1,4 +1,10 @@
-## ADDED Requirements
+# cluster-secret-lifecycle Specification
+
+## Purpose
+
+Defines the Cluster Secret Lifecycle capability requirements preserved by Aspen's archived OpenSpec records, including secret creation at cluster init, share persistence, threshold configuration.
+
+## Requirements
 
 ### Requirement: Secret creation at cluster init
 

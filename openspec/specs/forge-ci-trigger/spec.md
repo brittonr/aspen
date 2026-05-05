@@ -1,4 +1,10 @@
-## ADDED Requirements
+# forge-ci-trigger Specification
+
+## Purpose
+
+Defines the Forge CI Trigger capability requirements preserved by Aspen's archived OpenSpec records, including forge push triggers CI pipeline, configFetcher reads from Forge git objects, pipelineStarter drives orchestrator.
+
+## Requirements
 
 ### Requirement: Forge push triggers CI pipeline
 
@@ -78,7 +84,6 @@ When both `forge` and `ci` features are enabled, the node startup sequence SHALL
 
 <!-- Synced from forge-ci-commit-status change (2026-03-20) -->
 
-## MODIFIED Requirements
 
 ### Requirement: Node startup wires Forge-CI integration
 

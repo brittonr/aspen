@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-build-default Specification
+
+## Purpose
+
+Defines the Snix Build Default capability requirements preserved by Aspen's archived OpenSpec records, including all CI-capable binaries compile with snix-build, snix build infrastructure propagated to all CI binaries, redundant binary variants removed.
+
+## Requirements
 
 ### Requirement: All CI-capable binaries compile with snix-build
 

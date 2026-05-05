@@ -1,4 +1,10 @@
-## ADDED Requirements
+# consensus Specification
+
+## Purpose
+
+Defines the Consensus capability requirements preserved by Aspen's archived OpenSpec records, including split-brain heal madsim scenario, slow follower madsim scenario, snapshot during membership change madsim scenario.
+
+## Requirements
 
 ### Requirement: Split-brain heal madsim scenario
 

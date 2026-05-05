@@ -1,7 +1,7 @@
 # forge-web-ui-style Specification
 
 ## Purpose
-TBD - created by archiving change onix-inspired-forge-web-ui. Update Purpose after archive.
+Defines the Forge Web Ui Style capability requirements preserved by Aspen's archived OpenSpec records, including onix-inspired forge web visual system, ui reference documentation.
 ## Requirements
 ### Requirement: Onix-inspired Forge web visual system
 

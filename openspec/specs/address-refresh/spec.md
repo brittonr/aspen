@@ -1,4 +1,10 @@
-## ADDED Requirements
+# address-refresh Specification
+
+## Purpose
+
+Defines the Address Refresh capability requirements preserved by Aspen's archived OpenSpec records, including gossip address override in Raft network factory, eager gossip announcement on startup, cluster reconnection after node restart.
+
+## Requirements
 
 ### Requirement: Gossip address override in Raft network factory
 

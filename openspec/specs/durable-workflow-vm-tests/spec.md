@@ -1,4 +1,10 @@
-## ADDED Requirements
+# durable-workflow-vm-tests Specification
+
+## Purpose
+
+Defines the Durable Workflow VM Tests capability requirements preserved by Aspen's archived OpenSpec records, including leader failover during active workflow, activity memoization verification under crash, durable timer firing across node restart.
+
+## Requirements
 
 ### Requirement: Leader failover during active workflow
 

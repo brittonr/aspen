@@ -1,4 +1,10 @@
-## ADDED Requirements
+# federation-blob-export-fix Specification
+
+## Purpose
+
+Defines the Federation Blob Export Fix capability requirements preserved by Aspen's archived OpenSpec records, including federation git object export succeeds, diagnostic logging on blob read failure, federated git clone produces working tree.
+
+## Requirements
 
 ### Requirement: Federation git object export succeeds
 

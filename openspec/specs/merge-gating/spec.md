@@ -1,4 +1,10 @@
-## ADDED Requirements
+# merge-gating Specification
+
+## Purpose
+
+Defines the Merge Gating capability requirements preserved by Aspen's archived OpenSpec records, including branch protection configuration, merge gating on CI status, merge gating on approvals.
+
+## Requirements
 
 ### Requirement: Branch protection configuration
 

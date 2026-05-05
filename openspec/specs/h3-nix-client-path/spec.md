@@ -1,3 +1,11 @@
+# h3-nix-client-path Specification
+
+## Purpose
+
+Defines the H3 Nix Client Path capability requirements preserved by Aspen's archived OpenSpec records, including nix client fetches narinfo through H3 proxy, nix client fetches nix-cache-info through H3 proxy, h3 proxy binary is packaged in Nix.
+
+## Requirements
+
 ### Requirement: Nix client fetches narinfo through H3 proxy
 
 A Nix client SHALL be able to query `.narinfo` files through the `aspen-h3-proxy` → `aspen-nix-cache-gateway (--h3)` path. The proxy translates HTTP/1.1 requests to HTTP/3 streams over iroh QUIC.

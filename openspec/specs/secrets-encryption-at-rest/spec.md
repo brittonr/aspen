@@ -1,4 +1,10 @@
-## ADDED Requirements
+# secrets-encryption-at-rest Specification
+
+## Purpose
+
+Defines the Secrets Encryption At Rest capability requirements preserved by Aspen's archived OpenSpec records, including transparent encryption of secrets data, authenticated encryption, epoch-scoped key derivation.
+
+## Requirements
 
 ### Requirement: Transparent encryption of secrets data
 

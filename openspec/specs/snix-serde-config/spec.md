@@ -1,4 +1,10 @@
-## ADDED Requirements
+# snix-serde-config Specification
+
+## Purpose
+
+Defines the Snix Serde Config capability requirements preserved by Aspen's archived OpenSpec records, including deserialize Nix expressions to Rust config structs, nix-based CI pipeline definitions, pure evaluation only.
+
+## Requirements
 
 ### Requirement: Deserialize Nix expressions to Rust config structs
 

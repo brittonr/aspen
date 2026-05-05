@@ -1,4 +1,10 @@
-## ADDED Requirements
+# commit-status Specification
+
+## Purpose
+
+Defines the Commit Status capability requirements preserved by Aspen's archived OpenSpec records, including commit status storage, query commit statuses, status reporter trait.
+
+## Requirements
 
 ### Requirement: Commit status storage
 

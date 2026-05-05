@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change secret-rotation-on-membership-change. Update Purpose after archive.
+Defines the Trust Reconfiguration capability requirements preserved by Aspen's archived OpenSpec records, including secret rotation on membership change, encrypted secret chain, epoch alignment with raft.
 
 ## Requirements
 

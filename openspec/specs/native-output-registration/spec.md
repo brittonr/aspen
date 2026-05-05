@@ -1,4 +1,10 @@
-## ADDED Requirements
+# native-output-registration Specification
+
+## Purpose
+
+Defines the Native Output Registration capability requirements preserved by Aspen's archived OpenSpec records, including build outputs registered at derivation output path, unit test for output registration, integration test for bwrap build + registration.
+
+## Requirements
 
 ### Requirement: Build outputs registered at derivation output path
 
