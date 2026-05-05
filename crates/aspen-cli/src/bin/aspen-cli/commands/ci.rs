@@ -489,6 +489,34 @@ impl Outputable for CiRunReceiptOutput {
             jobs_with_ids,
             artifact_count,
         );
+        for stage in &receipt.stages {
+            output.push_str(&format!("\nStage: {} ({})", stage.name, stage.status));
+            for job in &stage.jobs {
+                let job_id = job.job_id.as_deref().unwrap_or("-");
+                output.push_str(&format!("\n  Job: {} [{}] id={}", job.name, job.status, job_id));
+                if let Some(error) = &job.error {
+                    output.push_str(&format!(" error={error}"));
+                }
+                for artifact in &job.artifacts {
+                    output.push_str(&format!(
+                        "\n    Artifact: {} blob={} size={} content_type={}",
+                        artifact.name, artifact.blob_hash, artifact.size_bytes, artifact.content_type
+                    ));
+                    if !artifact.created_at.is_empty() {
+                        output.push_str(&format!(" created_at={}", artifact.created_at));
+                    }
+                    if !artifact.metadata.is_empty() {
+                        let metadata = artifact
+                            .metadata
+                            .iter()
+                            .map(|(key, value)| format!("{key}={value}"))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        output.push_str(&format!(" metadata=[{metadata}]"));
+                    }
+                }
+            }
+        }
         if let Some(error) = &receipt.error {
             output.push_str(&format!("\nError: {error}"));
         }
@@ -1077,6 +1105,9 @@ async fn ci_ref_status(client: &AspenClient, args: RefStatusArgs, json: bool) ->
 }
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
+    use aspen_client_api::CI_RUN_RECEIPT_SCHEMA;
     use aspen_client_api::CI_STATUS_CANCELLED;
     use aspen_client_api::CI_STATUS_CHECKOUT_FAILED;
     use aspen_client_api::CI_STATUS_FAILED;
@@ -1084,6 +1115,66 @@ mod tests {
     use aspen_client_api::CI_STATUS_SUCCESS;
 
     use super::*;
+
+    #[test]
+    fn ci_receipt_human_output_includes_artifact_metadata() {
+        let metadata = BTreeMap::from([
+            ("nix_store_path".to_string(), "/nix/store/abc123-aspen-node".to_string()),
+            ("nar_hash".to_string(), "sha256-nar".to_string()),
+        ]);
+        let receipt = CiRunReceipt {
+            schema: CI_RUN_RECEIPT_SCHEMA.to_string(),
+            run_id: "run-operator-1".to_string(),
+            pipeline_name: "aspen-ci".to_string(),
+            repo_id: "repo-123".to_string(),
+            ref_name: "refs/heads/main".to_string(),
+            commit_hash: "abcdef123456".to_string(),
+            status: CI_STATUS_SUCCESS.to_string(),
+            created_at_ms: 1_700_000_000_000,
+            started_at_ms: Some(1_700_000_000_100),
+            completed_at_ms: Some(1_700_000_010_000),
+            error: None,
+            stages: vec![aspen_client_api::CiRunReceiptStage {
+                name: "build".to_string(),
+                status: CI_STATUS_SUCCESS.to_string(),
+                started_at_ms: Some(1_700_000_000_100),
+                completed_at_ms: Some(1_700_000_010_000),
+                jobs: vec![aspen_client_api::CiRunReceiptJob {
+                    name: "nix-build".to_string(),
+                    job_id: Some("job-456".to_string()),
+                    status: CI_STATUS_SUCCESS.to_string(),
+                    started_at_ms: Some(1_700_000_000_200),
+                    completed_at_ms: Some(1_700_000_009_000),
+                    error: None,
+                    artifacts: vec![aspen_client_api::CiArtifactInfo {
+                        blob_hash: "b3:artifact-hash".to_string(),
+                        name: "aspen-node".to_string(),
+                        size_bytes: 4096,
+                        content_type: "application/x-nix-nar".to_string(),
+                        created_at: "2026-05-05T20:10:00Z".to_string(),
+                        metadata,
+                    }],
+                }],
+            }],
+        };
+
+        let output = CiRunReceiptOutput {
+            was_found: true,
+            receipt: Some(receipt),
+            error: None,
+        }
+        .to_human();
+
+        assert!(output.contains("CI receipt: run-operator-1"));
+        assert!(output.contains("Schema: aspen.ci.run-receipt.v1"));
+        assert!(output.contains("Artifacts: 1"));
+        assert!(output.contains("Stage: build (success)"));
+        assert!(output.contains("Job: nix-build [success] id=job-456"));
+        assert!(output.contains(
+            "Artifact: aspen-node blob=b3:artifact-hash size=4096 content_type=application/x-nix-nar created_at=2026-05-05T20:10:00Z"
+        ));
+        assert!(output.contains("metadata=[nar_hash=sha256-nar, nix_store_path=/nix/store/abc123-aspen-node]"));
+    }
 
     #[test]
     fn ci_status_follow_terminal_contract_includes_all_terminal_labels() {
