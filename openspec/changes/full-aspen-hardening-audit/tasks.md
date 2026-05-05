@@ -15,7 +15,8 @@
 - [x] Verify auth-before-dispatch and presenter binding across direct, native, blob, proxy, and feature-gated handler paths. Evidence: `evidence/auth-before-dispatch.md`, `evidence/auth-before-dispatch.json`; added regression coverage for blob-before-dispatch ordering, local-handler-before-proxy fallback, and verified-token proxy handoff.
 - [x] Verify reserved storage prefixes cannot be disclosed or mutated through generic KV read/write/scan/watch/batch/conditional operations. Evidence: `evidence/reserved-prefix-audit.md`, `evidence/reserved-prefix-audit.json`; generic KV exact, scan/watch, batch, and conditional-batch condition-key paths now fail closed to cluster-admin for internal prefixes.
 - [ ] Verify SNIX, Forge, federation, deploy, jobs/CI, secrets/trust, and admin operations use domain-specific capabilities rather than generic prefixes.
-  - Secrets/trust high-risk slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; secrets, transit, PKI, and Nix-cache signing requests now use domain-specific operations instead of generic `_secrets:` data prefixes. Remaining generic internal-domain mappings stay open for follow-up slices.
+  - Secrets/trust high-risk slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; secrets, transit, PKI, and Nix-cache signing requests now use domain-specific operations instead of generic `_secrets:` data prefixes.
+  - Net service-mesh slice captured in `evidence/domain-capability-audit.md`, `evidence/domain-capability-audit.json`; publish/unpublish/lookup/list now require net-domain capabilities instead of generic `/_sys/net/svc/` data prefixes. Remaining generic internal-domain mappings stay open for follow-up slices.
 - [ ] Add or update negative drift tests for every high-risk bypass class discovered by the matrix.
 
 ## Phase 4: Credential, Redaction, and Evidence Audit

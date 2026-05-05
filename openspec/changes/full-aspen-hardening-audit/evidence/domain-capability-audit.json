@@ -1,413 +1,345 @@
 {
-  "generated_at": "2026-05-04T23:39:02Z",
-  "scope": "Phase 3 domain-specific capability audit: high-risk secrets/trust authority slice plus cross-domain status inventory.",
-  "checks": [
+  "generated": "2026-05-05T00:02:09Z",
+  "scanner": "production to_operation files before #[cfg(test)] modules; generic data operations on known internal-domain files/prefix windows",
+  "completed_slices": [
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
-      "line": 24,
-      "needle": "Operation::SecretsRead",
-      "snippet": "Operation::SecretsRead {",
-      "status": "remediated",
-      "note": "Client RPC KV secret reads now map to domain-specific SecretsRead."
+      "surface": "Secrets/trust",
+      "evidence": "domain-specific secrets/transit/PKI operations; generic _secrets: Read/Write negative tests"
     },
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
-      "line": 80,
-      "needle": "Operation::TransitEncrypt",
-      "snippet": "ClientRpcRequest::SecretsTransitEncrypt { mount, name, .. } => Some(Some(Operation::TransitEncrypt {",
-      "status": "remediated",
-      "note": "Transit encrypt uses TransitEncrypt with mount-scoped key name."
+      "surface": "SNIX store",
+      "evidence": "SnixRead/SnixWrite mappings and generic snix: negative tests"
     },
     {
-      "path": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
-      "line": 114,
-      "needle": "Operation::PkiIssue",
-      "snippet": "ClientRpcRequest::SecretsPkiIssue { mount, role, .. } => Some(Some(Operation::PkiIssue {",
-      "status": "remediated",
-      "note": "PKI issuance uses PkiIssue with mount-scoped role."
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/secrets_ops.rs",
-      "line": 77,
-      "needle": "Operation::TransitKeyManage",
-      "snippet": "| ClientRpcRequest::SecretsTransitRotateKey { mount, name } => Some(Some(Operation::TransitKeyManage {",
-      "status": "remediated",
-      "note": "Nix-cache key create/rotate/delete use TransitKeyManage."
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/secrets.rs",
-      "line": 181,
-      "needle": "Operation::SecretsRead",
-      "snippet": "Some(Operation::SecretsRead {",
-      "status": "remediated",
-      "note": "Standalone SecretsRequest mapping matches domain-specific ClientRpcRequest mapping."
-    },
-    {
-      "path": "crates/aspen-auth-core/src/capability.rs",
-      "line": 437,
-      "needle": "fn authorizes_secrets",
-      "snippet": "fn authorizes_secrets(&self, op: &Operation) -> Option<bool> {",
-      "status": "existing-domain-capability",
-      "note": "Secrets capabilities are distinct from generic data capabilities."
-    },
-    {
-      "path": "crates/aspen-auth-core/src/capability.rs",
-      "line": 484,
-      "needle": "fn authorizes_transit",
-      "snippet": "fn authorizes_transit(&self, op: &Operation) -> Option<bool> {",
-      "status": "existing-domain-capability",
-      "note": "Transit capabilities are distinct from generic data capabilities."
-    },
-    {
-      "path": "crates/aspen-auth-core/src/capability.rs",
-      "line": 505,
-      "needle": "fn authorizes_pki",
-      "snippet": "fn authorizes_pki(&self, op: &Operation) -> Option<bool> {",
-      "status": "existing-domain-capability",
-      "note": "PKI capabilities are distinct from generic data capabilities."
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
-      "line": 81,
-      "needle": "Operation::SnixRead",
-      "snippet": "ClientRpcRequest::SnixDirectoryGet { digest } => Some(Some(Operation::SnixRead {",
-      "status": "already-domain-specific",
-      "note": "SNIX CI endpoints already use SnixRead/SnixWrite for store authority."
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/forge_ops.rs",
-      "line": 38,
-      "needle": "Operation::FederationPull",
-      "snippet": "Operation::FederationPull { fed_id: fed_id.into() }",
-      "status": "already-domain-specific",
-      "note": "Federation pull/push endpoints already use federation-specific operations."
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/deploy_ops.rs",
-      "line": 14,
-      "needle": "Operation::ClusterAdmin",
-      "snippet": "| ClientRpcRequest::ClusterDeployStatus => Some(Some(Operation::ClusterAdmin {",
-      "status": "already-admin-specific",
-      "note": "Deploy control-plane endpoints map to ClusterAdmin."
+      "surface": "Net service mesh",
+      "evidence": "NetPublish/NetUnpublish/NetConnect/NetAdmin mappings; generic /_sys/net/svc/ negative tests"
     }
+  ],
+  "net_slice": {
+    "generic_prefix": "/_sys/net/svc/",
+    "mappings": {
+      "NetPublish": "Operation::NetPublish",
+      "NetUnpublish": "Operation::NetUnpublish",
+      "NetLookup": "Operation::NetConnect(port=0)",
+      "NetList": "Operation::NetAdmin"
+    },
+    "generic_prefix_capabilities_rejected": true
+  },
+  "regressions": [
+    "secrets_kv_requests_use_secrets_capabilities_not_generic_prefixes",
+    "transit_and_nix_cache_requests_use_transit_capabilities",
+    "pki_requests_use_pki_capabilities_not_generic_prefixes",
+    "snix_requests_require_snix_scoped_operations",
+    "generic_kv_scopes_do_not_authorize_snix_put_operations",
+    "net_registry_requests_use_net_capabilities_not_sys_prefixes",
+    "generic_sys_prefixes_do_not_authorize_net_registry_requests"
   ],
   "remaining_generic_internal_domain_mappings": [
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
       "line": 16,
-      "snippet": "| ClientRpcRequest::AutomergeReceiveSyncMessage { .. } => Some(Some(Operation::Write {",
-      "window": "        | ClientRpcRequest::AutomergeApplyChanges { .. }\n        | ClientRpcRequest::AutomergeMerge { .. }\n        | ClientRpcRequest::AutomergeReceiveSyncMessage { .. } => Some(Some(Operation::Write {\n            key: \"_automerge:\".to_string(),\n            value: vec![],\n        })),"
+      "text": "| ClientRpcRequest::AutomergeReceiveSyncMessage { .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/automerge_ops.rs",
       "line": 27,
-      "snippet": "| ClientRpcRequest::AutomergeGenerateSyncMessage { .. } => Some(Some(Operation::Read {",
-      "window": "        | ClientRpcRequest::AutomergeGetMetadata { .. }\n        | ClientRpcRequest::AutomergeExists { .. }\n        | ClientRpcRequest::AutomergeGenerateSyncMessage { .. } => Some(Some(Operation::Read {\n            key: \"_automerge:\".to_string(),\n        })),\n"
+      "text": "| ClientRpcRequest::AutomergeGenerateSyncMessage { .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
       "line": 16,
-      "snippet": "| ClientRpcRequest::DownloadBlobByProvider { .. } => Some(Some(Operation::Write {",
-      "window": "        | ClientRpcRequest::DownloadBlob { .. }\n        | ClientRpcRequest::DownloadBlobByHash { .. }\n        | ClientRpcRequest::DownloadBlobByProvider { .. } => Some(Some(Operation::Write {\n            key: \"_blob:\".to_string(),\n            value: vec![],\n        })),"
+      "text": "| ClientRpcRequest::DownloadBlobByProvider { .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
       "line": 26,
-      "snippet": "| ClientRpcRequest::GetBlobReplicationStatus { hash } => Some(Some(Operation::Read {",
-      "window": "        | ClientRpcRequest::GetBlobTicket { hash }\n        | ClientRpcRequest::GetBlobStatus { hash }\n        | ClientRpcRequest::GetBlobReplicationStatus { hash } => Some(Some(Operation::Read {\n            key: format!(\"_blob:{hash}\"),\n        })),\n        ClientRpcRequest::ListBlobs { .. } => Some(Some(Operation::Read {"
+      "text": "| ClientRpcRequest::GetBlobReplicationStatus { hash } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
       "line": 29,
-      "snippet": "ClientRpcRequest::ListBlobs { .. } => Some(Some(Operation::Read {",
-      "window": "            key: format!(\"_blob:{hash}\"),\n        })),\n        ClientRpcRequest::ListBlobs { .. } => Some(Some(Operation::Read {\n            key: \"_blob:\".to_string(),\n        })),\n"
+      "text": "ClientRpcRequest::ListBlobs { .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
       "line": 34,
-      "snippet": "ClientRpcRequest::BlobReplicatePull { hash, .. } => Some(Some(Operation::Write {",
-      "window": "\n        // Blob replication operations (cluster-internal)\n        ClientRpcRequest::BlobReplicatePull { hash, .. } => Some(Some(Operation::Write {\n            key: format!(\"_blob:replica:{hash}\"),\n            value: vec![],\n        })),"
+      "text": "ClientRpcRequest::BlobReplicatePull { hash, .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/blob_ops.rs",
       "line": 38,
-      "snippet": "ClientRpcRequest::TriggerBlobReplication { hash, .. } => Some(Some(Operation::Write {",
-      "window": "            value: vec![],\n        })),\n        ClientRpcRequest::TriggerBlobReplication { hash, .. } => Some(Some(Operation::Write {\n            key: format!(\"_blob:replica:{hash}\"),\n            value: vec![],\n        })),"
+      "text": "ClientRpcRequest::TriggerBlobReplication { hash, .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 14,
-      "snippet": "Some(Some(Operation::Read {",
-      "window": "    match request {\n        ClientRpcRequest::CiGetStatus { run_id } | ClientRpcRequest::CiGetRunReceipt { run_id } => {\n            Some(Some(Operation::Read {\n                key: format!(\"_ci:runs:{}\", run_id),\n            }))\n        }"
+      "text": "Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 18,
-      "snippet": "ClientRpcRequest::CiGetRefStatus { repo_id, ref_name } => Some(Some(Operation::Read {",
-      "window": "            }))\n        }\n        ClientRpcRequest::CiGetRefStatus { repo_id, ref_name } => Some(Some(Operation::Read {\n            key: format!(\"_ci:ref-status:{}:{}\", repo_id, ref_name),\n        })),\n        ClientRpcRequest::CiListRuns { repo_id, .. } => Some(Some(Operation::Read {"
+      "text": "ClientRpcRequest::CiGetRefStatus { repo_id, ref_name } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 21,
-      "snippet": "ClientRpcRequest::CiListRuns { repo_id, .. } => Some(Some(Operation::Read {",
-      "window": "            key: format!(\"_ci:ref-status:{}:{}\", repo_id, ref_name),\n        })),\n        ClientRpcRequest::CiListRuns { repo_id, .. } => Some(Some(Operation::Read {\n            key: format!(\"_ci:runs:{}\", repo_id.as_deref().unwrap_or(\"\")),\n        })),\n        ClientRpcRequest::CiTriggerPipeline { repo_id, .. }"
+      "text": "ClientRpcRequest::CiListRuns { repo_id, .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 26,
-      "snippet": "| ClientRpcRequest::CiUnwatchRepo { repo_id } => Some(Some(Operation::Write {",
-      "window": "        ClientRpcRequest::CiTriggerPipeline { repo_id, .. }\n        | ClientRpcRequest::CiWatchRepo { repo_id }\n        | ClientRpcRequest::CiUnwatchRepo { repo_id } => Some(Some(Operation::Write {\n            key: format!(\"_ci:repos:{}\", repo_id),\n            value: vec![],\n        })),"
+      "text": "| ClientRpcRequest::CiUnwatchRepo { repo_id } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 30,
-      "snippet": "ClientRpcRequest::CiCancelRun { run_id, .. } => Some(Some(Operation::Write {",
-      "window": "            value: vec![],\n        })),\n        ClientRpcRequest::CiCancelRun { run_id, .. } => Some(Some(Operation::Write {\n            key: format!(\"_ci:runs:{}\", run_id),\n            value: vec![],\n        })),"
+      "text": "ClientRpcRequest::CiCancelRun { run_id, .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 34,
-      "snippet": "ClientRpcRequest::CiListArtifacts { job_id, run_id } => Some(Some(Operation::Read {",
-      "window": "            value: vec![],\n        })),\n        ClientRpcRequest::CiListArtifacts { job_id, run_id } => Some(Some(Operation::Read {\n            key: format!(\"_ci:artifacts:{}:{}\", job_id, run_id.as_deref().unwrap_or(\"\")),\n        })),\n        ClientRpcRequest::CiGetArtifact { blob_hash } => Some(Some(Operation::Read {"
+      "text": "ClientRpcRequest::CiListArtifacts { job_id, run_id } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 37,
-      "snippet": "ClientRpcRequest::CiGetArtifact { blob_hash } => Some(Some(Operation::Read {",
-      "window": "            key: format!(\"_ci:artifacts:{}:{}\", job_id, run_id.as_deref().unwrap_or(\"\")),\n        })),\n        ClientRpcRequest::CiGetArtifact { blob_hash } => Some(Some(Operation::Read {\n            key: format!(\"_ci:artifacts:{}\", blob_hash),\n        })),\n        ClientRpcRequest::CiGetJobLogs { run_id, job_id, .. } => Some(Some(Operation::Read {"
+      "text": "ClientRpcRequest::CiGetArtifact { blob_hash } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 40,
-      "snippet": "ClientRpcRequest::CiGetJobLogs { run_id, job_id, .. } => Some(Some(Operation::Read {",
-      "window": "            key: format!(\"_ci:artifacts:{}\", blob_hash),\n        })),\n        ClientRpcRequest::CiGetJobLogs { run_id, job_id, .. } => Some(Some(Operation::Read {\n            key: format!(\"_ci:logs:{}:{}\", run_id, job_id),\n        })),\n        ClientRpcRequest::CiSubscribeLogs { run_id, job_id, .. } => Some(Some(Operation::Read {"
+      "text": "ClientRpcRequest::CiGetJobLogs { run_id, job_id, .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 43,
-      "snippet": "ClientRpcRequest::CiSubscribeLogs { run_id, job_id, .. } => Some(Some(Operation::Read {",
-      "window": "            key: format!(\"_ci:logs:{}:{}\", run_id, job_id),\n        })),\n        ClientRpcRequest::CiSubscribeLogs { run_id, job_id, .. } => Some(Some(Operation::Read {\n            key: format!(\"_ci:logs:{}:{}\", run_id, job_id),\n        })),\n        ClientRpcRequest::CiGetJobOutput { run_id, job_id } => Some(Some(Operation::Read {"
+      "text": "ClientRpcRequest::CiSubscribeLogs { run_id, job_id, .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 46,
-      "snippet": "ClientRpcRequest::CiGetJobOutput { run_id, job_id } => Some(Some(Operation::Read {",
-      "window": "            key: format!(\"_ci:logs:{}:{}\", run_id, job_id),\n        })),\n        ClientRpcRequest::CiGetJobOutput { run_id, job_id } => Some(Some(Operation::Read {\n            key: format!(\"_ci:runs:{}:{}\", run_id, job_id),\n        })),\n"
+      "text": "ClientRpcRequest::CiGetJobOutput { run_id, job_id } => Some(Some(Operation::Read {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+      "line": 57,
+      "text": "Some(Some(Operation::Read {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+      "line": 61,
+      "text": "ClientRpcRequest::CacheStats => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
       "line": 64,
-      "snippet": "ClientRpcRequest::NixCacheGetPublicKey => Some(Some(Operation::Read {",
-      "window": "            key: \"_cache:stats\".to_string(),\n        })),\n        ClientRpcRequest::NixCacheGetPublicKey => Some(Some(Operation::Read {\n            key: \"_sys:nix-cache:public-key\".to_string(),\n        })),\n"
+      "text": "ClientRpcRequest::NixCacheGetPublicKey => Some(Some(Operation::Read {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/ci_ops.rs",
+      "line": 76,
+      "text": "Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
       "line": 29,
-      "snippet": "| ClientRpcRequest::LockRenew { key, .. } => Some(Some(Operation::Write {",
-      "window": "        | ClientRpcRequest::LockTryAcquire { key, .. }\n        | ClientRpcRequest::LockRelease { key, .. }\n        | ClientRpcRequest::LockRenew { key, .. } => Some(Some(Operation::Write {\n            key: format!(\"_lock:{key}\"),\n            value: vec![],\n        })),"
+      "text": "| ClientRpcRequest::LockRenew { key, .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
       "line": 35,
-      "snippet": "Some(Operation::Write {",
-      "window": "        ClientRpcRequest::LockSetAcquire { members, .. } | ClientRpcRequest::LockSetTryAcquire { members, .. } => {\n            canonical_lockset_member(members).map(|member| {\n                Some(Operation::Write {\n                    key: format!(\"_lock:{member}\"),\n                    value: vec![],\n                })"
+      "text": "Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
       "line": 44,
-      "snippet": "Some(Operation::Write {",
-      "window": "        | ClientRpcRequest::LockSetRenew { member_tokens, .. } => {\n            canonical_lockset_token_member(member_tokens).map(|member| {\n                Some(Operation::Write {\n                    key: format!(\"_lock:{member}\"),\n                    value: vec![],\n                })"
+      "text": "Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
       "line": 53,
-      "snippet": "| ClientRpcRequest::SequenceCurrent { key } => Some(Some(Operation::Read {",
-      "window": "        ClientRpcRequest::CounterGet { key }\n        | ClientRpcRequest::SignedCounterGet { key }\n        | ClientRpcRequest::SequenceCurrent { key } => Some(Some(Operation::Read {\n            key: format!(\"_counter:{key}\"),\n        })),\n"
+      "text": "| ClientRpcRequest::SequenceCurrent { key } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
       "line": 65,
-      "snippet": "| ClientRpcRequest::SequenceReserve { key, .. } => Some(Some(Operation::Write {",
-      "window": "        | ClientRpcRequest::SignedCounterAdd { key, .. }\n        | ClientRpcRequest::SequenceNext { key }\n        | ClientRpcRequest::SequenceReserve { key, .. } => Some(Some(Operation::Write {\n            key: format!(\"_counter:{key}\"),\n            value: vec![],\n        })),"
+      "text": "| ClientRpcRequest::SequenceReserve { key, .. } => Some(Some(Operation::Write {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+      "line": 78,
+      "text": "| ClientRpcRequest::RateLimiterReset { key, .. } => Some(Some(Operation::Write {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+      "line": 82,
+      "text": "ClientRpcRequest::RateLimiterAvailable { key, .. } => Some(Some(Operation::Read {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+      "line": 87,
+      "text": "Some(Some(Operation::Write {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+      "line": 92,
+      "text": "ClientRpcRequest::BarrierStatus { name } => Some(Some(Operation::Read {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+      "line": 104,
+      "text": "| ClientRpcRequest::SemaphoreRelease { name, .. } => Some(Some(Operation::Write {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+      "line": 108,
+      "text": "ClientRpcRequest::SemaphoreStatus { name } => Some(Some(Operation::Read {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+      "line": 118,
+      "text": "| ClientRpcRequest::RWLockDowngrade { name, .. } => Some(Some(Operation::Write {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
+      "line": 122,
+      "text": "ClientRpcRequest::RWLockStatus { name } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
       "line": 141,
-      "snippet": "| ClientRpcRequest::QueueRedriveDLQ { queue_name, .. } => Some(Some(Operation::Write {",
-      "window": "        | ClientRpcRequest::QueueNack { queue_name, .. }\n        | ClientRpcRequest::QueueExtendVisibility { queue_name, .. }\n        | ClientRpcRequest::QueueRedriveDLQ { queue_name, .. } => Some(Some(Operation::Write {\n            key: format!(\"_queue:{queue_name}\"),\n            value: vec![],\n        })),"
+      "text": "| ClientRpcRequest::QueueRedriveDLQ { queue_name, .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
       "line": 147,
-      "snippet": "| ClientRpcRequest::QueueGetDLQ { queue_name, .. } => Some(Some(Operation::Read {",
-      "window": "        ClientRpcRequest::QueuePeek { queue_name, .. }\n        | ClientRpcRequest::QueueStatus { queue_name }\n        | ClientRpcRequest::QueueGetDLQ { queue_name, .. } => Some(Some(Operation::Read {\n            key: format!(\"_queue:{queue_name}\"),\n        })),\n"
+      "text": "| ClientRpcRequest::QueueGetDLQ { queue_name, .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
       "line": 161,
-      "snippet": "| ClientRpcRequest::ServiceUpdateMetadata { service_name, .. } => Some(Some(Operation::Write {",
-      "window": "        | ClientRpcRequest::ServiceHeartbeat { service_name, .. }\n        | ClientRpcRequest::ServiceUpdateHealth { service_name, .. }\n        | ClientRpcRequest::ServiceUpdateMetadata { service_name, .. } => Some(Some(Operation::Write {\n            key: format!(\"_service:{service_name}\"),\n            value: vec![],\n        })),"
+      "text": "| ClientRpcRequest::ServiceUpdateMetadata { service_name, .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
       "line": 166,
-      "snippet": "| ClientRpcRequest::ServiceGetInstance { service_name, .. } => Some(Some(Operation::Read {",
-      "window": "        })),\n        ClientRpcRequest::ServiceDiscover { service_name, .. }\n        | ClientRpcRequest::ServiceGetInstance { service_name, .. } => Some(Some(Operation::Read {\n            key: format!(\"_service:{service_name}\"),\n        })),\n        ClientRpcRequest::ServiceList { prefix, .. } => Some(Some(Operation::Read {"
+      "text": "| ClientRpcRequest::ServiceGetInstance { service_name, .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/coordination_ops.rs",
       "line": 169,
-      "snippet": "ClientRpcRequest::ServiceList { prefix, .. } => Some(Some(Operation::Read {",
-      "window": "            key: format!(\"_service:{service_name}\"),\n        })),\n        ClientRpcRequest::ServiceList { prefix, .. } => Some(Some(Operation::Read {\n            key: format!(\"_service:{prefix}\"),\n        })),\n"
+      "text": "ClientRpcRequest::ServiceList { prefix, .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
       "line": 10,
-      "snippet": "ClientRpcRequest::DocsSet { key, value } => Some(Some(Operation::Write {",
-      "window": "    match request {\n        // Docs operations\n        ClientRpcRequest::DocsSet { key, value } => Some(Some(Operation::Write {\n            key: format!(\"_docs:{key}\"),\n            value: value.clone(),\n        })),"
+      "text": "ClientRpcRequest::DocsSet { key, value } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
       "line": 14,
-      "snippet": "ClientRpcRequest::DocsGet { key } | ClientRpcRequest::DocsDelete { key } => Some(Some(Operation::Read {",
-      "window": "            value: value.clone(),\n        })),\n        ClientRpcRequest::DocsGet { key } | ClientRpcRequest::DocsDelete { key } => Some(Some(Operation::Read {\n            key: format!(\"_docs:{key}\"),\n        })),\n        ClientRpcRequest::DocsList { .. } | ClientRpcRequest::DocsStatus => Some(Some(Operation::Read {"
+      "text": "ClientRpcRequest::DocsGet { key } | ClientRpcRequest::DocsDelete { key } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/docs_ops.rs",
       "line": 17,
-      "snippet": "ClientRpcRequest::DocsList { .. } | ClientRpcRequest::DocsStatus => Some(Some(Operation::Read {",
-      "window": "            key: format!(\"_docs:{key}\"),\n        })),\n        ClientRpcRequest::DocsList { .. } | ClientRpcRequest::DocsStatus => Some(Some(Operation::Read {\n            key: \"_docs:\".to_string(),\n        })),\n"
+      "text": "ClientRpcRequest::DocsList { .. } | ClientRpcRequest::DocsStatus => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs",
       "line": 10,
-      "snippet": "ClientRpcRequest::HookList | ClientRpcRequest::HookGetMetrics { .. } => Some(Some(Operation::Read {",
-      "window": "    match request {\n        // Hook operations (read-only metadata access)\n        ClientRpcRequest::HookList | ClientRpcRequest::HookGetMetrics { .. } => Some(Some(Operation::Read {\n            key: \"_hooks:\".to_string(),\n        })),\n        ClientRpcRequest::HookTrigger { .. } => Some(Some(Operation::Write {"
+      "text": "ClientRpcRequest::HookList | ClientRpcRequest::HookGetMetrics { .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/hooks_ops.rs",
       "line": 13,
-      "snippet": "ClientRpcRequest::HookTrigger { .. } => Some(Some(Operation::Write {",
-      "window": "            key: \"_hooks:\".to_string(),\n        })),\n        ClientRpcRequest::HookTrigger { .. } => Some(Some(Operation::Write {\n            key: \"_hooks:\".to_string(),\n            value: vec![],\n        })),"
+      "text": "ClientRpcRequest::HookTrigger { .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
       "line": 15,
-      "snippet": "| ClientRpcRequest::WorkerDeregister { .. } => Some(Some(Operation::Write {",
-      "window": "        | ClientRpcRequest::WorkerRegister { .. }\n        | ClientRpcRequest::WorkerHeartbeat { .. }\n        | ClientRpcRequest::WorkerDeregister { .. } => Some(Some(Operation::Write {\n            key: \"_jobs:\".to_string(),\n            value: vec![],\n        })),"
+      "text": "| ClientRpcRequest::WorkerDeregister { .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
       "line": 24,
-      "snippet": "| ClientRpcRequest::WorkerStatus => Some(Some(Operation::Read {",
-      "window": "        | ClientRpcRequest::JobList { .. }\n        | ClientRpcRequest::JobQueueStats\n        | ClientRpcRequest::WorkerStatus => Some(Some(Operation::Read {\n            key: \"_jobs:\".to_string(),\n        })),\n"
+      "text": "| ClientRpcRequest::WorkerStatus => Some(Some(Operation::Read {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+      "line": 29,
+      "text": "ClientRpcRequest::WorkerPollJobs { worker_id, .. } => Some(Some(Operation::Read {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/jobs_ops.rs",
+      "line": 32,
+      "text": "ClientRpcRequest::WorkerCompleteJob { worker_id, .. } => Some(Some(Operation::Write {"
+    },
+    {
+      "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
+      "line": 20,
+      "text": "ClientRpcRequest::GetVaultKeys { vault_name: key } => Some(Some(Operation::Read { key: key.clone() })),"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
       "line": 32,
-      "snippet": "ClientRpcRequest::IndexScan { .. } | ClientRpcRequest::IndexList => Some(Some(Operation::Read {",
-      "window": "\n        // Index read operations\n        ClientRpcRequest::IndexScan { .. } | ClientRpcRequest::IndexList => Some(Some(Operation::Read {\n            key: \"_sys:index:\".to_string(),\n        })),\n"
+      "text": "ClientRpcRequest::IndexScan { .. } | ClientRpcRequest::IndexList => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/kv_ops.rs",
       "line": 38,
-      "snippet": "Some(Some(Operation::Write {",
-      "window": "        // Index write operations\n        ClientRpcRequest::IndexCreate { name, .. } | ClientRpcRequest::IndexDrop { name, .. } => {\n            Some(Some(Operation::Write {\n                key: format!(\"_sys:index:{}\", name),\n                value: vec![],\n            }))"
+      "text": "Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/lease_ops.rs",
       "line": 12,
-      "snippet": "| ClientRpcRequest::LeaseKeepalive { .. } => Some(Some(Operation::Write {",
-      "window": "        ClientRpcRequest::LeaseGrant { .. }\n        | ClientRpcRequest::LeaseRevoke { .. }\n        | ClientRpcRequest::LeaseKeepalive { .. } => Some(Some(Operation::Write {\n            key: \"_lease:\".to_string(),\n            value: vec![],\n        })),"
+      "text": "| ClientRpcRequest::LeaseKeepalive { .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/lease_ops.rs",
       "line": 16,
-      "snippet": "ClientRpcRequest::LeaseTimeToLive { .. } | ClientRpcRequest::LeaseList => Some(Some(Operation::Read {",
-      "window": "            value: vec![],\n        })),\n        ClientRpcRequest::LeaseTimeToLive { .. } | ClientRpcRequest::LeaseList => Some(Some(Operation::Read {\n            key: \"_lease:\".to_string(),\n        })),\n"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/net_ops.rs",
-      "line": 9,
-      "snippet": "ClientRpcRequest::NetPublish { name, .. } => Some(Some(Operation::Write {",
-      "window": "pub(crate) fn to_operation(request: &ClientRpcRequest) -> Option<Option<Operation>> {\n    match request {\n        ClientRpcRequest::NetPublish { name, .. } => Some(Some(Operation::Write {\n            key: format!(\"/_sys/net/svc/{}\", name),\n            value: vec![],\n        })),"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/net_ops.rs",
-      "line": 13,
-      "snippet": "ClientRpcRequest::NetUnpublish { name, .. } => Some(Some(Operation::Write {",
-      "window": "            value: vec![],\n        })),\n        ClientRpcRequest::NetUnpublish { name, .. } => Some(Some(Operation::Write {\n            key: format!(\"/_sys/net/svc/{}\", name),\n            value: vec![],\n        })),"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/net_ops.rs",
-      "line": 17,
-      "snippet": "ClientRpcRequest::NetLookup { name, .. } => Some(Some(Operation::Read {",
-      "window": "            value: vec![],\n        })),\n        ClientRpcRequest::NetLookup { name, .. } => Some(Some(Operation::Read {\n            key: format!(\"/_sys/net/svc/{}\", name),\n        })),\n        ClientRpcRequest::NetList { .. } => Some(Some(Operation::Read {"
-    },
-    {
-      "path": "crates/aspen-client-api/src/messages/to_operation/net_ops.rs",
-      "line": 20,
-      "snippet": "ClientRpcRequest::NetList { .. } => Some(Some(Operation::Read {",
-      "window": "            key: format!(\"/_sys/net/svc/{}\", name),\n        })),\n        ClientRpcRequest::NetList { .. } => Some(Some(Operation::Read {\n            key: \"/_sys/net/svc/\".to_string(),\n        })),\n        _ => None,"
+      "text": "ClientRpcRequest::LeaseTimeToLive { .. } | ClientRpcRequest::LeaseList => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
       "line": 10,
-      "snippet": "ClientRpcRequest::TraceIngest { .. } => Some(Some(Operation::Write {",
-      "window": "    match request {\n        // Trace writes\n        ClientRpcRequest::TraceIngest { .. } => Some(Some(Operation::Write {\n            key: \"_sys:traces:\".to_string(),\n            value: vec![],\n        })),"
+      "text": "ClientRpcRequest::TraceIngest { .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
       "line": 17,
-      "snippet": "| ClientRpcRequest::TraceSearch { .. } => Some(Some(Operation::Read {",
-      "window": "        ClientRpcRequest::TraceList { .. }\n        | ClientRpcRequest::TraceGet { .. }\n        | ClientRpcRequest::TraceSearch { .. } => Some(Some(Operation::Read {\n            key: \"_sys:traces:\".to_string(),\n        })),\n        // Metric writes"
+      "text": "| ClientRpcRequest::TraceSearch { .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
       "line": 21,
-      "snippet": "ClientRpcRequest::MetricIngest { .. } => Some(Some(Operation::Write {",
-      "window": "        })),\n        // Metric writes\n        ClientRpcRequest::MetricIngest { .. } => Some(Some(Operation::Write {\n            key: \"_sys:metrics:\".to_string(),\n            value: vec![],\n        })),"
+      "text": "ClientRpcRequest::MetricIngest { .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
       "line": 26,
-      "snippet": "ClientRpcRequest::MetricList { .. } | ClientRpcRequest::MetricQuery { .. } => Some(Some(Operation::Read {",
-      "window": "        })),\n        // Metric reads\n        ClientRpcRequest::MetricList { .. } | ClientRpcRequest::MetricQuery { .. } => Some(Some(Operation::Read {\n            key: \"_sys:metrics:\".to_string(),\n        })),\n        // Alert writes"
+      "text": "ClientRpcRequest::MetricList { .. } | ClientRpcRequest::MetricQuery { .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
       "line": 30,
-      "snippet": "ClientRpcRequest::AlertCreate { .. } | ClientRpcRequest::AlertDelete { .. } => Some(Some(Operation::Write {",
-      "window": "        })),\n        // Alert writes\n        ClientRpcRequest::AlertCreate { .. } | ClientRpcRequest::AlertDelete { .. } => Some(Some(Operation::Write {\n            key: \"_sys:alerts:rule:\".to_string(),\n            value: vec![],\n        })),"
+      "text": "ClientRpcRequest::AlertCreate { .. } | ClientRpcRequest::AlertDelete { .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
       "line": 35,
-      "snippet": "ClientRpcRequest::AlertEvaluate { .. } => Some(Some(Operation::Write {",
-      "window": "        })),\n        // Alert evaluate (reads metrics, writes state)\n        ClientRpcRequest::AlertEvaluate { .. } => Some(Some(Operation::Write {\n            key: \"_sys:alerts:state:\".to_string(),\n            value: vec![],\n        })),"
+      "text": "ClientRpcRequest::AlertEvaluate { .. } => Some(Some(Operation::Write {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/observability_ops.rs",
       "line": 40,
-      "snippet": "ClientRpcRequest::AlertList | ClientRpcRequest::AlertGet { .. } => Some(Some(Operation::Read {",
-      "window": "        })),\n        // Alert reads\n        ClientRpcRequest::AlertList | ClientRpcRequest::AlertGet { .. } => Some(Some(Operation::Read {\n            key: \"_sys:alerts:\".to_string(),\n        })),\n        _ => None,"
+      "text": "ClientRpcRequest::AlertList | ClientRpcRequest::AlertGet { .. } => Some(Some(Operation::Read {"
     },
     {
       "path": "crates/aspen-client-api/src/messages/to_operation/sql_ops.rs",
       "line": 10,
-      "snippet": "ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {",
-      "window": "    match request {\n        // SQL queries\n        ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {\n            key: \"_sql:\".to_string(),\n        })),\n"
+      "text": "ClientRpcRequest::ExecuteSql { .. } => Some(Some(Operation::Read {"
     }
   ],
-  "tests_planned": [
-    "cargo test -p aspen-client-api --features auth secrets_ -- --nocapture",
-    "cargo test -p aspen-client-api --features auth to_operation -- --nocapture",
-    "cargo check -p aspen-client-api --features auth",
-    "scripts/tigerstyle-check.sh",
-    "openspec validate full-aspen-hardening-audit --strict --json",
-    "python ~/.hermes/skills/agentkit-port/openspec/scripts/openspec_helper.py verify full-aspen-hardening-audit --json || true",
-    "git diff --check"
-  ],
-  "finding": "Concrete bypass class fixed for secrets/trust: ClientRpcRequest and standalone SecretsRequest mappings no longer authorize secrets, transit, PKI, or Nix-cache signing operations through generic _secrets: Read/Write prefixes. Generic data capabilities do not authorize the new domain-specific operations; Secrets/Transit/PKI capabilities do.",
-  "remaining_scope": "Forge local repository operations, jobs/CI metadata, docs/hooks/blob/observability/net/coordination/automerge domain APIs still have generic internal-prefix mappings or no dedicated Operation variants; retain the umbrella task open for those follow-up slices."
+  "remaining_count": 61
 }
