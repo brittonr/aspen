@@ -170,4 +170,11 @@ mod tests {
         assert_eq!(set.as_slice()[0].ability, "kv/read");
         assert_eq!(set.as_slice()[1].resource, "aspen:federation:forge:org-a/");
     }
+
+    #[test]
+    fn rejects_empty_ucan_capability_set() {
+        let error = capabilities_to_ucan_set(&[]).expect_err("empty UCAN sets are denied");
+
+        assert!(matches!(error, aspen_auth_core::AuthError::EncodingError(_)));
+    }
 }

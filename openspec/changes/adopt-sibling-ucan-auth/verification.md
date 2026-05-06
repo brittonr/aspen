@@ -77,3 +77,13 @@
 - Commands: `rustfmt crates/aspen-auth/src/verifier.rs`; `CARGO_TARGET_DIR=target/agent cargo test -p aspen-auth test_verifier --all-targets`.
 - Boundary conclusion: direct and delegation-chain token verification now require Aspen capabilities to project into sibling-validated UCAN capability documents before runtime admission proceeds; legacy token wire format and Aspen operation authorization semantics remain preserved.
 - Next best check: run final OpenSpec validation/docs/focused test suite and capture release notes.
+
+## I9 UCAN/Aspen positive and negative tests
+
+- Rail: focused compatibility/negative evidence before final docs.
+- Status: PASS
+- Artifact: `openspec/changes/adopt-sibling-ucan-auth/evidence/i9-ucan-aspen-positive-negative-tests.md`
+- Code: `crates/aspen-auth/src/ucan_adapter.rs`
+- Commands: `rustfmt crates/aspen-auth/src/ucan_adapter.rs`; `CARGO_TARGET_DIR=target/agent cargo test -p aspen-auth ucan_adapter --all-targets`; `CARGO_TARGET_DIR=target/agent cargo test -p aspen-auth test_verifier --all-targets`.
+- Boundary conclusion: positive UCAN projection tests and denied empty UCAN capability-set mapping are retained; existing verifier negatives cover signature, expiry, audience, revocation, and proof-chain failures.
+- Next best check: update auth/federation/operator docs with adapter boundary and migration caveats.
