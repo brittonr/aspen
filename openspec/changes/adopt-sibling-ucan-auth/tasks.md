@@ -6,7 +6,7 @@
 
 - [x] [serial] Inventory current `aspen-auth-core`, `aspen-auth`, `aspen-token`, federation credential, and RPC admission call sites that issue, parse, verify, delegate, or authorize capability tokens. ✅ 2m 20s (started: 2026-05-06T23:21:13Z → completed: 2026-05-06T23:23:33Z) Evidence: `evidence/i1-aspen-auth-callsite-inventory.md`.
 - [x] [serial] Inventory the sibling `../ucan` public APIs and decide which APIs belong in `aspen-auth-core` versus the runtime `aspen-auth` shell. ✅ 3m 12s (started: 2026-05-06T23:24:19Z → completed: 2026-05-06T23:27:31Z) Evidence: `evidence/i2-sibling-ucan-api-inventory.md`.
-- [ ] [depends:boundary-inventory] Write the Aspen capability/operation to UCAN ability/resource mapping table, including unsupported or intentionally Aspen-local capabilities.
+- [x] [depends:boundary-inventory] Write the Aspen capability/operation to UCAN ability/resource mapping table, including unsupported or intentionally Aspen-local capabilities. ✅ 1m 54s (started: 2026-05-06T23:29:42Z → completed: 2026-05-06T23:31:36Z) Evidence: `evidence/i3-aspen-ucan-capability-mapping.md`.
 
 ## Phase 3: Dependency wiring
 

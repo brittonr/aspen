@@ -18,3 +18,13 @@
 - Scope rationale: Task I2 required classifying sibling public APIs between portable `aspen-auth-core`, runtime `aspen-auth`, and Aspen-only adapter surfaces; no Rust source change was required.
 - Boundary conclusion: `aspen-auth-core` should depend only on `ucan-core` no-std validation/claim-shape APIs; `aspen-auth` should own root `ucan` compact-token issuance, verification, resolver/proof/revocation/replay/caveat hooks, and shell IO/readiness adapters.
 - Next best check: Aspen capability/operation to UCAN resource/ability mapping table, including unsupported or intentionally Aspen-local capabilities.
+
+## I3 Aspen capability/operation to UCAN mapping
+
+- Rail: evidence-only mapping table and adapter decision record
+- Command: source-anchor inspection of `Capability`, `Operation`, `authorizes`, `contains`, and sibling UCAN resource-prefix / ability wildcard behavior.
+- Status: PASS
+- Artifact: `openspec/changes/adopt-sibling-ucan-auth/evidence/i3-aspen-ucan-capability-mapping.md`
+- Scope rationale: Task I3 required a mapping table, including unsupported or Aspen-local semantics; no Rust adapter implementation was required.
+- Boundary conclusion: map Aspen resources as `aspen:<domain>:<scope>` and abilities as `aspen/<domain>/<verb>`; keep shell globs, admin implication sets, delegate issuance gate, batch all-item checks, and audit-only fields in the Aspen adapter.
+- Next best check: controlled Cargo/Nix dependency wiring for sibling `../ucan` and protected dependency graph evidence.
