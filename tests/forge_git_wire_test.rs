@@ -94,7 +94,7 @@ struct MinimalForgeServer {
 impl MinimalForgeServer {
     /// Create a new minimal forge server with in-memory storage.
     async fn new() -> Self {
-        let secret_key = SecretKey::generate(&mut rand::rng());
+        let secret_key = SecretKey::generate();
         let kv: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
         let blobs = Arc::new(InMemoryBlobStore::new());
         let forge_node = Arc::new(ForgeNode::new(blobs, kv.clone(), secret_key.clone()));

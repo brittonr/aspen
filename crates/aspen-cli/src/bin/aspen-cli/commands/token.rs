@@ -713,7 +713,7 @@ mod tests {
 
     #[test]
     fn test_load_secret_key_from_env() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let hex_key = hex::encode(sk.to_bytes());
         unsafe { std::env::set_var("ASPEN_SECRET_KEY", &hex_key) };
         let loaded = load_secret_key(None).unwrap();
@@ -723,7 +723,7 @@ mod tests {
 
     #[test]
     fn test_load_secret_key_from_file() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let hex_key = hex::encode(sk.to_bytes());
         let tmp = std::env::temp_dir().join("aspen_test_secret_key");
         std::fs::write(&tmp, &hex_key).unwrap();
@@ -758,7 +758,7 @@ mod tests {
 
     #[test]
     fn test_generate_default_root_token() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let hex_key = hex::encode(sk.to_bytes());
         let tmp = std::env::temp_dir().join("aspen_test_gen_root");
         std::fs::write(&tmp, &hex_key).unwrap();
@@ -777,7 +777,7 @@ mod tests {
 
     #[test]
     fn test_generate_specific_capabilities() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let hex_key = hex::encode(sk.to_bytes());
         let tmp = std::env::temp_dir().join("aspen_test_gen_caps");
         std::fs::write(&tmp, &hex_key).unwrap();
@@ -809,7 +809,7 @@ mod tests {
 
     #[test]
     fn test_generate_invalid_lifetime() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let hex_key = hex::encode(sk.to_bytes());
         let tmp = std::env::temp_dir().join("aspen_test_gen_badlife");
         std::fs::write(&tmp, &hex_key).unwrap();
@@ -830,7 +830,7 @@ mod tests {
     // =========================================================================
 
     fn make_test_token(lifetime: Duration, caps: Vec<Capability>) -> String {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let mut builder = TokenBuilder::new(sk).with_lifetime(lifetime).with_random_nonce();
         for cap in caps {
             builder = builder.with_capability(cap);
@@ -863,7 +863,7 @@ mod tests {
     fn test_inspect_expired_token() {
         // Create a token that's already expired (lifetime 0 seconds would still be valid
         // at creation time, so we create one and check the output)
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let token = TokenBuilder::new(sk)
             .with_lifetime(Duration::from_secs(1))
             .with_capability(Capability::Delegate)
@@ -899,7 +899,7 @@ mod tests {
 
     #[test]
     fn test_delegate_success() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let hex_key = hex::encode(sk.to_bytes());
         let tmp = std::env::temp_dir().join("aspen_test_delegate_key");
         std::fs::write(&tmp, &hex_key).unwrap();
@@ -928,7 +928,7 @@ mod tests {
 
     #[test]
     fn test_delegate_no_delegate_capability() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let hex_key = hex::encode(sk.to_bytes());
         let tmp = std::env::temp_dir().join("aspen_test_delegate_nodel");
         std::fs::write(&tmp, &hex_key).unwrap();
@@ -957,7 +957,7 @@ mod tests {
 
     #[test]
     fn test_delegate_capability_escalation() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let hex_key = hex::encode(sk.to_bytes());
         let tmp = std::env::temp_dir().join("aspen_test_delegate_esc");
         std::fs::write(&tmp, &hex_key).unwrap();
@@ -990,7 +990,7 @@ mod tests {
 
     #[test]
     fn test_delegate_max_depth() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let hex_key = hex::encode(sk.to_bytes());
         let tmp = std::env::temp_dir().join("aspen_test_delegate_depth");
         std::fs::write(&tmp, &hex_key).unwrap();
@@ -1032,7 +1032,7 @@ mod tests {
 
     #[test]
     fn test_delegate_requires_capabilities() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let hex_key = hex::encode(sk.to_bytes());
         let tmp = std::env::temp_dir().join("aspen_test_delegate_nocaps");
         std::fs::write(&tmp, &hex_key).unwrap();
@@ -1060,7 +1060,7 @@ mod tests {
 
     #[test]
     fn test_delegate_federation_proxy_marks_short_lived_bearer_token() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let parent = TokenBuilder::new(sk.clone())
             .with_lifetime(Duration::from_secs(86400))
             .with_capability(Capability::FederationPull {
@@ -1092,7 +1092,7 @@ mod tests {
 
     #[test]
     fn test_delegate_federation_proxy_rejects_non_federation_capability() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let parent = TokenBuilder::new(sk.clone())
             .with_capability(Capability::Full { prefix: "".to_string() })
             .with_capability(Capability::Delegate)
@@ -1114,7 +1114,7 @@ mod tests {
 
     #[test]
     fn test_delegate_federation_proxy_rejects_long_lifetime() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let parent = TokenBuilder::new(sk.clone())
             .with_lifetime(Duration::from_secs(86400))
             .with_capability(Capability::FederationPull {
@@ -1192,7 +1192,7 @@ mod tests {
 
     #[test]
     fn test_roundtrip_generate_inspect() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
         let token = TokenBuilder::new(sk.clone())
             .with_lifetime(Duration::from_secs(3600))
             .with_capability(Capability::Read {
@@ -1214,7 +1214,7 @@ mod tests {
 
     #[test]
     fn test_roundtrip_generate_delegate_inspect() {
-        let sk = SecretKey::generate(&mut rand::rng());
+        let sk = SecretKey::generate();
 
         // Root token
         let root = TokenBuilder::new(sk.clone())

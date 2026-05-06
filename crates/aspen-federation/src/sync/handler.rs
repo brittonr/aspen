@@ -915,7 +915,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_push_rejected_from_untrusted_peer() {
-        let remote_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let remote_key = iroh::SecretKey::generate().public();
         let context = make_context_with_trust(None).await; // no trusted peers
 
         let fed_id = crate::types::FederatedId::new(remote_key, [0xaa; 32]);
@@ -931,7 +931,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_push_limit_exceeded() {
-        let remote_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let remote_key = iroh::SecretKey::generate().public();
         let context = make_context_with_trust(Some(remote_key)).await;
 
         let fed_id = crate::types::FederatedId::new(remote_key, [0xaa; 32]);
@@ -961,7 +961,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_push_no_resolver_returns_not_configured() {
-        let remote_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let remote_key = iroh::SecretKey::generate().public();
         let context = make_context_with_trust(Some(remote_key)).await;
 
         let fed_id = crate::types::FederatedId::new(remote_key, [0xaa; 32]);

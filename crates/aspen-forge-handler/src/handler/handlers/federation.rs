@@ -2873,7 +2873,7 @@ mod tests {
     #[tokio::test]
     async fn test_trust_cluster_valid_key() {
         let trust_manager = Arc::new(TrustManager::new());
-        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let peer_key = iroh::SecretKey::generate().public();
         let key_hex = hex::encode(peer_key.as_bytes());
 
         let response = super::handle_trust_cluster(Some(&trust_manager), key_hex).await.unwrap();
@@ -2937,7 +2937,7 @@ mod tests {
     #[tokio::test]
     async fn test_trust_cluster_idempotent() {
         let trust_manager = Arc::new(TrustManager::new());
-        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let peer_key = iroh::SecretKey::generate().public();
         let key_hex = hex::encode(peer_key.as_bytes());
 
         // Trust twice - should succeed both times
@@ -2960,7 +2960,7 @@ mod tests {
     #[tokio::test]
     async fn test_untrust_cluster_trusted_key() {
         let trust_manager = Arc::new(TrustManager::new());
-        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let peer_key = iroh::SecretKey::generate().public();
         let key_hex = hex::encode(peer_key.as_bytes());
 
         // First trust the cluster
@@ -2983,7 +2983,7 @@ mod tests {
     #[tokio::test]
     async fn test_untrust_cluster_not_trusted() {
         let trust_manager = Arc::new(TrustManager::new());
-        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let peer_key = iroh::SecretKey::generate().public();
         let key_hex = hex::encode(peer_key.as_bytes());
 
         let response = super::handle_untrust_cluster(Some(&trust_manager), key_hex).await.unwrap();
@@ -3129,7 +3129,7 @@ mod tests {
     #[tokio::test]
     async fn test_trust_then_untrust_roundtrip() {
         let trust_manager = Arc::new(TrustManager::new());
-        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let peer_key = iroh::SecretKey::generate().public();
         let key_hex = hex::encode(peer_key.as_bytes());
 
         // Trust
@@ -3152,7 +3152,7 @@ mod tests {
 
         // Trust 3 clusters
         for _ in 0..3 {
-            let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+            let peer_key = iroh::SecretKey::generate().public();
             let key_hex = hex::encode(peer_key.as_bytes());
             let r = super::handle_trust_cluster(Some(&trust_manager), key_hex).await.unwrap();
             assert!(matches!(r, ClientRpcResponse::TrustClusterResult(ref t) if t.is_success));

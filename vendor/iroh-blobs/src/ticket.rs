@@ -1,12 +1,20 @@
 //! Tickets for blobs.
-use std::{collections::BTreeSet, net::SocketAddr, str::FromStr};
+use std::collections::BTreeSet;
+use std::net::SocketAddr;
+use std::str::FromStr;
 
-use iroh::{EndpointAddr, EndpointId, RelayUrl};
-use iroh_tickets::{ParseError, Ticket};
+use iroh::EndpointAddr;
+use iroh::EndpointId;
+use iroh::RelayUrl;
+use iroh_tickets::ParseError;
+use iroh_tickets::Ticket;
 use n0_error::Result;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{BlobFormat, Hash, HashAndFormat};
+use crate::BlobFormat;
+use crate::Hash;
+use crate::HashAndFormat;
 
 /// A token containing everything to get a file from the provider.
 ///
@@ -172,14 +180,17 @@ impl<'de> Deserialize<'de> for BlobTicket {
 mod tests {
     use std::net::SocketAddr;
 
-    use iroh::{PublicKey, SecretKey, TransportAddr};
-    use iroh_test::{assert_eq_hex, hexdump::parse_hexdump};
+    use iroh::PublicKey;
+    use iroh::SecretKey;
+    use iroh::TransportAddr;
+    use iroh_test::assert_eq_hex;
+    use iroh_test::hexdump::parse_hexdump;
 
     use super::*;
 
     fn make_ticket() -> BlobTicket {
         let hash = Hash::new(b"hi there");
-        let peer = SecretKey::generate(&mut rand::rng()).public();
+        let peer = SecretKey::generate().public();
         let addr = SocketAddr::from_str("127.0.0.1:1234").unwrap();
         BlobTicket {
             hash,
@@ -206,12 +217,9 @@ mod tests {
 
     #[test]
     fn test_ticket_base32() {
-        let hash =
-            Hash::from_str("0b84d358e4c8be6c38626b2182ff575818ba6bd3f4b90464994be14cb354a072")
-                .unwrap();
+        let hash = Hash::from_str("0b84d358e4c8be6c38626b2182ff575818ba6bd3f4b90464994be14cb354a072").unwrap();
         let endpoint_id =
-            PublicKey::from_str("ae58ff8833241ac82d6ff7611046ed67b5072d142c588d0063e942d9a75502b6")
-                .unwrap();
+            PublicKey::from_str("ae58ff8833241ac82d6ff7611046ed67b5072d142c588d0063e942d9a75502b6").unwrap();
 
         let ticket = BlobTicket {
             addr: EndpointAddr::new(endpoint_id),
@@ -220,17 +228,18 @@ mod tests {
         };
         let encoded = ticket.to_string();
         let stripped = encoded.strip_prefix("blob").unwrap();
-        let base32 = data_encoding::BASE32_NOPAD
-            .decode(stripped.to_ascii_uppercase().as_bytes())
-            .unwrap();
-        let expected = parse_hexdump("
+        let base32 = data_encoding::BASE32_NOPAD.decode(stripped.to_ascii_uppercase().as_bytes()).unwrap();
+        let expected = parse_hexdump(
+            "
             00 # discriminator for variant 0
             ae58ff8833241ac82d6ff7611046ed67b5072d142c588d0063e942d9a75502b6 # endpoint id, 32 bytes, see above
             00 # relay url
             00 # number of addresses (0)
             00 # format (raw)
             0b84d358e4c8be6c38626b2182ff575818ba6bd3f4b90464994be14cb354a072 # hash, 32 bytes, see above
-        ").unwrap();
+        ",
+        )
+        .unwrap();
         assert_eq_hex!(base32, expected);
     }
 }

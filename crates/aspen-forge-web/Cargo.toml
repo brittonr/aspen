@@ -16,7 +16,7 @@ aspen-forge-protocol = { path = "../aspen-forge-protocol" }
 
 # HTTP/3 serving via iroh
 h3 = { workspace = true }
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
 iroh-h3 = { workspace = true }
 http = "1.0"
 bytes = { workspace = true }
@@ -64,9 +64,9 @@ chrono = { workspace = true }
 async-trait = "0.1"
 blake3 = { workspace = true }
 http = "1.0"
-iroh = { version = "0.97.0" }
+iroh = { version = "0.98.0" }
 iroh-blobs = "0.99.0"
-iroh-gossip = "0.97"
+iroh-gossip = "0.98.0"
 tempfile = "3.10"
 aspen-blob = { workspace = true }
 aspen-client = { workspace = true }

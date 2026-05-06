@@ -639,7 +639,7 @@ mod remaining_timeout_tests {
     async fn connect_timeout_on_unreachable_peer() {
         use aspen_client_api::CLIENT_ALPN;
 
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .bind_addr(std::net::SocketAddr::from(([127, 0, 0, 1], 0u16)))
@@ -648,7 +648,7 @@ mod remaining_timeout_tests {
             .await
             .expect("failed to bind endpoint");
 
-        let unreachable_key = iroh::SecretKey::generate(&mut rand::rng());
+        let unreachable_key = iroh::SecretKey::generate();
         let unreachable_addr = iroh::EndpointAddr::from(unreachable_key.public());
 
         let connect_result = tokio::time::timeout(

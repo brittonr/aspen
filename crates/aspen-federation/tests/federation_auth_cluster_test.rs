@@ -114,7 +114,7 @@ impl TestCluster {
     }
 
     async fn with_resolver(name: &str, resolver: Option<Arc<dyn FederationResourceResolver>>) -> Self {
-        let secret_key = SecretKey::generate(&mut rand::rng());
+        let secret_key = SecretKey::generate();
         let identity = ClusterIdentity::generate(name.to_string());
         let trust_manager = Arc::new(TrustManager::new());
         let resource_settings = Arc::new(RwLock::new(HashMap::new()));
@@ -292,7 +292,7 @@ async fn test_credential_from_wrong_issuer_rejected() {
     let bob = TestCluster::new("bob").await;
 
     // Carol's key — not trusted by bob.
-    let carol_sk = SecretKey::generate(&mut rand::rng());
+    let carol_sk = SecretKey::generate();
 
     let bad_credential = {
         let token = TokenBuilder::new(carol_sk)
@@ -531,7 +531,7 @@ async fn test_delegated_credential_two_levels() {
     let alice = TestCluster::new("alice").await;
     let bob = TestCluster::with_resolver("bob", Some(Arc::new(MockResolver::empty()))).await;
 
-    let carol_sk = SecretKey::generate(&mut rand::rng());
+    let carol_sk = SecretKey::generate();
     let carol_pk = carol_sk.public();
 
     // Bob issues root token to carol with delegation rights.
@@ -590,10 +590,10 @@ async fn test_delegated_credential_two_levels() {
 #[tokio::test]
 #[ignore = "requires network access (iroh socket binding) - not available in Nix sandbox"]
 async fn test_delegation_escalation_rejected_locally() {
-    let bob_sk = SecretKey::generate(&mut rand::rng());
-    let carol_sk = SecretKey::generate(&mut rand::rng());
+    let bob_sk = SecretKey::generate();
+    let carol_sk = SecretKey::generate();
     let carol_pk = carol_sk.public();
-    let alice_pk = SecretKey::generate(&mut rand::rng()).public();
+    let alice_pk = SecretKey::generate().public();
 
     // Bob gives carol Read + Delegate.
     let root_cred = {

@@ -301,7 +301,7 @@ mod tests {
 
     #[test]
     fn push_objects_request_roundtrip() {
-        let fed_id = FederatedId::new(iroh::SecretKey::generate(&mut rand::rng()).public(), [0xaa; 32]);
+        let fed_id = FederatedId::new(iroh::SecretKey::generate().public(), [0xaa; 32]);
         let obj = SyncObject {
             object_type: "blob".to_string(),
             hash: [0xbb; 32],

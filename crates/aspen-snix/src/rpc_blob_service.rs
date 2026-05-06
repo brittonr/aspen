@@ -422,7 +422,7 @@ mod tests {
     }
 
     async fn make_test_endpoint() -> iroh::Endpoint {
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         iroh::Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .alpns(vec![CLIENT_ALPN.to_vec()])
@@ -534,7 +534,7 @@ mod tests {
     /// Connect to an unreachable peer and verify the connect stage times out.
     #[tokio::test]
     async fn connect_timeout_on_unreachable_peer() {
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .bind_addr(std::net::SocketAddr::from(([127, 0, 0, 1], 0u16)))
@@ -543,7 +543,7 @@ mod tests {
             .await
             .expect("failed to bind endpoint");
 
-        let unreachable_key = iroh::SecretKey::generate(&mut rand::rng());
+        let unreachable_key = iroh::SecretKey::generate();
         let unreachable_addr = iroh::EndpointAddr::from(unreachable_key.public());
 
         let connect_result = tokio::time::timeout(

@@ -656,7 +656,7 @@ mod tests {
     use super::*;
 
     fn test_fed_id() -> FederatedId {
-        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let secret = iroh::SecretKey::generate();
         FederatedId::new(secret.public(), [0xab; 32])
     }
 

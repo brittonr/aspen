@@ -19,7 +19,7 @@ aspen-kv-types = { path = "../aspen-kv-types" }
 aspen-client-api = { path = "../aspen-client-api", optional = true }
 
 # Iroh P2P and blobs
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
 iroh-blobs = "0.99.0"
 
 # Async traits

@@ -46,8 +46,8 @@ async fn test_affinity_tagged_job_routes_to_matching_worker() -> TestResult {
     let affinity_manager = AffinityJobManager::new(manager.clone());
 
     // Register workers
-    let key1 = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let key2 = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key1 = iroh::SecretKey::generate().public();
+    let key2 = iroh::SecretKey::generate().public();
     let w1 = make_worker("w1", key1, vec!["gpu=true".to_string()]);
     let w2 = make_worker("w2", key2, vec!["gpu=false".to_string()]);
 
@@ -88,8 +88,8 @@ async fn test_no_matching_worker_scores_zero() -> TestResult {
 
     let affinity_manager = AffinityJobManager::new(manager.clone());
 
-    let key1 = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let key2 = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key1 = iroh::SecretKey::generate().public();
+    let key2 = iroh::SecretKey::generate().public();
     let w1 = make_worker("w1", key1, vec!["region=us".to_string()]);
     let w2 = make_worker("w2", key2, vec!["region=ap".to_string()]);
 

@@ -57,7 +57,7 @@ async fn patchbay_forge_web_all_pages() {
     // --- Node device ---
     node_dev
         .spawn(async move |_dev| {
-            let key = iroh::SecretKey::generate(&mut rand::rng());
+            let key = iroh::SecretKey::generate();
             let ep = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
                 .secret_key(key.clone())
                 .relay_mode(iroh::RelayMode::Disabled)
@@ -96,7 +96,7 @@ async fn patchbay_forge_web_all_pages() {
             let repo_id = identity.repo_id();
 
             let hlc = create_hlc("test");
-            let sign_key = iroh::SecretKey::generate(&mut rand::rng());
+            let sign_key = iroh::SecretKey::generate();
 
             let readme =
                 SignedObject::new(GitObject::Blob(BlobObject::new(b"# Test Repo\nHello.")), &sign_key, &hlc).unwrap();
@@ -307,7 +307,7 @@ async fn patchbay_nostr_auth_and_backward_compat() {
     // --- Node ---
     node_dev
         .spawn(async move |_dev| {
-            let key = iroh::SecretKey::generate(&mut rand::rng());
+            let key = iroh::SecretKey::generate();
             let ep = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
                 .secret_key(key.clone())
                 .relay_mode(iroh::RelayMode::Disabled)
@@ -454,7 +454,7 @@ async fn patchbay_two_users_distinct_commits() {
     // --- Node: create repo with commits from two users ---
     node_dev
         .spawn(async move |_dev| {
-            let node_key = iroh::SecretKey::generate(&mut rand::rng());
+            let node_key = iroh::SecretKey::generate();
             let ep = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
                 .secret_key(node_key.clone())
                 .relay_mode(iroh::RelayMode::Disabled)

@@ -329,6 +329,8 @@ impl IrohEndpointManager {
         config: &IrohEndpointConfig,
     ) -> iroh::endpoint::Builder {
         use iroh::address_lookup::AddrFilter;
+        use iroh::address_lookup::pkarr::PkarrPublisher;
+        use iroh::address_lookup::pkarr::PkarrResolver;
         use iroh::address_lookup::pkarr::dht::DhtAddressLookup;
 
         let addr_filter = if config.include_pkarr_direct_addresses {
@@ -337,59 +339,56 @@ impl IrohEndpointManager {
             AddrFilter::relay_only()
         };
 
-        let mut dht_builder = DhtAddressLookup::builder()
-            .dht(config.enable_pkarr_dht)
-            .addr_filter(addr_filter)
-            .republish_delay(std::time::Duration::from_secs(config.pkarr_republish_delay_secs));
-
-        // Add relay if enabled
-        if config.enable_pkarr_relay {
-            dht_builder = Self::configure_pkarr_relay(dht_builder, config);
+        if config.enable_pkarr_dht {
+            let dht_builder = DhtAddressLookup::builder()
+                .addr_filter(addr_filter.clone())
+                .republish_delay(std::time::Duration::from_secs(config.pkarr_republish_delay_secs));
+            builder = builder.address_lookup(dht_builder);
         }
 
-        builder = builder.address_lookup(dht_builder);
+        if config.enable_pkarr_relay {
+            builder = match Self::pkarr_relay_url(config) {
+                Some(url) => builder
+                    .address_lookup(PkarrPublisher::builder(url.clone()).addr_filter(addr_filter))
+                    .address_lookup(PkarrResolver::builder(url)),
+                None => builder
+                    .address_lookup(PkarrPublisher::n0_dns().addr_filter(addr_filter))
+                    .address_lookup(PkarrResolver::n0_dns()),
+            };
+        }
+
         tracing::info!(
             dht_enabled = config.enable_pkarr_dht,
             relay_enabled = config.enable_pkarr_relay,
             custom_relay = config.pkarr_relay_url.is_some(),
             include_direct_addrs = config.include_pkarr_direct_addresses,
             republish_delay_secs = config.pkarr_republish_delay_secs,
-            "Pkarr DHT address lookup enabled (publish + resolve)"
+            "Pkarr address lookup enabled"
         );
 
         builder
     }
 
-    /// Configure Pkarr relay settings on the DHT builder.
-    fn configure_pkarr_relay(
-        mut dht_builder: iroh::address_lookup::pkarr::dht::Builder,
-        config: &IrohEndpointConfig,
-    ) -> iroh::address_lookup::pkarr::dht::Builder {
-        if let Some(ref relay_url) = config.pkarr_relay_url {
-            // Use custom pkarr relay URL (private infrastructure)
-            match relay_url.parse::<url::Url>() {
-                Ok(url) => {
-                    dht_builder = dht_builder.pkarr_relay(url);
-                    tracing::info!(
-                        relay_url = %relay_url,
-                        "Pkarr using custom relay server (private infrastructure)"
-                    );
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        relay_url = %relay_url,
-                        error = %e,
-                        "failed to parse custom pkarr relay URL, falling back to n0 relay"
-                    );
-                    dht_builder = dht_builder.n0_dns_pkarr_relay();
-                }
+    /// Parse the custom Pkarr relay URL, falling back to n0 DNS when absent or invalid.
+    fn pkarr_relay_url(config: &IrohEndpointConfig) -> Option<url::Url> {
+        let relay_url = config.pkarr_relay_url.as_ref()?;
+        match relay_url.parse::<url::Url>() {
+            Ok(url) => {
+                tracing::info!(
+                    relay_url = %relay_url,
+                    "Pkarr using custom relay server (private infrastructure)"
+                );
+                Some(url)
             }
-        } else {
-            // Use n0's default relay at dns.iroh.link
-            dht_builder = dht_builder.n0_dns_pkarr_relay();
-            tracing::debug!("Pkarr using n0 default relay (dns.iroh.link)");
+            Err(e) => {
+                tracing::warn!(
+                    relay_url = %relay_url,
+                    error = %e,
+                    "failed to parse custom pkarr relay URL, falling back to n0 relay"
+                );
+                None
+            }
         }
-        dht_builder
     }
 
     /// Resolve the secret key from config, file, or generate a new one.

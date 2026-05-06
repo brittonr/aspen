@@ -807,7 +807,7 @@ mod tests {
     use super::*;
 
     fn test_fed_id() -> FederatedId {
-        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let secret = iroh::SecretKey::generate();
         FederatedId::new(secret.public(), [0xab; 32])
     }
 
@@ -1151,7 +1151,7 @@ mod git_bridge_tests {
             let source_blobs = Arc::new(InMemoryBlobStore::new());
             let mapping = Arc::new(HashMappingStore::new(Arc::clone(&source_kv)));
             let refs = Arc::new(RefStore::new(Arc::clone(&source_kv)));
-            let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+            let secret_key = iroh::SecretKey::generate();
 
             let importer = GitImporter::new(
                 Arc::clone(&mapping),
@@ -1722,7 +1722,7 @@ mod git_bridge_tests {
         let dest_blobs = Arc::new(InMemoryBlobStore::new());
         let dest_mapping = Arc::new(HashMappingStore::new(Arc::clone(&dest_kv)));
         let dest_refs = Arc::new(RefStore::new(Arc::clone(&dest_kv)));
-        let dest_secret = iroh::SecretKey::generate(&mut rand::rng());
+        let dest_secret = iroh::SecretKey::generate();
         let dest_importer = GitImporter::new(
             Arc::clone(&dest_mapping),
             Arc::clone(&dest_blobs),

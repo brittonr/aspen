@@ -17,7 +17,7 @@ use aspen::forge::sync::SyncService;
 /// Test helper to create a GitBlobStore with InMemoryBlobStore.
 fn create_git_store() -> (Arc<InMemoryBlobStore>, GitBlobStore<InMemoryBlobStore>) {
     let blobs = Arc::new(InMemoryBlobStore::new());
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
     let node_id = hex::encode(secret_key.public().as_bytes());
     let git = GitBlobStore::new(blobs.clone(), secret_key, &node_id);
     (blobs, git)
@@ -260,7 +260,7 @@ async fn store_cob_change(blobs: &InMemoryBlobStore, secret_key: &iroh::SecretKe
 async fn test_sync_cob_single_change() {
     let blobs = Arc::new(InMemoryBlobStore::new());
     let sync = SyncService::new(blobs.clone());
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     // Create a root COB change
     let cob_id = blake3::hash(b"issue-1");
@@ -282,7 +282,7 @@ async fn test_sync_cob_single_change() {
 async fn test_sync_cob_chain() {
     let blobs = Arc::new(InMemoryBlobStore::new());
     let sync = SyncService::new(blobs.clone());
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let cob_id = blake3::hash(b"issue-1");
 
@@ -317,7 +317,7 @@ async fn test_sync_cob_chain() {
 async fn test_sync_cob_diamond() {
     let blobs = Arc::new(InMemoryBlobStore::new());
     let sync = SyncService::new(blobs.clone());
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let cob_id = blake3::hash(b"issue-1");
 

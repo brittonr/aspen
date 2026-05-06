@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_provider_info_fields() {
-        let node_id = SecretKey::generate(&mut rand::rng()).public();
+        let node_id = SecretKey::generate().public();
         let provider = ProviderInfo {
             node_id,
             blob_size: 4096,
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_provider_info_verified() {
-        let node_id = SecretKey::generate(&mut rand::rng()).public();
+        let node_id = SecretKey::generate().public();
         let provider = ProviderInfo {
             node_id,
             blob_size: 0,
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_dht_node_addr_creation() {
-        let public_key = SecretKey::generate(&mut rand::rng()).public();
+        let public_key = SecretKey::generate().public();
         let relay_url = url::Url::parse("https://relay.example.com").unwrap();
         let direct_addrs = vec!["127.0.0.1:1234".parse().unwrap()];
 
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_dht_node_addr_no_relay() {
-        let public_key = SecretKey::generate(&mut rand::rng()).public();
+        let public_key = SecretKey::generate().public();
 
         let addr = DhtNodeAddr::new(public_key, None, Vec::new(), 1024, BlobFormat::HashSeq);
 
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_dht_node_addr_roundtrip() {
-        let public_key = SecretKey::generate(&mut rand::rng()).public();
+        let public_key = SecretKey::generate().public();
 
         let addr = DhtNodeAddr::new(public_key, None, vec!["192.168.1.1:5000".parse().unwrap()], 512, BlobFormat::Raw);
 
@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn test_dht_node_addr_iroh_public_key() {
-        let secret_key = SecretKey::generate(&mut rand::rng());
+        let secret_key = SecretKey::generate();
         let public_key = secret_key.public();
 
         let addr = DhtNodeAddr::new(public_key, None, Vec::new(), 0, BlobFormat::Raw);
@@ -217,7 +217,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_content_discovery_service_lifecycle() {
-        let secret_key = SecretKey::generate(&mut rand::rng());
+        let secret_key = SecretKey::generate();
         let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0).bind().await.unwrap();
 
         let config = ContentDiscoveryConfig {

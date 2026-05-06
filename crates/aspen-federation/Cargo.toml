@@ -16,9 +16,9 @@ aspen-sharding = { path = "../aspen-sharding" }
 aspen-traits = { path = "../aspen-traits" }
 
 # Networking and P2P
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
-iroh-base = "0.97.0"
-iroh-gossip = "0.97.0"
+iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-base = "0.98.0"
+iroh-gossip = "0.98.0"
 
 # Async runtime
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "io-util", "net"] }

@@ -154,11 +154,11 @@ features = ["futures03"]
 version = "0.4.3"
 
 [dependencies.iroh]
-version = "0.97"
+version = "0.98"
 default-features = false
 
 [dependencies.iroh-base]
-version = "0.97"
+version = "0.98"
 
 [dependencies.iroh-io]
 version = "0.6.1"
@@ -264,7 +264,7 @@ version = "0.2.0"
 version = "0.4.3"
 
 [dev-dependencies.iroh]
-version = "0.97"
+version = "0.98"
 features = ["address-lookup-mdns"]
 
 [dev-dependencies.iroh-test]

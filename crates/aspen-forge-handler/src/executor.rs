@@ -2939,7 +2939,7 @@ mod tests {
     }
 
     async fn make_test_executor() -> ForgeServiceExecutor {
-        let endpoint_secret = iroh::SecretKey::generate(&mut rand::rng());
+        let endpoint_secret = iroh::SecretKey::generate();
         let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(endpoint_secret)
             .bind_addr("127.0.0.1:0".parse::<SocketAddrV4>().expect("loopback bind address should parse"))
@@ -2952,7 +2952,7 @@ mod tests {
         let blob_store =
             Arc::new(IrohBlobStore::new(&blob_dir, endpoint.clone()).await.expect("blob store should initialize"));
         let kv: Arc<dyn aspen_core::KeyValueStore> = Arc::new(DeterministicKeyValueStore::new());
-        let forge_secret = iroh::SecretKey::generate(&mut rand::rng());
+        let forge_secret = iroh::SecretKey::generate();
         let forge_node = Arc::new(aspen_forge::ForgeNode::new(blob_store, kv, forge_secret));
         ForgeServiceExecutor::new(forge_node, ForgeServiceExecutorDeps {
             #[cfg(feature = "global-discovery")]
@@ -2987,7 +2987,7 @@ mod tests {
 
     #[test]
     fn test_repo_info_dual_backend_uses_only_active_routes() {
-        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let secret = iroh::SecretKey::generate();
         let identity = aspen_forge::identity::RepoIdentity::new("repo", vec![secret.public()], TEST_THRESHOLD)
             .expect("repo identity builds");
         let active_routes = vec![
@@ -3009,7 +3009,7 @@ mod tests {
 
     #[test]
     fn test_repo_info_jj_only_omits_git_route() {
-        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let secret = iroh::SecretKey::generate();
         let identity = aspen_forge::identity::RepoIdentity::new("repo", vec![secret.public()], TEST_THRESHOLD)
             .expect("repo identity builds");
         let active_routes = vec![
@@ -3027,7 +3027,7 @@ mod tests {
 
     #[test]
     fn test_repo_info_omits_inactive_backend_routes() {
-        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let secret = iroh::SecretKey::generate();
         let identity = aspen_forge::identity::RepoIdentity::new("repo", vec![secret.public()], TEST_THRESHOLD)
             .expect("repo identity builds");
         let active_routes = vec![git_backend_route(TEST_NODE_ID)];

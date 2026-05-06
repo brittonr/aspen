@@ -292,7 +292,7 @@ mod tests {
     use crate::cob::change::CobOperation;
 
     fn test_key() -> PublicKey {
-        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let secret = iroh::SecretKey::generate();
         secret.public()
     }
 

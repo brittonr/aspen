@@ -94,7 +94,7 @@ fn test_ref_update_new_ref_creation() {
 /// Test: Seeding announcement serialization roundtrip.
 #[test]
 fn test_seeding_announcement_serialization() {
-    let node_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let node_key = iroh::SecretKey::generate().public();
     let announcement = Announcement::Seeding {
         repo_id: test_repo_id(),
         node_id: node_key,
@@ -115,7 +115,7 @@ fn test_seeding_announcement_serialization() {
 /// Test: Unseeding announcement.
 #[test]
 fn test_unseeding_announcement() {
-    let node_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let node_key = iroh::SecretKey::generate().public();
     let announcement = Announcement::Unseeding {
         repo_id: test_repo_id(),
         node_id: node_key,
@@ -165,7 +165,7 @@ fn test_cob_change_announcement() {
 /// Test: RepoCreated announcement.
 #[test]
 fn test_repo_created_announcement() {
-    let creator = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let creator = iroh::SecretKey::generate().public();
     let announcement = Announcement::RepoCreated {
         repo_id: test_repo_id(),
         name: "my-project".to_string(),
@@ -192,7 +192,7 @@ fn test_repo_created_announcement() {
 /// Test: Signed announcement creation and verification.
 #[test]
 fn test_signed_announcement() {
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
     let announcement = Announcement::RefUpdate {
         repo_id: test_repo_id(),
         ref_name: "heads/main".to_string(),
@@ -214,7 +214,7 @@ fn test_signed_announcement() {
 /// Test: Tampered signed announcement detection.
 #[test]
 fn test_signed_announcement_tamper_detection() {
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
     let announcement = Announcement::RefUpdate {
         repo_id: test_repo_id(),
         ref_name: "heads/main".to_string(),
@@ -239,8 +239,8 @@ fn test_signed_announcement_tamper_detection() {
 /// Test: Different signers produce different signatures.
 #[test]
 fn test_different_signer_detection() {
-    let secret_key1 = iroh::SecretKey::generate(&mut rand::rng());
-    let secret_key2 = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key1 = iroh::SecretKey::generate();
+    let secret_key2 = iroh::SecretKey::generate();
 
     let announcement = Announcement::RefUpdate {
         repo_id: test_repo_id(),
@@ -314,7 +314,7 @@ fn test_global_vs_repo_topic() {
 #[test]
 fn test_all_announcement_variants() {
     let repo_id = test_repo_id();
-    let node_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let node_key = iroh::SecretKey::generate().public();
 
     // RefUpdate variant
     let ref_update = Announcement::RefUpdate {
@@ -361,7 +361,7 @@ fn test_all_announcement_variants() {
 #[test]
 fn test_announcement_repo_id_accessor() {
     let repo_id = test_repo_id();
-    let node_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let node_key = iroh::SecretKey::generate().public();
 
     let announcements = vec![
         Announcement::RefUpdate {
@@ -446,7 +446,7 @@ fn test_long_ref_name() {
 #[test]
 fn test_long_repo_name() {
     let long_name = "a".repeat(500);
-    let creator = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let creator = iroh::SecretKey::generate().public();
 
     let announcement = Announcement::RepoCreated {
         repo_id: test_repo_id(),

@@ -407,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_enforce_fork_policy_disabled_ignores_forks() {
-        let fed_id = FederatedId::new(iroh::SecretKey::generate(&mut rand::rng()).public(), [0xaa; 32]);
+        let fed_id = FederatedId::new(iroh::SecretKey::generate().public(), [0xaa; 32]);
         let forks = vec![ForkInfo {
             ref_name: "refs/heads/main".to_string(),
             branches: vec![],
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_enforce_fork_policy_warn_allows_forks() {
-        let fed_id = FederatedId::new(iroh::SecretKey::generate(&mut rand::rng()).public(), [0xaa; 32]);
+        let fed_id = FederatedId::new(iroh::SecretKey::generate().public(), [0xaa; 32]);
         let forks = vec![ForkInfo {
             ref_name: "refs/heads/main".to_string(),
             branches: vec![],
@@ -427,7 +427,7 @@ mod tests {
 
     #[test]
     fn test_enforce_fork_policy_halt_blocks_forks() {
-        let fed_id = FederatedId::new(iroh::SecretKey::generate(&mut rand::rng()).public(), [0xaa; 32]);
+        let fed_id = FederatedId::new(iroh::SecretKey::generate().public(), [0xaa; 32]);
         let forks = vec![ForkInfo {
             ref_name: "refs/heads/main".to_string(),
             branches: vec![],
@@ -439,7 +439,7 @@ mod tests {
 
     #[test]
     fn test_enforce_fork_policy_no_forks_always_ok() {
-        let fed_id = FederatedId::new(iroh::SecretKey::generate(&mut rand::rng()).public(), [0xaa; 32]);
+        let fed_id = FederatedId::new(iroh::SecretKey::generate().public(), [0xaa; 32]);
         assert!(enforce_fork_policy(&fed_id, &[], &ForkDetectionMode::Halt).is_ok());
         assert!(enforce_fork_policy(&fed_id, &[], &ForkDetectionMode::Warn).is_ok());
         assert!(enforce_fork_policy(&fed_id, &[], &ForkDetectionMode::Disabled).is_ok());

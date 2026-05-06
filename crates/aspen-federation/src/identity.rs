@@ -84,7 +84,7 @@ impl ClusterIdentity {
     ///
     /// A new `ClusterIdentity` with a freshly generated Ed25519 keypair.
     pub fn generate(name: String) -> Self {
-        let secret_key = SecretKey::generate(&mut rand::rng());
+        let secret_key = SecretKey::generate();
         Self::from_secret_key(secret_key, name)
     }
 

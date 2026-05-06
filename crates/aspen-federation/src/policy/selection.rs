@@ -310,7 +310,7 @@ mod tests {
     use crate::types::FederatedId;
 
     fn test_key() -> PublicKey {
-        iroh::SecretKey::generate(&mut rand::rng()).public()
+        iroh::SecretKey::generate().public()
     }
 
     fn test_fed_id() -> FederatedId {

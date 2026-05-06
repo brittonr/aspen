@@ -388,7 +388,7 @@ mod tests {
 
         let discovery = ClusterDiscovery::new(node_dir.clone(), None, None);
         let addr = make_addr(1, 5000);
-        let data = EndpointData::new(addr.addrs.iter().cloned());
+        let data = EndpointData::new(addr.addrs.iter().cloned().collect());
 
         // Before setting endpoint_id, publish is a no-op
         discovery.publish(&data);

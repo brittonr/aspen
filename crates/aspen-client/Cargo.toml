@@ -17,8 +17,8 @@ aspen-ticket = { path = "../aspen-ticket", default-features = false, features = 
 aspen-transport = { path = "../aspen-transport", features = ["log-subscriber"] }
 
 # P2P networking for Iroh connections
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
-iroh-gossip = "0.97.0"
+iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-gossip = "0.98.0"
 iroh-tickets = "0.4.0"
 
 # Serialization (postcard for compact binary encoding)

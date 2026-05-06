@@ -223,7 +223,7 @@ mod tests {
         let (handler, _sync_rx, mut seeding_rx) = ForgeAnnouncementHandler::with_channels(10);
 
         let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
-        let signer = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let signer = iroh::SecretKey::generate().public();
 
         let announcement = Announcement::Seeding {
             repo_id,
@@ -244,7 +244,7 @@ mod tests {
         let (handler, _sync_rx, mut seeding_rx) = ForgeAnnouncementHandler::with_channels(10);
 
         let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
-        let signer = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let signer = iroh::SecretKey::generate().public();
 
         let announcement = Announcement::Unseeding {
             repo_id,
@@ -262,7 +262,7 @@ mod tests {
         let (handler, mut sync_rx, _seeding_rx) = ForgeAnnouncementHandler::with_channels(10);
 
         let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
-        let signer = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let signer = iroh::SecretKey::generate().public();
 
         let announcement = Announcement::RefUpdate {
             repo_id,
@@ -294,7 +294,7 @@ mod tests {
         let (handler, mut sync_rx, _seeding_rx) = ForgeAnnouncementHandler::with_channels(10);
 
         let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
-        let signer = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let signer = iroh::SecretKey::generate().public();
 
         let announcement = Announcement::CobChange {
             repo_id,

@@ -7,7 +7,7 @@ repository = "https://github.com/brittonr/aspen"
 description = "Alloc-focused authorization types and pure logic for Aspen distributed systems"
 
 [dependencies]
-iroh-base = { version = "0.97.0", default-features = false, features = ["key"] }
+iroh-base = { version = "0.98.0", default-features = false, features = ["key"] }
 serde = { version = "1.0", default-features = false, features = ["alloc", "derive"] }
 postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 base64 = { version = "0.22", default-features = false, features = ["alloc"] }

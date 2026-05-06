@@ -126,7 +126,7 @@ async fn run_sync(
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_full_simple_repo() {
     let blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sync = SyncService::new(Arc::clone(&blobs));
 
     let (commit, tree, blob_a, blob_b) = build_simple_repo(&blobs, &key).await;
@@ -171,7 +171,7 @@ async fn dag_sync_full_simple_repo() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_incremental_with_known_heads() {
     let blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sync = SyncService::new(Arc::clone(&blobs));
 
     // First commit (already known by receiver).
@@ -219,7 +219,7 @@ async fn dag_sync_incremental_with_known_heads() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_stem_leaf_split() {
     let blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sync = SyncService::new(Arc::clone(&blobs));
 
     let (commit, tree, blob_a, blob_b) = build_simple_repo(&blobs, &key).await;
@@ -252,7 +252,7 @@ async fn dag_sync_stem_leaf_split() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_sequence_request() {
     let blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sync = SyncService::new(Arc::clone(&blobs));
 
     let (commit, _tree, blob_a, _blob_b) = build_simple_repo(&blobs, &key).await;
@@ -274,7 +274,7 @@ async fn dag_sync_sequence_request() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_size_threshold_policy() {
     let blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sync = SyncService::new(Arc::clone(&blobs));
 
     let (commit, _tree, _blob_a, _blob_b) = build_simple_repo(&blobs, &key).await;
@@ -307,7 +307,7 @@ async fn dag_sync_size_threshold_policy() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_plan_to_execution_roundtrip() {
     let blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sync = SyncService::new(Arc::clone(&blobs));
 
     let (commit, _tree, _blob_a, _blob_b) = build_simple_repo(&blobs, &key).await;
@@ -350,7 +350,7 @@ async fn send_then_receive(
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_receiver_full_roundtrip() {
     let sender_blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sender = SyncService::new(Arc::clone(&sender_blobs));
 
     let (commit, tree, blob_a, blob_b) = build_simple_repo(&sender_blobs, &key).await;
@@ -400,7 +400,7 @@ async fn dag_sync_receiver_full_roundtrip() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_receiver_incremental() {
     let sender_blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sender = SyncService::new(Arc::clone(&sender_blobs));
 
     // Build a two-commit chain.
@@ -460,7 +460,7 @@ async fn dag_sync_receiver_incremental() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_receiver_hash_only_deferred() {
     let sender_blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sender = SyncService::new(Arc::clone(&sender_blobs));
 
     let (commit, _tree, _blob_a, _blob_b) = build_simple_repo(&sender_blobs, &key).await;
@@ -495,7 +495,7 @@ async fn dag_sync_receiver_hash_only_deferred() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_receiver_two_phase() {
     let sender_blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sender = SyncService::new(Arc::clone(&sender_blobs));
 
     let (commit, tree, blob_a, blob_b) = build_simple_repo(&sender_blobs, &key).await;
@@ -539,7 +539,7 @@ async fn dag_sync_receiver_two_phase() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_receiver_idempotent() {
     let sender_blobs = Arc::new(InMemoryBlobStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sender = SyncService::new(Arc::clone(&sender_blobs));
 
     let (commit, _, _, _) = build_simple_repo(&sender_blobs, &key).await;
@@ -606,7 +606,7 @@ async fn gossip_to_sync_request_pipeline() {
 
     let (handler, mut sync_rx, _seeding_rx) = ForgeAnnouncementHandler::with_channels(10);
 
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let repo_id = RepoId::from_hash(blake3::hash(b"test-repo"));
     let commit_hash = blake3::hash(b"new-commit");
 
@@ -645,7 +645,7 @@ async fn forge_node_dag_sync_handler() {
 
     let blobs = Arc::new(InMemoryBlobStore::new());
     let kv = Arc::new(aspen_testing_core::DeterministicKeyValueStore::new());
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
 
     let forge = ForgeNode::new(blobs, kv, key);
     let _handler = forge.dag_sync_handler();
@@ -658,7 +658,7 @@ async fn forge_node_dag_sync_handler() {
 /// handle_sync_request — proving the objects are fully usable.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn dag_sync_full_loop_sender_receiver_sender() {
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
 
     // Sender: create a repo.
     let sender_blobs = Arc::new(InMemoryBlobStore::new());
@@ -739,7 +739,7 @@ async fn build_commit_chain(blobs: &InMemoryBlobStore, key: &iroh::SecretKey, le
 /// the mechanism works with a moderate chain.
 #[tokio::test]
 async fn dag_sync_handles_large_chain_without_panic() {
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let blobs = Arc::new(InMemoryBlobStore::new());
     let sync = SyncService::new(Arc::clone(&blobs));
 
@@ -774,7 +774,7 @@ async fn dag_sync_handles_large_chain_without_panic() {
 /// Should only transfer A and its tree.
 #[tokio::test]
 async fn dag_sync_known_heads_stops_traversal() {
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let blobs = Arc::new(InMemoryBlobStore::new());
     let sync = SyncService::new(Arc::clone(&blobs));
 

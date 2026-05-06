@@ -1050,7 +1050,7 @@ mod tests {
 
     /// Generate a valid test public key.
     fn test_public_key() -> PublicKey {
-        iroh::SecretKey::generate(&mut rand::rng()).public()
+        iroh::SecretKey::generate().public()
     }
 
     #[tokio::test]

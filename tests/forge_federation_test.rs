@@ -69,7 +69,7 @@ fn test_cluster_identity_unique_keys() {
 
 #[test]
 fn test_federated_id_creation() {
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let local_id = [0xab; 32];
 
     let fed_id = FederatedId::new(origin, local_id);
@@ -80,7 +80,7 @@ fn test_federated_id_creation() {
 
 #[test]
 fn test_federated_id_short_display() {
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let local_id = [0xcd; 32];
 
     let fed_id = FederatedId::new(origin, local_id);
@@ -93,7 +93,7 @@ fn test_federated_id_short_display() {
 
 #[test]
 fn test_federated_id_equality() {
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let local_id = [0xef; 32];
 
     let fed_id1 = FederatedId::new(origin, local_id);
@@ -104,8 +104,8 @@ fn test_federated_id_equality() {
 
 #[test]
 fn test_federated_id_different_origins() {
-    let origin1 = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let origin2 = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin1 = iroh::SecretKey::generate().public();
+    let origin2 = iroh::SecretKey::generate().public();
     let local_id = [0x11; 32];
 
     let fed_id1 = FederatedId::new(origin1, local_id);
@@ -129,8 +129,8 @@ fn test_federation_settings_public() {
 
 #[test]
 fn test_federation_settings_allowlist() {
-    let cluster1 = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let cluster2 = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let cluster1 = iroh::SecretKey::generate().public();
+    let cluster2 = iroh::SecretKey::generate().public();
 
     let settings = FederationSettings::allowlist(vec![cluster1, cluster2]);
 
@@ -149,8 +149,8 @@ fn test_federation_settings_disabled() {
 
 #[test]
 fn test_federation_settings_is_cluster_allowed() {
-    let allowed = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let not_allowed = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let allowed = iroh::SecretKey::generate().public();
+    let not_allowed = iroh::SecretKey::generate().public();
 
     // Public mode - anyone can access
     let public_settings = FederationSettings::public();
@@ -175,7 +175,7 @@ fn test_federation_settings_is_cluster_allowed() {
 #[test]
 fn test_trust_manager_default_public() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     assert_eq!(manager.trust_level(&key), TrustLevel::Public);
     assert!(!manager.is_trusted(&key));
@@ -185,7 +185,7 @@ fn test_trust_manager_default_public() {
 #[test]
 fn test_trust_manager_add_trusted() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     assert!(manager.add_trusted(key, "test-cluster".to_string(), None));
     assert!(manager.is_trusted(&key));
@@ -195,7 +195,7 @@ fn test_trust_manager_add_trusted() {
 #[test]
 fn test_trust_manager_remove_trusted() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     manager.add_trusted(key, "test-cluster".to_string(), None);
     assert!(manager.is_trusted(&key));
@@ -207,7 +207,7 @@ fn test_trust_manager_remove_trusted() {
 #[test]
 fn test_trust_manager_block() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     assert!(manager.block(key));
     assert!(manager.is_blocked(&key));
@@ -217,7 +217,7 @@ fn test_trust_manager_block() {
 #[test]
 fn test_trust_manager_block_overrides_trust() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     manager.add_trusted(key, "test-cluster".to_string(), None);
     assert!(manager.is_trusted(&key));
@@ -230,7 +230,7 @@ fn test_trust_manager_block_overrides_trust() {
 #[test]
 fn test_trust_manager_trust_removes_block() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     manager.block(key);
     assert!(manager.is_blocked(&key));
@@ -243,9 +243,9 @@ fn test_trust_manager_trust_removes_block() {
 #[test]
 fn test_trust_manager_can_access_resource() {
     let manager = TrustManager::new();
-    let trusted_key = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let public_key = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let blocked_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let trusted_key = iroh::SecretKey::generate().public();
+    let public_key = iroh::SecretKey::generate().public();
+    let blocked_key = iroh::SecretKey::generate().public();
 
     manager.add_trusted(trusted_key, "trusted".to_string(), None);
     manager.block(blocked_key);
@@ -324,8 +324,8 @@ fn test_trust_manager_reject_blocked_request() {
 
 #[test]
 fn test_trust_manager_with_initial_trusted() {
-    let key1 = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let key2 = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key1 = iroh::SecretKey::generate().public();
+    let key2 = iroh::SecretKey::generate().public();
 
     let manager = TrustManager::with_trusted(vec![key1, key2]);
 
@@ -389,7 +389,7 @@ fn test_list_resources_request_serialization() {
 
 #[test]
 fn test_get_resource_state_request_serialization() {
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let fed_id = FederatedId::new(origin, [0xab; 32]);
 
     let request = FederationRequest::GetResourceState { fed_id };
@@ -407,7 +407,7 @@ fn test_get_resource_state_request_serialization() {
 
 #[test]
 fn test_sync_objects_request_serialization() {
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let fed_id = FederatedId::new(origin, [0xcd; 32]);
 
     let request = FederationRequest::SyncObjects {
@@ -609,7 +609,7 @@ fn test_multiple_federated_repos() {
     let repo3 = FederatedId::new(origin, [0x03; 32]);
 
     settings.insert(repo1, FederationSettings::public());
-    settings.insert(repo2, FederationSettings::allowlist(vec![iroh::SecretKey::generate(&mut rand::rng()).public()]));
+    settings.insert(repo2, FederationSettings::allowlist(vec![iroh::SecretKey::generate().public()]));
     settings.insert(repo3, FederationSettings::disabled());
 
     // Verify we can list federated repos
@@ -637,7 +637,7 @@ fn test_trust_manager_capacity_limits() {
 
     // Add up to the maximum trusted clusters
     for i in 0..MAX_TRUSTED_CLUSTERS {
-        let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let key = iroh::SecretKey::generate().public();
         assert!(
             manager.add_trusted(key, format!("cluster-{}", i), None),
             "Should allow adding trusted cluster at index {}",
@@ -646,7 +646,7 @@ fn test_trust_manager_capacity_limits() {
     }
 
     // Verify we hit the limit
-    let extra_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let extra_key = iroh::SecretKey::generate().public();
     assert!(
         !manager.add_trusted(extra_key, "over-limit".to_string(), None),
         "Should reject adding cluster over limit"
@@ -658,7 +658,7 @@ fn test_trust_manager_capacity_limits() {
 #[test]
 fn test_federation_settings_many_allowed_clusters() {
     // Create settings with many allowed clusters
-    let allowed: Vec<_> = (0..100).map(|_| iroh::SecretKey::generate(&mut rand::rng()).public()).collect();
+    let allowed: Vec<_> = (0..100).map(|_| iroh::SecretKey::generate().public()).collect();
 
     let settings = FederationSettings::allowlist(allowed.clone());
 
@@ -668,6 +668,6 @@ fn test_federation_settings_many_allowed_clusters() {
     }
 
     // Random key should not be accessible
-    let random_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let random_key = iroh::SecretKey::generate().public();
     assert!(!settings.is_cluster_allowed(&random_key));
 }

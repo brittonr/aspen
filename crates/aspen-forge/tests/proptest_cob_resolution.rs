@@ -25,7 +25,7 @@ fn test_hlc() -> aspen_core::hlc::HLC {
 
 /// Helper to create a test public key.
 fn test_key() -> PublicKey {
-    let secret = iroh::SecretKey::generate(&mut rand::rng());
+    let secret = iroh::SecretKey::generate();
     secret.public()
 }
 

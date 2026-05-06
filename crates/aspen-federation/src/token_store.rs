@@ -122,7 +122,7 @@ mod tests {
     }
 
     fn make_credential(lifetime_secs: u64) -> Credential {
-        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let secret = iroh::SecretKey::generate();
         let token = aspen_auth::TokenBuilder::new(secret)
             .with_lifetime(std::time::Duration::from_secs(lifetime_secs))
             .build()
@@ -133,7 +133,7 @@ mod tests {
     #[tokio::test]
     async fn test_load_returns_none_when_key_missing() {
         let store = make_store();
-        let peer = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let peer = iroh::SecretKey::generate().public();
         let result = load_credential_for_peer(store.as_ref(), &peer).await;
         assert!(result.is_none());
     }
@@ -141,7 +141,7 @@ mod tests {
     #[tokio::test]
     async fn test_store_and_load_credential() {
         let store = make_store();
-        let peer = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let peer = iroh::SecretKey::generate().public();
         // 1 hour lifetime — well in the future
         let cred = make_credential(3600);
         let issued = cred.token.issued_at;
@@ -155,7 +155,7 @@ mod tests {
     #[tokio::test]
     async fn test_expired_credential_returns_none() {
         let store = make_store();
-        let peer = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let peer = iroh::SecretKey::generate().public();
         // Build a valid credential, then manually set expires_at to the past
         let mut cred = make_credential(3600);
         cred.token.expires_at = 1; // 1970-01-01T00:00:01 — clearly expired
@@ -168,7 +168,7 @@ mod tests {
     #[tokio::test]
     async fn test_corrupt_json_returns_none() {
         let store = make_store();
-        let peer = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let peer = iroh::SecretKey::generate().public();
         let key = received_key(&peer);
         // Write garbage JSON
         store.write(aspen_traits::WriteRequest::set(key, "not-valid-json".to_string())).await.unwrap();

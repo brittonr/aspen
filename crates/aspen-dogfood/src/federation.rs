@@ -391,7 +391,7 @@ mod tests {
 
     #[test]
     fn select_addr_hint_prefers_ipv4() {
-        let secret_key = SecretKey::generate(&mut rand::rng());
+        let secret_key = SecretKey::generate();
         let endpoint_id = secret_key.public();
         let endpoint_addr = EndpointAddr::from_parts(endpoint_id, [
             TransportAddr::Ip(SocketAddr::from((Ipv6Addr::LOCALHOST, 7000))),

@@ -41,12 +41,12 @@ aspen-nostr-relay = { path = "../aspen-nostr-relay", optional = true }
 aspen-constants = { path = "../aspen-constants" }
 
 # Networking and P2P
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
-iroh-base = "0.97.0"
+iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-base = "0.98.0"
 iroh-blobs = { version = "0.99.0", optional = true }
-iroh-gossip = "0.97.0"
-iroh-docs = { version = "0.97.0", optional = true }
-iroh-relay = { version = "0.97.0", features = ["server"], optional = true }
+iroh-gossip = "0.98.0"
+iroh-docs = { version = "0.98.0", optional = true }
+iroh-relay = { version = "0.98.0", features = ["server"], optional = true }
 iroh-metrics = "0.38"
 iroh-tickets = "0.4.0"
 irpc = { version = "0.13.0", features = ["derive"] }

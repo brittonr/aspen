@@ -203,7 +203,7 @@ mod tests {
     #[tokio::test]
     async fn send_rpc_connect_timeout_on_unreachable_peer() {
         // Create a real iroh endpoint
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .bind_addr(std::net::SocketAddr::from(([127, 0, 0, 1], 0u16)))
@@ -213,7 +213,7 @@ mod tests {
             .expect("failed to bind endpoint");
 
         // Target a random unreachable peer
-        let unreachable_key = iroh::SecretKey::generate(&mut rand::rng());
+        let unreachable_key = iroh::SecretKey::generate();
         let unreachable_addr = iroh::EndpointAddr::from(unreachable_key.public());
 
         // Exercise the same connect + stage pattern as send_rpc.

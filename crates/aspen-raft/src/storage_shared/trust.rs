@@ -457,7 +457,7 @@ mod tests {
     use super::*;
 
     fn node_addr() -> NodeAddress {
-        let key = SecretKey::generate(&mut rand::rng());
+        let key = SecretKey::generate();
         NodeAddress::new(EndpointAddr::new(key.public()))
     }
 

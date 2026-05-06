@@ -169,7 +169,7 @@ fn generate_root_cmd(
     let secret_key = if let Some(hex) = secret_key_hex {
         parse_secret_key(&hex)?
     } else {
-        SecretKey::generate(&mut rand::rng())
+        SecretKey::generate()
     };
 
     let lifetime = parse_duration(lifetime_str)?;
@@ -885,7 +885,7 @@ mod tests {
     fn delegate_federation_proxy_marks_short_lived_bearer_token() {
         let dir = tempfile::tempdir().expect("tempdir");
         let output_path = dir.path().join("proxy-token.json");
-        let issuer_key = SecretKey::generate(&mut rand::rng());
+        let issuer_key = SecretKey::generate();
         let parent = TokenBuilder::new(issuer_key.clone())
             .with_capability(Capability::FederationPull {
                 repo_prefix: "forge:".to_string(),
@@ -924,7 +924,7 @@ mod tests {
 
     #[test]
     fn delegate_federation_proxy_rejects_explicit_audience() {
-        let issuer_key = SecretKey::generate(&mut rand::rng());
+        let issuer_key = SecretKey::generate();
         let parent = TokenBuilder::new(issuer_key.clone())
             .with_capability(Capability::FederationPull {
                 repo_prefix: "forge:".to_string(),
@@ -935,7 +935,7 @@ mod tests {
             .build()
             .expect("parent token");
 
-        let audience_key = SecretKey::generate(&mut rand::rng()).public().to_string();
+        let audience_key = SecretKey::generate().public().to_string();
         let result = delegate_cmd(DelegateCmdInput {
             parent_token_b64: &parent.to_base64().expect("parent b64"),
             parent_key_hex: &hex::encode(issuer_key.to_bytes()),
@@ -952,7 +952,7 @@ mod tests {
 
     #[test]
     fn delegate_federation_proxy_rejects_non_federation_capability() {
-        let issuer_key = SecretKey::generate(&mut rand::rng());
+        let issuer_key = SecretKey::generate();
         let parent = TokenBuilder::new(issuer_key.clone())
             .with_capability(Capability::Full { prefix: "".to_string() })
             .with_capability(Capability::Delegate)
@@ -977,7 +977,7 @@ mod tests {
 
     #[test]
     fn delegate_federation_proxy_rejects_long_lifetime() {
-        let issuer_key = SecretKey::generate(&mut rand::rng());
+        let issuer_key = SecretKey::generate();
         let parent = TokenBuilder::new(issuer_key.clone())
             .with_capability(Capability::FederationPull {
                 repo_prefix: "forge:".to_string(),

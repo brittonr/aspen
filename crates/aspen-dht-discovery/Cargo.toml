@@ -9,8 +9,8 @@ authors = ["Aspen Contributors"]
 
 [dependencies]
 # Networking and P2P
-iroh = "0.97.0"
-iroh-base = "0.97.0"
+iroh = "0.98.0"
+iroh-base = "0.98.0"
 iroh-blobs = "0.99.0"
 
 # Async runtime

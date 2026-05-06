@@ -159,7 +159,7 @@ impl AspenClient {
         }
 
         // Create Iroh endpoint
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .alpns(vec![CLIENT_ALPN.to_vec()])
@@ -649,7 +649,7 @@ mod tests {
     }
 
     async fn make_test_endpoint() -> Endpoint {
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .alpns(vec![CLIENT_ALPN.to_vec()])

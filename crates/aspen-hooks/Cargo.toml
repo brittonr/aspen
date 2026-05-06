@@ -22,7 +22,7 @@ aspen-client-api = { path = "../aspen-client-api", default-features = false }
 anyhow = "1"
 async-trait = "0.1"
 blake3 = "1"
-iroh = { version = "0.97.0" }
+iroh = { version = "0.98.0" }
 iroh-tickets = "0.4.0"
 parking_lot = "0.12"
 postcard = { version = "1", default-features = false, features = ["alloc"] }

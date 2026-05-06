@@ -47,7 +47,7 @@ version = "2.0.1"
 features = ["display"]
 
 [dependencies.iroh-base]
-version = "0.97"
+version = "0.98"
 features = ["key"]
 
 [dependencies.n0-error]

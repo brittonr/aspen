@@ -182,7 +182,7 @@ impl AspenClient {
     ///
     /// Respects `ASPEN_RELAY_DISABLED=1` for local/offline testing.
     async fn create_client_endpoint() -> Result<Endpoint> {
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         let mut builder = Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .alpns(vec![CLIENT_ALPN.to_vec()]);
@@ -258,9 +258,7 @@ impl AspenClient {
             .get(peer_index)
             .or_else(|| self.ticket.bootstrap.first())
             .ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?;
-        let target_addr = peer
-            .to_endpoint_addr()
-            .context("cluster ticket contains invalid bootstrap endpoint id")?;
+        let target_addr = peer.to_endpoint_addr().context("cluster ticket contains invalid bootstrap endpoint id")?;
         self.send_to_addr(&target_addr, request).await
     }
 

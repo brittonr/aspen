@@ -51,7 +51,7 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 serde_json = { workspace = true }
 
 # HTTP/3 via iroh-h3
-iroh = { version = "0.97.0", optional = true }
+iroh = { version = "0.98.0", optional = true }
 iroh-h3 = { workspace = true, optional = true }
 iroh-h3-axum = { workspace = true, optional = true }
 aspen-transport = { workspace = true, optional = true }

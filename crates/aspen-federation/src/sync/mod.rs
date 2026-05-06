@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn test_get_resource_state_request_roundtrip() {
-        let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let origin = iroh::SecretKey::generate().public();
         let fed_id = FederatedId::new(origin, [0xab; 32]);
 
         let request = FederationRequest::GetResourceState { fed_id };
@@ -369,7 +369,7 @@ mod tests {
 
     #[test]
     fn test_sync_objects_request_roundtrip() {
-        let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let origin = iroh::SecretKey::generate().public();
         let fed_id = FederatedId::new(origin, [0xcd; 32]);
 
         let request = FederationRequest::SyncObjects {
@@ -399,7 +399,7 @@ mod tests {
 
     #[test]
     fn test_sync_objects_request_empty_hashes() {
-        let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let origin = iroh::SecretKey::generate().public();
         let fed_id = FederatedId::new(origin, [0xcd; 32]);
 
         let request = FederationRequest::SyncObjects {
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn test_verify_ref_update_request_roundtrip() {
-        let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let origin = iroh::SecretKey::generate().public();
         let fed_id = FederatedId::new(origin, [0xee; 32]);
 
         let request = FederationRequest::VerifyRefUpdate {
@@ -501,7 +501,7 @@ mod tests {
 
     #[test]
     fn test_resource_list_response_roundtrip() {
-        let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let origin = iroh::SecretKey::generate().public();
         let fed_id = FederatedId::new(origin, [0xab; 32]);
         let hlc = aspen_core::hlc::create_hlc("test-node");
 
@@ -556,7 +556,7 @@ mod tests {
 
     #[test]
     fn test_resource_info_roundtrip() {
-        let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let origin = iroh::SecretKey::generate().public();
         let fed_id = FederatedId::new(origin, [0xab; 32]);
 
         let hlc = aspen_core::hlc::create_hlc("test-node");
@@ -926,7 +926,7 @@ mod tests {
         assert!(signed.verify());
 
         // Verify trust manager starts with no trusted peers
-        let random_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let random_key = iroh::SecretKey::generate().public();
         assert!(!trust_manager.is_trusted(&random_key));
 
         // Verify HLC creates valid timestamps (just ensure it doesn't panic)

@@ -20,7 +20,7 @@ async fn create_node_with_gossip()
 -> (ForgeNode<InMemoryBlobStore, aspen_testing::DeterministicKeyValueStore>, mpsc::Receiver<SyncRequest>) {
     let blobs = Arc::new(InMemoryBlobStore::new());
     let kv = aspen_testing::DeterministicKeyValueStore::new();
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     // Create an iroh endpoint + gossip so announce_ref_update has a path to dispatch.
     let endpoint = iroh::Endpoint::builder(iroh::endpoint::presets::N0)
@@ -96,7 +96,7 @@ async fn test_announce_new_ref_fires_handler() {
 async fn test_announce_without_gossip_is_noop() {
     let blobs = Arc::new(InMemoryBlobStore::new());
     let kv = aspen_testing::DeterministicKeyValueStore::new();
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
     let node = ForgeNode::new(blobs, kv, secret_key);
 
     let repo_id = RepoId::from_hash(blake3::hash(b"no-gossip-repo"));

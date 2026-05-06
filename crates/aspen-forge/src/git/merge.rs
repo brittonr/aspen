@@ -356,7 +356,7 @@ mod tests {
 
     fn test_store() -> GitBlobStore<InMemoryBlobStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         GitBlobStore::new(blobs, secret_key, "test")
     }
 

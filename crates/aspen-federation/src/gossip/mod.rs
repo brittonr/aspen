@@ -470,7 +470,7 @@ mod tests {
     }
 
     fn test_node_key() -> PublicKey {
-        iroh::SecretKey::generate(&mut rand::rng()).public()
+        iroh::SecretKey::generate().public()
     }
 
     fn test_apps() -> Vec<crate::app_registry::AppManifest> {

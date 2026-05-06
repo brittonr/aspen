@@ -59,7 +59,7 @@ impl NetAuthenticator {
     /// Uses a self-signed token with `NetAdmin` capability.
     /// Suitable for trusted environments (e.g., cluster-internal daemons).
     pub fn permissive() -> Self {
-        let issuer = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let issuer = iroh::SecretKey::generate().public();
         let token = CapabilityToken {
             version: 1,
             issuer,

@@ -50,7 +50,7 @@ version = "0.3.31"
 version = "0.0.8"
 
 [dependencies.iroh]
-version = "0.97.0"
+version = "0.98.0"
 
 [dependencies.tokio-util]
 version = "0.7.17"

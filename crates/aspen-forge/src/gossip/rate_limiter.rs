@@ -199,7 +199,7 @@ mod tests {
     use super::*;
 
     fn test_key() -> PublicKey {
-        iroh::SecretKey::generate(&mut rand::rng()).public()
+        iroh::SecretKey::generate().public()
     }
 
     #[test]

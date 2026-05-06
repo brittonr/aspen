@@ -274,7 +274,7 @@ mod tests {
     use crate::cob::change::ReviewSide;
 
     fn test_key() -> iroh::PublicKey {
-        let secret = iroh::SecretKey::generate(&mut rand::rng());
+        let secret = iroh::SecretKey::generate();
         secret.public()
     }
 

@@ -22,7 +22,7 @@ tracing = "0.1"
 nix = { version = "0.29", features = ["signal", "process"] }
 
 [dev-dependencies]
-iroh = "0.97.0"
+iroh = "0.98.0"
 rand = "0.9"
 tokio = { version = "1.41", features = ["rt-multi-thread", "macros", "test-util"] }
 

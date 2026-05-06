@@ -221,7 +221,7 @@ mod tests {
     use super::*;
 
     fn test_key() -> SecretKey {
-        SecretKey::generate(&mut rand::rng())
+        SecretKey::generate()
     }
 
     #[test]

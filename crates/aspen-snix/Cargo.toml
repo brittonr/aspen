@@ -20,7 +20,7 @@ aspen-client-api = { workspace = true }
 aspen-dag = { path = "../aspen-dag" }
 
 # Iroh for RPC communication
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
 
 # Async runtime
 tokio = { workspace = true, features = ["rt", "io-util", "sync", "fs"] }

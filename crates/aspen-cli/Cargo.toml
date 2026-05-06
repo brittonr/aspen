@@ -60,8 +60,8 @@ comfy-table = "7.1"
 dialoguer = "0.11"
 
 # P2P networking (for tickets)
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
-iroh-base = "0.97.0"
+iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-base = "0.98.0"
 
 # Encoding
 hex = "0.4"

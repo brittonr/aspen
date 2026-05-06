@@ -140,7 +140,7 @@ impl ForgeClusterTester {
         // Create ForgeNode instances for each cluster node
         let mut forge_nodes = Vec::with_capacity(node_count);
         for node in &nodes {
-            let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+            let secret_key = iroh::SecretKey::generate();
             let kv: Arc<dyn KeyValueStore> = node.raft_node().clone();
             let forge = ForgeNode::new(blobs.clone(), kv, secret_key);
             forge_nodes.push(forge);

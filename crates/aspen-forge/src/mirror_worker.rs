@@ -235,8 +235,8 @@ mod tests {
         // Both nodes share the same KV (simulating same-cluster Raft)
         let kv = DeterministicKeyValueStore::new();
 
-        let sk1 = iroh::SecretKey::generate(&mut rand::rng());
-        let sk2 = iroh::SecretKey::generate(&mut rand::rng());
+        let sk1 = iroh::SecretKey::generate();
+        let sk2 = iroh::SecretKey::generate();
 
         let node1: TestNode = ForgeNode::new(blobs.clone(), kv.clone(), sk1);
         let node2: TestNode = ForgeNode::new(blobs, kv.clone(), sk2);

@@ -44,10 +44,10 @@ use std::time::Duration;
 use anyhow::Context;
 use anyhow::Result;
 use aspen_client_api::CLIENT_ALPN;
-use aspen_cluster_types::NodeAddress;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
+use aspen_cluster_types::NodeAddress;
 use iroh::Endpoint;
 use iroh::endpoint::VarInt;
 use tokio::sync::OnceCell;
@@ -275,7 +275,7 @@ impl HookClient {
     async fn get_or_create_endpoint(&self) -> Result<Arc<Endpoint>, HookClientError> {
         self.endpoint
             .get_or_try_init(|| async {
-                let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+                let secret_key = iroh::SecretKey::generate();
                 let endpoint = Endpoint::builder(iroh::endpoint::presets::N0)
                     .secret_key(secret_key)
                     .alpns(vec![CLIENT_ALPN.to_vec()])
@@ -392,8 +392,9 @@ fn convert_bootstrap_peer(peer_addr: &NodeAddress) -> Result<iroh::EndpointAddr,
 
 #[cfg(test)]
 mod tests {
-    use aspen_cluster_types::NodeTransportAddr;
     use core::net::SocketAddr;
+
+    use aspen_cluster_types::NodeTransportAddr;
     use iroh_tickets::Ticket;
     use serde::Deserialize;
     use serde::Serialize;
@@ -459,10 +460,10 @@ mod tests {
 
     #[test]
     fn test_convert_bootstrap_peer_rejects_invalid_node_address() {
-        let invalid_addr = NodeAddress::from_parts(
-            "not-an-endpoint-id",
-            [NodeTransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], 7777)))],
-        );
+        let invalid_addr = NodeAddress::from_parts("not-an-endpoint-id", [NodeTransportAddr::Ip(SocketAddr::from((
+            [127, 0, 0, 1],
+            7777,
+        )))]);
         let result = convert_bootstrap_peer(&invalid_addr);
         assert!(matches!(result, Err(HookClientError::ConnectionFailed(_))));
     }

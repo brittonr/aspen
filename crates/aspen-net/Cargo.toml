@@ -24,7 +24,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 
 # Iroh networking
-iroh = { version = "0.97.0" }
+iroh = { version = "0.98.0" }
 iroh-proxy-utils = { path = "../../vendor/iroh-proxy-utils" }
 
 # Async

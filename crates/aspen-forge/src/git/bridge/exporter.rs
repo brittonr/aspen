@@ -791,7 +791,7 @@ mod tests {
         let blobs = Arc::new(InMemoryBlobStore::new());
         let mapping = Arc::new(HashMappingStore::new(Arc::clone(&kv)));
         let refs = Arc::new(RefStore::new(Arc::clone(&kv)));
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
 
         let importer = crate::git::bridge::GitImporter::new(
             Arc::clone(&mapping),

@@ -33,7 +33,7 @@ use sha1::Sha1;
 async fn create_test_forge_node() -> ForgeNode<InMemoryBlobStore, DeterministicKeyValueStore> {
     let blobs = Arc::new(InMemoryBlobStore::new());
     let kv = DeterministicKeyValueStore::new();
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
     ForgeNode::new(blobs, kv, secret_key)
 }
 
@@ -117,7 +117,7 @@ async fn test_import_export_single_blob() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -162,7 +162,7 @@ async fn test_import_export_tree() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -207,7 +207,7 @@ async fn test_import_export_commit() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -260,7 +260,7 @@ async fn test_import_export_commit_chain() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -344,7 +344,7 @@ async fn test_incremental_fetch_with_have_set() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -414,7 +414,7 @@ async fn test_ref_update_via_importer() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -469,7 +469,7 @@ async fn test_list_refs_with_multiple_branches() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -534,7 +534,7 @@ async fn test_import_idempotency() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -567,7 +567,7 @@ async fn test_merge_commit_import() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -652,7 +652,7 @@ async fn test_nested_tree_structure() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -727,7 +727,7 @@ async fn test_binary_blob_content() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -768,7 +768,7 @@ async fn test_large_blob_import_export() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -812,7 +812,7 @@ async fn test_simulate_git_clone() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -891,7 +891,7 @@ async fn test_simulate_git_push() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
 
     let importer = GitImporter::new(
         Arc::clone(&mapping),
@@ -1003,7 +1003,7 @@ async fn test_federated_clone_cross_batch_convergence() {
     let origin_repo_id = origin_identity.repo_id();
 
     let origin_mapping = Arc::new(HashMappingStore::new(origin.kv().clone()));
-    let origin_secret = iroh::SecretKey::generate(&mut rand::rng());
+    let origin_secret = iroh::SecretKey::generate();
     let origin_importer = GitImporter::new(
         Arc::clone(&origin_mapping),
         origin.git.blobs().clone(),
@@ -1149,7 +1149,7 @@ async fn test_federated_clone_cross_batch_convergence() {
     let mirror_repo_id = mirror_identity.repo_id();
 
     let mirror_mapping = Arc::new(HashMappingStore::new(mirror.kv().clone()));
-    let mirror_secret = iroh::SecretKey::generate(&mut rand::rng());
+    let mirror_secret = iroh::SecretKey::generate();
     let mirror_importer = GitImporter::new(
         Arc::clone(&mirror_mapping),
         mirror.git.blobs().clone(),
@@ -1304,7 +1304,7 @@ async fn test_federated_incremental_sync_no_duplication() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret = iroh::SecretKey::generate(&mut rand::rng());
+    let secret = iroh::SecretKey::generate();
     let importer = GitImporter::new(
         Arc::clone(&mapping),
         forge.git.blobs().clone(),
@@ -1391,7 +1391,7 @@ async fn test_gpgsig_commit_roundtrip() {
     let repo_id = identity.repo_id();
 
     let mapping = Arc::new(HashMappingStore::new(forge.kv().clone()));
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
     let importer = GitImporter::new(
         Arc::clone(&mapping),
         forge.git.blobs().clone(),

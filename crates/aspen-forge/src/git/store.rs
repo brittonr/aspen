@@ -450,7 +450,7 @@ mod tests {
 
     async fn create_test_store() -> GitBlobStore<InMemoryBlobStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         let node_id = hex::encode(secret_key.public().as_bytes());
         GitBlobStore::new(blobs, secret_key, &node_id)
     }

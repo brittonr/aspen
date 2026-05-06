@@ -900,7 +900,7 @@ mod tests {
     use super::*;
 
     fn endpoint_addr() -> EndpointAddr {
-        let key = SecretKey::generate(&mut rand::rng());
+        let key = SecretKey::generate();
         EndpointAddr::new(key.public())
     }
 

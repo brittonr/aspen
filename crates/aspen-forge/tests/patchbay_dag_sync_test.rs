@@ -88,7 +88,7 @@ async fn patchbay_forge_dag_sync_full() {
     let sender_dev = lab.add_device("sender").iface("eth0", router.id(), None).build().await.unwrap();
     let receiver_dev = lab.add_device("receiver").iface("eth0", router.id(), None).build().await.unwrap();
 
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
 
     // --- Sender side ---
     let sender_blobs = Arc::new(InMemoryBlobStore::new());
@@ -175,7 +175,7 @@ async fn patchbay_forge_dag_sync_incremental() {
     let sender_dev = lab.add_device("sender").iface("eth0", router.id(), None).build().await.unwrap();
     let receiver_dev = lab.add_device("receiver").iface("eth0", router.id(), None).build().await.unwrap();
 
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
 
     // Build two-commit chain on sender.
     let sender_blobs = Arc::new(InMemoryBlobStore::new());
@@ -273,7 +273,7 @@ async fn patchbay_forge_dag_sync_stem_leaf() {
     let sender_dev = lab.add_device("sender").iface("eth0", router.id(), None).build().await.unwrap();
     let receiver_dev = lab.add_device("receiver").iface("eth0", router.id(), None).build().await.unwrap();
 
-    let key = iroh::SecretKey::generate(&mut rand::rng());
+    let key = iroh::SecretKey::generate();
     let sender_blobs = Arc::new(InMemoryBlobStore::new());
     let (commit, tree, blob_a, blob_b) = build_repo(&sender_blobs, &key).await;
 

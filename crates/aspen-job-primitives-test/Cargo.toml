@@ -17,7 +17,7 @@ aspen-core = { path = "../aspen-core" }
 aspen-traits = { path = "../aspen-traits" }
 aspen-kv-types = { path = "../aspen-kv-types" }
 
-iroh = "0.97.0"
+iroh = "0.98.0"
 rand = "0.9"
 tokio = { version = "1.41", features = ["rt-multi-thread", "macros", "time", "sync"] }
 serde_json = "1.0"

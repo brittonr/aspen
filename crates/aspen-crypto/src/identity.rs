@@ -102,7 +102,7 @@ impl NodeIdentityProvider {
     /// Generate a new random node identity.
     pub fn generate() -> Self {
         Self {
-            secret_key: SecretKey::generate(&mut rand::rng()),
+            secret_key: SecretKey::generate(),
         }
     }
 

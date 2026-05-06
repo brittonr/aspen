@@ -20,9 +20,9 @@ aspen-client = { path = "../aspen-client" }
 aspen-commit-dag = { path = "../aspen-commit-dag", optional = true }
 
 # Iroh P2P and docs
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
-iroh-base = "0.97.0"
-iroh-docs = "0.97.0"
+iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-base = "0.98.0"
+iroh-docs = "0.98.0"
 iroh-blobs = "0.99.0"
 
 # Async runtime

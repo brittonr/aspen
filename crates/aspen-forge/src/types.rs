@@ -186,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_signed_object_roundtrip() {
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         let hlc = create_hlc("test-node");
 
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn test_signed_object_hlc_ordering() {
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         let hlc = create_hlc("test-node");
 
         #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

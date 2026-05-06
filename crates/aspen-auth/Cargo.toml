@@ -23,7 +23,7 @@ serde = { version = "1.0", default-features = false, features = ["alloc", "deriv
 # Cryptography
 hmac = "0.12"
 sha2 = "0.10"
-iroh-base = { version = "0.97.0", default-features = false, features = ["key"] }
+iroh-base = { version = "0.98.0", default-features = false, features = ["key"] }
 
 # Error handling
 anyhow = "1.0"

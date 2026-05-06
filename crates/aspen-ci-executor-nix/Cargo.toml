@@ -17,7 +17,7 @@ aspen-cache = { workspace = true }
 aspen-jobs = { workspace = true }
 
 # Iroh for P2P networking
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
 
 # SNIX dependencies
 snix-castore = { workspace = true, optional = true }

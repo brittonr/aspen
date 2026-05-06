@@ -35,7 +35,7 @@ mod tests {
     async fn create_test_forge() -> ForgeNode<InMemoryBlobStore, DeterministicKeyValueStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());
         let kv = DeterministicKeyValueStore::new();
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         ForgeNode::new(blobs, kv, secret_key)
     }
 

@@ -8,7 +8,7 @@ description = "Composable DAG traversal and sync protocol for content-addressed 
 
 [dependencies]
 # P2P networking
-iroh = "0.97.0"
+iroh = "0.98.0"
 iroh-blobs = "0.99.0"
 
 # Hashing

@@ -22,29 +22,8 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 ignore = [
     # Unmaintained transitive dependencies - accepted risks:
 
-    # instant crate (via iroh) - unmaintained but stable, no direct usage
-    { id = "RUSTSEC-2024-0384", reason = "Transitive dependency via iroh. Stable functionality, no security impact. Upgrade blocked by iroh." },
-
-    # number_prefix crate (via cargo-nextest dev dependency) - display formatting only
-    { id = "RUSTSEC-2025-0119", reason = "Dev dependency via cargo-nextest. Display formatting only, no security impact." },
-
     # paste crate (via iroh's netlink dependencies) - proc macro only
     { id = "RUSTSEC-2024-0436", reason = "Transitive dependency via iroh's netlink stack. Proc macro only, no runtime impact." },
-
-    # atomic-polyfill (via postcard/heapless in iroh ecosystem) - stable functionality
-    { id = "RUSTSEC-2023-0089", reason = "Transitive dependency via postcard. Stable atomic operations polyfill, alternative portable-atomic blocked by iroh ecosystem." },
-
-    # atty crate (via cargo-nextest) - unmaintained but dev-only, no upgrade available
-    { id = "RUSTSEC-2024-0375", reason = "Dev dependency via cargo-nextest -> supports-color -> owo-colors. Terminal detection only, no security impact." },
-
-    # rustls-pemfile crate (via cargo-nextest) - unmaintained, dev-only
-    { id = "RUSTSEC-2025-0134", reason = "Dev dependency via cargo-nextest -> nextest-runner -> self_update -> reqwest. PEM parsing only, no security impact." },
-
-    # memoffset crate (via nix via swarm-discovery) - potential unaligned read, fixed in 0.6.5+
-    { id = "RUSTSEC-2021-0145", reason = "Transitive dependency via swarm-discovery. Not on hot path, impact unlikely." },
-
-    # bincode crate - unmaintained due to harassment incident, but v1.3.3 is stable and complete
-    { id = "RUSTSEC-2025-0141", reason = "bincode 1.3.3 is stable and complete. No security vulnerability, just maintenance status. Used throughout iroh ecosystem." },
 
     # proc-macro-error crate - unmaintained but stable, used by derive macros (snafu, etc.)
     { id = "RUSTSEC-2024-0370", reason = "Proc macro helper crate, compile-time only. No runtime security impact. Used by derive macro ecosystem." },

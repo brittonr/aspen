@@ -459,11 +459,11 @@ snix-tracing = { workspace = true, optional = true }
 
 aspen-proxy = { workspace = true, optional = true }
 aspen-net = { workspace = true, optional = true }
-iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
-iroh-base = "0.97.0"
-iroh-gossip = "0.97.0"
+iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
+iroh-base = "0.98.0"
+iroh-gossip = "0.98.0"
 iroh-blobs = { version = "0.99.0", optional = true }
-iroh-docs = { version = "0.97.0", optional = true }
+iroh-docs = { version = "0.98.0", optional = true }
 iroh-tickets = "0.4.0"
 blake3 = { workspace = true }
 bytes = "1.7"
@@ -919,12 +919,15 @@ required-features = ["node-runtime"]
 #   unmaintained atomic-polyfill edge. iroh-blobs, iroh-metrics, and
 #   iroh-tickets also disable postcard defaults at their call sites.
 [patch.crates-io]
+iroh = { path = "vendor/iroh" }
 cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
 iroh-blobs = { path = "vendor/iroh-blobs" }
 iroh-metrics = { path = "vendor/iroh-metrics" }
 iroh-tickets = { path = "vendor/iroh-tickets" }
+iroh-relay = { path = "vendor/iroh-relay" }
 nostr = { path = "vendor/nostr" }
 postcard = { path = "vendor/postcard" }
+swarm-discovery = { path = "vendor/swarm-discovery" }
 uhlc = { path = "vendor/uhlc" }
 
 # snix-glue patched to implement Fetch::Git and builtins.fetchGit.

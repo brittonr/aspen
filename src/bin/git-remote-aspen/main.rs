@@ -188,7 +188,7 @@ impl RpcClient {
             );
         }
 
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
 
         // Configure transport for large git operations
         let transport_config = QuicTransportConfig::builder()
@@ -1916,7 +1916,7 @@ mod tests {
     }
 
     async fn make_test_endpoint() -> iroh::Endpoint {
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         iroh::Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .alpns(vec![aspen::CLIENT_ALPN.to_vec()])

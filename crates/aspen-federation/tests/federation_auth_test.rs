@@ -12,7 +12,7 @@ use aspen_auth::TokenVerifier;
 use iroh::SecretKey;
 
 fn test_secret_key() -> SecretKey {
-    SecretKey::generate(&mut rand::rng())
+    SecretKey::generate()
 }
 
 // =========================================================================

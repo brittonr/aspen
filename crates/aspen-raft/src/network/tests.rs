@@ -594,7 +594,7 @@ async fn test_gossip_addr_overrides_raft_membership_when_addrs_differ() {
 
     use iroh::SecretKey;
 
-    let secret = SecretKey::generate(&mut rand::rng());
+    let secret = SecretKey::generate();
     let endpoint_id = secret.public();
 
     // Raft membership has old address (port 12345)
@@ -648,8 +648,8 @@ async fn test_gossip_addr_mismatch_endpoint_id_falls_back() {
 
     use iroh::SecretKey;
 
-    let secret1 = SecretKey::generate(&mut rand::rng());
-    let secret2 = SecretKey::generate(&mut rand::rng());
+    let secret1 = SecretKey::generate();
+    let secret2 = SecretKey::generate();
     let raft_endpoint_id = secret1.public();
     let gossip_endpoint_id = secret2.public();
 
@@ -701,7 +701,7 @@ async fn test_no_gossip_entry_uses_raft_membership() {
 
     use iroh::SecretKey;
 
-    let secret = SecretKey::generate(&mut rand::rng());
+    let secret = SecretKey::generate();
     let endpoint_id = secret.public();
 
     let addr: SocketAddr = "192.168.1.2:12345".parse().unwrap();

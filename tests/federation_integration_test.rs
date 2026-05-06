@@ -126,7 +126,7 @@ fn test_cluster_identity_hex_roundtrip() {
 #[test]
 fn test_trust_manager_basic() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     // Default is public
     assert_eq!(manager.trust_level(&key), TrustLevel::Public);
@@ -138,7 +138,7 @@ fn test_trust_manager_basic() {
 #[test]
 fn test_trust_manager_add_remove() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     // Add trusted
     assert!(manager.add_trusted(key, "test-cluster".to_string(), None));
@@ -155,7 +155,7 @@ fn test_trust_manager_add_remove() {
 #[test]
 fn test_trust_manager_blocking() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     // Block
     assert!(manager.block(key));
@@ -171,7 +171,7 @@ fn test_trust_manager_blocking() {
 #[test]
 fn test_blocking_removes_trust() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     manager.add_trusted(key, "test-cluster".to_string(), None);
     assert!(manager.is_trusted(&key));
@@ -185,7 +185,7 @@ fn test_blocking_removes_trust() {
 #[test]
 fn test_trust_removes_block() {
     let manager = TrustManager::new();
-    let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key = iroh::SecretKey::generate().public();
 
     manager.block(key);
     assert!(manager.is_blocked(&key));
@@ -199,9 +199,9 @@ fn test_trust_removes_block() {
 #[test]
 fn test_resource_access_control() {
     let manager = TrustManager::new();
-    let trusted_key = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let public_key = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let blocked_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let trusted_key = iroh::SecretKey::generate().public();
+    let public_key = iroh::SecretKey::generate().public();
+    let blocked_key = iroh::SecretKey::generate().public();
 
     manager.add_trusted(trusted_key, "trusted".to_string(), None);
     manager.block(blocked_key);
@@ -228,7 +228,7 @@ fn test_resource_access_control() {
 /// Test: Federated ID creation and components.
 #[test]
 fn test_federated_id_creation() {
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let local_id = [0xab; 32];
 
     let fed_id = FederatedId::new(origin, local_id);
@@ -240,7 +240,7 @@ fn test_federated_id_creation() {
 /// Test: Federated ID string representation.
 #[test]
 fn test_federated_id_string_representation() {
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let local_id = [0xcd; 32];
 
     let fed_id = FederatedId::new(origin, local_id);
@@ -254,7 +254,7 @@ fn test_federated_id_string_representation() {
 /// Test: Federated ID equality.
 #[test]
 fn test_federated_id_equality() {
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let local_id = [0xef; 32];
 
     let fed_id1 = FederatedId::new(origin, local_id);
@@ -273,7 +273,7 @@ fn test_federated_id_equality() {
 #[test]
 fn test_cluster_online_message_roundtrip() {
     let identity = ClusterIdentity::generate("test-cluster".to_string());
-    let node_keys = vec![*iroh::SecretKey::generate(&mut rand::rng()).public().as_bytes()];
+    let node_keys = vec![*iroh::SecretKey::generate().public().as_bytes()];
     let hlc = aspen_core::hlc::create_hlc("test-node");
 
     let apps = vec![
@@ -311,7 +311,7 @@ fn test_cluster_online_message_roundtrip() {
 #[test]
 fn test_resource_seeding_message_roundtrip() {
     let identity = ClusterIdentity::generate("test-cluster".to_string());
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let fed_id = FederatedId::new(origin, [0xab; 32]);
     let hlc = aspen_core::hlc::create_hlc("test-node");
 
@@ -320,7 +320,7 @@ fn test_resource_seeding_message_roundtrip() {
         fed_id_origin: *fed_id.origin().as_bytes(),
         fed_id_local: *fed_id.local_id(),
         cluster_key: *identity.public_key().as_bytes(),
-        node_keys: vec![*iroh::SecretKey::generate(&mut rand::rng()).public().as_bytes()],
+        node_keys: vec![*iroh::SecretKey::generate().public().as_bytes()],
         ref_heads: vec![("heads/main".to_string(), [0xcd; 32])],
         hlc_timestamp: SerializableTimestamp::from(hlc.new_timestamp()),
     };
@@ -468,8 +468,8 @@ fn test_federation_settings_public() {
 /// Test: Federation settings with allow list.
 #[test]
 fn test_federation_settings_allowlist() {
-    let key1 = iroh::SecretKey::generate(&mut rand::rng()).public();
-    let key2 = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let key1 = iroh::SecretKey::generate().public();
+    let key2 = iroh::SecretKey::generate().public();
 
     let settings = FederationSettings::allowlist(vec![key1, key2]);
 

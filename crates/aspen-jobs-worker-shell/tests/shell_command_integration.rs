@@ -24,7 +24,7 @@ use aspen_jobs_worker_shell::ShellCommandWorkerConfig;
 
 /// Create a test worker with default configuration.
 fn create_test_worker() -> (ShellCommandWorker, iroh::SecretKey) {
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
     let token_verifier = Arc::new(TokenVerifier::new());
 
     // Capture PATH from test environment for Nix compatibility

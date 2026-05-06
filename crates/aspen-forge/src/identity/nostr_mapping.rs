@@ -238,7 +238,7 @@ mod tests {
 
     fn test_store() -> NostrIdentityStore<dyn aspen_core::KeyValueStore> {
         let kv: Arc<dyn aspen_core::KeyValueStore> = DeterministicKeyValueStore::new();
-        let cluster_key = SecretKey::generate(&mut rand::rng());
+        let cluster_key = SecretKey::generate();
         NostrIdentityStore::new(kv, &cluster_key)
     }
 
@@ -281,7 +281,7 @@ mod tests {
     #[tokio::test]
     async fn encryption_is_not_plaintext() {
         let kv: Arc<dyn aspen_core::KeyValueStore> = DeterministicKeyValueStore::new();
-        let cluster_key = SecretKey::generate(&mut rand::rng());
+        let cluster_key = SecretKey::generate();
         let store = NostrIdentityStore::new(kv.clone(), &cluster_key);
 
         let npub = "d".repeat(64);
@@ -309,8 +309,8 @@ mod tests {
     #[tokio::test]
     async fn wrong_cluster_key_cannot_decrypt() {
         let kv: Arc<dyn aspen_core::KeyValueStore> = DeterministicKeyValueStore::new();
-        let key1 = SecretKey::generate(&mut rand::rng());
-        let key2 = SecretKey::generate(&mut rand::rng());
+        let key1 = SecretKey::generate();
+        let key2 = SecretKey::generate();
 
         let store1 = NostrIdentityStore::new(kv.clone(), &key1);
         store1.get_or_create(&"e".repeat(64)).await.unwrap();

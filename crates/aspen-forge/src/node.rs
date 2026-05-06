@@ -1508,7 +1508,7 @@ mod tests {
     async fn create_test_node() -> ForgeNode<InMemoryBlobStore, DeterministicKeyValueStore> {
         let blobs = Arc::new(InMemoryBlobStore::new());
         let kv = DeterministicKeyValueStore::new();
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         ForgeNode::new(blobs, kv, secret_key)
     }
 
@@ -1621,7 +1621,7 @@ mod tests {
     async fn test_count_federated_resources_includes_allowlist() {
         let node = create_test_node().await;
 
-        let peer_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let peer_key = iroh::SecretKey::generate().public();
         let settings = aspen_cluster::federation::FederationSettings::allowlist(vec![peer_key])
             .with_resource_type(crate::federation::FORGE_RESOURCE_TYPE);
         let json = serde_json::to_string(&settings).unwrap();
@@ -1650,7 +1650,7 @@ mod tests {
         let node = create_test_node().await;
 
         // Create a valid FederatedId for the key suffix
-        let origin_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let origin_key = iroh::SecretKey::generate().public();
         let local_id: [u8; 32] = blake3::hash(b"test-repo").into();
         let fed_id = aspen_cluster::federation::FederatedId::new(origin_key, local_id);
 
@@ -1687,7 +1687,7 @@ mod tests {
     async fn test_list_federated_resources_limit_capped() {
         let node = create_test_node().await;
 
-        let origin_key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let origin_key = iroh::SecretKey::generate().public();
         let public_json = serde_json::to_string(
             &aspen_cluster::federation::FederationSettings::public()
                 .with_resource_type(crate::federation::FORGE_RESOURCE_TYPE),

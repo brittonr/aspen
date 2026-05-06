@@ -179,7 +179,7 @@ mod tests {
     // ── Allowlist with specific clusters ──────────────────────────
     #[test]
     fn test_allowlist_access_mode() {
-        let key = iroh::SecretKey::generate(&mut rand::rng()).public();
+        let key = iroh::SecretKey::generate().public();
         let settings = FederationSettings::allowlist(vec![key]);
         let policy = ResourcePolicy::new("test:res").with_access(settings);
         assert!(matches!(policy.access.mode, FederationMode::AllowList));

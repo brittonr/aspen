@@ -569,7 +569,7 @@ mod tests {
     fn test_affinity_scoring() {
         let worker = WorkerMetadata {
             id: "worker-1".to_string(),
-            node_id: iroh::SecretKey::generate(&mut rand::rng()).public(),
+            node_id: iroh::SecretKey::generate().public(),
             tags: vec!["gpu".to_string(), "ml".to_string()],
             region: Some("us-west".to_string()),
             load: 0.3,

@@ -20,7 +20,7 @@ use aspen::testing::DeterministicKeyValueStore;
 async fn create_test_store() -> CobStore<InMemoryBlobStore, DeterministicKeyValueStore> {
     let blobs = Arc::new(InMemoryBlobStore::new());
     let kv = DeterministicKeyValueStore::new();
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
     CobStore::new(blobs, kv, secret_key, "test-cob-merge")
 }
 

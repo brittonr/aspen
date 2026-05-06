@@ -11,7 +11,7 @@ use super::*;
 async fn create_test_store() -> CobStore<InMemoryBlobStore, DeterministicKeyValueStore> {
     let blobs = Arc::new(InMemoryBlobStore::new());
     let kv = DeterministicKeyValueStore::new();
-    let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+    let secret_key = iroh::SecretKey::generate();
     let node_id = hex::encode(secret_key.public().as_bytes());
     CobStore::new(blobs, kv, secret_key, &node_id)
 }
@@ -269,7 +269,7 @@ mod dag_wellformedness {
     #[tokio::test]
     async fn test_linear_dag_topological_sort() {
         let store = super::create_test_store().await;
-        let sk = iroh::SecretKey::generate(&mut rand::rng());
+        let sk = iroh::SecretKey::generate();
         let hlc = create_hlc("dag-test");
 
         let changes = build_linear_dag(10, &sk, &hlc);
@@ -300,7 +300,7 @@ mod dag_wellformedness {
     #[tokio::test]
     async fn test_diamond_dag_topological_sort() {
         let store = super::create_test_store().await;
-        let sk = iroh::SecretKey::generate(&mut rand::rng());
+        let sk = iroh::SecretKey::generate();
         let hlc = create_hlc("dag-test");
 
         let changes = build_diamond_dag(&sk, &hlc);
@@ -324,7 +324,7 @@ mod dag_wellformedness {
     #[tokio::test]
     async fn test_cycle_detection() {
         let store = super::create_test_store().await;
-        let sk = iroh::SecretKey::generate(&mut rand::rng());
+        let sk = iroh::SecretKey::generate();
         let hlc = create_hlc("dag-test");
         let cob_id = blake3::hash(b"cycle-cob");
 
@@ -376,7 +376,7 @@ mod dag_wellformedness {
     #[tokio::test]
     async fn test_single_root_dag() {
         let store = super::create_test_store().await;
-        let sk = iroh::SecretKey::generate(&mut rand::rng());
+        let sk = iroh::SecretKey::generate();
         let hlc = create_hlc("dag-test");
         let cob_id = blake3::hash(b"single-cob");
 

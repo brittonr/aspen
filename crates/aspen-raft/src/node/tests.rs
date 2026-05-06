@@ -149,7 +149,7 @@ async fn create_test_redb_node(
 
 #[cfg(feature = "trust")]
 fn endpoint_addr_for_node(_node_id: u64) -> EndpointAddr {
-    let key = SecretKey::generate(&mut rand::rng());
+    let key = SecretKey::generate();
     EndpointAddr::from_parts(key.public(), std::iter::empty())
 }
 
@@ -622,7 +622,7 @@ async fn test_multi_node_trust_init_persists_follower_shares() {
 
     let members: Vec<ClusterNode> = (1u64..=3)
         .map(|id| {
-            let secret = iroh::SecretKey::generate(&mut rand::rng());
+            let secret = iroh::SecretKey::generate();
             let mut node = ClusterNode::new(id, format!("node-{id}"), None);
             node.node_addr = Some(aspen_cluster_types::NodeAddress::new(iroh::EndpointAddr::from_parts(
                 secret.public(),
@@ -2177,7 +2177,7 @@ async fn test_transfer_leader_accepted_on_initialized_leader() {
 
     let node = RaftNode::new(NodeId(1), Arc::new(raft), StateMachineVariant::InMemory(state_machine));
 
-    let secret = iroh::SecretKey::generate(&mut rand::rng());
+    let secret = iroh::SecretKey::generate();
     let cn = {
         let mut cn = ClusterNode::new(1, "node-1", None);
         cn.node_addr = Some(aspen_cluster_types::NodeAddress::new(iroh::EndpointAddr::from_parts(

@@ -242,7 +242,7 @@ mod tests {
     use super::*;
 
     fn test_key() -> SecretKey {
-        SecretKey::generate(&mut rand::rng())
+        SecretKey::generate()
     }
 
     fn test_identity(delegates: Vec<PublicKey>, threshold: u32) -> RepoIdentity {

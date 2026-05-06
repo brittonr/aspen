@@ -2731,10 +2731,11 @@
                 '';
                 # RUSTSEC-2023-0071: rsa crate timing sidechannel — no fix available,
                 # transitive dep via ssh-key → aspen-forge.
-                # RUSTSEC-2026-0066: astral-tokio-tar PAX validation; fixed in 0.6.0,
-                # but snix currently pins ^0.5.6. Aspen uses this only through the
-                # snix store/NAR import path; keep this exception bounded to the
-                # upstream snix pin and recheck when snix moves to astral-tokio-tar 0.6.x.
+                # RUSTSEC-2026-0066 / RUSTSEC-2026-0112 / RUSTSEC-2026-0113:
+                # astral-tokio-tar archive unpacking issues fixed in 0.6.x/0.6.1, but
+                # snix currently pins ^0.5.6. Aspen uses this only through the snix
+                # store/NAR import path; keep these exceptions bounded to the upstream
+                # snix pin and recheck when snix moves to astral-tokio-tar 0.6.x.
                 # RUSTSEC-2026-0002: lru 0.12.5 IterMut soundness; fixed in lru 0.16.x,
                 # but snix nar-bridge/snix-store pin ^0.12.4. Aspen does not call IterMut
                 # through its SNIX integration; remove when snix upgrades lru.
@@ -2747,7 +2748,7 @@
                 # RUSTSEC-2023-0086: lexical-core 0.8.5 remains as a lockfile edge from
                 # snix-eval; default locked metadata does not select it. Remove when snix-eval
                 # updates lexical-core or the lockfile edge disappears.
-                cargoAuditExtraArgs = "--ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0066 --ignore RUSTSEC-2026-0002 --ignore RUSTSEC-2023-0056 --ignore RUSTSEC-2024-0002 --ignore RUSTSEC-2023-0086";
+                cargoAuditExtraArgs = "--ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0066 --ignore RUSTSEC-2026-0112 --ignore RUSTSEC-2026-0113 --ignore RUSTSEC-2026-0002 --ignore RUSTSEC-2023-0056 --ignore RUSTSEC-2024-0002 --ignore RUSTSEC-2023-0086";
               };
 
               # Verus formal verification check

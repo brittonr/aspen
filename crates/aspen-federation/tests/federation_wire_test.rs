@@ -122,7 +122,7 @@ impl TestCluster {
 
     /// Create a new test cluster with an optional resource resolver.
     async fn new_with_resolver(name: &str, resource_resolver: Option<Arc<dyn FederationResourceResolver>>) -> Self {
-        let secret_key = iroh::SecretKey::generate(&mut rand::rng());
+        let secret_key = iroh::SecretKey::generate();
         let identity = ClusterIdentity::generate(name.to_string());
         let trust_manager = Arc::new(TrustManager::new());
         let resource_settings = Arc::new(RwLock::new(HashMap::new()));
@@ -711,17 +711,17 @@ async fn test_sync_objects_drops_bad_delegate_signature() {
     let alice = TestCluster::new("alice").await;
 
     // Create a valid delegate key
-    let delegate_secret = iroh::SecretKey::generate(&mut rand::rng());
+    let delegate_secret = iroh::SecretKey::generate();
     let delegate_pub = delegate_secret.public();
 
     // Create an unauthorized key (not in delegates list)
-    let unauthorized_secret = iroh::SecretKey::generate(&mut rand::rng());
+    let unauthorized_secret = iroh::SecretKey::generate();
 
     let data = b"signed object data";
     let hash = *blake3::hash(data).as_bytes();
 
     // Create FederatedId for signing
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let fed_id = test_fed_id(origin, "test-repo");
 
     // Build the signed message (same format as verify_delegate_signature)
@@ -785,14 +785,14 @@ async fn test_sync_objects_passes_valid_delegate_signature() {
     let alice = TestCluster::new("alice").await;
 
     // Create a valid delegate key
-    let delegate_secret = iroh::SecretKey::generate(&mut rand::rng());
+    let delegate_secret = iroh::SecretKey::generate();
     let delegate_pub = delegate_secret.public();
 
     let data = b"properly signed object data";
     let hash = *blake3::hash(data).as_bytes();
 
     // Create FederatedId for signing
-    let origin = iroh::SecretKey::generate(&mut rand::rng()).public();
+    let origin = iroh::SecretKey::generate().public();
     let fed_id = test_fed_id(origin, "test-repo");
 
     // Build the signed message

@@ -479,7 +479,7 @@ mod tests {
     use super::*;
 
     fn test_key() -> PublicKey {
-        iroh::SecretKey::generate(&mut rand::rng()).public()
+        iroh::SecretKey::generate().public()
     }
 
     fn test_identity(name: &str) -> SignedClusterIdentity {
@@ -632,10 +632,10 @@ mod tests {
     fn test_trust_from_credential() {
         let manager = TrustManager::new();
 
-        let cluster_sk = iroh::SecretKey::generate(&mut rand::rng());
+        let cluster_sk = iroh::SecretKey::generate();
         let cluster_pk = cluster_sk.public();
 
-        let remote_sk = iroh::SecretKey::generate(&mut rand::rng());
+        let remote_sk = iroh::SecretKey::generate();
         let remote_pk = remote_sk.public();
 
         // Issue a token from cluster to remote
@@ -660,8 +660,8 @@ mod tests {
     fn test_trust_expires_with_credential() {
         let manager = TrustManager::new();
 
-        let cluster_sk = iroh::SecretKey::generate(&mut rand::rng());
-        let remote_sk = iroh::SecretKey::generate(&mut rand::rng());
+        let cluster_sk = iroh::SecretKey::generate();
+        let remote_sk = iroh::SecretKey::generate();
         let remote_pk = remote_sk.public();
 
         let token = aspen_auth::TokenBuilder::new(cluster_sk)
@@ -685,8 +685,8 @@ mod tests {
     fn test_trust_blocked_on_revocation() {
         let manager = TrustManager::new();
 
-        let cluster_sk = iroh::SecretKey::generate(&mut rand::rng());
-        let remote_sk = iroh::SecretKey::generate(&mut rand::rng());
+        let cluster_sk = iroh::SecretKey::generate();
+        let remote_sk = iroh::SecretKey::generate();
         let remote_pk = remote_sk.public();
 
         let token = aspen_auth::TokenBuilder::new(cluster_sk)
@@ -717,7 +717,7 @@ mod tests {
         manager.add_trusted(manual_key, "manual-cluster".to_string(), None);
 
         // Credential trust
-        let sk = iroh::SecretKey::generate(&mut rand::rng());
+        let sk = iroh::SecretKey::generate();
         let token = aspen_auth::TokenBuilder::new(sk)
             .for_key(cred_key)
             .with_capability(aspen_auth::Capability::Read { prefix: "data:".into() })
