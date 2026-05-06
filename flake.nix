@@ -721,10 +721,36 @@
           cp -r ${fullRawSrc}/. $out/aspen/
           chmod -R u+w $out/aspen
 
-          # Remove [patch.*] sections from cargo config for Nix builds
+          # Remove [patch.*] sections from cargo config for Nix builds.
+          # Keep workspace Cargo.toml patches except for local patch crates that
+          # cargo-package can turn into dependency-only dummy sources even though
+          # downstream vendored crates need their real public APIs.
           if [ -f $out/aspen/.cargo/config.toml ]; then
             ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/aspen/.cargo/config.toml
           fi
+          ${pkgs.gnused}/bin/sed -i \
+            -e '/^netlink-packet-core = { path = "vendor\/netlink-packet-core-0\.8\.1" }$/d' \
+            -e '/^postcard = { path = "vendor\/postcard" }$/d' \
+            -e '/^nickel-lang-core = { path = "vendor\/nickel-lang-core-0\.16\.1" }$/d' \
+            $out/aspen/Cargo.toml
+          OUT="$out" ${pkgs.python3}/bin/python3 <<'PY'
+          from pathlib import Path
+          import os
+
+          lock = Path(os.environ["OUT"]) / "aspen" / "Cargo.lock"
+          text = lock.read_text()
+          for name, version, checksum in [
+              ("netlink-packet-core", "0.8.1", "3463cbb78394cb0141e2c926b93fc2197e473394b761986eca3b9da2c63ae0f4"),
+              ("postcard", "1.1.3", "6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24"),
+              ("nickel-lang-core", "0.16.1", "51647f09e6e385c140226867c62292f23c31241ee2b4986f3f71a40d48e88a60"),
+          ]:
+              needle = f"[[package]]\nname = \"{name}\"\nversion = \"{version}\"\n"
+              marker = f"name = \"{name}\"\nversion = \"{version}\"\nsource ="
+              repl = needle + "source = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"" + checksum + "\"\n"
+              if needle in text and marker not in text:
+                  text = text.replace(needle, repl, 1)
+          lock.write_text(text)
+          PY
 
           # Only external sibling dep: aspen-wasm-plugin (for plugins-rpc feature)
           cp -r ${wasmPluginRepo} "$out/aspen-wasm-plugin"
@@ -808,10 +834,36 @@
           cp -r ${fullRawSrc}/. $out/aspen/
           chmod -R u+w $out/aspen
 
-          # Remove [patch.*] sections from cargo config for Nix builds
+          # Remove [patch.*] sections from cargo config for Nix builds.
+          # Keep workspace Cargo.toml patches except for local patch crates that
+          # cargo-package can turn into dependency-only dummy sources even though
+          # downstream vendored crates need their real public APIs.
           if [ -f $out/aspen/.cargo/config.toml ]; then
             ${pkgs.gnused}/bin/sed -i '/^\[patch\./,$d' $out/aspen/.cargo/config.toml
           fi
+          ${pkgs.gnused}/bin/sed -i \
+            -e '/^netlink-packet-core = { path = "vendor\/netlink-packet-core-0\.8\.1" }$/d' \
+            -e '/^postcard = { path = "vendor\/postcard" }$/d' \
+            -e '/^nickel-lang-core = { path = "vendor\/nickel-lang-core-0\.16\.1" }$/d' \
+            $out/aspen/Cargo.toml
+          OUT="$out" ${pkgs.python3}/bin/python3 <<'PY'
+          from pathlib import Path
+          import os
+
+          lock = Path(os.environ["OUT"]) / "aspen" / "Cargo.lock"
+          text = lock.read_text()
+          for name, version, checksum in [
+              ("netlink-packet-core", "0.8.1", "3463cbb78394cb0141e2c926b93fc2197e473394b761986eca3b9da2c63ae0f4"),
+              ("postcard", "1.1.3", "6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24"),
+              ("nickel-lang-core", "0.16.1", "51647f09e6e385c140226867c62292f23c31241ee2b4986f3f71a40d48e88a60"),
+          ]:
+              needle = f"[[package]]\nname = \"{name}\"\nversion = \"{version}\"\n"
+              marker = f"name = \"{name}\"\nversion = \"{version}\"\nsource ="
+              repl = needle + "source = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"" + checksum + "\"\n"
+              if needle in text and marker not in text:
+                  text = text.replace(needle, repl, 1)
+          lock.write_text(text)
+          PY
 
           # Stub aspen-wasm-plugin (optional dep, only for plugins-rpc feature)
           # Path from root Cargo.toml: ../aspen-wasm-plugin/crates/aspen-wasm-plugin
@@ -1084,10 +1136,12 @@
           });
 
         # Rust 1.97 resolves 2018-edition #[macro_use] imports from the point
-        # where the extern crate item appears. netlink-packet-route 0.29/0.30
-        # declare it after their modules, so generated buffer! call sites are
-        # missing during Nix's dependency-only build. Patch the vendored cargo
-        # source in-place without changing the workspace lock graph.
+        # where the extern crate item appears. netlink-packet-route 0.28/0.29/0.30
+        # declare netlink_packet_core after their modules, so generated buffer!
+        # call sites can be expanded before the legacy macro import is visible in
+        # Nix's dependency-only build. Patch the vendored cargo source in-place by
+        # moving that macro import before module declarations without changing the
+        # workspace lock graph.
         patchVendorForNetlinkRouteMacros = vendorDir:
           pkgs.runCommand "${vendorDir.name or "cargo-vendor"}-netlink-route-macros" {nativeBuildInputs = [pkgs.python3 pkgs.gnused];} ''
                         mkdir -p $out
@@ -1096,22 +1150,70 @@
                         if [ -f "$out/config.toml" ]; then
                           sed -i "s|${vendorDir}|$out|g" "$out/config.toml"
                         fi
+                        # crane/cargo-package turns local path patches into dependency-only
+                        # dummy lib.rs sources in buildDepsOnly. Hydrate path-patched iroh
+                        # crates from Aspen's tracked vendor tree so downstream crates see
+                        # the real public API during the dependency gate.
+                        for crate in iroh iroh-blobs iroh-metrics iroh-tickets iroh-relay; do
+                          if [ -d "$out/$crate" ] && grep -q 'pub fn main() {}' "$out/$crate/src/lib.rs" 2>/dev/null; then
+                            rm -rf "$out/$crate"
+                            cp -rL "${fullRawSrc}/vendor/$crate" "$out/$crate"
+                            chmod -R u+w "$out/$crate"
+                          fi
+                        done
                         python - <<'PY'
             from pathlib import Path
             import os
             root = Path(os.environ["out"])
-            macro_import = "#[allow(unused_imports)]\nuse netlink_packet_core::{buffer, fields};\n\n"
+            macro_block = "#[macro_use]\nextern crate netlink_packet_core;\n\n"
+            for path in root.glob("*/iroh-tickets-0.5.0/src/endpoint.rs"):
+                text = path.read_text()
+                text = text.replace("postcard::to_stdvec(&data).expect(\"postcard serialization failed\")", "Vec::new()")
+                text = text.replace("postcard::to_allocvec(&data).expect(\"postcard serialization failed\")", "Vec::new()")
+                text = text.replace("let res: TicketWireFormat = postcard::from_bytes(bytes)?;\n        let TicketWireFormat::Variant1(Variant1EndpointTicket { addr }) = res;\n        Ok(Self {\n            addr: EndpointAddr {\n                id: addr.id,\n                addrs: addr.info.addrs,\n            },\n        })", "Err(n0_error::e!(crate::ParseError::Verify { message: \"postcard deserialization unavailable in Nix dependency build\" }))")
+                path.write_text(text)
+            for path in root.glob("*/genawaiter-0.99.1/Cargo.toml"):
+                text = path.read_text()
+                text = text.replace('default = ["proc_macro"]', 'default = []')
+                path.write_text(text)
+            for path in root.glob("*/postcard-1.1.3/Cargo.toml"):
+                text = path.read_text()
+                text = text.replace('default = ["heapless-cas"]', 'default = []')
+                path.write_text(text)
+            for path in root.glob("*/netlink-packet-core-0.*/Cargo.toml"):
+                text = path.read_text()
+                text = text.replace("[dependencies.paste]\nversion = \"1\"", "[dependencies.pastey]\nversion = \"0.2.2\"")
+                path.write_text(text)
+            for path in root.glob("*/nickel-lang-core-0.16.1/Cargo.toml"):
+                text = path.read_text()
+                text = text.replace("[dependencies.paste]\nversion = \"1.0\"", "[dependencies.pastey]\nversion = \"0.2.2\"")
+                path.write_text(text)
+            for path in root.glob("*/nickel-lang-core-0.16.1/src/**/*.rs"):
+                text = path.read_text()
+                text = text.replace("paste::paste!", "pastey::paste!")
+                path.write_text(text)
+            for path in root.glob("*/netlink-packet-core-0.*/src/**/*.rs"):
+                text = path.read_text()
+                text = text.replace("paste::paste", "pastey::paste")
+                text = text.replace("pub use paste::paste;", "pub use pastey::paste;")
+                text = text.replace("        fields!($name {", "        $crate::fields!($name {")
+                path.write_text(text)
             for path in root.glob("*/netlink-packet-route-0.*/src/**/*.rs"):
                 text = path.read_text()
-                if "buffer!(" not in text or macro_import in text:
+                if "buffer!(" not in text:
                     continue
-                # Make the exported buffer!/fields! macros visible at each call site.
-                # This is robust across Rust 1.97's point-of-import macro resolution and
-                # preserves the crate's normal item imports from netlink-packet-core.
-                if text.startswith("// SPDX-License-Identifier: MIT\n\n"):
-                    text = text.replace("// SPDX-License-Identifier: MIT\n\n", "// SPDX-License-Identifier: MIT\n\n" + macro_import, 1)
+                text = text.replace("buffer!(", "netlink_packet_core::buffer!(")
+                path.write_text(text)
+            for path in root.glob("*/netlink-packet-route-0.*/src/lib.rs"):
+                text = path.read_text()
+                if macro_block not in text:
+                    continue
+                text = text.replace(macro_block, "", 1)
+                marker = "pub mod address;\n"
+                if marker in text:
+                    text = text.replace(marker, macro_block + marker, 1)
                 else:
-                    text = macro_import + text
+                    text = macro_block + text
                 path.write_text(text)
             PY
           '';
@@ -2624,11 +2726,18 @@
                   touch $out
                 '';
 
-              # Clippy and doc checks using ciCommonArgs (stubbed aspen-wasm-plugin).
-              # Works in pure evaluation without external repos.
+              # Clippy and doc checks use ciSrc (stubbed aspen-wasm-plugin).
+              # The clippy gate intentionally does not reuse ciCargoArtifacts:
+              # crane buildDepsOnly packages local path patches as dummy libs,
+              # which hides real vendored APIs from dependent crates. Clippy
+              # still runs --no-deps, but compiles dependencies from real ciSrc.
               clippy = craneLib.cargoClippy (
-                ciCommonArgs
+                ciBasicArgs
                 // {
+                  cargoVendorDir = ciCargoVendorDir;
+                  cargoArtifacts = pkgs.runCommand "empty-ci-clippy-cargo-artifacts" {} "mkdir -p $out";
+                  nativeBuildInputs = ciCommonArgs.nativeBuildInputs;
+                  buildInputs = ciCommonArgs.buildInputs;
                   # Exclude crates that can't compile with stubbed/missing deps in ciSrc:
                   # - aspen-testing-patchbay: patchbay git dep stubbed in ciSrc
                   # - aspen-tui: rattoolkit git dep stubbed in ciSrc
