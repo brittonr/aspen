@@ -38,3 +38,12 @@
 - Boundary conclusion: `aspen-auth-core` is wired only to `ucan-core`; `aspen-auth` is wired to root `ucan`; local `../ucan` path patching is opt-in and commented; Nix uses a locked `ucan-src` source override.
 - Known failure mode: private SSH fetch requires GitHub credentials until UCAN is public or mirrored into Aspen-owned cache/source distribution.
 - Next best check: prove dependency boundaries with `cargo tree`/feature checks for `aspen-auth-core`, `aspen-auth`, and protected `aspen-core --no-default-features` paths.
+
+## I5 UCAN dependency-boundary proof
+
+- Rail: `cargo tree`/feature boundary evidence plus deterministic protected-core checker
+- Status: PASS
+- Artifact: `openspec/changes/adopt-sibling-ucan-auth/evidence/i5-ucan-dependency-boundary-proof.md`
+- Commands: `cargo tree -p aspen-auth-core --no-default-features`, `cargo tree -p aspen-auth`, `cargo tree -p aspen-core --no-default-features`, feature-tree variants, and `scripts/check-aspen-core-no-std-boundary.py`.
+- Boundary conclusion: `aspen-auth-core` includes only `ucan-core`; `aspen-auth` includes root `ucan` and `verified-logic`; protected `aspen-core --no-default-features` excludes Aspen auth and all UCAN dependencies.
+- Next best check: implement the UCAN-backed adapter while preserving Aspen-facing capability/token/RPC/CLI behavior.
