@@ -14,7 +14,6 @@ use super::super::RemoveSnafu;
 use super::super::SerializeSnafu;
 use super::super::SharedStorageError;
 use super::set::empty_response;
-
 use crate::check_cas_condition;
 use crate::compute_kv_versions;
 
@@ -36,7 +35,7 @@ impl RedbKvStorage {
         let current = kv_table
             .get(key_bytes)
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+            .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok());
 
         let current_value = current.as_ref().map(|e| e.value.as_str());
 
@@ -86,7 +85,7 @@ impl RedbKvStorage {
             index_table.insert(insert_key.as_slice(), &[][..]).context(InsertSnafu)?;
         }
 
-        let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
+        let entry_bytes = aspen_codec::serialize(&entry).context(SerializeSnafu)?;
         kv_table.insert(key_bytes, entry_bytes.as_slice()).context(InsertSnafu)?;
 
         Ok(RaftKvResponse {
@@ -111,7 +110,7 @@ impl RedbKvStorage {
         let current = kv_table
             .get(key_bytes)
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+            .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok());
 
         let current_value = current.as_ref().map(|e| e.value.as_str());
         let is_condition_match = current_value.is_some_and(|value| value == expected);

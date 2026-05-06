@@ -242,16 +242,16 @@ pub enum StorageError {
     #[snafu(display("failed to serialize data: {source}"))]
     Serialize {
         /// Underlying bincode error.
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
+        #[snafu(source(from(aspen_codec::Error, Box::new)))]
+        source: Box<aspen_codec::Error>,
     },
 
     /// Failed to deserialize data with bincode.
     #[snafu(display("failed to deserialize data: {source}"))]
     Deserialize {
         /// Underlying bincode error.
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
+        #[snafu(source(from(aspen_codec::Error, Box::new)))]
+        source: Box<aspen_codec::Error>,
     },
 
     /// Failed to create a directory for the database.
@@ -483,8 +483,8 @@ mod tests {
             integrity: None,
         };
 
-        let serialized = bincode::serialize(&snapshot).expect("serialize");
-        let deserialized: StoredSnapshot = bincode::deserialize(&serialized).expect("deserialize");
+        let serialized = aspen_codec::serialize(&snapshot).expect("serialize");
+        let deserialized: StoredSnapshot = aspen_codec::deserialize(&serialized).expect("deserialize");
 
         assert_eq!(deserialized.data, vec![1, 2, 3, 4]);
         assert_eq!(deserialized.meta.snapshot_id, "test-snap");

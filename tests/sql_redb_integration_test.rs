@@ -51,7 +51,7 @@ fn setup_test_db() -> Arc<Database> {
                 expires_at_ms: None,
                 lease_id: None,
             };
-            let entry_bytes = bincode::serialize(&entry).unwrap();
+            let entry_bytes = aspen_codec::serialize(&entry).unwrap();
             table.insert(key.as_bytes(), entry_bytes.as_slice()).unwrap();
         }
     }

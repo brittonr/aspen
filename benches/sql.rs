@@ -60,7 +60,7 @@ mod sql_benchmarks {
                         expires_at_ms: None,
                         lease_id: None,
                     };
-                    let bytes = bincode::serialize(&entry).expect("serialize");
+                    let bytes = aspen_codec::serialize(&entry).expect("serialize");
                     table.insert(key.as_bytes(), bytes.as_slice()).expect("insert");
                 }
             }
@@ -102,7 +102,7 @@ mod sql_benchmarks {
                             lease_id: None,
                         };
                         revision += 1;
-                        let bytes = bincode::serialize(&entry).expect("serialize");
+                        let bytes = aspen_codec::serialize(&entry).expect("serialize");
                         table.insert(key.as_bytes(), bytes.as_slice()).expect("insert");
                     }
                 }
@@ -464,7 +464,7 @@ mod sql_benchmarks {
                 for result in table.iter().expect("iter") {
                     let (key, value) = result.expect("entry");
                     let _key = key.value();
-                    let _entry: KvEntry = bincode::deserialize(value.value()).expect("deserialize");
+                    let _entry: KvEntry = aspen_codec::deserialize(value.value()).expect("deserialize");
                     count += 1;
                 }
                 count

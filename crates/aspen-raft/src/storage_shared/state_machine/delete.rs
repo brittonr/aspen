@@ -50,7 +50,7 @@ impl SharedRedbStorage {
         let existing = kv_table
             .get(key_bytes)
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+            .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok());
 
         // Delete index entries if the key existed
         if let Some(old_entry) = &existing {

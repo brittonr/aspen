@@ -24,7 +24,7 @@ impl SharedRedbStorage {
 
         match table.get(key.as_bytes()).context(GetSnafu)? {
             Some(value) => {
-                let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let entry: KvEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
                 // Check expiration
                 if let Some(expires_at) = entry.expires_at_ms
@@ -104,7 +104,7 @@ impl SharedRedbStorage {
                 continue;
             }
 
-            let entry: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let entry: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -165,7 +165,7 @@ impl SharedRedbStorage {
                 }
 
                 let (key, value) = item.context(GetSnafu)?;
-                let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let entry: KvEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
                 if let Some(expires_at) = entry.expires_at_ms
                     && expires_at <= now_ms
@@ -203,7 +203,7 @@ impl SharedRedbStorage {
         let mut count: u64 = 0;
         for item in table.iter().context(RangeSnafu)? {
             let (_key, value) = item.context(GetSnafu)?;
-            let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+            let entry: KvEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
             if let Some(expires_at) = entry.expires_at_ms
                 && expires_at <= now_ms
@@ -226,7 +226,7 @@ impl SharedRedbStorage {
         let mut count: u64 = 0;
         for item in table.iter().context(RangeSnafu)? {
             let (_key, value) = item.context(GetSnafu)?;
-            let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+            let entry: KvEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
             if let Some(expires_at) = entry.expires_at_ms
                 && expires_at > now_ms
@@ -264,7 +264,7 @@ impl SharedRedbStorage {
             }
 
             let (key, value) = item.context(GetSnafu)?;
-            let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+            let entry: KvEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
             if let Some(expires_at) = entry.expires_at_ms
                 && expires_at <= now_ms

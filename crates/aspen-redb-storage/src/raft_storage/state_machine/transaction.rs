@@ -2,6 +2,7 @@
 //! apply helpers for the state machine.
 
 use aspen_constants::api::MAX_SCAN_RESULTS;
+use aspen_constants::api::MAX_SETMULTI_KEYS;
 use aspen_kv_types::KeyValueWithRevision;
 use aspen_kv_types::TxnOpResult;
 use aspen_layer::IndexRegistry;
@@ -20,8 +21,6 @@ use super::super::RangeSnafu;
 use super::super::RedbKvStorage;
 use super::super::SharedStorageError;
 use super::set::empty_response;
-
-use aspen_constants::api::MAX_SETMULTI_KEYS;
 
 #[inline]
 fn max_setmulti_keys_usize() -> usize {
@@ -61,7 +60,7 @@ impl RedbKvStorage {
             let current_entry = kv_table
                 .get(key_bytes)
                 .context(GetSnafu)?
-                .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+                .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok());
 
             let is_condition_met = match spec.target {
                 TxnCompareTarget::Value => {
@@ -141,7 +140,7 @@ impl RedbKvStorage {
                     let kv = kv_table
                         .get(key.as_bytes())
                         .context(GetSnafu)?
-                        .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok())
+                        .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok())
                         .map(|entry| KeyValueWithRevision {
                             key: key.clone(),
                             value: entry.value,
@@ -166,7 +165,7 @@ impl RedbKvStorage {
                             break;
                         }
 
-                        if let Ok(kv_entry) = bincode::deserialize::<KvEntry>(v.value()) {
+                        if let Ok(kv_entry) = aspen_codec::deserialize::<KvEntry>(v.value()) {
                             kvs.push(KeyValueWithRevision {
                                 key: String::from_utf8_lossy(k.value()).to_string(),
                                 value: kv_entry.value,
@@ -213,7 +212,7 @@ impl RedbKvStorage {
             let current_entry = kv_table
                 .get(key_bytes)
                 .context(GetSnafu)?
-                .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+                .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok());
 
             let current_version = current_entry.as_ref().map(|e| e.version).unwrap_or(0);
 

@@ -169,7 +169,7 @@ impl SharedRedbStorage {
         let tip_index: Option<u64> = meta_table
             .get("chain_tip_index")
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize(v.value()).ok());
+            .and_then(|v| aspen_codec::deserialize(v.value()).ok());
 
         match (tip_hash, tip_index) {
             (Some(hash), Some(index)) => Ok(ChainTipState { hash, index }),

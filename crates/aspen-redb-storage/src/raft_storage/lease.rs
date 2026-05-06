@@ -13,9 +13,9 @@ use super::OpenTableSnafu;
 use super::RangeSnafu;
 use super::RedbKvStorage;
 use super::RemoveSnafu;
-use super::SharedStorageError;
 use super::SM_KV_TABLE;
 use super::SM_LEASES_TABLE;
+use super::SharedStorageError;
 
 #[inline]
 fn now_ms() -> u64 {
@@ -41,7 +41,7 @@ impl RedbKvStorage {
 
         match table.get(lease_id).context(GetSnafu)? {
             Some(value) => {
-                let entry: LeaseEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let entry: LeaseEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
                 if current_ms > entry.expires_at_ms {
                     return Ok(None);
@@ -62,7 +62,7 @@ impl RedbKvStorage {
 
         match table.get(lease_id).context(GetSnafu)? {
             Some(value) => {
-                let entry: LeaseEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let entry: LeaseEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
                 Ok(entry.keys)
             }
             None => Ok(vec![]),
@@ -80,7 +80,7 @@ impl RedbKvStorage {
         for item in table.iter().context(RangeSnafu)? {
             let (id_guard, value_guard) = item.context(GetSnafu)?;
             let lease_id = id_guard.value();
-            let entry: LeaseEntry = bincode::deserialize(value_guard.value()).context(DeserializeSnafu)?;
+            let entry: LeaseEntry = aspen_codec::deserialize(value_guard.value()).context(DeserializeSnafu)?;
 
             if current_ms > entry.expires_at_ms {
                 continue;
@@ -110,7 +110,7 @@ impl RedbKvStorage {
                 }
                 let (id_guard, value_guard) = item.context(GetSnafu)?;
                 let lease_id = id_guard.value();
-                let entry: LeaseEntry = bincode::deserialize(value_guard.value()).context(DeserializeSnafu)?;
+                let entry: LeaseEntry = aspen_codec::deserialize(value_guard.value()).context(DeserializeSnafu)?;
 
                 if current_ms > entry.expires_at_ms {
                     expired.push((lease_id, entry.keys.clone()));
@@ -149,7 +149,7 @@ impl RedbKvStorage {
         let mut count: u64 = 0;
         for item in table.iter().context(RangeSnafu)? {
             let (_id_guard, value_guard) = item.context(GetSnafu)?;
-            let entry: LeaseEntry = bincode::deserialize(value_guard.value()).context(DeserializeSnafu)?;
+            let entry: LeaseEntry = aspen_codec::deserialize(value_guard.value()).context(DeserializeSnafu)?;
 
             if current_ms > entry.expires_at_ms {
                 count += 1;
@@ -167,7 +167,7 @@ impl RedbKvStorage {
         let mut count: u64 = 0;
         for item in table.iter().context(RangeSnafu)? {
             let (_id_guard, value_guard) = item.context(GetSnafu)?;
-            let entry: LeaseEntry = bincode::deserialize(value_guard.value()).context(DeserializeSnafu)?;
+            let entry: LeaseEntry = aspen_codec::deserialize(value_guard.value()).context(DeserializeSnafu)?;
 
             if current_ms <= entry.expires_at_ms {
                 count += 1;

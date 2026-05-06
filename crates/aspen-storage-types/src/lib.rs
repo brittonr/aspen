@@ -8,6 +8,7 @@
 extern crate alloc;
 
 use alloc::string::String;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -123,8 +124,8 @@ mod tests {
             lease_id: Some(777),
         };
 
-        let encoded = bincode::serialize(&original).expect("bincode serialize failed");
-        let decoded: KvEntry = bincode::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&original).expect("bincode serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
 
         assert_eq!(original, decoded);
     }
@@ -140,8 +141,8 @@ mod tests {
             lease_id: None,
         };
 
-        let encoded = bincode::serialize(&original).expect("bincode serialize failed");
-        let decoded: KvEntry = bincode::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&original).expect("bincode serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
 
         assert_eq!(original, decoded);
     }
@@ -158,8 +159,8 @@ mod tests {
             lease_id: None,
         };
 
-        let encoded = bincode::serialize(&original).expect("bincode serialize failed");
-        let decoded: KvEntry = bincode::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&original).expect("bincode serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
 
         assert_eq!(original, decoded);
     }
@@ -175,8 +176,8 @@ mod tests {
             lease_id: None,
         };
 
-        let encoded = bincode::serialize(&original).expect("bincode serialize failed");
-        let decoded: KvEntry = bincode::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&original).expect("bincode serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
 
         assert_eq!(original, decoded);
     }
@@ -213,8 +214,8 @@ mod tests {
             lease_id: Some(u64::MAX),
         };
 
-        let encoded = bincode::serialize(&entry).expect("bincode serialize failed");
-        let decoded: KvEntry = bincode::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&entry).expect("bincode serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
 
         assert_eq!(entry, decoded);
     }
@@ -246,8 +247,8 @@ mod tests {
             lease_id: None,
         };
 
-        let encoded = bincode::serialize(&entry).expect("bincode serialize failed");
-        let decoded: KvEntry = bincode::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&entry).expect("bincode serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
 
         assert_eq!(entry, decoded);
     }
@@ -290,5 +291,4 @@ mod tests {
         assert!(debug_str.contains("debug"));
         assert!(debug_str.contains("version"));
     }
-
 }

@@ -115,7 +115,7 @@ impl SharedRedbStorage {
             let current = kv_table
                 .get(key.as_bytes())
                 .context(GetSnafu)?
-                .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+                .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok());
 
             let is_condition_met = match cond_type {
                 0 => current.as_ref().map(|e| e.value.as_str() == expected).unwrap_or(false), // ValueEquals

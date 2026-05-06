@@ -190,7 +190,7 @@ impl RedbRecordBatchStream {
             let value_bytes = value_guard.value();
 
             // Deserialize the entry
-            let entry: KvEntry = match bincode::deserialize(value_bytes) {
+            let entry: KvEntry = match aspen_codec::deserialize(value_bytes) {
                 Ok(e) => e,
                 Err(_) => continue, // Skip malformed entries
             };
@@ -630,7 +630,7 @@ impl IndexRecordBatchStream {
             };
 
             // Deserialize
-            let entry: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let entry: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };

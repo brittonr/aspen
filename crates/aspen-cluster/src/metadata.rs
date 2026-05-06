@@ -144,7 +144,7 @@ impl MetadataStore {
         {
             let mut table = write_txn.open_table(NODE_METADATA_TABLE).context(OpenTableSnafu)?;
 
-            let serialized = bincode::serialize(&metadata).context(SerializeSnafu)?;
+            let serialized = aspen_codec::serialize(&metadata).context(SerializeSnafu)?;
             table.insert(metadata.node_id, serialized.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -162,7 +162,7 @@ impl MetadataStore {
         let result = match table.get(node_id).context(GetSnafu)? {
             Some(value) => {
                 let bytes = value.value();
-                let metadata: NodeMetadata = bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                let metadata: NodeMetadata = aspen_codec::deserialize(bytes).context(DeserializeSnafu)?;
                 Some(metadata)
             }
             None => None,
@@ -182,7 +182,7 @@ impl MetadataStore {
         for item in range {
             let (_key, value) = item.context(IteratorSnafu)?;
             let bytes = value.value();
-            let metadata: NodeMetadata = bincode::deserialize(bytes).context(DeserializeSnafu)?;
+            let metadata: NodeMetadata = aspen_codec::deserialize(bytes).context(DeserializeSnafu)?;
             nodes.push(metadata);
         }
 
@@ -203,14 +203,14 @@ impl MetadataStore {
                 existing.value().to_vec()
             };
 
-            let mut metadata: NodeMetadata = bincode::deserialize(&metadata_bytes).context(DeserializeSnafu)?;
+            let mut metadata: NodeMetadata = aspen_codec::deserialize(&metadata_bytes).context(DeserializeSnafu)?;
 
             // Update status and timestamp
             metadata.status = status;
             metadata.last_updated_secs = current_timestamp_secs()?;
 
             // Write back
-            let serialized = bincode::serialize(&metadata).context(SerializeSnafu)?;
+            let serialized = aspen_codec::serialize(&metadata).context(SerializeSnafu)?;
             table.insert(node_id, serialized.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -380,8 +380,8 @@ pub enum MetadataError {
     #[snafu(display("failed to serialize metadata: {source}"))]
     Serialize {
         /// Underlying bincode serialization error.
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
+        #[snafu(source(from(aspen_codec::Error, Box::new)))]
+        source: Box<aspen_codec::Error>,
     },
 
     /// Failed to deserialize node metadata from bytes.
@@ -391,8 +391,8 @@ pub enum MetadataError {
     #[snafu(display("failed to deserialize metadata: {source}"))]
     Deserialize {
         /// Underlying bincode deserialization error.
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
+        #[snafu(source(from(aspen_codec::Error, Box::new)))]
+        source: Box<aspen_codec::Error>,
     },
 
     /// The requested node was not found in the registry.

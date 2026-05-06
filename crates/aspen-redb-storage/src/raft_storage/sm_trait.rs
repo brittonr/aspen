@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::io::Cursor;
 
+use aspen_raft_kv_types::RaftKvTypeConfig;
 use aspen_storage_types::KvEntry;
 use n0_future::Stream;
 use n0_future::TryStreamExt;
@@ -19,12 +20,6 @@ use snafu::ResultExt;
 
 use super::RedbKvStorage;
 use super::SharedStorageError;
-use super::snapshot::RedbKvSnapshotBuilder;
-use super::types::SM_KV_TABLE;
-use super::types::SM_META_TABLE;
-use super::types::SNAPSHOT_TABLE;
-use super::types::StoredSnapshot;
-use super::types::SnapshotEvent;
 use super::error::BeginReadSnafu;
 use super::error::BeginWriteSnafu;
 use super::error::CommitSnafu;
@@ -34,8 +29,12 @@ use super::error::OpenTableSnafu;
 use super::error::RangeSnafu;
 use super::error::RemoveSnafu;
 use super::error::SerializeSnafu;
-
-use aspen_raft_kv_types::RaftKvTypeConfig;
+use super::snapshot::RedbKvSnapshotBuilder;
+use super::types::SM_KV_TABLE;
+use super::types::SM_META_TABLE;
+use super::types::SNAPSHOT_TABLE;
+use super::types::SnapshotEvent;
+use super::types::StoredSnapshot;
 use crate::MAX_SNAPSHOT_ENTRIES;
 
 #[inline]
@@ -139,9 +138,8 @@ impl RaftStateMachine<RaftKvTypeConfig> for RedbKvStorage {
 
         match table.get("current").context(GetSnafu)? {
             Some(value) => {
-                let stored: StoredSnapshot = bincode::deserialize(value.value()).map_err(|e| {
-                    io::Error::other(format!("failed to deserialize stored snapshot: {e}"))
-                })?;
+                let stored: StoredSnapshot = aspen_codec::deserialize(value.value())
+                    .map_err(|e| io::Error::other(format!("failed to deserialize stored snapshot: {e}")))?;
                 Ok(Some(Snapshot {
                     meta: stored.meta,
                     snapshot: Cursor::new(stored.data),
@@ -169,14 +167,14 @@ impl RedbKvStorage {
         let Some(value) = table.get("current").context(GetSnafu)? else {
             return Ok(());
         };
-        let Ok(stored) = bincode::deserialize::<StoredSnapshot>(value.value()) else {
+        let Ok(stored) = aspen_codec::deserialize::<StoredSnapshot>(value.value()) else {
             return Ok(());
         };
         let Some(ref integrity) = stored.integrity else {
             return Ok(());
         };
 
-        let meta_bytes = bincode::serialize(meta)
+        let meta_bytes = aspen_codec::serialize(meta)
             .map_err(|e| io::Error::other(format!("failed to serialize snapshot metadata for integrity check: {e}")))?;
         if !integrity.verify(&meta_bytes, data) {
             tracing::error!(
@@ -194,7 +192,7 @@ impl RedbKvStorage {
     }
 
     fn install_snapshot_deserialize_data(&self, data: &[u8]) -> Result<BTreeMap<String, KvEntry>, io::Error> {
-        let kv_entries: BTreeMap<String, KvEntry> = bincode::deserialize(data).map_err(|e| {
+        let kv_entries: BTreeMap<String, KvEntry> = aspen_codec::deserialize(data).map_err(|e| {
             io::Error::other(format!("failed to deserialize snapshot KV entries ({} bytes): {e}", data.len()))
         })?;
 
@@ -233,14 +231,14 @@ impl RedbKvStorage {
             }
 
             for (key, entry) in kv_entries {
-                let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
+                let entry_bytes = aspen_codec::serialize(&entry).context(SerializeSnafu)?;
                 kv_table.insert(key.as_bytes(), entry_bytes.as_slice()).context(InsertSnafu)?;
             }
 
-            let log_id_bytes = bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
+            let log_id_bytes = aspen_codec::serialize(&meta.last_log_id).context(SerializeSnafu)?;
             sm_meta_table.insert("last_applied_log", log_id_bytes.as_slice()).context(InsertSnafu)?;
 
-            let membership_bytes = bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
+            let membership_bytes = aspen_codec::serialize(&meta.last_membership).context(SerializeSnafu)?;
             sm_meta_table.insert("last_membership", membership_bytes.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;

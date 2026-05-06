@@ -50,7 +50,7 @@ impl SharedRedbStorage {
         let current = kv_table
             .get(key_bytes)
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+            .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok());
 
         let current_value = current.as_ref().map(|e| e.value.as_str());
 
@@ -111,7 +111,7 @@ impl SharedRedbStorage {
             "CAS: new entry must have positive version and correct mod_revision"
         );
 
-        let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
+        let entry_bytes = aspen_codec::serialize(&entry).context(SerializeSnafu)?;
         kv_table.insert(key_bytes, entry_bytes.as_slice()).context(InsertSnafu)?;
 
         Ok(AppResponse {
@@ -140,7 +140,7 @@ impl SharedRedbStorage {
         let current = kv_table
             .get(key_bytes)
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+            .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok());
 
         let current_value = current.as_ref().map(|e| e.value.as_str());
 

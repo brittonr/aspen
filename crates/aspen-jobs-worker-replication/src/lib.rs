@@ -156,7 +156,7 @@ impl ReplicationWorker {
             }
 
             // Deserialize entry
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -231,7 +231,7 @@ impl ReplicationWorker {
             let key_bytes = key_guard.value();
 
             // Deserialize entry
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -312,7 +312,7 @@ impl ReplicationWorker {
             };
 
             // Deserialize entry
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -411,7 +411,7 @@ impl ReplicationWorker {
             };
 
             // Deserialize entry
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };

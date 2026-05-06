@@ -114,15 +114,15 @@ fn fuzz_metadata() {
         }
 
         // Fuzz bincode deserialization of NodeMetadata
-        let metadata_result = bincode::deserialize::<FuzzNodeMetadata>(data);
+        let metadata_result = aspen_codec::deserialize::<FuzzNodeMetadata>(data);
 
         // If deserialization succeeded, verify round-trip
         if let Ok(metadata) = metadata_result {
             // Re-serialize
-            if let Ok(serialized) = bincode::serialize(&metadata) {
+            if let Ok(serialized) = aspen_codec::serialize(&metadata) {
                 // Re-deserialize
-                let metadata2 =
-                    bincode::deserialize::<FuzzNodeMetadata>(&serialized).expect("re-deserialization should succeed");
+                let metadata2 = aspen_codec::deserialize::<FuzzNodeMetadata>(&serialized)
+                    .expect("re-deserialization should succeed");
 
                 // Verify key fields match
                 assert_eq!(metadata.node_id, metadata2.node_id);
@@ -132,7 +132,7 @@ fn fuzz_metadata() {
         }
 
         // Fuzz registry entry deserialization
-        let entry_result = bincode::deserialize::<FuzzRegistryEntry>(data);
+        let entry_result = aspen_codec::deserialize::<FuzzRegistryEntry>(data);
 
         if let Ok(entry) = entry_result {
             // Verify key matches metadata
@@ -141,9 +141,9 @@ fn fuzz_metadata() {
             let _ = entry.metadata.node_id;
 
             // Test serialization
-            if let Ok(serialized) = bincode::serialize(&entry) {
-                let entry2 =
-                    bincode::deserialize::<FuzzRegistryEntry>(&serialized).expect("re-deserialization should succeed");
+            if let Ok(serialized) = aspen_codec::serialize(&entry) {
+                let entry2 = aspen_codec::deserialize::<FuzzRegistryEntry>(&serialized)
+                    .expect("re-deserialization should succeed");
                 assert_eq!(entry.key, entry2.key);
             }
         }
@@ -154,13 +154,13 @@ fn fuzz_metadata() {
 fn fuzz_metadata_structure_aware() {
     check!().with_type::<FuzzNodeMetadata>().for_each(|metadata| {
         // Verify we can serialize arbitrary metadata
-        if let Ok(serialized) = bincode::serialize(&metadata) {
+        if let Ok(serialized) = aspen_codec::serialize(&metadata) {
             // Tiger Style: Serialized size should be bounded
             assert!(serialized.len() <= MAX_METADATA_SIZE, "serialized metadata too large: {}", serialized.len());
 
             // Round-trip
             let metadata2 =
-                bincode::deserialize::<FuzzNodeMetadata>(&serialized).expect("re-deserialization should succeed");
+                aspen_codec::deserialize::<FuzzNodeMetadata>(&serialized).expect("re-deserialization should succeed");
             assert_eq!(metadata.node_id, metadata2.node_id);
         }
     });

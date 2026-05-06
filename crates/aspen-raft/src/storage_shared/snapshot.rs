@@ -76,7 +76,7 @@ impl SharedRedbSnapshotBuilder {
         let membership: StoredMembership<AppTypeConfig> = sm_meta_table
             .get("last_membership")
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize(v.value()).ok())
+            .and_then(|v| aspen_codec::deserialize(v.value()).ok())
             .unwrap_or_default();
 
         let kv_entries = self.build_snapshot_collect_entries(&kv_table)?;
@@ -104,7 +104,7 @@ impl SharedRedbSnapshotBuilder {
                 Err(_) => continue,
             };
 
-            let entry: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let entry: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -143,7 +143,7 @@ impl SharedRedbSnapshotBuilder {
     ) -> Result<String, std::io::Error> {
         let snapshot_index = meta.last_log_id.as_ref().map(|l| l.index).unwrap_or(0);
         let chain_hash = self.storage.read_chain_hash_at(snapshot_index)?.unwrap_or([0u8; 32]);
-        let meta_bytes = bincode::serialize(meta).context(SerializeSnafu)?;
+        let meta_bytes = aspen_codec::serialize(meta).context(SerializeSnafu)?;
         let integrity = SnapshotIntegrity::compute(&meta_bytes, data, chain_hash);
         let integrity_hex = integrity.combined_hash_hex();
 
@@ -156,7 +156,7 @@ impl SharedRedbSnapshotBuilder {
         let write_txn = self.storage.db.begin_write().context(BeginWriteSnafu)?;
         {
             let mut table = write_txn.open_table(SNAPSHOT_TABLE).context(OpenTableSnafu)?;
-            let stored_bytes = bincode::serialize(&stored).context(SerializeSnafu)?;
+            let stored_bytes = aspen_codec::serialize(&stored).context(SerializeSnafu)?;
             table.insert("current", stored_bytes.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -215,7 +215,7 @@ impl RaftSnapshotBuilder<AppTypeConfig> for SharedRedbSnapshotBuilder {
         let read_txn = self.storage.db.begin_read().context(BeginReadSnafu)?;
         let snapshot_data = self.build_snapshot_read_data(&read_txn)?;
 
-        let data = bincode::serialize(&snapshot_data.kv_entries).context(SerializeSnafu)?;
+        let data = aspen_codec::serialize(&snapshot_data.kv_entries).context(SerializeSnafu)?;
         let snapshot_id =
             format!("snapshot-{}-{}", snapshot_data.last_applied.as_ref().map(|l| l.index).unwrap_or(0), now_unix_ms());
 

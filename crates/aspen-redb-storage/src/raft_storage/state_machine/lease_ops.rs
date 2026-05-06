@@ -14,7 +14,6 @@ use super::super::RemoveSnafu;
 use super::super::SerializeSnafu;
 use super::super::SharedStorageError;
 use super::set::empty_response;
-
 use crate::compute_lease_refresh;
 use crate::create_lease_entry;
 
@@ -49,7 +48,7 @@ impl RedbKvStorage {
 
         assert!(actual_lease_id > 0, "LEASE GRANT: generated lease_id must be non-zero");
 
-        let lease_bytes = bincode::serialize(&lease_entry).context(SerializeSnafu)?;
+        let lease_bytes = aspen_codec::serialize(&lease_entry).context(SerializeSnafu)?;
         leases_table.insert(actual_lease_id, lease_bytes.as_slice()).context(InsertSnafu)?;
 
         Ok(RaftKvResponse {
@@ -69,7 +68,7 @@ impl RedbKvStorage {
         assert!(lease_id > 0, "LEASE REVOKE: lease_id must be non-zero");
 
         let keys_to_delete = if let Some(lease_data) = leases_table.get(lease_id).context(GetSnafu)? {
-            let lease_entry: LeaseEntry = bincode::deserialize(lease_data.value()).context(DeserializeSnafu)?;
+            let lease_entry: LeaseEntry = aspen_codec::deserialize(lease_data.value()).context(DeserializeSnafu)?;
             lease_entry.keys.clone()
         } else {
             Vec::new()
@@ -103,7 +102,7 @@ impl RedbKvStorage {
         let lease_opt = {
             let lease_bytes = leases_table.get(lease_id).context(GetSnafu)?;
             if let Some(lease_data) = lease_bytes {
-                let entry: LeaseEntry = bincode::deserialize(lease_data.value()).context(DeserializeSnafu)?;
+                let entry: LeaseEntry = aspen_codec::deserialize(lease_data.value()).context(DeserializeSnafu)?;
                 Some(entry)
             } else {
                 None
@@ -114,7 +113,7 @@ impl RedbKvStorage {
             let ttl = lease_entry.ttl_seconds;
             lease_entry.expires_at_ms = compute_lease_refresh(ttl, now_ms());
 
-            let updated_bytes = bincode::serialize(&lease_entry).context(SerializeSnafu)?;
+            let updated_bytes = aspen_codec::serialize(&lease_entry).context(SerializeSnafu)?;
             leases_table.insert(lease_id, updated_bytes.as_slice()).context(InsertSnafu)?;
 
             Ok(RaftKvResponse {

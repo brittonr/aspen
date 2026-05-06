@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 use std::io::Cursor;
 
+use aspen_raft_kv_types::RaftKvTypeConfig;
 use aspen_storage_types::KvEntry;
 use openraft::SnapshotMeta;
 use openraft::StoredMembership;
@@ -15,11 +16,6 @@ use snafu::ResultExt;
 
 use super::RedbKvStorage;
 use super::SharedStorageError;
-use super::types::SM_KV_TABLE;
-use super::types::SM_META_TABLE;
-use super::types::SNAPSHOT_TABLE;
-use super::types::StoredSnapshot;
-use super::types::SnapshotEvent;
 use super::error::BeginReadSnafu;
 use super::error::BeginWriteSnafu;
 use super::error::CommitSnafu;
@@ -28,8 +24,11 @@ use super::error::InsertSnafu;
 use super::error::OpenTableSnafu;
 use super::error::RangeSnafu;
 use super::error::SerializeSnafu;
-
-use aspen_raft_kv_types::RaftKvTypeConfig;
+use super::types::SM_KV_TABLE;
+use super::types::SM_META_TABLE;
+use super::types::SNAPSHOT_TABLE;
+use super::types::SnapshotEvent;
+use super::types::StoredSnapshot;
 use crate::MAX_SNAPSHOT_ENTRIES;
 use crate::SnapshotIntegrity;
 
@@ -80,7 +79,7 @@ impl RedbKvSnapshotBuilder {
         let membership: StoredMembership<RaftKvTypeConfig> = sm_meta_table
             .get("last_membership")
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize(v.value()).ok())
+            .and_then(|v| aspen_codec::deserialize(v.value()).ok())
             .unwrap_or_default();
 
         let kv_entries = self.build_snapshot_collect_entries(&kv_table)?;
@@ -107,7 +106,7 @@ impl RedbKvSnapshotBuilder {
                 Err(_) => continue,
             };
 
-            let entry: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let entry: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -144,7 +143,7 @@ impl RedbKvSnapshotBuilder {
     ) -> Result<String, std::io::Error> {
         let snapshot_index = meta.last_log_id.as_ref().map(|l| l.index).unwrap_or(0);
         let chain_hash = self.storage.read_chain_hash_at(snapshot_index)?.unwrap_or([0u8; 32]);
-        let meta_bytes = bincode::serialize(meta).context(SerializeSnafu)?;
+        let meta_bytes = aspen_codec::serialize(meta).context(SerializeSnafu)?;
         let integrity = SnapshotIntegrity::compute(&meta_bytes, data, chain_hash);
         let integrity_hex = integrity.combined_hash_hex();
 
@@ -157,7 +156,7 @@ impl RedbKvSnapshotBuilder {
         let write_txn = self.storage.db.begin_write().context(BeginWriteSnafu)?;
         {
             let mut table = write_txn.open_table(SNAPSHOT_TABLE).context(OpenTableSnafu)?;
-            let stored_bytes = bincode::serialize(&stored).context(SerializeSnafu)?;
+            let stored_bytes = aspen_codec::serialize(&stored).context(SerializeSnafu)?;
             table.insert("current", stored_bytes.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -195,7 +194,7 @@ impl RaftSnapshotBuilder<RaftKvTypeConfig> for RedbKvSnapshotBuilder {
         let read_txn = self.storage.db.begin_read().context(BeginReadSnafu)?;
         let snapshot_data = self.build_snapshot_read_data(&read_txn)?;
 
-        let data = bincode::serialize(&snapshot_data.kv_entries).context(SerializeSnafu)?;
+        let data = aspen_codec::serialize(&snapshot_data.kv_entries).context(SerializeSnafu)?;
         let snapshot_id =
             format!("snapshot-{}-{}", snapshot_data.last_applied.as_ref().map(|l| l.index).unwrap_or(0), now_ms());
 

@@ -113,9 +113,10 @@ impl SharedRedbStorage {
             if let Some(node_id_str) = key_str.strip_prefix(&prefix)
                 && let Ok(node_id) = node_id_str.parse::<u64>()
             {
-                let endpoint = bincode::deserialize(value_guard.value()).map_err(|e| SharedStorageError::Internal {
-                    reason: format!("failed to deserialize NodeAddress: {e}"),
-                })?;
+                let endpoint =
+                    aspen_codec::deserialize(value_guard.value()).map_err(|e| SharedStorageError::Internal {
+                        reason: format!("failed to deserialize NodeAddress: {e}"),
+                    })?;
                 members.insert(node_id, endpoint);
             }
         }
@@ -131,7 +132,7 @@ impl SharedRedbStorage {
 
         match entry {
             Some(value) => {
-                let chain = bincode::deserialize(value.value()).map_err(|e| SharedStorageError::Internal {
+                let chain = aspen_codec::deserialize(value.value()).map_err(|e| SharedStorageError::Internal {
                     reason: format!("failed to deserialize EncryptedSecretChain: {e}"),
                 })?;
                 Ok(Some(chain))
@@ -263,12 +264,13 @@ impl SharedRedbStorage {
         store_epoch_digests_in_txn(digests_table, payload.epoch, &payload.digests)?;
         store_epoch_members_in_txn(members_table, payload.epoch, &payload.members)?;
 
-        let chain_bytes = bincode::serialize(&payload.encrypted_chain).map_err(|e| SharedStorageError::Internal {
-            reason: format!("failed to serialize EncryptedSecretChain: {e}"),
-        })?;
+        let chain_bytes =
+            aspen_codec::serialize(&payload.encrypted_chain).map_err(|e| SharedStorageError::Internal {
+                reason: format!("failed to serialize EncryptedSecretChain: {e}"),
+            })?;
         chains_table.insert(payload.epoch, chain_bytes.as_slice()).context(super::InsertSnafu)?;
 
-        let epoch_bytes = bincode::serialize(&payload.epoch).map_err(|e| SharedStorageError::Internal {
+        let epoch_bytes = aspen_codec::serialize(&payload.epoch).map_err(|e| SharedStorageError::Internal {
             reason: format!("failed to serialize trust epoch: {e}"),
         })?;
         sm_meta_table.insert("trust_current_epoch", epoch_bytes.as_slice()).context(super::InsertSnafu)?;
@@ -418,7 +420,7 @@ fn store_epoch_members_in_txn(
 ) -> Result<(), SharedStorageError> {
     for (node_id, node_addr) in members {
         let key = format!("{epoch}:{node_id}");
-        let node_addr_bytes = bincode::serialize(node_addr).map_err(|e| SharedStorageError::Internal {
+        let node_addr_bytes = aspen_codec::serialize(node_addr).map_err(|e| SharedStorageError::Internal {
             reason: format!("failed to serialize NodeAddress: {e}"),
         })?;
         members_table.insert(key.as_str(), node_addr_bytes.as_slice()).context(super::InsertSnafu)?;
@@ -432,7 +434,7 @@ fn store_trust_threshold_override_in_txn(
 ) -> Result<(), SharedStorageError> {
     match threshold_override {
         Some(value) => {
-            let bytes = bincode::serialize(&value).map_err(|e| SharedStorageError::Internal {
+            let bytes = aspen_codec::serialize(&value).map_err(|e| SharedStorageError::Internal {
                 reason: format!("failed to serialize trust threshold override: {e}"),
             })?;
             sm_meta_table.insert("trust_threshold_override", bytes.as_slice()).context(super::InsertSnafu)?;

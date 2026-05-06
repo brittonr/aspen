@@ -1,5 +1,6 @@
 //! Delete and DeleteMulti apply helpers for the state machine.
 
+use aspen_constants::api::MAX_SETMULTI_KEYS;
 use aspen_layer::IndexRegistry;
 use aspen_layer::IndexableEntry;
 use aspen_raft_kv_types::RaftKvResponse;
@@ -12,8 +13,6 @@ use super::super::RedbKvStorage;
 use super::super::RemoveSnafu;
 use super::super::SharedStorageError;
 use super::set::empty_response;
-
-use aspen_constants::api::MAX_SETMULTI_KEYS;
 
 #[inline]
 fn max_setmulti_keys_usize() -> usize {
@@ -34,7 +33,7 @@ impl RedbKvStorage {
         let existing = kv_table
             .get(key_bytes)
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+            .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok());
 
         if let Some(old_entry) = &existing {
             let old_indexable = IndexableEntry {

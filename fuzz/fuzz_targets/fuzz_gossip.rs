@@ -34,7 +34,7 @@ fn fuzz_gossip() {
 
         // Also fuzz just NodeId deserialization
         let _ = postcard::from_bytes::<NodeId>(data);
-        let _ = bincode::deserialize::<NodeId>(data);
+        let _ = aspen_codec::deserialize::<NodeId>(data);
 
         // Fuzz u64 timestamp extraction (should handle truncated data)
         if data.len() >= 8 {

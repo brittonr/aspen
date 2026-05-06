@@ -570,7 +570,7 @@ impl RaftSnapshotBuilder<AppTypeConfig> for InMemoryStateMachineStore {
             };
 
             // Compute snapshot integrity hash (Tiger Style: verify data corruption)
-            let meta_bytes = bincode::serialize(&meta).map_err(|err| io::Error::other(err.to_string()))?;
+            let meta_bytes = aspen_codec::serialize(&meta).map_err(|err| io::Error::other(err.to_string()))?;
             let integrity = SnapshotIntegrity::compute(&meta_bytes, &data, GENESIS_HASH);
 
             let snapshot = StoredSnapshot {
@@ -656,7 +656,7 @@ impl RaftStateMachine<AppTypeConfig> for InMemoryStateMachineStore {
         drop(sm);
 
         // Compute integrity hash for the installed snapshot (Tiger Style)
-        let meta_bytes = bincode::serialize(meta).map_err(|err| io::Error::other(err.to_string()))?;
+        let meta_bytes = aspen_codec::serialize(meta).map_err(|err| io::Error::other(err.to_string()))?;
         let integrity = SnapshotIntegrity::compute(&meta_bytes, &snapshot_data, GENESIS_HASH);
 
         // Store the installed snapshot so get_current_snapshot() returns it
@@ -831,8 +831,8 @@ mod tests {
         let mut data = StateMachineData::default();
         data.data.insert("test".to_string(), "data".to_string());
 
-        let serialized = bincode::serialize(&data).expect("serialize");
-        let deserialized: StateMachineData = bincode::deserialize(&serialized).expect("deserialize");
+        let serialized = aspen_codec::serialize(&data).expect("serialize");
+        let deserialized: StateMachineData = aspen_codec::deserialize(&serialized).expect("deserialize");
 
         assert_eq!(deserialized.data.get("test"), Some(&"data".to_string()));
     }

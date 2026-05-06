@@ -1,5 +1,6 @@
 //! KV operations: get, scan, TTL cleanup, and related methods.
 
+use aspen_constants::raft::MAX_BATCH_SIZE;
 use aspen_kv_types::KeyValueWithRevision;
 use aspen_storage_types::KvEntry;
 use redb::ReadableTable;
@@ -14,10 +15,8 @@ use super::OpenTableSnafu;
 use super::RangeSnafu;
 use super::RedbKvStorage;
 use super::RemoveSnafu;
-use super::SharedStorageError;
 use super::SM_KV_TABLE;
-
-use aspen_constants::raft::MAX_BATCH_SIZE;
+use super::SharedStorageError;
 
 #[inline]
 fn now_ms() -> u64 {
@@ -42,7 +41,7 @@ impl RedbKvStorage {
 
         match table.get(key.as_bytes()).context(GetSnafu)? {
             Some(value) => {
-                let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let entry: KvEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
                 if let Some(expires_at) = entry.expires_at_ms
                     && now_ms() > expires_at
@@ -115,7 +114,7 @@ impl RedbKvStorage {
                 continue;
             }
 
-            let entry: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let entry: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -139,12 +138,7 @@ impl RedbKvStorage {
             }
         }
 
-        assert!(
-            results.len() <= max_results,
-            "SCAN: results {} exceed max_results {}",
-            results.len(),
-            max_results
-        );
+        assert!(results.len() <= max_results, "SCAN: results {} exceed max_results {}", results.len(), max_results);
 
         Ok(results)
     }
@@ -165,7 +159,7 @@ impl RedbKvStorage {
                 }
 
                 let (key, value) = item.context(GetSnafu)?;
-                let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let entry: KvEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
                 if let Some(expires_at) = entry.expires_at_ms
                     && expires_at <= current_ms
@@ -199,7 +193,7 @@ impl RedbKvStorage {
         let mut count: u64 = 0;
         for item in table.iter().context(RangeSnafu)? {
             let (_key, value) = item.context(GetSnafu)?;
-            let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+            let entry: KvEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
             if let Some(expires_at) = entry.expires_at_ms
                 && expires_at <= current_ms
@@ -219,7 +213,7 @@ impl RedbKvStorage {
         let mut count: u64 = 0;
         for item in table.iter().context(RangeSnafu)? {
             let (_key, value) = item.context(GetSnafu)?;
-            let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+            let entry: KvEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
             if let Some(expires_at) = entry.expires_at_ms
                 && expires_at > current_ms
@@ -247,7 +241,7 @@ impl RedbKvStorage {
             }
 
             let (key, value) = item.context(GetSnafu)?;
-            let entry: KvEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+            let entry: KvEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
             if let Some(expires_at) = entry.expires_at_ms
                 && expires_at <= current_ms

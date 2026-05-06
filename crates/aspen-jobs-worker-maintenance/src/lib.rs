@@ -138,7 +138,7 @@ impl MaintenanceWorker {
         for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
             let (key_guard, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -210,7 +210,7 @@ impl MaintenanceWorker {
         for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
             let (_, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -401,7 +401,7 @@ impl MaintenanceWorker {
             for item in table.iter().map_err(|e| format!("iterate error: {}", e))? {
                 let (key_guard, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
-                let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+                let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                     Ok(e) => e,
                     Err(_) => continue,
                 };

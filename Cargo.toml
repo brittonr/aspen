@@ -55,6 +55,7 @@ members = [
 
     # Tier 0: Types + primitives
     "crates/aspen-constants",
+    "crates/aspen-codec",
     "crates/aspen-kv-types",
     "crates/aspen-hlc",
     "crates/aspen-time",
@@ -285,6 +286,7 @@ opentelemetry = "0.30"
 aspen-client = { path = "crates/aspen-client" }
 aspen-client-api = { path = "crates/aspen-client-api" }
 aspen-constants = { path = "crates/aspen-constants" }
+aspen-codec = { path = "crates/aspen-codec", default-features = false, features = ["alloc"] }
 aspen-cluster-types = { path = "crates/aspen-cluster-types", default-features = false }
 # Two `aspen-core` keys coexist: this one (real alloc-only crate) is what
 # `{ workspace = true }` consumers resolve to. The root [dependencies]
@@ -428,6 +430,7 @@ aspen-jobs-worker-shell = { workspace = true, optional = true }
 aspen-transport = { workspace = true }
 aspen-rpc-handlers = { workspace = true }
 aspen-core-essentials-handler = { workspace = true }
+aspen-codec = { workspace = true, features = ["std"] }
 aspen-hooks-types = { workspace = true }
 aspen-hooks = { workspace = true, optional = true }
 aspen-forge = { workspace = true, optional = true }
@@ -480,7 +483,6 @@ env_logger = "0.11"
 thiserror = "2.0"
 hex = "0.4"
 url = "2"
-bincode = "1.3"
 postcard = { version = "1.0", features = ["alloc"] }
 openraft = { workspace = true }
 redb = "2.0.0"

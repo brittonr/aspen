@@ -65,6 +65,7 @@ extern crate alloc;
 
 use alloc::string::String;
 use core::num::NonZeroU8;
+
 use serde::Deserialize;
 use serde::Serialize;
 // Re-export core uhlc types for convenience
@@ -316,8 +317,8 @@ mod tests {
             let hash = blake3::hash(node_id_str.as_bytes());
             let bytes = hash.as_bytes();
             let node_id: [u8; 16] = [
-                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-                bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9],
+                bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15],
             ];
             Self {
                 counter: core::sync::atomic::AtomicU64::new(1),
@@ -369,10 +370,7 @@ mod tests {
     fn sequential_clock_update_advances() {
         let clock = SequentialClock::new("test");
         let _ts1 = clock.new_timestamp();
-        let far_future = HlcTimestamp::new(
-            NTP64(1_000_000),
-            ID::try_from(clock.node_id).unwrap(),
-        );
+        let far_future = HlcTimestamp::new(NTP64(1_000_000), ID::try_from(clock.node_id).unwrap());
         clock.update_with_timestamp(&far_future).unwrap();
         let ts_after = clock.new_timestamp();
         assert!(ts_after.get_time().as_u64() > 1_000_000);
@@ -561,8 +559,8 @@ mod tests {
         let ser = SerializableTimestamp::new(ts);
 
         // Test bincode serialization
-        let bytes = bincode::serialize(&ser).expect("bincode serialize");
-        let deser: SerializableTimestamp = bincode::deserialize(&bytes).expect("bincode deserialize");
+        let bytes = aspen_codec::serialize(&ser).expect("bincode serialize");
+        let deser: SerializableTimestamp = aspen_codec::deserialize(&bytes).expect("bincode deserialize");
 
         assert_eq!(ser, deser);
     }
@@ -584,10 +582,7 @@ mod tests {
     fn hlc_rejects_far_future_timestamp() {
         let hlc = create_hlc("reject-test");
         // Default max delta is 100ms. Create a timestamp far in the future.
-        let far_future = HlcTimestamp::new(
-            NTP64(u64::MAX / 2),
-            ID::try_from([1u8; 16]).unwrap(),
-        );
+        let far_future = HlcTimestamp::new(NTP64(u64::MAX / 2), ID::try_from([1u8; 16]).unwrap());
         let result = update_from_timestamp(&hlc, &far_future);
         assert!(result.is_err(), "Should reject timestamps too far in the future");
     }
@@ -621,10 +616,7 @@ mod tests {
         let ts3 = clock.new_timestamp();
 
         // Update with a timestamp from the past
-        let past = HlcTimestamp::new(
-            NTP64(1),
-            ID::try_from([0u8; 16]).unwrap_or_else(|_| ID::from(NonZeroU8::MIN)),
-        );
+        let past = HlcTimestamp::new(NTP64(1), ID::try_from([0u8; 16]).unwrap_or_else(|_| ID::from(NonZeroU8::MIN)));
         clock.update_with_timestamp(&past).unwrap();
 
         // Next timestamp should still be after ts3

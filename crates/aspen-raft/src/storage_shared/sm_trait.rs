@@ -233,7 +233,7 @@ impl RaftStateMachine<AppTypeConfig> for SharedRedbStorage {
 
         match table.get("current").context(GetSnafu)? {
             Some(value) => {
-                let stored: StoredSnapshot = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let stored: StoredSnapshot = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
                 Ok(Some(Snapshot {
                     meta: stored.meta,
                     snapshot: Cursor::new(stored.data),
@@ -268,14 +268,14 @@ impl SharedRedbStorage {
         let Some(value) = table.get("current").context(GetSnafu)? else {
             return Ok(());
         };
-        let Ok(stored) = bincode::deserialize::<StoredSnapshot>(value.value()) else {
+        let Ok(stored) = aspen_codec::deserialize::<StoredSnapshot>(value.value()) else {
             return Ok(());
         };
         let Some(ref integrity) = stored.integrity else {
             return Ok(());
         };
 
-        let meta_bytes = bincode::serialize(meta)
+        let meta_bytes = aspen_codec::serialize(meta)
             .map_err(|e| io::Error::other(format!("failed to serialize snapshot metadata for integrity check: {e}")))?;
         if !integrity.verify(&meta_bytes, data) {
             tracing::error!(
@@ -294,7 +294,7 @@ impl SharedRedbStorage {
 
     /// Deserialize and validate snapshot KV entries.
     fn install_snapshot_deserialize_data(&self, data: &[u8]) -> Result<BTreeMap<String, KvEntry>, io::Error> {
-        let kv_entries: BTreeMap<String, KvEntry> = bincode::deserialize(data).map_err(|e| {
+        let kv_entries: BTreeMap<String, KvEntry> = aspen_codec::deserialize(data).map_err(|e| {
             io::Error::other(format!("failed to deserialize snapshot KV entries ({} bytes): {e}", data.len()))
         })?;
 
@@ -338,16 +338,16 @@ impl SharedRedbStorage {
 
             // Insert snapshot data
             for (key, entry) in kv_entries {
-                let entry_bytes = bincode::serialize(&entry).context(SerializeSnafu)?;
+                let entry_bytes = aspen_codec::serialize(&entry).context(SerializeSnafu)?;
                 kv_table.insert(key.as_bytes(), entry_bytes.as_slice()).context(InsertSnafu)?;
             }
 
             // Update last_applied
-            let log_id_bytes = bincode::serialize(&meta.last_log_id).context(SerializeSnafu)?;
+            let log_id_bytes = aspen_codec::serialize(&meta.last_log_id).context(SerializeSnafu)?;
             sm_meta_table.insert("last_applied_log", log_id_bytes.as_slice()).context(InsertSnafu)?;
 
             // Update membership
-            let membership_bytes = bincode::serialize(&meta.last_membership).context(SerializeSnafu)?;
+            let membership_bytes = aspen_codec::serialize(&meta.last_membership).context(SerializeSnafu)?;
             sm_meta_table.insert("last_membership", membership_bytes.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;

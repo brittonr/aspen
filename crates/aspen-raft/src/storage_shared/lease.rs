@@ -32,7 +32,7 @@ impl SharedRedbStorage {
 
         match table.get(lease_id).context(GetSnafu)? {
             Some(value) => {
-                let entry: LeaseEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let entry: LeaseEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
 
                 // Check if lease has expired
                 if now_ms > entry.expires_at_ms {
@@ -55,7 +55,7 @@ impl SharedRedbStorage {
 
         match table.get(lease_id).context(GetSnafu)? {
             Some(value) => {
-                let entry: LeaseEntry = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let entry: LeaseEntry = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
                 Ok(entry.keys)
             }
             None => Ok(vec![]),
@@ -75,7 +75,7 @@ impl SharedRedbStorage {
         for item in table.iter().context(RangeSnafu)? {
             let (id_guard, value_guard) = item.context(GetSnafu)?;
             let lease_id = id_guard.value();
-            let entry: LeaseEntry = bincode::deserialize(value_guard.value()).context(DeserializeSnafu)?;
+            let entry: LeaseEntry = aspen_codec::deserialize(value_guard.value()).context(DeserializeSnafu)?;
 
             // Skip expired leases
             if now_ms > entry.expires_at_ms {
@@ -116,7 +116,7 @@ impl SharedRedbStorage {
                 }
                 let (id_guard, value_guard) = item.context(GetSnafu)?;
                 let lease_id = id_guard.value();
-                let entry: LeaseEntry = bincode::deserialize(value_guard.value()).context(DeserializeSnafu)?;
+                let entry: LeaseEntry = aspen_codec::deserialize(value_guard.value()).context(DeserializeSnafu)?;
 
                 if now_ms > entry.expires_at_ms {
                     expired.push((lease_id, entry.keys.clone()));
@@ -161,7 +161,7 @@ impl SharedRedbStorage {
         let mut count: u64 = 0;
         for item in table.iter().context(RangeSnafu)? {
             let (_id_guard, value_guard) = item.context(GetSnafu)?;
-            let entry: LeaseEntry = bincode::deserialize(value_guard.value()).context(DeserializeSnafu)?;
+            let entry: LeaseEntry = aspen_codec::deserialize(value_guard.value()).context(DeserializeSnafu)?;
 
             if now_ms > entry.expires_at_ms {
                 count += 1;
@@ -182,7 +182,7 @@ impl SharedRedbStorage {
         let mut count: u64 = 0;
         for item in table.iter().context(RangeSnafu)? {
             let (_id_guard, value_guard) = item.context(GetSnafu)?;
-            let entry: LeaseEntry = bincode::deserialize(value_guard.value()).context(DeserializeSnafu)?;
+            let entry: LeaseEntry = aspen_codec::deserialize(value_guard.value()).context(DeserializeSnafu)?;
 
             if now_ms <= entry.expires_at_ms {
                 count += 1;

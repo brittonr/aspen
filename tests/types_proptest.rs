@@ -92,11 +92,11 @@ fn test_app_request_serde_json_roundtrip() {
 #[test]
 fn test_app_request_bincode_roundtrip() {
     check!().with_iterations(1000).with_type::<BalancedAppRequest>().for_each(|request| {
-        let serialized = bincode::serialize(&request.0).expect("Should serialize");
-        let deserialized: AppRequest = bincode::deserialize(&serialized).expect("Should deserialize");
+        let serialized = aspen_codec::serialize(&request.0).expect("Should serialize");
+        let deserialized: AppRequest = aspen_codec::deserialize(&serialized).expect("Should deserialize");
 
         // Compare by re-serializing
-        let reserialized = bincode::serialize(&deserialized).expect("Should re-serialize");
+        let reserialized = aspen_codec::serialize(&deserialized).expect("Should re-serialize");
         assert_eq!(serialized, reserialized);
     });
 }

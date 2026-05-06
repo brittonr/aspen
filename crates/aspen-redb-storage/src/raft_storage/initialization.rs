@@ -15,25 +15,24 @@ use tokio::sync::broadcast;
 
 use super::BeginReadSnafu;
 use super::BeginWriteSnafu;
+use super::CHAIN_HASH_TABLE;
 use super::CommitSnafu;
 use super::CreateDirectorySnafu;
 use super::GetSnafu;
+use super::INTEGRITY_META_TABLE;
 use super::OpenDatabaseSnafu;
 use super::OpenTableSnafu;
-use super::RangeSnafu;
-use super::RedbKvStorage;
-use super::SharedStorageError;
-use super::SnapshotEvent;
-use super::CHAIN_HASH_TABLE;
-use super::INTEGRITY_META_TABLE;
 use super::RAFT_LOG_TABLE;
 use super::RAFT_META_TABLE;
+use super::RangeSnafu;
+use super::RedbKvStorage;
 use super::SM_INDEX_TABLE;
 use super::SM_KV_TABLE;
 use super::SM_LEASES_TABLE;
 use super::SM_META_TABLE;
 use super::SNAPSHOT_TABLE;
-
+use super::SharedStorageError;
+use super::SnapshotEvent;
 use crate::ChainTipState;
 
 impl RedbKvStorage {
@@ -109,7 +108,7 @@ impl RedbKvStorage {
         let tip_index: Option<u64> = meta_table
             .get("chain_tip_index")
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize(v.value()).ok());
+            .and_then(|v| aspen_codec::deserialize(v.value()).ok());
 
         match (tip_hash, tip_index) {
             (Some(hash), Some(index)) => Ok(ChainTipState { hash, index }),

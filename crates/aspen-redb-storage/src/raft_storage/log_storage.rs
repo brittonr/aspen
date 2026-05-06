@@ -4,6 +4,8 @@ use std::fmt::Debug;
 use std::io;
 use std::ops::RangeBounds;
 
+use aspen_raft_kv_types::RaftKvResponse;
+use aspen_raft_kv_types::RaftKvTypeConfig;
 use openraft::EntryPayload;
 use openraft::LogState;
 use openraft::OptionalSend;
@@ -19,19 +21,6 @@ use snafu::ResultExt;
 
 use super::RedbKvStorage;
 use super::SharedStorageError;
-use super::state_machine::set::empty_response;
-use crate::ChainTipState;
-use crate::EntryHashInput;
-use crate::MAX_BATCH_SIZE;
-use crate::compute_entry_hash;
-
-use super::types::CHAIN_HASH_TABLE;
-use super::types::INTEGRITY_META_TABLE;
-use super::types::RAFT_LOG_TABLE;
-use super::types::SM_INDEX_TABLE;
-use super::types::SM_KV_TABLE;
-use super::types::SM_LEASES_TABLE;
-use super::types::SM_META_TABLE;
 use super::error::BeginReadSnafu;
 use super::error::BeginWriteSnafu;
 use super::error::CommitSnafu;
@@ -42,9 +31,18 @@ use super::error::OpenTableSnafu;
 use super::error::RangeSnafu;
 use super::error::RemoveSnafu;
 use super::error::SerializeSnafu;
-
-use aspen_raft_kv_types::RaftKvResponse;
-use aspen_raft_kv_types::RaftKvTypeConfig;
+use super::state_machine::set::empty_response;
+use super::types::CHAIN_HASH_TABLE;
+use super::types::INTEGRITY_META_TABLE;
+use super::types::RAFT_LOG_TABLE;
+use super::types::SM_INDEX_TABLE;
+use super::types::SM_KV_TABLE;
+use super::types::SM_LEASES_TABLE;
+use super::types::SM_META_TABLE;
+use crate::ChainTipState;
+use crate::EntryHashInput;
+use crate::MAX_BATCH_SIZE;
+use crate::compute_entry_hash;
 
 #[inline]
 fn max_batch_size_usize() -> usize {
@@ -74,7 +72,7 @@ impl RaftLogReader<RaftKvTypeConfig> for RedbKvStorage {
             let (_key, value) = item.context(GetSnafu)?;
             let bytes = value.value();
             let entry: <RaftKvTypeConfig as openraft::RaftTypeConfig>::Entry =
-                bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                aspen_codec::deserialize(bytes).context(DeserializeSnafu)?;
 
             let current_index = entry.log_id().index();
             if let Some(prev) = prev_index {
@@ -123,7 +121,7 @@ impl RaftLogStorage<RaftKvTypeConfig> for RedbKvStorage {
             .map(|(_key, value)| {
                 let bytes = value.value();
                 let entry: <RaftKvTypeConfig as openraft::RaftTypeConfig>::Entry =
-                    bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                    aspen_codec::deserialize(bytes).context(DeserializeSnafu)?;
                 Ok::<_, SharedStorageError>(entry.log_id())
             })
             .transpose()?;
@@ -331,7 +329,7 @@ impl RedbKvStorage {
             assert!(term > 0, "APPEND: entry at index {index} has zero term");
         }
 
-        let data = bincode::serialize(entry).context(SerializeSnafu)?;
+        let data = aspen_codec::serialize(entry).context(SerializeSnafu)?;
         let entry_hash = compute_entry_hash(EntryHashInput {
             prev_hash: &prev_hash,
             log_index: index,
@@ -342,18 +340,11 @@ impl RedbKvStorage {
         log_table.insert(index, data.as_slice()).context(InsertSnafu)?;
         hash_table.insert(index, entry_hash.as_slice()).context(InsertSnafu)?;
 
-        let response = self.append_apply_entry_payload(
-            entry,
-            log_id,
-            index,
-            kv_table,
-            index_table,
-            leases_table,
-            sm_meta_table,
-        )?;
+        let response =
+            self.append_apply_entry_payload(entry, log_id, index, kv_table, index_table, leases_table, sm_meta_table)?;
         pending_response_batch.push((index, response));
 
-        let log_id_bytes = bincode::serialize(&Some(log_id)).context(SerializeSnafu)?;
+        let log_id_bytes = aspen_codec::serialize(&Some(log_id)).context(SerializeSnafu)?;
         sm_meta_table.insert("last_applied_log", log_id_bytes.as_slice()).context(InsertSnafu)?;
 
         Ok((entry_hash, index))
@@ -382,7 +373,7 @@ impl RedbKvStorage {
             )?),
             EntryPayload::Membership(membership) => {
                 let stored = StoredMembership::new(Some(log_id), membership.clone());
-                let membership_bytes = bincode::serialize(&stored).context(SerializeSnafu)?;
+                let membership_bytes = aspen_codec::serialize(&stored).context(SerializeSnafu)?;
                 sm_meta_table.insert("last_membership", membership_bytes.as_slice()).context(InsertSnafu)?;
                 Ok(empty_response())
             }
@@ -398,7 +389,7 @@ impl RedbKvStorage {
     ) -> Result<(), io::Error> {
         let mut integrity_table = write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
         integrity_table.insert("chain_tip_hash", new_tip_hash.as_slice()).context(InsertSnafu)?;
-        let index_bytes = bincode::serialize(&new_tip_index).context(SerializeSnafu)?;
+        let index_bytes = aspen_codec::serialize(&new_tip_index).context(SerializeSnafu)?;
         integrity_table.insert("chain_tip_index", index_bytes.as_slice()).context(InsertSnafu)?;
         Ok(())
     }
@@ -419,7 +410,10 @@ impl RedbKvStorage {
         Ok(())
     }
 
-    fn append_store_pending_responses(&self, pending_response_batch: Vec<(u64, RaftKvResponse)>) -> Result<(), io::Error> {
+    fn append_store_pending_responses(
+        &self,
+        pending_response_batch: Vec<(u64, RaftKvResponse)>,
+    ) -> Result<(), io::Error> {
         if pending_response_batch.is_empty() {
             return Ok(());
         }

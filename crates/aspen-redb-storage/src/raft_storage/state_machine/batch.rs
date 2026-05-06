@@ -1,5 +1,6 @@
 //! Batch and ConditionalBatch apply helpers for the state machine.
 
+use aspen_constants::api::MAX_SETMULTI_KEYS;
 use aspen_layer::IndexRegistry;
 use aspen_raft_kv_types::BatchCondition;
 use aspen_raft_kv_types::BatchWriteOp;
@@ -12,8 +13,6 @@ use super::super::GetSnafu;
 use super::super::RedbKvStorage;
 use super::super::SharedStorageError;
 use super::set::empty_response;
-
-use aspen_constants::api::MAX_SETMULTI_KEYS;
 
 #[inline]
 fn max_setmulti_keys_usize() -> usize {
@@ -94,7 +93,7 @@ impl RedbKvStorage {
                     let current = kv_table
                         .get(key.as_bytes())
                         .context(GetSnafu)?
-                        .and_then(|v| bincode::deserialize::<KvEntry>(v.value()).ok());
+                        .and_then(|v| aspen_codec::deserialize::<KvEntry>(v.value()).ok());
                     (key, current.as_ref().map(|e| e.value.as_str() == expected).unwrap_or(false))
                 }
                 BatchCondition::KeyExists { key } => {

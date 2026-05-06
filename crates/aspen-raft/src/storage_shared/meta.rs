@@ -54,7 +54,7 @@ impl SharedRedbStorage {
 
         match table.get(key).context(GetSnafu)? {
             Some(value) => {
-                let data: T = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let data: T = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
                 Ok(Some(data))
             }
             None => Ok(None),
@@ -66,7 +66,7 @@ impl SharedRedbStorage {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
             let mut table = write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
-            let serialized = bincode::serialize(value).context(SerializeSnafu)?;
+            let serialized = aspen_codec::serialize(value).context(SerializeSnafu)?;
             table.insert(key, serialized.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -94,7 +94,7 @@ impl SharedRedbStorage {
 
         match table.get(key).context(GetSnafu)? {
             Some(value) => {
-                let data: T = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let data: T = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
                 Ok(Some(data))
             }
             None => Ok(None),

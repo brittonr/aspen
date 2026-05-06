@@ -90,16 +90,16 @@ pub enum SharedStorageError {
     #[snafu(display("failed to serialize data: {source}"))]
     Serialize {
         /// The underlying bincode error.
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
+        #[snafu(source(from(aspen_codec::Error, Box::new)))]
+        source: Box<aspen_codec::Error>,
     },
 
     /// Failed to deserialize data with bincode.
     #[snafu(display("failed to deserialize data: {source}"))]
     Deserialize {
         /// The underlying bincode error.
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
+        #[snafu(source(from(aspen_codec::Error, Box::new)))]
+        source: Box<aspen_codec::Error>,
     },
 
     /// Failed to create a directory.

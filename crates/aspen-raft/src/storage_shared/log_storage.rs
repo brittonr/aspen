@@ -70,7 +70,7 @@ impl RaftLogReader<AppTypeConfig> for SharedRedbStorage {
             let (_key, value) = item.context(GetSnafu)?;
             let bytes = value.value();
             let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
-                bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                aspen_codec::deserialize(bytes).context(DeserializeSnafu)?;
 
             // Tiger Style: log indices must be monotonically increasing
             let current_index = entry.log_id().index();
@@ -122,7 +122,7 @@ impl RaftLogStorage<AppTypeConfig> for SharedRedbStorage {
             .map(|(_key, value)| {
                 let bytes = value.value();
                 let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
-                    bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                    aspen_codec::deserialize(bytes).context(DeserializeSnafu)?;
                 Ok::<_, SharedStorageError>(entry.log_id())
             })
             .transpose()?;
@@ -472,7 +472,7 @@ impl SharedRedbStorage {
             assert!(term > 0, "APPEND: entry at index {index} has zero term");
         }
 
-        let data = bincode::serialize(entry).context(SerializeSnafu)?;
+        let data = aspen_codec::serialize(entry).context(SerializeSnafu)?;
         let entry_hash = compute_entry_hash(&prev_hash, index, term, &data);
 
         log_table.insert(index, data.as_slice()).context(InsertSnafu)?;
@@ -497,7 +497,7 @@ impl SharedRedbStorage {
         )?;
         pending_response_batch.push((index, response));
 
-        let log_id_bytes = bincode::serialize(&Some(log_id)).context(SerializeSnafu)?;
+        let log_id_bytes = aspen_codec::serialize(&Some(log_id)).context(SerializeSnafu)?;
         sm_meta_table.insert("last_applied_log", log_id_bytes.as_slice()).context(InsertSnafu)?;
 
         Ok((entry_hash, index))
@@ -539,7 +539,7 @@ impl SharedRedbStorage {
             )?),
             EntryPayload::Membership(membership) => {
                 let stored = StoredMembership::new(Some(log_id), membership.clone());
-                let membership_bytes = bincode::serialize(&stored).context(SerializeSnafu)?;
+                let membership_bytes = aspen_codec::serialize(&stored).context(SerializeSnafu)?;
                 sm_meta_table.insert("last_membership", membership_bytes.as_slice()).context(InsertSnafu)?;
                 Ok(empty_response())
             }
@@ -556,7 +556,7 @@ impl SharedRedbStorage {
     ) -> Result<(), io::Error> {
         let mut integrity_table = write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
         integrity_table.insert("chain_tip_hash", new_tip_hash.as_slice()).context(InsertSnafu)?;
-        let index_bytes = bincode::serialize(&new_tip_index).context(SerializeSnafu)?;
+        let index_bytes = aspen_codec::serialize(&new_tip_index).context(SerializeSnafu)?;
         integrity_table.insert("chain_tip_index", index_bytes.as_slice()).context(InsertSnafu)?;
         Ok(())
     }

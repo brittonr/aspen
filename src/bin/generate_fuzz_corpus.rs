@@ -345,7 +345,7 @@ fn generate_metadata_corpus(corpus_dir: &Path) -> Result<()> {
         last_updated_secs: 1700000000,
     };
 
-    if let Ok(bytes) = bincode::serialize(&meta1) {
+    if let Ok(bytes) = aspen_codec::serialize(&meta1) {
         fs::write(dir.join("node1"), &bytes).context("failed to write node1")?;
         println!("Created: {}/node1", dir.display());
     }

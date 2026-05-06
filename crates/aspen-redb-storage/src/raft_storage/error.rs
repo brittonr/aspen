@@ -66,21 +66,18 @@ pub enum SharedStorageError {
 
     #[snafu(display("failed to serialize data: {source}"))]
     Serialize {
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
+        #[snafu(source(from(aspen_codec::Error, Box::new)))]
+        source: Box<aspen_codec::Error>,
     },
 
     #[snafu(display("failed to deserialize data: {source}"))]
     Deserialize {
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
+        #[snafu(source(from(aspen_codec::Error, Box::new)))]
+        source: Box<aspen_codec::Error>,
     },
 
     #[snafu(display("failed to create directory {}: {source}", path.display()))]
-    CreateDirectory {
-        path: PathBuf,
-        source: std::io::Error,
-    },
+    CreateDirectory { path: PathBuf, source: std::io::Error },
 
     #[snafu(display("storage lock poisoned: {context}"))]
     LockPoisoned { context: String },

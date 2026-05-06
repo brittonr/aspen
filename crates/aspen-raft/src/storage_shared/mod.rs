@@ -104,16 +104,15 @@ use aspen_core::layer::IndexScanResult;
 use aspen_core::layer::IndexableEntry;
 use aspen_core::layer::Tuple;
 use aspen_core::layer::extract_primary_key_from_tuple;
+pub use aspen_redb_storage::raft_storage::RedbKvSnapshotBuilder;
+// Compatibility re-exports from aspen-redb-storage.
+// New consumers should depend on aspen-redb-storage directly.
+pub use aspen_redb_storage::raft_storage::RedbKvStorage;
 // Re-export types from submodules for public API
 pub use error::*;
 use openraft::alias::LogIdOf;
 pub use snapshot::SharedRedbSnapshotBuilder;
 pub use types::*;
-
-// Compatibility re-exports from aspen-redb-storage.
-// New consumers should depend on aspen-redb-storage directly.
-pub use aspen_redb_storage::raft_storage::RedbKvStorage;
-pub use aspen_redb_storage::raft_storage::RedbKvSnapshotBuilder;
 
 use crate::constants::MAX_BATCH_SIZE;
 use crate::constants::MAX_SETMULTI_KEYS;
@@ -233,7 +232,7 @@ mod tests {
                 expires_at_ms: None,
                 lease_id: None,
             };
-            let entry_bytes = bincode::serialize(&entry).unwrap();
+            let entry_bytes = aspen_codec::serialize(&entry).unwrap();
             kv_table.insert(key.as_bytes(), entry_bytes.as_slice()).unwrap();
         }
         write_txn.commit().unwrap();
@@ -251,7 +250,7 @@ mod tests {
                 expires_at_ms: Some(expires_at_ms),
                 lease_id: None,
             };
-            let entry_bytes = bincode::serialize(&entry).unwrap();
+            let entry_bytes = aspen_codec::serialize(&entry).unwrap();
             kv_table.insert(key.as_bytes(), entry_bytes.as_slice()).unwrap();
         }
         write_txn.commit().unwrap();
@@ -266,7 +265,7 @@ mod tests {
                 expires_at_ms,
                 keys: Vec::new(),
             };
-            let entry_bytes = bincode::serialize(&entry).unwrap();
+            let entry_bytes = aspen_codec::serialize(&entry).unwrap();
             leases_table.insert(lease_id, entry_bytes.as_slice()).unwrap();
         }
         write_txn.commit().unwrap();
@@ -287,7 +286,7 @@ mod tests {
                 expires_at_ms,
                 keys,
             };
-            let entry_bytes = bincode::serialize(&entry).unwrap();
+            let entry_bytes = aspen_codec::serialize(&entry).unwrap();
             leases_table.insert(lease_id, entry_bytes.as_slice()).unwrap();
         }
         write_txn.commit().unwrap();
@@ -1028,7 +1027,7 @@ mod tests {
         let write_txn = storage.db.begin_write().unwrap();
         {
             let mut table = write_txn.open_table(SM_META_TABLE).unwrap();
-            let data = bincode::serialize(&Some(100u64)).unwrap();
+            let data = aspen_codec::serialize(&Some(100u64)).unwrap();
             table.insert("test_sm_meta", data.as_slice()).unwrap();
         }
         write_txn.commit().unwrap();
@@ -1106,8 +1105,8 @@ mod tests {
             lease_id: Some(1001),
         };
 
-        let serialized = bincode::serialize(&entry).unwrap();
-        let deserialized: KvEntry = bincode::deserialize(&serialized).unwrap();
+        let serialized = aspen_codec::serialize(&entry).unwrap();
+        let deserialized: KvEntry = aspen_codec::deserialize(&serialized).unwrap();
 
         assert_eq!(entry.value, deserialized.value);
         assert_eq!(entry.version, deserialized.version);
@@ -1129,8 +1128,8 @@ mod tests {
             keys: vec!["key1".to_string(), "key2".to_string()],
         };
 
-        let serialized = bincode::serialize(&entry).unwrap();
-        let deserialized: LeaseEntry = bincode::deserialize(&serialized).unwrap();
+        let serialized = aspen_codec::serialize(&entry).unwrap();
+        let deserialized: LeaseEntry = aspen_codec::deserialize(&serialized).unwrap();
 
         assert_eq!(entry.ttl_seconds, deserialized.ttl_seconds);
         assert_eq!(entry.expires_at_ms, deserialized.expires_at_ms);

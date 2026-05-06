@@ -165,7 +165,7 @@ impl SqlQueryWorker {
             }
 
             // Deserialize and check expiration
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -226,7 +226,7 @@ impl SqlQueryWorker {
             };
 
             // Deserialize entry
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -312,7 +312,7 @@ impl SqlQueryWorker {
             let value_bytes = value_guard.value();
 
             // Deserialize entry
-            let kv: KvEntry = match bincode::deserialize(value_bytes) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_bytes) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -464,7 +464,7 @@ impl SqlQueryWorker {
         for item in table.iter().map_err(|e| format!("failed to iterate: {}", e))? {
             let (_, value_guard) = item.map_err(|e| format!("read error: {}", e))?;
 
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };

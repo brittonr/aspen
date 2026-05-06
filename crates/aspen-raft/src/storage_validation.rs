@@ -174,8 +174,8 @@ pub enum StorageValidationError {
         /// Type of data being deserialized (e.g., "vote state", "log entry").
         data_type: String,
         /// Underlying bincode deserialization error.
-        #[snafu(source(from(bincode::Error, Box::new)))]
-        source: Box<bincode::Error>,
+        #[snafu(source(from(aspen_codec::Error, Box::new)))]
+        source: Box<aspen_codec::Error>,
     },
 
     /// Vote state is inconsistent or invalid.
@@ -437,9 +437,10 @@ fn read_current_snapshot(db: &Database) -> Result<Option<StoredSnapshot>, Storag
         return Ok(None);
     };
 
-    let snapshot: StoredSnapshot = bincode::deserialize(snapshot_bytes.value()).context(DeserializeFailedSnafu {
-        data_type: "snapshot metadata",
-    })?;
+    let snapshot: StoredSnapshot =
+        aspen_codec::deserialize(snapshot_bytes.value()).context(DeserializeFailedSnafu {
+            data_type: "snapshot metadata",
+        })?;
     Ok(Some(snapshot))
 }
 
@@ -481,7 +482,7 @@ fn read_vote_state(db: &Database) -> Result<Option<Vote<AppTypeConfig>>, Storage
         return Ok(None);
     };
 
-    let vote: Vote<AppTypeConfig> = bincode::deserialize(vote_bytes.value()).context(DeserializeFailedSnafu {
+    let vote: Vote<AppTypeConfig> = aspen_codec::deserialize(vote_bytes.value()).context(DeserializeFailedSnafu {
         data_type: "vote state",
     })?;
     Ok(Some(vote))
@@ -525,7 +526,7 @@ fn read_committed_log_id(db: &Database) -> Result<Option<LogId<AppTypeConfig>>, 
     };
 
     let committed: LogId<AppTypeConfig> =
-        bincode::deserialize(committed_bytes.value()).context(DeserializeFailedSnafu {
+        aspen_codec::deserialize(committed_bytes.value()).context(DeserializeFailedSnafu {
             data_type: "committed index",
         })?;
     Ok(Some(committed))
@@ -580,7 +581,7 @@ mod tests {
                     key: format!("key{}", i),
                     value: format!("value{}", i),
                 });
-                let serialized = bincode::serialize(&entry).expect("failed to serialize");
+                let serialized = aspen_codec::serialize(&entry).expect("failed to serialize");
                 table.insert(u64::from(i), serialized.as_slice()).expect("failed to insert");
             }
         }

@@ -158,8 +158,8 @@ fn test_write_command_set_bincode_roundtrip() {
             key: key.0.clone(),
             value: value.0.clone(),
         };
-        let serialized = bincode::serialize(&cmd).expect("serialize");
-        let deserialized: WriteCommand = bincode::deserialize(&serialized).expect("deserialize");
+        let serialized = aspen_codec::serialize(&cmd).expect("serialize");
+        let deserialized: WriteCommand = aspen_codec::deserialize(&serialized).expect("deserialize");
         assert_eq!(cmd, deserialized);
     });
 }

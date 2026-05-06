@@ -308,9 +308,10 @@ impl RedbSqlExecutor {
 
         let rows = match entry {
             Some(value) => {
-                let kv: KvEntry = bincode::deserialize(value.value()).map_err(|e| SqlQueryError::ExecutionFailed {
-                    reason: format!("failed to deserialize entry: {}", e),
-                })?;
+                let kv: KvEntry =
+                    aspen_codec::deserialize(value.value()).map_err(|e| SqlQueryError::ExecutionFailed {
+                        reason: format!("failed to deserialize entry: {}", e),
+                    })?;
 
                 // Check expiration
                 if let Some(expires_at) = kv.expires_at_ms {
@@ -375,7 +376,7 @@ impl RedbSqlExecutor {
                 Err(_) => continue,
             };
 
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };
@@ -425,7 +426,7 @@ impl RedbSqlExecutor {
                 reason: format!("failed to read entry: {}", e),
             })?;
 
-            let kv: KvEntry = match bincode::deserialize(value_guard.value()) {
+            let kv: KvEntry = match aspen_codec::deserialize(value_guard.value()) {
                 Ok(e) => e,
                 Err(_) => continue,
             };

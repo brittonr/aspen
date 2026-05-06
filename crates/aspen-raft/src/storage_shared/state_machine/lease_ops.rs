@@ -64,7 +64,7 @@ impl SharedRedbStorage {
         debug_assert!(lease_entry.expires_at_ms > 0, "LEASE GRANT: expires_at_ms must be positive");
 
         // Store lease
-        let lease_bytes = bincode::serialize(&lease_entry).context(SerializeSnafu)?;
+        let lease_bytes = aspen_codec::serialize(&lease_entry).context(SerializeSnafu)?;
         leases_table.insert(actual_lease_id, lease_bytes.as_slice()).context(InsertSnafu)?;
 
         Ok(AppResponse {
@@ -87,7 +87,7 @@ impl SharedRedbStorage {
 
         // Get the lease entry and extract the keys
         let keys_to_delete = if let Some(lease_data) = leases_table.get(lease_id).context(GetSnafu)? {
-            let lease_entry: LeaseEntry = bincode::deserialize(lease_data.value()).context(DeserializeSnafu)?;
+            let lease_entry: LeaseEntry = aspen_codec::deserialize(lease_data.value()).context(DeserializeSnafu)?;
             lease_entry.keys.clone()
         } else {
             Vec::new()
@@ -126,7 +126,7 @@ impl SharedRedbStorage {
         let lease_opt = {
             let lease_bytes = leases_table.get(lease_id).context(GetSnafu)?;
             if let Some(lease_data) = lease_bytes {
-                let entry: LeaseEntry = bincode::deserialize(lease_data.value()).context(DeserializeSnafu)?;
+                let entry: LeaseEntry = aspen_codec::deserialize(lease_data.value()).context(DeserializeSnafu)?;
                 Some(entry)
             } else {
                 None
@@ -139,7 +139,7 @@ impl SharedRedbStorage {
             lease_entry.expires_at_ms = compute_lease_refresh(ttl, now_unix_ms());
 
             // Update the lease
-            let updated_bytes = bincode::serialize(&lease_entry).context(SerializeSnafu)?;
+            let updated_bytes = aspen_codec::serialize(&lease_entry).context(SerializeSnafu)?;
             leases_table.insert(lease_id, updated_bytes.as_slice()).context(InsertSnafu)?;
 
             Ok(AppResponse {

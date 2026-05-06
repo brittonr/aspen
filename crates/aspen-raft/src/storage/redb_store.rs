@@ -210,7 +210,7 @@ impl RedbLogStore {
         let tip_index: Option<u64> = meta_table
             .get("chain_tip_index")
             .context(GetSnafu)?
-            .and_then(|v| bincode::deserialize(v.value()).ok());
+            .and_then(|v| aspen_codec::deserialize(v.value()).ok());
 
         match (tip_hash, tip_index) {
             (Some(hash), Some(index)) => Ok(ChainTipState { hash, index }),
@@ -265,7 +265,7 @@ impl RedbLogStore {
 
                 // Deserialize to get term
                 let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
-                    bincode::deserialize(entry_bytes).context(DeserializeSnafu)?;
+                    aspen_codec::deserialize(entry_bytes).context(DeserializeSnafu)?;
                 let log_id = entry.log_id();
                 let term = log_id.leader_id.term;
 
@@ -285,12 +285,12 @@ impl RedbLogStore {
 
             // Store migration version
             let mut meta_table = write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
-            let version_bytes = bincode::serialize(&INTEGRITY_VERSION).context(SerializeSnafu)?;
+            let version_bytes = aspen_codec::serialize(&INTEGRITY_VERSION).context(SerializeSnafu)?;
             meta_table.insert("integrity_version", version_bytes.as_slice()).context(InsertSnafu)?;
 
             // Store chain tip
             meta_table.insert("chain_tip_hash", prev_hash.as_slice()).context(InsertSnafu)?;
-            let index_bytes = bincode::serialize(&last_index).context(SerializeSnafu)?;
+            let index_bytes = aspen_codec::serialize(&last_index).context(SerializeSnafu)?;
             meta_table.insert("chain_tip_index", index_bytes.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -323,7 +323,7 @@ impl RedbLogStore {
 
         match table.get("integrity_version").context(GetSnafu)? {
             Some(value) => {
-                let version: u32 = bincode::deserialize(value.value()).context(DeserializeSnafu)?;
+                let version: u32 = aspen_codec::deserialize(value.value()).context(DeserializeSnafu)?;
                 Ok(version)
             }
             None => Ok(0),
@@ -363,7 +363,7 @@ impl RedbLogStore {
         match table.get(key).context(GetSnafu)? {
             Some(value) => {
                 let bytes = value.value();
-                let data: T = bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                let data: T = aspen_codec::deserialize(bytes).context(DeserializeSnafu)?;
                 Ok(Some(data))
             }
             None => Ok(None),
@@ -375,7 +375,7 @@ impl RedbLogStore {
         let write_txn = self.db.begin_write().context(BeginWriteSnafu)?;
         {
             let mut table = write_txn.open_table(RAFT_META_TABLE).context(OpenTableSnafu)?;
-            let serialized = bincode::serialize(value).context(SerializeSnafu)?;
+            let serialized = aspen_codec::serialize(value).context(SerializeSnafu)?;
             table.insert(key, serialized.as_slice()).context(InsertSnafu)?;
         }
         write_txn.commit().context(CommitSnafu)?;
@@ -416,7 +416,7 @@ impl RaftLogReader<AppTypeConfig> for RedbLogStore {
             let (_key, value) = item.context(GetSnafu)?;
             let bytes = value.value();
             let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
-                bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                aspen_codec::deserialize(bytes).context(DeserializeSnafu)?;
             entries.push(entry);
         }
 
@@ -449,7 +449,7 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
             .map(|(_key, value)| {
                 let bytes = value.value();
                 let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
-                    bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                    aspen_codec::deserialize(bytes).context(DeserializeSnafu)?;
                 Ok::<_, StorageError>(entry.log_id())
             })
             .transpose()?;
@@ -518,7 +518,7 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
                 let log_id = entry.log_id();
                 let index = log_id.index();
                 let term = log_id.leader_id.term;
-                let data = bincode::serialize(&entry).context(SerializeSnafu)?;
+                let data = aspen_codec::serialize(&entry).context(SerializeSnafu)?;
 
                 // Compute chain hash
                 let entry_hash = compute_entry_hash(&prev_hash, index, term, &data);
@@ -544,7 +544,7 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
                 // Persist chain tip to integrity metadata table for recovery across restarts
                 let mut meta_table = write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
                 meta_table.insert("chain_tip_hash", new_tip_hash.as_slice()).context(InsertSnafu)?;
-                let index_bytes = bincode::serialize(&new_tip_index).context(SerializeSnafu)?;
+                let index_bytes = aspen_codec::serialize(&new_tip_index).context(SerializeSnafu)?;
                 meta_table.insert("chain_tip_index", index_bytes.as_slice()).context(InsertSnafu)?;
             }
         }
@@ -607,7 +607,7 @@ impl RaftLogStorage<AppTypeConfig> for RedbLogStore {
             {
                 let mut meta_table = write_txn.open_table(INTEGRITY_META_TABLE).context(OpenTableSnafu)?;
                 meta_table.insert("chain_tip_hash", new_tip.hash.as_slice()).context(InsertSnafu)?;
-                let index_bytes = bincode::serialize(&new_tip.index).context(SerializeSnafu)?;
+                let index_bytes = aspen_codec::serialize(&new_tip.index).context(SerializeSnafu)?;
                 meta_table.insert("chain_tip_index", index_bytes.as_slice()).context(InsertSnafu)?;
             }
             write_txn.commit().context(CommitSnafu)?;
@@ -778,7 +778,7 @@ impl RedbLogStore {
 
             // Deserialize to get term
             let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
-                bincode::deserialize(&entry_bytes).context(DeserializeSnafu)?;
+                aspen_codec::deserialize(&entry_bytes).context(DeserializeSnafu)?;
             let log_id = entry.log_id();
             let term = log_id.leader_id.term;
 
@@ -855,7 +855,7 @@ impl aspen_transport::log_subscriber::HistoricalLogReader for RedbLogStore {
                 let (_key, value) = item.context(GetSnafu)?;
                 let bytes = value.value();
                 let entry: <AppTypeConfig as openraft::RaftTypeConfig>::Entry =
-                    bincode::deserialize(bytes).context(DeserializeSnafu)?;
+                    aspen_codec::deserialize(bytes).context(DeserializeSnafu)?;
 
                 let log_id = entry.log_id();
                 let operation = match &entry.payload {

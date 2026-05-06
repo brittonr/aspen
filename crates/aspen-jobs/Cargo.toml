@@ -68,7 +68,7 @@ libc = "0.2"
 
 # Storage (for worker implementations)
 redb = "2.0.0"
-bincode = "1.3"
+aspen-codec = { workspace = true, features = ["std"] }
 zstd = "0.13"
 
 # VM execution (optional)
