@@ -1,0 +1,55 @@
+{
+  "cluster_dir": "/tmp/aspen-dogfood",
+  "command": "full",
+  "created_at": "2026-05-06T19:12:39Z",
+  "git_commit": "2f55a92e17b3abecb71c5fa2f96eca087281fb1a",
+  "mode": {
+    "federation": false,
+    "vm_ci": false
+  },
+  "project_dir": ".",
+  "run_id": "dogfood-20260506T191239Z",
+  "schema": "aspen.dogfood.run-receipt.v1",
+  "stages": [
+    {
+      "artifacts": [],
+      "elapsed_ms": 12684,
+      "failure": null,
+      "finished_at": "2026-05-06T19:12:52Z",
+      "stage": "start",
+      "started_at": "2026-05-06T19:12:39Z",
+      "status": "succeeded"
+    },
+    {
+      "artifacts": [],
+      "elapsed_ms": 570573,
+      "failure": null,
+      "finished_at": "2026-05-06T19:22:22Z",
+      "stage": "push",
+      "started_at": "2026-05-06T19:12:52Z",
+      "status": "succeeded"
+    },
+    {
+      "artifacts": [],
+      "elapsed_ms": 77416,
+      "failure": {
+        "category": "ci_pipeline",
+        "message": "CI pipeline 212f42a5-8dac-404a-97b3-774c57631243 failed: --- Failed job: clippy (stage: check) ---\nNo error details available. The job may have failed before any output was produced.",
+        "operation": "Build"
+      },
+      "finished_at": "2026-05-06T19:23:40Z",
+      "stage": "build",
+      "started_at": "2026-05-06T19:22:22Z",
+      "status": "failed"
+    },
+    {
+      "artifacts": [],
+      "elapsed_ms": 2508,
+      "failure": null,
+      "finished_at": "2026-05-06T19:23:42Z",
+      "stage": "stop",
+      "started_at": "2026-05-06T19:23:40Z",
+      "status": "succeeded"
+    }
+  ]
+}

@@ -18,7 +18,15 @@ Aspen needs an operator-grade receipt proving the current pushed head still sati
 
 ## Impact
 
-- **Files**: OpenSpec artifacts under `openspec/changes/dogfood-current-head-acceptance-receipt/`.
-- **APIs**: No immediate code API change; implementation tasks will decide stable public API or evidence surfaces.
-- **Dependencies**: No dependency change in this spec-only slice.
+- **Files**: OpenSpec artifacts under `openspec/changes/dogfood-current-head-acceptance-receipt/`, `docs/operator-receipts.md`, and current-head receipt/log evidence.
+- **APIs**: Dogfood receipt/readback behavior now records and surfaces the exact git commit for operator evidence.
+- **Dependencies**: No new runtime dependency is required by this evidence closeout.
 - **Testing**: `openspec validate dogfood-current-head-acceptance-receipt --strict`, helper verification, `git diff --check`, and the change-specific verification tasks.
+
+## Verification Expectations
+
+- Capture a current-head dogfood run receipt tied to an exact git commit and run id.
+- Save local receipt readback/diagnose outputs so operators can inspect evidence without scraping raw logs.
+- Redact cluster tickets, remote URLs, credentials, tokens, and secrets before committing evidence.
+- Document whether the full loop passed or deliberately gated; if gated, include a reproducible blocker command and triage summary.
+- Validate the OpenSpec change with `openspec validate dogfood-current-head-acceptance-receipt --strict`, `scripts/openspec-preflight.sh dogfood-current-head-acceptance-receipt`, and `git diff --check` before archive.

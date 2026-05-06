@@ -1,0 +1,16 @@
+Dogfood receipt: dogfood-20260506T191239Z
+  schema: aspen.dogfood.run-receipt.v1
+  git_commit: 2f55a92e17b3abecb71c5fa2f96eca087281fb1a
+  command: full
+  created_at: 2026-05-06T19:12:39Z
+  mode: federation=false, vm_ci=false
+  project_dir: .
+  cluster_dir: /tmp/aspen-dogfood
+  path: /tmp/aspen-dogfood-receipts/dogfood-20260506T191239Z.json
+  stages:
+    - start: succeeded (2026-05-06T19:12:39Z → 2026-05-06T19:12:52Z, elapsed_ms=12684)
+    - push: succeeded (2026-05-06T19:12:52Z → 2026-05-06T19:22:22Z, elapsed_ms=570573)
+    - build: failed (2026-05-06T19:22:22Z → 2026-05-06T19:23:40Z, elapsed_ms=77416)
+        failure Build [ci_pipeline]: CI pipeline 212f42a5-8dac-404a-97b3-774c57631243 failed: --- Failed job: clippy (stage: check) ---
+No error details available. The job may have failed before any output was produced.
+    - stop: succeeded (2026-05-06T19:23:40Z → 2026-05-06T19:23:42Z, elapsed_ms=2508)

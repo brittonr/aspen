@@ -196,7 +196,18 @@ result: deploy completed; node 1 healthy; verification passed; all stages succee
 ci_run_artifact: 497775a3-9bb7-461b-8d17-d0147b956e18
 ```
 
-Treat this section as a historical trail, not a live status endpoint. For current evidence, rerun `nix run .#dogfood-local -- full` at the commit you want to cite and record the new receipt path/key.
+A later current-head gated run captured durable failure evidence for the then-current synced `main`:
+
+```text
+run_id: dogfood-20260506T191239Z
+local receipt: /tmp/aspen-dogfood-receipts/dogfood-20260506T191239Z.json
+commit: 2f55a92e17b3abecb71c5fa2f96eca087281fb1a
+result: start succeeded; Forge push succeeded; native CI build gated at check/clippy; deploy/verify/publish_receipt did not run
+triage: local `nix build .#checks.x86_64-linux.clippy --no-link -L --show-trace` reproduced unresolved `netlink-packet-route` imports against the Nix vendored `netlink-packet-core` surface
+redaction: saved OpenSpec log redacts the cluster ticket and `aspen://...` remote URL; receipt/readback artifacts contain no secrets
+```
+
+Treat this section as a historical trail, not a live status endpoint. For current evidence, rerun `nix run .#dogfood-local -- full` at the commit you want to cite and record the new receipt path/key. A failure receipt is useful triage evidence, but it is not acceptance evidence unless every required stage succeeds.
 
 ## Operator checklist
 

@@ -5,30 +5,37 @@ Aspen needs an operator-grade receipt proving the current pushed head still sati
 ## Goals / Non-Goals
 
 **Goals:**
-- Define the smallest evidence-backed implementation slice for `dogfood-current-head-acceptance-receipt`.
+- Define and drain the smallest evidence-backed implementation slice for `dogfood-current-head-acceptance-receipt`.
 - Preserve current Aspen compatibility while proving the targeted reusable/evidence boundary.
-- Leave implementation tasks open for later autonomous drain.
+- Save redacted current-head dogfood receipt, readback, diagnose, and blocker evidence under the change.
 
 **Non-Goals:**
-- Do not raise readiness labels, archive the change, or claim dogfood acceptance before evidence exists.
+- Do not claim full dogfood acceptance if the run gates before deploy/verify/publish_receipt.
 - Do not broaden scope to unrelated crate families or runtime rewrites.
 - Do not use stale storage/Redb guidance as evidence; use live checks.
 
 ## Decisions
 
-### 1. Separate spec foundation from implementation evidence
+### 1. Commit-bound receipts are acceptance evidence
 
-**Choice:** Mark only the spec-foundation task complete and leave all implementation/evidence tasks open.
+**Choice:** Treat the dogfood receipt as the durable operator record only when it records the checked-out git commit, schema, run id, stage outcomes, timings, artifact identifiers, and failure category when any.
 
-**Rationale:** The user asked to write OpenSpecs for the targets, not to implement every target in this turn. Active changes should be drainable independently.
+**Rationale:** Current-head evidence must be auditable after logs rotate and must not depend on the operator remembering which commit was run.
 
-**Alternative:** Collapse all targets into one umbrella change. Rejected because each target has a distinct implementation seam and verification rail.
+**Alternative:** Keep a console transcript only. Rejected because raw logs are hard to compare, easy to leak, and do not provide a stable operator readback surface.
 
 ### 2. Evidence must be captured under the active change
 
-**Choice:** Implementation tasks must save command transcripts, fixture metadata, negative checks, and readiness/doc diffs under `openspec/changes/dogfood-current-head-acceptance-receipt/evidence/` or documented repo-local equivalents before tasks are checked off.
+**Choice:** Save the redacted dogfood log, redacted JSON receipt copy, receipt show output, receipt diagnose output, and verification matrix under `openspec/changes/dogfood-current-head-acceptance-receipt/evidence/` or `verification.md` before tasks are checked off.
 
 **Rationale:** Aspen extraction and dogfood claims need rerunnable, reviewable evidence rather than console-only summaries.
+
+## Verification Strategy
+
+- Cover `r[dogfood-evidence.current-head-receipt-durable]` and `r[dogfood-evidence.current-head-receipt-durable.evidence]` by running the current-head dogfood command with explicit locally built binaries and fresh `/tmp/aspen-dogfood*` directories.
+- Cover `r[dogfood-evidence.receipt-readback-operator-evidence]` and `r[dogfood-evidence.receipt-readback-operator-evidence.evidence]` by committing only redacted evidence: JSON receipt copy, dogfood log, receipt show output, and receipt diagnose output.
+- If the loop gates before deploy/verify/publish_receipt, capture the local reproduction command and failure category instead of claiming success.
+- Run `openspec validate dogfood-current-head-acceptance-receipt --strict`, `scripts/openspec-preflight.sh dogfood-current-head-acceptance-receipt`, and `git diff --check` before archiving.
 
 ## Risks / Trade-offs
 

@@ -1,0 +1,290 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant spelling")]
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spelling")]
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option spelling")]
+  |         ^^^^^^^^^^^^^
+
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+warning: unknown lint: `sentinel_fallback`
+  --> crates/aspen-raft-kv-types/src/lib.rs:62:9
+   |
+62 |         sentinel_fallback,
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: `aspen-raft-kv-types` (lib) generated 1 warning
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1494:9
+     |
+1494 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1510:9
+     |
+1510 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1524:9
+     |
+1524 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1540:9
+     |
+1540 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1554:9
+     |
+1554 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1566:9
+     |
+1566 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1580:9
+     |
+1580 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1596:9
+     |
+1596 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4322:9
+     |
+4322 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4329:9
+     |
+4329 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4336:9
+     |
+4336 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4343:9
+     |
+4343 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4350:9
+     |
+4350 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4357:9
+     |
+4357 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4364:9
+     |
+4364 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4371:9
+     |
+4371 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4411:9
+     |
+4411 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4418:9
+     |
+4418 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: `aspen-client-api` (lib) generated 28 warnings
+warning: unknown lint: `sentinel_fallback`
+  --> crates/aspen-raft-types/src/member.rs:63:9
+   |
+63 |         sentinel_fallback,
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: `aspen-raft-types` (lib) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.34s
+     Running `target/debug/aspen-dogfood --cluster-dir /tmp/aspen-dogfood full --leave-running`
+2026-05-06T19:12:39.595548Z  INFO aspen_dogfood: 🚀 Starting dogfood cluster...
+2026-05-06T19:12:39.596055Z  INFO aspen_dogfood::node:   spawned node1 (pid 53654)
+2026-05-06T19:12:39.596112Z  INFO aspen_dogfood::cluster:   waiting for node to start...
+2026-05-06T19:12:45.103181Z  INFO aspen_dogfood::cluster:   health-checking node...
+2026-05-06T19:12:45.129766Z  WARN endpoint{id=f06cacd20b}:actor:QADv6{relay_url=https://euc1-1.relay.n0.iroh-canary.iroh.link./}:poll_send{dst=Ip([2a01:4f8:1c1a:d408::1]:7842) src=None len=1200}: noq_udp: sendmsg error: Os { code: 101, kind: NetworkUnreachable, message: "Network is unreachable" }, Transmit: { destination: [2a01:4f8:1c1a:d408::1]:7842, src_ip: None, ecn: Some(Ect0), len: 1200, segment_size: None }
+2026-05-06T19:12:48.217940Z  INFO aspen_dogfood::cluster:   node reachable (status=unhealthy)
+2026-05-06T19:12:48.217976Z  INFO aspen_dogfood::cluster:   initializing cluster...
+2026-05-06T19:12:48.227106Z  WARN endpoint{id=2da5932712}:actor:QADv6{relay_url=https://aps1-1.relay.n0.iroh-canary.iroh.link./}:poll_send{dst=Ip([2a01:4ff:2f0:2403::1]:7842) src=None len=1200}: noq_udp: sendmsg error: Os { code: 101, kind: NetworkUnreachable, message: "Network is unreachable" }, Transmit: { destination: [2a01:4ff:2f0:2403::1]:7842, src_ip: None, ecn: Some(Ect0), len: 1200, segment_size: None }
+2026-05-06T19:12:51.255639Z  WARN endpoint{id=ec0f7c5561}:actor:QADv6{relay_url=https://usw1-1.relay.n0.iroh-canary.iroh.link./}:poll_send{dst=Ip([2a01:4ff:1f0:4b7b::1]:7842) src=None len=1200}: noq_udp: sendmsg error: Os { code: 101, kind: NetworkUnreachable, message: "Network is unreachable" }, Transmit: { destination: [2a01:4ff:1f0:4b7b::1]:7842, src_ip: None, ecn: Some(Ect0), len: 1200, segment_size: None }
+2026-05-06T19:12:52.279609Z  INFO aspen_dogfood: ✅ Single-node cluster running (ticket: [REDACTED])
+2026-05-06T19:12:52.280084Z  INFO aspen_dogfood: 📦 Pushing source to Forge...
+2026-05-06T19:12:52.309881Z  WARN endpoint{id=e7867186cc}:actor:QADv6{relay_url=https://euc1-1.relay.n0.iroh-canary.iroh.link./}:poll_send{dst=Ip([2a01:4f8:1c1a:d408::1]:7842) src=None len=1200}: noq_udp: sendmsg error: Os { code: 101, kind: NetworkUnreachable, message: "Network is unreachable" }, Transmit: { destination: [2a01:4f8:1c1a:d408::1]:7842, src_ip: None, ecn: Some(Ect0), len: 1200, segment_size: None }
+2026-05-06T19:12:52.371307Z  INFO aspen_dogfood::forge:   creating repo 'aspen'...
+2026-05-06T19:12:52.418529Z  INFO aspen_dogfood::forge:   repo created (id: 07067935c5893f7d)
+2026-05-06T19:12:52.419634Z  INFO endpoint{id=e7867186cc}:relay-actor: iroh::socket::transports::relay::actor: home is now relay https://use1-1.relay.n0.iroh-canary.iroh.link./, was None
+2026-05-06T19:12:54.759375Z  WARN endpoint{id=e7867186cc}:RemoteStateActor{remote=44699d83e7}: iroh::socket::remote_map::remote_state: Address Lookup failed: All address lookup services failed or produced no results
+    Service 'dns' failed: no calls succeeded: [Failed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT record]
+2026-05-06T19:12:55.459824Z  WARN endpoint{id=54ab37533b}:actor:QADv6{relay_url=https://use1-1.relay.n0.iroh-canary.iroh.link./}:poll_send{dst=Ip([2a01:4ff:f0:febe::1]:7842) src=None len=1200}: noq_udp: sendmsg error: Os { code: 101, kind: NetworkUnreachable, message: "Network is unreachable" }, Transmit: { destination: [2a01:4ff:f0:febe::1]:7842, src_ip: None, ecn: Some(Ect0), len: 1200, segment_size: None }
+2026-05-06T19:12:55.488451Z  INFO aspen_dogfood::forge:   CI watch registered for repo 07067935c5893f7d
+2026-05-06T19:12:56.508077Z  INFO aspen_dogfood::forge:   git push aspen-dogfood main...
+2026-05-06T19:22:22.853817Z  INFO aspen_dogfood: ✅ Source pushed to Forge
+2026-05-06T19:22:22.853977Z  INFO aspen_dogfood: 🔨 Waiting for CI build...
+2026-05-06T19:22:22.870731Z  WARN endpoint{id=4193b6b064}:actor:QADv6{relay_url=https://euc1-1.relay.n0.iroh-canary.iroh.link./}:poll_send{dst=Ip([2a01:4f8:1c1a:d408::1]:7842) src=None len=1200}: noq_udp: sendmsg error: Os { code: 101, kind: NetworkUnreachable, message: "Network is unreachable" }, Transmit: { destination: [2a01:4f8:1c1a:d408::1]:7842, src_ip: None, ecn: Some(Ect0), len: 1200, segment_size: None }
+2026-05-06T19:22:24.811184Z  INFO aspen_dogfood::ci:   looking for auto-triggered pipeline...
+2026-05-06T19:22:24.820789Z  INFO aspen_dogfood::ci:   found pipeline: 212f42a5-8dac-404a-97b3-774c57631243
+2026-05-06T19:22:24.820810Z  INFO aspen_dogfood::ci:   waiting for pipeline 212f42a5-8dac-404a-97b3-774c57631243...
+2026-05-06T19:22:25.724005Z  WARN endpoint{id=4193b6b064}:RemoteStateActor{remote=44699d83e7}: iroh::socket::remote_map::remote_state: Address Lookup failed: All address lookup services failed or produced no results
+    Service 'dns' failed: no calls succeeded: [Failed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT record]
+2026-05-06T19:22:25.862888Z  INFO endpoint{id=4193b6b064}:relay-actor: iroh::socket::transports::relay::actor: home is now relay https://use1-1.relay.n0.iroh-canary.iroh.link./, was None
+2026-05-06T19:22:29.439188Z  WARN endpoint{id=4193b6b064}:RemoteStateActor{remote=44699d83e7}: iroh::socket::remote_map::remote_state: Address Lookup failed: All address lookup services failed or produced no results
+    Service 'dns' failed: no calls succeeded: [Failed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT record]
+2026-05-06T19:22:35.402509Z  WARN endpoint{id=4193b6b064}:RemoteStateActor{remote=44699d83e7}: iroh::socket::remote_map::remote_state: Address Lookup failed: All address lookup services failed or produced no results
+    Service 'dns' failed: no calls succeeded: [Failed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT record]
+2026-05-06T19:22:42.641186Z  WARN endpoint{id=4193b6b064}:RemoteStateActor{remote=44699d83e7}: iroh::socket::remote_map::remote_state: Address Lookup failed: All address lookup services failed or produced no results
+    Service 'dns' failed: no calls succeeded: [Failed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT record]
+2026-05-06T19:22:52.466106Z  WARN endpoint{id=4193b6b064}:RemoteStateActor{remote=44699d83e7}: iroh::socket::remote_map::remote_state: Address Lookup failed: All address lookup services failed or produced no results
+    Service 'dns' failed: no calls succeeded: [Failed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT record]
+2026-05-06T19:23:02.598084Z  WARN endpoint{id=4193b6b064}:RemoteStateActor{remote=44699d83e7}: iroh::socket::remote_map::remote_state: Address Lookup failed: All address lookup services failed or produced no results
+    Service 'dns' failed: no calls succeeded: [Failed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT record]
+2026-05-06T19:23:13.090688Z  WARN endpoint{id=4193b6b064}:RemoteStateActor{remote=44699d83e7}: iroh::socket::remote_map::remote_state: Address Lookup failed: All address lookup services failed or produced no results
+    Service 'dns' failed: no calls succeeded: [Failed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT record]
+2026-05-06T19:23:23.079934Z  WARN endpoint{id=4193b6b064}:RemoteStateActor{remote=44699d83e7}: iroh::socket::remote_map::remote_state: Address Lookup failed: All address lookup services failed or produced no results
+    Service 'dns' failed: no calls succeeded: [Failed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT record]
+2026-05-06T19:23:33.402978Z  WARN endpoint{id=4193b6b064}:RemoteStateActor{remote=44699d83e7}: iroh::socket::remote_map::remote_state: Address Lookup failed: All address lookup services failed or produced no results
+    Service 'dns' failed: no calls succeeded: [Failed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT recordFailed to resolve TXT record]
+2026-05-06T19:23:40.007314Z  INFO aspen_dogfood::ci:   ❌ check
+2026-05-06T19:23:40.007351Z  INFO aspen_dogfood::ci:       ❌ clippy
+2026-05-06T19:23:40.007355Z  INFO aspen_dogfood::ci:       ✅ format-check
+2026-05-06T19:23:40.007358Z  INFO aspen_dogfood::ci:   ⏳ build
+2026-05-06T19:23:40.007360Z  INFO aspen_dogfood::ci:       ⏳ build-node
+2026-05-06T19:23:40.007363Z  INFO aspen_dogfood::ci:       ⏳ build-cli
+2026-05-06T19:23:40.007365Z  INFO aspen_dogfood::ci:   ⏳ test
+2026-05-06T19:23:40.007367Z  INFO aspen_dogfood::ci:       ⏳ nextest-quick
+2026-05-06T19:23:40.007369Z  INFO aspen_dogfood::ci:   ⏳ deploy
+2026-05-06T19:23:40.007371Z  INFO aspen_dogfood::ci:       ⏳ deploy-node
+2026-05-06T19:23:40.270502Z  INFO aspen_dogfood: 🛑 Stopping dogfood cluster...
+2026-05-06T19:23:40.270576Z  INFO aspen_dogfood::node:   sending SIGTERM to pid 53654
+2026-05-06T19:23:42.778606Z  INFO aspen_dogfood: ✅ Cluster stopped and cleaned up
+2026-05-06T19:23:42.778774Z  INFO aspen_dogfood: 🧾 Dogfood receipt: /tmp/aspen-dogfood-receipts/dogfood-20260506T191239Z.json
+2026-05-06T19:23:42.779678Z ERROR aspen_dogfood: ❌ CI pipeline 212f42a5-8dac-404a-97b3-774c57631243 failed: --- Failed job: clippy (stage: check) ---
+No error details available. The job may have failed before any output was produced.

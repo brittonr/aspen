@@ -1,0 +1,14 @@
+Dogfood receipt diagnosis: dogfood-20260506T191239Z
+  path: /tmp/aspen-dogfood-receipts/dogfood-20260506T191239Z.json
+  git_commit: 2f55a92e17b3abecb71c5fa2f96eca087281fb1a
+  command: full
+  created_at: 2026-05-06T19:12:39Z
+  status: failed
+  failed_stage: build
+  failure_category: ci_pipeline
+  failure_operation: Build
+  failure_message: CI pipeline 212f42a5-8dac-404a-97b3-774c57631243 failed: --- Failed job: clippy (stage: check) ---
+No error details available. The job may have failed before any output was produced.
+  first_checks:
+    - Use the CI run artifact from the receipt, then inspect CI status and logs for that exact run id.
+    - Check failed job output before rerunning or changing source.
