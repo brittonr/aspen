@@ -1,0 +1,10 @@
+# Archive verification: review-auth-ticket-public-api
+
+Commands run after archive:
+
+```bash
+openspec archive review-auth-ticket-public-api --yes
+openspec validate auth-ticket-extraction --strict
+```
+
+Result: archive completed as `openspec/changes/archive/2026-05-06-review-auth-ticket-public-api/` and canonical spec `openspec/specs/auth-ticket-extraction/spec.md` validated strictly.
