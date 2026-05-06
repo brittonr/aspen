@@ -16,7 +16,8 @@ removal trigger.
 After remediating the two `rand` soundness warnings by lockfile-only updates,
 replacing Aspen-owned bincode serialization, retiring direct CLI/web warning
 edges, patching the Nostr time supplier away from unmaintained `instant`,
-patching iroh postcard users away from `heapless-cas`/`atomic-polyfill`, and
+patching iroh postcard users away from `heapless-cas`/`atomic-polyfill`, pruning
+the unused `cloud-hypervisor-client` dev-dependency that selected `safemem`, and
 accepting the SNIX/FUSE unsound cluster as bounded upstream dependency debt, the
 direct audit inventory is:
 
@@ -31,8 +32,8 @@ cargo audit -n \
 ```
 
 - vulnerabilities: `0`
-- allowed warnings: `4`
-  - unmaintained: `4`
+- allowed warnings: `3`
+  - unmaintained: `3`
   - unsound: `0`
 
 ## Remediated or bounded in this triage slice
@@ -45,6 +46,7 @@ cargo audit -n \
 | `RUSTSEC-2024-0370` | `proc-macro-error` | `1.0.4` | removed | Bumped Forge web `maud` to `0.27`; `maud_macros` no longer depends on `proc-macro-error`. |
 | `RUSTSEC-2024-0384` | `instant` | `0.1.13` | removed | Vendored `nostr 0.44.2` only to replace its wasm-only `instant` time supplier with maintained `web-time`; `instant` left `Cargo.lock`. |
 | `RUSTSEC-2023-0089` | `atomic-polyfill` | `1.0.3` | removed | Vendored the narrow iroh crates that enabled postcard defaults (`iroh-blobs`, `iroh-metrics`, `iroh-tickets`) and disabled postcard `heapless-cas`; `atomic-polyfill` left `Cargo.lock`. |
+| `RUSTSEC-2023-0081` | `safemem` | `0.2.0` | removed | Removed the unused root `cloud-hypervisor-client 0.3.3` dev-dependency; VM CI runtime uses Aspen's `aspen-ci::CloudHypervisorWorker`, not that stale client crate. |
 | `RUSTSEC-2026-0002` | `lru` | `0.12.5` | upstream-pinned | Advisory-specific exception. SNIX `nar-bridge`/`snix-store` pin `lru = ^0.12.4`; Aspen does not call `IterMut` through its SNIX integration. |
 | `RUSTSEC-2023-0056` | `vm-memory` | `0.10.0` | upstream-pinned | Advisory-specific exception through `snix-castore -> fuse-backend-rs`; Aspen's SNIX path uses store/NAR traits, not FUSE `VolatileMemory` helpers. |
 | `RUSTSEC-2024-0002` | `vmm-sys-util` | `0.11.2` | upstream-pinned | Advisory-specific exception through `snix-castore -> fuse-backend-rs`; Aspen does not deserialize attacker-controlled `FamStructWrapper` values through this edge. |
@@ -72,9 +74,8 @@ revisited when upstream dependency constraints move.
 | P2 | `RUSTSEC-2025-0141` | `bincode 1.3.3` | `madsim` transitive test/simulation edge | Aspen-owned `aspen-codec` now uses postcard, so no first-party storage/wire path depends on `bincode`. The remaining lockfile warning is upstream madsim-only. | Upstream `madsim` drops its `bincode 1.x` edge, or Aspen removes/replaces that simulation dependency. |
 | P3 | `RUSTSEC-2024-0436` | `paste 1.0.15` | DataFusion SQL path and netlink/iroh path | Proc-macro unmaintained warning. No direct runtime input exposure; remove through parent upgrades. | DataFusion/iroh/netlink stack drops `paste`. |
 | P3 | `RUSTSEC-2024-0370` | `proc-macro-error 0.4.12` | `genawaiter-proc-macro` -> `genawaiter` -> `bao-tree`/`iroh-blobs` | Proc-macro build-time warning through blob DAG stack. | iroh-blobs/bao-tree stack drops `genawaiter` or moves to maintained macro deps. |
-| P3 | `RUSTSEC-2023-0081` | `safemem 0.2.0` | `base64 0.7.0` -> `cloud-hypervisor-client 0.3.3` -> Aspen root | Cloud Hypervisor client edge; likely isolated to VM job control surfaces. | Upgrade/replace `cloud-hypervisor-client` or avoid that old base64 path. |
 
 ## Next remediation order
 
-1. Parent-stack refreshes: DataFusion/iroh/netlink, iroh-blobs/bao-tree, and Cloud Hypervisor client.
+1. Parent-stack refreshes: DataFusion/iroh/netlink and iroh-blobs/bao-tree.
 2. Upstream-watch the remaining `madsim` bincode edge, vendored iroh postcard patches, and SNIX/FUSE exceptions; remove local patches/ignores as soon as parent stacks move or Aspen can make the affected edge unreachable in the selected feature graph.

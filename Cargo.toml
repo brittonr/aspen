@@ -532,9 +532,6 @@ anyerror = { version = "0.1", features = ["anyhow"] }
 criterion = { version = "0.5", features = ["html_reports", "async_tokio"] }
 portpicker = "0.1"
 
-# VM-based integration testing with Cloud Hypervisor
-cloud-hypervisor-client = "0.3"
-
 [features]
 # Minimal default: just Raft + KV + Coordination (no optional features)
 # Users opt-in to heavier features (SQL, DNS, Forge, CI) as needed
