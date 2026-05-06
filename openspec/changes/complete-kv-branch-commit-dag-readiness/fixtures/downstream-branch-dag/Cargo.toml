@@ -1,0 +1,15 @@
+[workspace]
+
+[package]
+name = "downstream-branch-dag"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+aspen-commit-dag = { path = "../../../../../crates/aspen-commit-dag" }
+aspen-kv-branch = { path = "../../../../../crates/aspen-kv-branch", features = ["commit-dag"] }
+aspen-kv-types = { path = "../../../../../crates/aspen-kv-types" }
+aspen-traits = { path = "../../../../../crates/aspen-traits" }
+async-trait = "0.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

@@ -86,7 +86,7 @@ No root app, CLI/TUI, web, dogfood, handler, concrete transport, trust, secrets,
 - `aspen-fuse --features kv-branch`
 - `aspen-docs --features commit-dag-federation`
 - `aspen-cli --features commit-dag`
-- Downstream fixture under `openspec/changes/extract-kv-branch-commit-dag/fixtures/downstream-branch-dag`
+- Downstream fixture under `openspec/changes/complete-kv-branch-commit-dag-readiness/fixtures/downstream-branch-dag`
 
 ## Representative consumers and re-exporters
 
@@ -121,4 +121,13 @@ No root app, CLI/TUI, web, dogfood, handler, concrete transport, trust, secrets,
 
 ## First-slice status
 
-Current status is `workspace-internal`. The first implementation slice localizes the hash helper surface in `aspen-commit-dag`, removes the normal `aspen-raft` dependency, and proves branch/DAG feature boundaries with compile, tree, fixture, and consumer evidence before any publication readiness state is raised.
+Current status is `workspace-internal`. The `complete-kv-branch-commit-dag-readiness`
+slice captured current ownership, graph, downstream fixture, and representative
+consumer evidence under
+`openspec/changes/complete-kv-branch-commit-dag-readiness/evidence/`.
+The leaf crates and the jobs, CI shell executor, deploy, and CLI feature paths
+compile against the current graph. `aspen-docs --features commit-dag-federation`
+remains a broader pre-existing compatibility blocker caused by mixed
+`iroh-blobs`/`iroh-docs` and RNG API skew, not by the branch/DAG leaf graph;
+retain `workspace-internal` until that docs feature path has fresh passing
+evidence.

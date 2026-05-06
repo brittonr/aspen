@@ -1,0 +1,299 @@
+$ cargo tree -p aspen-commit-dag -e normal
+aspen-commit-dag v0.1.0 (/home/brittonr/git/aspen/crates/aspen-commit-dag)
+├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   ├── serde v1.0.228
+│   │   ├── serde_core v1.0.228
+│   │   └── serde_derive v1.0.228 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106
+│   │       │   └── unicode-ident v1.0.24
+│   │       ├── quote v1.0.45
+│   │       │   └── proc-macro2 v1.0.106 (*)
+│   │       └── syn v2.0.117
+│   │           ├── proc-macro2 v1.0.106 (*)
+│   │           ├── quote v1.0.45 (*)
+│   │           └── unicode-ident v1.0.24
+│   └── thiserror v2.0.18
+│       └── thiserror-impl v2.0.18 (proc-macro)
+│           ├── proc-macro2 v1.0.106 (*)
+│           ├── quote v1.0.45 (*)
+│           └── syn v2.0.117 (*)
+├── aspen-time v0.1.0 (/home/brittonr/git/aspen/crates/aspen-time)
+├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+│   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+│   │   ├── serde v1.0.228 (*)
+│   │   └── thiserror v2.0.18 (*)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+│   └── async-trait v0.1.89 (proc-macro)
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+├── async-trait v0.1.89 (proc-macro) (*)
+├── blake3 v1.8.5
+│   ├── arrayref v0.3.9
+│   ├── arrayvec v0.7.6
+│   ├── cfg-if v1.0.4
+│   ├── constant_time_eq v0.4.2
+│   └── cpufeatures v0.3.0
+├── hex v0.4.3
+├── postcard v1.1.3 (/home/brittonr/git/aspen/vendor/postcard)
+│   ├── cobs v0.3.0
+│   │   └── thiserror v2.0.18 (*)
+│   └── serde v1.0.228 (*)
+├── serde v1.0.228 (*)
+├── snafu v0.8.9
+│   └── snafu-derive v0.8.9 (proc-macro)
+│       ├── heck v0.5.0
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+├── tokio v1.52.2
+│   ├── bytes v1.11.1
+│   ├── libc v0.2.186
+│   ├── mio v1.2.0
+│   │   └── libc v0.2.186
+│   ├── pin-project-lite v0.2.17
+│   ├── signal-hook-registry v1.4.8
+│   │   ├── errno v0.3.14
+│   │   │   └── libc v0.2.186
+│   │   └── libc v0.2.186
+│   └── tokio-macros v2.7.0 (proc-macro)
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+└── tracing v0.1.44
+    ├── pin-project-lite v0.2.17
+    ├── tracing-attributes v0.1.31 (proc-macro)
+    │   ├── proc-macro2 v1.0.106 (*)
+    │   ├── quote v1.0.45 (*)
+    │   └── syn v2.0.117 (*)
+    └── tracing-core v0.1.36
+        └── once_cell v1.21.4
+$ cargo tree -p aspen-kv-branch -e normal
+aspen-kv-branch v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-branch)
+├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   ├── serde v1.0.228
+│   │   ├── serde_core v1.0.228
+│   │   └── serde_derive v1.0.228 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106
+│   │       │   └── unicode-ident v1.0.24
+│   │       ├── quote v1.0.45
+│   │       │   └── proc-macro2 v1.0.106 (*)
+│   │       └── syn v2.0.117
+│   │           ├── proc-macro2 v1.0.106 (*)
+│   │           ├── quote v1.0.45 (*)
+│   │           └── unicode-ident v1.0.24
+│   └── thiserror v2.0.18
+│       └── thiserror-impl v2.0.18 (proc-macro)
+│           ├── proc-macro2 v1.0.106 (*)
+│           ├── quote v1.0.45 (*)
+│           └── syn v2.0.117 (*)
+├── aspen-time v0.1.0 (/home/brittonr/git/aspen/crates/aspen-time)
+├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+│   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+│   │   ├── serde v1.0.228 (*)
+│   │   └── thiserror v2.0.18 (*)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+│   └── async-trait v0.1.89 (proc-macro)
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+├── async-trait v0.1.89 (proc-macro) (*)
+├── dashmap v6.1.0
+│   ├── cfg-if v1.0.4
+│   ├── crossbeam-utils v0.8.21
+│   ├── hashbrown v0.14.5
+│   ├── lock_api v0.4.14
+│   │   └── scopeguard v1.2.0
+│   ├── once_cell v1.21.4
+│   └── parking_lot_core v0.9.12
+│       ├── cfg-if v1.0.4
+│       ├── libc v0.2.186
+│       └── smallvec v1.15.1
+├── hex v0.4.3
+├── serde v1.0.228 (*)
+├── tokio v1.52.2
+│   ├── bytes v1.11.1
+│   ├── libc v0.2.186
+│   ├── mio v1.2.0
+│   │   └── libc v0.2.186
+│   ├── pin-project-lite v0.2.17
+│   ├── signal-hook-registry v1.4.8
+│   │   ├── errno v0.3.14
+│   │   │   └── libc v0.2.186
+│   │   └── libc v0.2.186
+│   └── tokio-macros v2.7.0 (proc-macro)
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+└── tracing v0.1.44
+    ├── pin-project-lite v0.2.17
+    ├── tracing-attributes v0.1.31 (proc-macro)
+    │   ├── proc-macro2 v1.0.106 (*)
+    │   ├── quote v1.0.45 (*)
+    │   └── syn v2.0.117 (*)
+    └── tracing-core v0.1.36
+        └── once_cell v1.21.4
+$ cargo tree -p aspen-kv-branch --no-default-features -e normal
+aspen-kv-branch v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-branch)
+├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   ├── serde v1.0.228
+│   │   ├── serde_core v1.0.228
+│   │   └── serde_derive v1.0.228 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106
+│   │       │   └── unicode-ident v1.0.24
+│   │       ├── quote v1.0.45
+│   │       │   └── proc-macro2 v1.0.106 (*)
+│   │       └── syn v2.0.117
+│   │           ├── proc-macro2 v1.0.106 (*)
+│   │           ├── quote v1.0.45 (*)
+│   │           └── unicode-ident v1.0.24
+│   └── thiserror v2.0.18
+│       └── thiserror-impl v2.0.18 (proc-macro)
+│           ├── proc-macro2 v1.0.106 (*)
+│           ├── quote v1.0.45 (*)
+│           └── syn v2.0.117 (*)
+├── aspen-time v0.1.0 (/home/brittonr/git/aspen/crates/aspen-time)
+├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+│   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+│   │   ├── serde v1.0.228 (*)
+│   │   └── thiserror v2.0.18 (*)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+│   └── async-trait v0.1.89 (proc-macro)
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+├── async-trait v0.1.89 (proc-macro) (*)
+├── dashmap v6.1.0
+│   ├── cfg-if v1.0.4
+│   ├── crossbeam-utils v0.8.21
+│   ├── hashbrown v0.14.5
+│   ├── lock_api v0.4.14
+│   │   └── scopeguard v1.2.0
+│   ├── once_cell v1.21.4
+│   └── parking_lot_core v0.9.12
+│       ├── cfg-if v1.0.4
+│       ├── libc v0.2.186
+│       └── smallvec v1.15.1
+├── hex v0.4.3
+├── serde v1.0.228 (*)
+├── tokio v1.52.2
+│   ├── bytes v1.11.1
+│   ├── libc v0.2.186
+│   ├── mio v1.2.0
+│   │   └── libc v0.2.186
+│   ├── pin-project-lite v0.2.17
+│   ├── signal-hook-registry v1.4.8
+│   │   ├── errno v0.3.14
+│   │   │   └── libc v0.2.186
+│   │   └── libc v0.2.186
+│   └── tokio-macros v2.7.0 (proc-macro)
+│       ├── proc-macro2 v1.0.106 (*)
+│       ├── quote v1.0.45 (*)
+│       └── syn v2.0.117 (*)
+└── tracing v0.1.44
+    ├── pin-project-lite v0.2.17
+    ├── tracing-attributes v0.1.31 (proc-macro)
+    │   ├── proc-macro2 v1.0.106 (*)
+    │   ├── quote v1.0.45 (*)
+    │   └── syn v2.0.117 (*)
+    └── tracing-core v0.1.36
+        └── once_cell v1.21.4
+$ cargo tree -p aspen-kv-branch --features commit-dag -e normal
+aspen-kv-branch v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-branch)
+├── aspen-commit-dag v0.1.0 (/home/brittonr/git/aspen/crates/aspen-commit-dag)
+│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+│   │   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   │   ├── serde v1.0.228
+│   │   │   ├── serde_core v1.0.228
+│   │   │   └── serde_derive v1.0.228 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.106
+│   │   │       │   └── unicode-ident v1.0.24
+│   │   │       ├── quote v1.0.45
+│   │   │       │   └── proc-macro2 v1.0.106 (*)
+│   │   │       └── syn v2.0.117
+│   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │           ├── quote v1.0.45 (*)
+│   │   │           └── unicode-ident v1.0.24
+│   │   └── thiserror v2.0.18
+│   │       └── thiserror-impl v2.0.18 (proc-macro)
+│   │           ├── proc-macro2 v1.0.106 (*)
+│   │           ├── quote v1.0.45 (*)
+│   │           └── syn v2.0.117 (*)
+│   ├── aspen-time v0.1.0 (/home/brittonr/git/aspen/crates/aspen-time)
+│   ├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+│   │   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+│   │   │   ├── serde v1.0.228 (*)
+│   │   │   └── thiserror v2.0.18 (*)
+│   │   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+│   │   └── async-trait v0.1.89 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   ├── async-trait v0.1.89 (proc-macro) (*)
+│   ├── blake3 v1.8.5
+│   │   ├── arrayref v0.3.9
+│   │   ├── arrayvec v0.7.6
+│   │   ├── cfg-if v1.0.4
+│   │   ├── constant_time_eq v0.4.2
+│   │   └── cpufeatures v0.3.0
+│   ├── hex v0.4.3
+│   ├── postcard v1.1.3 (/home/brittonr/git/aspen/vendor/postcard)
+│   │   ├── cobs v0.3.0
+│   │   │   └── thiserror v2.0.18 (*)
+│   │   └── serde v1.0.228 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── snafu v0.8.9
+│   │   └── snafu-derive v0.8.9 (proc-macro)
+│   │       ├── heck v0.5.0
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   ├── tokio v1.52.2
+│   │   ├── bytes v1.11.1
+│   │   ├── libc v0.2.186
+│   │   ├── mio v1.2.0
+│   │   │   └── libc v0.2.186
+│   │   ├── pin-project-lite v0.2.17
+│   │   ├── signal-hook-registry v1.4.8
+│   │   │   ├── errno v0.3.14
+│   │   │   │   └── libc v0.2.186
+│   │   │   └── libc v0.2.186
+│   │   └── tokio-macros v2.7.0 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   └── tracing v0.1.44
+│       ├── pin-project-lite v0.2.17
+│       ├── tracing-attributes v0.1.31 (proc-macro)
+│       │   ├── proc-macro2 v1.0.106 (*)
+│       │   ├── quote v1.0.45 (*)
+│       │   └── syn v2.0.117 (*)
+│       └── tracing-core v0.1.36
+│           └── once_cell v1.21.4
+├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+├── aspen-time v0.1.0 (/home/brittonr/git/aspen/crates/aspen-time)
+├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits) (*)
+├── async-trait v0.1.89 (proc-macro) (*)
+├── dashmap v6.1.0
+│   ├── cfg-if v1.0.4
+│   ├── crossbeam-utils v0.8.21
+│   ├── hashbrown v0.14.5
+│   ├── lock_api v0.4.14
+│   │   └── scopeguard v1.2.0
+│   ├── once_cell v1.21.4
+│   └── parking_lot_core v0.9.12
+│       ├── cfg-if v1.0.4
+│       ├── libc v0.2.186
+│       └── smallvec v1.15.1
+├── hex v0.4.3
+├── serde v1.0.228 (*)
+├── tokio v1.52.2 (*)
+└── tracing v0.1.44 (*)

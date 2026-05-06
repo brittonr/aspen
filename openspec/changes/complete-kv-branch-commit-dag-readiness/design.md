@@ -35,3 +35,20 @@ KV branch and commit DAG are reusable primitives for sagas, speculative writes, 
 **Scope drift** → Keep each change bounded to its named family and open follow-up changes for unrelated findings.
 
 **False readiness** → Require downstream/negative/compatibility evidence before readiness labels or operator acceptance claims change.
+
+## Verification Strategy
+
+Capture all verification under the active change's `evidence/` directory plus
+the extraction documentation update. For
+`kv-branch-commit-dag-extraction.commit-dag-avoids-raft` and
+`kv-branch-commit-dag-extraction.commit-dag-avoids-raft.evidence`, the rails
+are source ownership, leaf package checks, negative cargo-tree scans, and
+representative consumer compile checks. For
+`kv-branch-commit-dag-extraction.kv-branch-boundaries-feature-gated` and
+`kv-branch-commit-dag-extraction.kv-branch-boundaries-feature-gated.evidence`,
+the rails are downstream fixture metadata/check/test, forbidden dependency
+scans, strict OpenSpec validation, helper verification, repo-local preflight,
+and whitespace validation. A failing representative consumer may be accepted
+only as blocker evidence when the transcript shows the failure is pre-existing
+and outside the branch/DAG leaf boundary, and the docs continue to withhold
+readiness promotion.

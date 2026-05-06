@@ -1,0 +1,9 @@
+# Current HEAD
+1ed6c85f70deb3ae881642cf8587fe11b89ec1d0
+
+# Source ownership scan
+NOTE historical Verus comment only: crates/aspen-commit-dag/verus/commit_hash_spec.rs:8: //! Reuses blake3_spec and u64_to_le_bytes axioms from aspen-raft/verus/chain_hash_spec.rs.
+NOTE historical Verus comment only: crates/aspen-commit-dag/verus/commit_hash_spec.rs:14: // Axioms (shared with aspen-raft chain_hash_spec)
+NOTE historical Verus comment only: crates/aspen-commit-dag/verus/commit_hash_spec.rs:168: /// aspen-raft/verus/chain_verify_spec.rs.
+NOTE historical Verus comment only: crates/aspen-commit-dag/verus/commit_hash_spec.rs:200: /// aspen-raft/verus/chain_verify_spec.rs.
+PASS: no live aspen_raft::verified imports or aspen-raft dependency declarations in commit DAG / KV branch crates; remaining mentions are historical Verus comments only.
