@@ -1,0 +1,3 @@
+$ openspec validate kv-branch-commit-dag-extraction --strict
+Specification 'kv-branch-commit-dag-extraction' is valid
+$ git diff --check

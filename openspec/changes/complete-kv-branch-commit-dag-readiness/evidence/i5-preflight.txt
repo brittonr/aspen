@@ -1,5 +1,0 @@
-OK: scripts/openspec-preflight.sh complete-kv-branch-commit-dag-readiness
-OK: openspec/changes/complete-kv-branch-commit-dag-readiness
-  tasks: 6 total / 6 checked
-  changed files listed: 17
-  verification artifacts: 6

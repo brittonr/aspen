@@ -1,0 +1,2 @@
+OK: archive verification freshness check
+OK: verification index is fresh

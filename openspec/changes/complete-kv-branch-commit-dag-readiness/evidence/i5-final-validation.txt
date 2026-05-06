@@ -1,7 +1,0 @@
-$ openspec validate complete-kv-branch-commit-dag-readiness --strict
-Change 'complete-kv-branch-commit-dag-readiness' is valid
-$ python ~/.hermes/skills/agentkit-port/openspec/scripts/openspec_helper.py verify complete-kv-branch-commit-dag-readiness --json
-{
-  "complete-kv-branch-commit-dag-readiness": []
-}
-$ git diff --check
