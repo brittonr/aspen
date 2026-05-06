@@ -49,7 +49,7 @@ This page is the top-level map of Aspen internals. Use it to orient yourself in 
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Aspen's invariant: cluster-wide mutable state goes through Raft, all network communication goes through Iroh, and durable local state goes through bounded storage paths. Higher-level systems are thin applications over those primitives.
+Aspen's invariant: cluster-wide mutable state goes through Raft, all network communication goes through Iroh, and durable local state goes through bounded storage paths. Higher-level systems are thin applications over those primitives. The emerging runtime/application contract is tracked in [Runtime Applications](../runtime-applications.md): applications declare services, execution plans, routes, capabilities, state, health, and receipts instead of depending directly on node startup wiring.
 
 ## Directory Structure
 
