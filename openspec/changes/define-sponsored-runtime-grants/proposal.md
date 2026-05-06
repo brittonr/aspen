@@ -2,11 +2,11 @@
 
 Aspen's runtime roadmap needs a neutral way for one party to authorize another party's hosted service, job, CI run, or application workload without baking in a currency, payment rail, or marketplace. The runtime should enforce resource authority and emit receipts; bilateral settlement should remain outside Aspen and up to the parties.
 
-This change defines sponsored runtime resource grants as the contract between workload owners, sponsors, and providers. It also records where Nickel typing and contracts fit: human-authored policies and provider offers can be Nickel-authored, while runtime-emitted grants, ledgers, and usage receipts remain Rust-owned DTOs with generated Nickel validation contracts.
+This change defines sponsored runtime resource grants as the contract between principals acting as workload owners, sponsors, providers, services, organizations, users, or payment/exchange plugins. It also records where Nickel typing and contracts fit: human-authored policies and provider offers can be Nickel-authored, while runtime-emitted grants, ledgers, and usage receipts remain Rust-owned DTOs with generated Nickel validation contracts.
 
 ## What Changes
 
-- **Sponsored resource grants**: Define a runtime sponsorship model for delegated resource authority across sponsor, beneficiary/workload owner, and provider/operator roles.
+- **Sponsored resource grants**: Define a runtime sponsorship model for delegated resource authority across principal roles: sponsor, beneficiary/workload owner, provider/operator, service, organization, user, node, or plugin.
 - **Currency-neutral settlement references**: Require settlement/payment references to be opaque metadata that Aspen stores and redacts but does not interpret.
 - **Admission and quota semantics**: Require runtime admission checks against grant scope, provider acceptance policy, resource limits, validity windows, revocation, and remaining quota.
 - **Usage receipts**: Require signed, redacted usage receipts that can support external settlement or audit without making Aspen a payment processor.
@@ -14,7 +14,7 @@ This change defines sponsored runtime resource grants as the contract between wo
 
 ## In Scope
 
-- Specification of sponsor, beneficiary, provider, workload, resource grant, quota ledger, provider offer, and usage receipt concepts.
+- Specification of principal-based sponsor, beneficiary, provider, workload/service, node, plugin/exchange, resource grant, quota ledger, provider offer, and usage receipt concepts.
 - Runtime admission invariants for sponsored workloads.
 - Currency-neutral settlement metadata rules.
 - Nickel ownership split for human policy/config versus Rust-owned runtime evidence DTOs.

@@ -1,14 +1,14 @@
 ## Context
 
-Aspen already has auth/capability primitives, jobs/CI, Forge, runtime host-loading OpenSpecs, active runtime service core work, dogfood/CI receipts, and a typed Nickel contract baseline. Those pieces are close to what sponsored execution needs, but the product concept needs an explicit boundary: Aspen should verify delegated resource authority and record metered usage, not decide how two parties settled value.
+Aspen already has auth/capability primitives, jobs/CI, Forge, runtime host-loading OpenSpecs, active runtime service core work, dogfood/CI receipts, and a typed Nickel contract baseline. Those pieces are close to what sponsored execution needs, but the product concept needs an explicit boundary: Aspen should verify delegated resource authority between principals and record metered usage, not decide how two parties settled value.
 
-The model should support organization budgets, sponsored open-source CI, customer-funded hosted services, peer-to-peer compute favors, and future marketplace adapters without committing Aspen core to any one payment rail.
+The model should support organization budgets, sponsored open-source CI, customer-funded hosted services, peer-to-peer compute favors, payment/exchange plugins, node operators, and future marketplace adapters without committing Aspen core to any one payment rail or assuming every actor is a human user.
 
 ## Goals
 
 - Keep Aspen currency- and settlement-neutral.
-- Represent sponsored hosting/execution as capability-backed resource authority.
-- Let providers accept or reject sponsors, workload classes, settlement references, and isolation modes under local policy.
+- Represent sponsored hosting/execution as capability-backed resource authority between principals, not hardcoded user accounts.
+- Let provider principals accept or reject sponsor principals, workload/service principals, settlement references, and isolation modes under local policy.
 - Emit signed, redacted usage receipts for external audit/settlement.
 - Use Nickel where it is strongest: typed human-authored provider/sponsor policies, resource class catalogs, and validation fixtures.
 - Keep Rust as the source of truth for runtime-emitted grants, ledger updates, revocation state, and receipts.
@@ -22,21 +22,21 @@ The model should support organization budgets, sponsored open-source CI, custome
 
 ## Decisions
 
-### 1. Sponsorship is resource authority, not money
+### 1. Sponsorship is principal-scoped resource authority, not money
 
-**Choice:** Aspen models `ResourceGrant` authority from a sponsor to a beneficiary/workload scope with limits, validity, provider scope, revocation, and opaque settlement metadata.
+**Choice:** Aspen models `ResourceGrant` authority from a sponsor principal to a beneficiary/workload principal scope with limits, validity, provider principal scope, revocation, and opaque settlement metadata.
 
 **Rationale:** This gives the scheduler and runtime a concrete object to enforce while keeping settlement entirely outside Aspen.
 
-### 2. Providers keep local acceptance policy
+### 2. Providers are principals with local acceptance policy
 
-**Choice:** Providers/operators declare what sponsor identities, grant issuers, workload classes, isolation modes, resource classes, settlement-reference families, and maximum exposure they accept.
+**Choice:** Provider/operator principals declare what sponsor principals, grant issuers, workload/service principal classes, isolation modes, resource classes, settlement-reference families, and maximum exposure they accept.
 
-**Rationale:** A provider may accept invoices, UCAN vouchers, prepaid accounts, internal org budgets, or no external settlement at all. Aspen should not define a universal trust or pricing model.
+**Rationale:** A provider principal may accept invoices, UCAN vouchers, prepaid accounts, internal org budgets, plugin-issued proofs, or no external settlement at all. Aspen should not define a universal trust or pricing model.
 
-### 3. Admission is fail-closed
+### 3. Admission is fail-closed across principal roles
 
-**Choice:** A sponsored workload is admitted only when the proof chain, provider policy, workload scope, resource request, isolation requirement, validity window, revocation status, and remaining quota all pass.
+**Choice:** A sponsored workload is admitted only when the principal proof chain, provider policy, workload/service principal scope, resource request, isolation requirement, validity window, revocation status, and remaining quota all pass.
 
 **Rationale:** Sponsored execution creates third-party cost exposure; failure must deny execution rather than best-effort run.
 

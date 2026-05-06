@@ -4,14 +4,14 @@
 
 ## Phase 2: Core model and admission semantics
 
-- [ ] Add portable Rust-owned DTOs for resource grants, grant scopes, sponsor/beneficiary/provider identities, resource limits, quota reservations, quota consumption, revocation refs, settlement references, and usage receipts.
+- [ ] Add portable Rust-owned DTOs for principal references, resource grants, grant scopes, sponsor/beneficiary/provider/workload/service principal roles, node/plugin principal refs, resource limits, quota reservations, quota consumption, revocation refs, settlement references, and usage receipts.
 - [ ] Add pure tests for bounded resources, validity windows, workload/provider scopes, settlement-reference opacity, redaction, and quota arithmetic.
-- [ ] Add fail-closed admission tests covering missing proof, expired grant, revoked grant, provider rejection, unsupported settlement tag, quota exhaustion, isolation mismatch, and workload-scope mismatch.
+- [ ] Add fail-closed admission tests covering missing principal proof, expired grant, revoked grant, provider-principal rejection, unsupported settlement tag, quota exhaustion, isolation mismatch, and workload/service-principal scope mismatch.
 
 ## Phase 3: Provider and sponsor policy contracts
 
 - [ ] Add Nickel-authored contracts and fixtures for provider offers, sponsor policies, resource class catalogs, and admission profiles.
-- [ ] Add positive/negative Nickel fixture tests proving policy defaults, bounded limits, secret-free settlement refs, and invalid provider/sponsor combinations are rejected before Rust runtime side effects.
+- [ ] Add positive/negative Nickel fixture tests proving policy defaults, bounded limits, secret-free settlement refs, and invalid provider/sponsor principal combinations are rejected before Rust runtime side effects.
 
 ## Phase 4: Rust-derived evidence contracts
 
