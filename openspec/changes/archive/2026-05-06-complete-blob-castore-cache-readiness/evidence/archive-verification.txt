@@ -1,0 +1,13 @@
+# Archive verification for complete-blob-castore-cache-readiness
+$ openspec validate blob-castore-cache-extraction --strict
+Specification 'blob-castore-cache-extraction' is valid
+
+$ test ! -d openspec/changes/complete-blob-castore-cache-readiness
+active change removed
+
+$ test -d openspec/changes/archive/2026-05-06-complete-blob-castore-cache-readiness
+archive exists
+
+$ git diff --check --cached
+
+$ git diff --check

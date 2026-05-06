@@ -48,4 +48,3 @@ OK: openspec/changes/complete-blob-castore-cache-readiness
 $ git diff --check --cached
 
 $ git diff --check
-
