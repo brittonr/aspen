@@ -18,9 +18,9 @@ replacing Aspen-owned bincode serialization, retiring direct CLI/web warning
 edges, patching the Nostr time supplier away from unmaintained `instant`,
 patching iroh postcard users away from `heapless-cas`/`atomic-polyfill`, pruning
 the unused `cloud-hypervisor-client` dev-dependency that selected `safemem`, bumping
-Iroh/Hickory and Wasmtime point releases, and accepting the SNIX/FUSE plus
-SNIX/astral-tokio-tar clusters as bounded upstream dependency debt, the
-direct audit inventory is:
+Iroh/Hickory and Wasmtime point releases, and vendoring narrow upstream crates to
+replace the remaining `bincode`, `paste`, and `proc-macro-error` warning edges,
+the direct audit inventory is:
 
 ```bash
 cargo audit -n \
@@ -35,9 +35,9 @@ cargo audit -n \
 ```
 
 - vulnerabilities: `0`
-- allowed warnings: `3`
-  - unmaintained: `3`
-  - unsound: `0`
+- allowed warnings: `4`
+  - unmaintained: `0`
+  - unsound: `4`
 
 ## Remediated or bounded in this triage slice
 
@@ -52,6 +52,9 @@ cargo audit -n \
 | `RUSTSEC-2023-0081` | `safemem` | `0.2.0` | removed | Removed the unused root `cloud-hypervisor-client 0.3.3` dev-dependency; VM CI runtime uses Aspen's `aspen-ci::CloudHypervisorWorker`, not that stale client crate. |
 | `RUSTSEC-2026-0118` / `RUSTSEC-2026-0119` / `RUSTSEC-2026-0120` | `hickory-*` | `0.25.2` / `0.26.0-beta.4` | `0.26.1` | Bumped Aspen/Iroh DNS graph to fixed Hickory releases; vendored `iroh`, `iroh-relay`, and `swarm-discovery` only to relax their prerelease Hickory pins until upstream Iroh publishes the same fix. |
 | `RUSTSEC-2026-0114` | `wasmtime` | `36.0.7` | `36.0.9` | Updated sibling `aspen-wasm-plugin` dependency to the patched 36.x point release while preserving the Hyperlight ABI family. |
+| `RUSTSEC-2025-0141` | `bincode` | `1.3.3` | removed | Vendored `madsim 0.2.34` only to replace its optional RPC serializer with `postcard`; `bincode` left `Cargo.lock`. |
+| `RUSTSEC-2024-0436` | `paste` | `1.0.15` | removed | Vendored narrow macro-call-site parents (`netlink-packet-core`, `nickel-lang-core`, and DataFusion 45 subcrates) to use maintained `pastey`; `paste` left `Cargo.lock`. |
+| `RUSTSEC-2024-0370` | `proc-macro-error` | `0.4.12` | removed | Vendored `genawaiter-proc-macro 0.99.1` only to use maintained `proc-macro-error2`; the remaining `proc-macro-error` edge left `Cargo.lock`. |
 | `RUSTSEC-2026-0112` / `RUSTSEC-2026-0113` | `astral-tokio-tar` | `0.5.6` | upstream-pinned | Advisory-specific exception. SNIX git dependencies pin `astral-tokio-tar = ^0.5.6`; Aspen exposure is bounded to SNIX store/NAR ingestion until SNIX can move to `0.6.1+`. |
 | `RUSTSEC-2026-0002` | `lru` | `0.12.5` | upstream-pinned | Advisory-specific exception. SNIX `nar-bridge`/`snix-store` pin `lru = ^0.12.4`; Aspen does not call `IterMut` through its SNIX integration. |
 | `RUSTSEC-2023-0056` | `vm-memory` | `0.10.0` | upstream-pinned | Advisory-specific exception through `snix-castore -> fuse-backend-rs`; Aspen's SNIX path uses store/NAR traits, not FUSE `VolatileMemory` helpers. |
@@ -60,7 +63,7 @@ cargo audit -n \
 
 ## Remaining warning backlog
 
-Only unmaintained warnings remain after applying the advisory-specific exceptions
+No unmaintained warning backlog remains after the local upstream-parent patches
 above. The SNIX/FUSE exceptions stay removal-tracked here because they must be
 revisited when upstream dependency constraints move.
 
@@ -76,14 +79,10 @@ revisited when upstream dependency constraints move.
 
 ### Unmaintained warnings
 
-| Priority | Advisory | Crate | Current path | Triage | Removal trigger |
-| --- | --- | --- | --- | --- | --- |
-| P2 | `RUSTSEC-2025-0141` | `bincode 1.3.3` | `madsim` transitive test/simulation edge | Aspen-owned `aspen-codec` now uses postcard, so no first-party storage/wire path depends on `bincode`. The remaining lockfile warning is upstream madsim-only. | Upstream `madsim` drops its `bincode 1.x` edge, or Aspen removes/replaces that simulation dependency. |
-| P3 | `RUSTSEC-2024-0436` | `paste 1.0.15` | DataFusion SQL path and netlink/iroh path | Proc-macro unmaintained warning. No direct runtime input exposure; remove through parent upgrades. | DataFusion/iroh/netlink stack drops `paste`. |
-| P3 | `RUSTSEC-2024-0370` | `proc-macro-error 0.4.12` | `genawaiter-proc-macro` -> `genawaiter` -> `bao-tree`/`iroh-blobs` | Proc-macro build-time warning through blob DAG stack. | iroh-blobs/bao-tree stack drops `genawaiter` or moves to maintained macro deps. |
+None currently selected by `Cargo.lock` after the local warning-drain patches.
 
 ## Next remediation order
 
 1. Upstream-watch SNIX for `astral-tokio-tar 0.6.1+`; remove the true-vulnerability exceptions as soon as SNIX moves or Aspen can patch the SNIX graph safely.
-2. Parent-stack refreshes: DataFusion/netlink and iroh-blobs/bao-tree.
-3. Upstream-watch the remaining `madsim` bincode edge, vendored iroh/Hickory/postcard patches, and SNIX/FUSE exceptions; remove local patches/ignores as soon as parent stacks move or Aspen can make the affected edge unreachable in the selected feature graph.
+2. Upstream-watch SNIX/FUSE for patched `lru`, `vm-memory`, `vmm-sys-util`, and `lexical-core` edges.
+3. Periodically remove local warning-drain vendor patches as upstream `madsim`, DataFusion, Nickel, netlink, and `genawaiter` move to maintained replacement crates themselves.

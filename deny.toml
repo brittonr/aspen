@@ -19,16 +19,7 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 # Advisory IDs to ignore (with reasons).
 # Tiger Style principle: Fail fast on known security issues.
 # Only add entries here after careful review and explicit decision to accept the risk.
-ignore = [
-    # Unmaintained transitive dependencies - accepted risks:
-
-    # paste crate (via iroh's netlink dependencies) - proc macro only
-    { id = "RUSTSEC-2024-0436", reason = "Transitive dependency via iroh's netlink stack. Proc macro only, no runtime impact." },
-
-    # proc-macro-error crate - unmaintained but stable, used by derive macros (snafu, etc.)
-    { id = "RUSTSEC-2024-0370", reason = "Proc macro helper crate, compile-time only. No runtime security impact. Used by derive macro ecosystem." },
-
-]
+ignore = []
 
 # -----------------------------------------------------------------------------
 # Licenses - Software license policy

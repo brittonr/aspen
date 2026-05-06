@@ -918,7 +918,23 @@ required-features = ["node-runtime"]
 # - postcard removes heapless-cas from its default feature set to avoid the
 #   unmaintained atomic-polyfill edge. iroh-blobs, iroh-metrics, and
 #   iroh-tickets also disable postcard defaults at their call sites.
+# - madsim uses postcard instead of the unmaintained bincode 1.x serializer.
+# - genawaiter-proc-macro uses proc-macro-error2 instead of proc-macro-error.
+# - netlink-packet-core, nickel-lang-core, and datafusion-common use pastey
+#   instead of paste.
 [patch.crates-io]
+madsim = { path = "vendor/madsim-0.2.34" }
+genawaiter-proc-macro = { path = "vendor/genawaiter-proc-macro-0.99.1" }
+netlink-packet-core = { path = "vendor/netlink-packet-core-0.8.1" }
+nickel-lang-core = { path = "vendor/nickel-lang-core-0.16.1" }
+datafusion-common = { path = "vendor/datafusion-common-45.0.0" }
+datafusion-expr = { path = "vendor/datafusion-expr-45.0.0" }
+datafusion-expr-common = { path = "vendor/datafusion-expr-common-45.0.0" }
+datafusion-functions-aggregate = { path = "vendor/datafusion-functions-aggregate-45.0.0" }
+datafusion-functions-nested = { path = "vendor/datafusion-functions-nested-45.0.0" }
+datafusion-functions-table = { path = "vendor/datafusion-functions-table-45.0.0" }
+datafusion-functions-window = { path = "vendor/datafusion-functions-window-45.0.0" }
+datafusion-physical-expr = { path = "vendor/datafusion-physical-expr-45.0.0" }
 iroh = { path = "vendor/iroh" }
 cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
 iroh-blobs = { path = "vendor/iroh-blobs" }

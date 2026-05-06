@@ -1,0 +1,3106 @@
+//! Error types and error reporting.
+//!
+//! Define error types for different phases of the execution, together with functions to generate a
+//! [codespan](https://crates.io/crates/codespan-reporting) diagnostic from them.
+pub use codespan_reporting::diagnostic::{Diagnostic, Label, LabelStyle};
+
+use codespan_reporting::term::termcolor::{ColorChoice, StandardStream, WriteColor};
+use malachite::base::num::conversion::traits::ToSci;
+
+use ouroboros::self_referencing;
+
+use crate::{
+    ast::{
+        Ast, MergeKind,
+        alloc::{AstAlloc, CloneTo},
+        compat::ToMainline as _,
+        typ::{EnumRow, RecordRow, Type},
+    },
+    cache::InputFormat,
+    eval::{
+        callstack::CallStack,
+        value::{EnumVariantData, NickelValue},
+    },
+    files::{FileId, Files},
+    identifier::{Ident, LocIdent},
+    label::{
+        self, MergeLabel,
+        ty_path::{self, PathSpan},
+    },
+    position::{PosIdx, PosTable, RawSpan, TermPos},
+    repl,
+    serialize::{ExportFormat, NickelPointer, NickelPointerElem},
+    term::{Number, record::FieldMetadata},
+    typ::{TypeF, VarKindDiscriminant},
+    typecheck::error::RowKind,
+};
+
+pub use nickel_lang_parser::error::{ParseError, ParseErrors};
+
+pub mod report;
+pub mod suggest;
+pub mod warning;
+
+pub use warning::Warning;
+
+/// A `Reporter` is basically a callback function for reporting errors and/or warnings.
+///
+/// The error type `E` is a generic parameter, so the same object can be a `Reporter`
+/// of various different things.
+pub trait Reporter<E> {
+    /// Called when there is something (`e`) for the reporter to report.
+    fn report(&mut self, e: E);
+
+    /// A utility function for reporting error variants.
+    ///
+    /// When this is called with an `Ok(_)` it does nothing; when called with an `Err(e)`
+    /// it reports `e`.
+    fn report_result<T, E2>(&mut self, result: Result<T, E2>)
+    where
+        Self: Sized,
+        E2: Into<E>,
+    {
+        if let Err(e) = result {
+            self.report(e.into());
+        }
+    }
+}
+
+impl<E, R: Reporter<E>> Reporter<E> for &mut R {
+    fn report(&mut self, e: E) {
+        R::report(*self, e)
+    }
+}
+
+/// A [`Reporter`] that just collects errors.
+pub struct Sink<E> {
+    pub errors: Vec<E>,
+}
+
+impl<E> Default for Sink<E> {
+    fn default() -> Self {
+        Sink { errors: Vec::new() }
+    }
+}
+
+impl<E> Reporter<E> for Sink<E> {
+    fn report(&mut self, e: E) {
+        self.errors.push(e);
+    }
+}
+
+/// A [`Reporter`] that throws away all its errors.
+pub struct NullReporter {}
+
+impl<E> Reporter<E> for NullReporter {
+    fn report(&mut self, _e: E) {}
+}
+
+/// A general error occurring during either parsing or evaluation.
+#[derive(Debug, PartialEq, Clone)]
+pub enum Error {
+    EvalError(EvalError),
+    TypecheckError(TypecheckError),
+    ParseErrors(ParseErrors),
+    ImportError(ImportError),
+    ExportError(ExportError),
+    IOError(IOError),
+    ReplError(ReplError),
+}
+
+pub type EvalError = Box<EvalErrorData>;
+pub type TypecheckError = Box<TypecheckErrorData>;
+pub type ImportError = Box<ImportErrorKind>;
+pub type ExportError = Box<ExportErrorData>;
+pub type ReplError = Box<ReplErrorKind>;
+
+impl Error {
+    pub fn eval_error(ctxt: EvalCtxt, error: EvalErrorKind) -> Self {
+        Error::EvalError(Box::new(EvalErrorData { ctxt, error }))
+    }
+
+    pub fn export_error(pos_table: PosTable, data: impl Into<PointedExportErrorData>) -> Self {
+        Error::ExportError(Box::new(ExportErrorData {
+            pos_table,
+            data: data.into(),
+        }))
+    }
+
+    pub fn import_error(kind: ImportErrorKind) -> Self {
+        Error::ImportError(Box::new(kind))
+    }
+}
+
+/// Runtime errors might need additional context to be properly reported. The most important one is
+/// the position table, which is need to map position indices stored inside a [NickelValue] back to
+/// a [TermPos]. Additional data is useful, such as the callstack.
+#[derive(Default, PartialEq, Clone)]
+pub struct EvalCtxt {
+    pub pos_table: PosTable,
+    pub call_stack: CallStack,
+}
+
+// Skip the pos table, because it's likely to be huge and uninformative.
+impl std::fmt::Debug for EvalCtxt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EvalCtxt")
+            .field("call_stack", &self.call_stack)
+            .finish()
+    }
+}
+
+/// An error occurring during evaluation with additional [context][EvalCtxt].
+#[derive(Debug, PartialEq, Clone)]
+pub struct EvalErrorData {
+    pub ctxt: EvalCtxt,
+    pub error: EvalErrorKind,
+}
+
+/// An error occurring during evaluation.
+#[derive(Debug, PartialEq, Clone)]
+pub enum EvalErrorKind {
+    /// A blame occurred: a contract has been broken somewhere.
+    BlameError {
+        /// The argument failing the contract. If the argument has been forced by the contract,
+        /// `evaluated_arg` provides the final value.
+        evaluated_arg: Option<NickelValue>,
+        /// The label of the corresponding contract.
+        label: label::Label,
+    },
+    /// A field required by a record contract is missing a definition.
+    MissingFieldDef {
+        id: LocIdent,
+        metadata: FieldMetadata,
+        pos_record: PosIdx,
+        pos_access: PosIdx,
+    },
+    /// Mismatch between the expected type and the actual type of an expression.
+    TypeError {
+        /// The expected type.
+        expected: String,
+        /// A freeform message.
+        message: String,
+        /// Position index of the original unevaluated expression.
+        orig_pos: PosIdx,
+        /// The evaluated expression.
+        term: NickelValue,
+    },
+    /// `TypeError` when evaluating a unary primop
+    UnaryPrimopTypeError {
+        primop: String,
+        expected: String,
+        pos_arg: PosIdx,
+        arg_evaluated: NickelValue,
+    },
+    /// `TypeError` when evaluating a binary primop
+    NAryPrimopTypeError {
+        primop: String,
+        expected: String,
+        arg_number: usize,
+        pos_arg: PosIdx,
+        arg_evaluated: NickelValue,
+        pos_op: PosIdx,
+    },
+    /// Tried to evaluate a term which wasn't parsed correctly.
+    ParseError(ParseError),
+    /// A term which is not a function has been applied to an argument.
+    NotAFunc(
+        /* term */ NickelValue,
+        /* arg */ NickelValue,
+        /* app position */ PosIdx,
+    ),
+    /// A field access, or another record operation requiring the existence of a specific field,
+    /// has been performed on a record missing that field.
+    FieldMissing {
+        // The name of the missing field.
+        id: LocIdent,
+        // The actual fields of the record used to suggest similar fields.
+        field_names: Vec<LocIdent>,
+        // The primitive operation that required the field to exist.
+        operator: String,
+        // The position of the record value which is missing the field.
+        pos_record: PosIdx,
+        // The position of the primitive operation application.
+        pos_op: PosIdx,
+    },
+    /// Too few arguments were provided to a builtin function.
+    NotEnoughArgs(
+        /* required arg count */ usize,
+        /* primitive */ String,
+        PosIdx,
+    ),
+    /// Attempted to merge incompatible values: for example, tried to merge two distinct default
+    /// values into one record field.
+    MergeIncompatibleArgs {
+        /// The left operand of the merge.
+        left_arg: NickelValue,
+        /// The right operand of the merge.
+        right_arg: NickelValue,
+        /// Additional error-reporting data.
+        merge_label: MergeLabel,
+    },
+    /// An unbound identifier was referenced.
+    UnboundIdentifier(LocIdent, TermPos),
+    /// An element in the evaluation Cache was entered during its own update.
+    InfiniteRecursion(CallStack, PosIdx),
+    /// A serialization error occurred during a call to the builtin `serialize`.
+    SerializationError(PointedExportErrorData),
+    /// A parse error occurred during a call to the builtin `deserialize`.
+    DeserializationError(
+        String, /* format */
+        String, /* error message */
+        PosIdx, /* position of the call to deserialize */
+    ),
+    /// A parse error occurred during a call to the builtin `deserialize`.
+    ///
+    /// This differs from `DeserializationError` in that the inner error
+    /// isn't just a string: it can refer to positions.
+    DeserializationErrorWithInner {
+        format: InputFormat,
+        inner: ParseError,
+        /// Position of the call to deserialize.
+        pos: PosIdx,
+    },
+    /// A polymorphic record contract was broken somewhere.
+    IllegalPolymorphicTailAccess {
+        action: IllegalPolymorphicTailAction,
+        evaluated_arg: Option<NickelValue>,
+        label: label::Label,
+    },
+    /// Two non-equatable terms of the same type (e.g. functions) were compared for equality.
+    IncomparableValues {
+        eq_pos: PosIdx,
+        left: NickelValue,
+        right: NickelValue,
+    },
+    /// A value didn't match any branch of a `match` expression at runtime. This is a specialized
+    /// version of [Self::NonExhaustiveMatch] when all branches are enum patterns. In this case,
+    /// the error message is more informative than the generic one.
+    NonExhaustiveEnumMatch {
+        /// The list of expected patterns. Currently, those are just enum tags.
+        expected: Vec<LocIdent>,
+        /// The original term matched
+        found: NickelValue,
+        /// The position of the `match` expression
+        pos: PosIdx,
+    },
+    NonExhaustiveMatch {
+        /// The original term matched.
+        value: NickelValue,
+        /// The position of the `match` expression
+        pos: PosIdx,
+    },
+    FailedDestructuring {
+        /// The original term matched.
+        value: NickelValue,
+        /// The position of the pattern that failed to match.
+        pattern_pos: PosIdx,
+    },
+    /// Tried to query a field of something that wasn't a record.
+    QueryNonRecord {
+        /// Position of the original unevaluated expression.
+        pos: PosIdx,
+        /// The identifier that we tried to query.
+        id: LocIdent,
+        /// Evaluated expression
+        value: NickelValue,
+    },
+    /// An unexpected internal error.
+    InternalError(String, PosIdx),
+    /// Errors occurring rarely enough to not deserve a dedicated variant.
+    Other(String, PosIdx),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum IllegalPolymorphicTailAction {
+    FieldAccess { field: String },
+    Map,
+    Merge,
+    FieldRemove { field: String },
+    Freeze,
+}
+
+impl IllegalPolymorphicTailAction {
+    fn message(&self) -> String {
+        use IllegalPolymorphicTailAction::*;
+
+        match self {
+            FieldAccess { field } => {
+                format!("cannot access field `{field}` sealed by a polymorphic contract")
+            }
+            Map => "cannot map over a record sealed by a polymorphic contract".to_owned(),
+            Merge => "cannot merge a record sealed by a polymorphic contract".to_owned(),
+            FieldRemove { field } => {
+                format!("cannot remove field `{field}` sealed by a polymorphic contract")
+            }
+            Freeze => "cannot freeze a record sealed by a polymorphic contract".to_owned(),
+        }
+    }
+}
+
+pub const UNKNOWN_SOURCE_NAME: &str = "<unknown> (generated by evaluation)";
+
+/// An error occurring during the static typechecking phase.
+#[self_referencing(pub_extras)]
+#[derive(Debug)]
+pub struct TypecheckErrorData {
+    /// The allocator hosting the types and AST nodes.
+    alloc: AstAlloc,
+    /// The actual error data.
+    #[borrows(alloc)]
+    #[covariant]
+    pub error: TypecheckErrorKind<'this>,
+}
+
+impl Clone for TypecheckErrorData {
+    fn clone(&self) -> Self {
+        TypecheckErrorData::new(AstAlloc::new(), |alloc| {
+            // We must clone the "shallow" layer of the error data to satisfy the `CloneTo`
+            // interface
+            TypecheckErrorKind::clone_to(self.borrow_error().clone(), alloc)
+        })
+    }
+}
+
+impl PartialEq for TypecheckErrorData {
+    fn eq(&self, other: &Self) -> bool {
+        self.borrow_error() == other.borrow_error()
+    }
+}
+
+/// The various kinds of typechecking errors.
+#[derive(Debug, PartialEq, Clone)]
+pub enum TypecheckErrorKind<'ast> {
+    /// An unbound identifier was referenced.
+    UnboundIdentifier(LocIdent),
+    /// A specific row was expected to be in the type of an expression, but was not.
+    MissingRow {
+        id: LocIdent,
+        kind: RowKind,
+        expected: Type<'ast>,
+        inferred: Type<'ast>,
+        pos: TermPos,
+    },
+    /// A dynamic tail was expected to be in the type of an expression, but was not.
+    MissingDynTail {
+        expected: Type<'ast>,
+        inferred: Type<'ast>,
+        pos: TermPos,
+    },
+    /// A specific row was not expected to be in the type of an expression.
+    ExtraRow {
+        id: LocIdent,
+        expected: Type<'ast>,
+        inferred: Type<'ast>,
+        pos: TermPos,
+    },
+    /// A additional dynamic tail was not expected to be in the type of an expression.
+    ExtraDynTail {
+        expected: Type<'ast>,
+        inferred: Type<'ast>,
+        pos: TermPos,
+    },
+    /// A parametricity violation involving a row-kinded type variable.
+    ///
+    /// For example, in a function like this:
+    ///
+    /// ```nickel
+    /// let f : forall a. { x: String, y: String } -> { x: String; a } =
+    ///   fun r => r
+    /// in ...
+    /// ```
+    ///
+    /// this error would be raised with `{ ; a }` as the `tail` type and
+    /// `{ y : String }` as the `violating_type`.
+    ForallParametricityViolation {
+        kind: VarKindDiscriminant,
+        tail: Type<'ast>,
+        violating_type: Type<'ast>,
+        pos: TermPos,
+    },
+    /// An unbound type variable was referenced.
+    UnboundTypeVariable(LocIdent),
+    /// The actual (inferred or annotated) type of an expression is incompatible with its expected
+    /// type.
+    TypeMismatch {
+        expected: Type<'ast>,
+        inferred: Type<'ast>,
+        pos: TermPos,
+    },
+    /// The actual (inferred or annotated) record row type of an expression is incompatible with
+    /// its expected record row type. Specialized version of [Self::TypeMismatch] with additional
+    /// row-specific information.
+    RecordRowMismatch {
+        id: LocIdent,
+        expected: Type<'ast>,
+        inferred: Type<'ast>,
+        cause: Box<TypecheckErrorKind<'ast>>,
+        pos: TermPos,
+    },
+    /// Same as [Self::RecordRowMismatch] but for enum types.
+    EnumRowMismatch {
+        id: LocIdent,
+        expected: Type<'ast>,
+        inferred: Type<'ast>,
+        cause: Option<Box<TypecheckErrorKind<'ast>>>,
+        pos: TermPos,
+    },
+    /// Two incompatible types have been deduced for the same identifier of a row type.
+    ///
+    /// This is similar to [Self::RecordRowMismatch] but occurs in a slightly different situation.
+    /// Consider a unification variable `t`, which is a placeholder to be filled by a concrete type
+    /// later in the typechecking phase.  If `t` appears as the tail of a row type, i.e. the type
+    /// of some expression is inferred to be `{ field: Type; t}`, then `t` must not be unified
+    /// later with a type including a different declaration for field, such as `field: Type2`.
+    ///
+    /// A [constraint][crate::typecheck::unif::RowConstrs] is added accordingly, and if this
+    /// constraint is violated (that is if `t` does end up being unified with a type of the form `{
+    /// .., field: Type2, .. }`), [Self::RecordRowConflict] is raised.  We do not necessarily have
+    /// access to the original `field: Type` declaration, as opposed to [Self::RecordRowMismatch],
+    /// which corresponds to the direct failure to unify `{ .. , x: T1, .. }` and `{ .., x: T2, ..
+    /// }`.
+    RecordRowConflict {
+        /// The row that couldn't be added to the record type, because it already existed with a
+        /// different type assignement.
+        row: RecordRow<'ast>,
+        expected: Type<'ast>,
+        inferred: Type<'ast>,
+        pos: TermPos,
+    },
+    /// Same as [Self::RecordRowConflict] but for enum types.
+    EnumRowConflict {
+        /// The row that couldn't be added to the record type, because it already existed with a
+        /// different type assignement.
+        row: EnumRow<'ast>,
+        expected: Type<'ast>,
+        inferred: Type<'ast>,
+        pos: TermPos,
+    },
+    /// Type mismatch on a subtype of an an arrow type.
+    ///
+    /// The unification of two arrow types requires the unification of the domain and the codomain
+    /// (and recursively so, if they are themselves arrow types). When the unification of a subtype
+    /// fails, we want to report which part of the arrow types is problematic, and why, rather than
+    /// a generic `TypeMismatch`. Indeed, failing to unify two arrow types is a common type error
+    /// which deserves a good reporting, that can be caused e.g. by applying a function to an
+    /// argument of a wrong type in some cases:
+    ///
+    /// ```text
+    /// let id_mono = fun x => x in let _ign = id_mono true in id_mono 0 : Number
+    /// ```
+    ///
+    /// This specific error stores additionally the [type path][crate::label::ty_path] that
+    /// identifies the subtype where unification failed and the corresponding error.
+    ArrowTypeMismatch {
+        expected: Type<'ast>,
+        inferred: Type<'ast>,
+        /// The path to the incompatible type components
+        type_path: ty_path::Path,
+        cause: Box<TypecheckErrorKind<'ast>>,
+        pos: TermPos,
+    },
+    /// Within statically typed code, the typechecker must reject terms containing nonsensical
+    /// contracts such as `let C = { foo : (4 + 1) } in ({ foo = 5 } | C)`, which will fail at
+    /// runtime.
+    ///
+    /// The typechecker is currently quite conservative and simply forbids to store any custom
+    /// contract in a type that appears in term position. Note that this restriction
+    /// doesn't apply to annotations, which aren't considered part of the statically typed block.
+    /// For example, `{foo = 5} | {foo : (4 + 1)}` is accepted by the typechecker.
+    CtrTypeInTermPos {
+        /// The term that was in a flat type (the `(4 + 1)` in the example above).
+        contract: Ast<'ast>,
+        /// The position of the entire type (the `{foo : 5}` in the example above).
+        pos_type: TermPos,
+    },
+    /// Unsound generalization.
+    ///
+    /// When typechecking polymorphic expressions, polymorphic variables introduced by a `forall`
+    /// are substituted with rigid type variables, which can only unify with a free unification
+    /// variable. However, the condition that the unification variable is free isn't enough.
+    ///
+    /// Consider the following example:
+    ///
+    /// ```nickel
+    /// (fun x => let y : forall a. a = x in (y : Number)) : _
+    /// ```
+    ///
+    /// This example must be rejected, as it is an identity function that casts any value to
+    /// something of type `Number`. It will typically fail with a contract error if applied to a
+    /// string, for example.
+    ///
+    /// But when `let y : forall a. a = x` is typechecked, `x` is affected to a free unification
+    /// variable `_a`, which isn't determined yet. The unsoundess comes from the fact that `_a` was
+    /// introduced **before** the block with the `forall a. a` annotation, and thus shouldn't be
+    /// allowed to be generalized (unified with a rigid type variable) at this point.
+    ///
+    /// Nickel uses an algorithm coming from the OCaml implementation, recognizing that the
+    /// discipline needed to reject those case is similar to region-based memory management. See
+    /// [crate::typecheck] for more details. This error indicates that a case similar to the above
+    /// example happened.
+    VarLevelMismatch {
+        /// The user-defined type variable (the rigid type variable during unification) that
+        /// couldn't be unified.
+        type_var: LocIdent,
+        /// The position of the expression that was being typechecked as `type_var`.
+        pos: TermPos,
+    },
+    /// Record-dict subtyping failed because the record was inhomogeneous.
+    InhomogeneousRecord {
+        /// One row of the record had this type.
+        row_a: Type<'ast>,
+        /// Another row of the record had this type.
+        row_b: Type<'ast>,
+        /// The position of the expression of record type.
+        pos: TermPos,
+    },
+    /// Invalid or-pattern.
+    ///
+    /// This error is raised when the patterns composing an or-pattern don't have the precise
+    /// same set of free variables. For example, `'Foo x or 'Bar y`.
+    OrPatternVarsMismatch {
+        /// A variable which isn't present in all the other patterns (there might be more of them,
+        /// this is just a sample).
+        var: LocIdent,
+        /// The position of the whole or-pattern.
+        pos: TermPos,
+    },
+    /// An error occured during the resolution of an import.
+    ///
+    /// Since RFC007, imports aren't pre-processed anymore, and import resolution can happen
+    /// interleaved with typechecking. In particular, in order to typecheck expressions of the form
+    /// `import "file.ncl"`, the typechecker might ask to resolve the import, which can lead to any
+    /// import error.
+    ImportError(ImportErrorKind),
+}
+
+impl IntoDiagnostics for ParseErrors {
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        self.errors
+            .into_iter()
+            .flat_map(|e| e.into_diagnostics(files))
+            .collect()
+    }
+}
+
+/// An error occurring during the resolution of an import.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ImportErrorKind {
+    /// An IO error occurred during an import.
+    IOError(
+        /* imported file */ String,
+        /* error message */ String,
+        /* import position */ TermPos,
+    ),
+    /// A parse error occurred during an import.
+    ParseErrors(
+        /* error */ ParseErrors,
+        /* import position */ TermPos,
+    ),
+    /// A package dependency was not found.
+    MissingDependency {
+        /// The package that tried to import the missing dependency, if there was one.
+        /// This will be `None` if the missing dependency was from the top-level
+        parent: Option<std::path::PathBuf>,
+        /// The name of the package that could not be resolved.
+        missing: Ident,
+        pos: TermPos,
+    },
+    /// They tried to import a file from a package, but no package manifest was supplied.
+    NoPackageMap { pos: TermPos },
+}
+
+/// An error occurring during serialization.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExportErrorData {
+    /// The position table, mapping position indices to spans.
+    pub pos_table: PosTable,
+    /// The cause of the error.
+    pub data: PointedExportErrorData,
+}
+
+/// The type of an error occurring during serialization, together with  a path to the field that
+/// contains a non-serializable value.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PointedExportErrorData {
+    /// The path to the field that contains a non-serializable value. This might be empty if the
+    /// error occurred before entering any record.
+    pub path: NickelPointer,
+    /// The cause of the error.
+    pub error: ExportErrorKind,
+}
+
+impl PointedExportErrorData {
+    /// Pushes a [NickelPointerElem] to the end of the path of this export error.
+    pub fn with_elem(mut self, elem: NickelPointerElem) -> PointedExportErrorData {
+        self.path.0.push(elem);
+        self
+    }
+
+    /// Attaches a position table to this error, producing a [ExportError].
+    pub fn with_pos_table(self, pos_table: PosTable) -> ExportErrorData {
+        ExportErrorData {
+            data: self,
+            pos_table,
+        }
+    }
+}
+
+impl From<ExportErrorKind> for PointedExportErrorData {
+    fn from(error: ExportErrorKind) -> Self {
+        PointedExportErrorData {
+            error,
+            path: NickelPointer::new(),
+        }
+    }
+}
+
+/// The type of error occurring during serialization.
+#[derive(Debug, PartialEq, Clone)]
+pub enum ExportErrorKind {
+    /// Encountered a null value for a format that doesn't support them.
+    UnsupportedNull(ExportFormat, NickelValue),
+    /// Tried exporting something else than a `String` to raw format.
+    NotAString(NickelValue),
+    /// A term contains constructs that cannot be serialized.
+    NonSerializable(NickelValue),
+    /// No exportable documentation was found when requested.
+    NoDocumentation(NickelValue),
+    /// A number was too large (in absolute value) to be serialized as `f64`
+    NumberOutOfRange {
+        term: NickelValue,
+        value: Number,
+    },
+    /// The YAML documents export format expects the value to be an array.
+    ExpectedArray {
+        value: NickelValue,
+    },
+    Other(String),
+}
+
+/// A general I/O error, occurring when reading a source file or writing an export.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct IOError(pub String);
+
+/// An error occurring during an REPL session.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ReplErrorKind {
+    UnknownCommand(String),
+    MissingArg {
+        cmd: repl::command::CommandType,
+        msg_opt: Option<String>,
+    },
+    InvalidQueryPath(ParseError),
+}
+
+impl From<EvalErrorData> for Error {
+    fn from(error: EvalErrorData) -> Error {
+        Error::EvalError(Box::new(error))
+    }
+}
+
+impl From<EvalError> for Error {
+    fn from(error: EvalError) -> Error {
+        Error::EvalError(error)
+    }
+}
+
+impl From<ParseError> for Error {
+    fn from(error: ParseError) -> Error {
+        Error::ParseErrors(ParseErrors {
+            errors: vec![error],
+        })
+    }
+}
+
+impl From<ParseErrors> for Error {
+    fn from(errors: ParseErrors) -> Error {
+        Error::ParseErrors(errors)
+    }
+}
+
+impl From<TypecheckErrorData> for Error {
+    fn from(error: TypecheckErrorData) -> Error {
+        Error::TypecheckError(Box::new(error))
+    }
+}
+
+impl From<TypecheckError> for Error {
+    fn from(error: TypecheckError) -> Self {
+        Error::TypecheckError(error)
+    }
+}
+
+impl From<ImportErrorKind> for Error {
+    fn from(error: ImportErrorKind) -> Error {
+        Error::ImportError(Box::new(error))
+    }
+}
+
+impl From<ImportError> for Error {
+    fn from(error: ImportError) -> Error {
+        Error::ImportError(error)
+    }
+}
+
+impl From<ExportErrorData> for Error {
+    fn from(error: ExportErrorData) -> Error {
+        Error::ExportError(Box::new(error))
+    }
+}
+
+impl From<ExportError> for Error {
+    fn from(error: ExportError) -> Error {
+        Error::ExportError(error)
+    }
+}
+
+impl From<IOError> for Error {
+    fn from(error: IOError) -> Error {
+        Error::IOError(error)
+    }
+}
+
+impl From<std::io::Error> for IOError {
+    fn from(error: std::io::Error) -> IOError {
+        IOError(error.to_string())
+    }
+}
+
+impl From<PointedExportErrorData> for EvalErrorKind {
+    fn from(error: PointedExportErrorData) -> EvalErrorKind {
+        EvalErrorKind::SerializationError(error)
+    }
+}
+
+impl From<ImportErrorKind> for TypecheckError {
+    fn from(error: ImportErrorKind) -> Self {
+        Box::new(TypecheckErrorData::new(AstAlloc::new(), |_alloc| {
+            TypecheckErrorKind::ImportError(error)
+        }))
+    }
+}
+
+/// Return an escaped version of a string. Used to sanitize strings before inclusion in error
+/// messages, which can contain ASCII code sequences, and in particular ANSI escape codes, that
+/// could alter Nickel's error messages.
+pub fn escape(s: &str) -> String {
+    String::from_utf8(strip_ansi_escapes::strip(s))
+        .expect("escape(): converting from a string should give back a valid UTF8 string")
+}
+
+impl From<ReplErrorKind> for Error {
+    fn from(error: ReplErrorKind) -> Error {
+        Error::ReplError(Box::new(error))
+    }
+}
+
+pub const INTERNAL_ERROR_MSG: &str = "This error should not happen. This is likely a bug in the Nickel interpreter. Please consider \
+ reporting it at https://github.com/tweag/nickel/issues with the above error message.";
+
+/// A trait for converting an error to a diagnostic.
+pub trait IntoDiagnostics {
+    /// Convert an error to a list of printable formatted diagnostic.
+    ///
+    /// # Arguments
+    ///
+    /// - `pos_table`: the position table, mapping position indices stored in Nickel values to
+    /// - `files`: this is a mutable reference to allow insertion of temporary snippets. Note that
+    ///   `Files` is cheaply clonable and copy-on-write, so you can easily get a mutable `Files` from
+    ///   a non-mutable one, but bear in mind that the returned diagnostics may contains file ids that
+    ///   refer to your mutated files.
+    ///
+    /// # Return
+    ///
+    /// Return a list of diagnostics. Most errors generate only one, but showing the callstack
+    /// ordered requires to sidestep a limitation of codespan. The current solution is to generate
+    /// one diagnostic per callstack element. See issue
+    /// [#285](https://github.com/brendanzab/codespan/issues/285).
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>>;
+}
+
+// Allow the use of a single `Diagnostic` directly as an error that can be reported by Nickel.
+impl IntoDiagnostics for Diagnostic<FileId> {
+    fn into_diagnostics(self, _files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        vec![self]
+    }
+}
+
+// Helpers for the creation of codespan `Label`s
+
+/// Create a primary label from a span.
+fn primary(span: &RawSpan) -> Label<FileId> {
+    Label::primary(span.src_id, span.start.to_usize()..span.end.to_usize())
+}
+
+/// Create a secondary label from a span.
+fn secondary(span: &RawSpan) -> Label<FileId> {
+    Label::secondary(span.src_id, span.start.to_usize()..span.end.to_usize())
+}
+
+/// Create a label from an optional span, or fallback to annotating the alternative snippet
+/// `alt_term` if the span is `None`.
+///
+/// When `span_opt` is `None`, the code snippet `alt_term` is added to `files` under a special name
+/// and is referred to instead.
+///
+/// This is useful because during evaluation, some terms are the results of computations. They
+/// correspond to nothing in the original source, and thus have a position set to `None`(e.g. the
+/// result of `let x = 1 + 1 in x`).  In such cases it may still be valuable to print the term (or a
+/// terse representation) in the error diagnostic rather than nothing, because if you have let `x =
+/// 1 + 1 in` and then 100 lines later, `x arg` - causing a `NotAFunc` error - it may be helpful to
+/// know that `x` holds the value `2`.
+///
+/// For example, if one wants to report an error on a record, `alt_term` may be defined as
+/// `{ ... }`. Then, if this record has no position (`span_opt` is `None`), the error will be
+/// reported as:
+///
+/// ```text
+/// error: some error
+///   -- <unknown> (generated by evaluation):1:2
+///   |
+/// 1 | { ... }
+///     ^^^^^^^ some annotation
+/// ```
+///
+/// The reason for the mutable reference to `files` is that codespan do no let you annotate
+/// something that is not in `files`: you can't provide a raw snippet, you need to provide a
+/// `FileId` referring to a file. This leaves the following possibilities:
+///
+/// 1. Do nothing: just elude annotations which refer to the term
+/// 2. Print the term and the annotation as a note together with the diagnostic. Notes are
+///    additional text placed at the end of diagnostic. What you lose:
+///     - pretty formatting of annotations for such snippets
+///     - style consistency: the style of the error now depends on the term being from the source or
+///       a byproduct of evaluation
+/// 3. Add the term to files, take 1: pass a reference to files so that the code building the
+///    diagnostic can itself add arbitrary snippets if necessary, and get back their `FileId`. This
+///    is what is done here.
+/// 4. Add the term to files, take 2: make a wrapper around the `Files` and `FileId` structures of
+///    codespan which handle source mapping. `FileId` could be something like
+///    `Either<codespan::FileId, CustomId = u32>` so that `to_diagnostic` could construct and use
+///    these separate ids, and return the corresponding snippets to be added together with the
+///    diagnostic without modifying external state. Or even have `FileId = Either<codespan::FileId`,
+///    `LoneCode = String or (Id, String)>` so we don't have to return the additional list of
+///    snippets. This adds some boilerplate, that we wanted to avoid, but this stays on the
+///    reasonable side of being an alternative.
+fn label_alt(
+    span_opt: Option<RawSpan>,
+    alt_term: String,
+    style: LabelStyle,
+    files: &mut Files,
+) -> Label<FileId> {
+    match span_opt {
+        Some(span) => Label::new(
+            style,
+            span.src_id,
+            span.start.to_usize()..span.end.to_usize(),
+        ),
+        None => {
+            let range = 0..alt_term.len();
+            Label::new(style, files.add(UNKNOWN_SOURCE_NAME, alt_term), range)
+        }
+    }
+}
+
+/// Create a secondary label from an optional span, or fallback to annotating the alternative
+/// snippet `alt_term` if the span is `None`.
+///
+/// See [`label_alt`].
+fn primary_alt(span_opt: Option<RawSpan>, alt_term: String, files: &mut Files) -> Label<FileId> {
+    label_alt(span_opt, alt_term, LabelStyle::Primary, files)
+}
+
+/// Create a primary label from a term, or fallback to annotating the shallow representation of this
+/// term if its span is `None`.
+///
+/// See [`label_alt`].
+fn primary_term(pos_table: &PosTable, term: &NickelValue, files: &mut Files) -> Label<FileId> {
+    primary_alt(
+        pos_table.get(term.pos_idx()).into_opt(),
+        term.to_string(),
+        files,
+    )
+}
+
+/// Create a secondary label from an optional span, or fallback to annotating the alternative
+/// snippet `alt_term` if the span is `None`.
+///
+/// See [`label_alt`].
+fn secondary_alt(span_opt: TermPos, alt_term: String, files: &mut Files) -> Label<FileId> {
+    label_alt(span_opt.into_opt(), alt_term, LabelStyle::Secondary, files)
+}
+
+/// Create a secondary label from a term, or fallback to annotating the shallow representation of
+/// this term if its span is `None`.
+///
+/// See [`label_alt`].
+fn secondary_term(pos_table: &PosTable, term: &NickelValue, files: &mut Files) -> Label<FileId> {
+    secondary_alt(pos_table.get(term.pos_idx()), term.to_string(), files)
+}
+
+fn cardinal(number: usize) -> String {
+    let suffix = if number % 10 == 1 {
+        "st"
+    } else if number % 10 == 2 {
+        "nd"
+    } else if number % 10 == 3 {
+        "rd"
+    } else {
+        "th"
+    };
+    format!("{number}{suffix}")
+}
+
+impl<T: IntoDiagnostics> IntoDiagnostics for Box<T> {
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        (*self).into_diagnostics(files)
+    }
+}
+
+impl IntoDiagnostics for Error {
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        match self {
+            Error::ParseErrors(errs) => errs
+                .errors
+                .into_iter()
+                .flat_map(|e| e.into_diagnostics(files))
+                .collect(),
+            Error::TypecheckError(err) => err.into_diagnostics(files),
+            Error::EvalError(err) => err.into_diagnostics(files),
+            Error::ImportError(err) => err.into_diagnostics(files),
+            Error::ExportError(err) => err.into_diagnostics(files),
+            Error::IOError(err) => err.into_diagnostics(files),
+            Error::ReplError(err) => err.into_diagnostics(files),
+        }
+    }
+}
+
+impl IntoDiagnostics for EvalErrorData {
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        let mut pos_table = self.ctxt.pos_table;
+
+        match self.error {
+            EvalErrorKind::BlameError {
+                evaluated_arg,
+                label,
+            } => blame_error::blame_diagnostics(
+                &mut pos_table,
+                files,
+                label,
+                evaluated_arg,
+                &self.ctxt.call_stack,
+                "",
+            ),
+            EvalErrorKind::MissingFieldDef {
+                id,
+                metadata,
+                pos_record,
+                pos_access,
+            } => {
+                let mut labels = vec![];
+
+                // If there's a contract attached to the missing field, point the error message
+                // at the contract instead of the access. This seems like a more useful error,
+                // because if someone hands you a `x | { fld | String }` and you call `x.fld`,
+                // then the `x.fld` shouldn't be blamed if `fld` is missing: we should point
+                // at the original `x` and at the `fld` in the record contract.
+                if let Some(label) = metadata
+                    .annotation
+                    .first()
+                    .map(|labeled_ty| labeled_ty.label.clone())
+                {
+                    if let Some(span) = label.field_name.and_then(|id| id.pos.into_opt()) {
+                        labels.push(primary(&span).with_message("required here"));
+                    }
+
+                    if let Some(span) = pos_table.get(pos_record).into_opt() {
+                        labels.push(secondary(&span).with_message("in this record"));
+                    }
+
+                    // In this branch, we don't point at the access location because it
+                    // isn't to blame.
+                } else {
+                    if let Some(span) = id.pos.into_opt() {
+                        labels.push(primary(&span).with_message("required here"));
+                    }
+
+                    if let Some(span) = pos_table.get(pos_record).into_opt() {
+                        labels.push(secondary(&span).with_message("in this record"));
+                    }
+
+                    if let Some(span) = pos_table.get(pos_access).into_opt() {
+                        labels.push(secondary(&span).with_message("accessed here"));
+                    }
+                }
+
+                let diags = vec![
+                    Diagnostic::error()
+                        .with_message(format!("missing definition for `{id}`",))
+                        .with_labels(labels),
+                ];
+
+                diags
+            }
+            EvalErrorKind::TypeError {
+                expected,
+                message,
+                orig_pos,
+                term: t,
+            } => {
+                let label = format!(
+                    "this expression has type {}, but {} was expected",
+                    t.type_of().unwrap_or("<unevaluated>").to_owned(),
+                    expected,
+                );
+
+                let labels = match (
+                    pos_table.get(orig_pos).into_opt(),
+                    pos_table.get(t.pos_idx()).into_opt(),
+                ) {
+                    (Some(span_orig), Some(span_t)) if span_orig == span_t => {
+                        vec![primary(&span_orig).with_message(label)]
+                    }
+                    (Some(span_orig), Some(t_pos)) if !files.is_stdlib(t_pos.src_id) => {
+                        vec![
+                            primary(&span_orig).with_message(label),
+                            secondary_term(&pos_table, &t, files).with_message("evaluated to this"),
+                        ]
+                    }
+                    (Some(span), _) => {
+                        vec![primary(&span).with_message(label)]
+                    }
+                    (None, Some(span)) => {
+                        vec![primary(&span).with_message(label)]
+                    }
+                    (None, None) => {
+                        vec![primary_term(&pos_table, &t, files).with_message(label)]
+                    }
+                };
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("dynamic type error")
+                        .with_labels(labels)
+                        .with_notes(vec![message]),
+                ]
+            }
+            EvalErrorKind::ParseError(parse_error) => parse_error.into_diagnostics(files),
+            EvalErrorKind::NotAFunc(t, arg, pos_opt) => vec![
+                Diagnostic::error()
+                    .with_message("not a function")
+                    .with_labels(vec![
+                        primary_term(&pos_table, &t, files)
+                            .with_message("this term is applied, but it is not a function"),
+                        secondary_alt(pos_table.get(pos_opt), format!("({t}) ({arg})"), files)
+                            .with_message("applied here"),
+                    ]),
+            ],
+            EvalErrorKind::FieldMissing {
+                id: name,
+                field_names,
+                operator,
+                pos_record,
+                pos_op,
+            } => {
+                let mut labels = Vec::new();
+                let mut notes = Vec::new();
+                let field = escape(name.as_ref());
+
+                if let Some(span) = pos_table.get(pos_op).into_opt() {
+                    labels.push(
+                        Label::primary(span.src_id, span.start.to_usize()..span.end.to_usize())
+                            .with_message(format!("this requires the field `{field}` to exist")),
+                    );
+                } else {
+                    notes.push(format!(
+                        "The field `{field}` was required by the operator {operator}"
+                    ));
+                }
+
+                if let Some(span) = pos_table.get(pos_record).as_opt_ref() {
+                    labels.push(
+                        secondary(span)
+                            .with_message(format!("this record lacks the field `{field}`")),
+                    );
+                }
+
+                suggest::add_suggestion(&mut notes, &field_names, &name);
+
+                vec![
+                    Diagnostic::error()
+                        .with_message(format!("missing field `{field}`"))
+                        .with_labels(labels)
+                        .with_notes(notes),
+                ]
+            }
+            EvalErrorKind::NotEnoughArgs(count, op, span_opt) => {
+                let mut labels = Vec::new();
+                let mut notes = Vec::new();
+                let msg = format!("{op} expects {count} arguments, but not enough were provided");
+
+                if let Some(span) = pos_table.get(span_opt).into_opt() {
+                    labels.push(
+                        Label::primary(span.src_id, span.start.to_usize()..span.end.to_usize())
+                            .with_message(msg),
+                    );
+                } else {
+                    notes.push(msg);
+                }
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("not enough arguments")
+                        .with_labels(labels)
+                        .with_notes(notes),
+                ]
+            }
+            EvalErrorKind::MergeIncompatibleArgs {
+                left_arg,
+                right_arg,
+                merge_label,
+            } => {
+                let mut labels = vec![
+                    primary_term(&pos_table, &left_arg, files)
+                        .with_message("cannot merge this expression"),
+                    primary_term(&pos_table, &right_arg, files)
+                        .with_message("with this expression"),
+                ];
+
+                let span_label = match merge_label.kind {
+                    // For a standard merge, the span of the label indicates the position of the
+                    // original merge expression
+                    MergeKind::Standard => "originally merged here",
+                    // For a piecewise definition, there isn't such merge expression (the merge has
+                    // been generated by the parser). The spans thus point to the corresponding
+                    // field identifier
+                    MergeKind::PiecewiseDef => "when combining the definitions of this field",
+                };
+
+                if let Some(merge_label_span) = pos_table.get(merge_label.span).into_opt() {
+                    labels.push(secondary(&merge_label_span).with_message(span_label));
+                }
+
+                fn push_merge_note(notes: &mut Vec<String>, typ: &str) {
+                    notes.push(format!(
+                        "Both values are of type {typ} but they aren't equal."
+                    ));
+                    notes.push(format!("{typ} values can only be merged if they are equal"));
+                }
+
+                let mut notes = vec![
+                    "Merge operands have the same merge priority but they can't \
+                    be combined."
+                        .to_owned(),
+                ];
+
+                if let (Some(left_ty), Some(right_ty)) = (right_arg.type_of(), left_arg.type_of()) {
+                    match left_ty {
+                        _ if left_ty != right_ty => {
+                            notes.push(format!(
+                                "One value is of type {left_ty} \
+                                while the other is of type {right_ty}"
+                            ));
+                            notes.push("Values of different types can't be merged".to_owned());
+                        }
+                        "String" | "Number" | "Bool" | "Array" | "EnumTag" => {
+                            push_merge_note(&mut notes, left_ty);
+                        }
+                        "Function" | "MatchExpression" => {
+                            notes.push(
+                                "Both values are functions (or match expressions)".to_owned(),
+                            );
+                            notes.push(
+                                "Functions can never be merged with anything else, \
+                                even another function."
+                                    .to_owned(),
+                            );
+                        }
+                        "EnumVariant" => {
+                            if let (
+                                Some(EnumVariantData { tag: tag1, .. }),
+                                Some(EnumVariantData { tag: tag2, .. }),
+                            ) = (right_arg.as_enum_variant(), left_arg.as_enum_variant())
+                            {
+                                // The only possible cause of failure of merging two enum variants is a
+                                // different tag (the arguments could fail to merge as well, but then
+                                // the error would have them as the operands, not the enclosing enums).
+                                notes.push(format!(
+                                    "Both values are enum variants, \
+                                    but their tags differ (`'{tag1}` vs `'{tag2}`)"
+                                ));
+                                notes.push(
+                                    "Enum variants can only be \
+                                    merged if they have the same tag"
+                                        .to_owned(),
+                                );
+                            } else {
+                                // This should not happen, but it's recoverable, so let's not fail
+                                // in release mode.
+                                debug_assert!(false);
+
+                                notes.push(
+                                    "Primitive values (Number, String, EnumTag and Bool) \
+                                    and arrays can only be merged if they are equal"
+                                        .to_owned(),
+                                );
+                                notes.push("Enum variants must have the same tag.".to_owned());
+                                notes.push("Functions can never be merged.".to_owned());
+                            }
+                        }
+                        _ => {
+                            // In other cases, we print a generic message
+                            notes.push(
+                                "Primitive values (Number, String, EnumTag and Bool) \
+                                    and arrays can only be merged if they are equal"
+                                    .to_owned(),
+                            );
+                            notes.push("Enum variants must have the same tag.".to_owned());
+                            notes.push("Functions can never be merged.".to_owned());
+                        }
+                    }
+                }
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("non mergeable terms")
+                        .with_labels(labels)
+                        .with_notes(notes),
+                ]
+            }
+            EvalErrorKind::UnboundIdentifier(ident, span_opt) => vec![
+                Diagnostic::error()
+                    .with_message(format!("unbound identifier `{ident}`"))
+                    .with_labels(vec![
+                        primary_alt(span_opt.into_opt(), ident.to_string(), files)
+                            .with_message("this identifier is unbound"),
+                    ]),
+            ],
+            EvalErrorKind::InfiniteRecursion(_call_stack, pos_idx) => {
+                let labels = pos_table
+                    .get(pos_idx)
+                    .as_opt_ref()
+                    .map(|span| vec![primary(span).with_message("recursive reference")])
+                    .unwrap_or_default();
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("infinite recursion")
+                        .with_labels(labels),
+                ]
+            }
+            EvalErrorKind::Other(msg, span_opt) => {
+                let labels = pos_table
+                    .get(span_opt)
+                    .as_opt_ref()
+                    .map(|span| vec![primary(span).with_message("here")])
+                    .unwrap_or_default();
+
+                vec![Diagnostic::error().with_message(msg).with_labels(labels)]
+            }
+            EvalErrorKind::InternalError(msg, span_opt) => {
+                let labels = pos_table
+                    .get(span_opt)
+                    .as_opt_ref()
+                    .map(|span| vec![primary(span).with_message("here")])
+                    .unwrap_or_default();
+
+                vec![
+                    Diagnostic::error()
+                        .with_message(format!("internal error: {msg}"))
+                        .with_labels(labels)
+                        .with_notes(vec![String::from(INTERNAL_ERROR_MSG)]),
+                ]
+            }
+            EvalErrorKind::SerializationError(err) => {
+                err.with_pos_table(pos_table).into_diagnostics(files)
+            }
+            EvalErrorKind::DeserializationError(format, msg, span_opt) => {
+                let labels = pos_table
+                    .get(span_opt)
+                    .as_opt_ref()
+                    .map(|span| vec![primary(span).with_message("here")])
+                    .unwrap_or_default();
+
+                vec![
+                    Diagnostic::error()
+                        .with_message(format!("{format} parse error: {msg}"))
+                        .with_labels(labels),
+                ]
+            }
+            EvalErrorKind::DeserializationErrorWithInner { format, inner, pos } => {
+                let mut diags = inner.into_diagnostics(files);
+                if let Some(diag) = diags.first_mut() {
+                    // TODO: should we really use a pos_idx here, or are those fresh TermPos coming
+                    // out from the YAML parser?
+                    if let Some(span) = pos_table.get(pos).as_opt_ref() {
+                        diag.labels
+                            .push(secondary(span).with_message("deserialized here"));
+                    }
+                    diag.notes.push(format!("while parsing {format}"));
+                }
+                diags
+            }
+            EvalErrorKind::IncomparableValues {
+                eq_pos,
+                left,
+                right,
+            } => {
+                let mut labels = Vec::new();
+
+                if let Some(span) = pos_table.get(eq_pos).as_opt_ref() {
+                    labels.push(primary(span).with_message("in this equality comparison"));
+                }
+
+                // Push the label for the right or left argument and return the type of said
+                // argument.
+                let mut push_label = |prefix: &str, term: &NickelValue| -> &'static str {
+                    let type_of = term.type_of().unwrap_or("<unevaluated>");
+
+                    labels.push(
+                        secondary_term(&pos_table, term, files)
+                            .with_message(format!("{prefix} argument has type {type_of}")),
+                    );
+
+                    type_of
+                };
+
+                let left_type = push_label("left", &left);
+                let right_type = push_label("right", &right);
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("cannot compare values for equality")
+                        .with_labels(labels)
+                        .with_notes(vec![format!(
+                            "A {left_type} can't be meaningfully compared with a {right_type}"
+                        )]),
+                ]
+            }
+            EvalErrorKind::NonExhaustiveEnumMatch {
+                expected,
+                found,
+                pos,
+            } => {
+                let tag_list = expected
+                    .into_iter()
+                    .map(|tag| {
+                        // We let the pretty printer handle proper formatting
+                        NickelValue::enum_variant_posless(tag, None).to_string()
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                let mut labels = Vec::new();
+
+                if let Some(span) = pos_table.get(pos).into_opt() {
+                    labels.push(primary(&span).with_message("in this match expression"));
+                }
+
+                labels.push(
+                    secondary_term(&pos_table, &found, files)
+                        .with_message("this value doesn't match any branch"),
+                );
+
+                vec![Diagnostic::error()
+                    .with_message("unmatched pattern")
+                    .with_labels(labels)
+                    .with_notes(vec![
+                        format!("This match expression isn't exhaustive, matching only the following pattern(s): `{tag_list}`"),
+                        "But it has been applied to an argument which doesn't match any of those patterns".to_owned(),
+                    ])]
+            }
+            EvalErrorKind::NonExhaustiveMatch { value, pos } => {
+                let mut labels = Vec::new();
+
+                if let Some(span) = pos_table.get(pos).into_opt() {
+                    labels.push(primary(&span).with_message("in this match expression"));
+                }
+
+                labels.push(
+                    secondary_term(&pos_table, &value, files)
+                        .with_message("this value doesn't match any branch"),
+                );
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("unmatched pattern")
+                        .with_labels(labels),
+                ]
+            }
+            EvalErrorKind::FailedDestructuring { value, pattern_pos } => {
+                let mut labels = Vec::new();
+
+                if let Some(span) = pos_table.get(pattern_pos).into_opt() {
+                    labels.push(primary(&span).with_message("this pattern"));
+                }
+
+                labels.push(
+                    secondary_term(&pos_table, &value, files)
+                        .with_message("this value failed to match"),
+                );
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("destructuring failed")
+                        .with_labels(labels),
+                ]
+            }
+            EvalErrorKind::IllegalPolymorphicTailAccess {
+                action,
+                label: contract_label,
+                evaluated_arg,
+            } => blame_error::blame_diagnostics(
+                &mut pos_table,
+                files,
+                contract_label,
+                evaluated_arg,
+                &self.ctxt.call_stack,
+                &format!(": {}", &action.message()),
+            ),
+            EvalErrorKind::UnaryPrimopTypeError {
+                primop,
+                expected,
+                pos_arg,
+                arg_evaluated,
+            } => EvalErrorData {
+                error: EvalErrorKind::TypeError {
+                    message: format!("{primop} expects its argument to be a {expected}"),
+                    expected,
+                    orig_pos: pos_arg,
+                    term: arg_evaluated,
+                },
+                ctxt: EvalCtxt {
+                    pos_table,
+                    call_stack: self.ctxt.call_stack,
+                },
+            }
+            .into_diagnostics(files),
+            EvalErrorKind::NAryPrimopTypeError {
+                primop,
+                expected,
+                arg_number,
+                pos_arg,
+                arg_evaluated,
+                pos_op,
+            } => {
+                // The parsing of binary subtraction vs unary negation has
+                // proven confusing in practice; for example, `add 1 -1` is
+                // parsed as `(add 1) - 1`, so the `-` is a subtraction and
+                // triggers a type error because `(add 1)` is not a number.
+                //
+                // We attempt to provide a useful hint for this case.
+                //
+                // We don't currently attempt to give a good hint for
+                // `add -1 1` (parsed as `add - (1 1)`) because the evaluation
+                // error hits in a context (the `(1 1)`) where we don't see
+                // the `-`.
+                let minus_pos = if primop == "(-)"
+                    && arg_number == 1
+                    && matches!(arg_evaluated.type_of(), Some("Function"))
+                {
+                    pos_table.get(pos_op).into_opt()
+                } else {
+                    None
+                };
+
+                let diags = EvalErrorData {
+                    ctxt: EvalCtxt {
+                        pos_table,
+                        call_stack: self.ctxt.call_stack,
+                    },
+                    error: EvalErrorKind::TypeError {
+                        message: format!(
+                            "{primop} expects its {} argument to be a {expected}",
+                            cardinal(arg_number)
+                        ),
+                        expected,
+                        orig_pos: pos_arg,
+                        term: arg_evaluated,
+                    },
+                }
+                .into_diagnostics(files);
+
+                if let Some(minus_pos) = minus_pos {
+                    let label = secondary(&minus_pos)
+                        .with_message("this expression was parsed as a binary subtraction");
+                    diags
+                        .into_iter()
+                        .map(|d| {
+                            d.with_label(label.clone())
+                                .with_note(
+                                    "for unary negation, add parentheses: write `(-42)` instead of `-42`",
+                                )
+                        })
+                        .collect()
+                } else {
+                    diags
+                }
+            }
+            EvalErrorKind::QueryNonRecord { pos, id, value } => {
+                let label = format!(
+                    "tried to query field `{}`, but the expression has type {}",
+                    id,
+                    value.type_of().unwrap_or("<unevaluated>"),
+                );
+
+                let label = if let Some(span) = pos_table.get(pos).into_opt() {
+                    primary(&span).with_message(label)
+                } else {
+                    primary_term(&pos_table, &value, files).with_message(label)
+                };
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("tried to query field of a non-record")
+                        .with_labels(vec![label]),
+                ]
+            }
+        }
+    }
+}
+
+/// Common functionality for formatting blame errors.
+mod blame_error {
+    use codespan_reporting::diagnostic::{Diagnostic, Label};
+
+    use crate::{
+        eval::{callstack::CallStack, value::NickelValue},
+        files::{FileId, Files},
+        label::{
+            self, Polarity,
+            ty_path::{self, PathSpan},
+        },
+        position::{PosIdx, PosTable, TermPos},
+        typ::Type,
+    };
+
+    use super::{primary, secondary, secondary_term};
+
+    /// Returns a title to be used by blame errors based on the `path` and `polarity`
+    /// of the label.
+    pub fn title(l: &label::Label) -> String {
+        if ty_path::has_no_arrow(&l.path) {
+            // An empty path or a path that contains only fields necessarily corresponds to
+            // a positive blame
+            assert_eq!(l.polarity, Polarity::Positive);
+            match l.field_name {
+                Some(ident) => format!("contract broken by the value of `{ident}`"),
+                None => "contract broken by a value".to_owned(),
+            }
+        } else if l.polarity == Polarity::Positive {
+            match l.field_name {
+                Some(ident) => format!("contract broken by the function `{ident}`"),
+                None => "contract broken by a function".to_owned(),
+            }
+        } else {
+            match l.field_name {
+                Some(ident) => format!("contract broken by the caller of `{ident}`"),
+                None => "contract broken by the caller".to_owned(),
+            }
+        }
+    }
+
+    /// Constructs the diagnostic labels used when raising a blame error.
+    pub fn build_diagnostic_labels(
+        pos_table: &PosTable,
+        evaluated_arg: Option<NickelValue>,
+        blame_label: &label::Label,
+        path_label: Label<FileId>,
+        files: &mut Files,
+    ) -> Vec<Label<FileId>> {
+        let mut labels = vec![path_label];
+
+        if let Some(ref arg_pos) = pos_table.get(blame_label.arg_pos).into_opt() {
+            // In some cases, if the blame error is located in an argument or return value
+            // of an higher order functions for example, the original argument position can
+            // point to the builtin implementation contract like `func` or `record`, so
+            // there's no good reason to show it. Note than even in that case, the
+            // information contained at the argument index can still be useful.
+            if !files.is_stdlib(arg_pos.src_id) {
+                labels.push(primary(arg_pos).with_message("applied to this expression"));
+            }
+        }
+
+        // If we have a reference to the element in the cache that was being tested,
+        // we can try to show more information about the final, evaluated value that is
+        // responsible for the blame.
+        if let Some(mut evaluated_arg) = evaluated_arg {
+            match (
+                pos_table.get(evaluated_arg.pos_idx()),
+                pos_table.get(blame_label.arg_pos).as_opt_ref(),
+            ) {
+                // Avoid showing a position inside builtin contracts, it's rarely
+                // informative.
+                (TermPos::Original(val_pos), _) if files.is_stdlib(val_pos.src_id) => {
+                    evaluated_arg = evaluated_arg.with_pos_idx(PosIdx::NONE);
+                    labels.push(
+                        secondary_term(pos_table, &evaluated_arg, files)
+                            .with_message("evaluated to this value"),
+                    );
+                }
+                // Do not show the same thing twice: if arg_pos and val_pos are the same,
+                // the first label "applied to this value" is sufficient.
+                (TermPos::Original(ref val_pos), Some(arg_pos)) if val_pos == arg_pos => {}
+                (TermPos::Original(ref val_pos), _) => {
+                    labels.push(secondary(val_pos).with_message("evaluated to this expression"))
+                }
+                // If the final element is a direct reduct of the original value, rather
+                // print the actual value than referring to the same position as
+                // before.
+                (TermPos::Inherited(ref val_pos), Some(arg_pos)) if val_pos == arg_pos => {
+                    evaluated_arg = evaluated_arg.with_pos_idx(PosIdx::NONE);
+                    labels.push(
+                        secondary_term(pos_table, &evaluated_arg, files)
+                            .with_message("evaluated to this value"),
+                    );
+                }
+                // Finally, if the parameter reduced to a value which originates from a
+                // different expression, show both the expression and the value.
+                (TermPos::Inherited(ref val_pos), _) => {
+                    if !files.is_stdlib(val_pos.src_id) {
+                        labels
+                            .push(secondary(val_pos).with_message("evaluated to this expression"));
+                    }
+
+                    evaluated_arg = evaluated_arg.with_pos_idx(PosIdx::NONE);
+                    labels.push(
+                        secondary_term(pos_table, &evaluated_arg, files)
+                            .with_message("evaluated to this value"),
+                    );
+                }
+                (TermPos::None, _) => labels.push(
+                    secondary_term(pos_table, &evaluated_arg, files)
+                        .with_message("evaluated to this value"),
+                ),
+            }
+        }
+
+        labels
+    }
+
+    pub trait ExtendWithCallStack {
+        fn extend_with_call_stack(
+            &mut self,
+            pos_table: &PosTable,
+            files: &Files,
+            call_stack: &CallStack,
+        );
+    }
+
+    impl ExtendWithCallStack for Vec<Diagnostic<FileId>> {
+        fn extend_with_call_stack(
+            &mut self,
+            pos_table: &PosTable,
+            files: &Files,
+            call_stack: &CallStack,
+        ) {
+            let (calls, curr_call) = call_stack.group_by_calls(pos_table, files);
+            let diag_curr_call = curr_call.map(|cdescr| {
+                let name = cdescr
+                    .head
+                    .map(|ident| ident.to_string())
+                    .unwrap_or_else(|| String::from("<func>"));
+                Diagnostic::note().with_labels(vec![
+                    primary(&cdescr.span).with_message(format!("While calling to {name}")),
+                ])
+            });
+            let diags = calls.into_iter().enumerate().map(|(i, cdescr)| {
+                let name = cdescr
+                    .head
+                    .map(|ident| ident.to_string())
+                    .unwrap_or_else(|| String::from("<func>"));
+                Diagnostic::note().with_labels(vec![secondary(&cdescr.span).with_message(format!(
+                    "({}) calling {}",
+                    i + 1,
+                    name
+                ))])
+            });
+
+            self.extend(diag_curr_call);
+            self.extend(diags);
+        }
+    }
+
+    /// Calls [`crate::label::ty_path::span`], but if the call returns `None` (the position of the
+    /// subtype isn't defined), [path_span] pretty-prints the type inside a new source, parses it,
+    /// and calls `ty_path::span`. This new type is guaranteed to have all of its positions set,
+    /// providing a definite `PathSpan`. This is similar to the behavior of [`super::primary_alt`].
+    pub fn path_span<'a, I>(
+        pos_table: &mut PosTable,
+        files: &mut Files,
+        path: I,
+        ty: &Type,
+    ) -> PathSpan
+    where
+        I: Iterator<Item = &'a ty_path::Elem> + Clone,
+    {
+        use crate::parser::{ErrorTolerantParserCompat, grammar::FixedTypeParser, lexer::Lexer};
+
+        ty_path::span(path.clone().peekable(), ty)
+            .or_else(|| {
+                let type_pprinted = format!("{ty}");
+                let file_id = files.add(super::UNKNOWN_SOURCE_NAME, type_pprinted.clone());
+
+                let (ty_with_pos, _) = FixedTypeParser::new()
+                    .parse_tolerant_compat(pos_table, file_id, Lexer::new(&type_pprinted))
+                    .unwrap();
+
+                ty_path::span(path.peekable(), &ty_with_pos)
+            })
+            .expect(
+                "path_span: we pretty-printed and parsed again the type of a label, \
+                so it must have all of its position defined, but `ty_path::span` returned `None`",
+            )
+    }
+
+    /// Generate a codespan label that describes the [type path][crate::label::ty_path::Path] of a
+    /// (Nickel) label.
+    pub fn report_ty_path(
+        pos_table: &mut PosTable,
+        files: &mut Files,
+        l: &label::Label,
+    ) -> Label<FileId> {
+        let PathSpan {
+            span,
+            last,
+            last_arrow_elem,
+        } = path_span(pos_table, files, l.path.iter(), &l.typ);
+
+        let msg = match (last, last_arrow_elem) {
+            // The type path doesn't contain any arrow, and the failing subcontract is the
+            // contract for the elements of an array
+            (Some(ty_path::Elem::Array), None) => "expected array element type",
+            // The type path doesn't contain any arrow, and the failing subcontract is the contract
+            // for the fields of a dictionary
+            (Some(ty_path::Elem::Dict), None) => "expected dictionary field type",
+            // The type path doesn't contain any arrow, and the failing subcontract is the contract
+            // for the field of a record
+            (Some(ty_path::Elem::Field(_)), None) => "expected field type",
+            // The original contract contains an arrow, and the path is only composed of codomains.
+            // Then polarity is necessarily true and the cause of the blame is the return value of
+            // the function
+            (Some(_), Some(ty_path::Elem::Codomain)) if ty_path::has_no_dom(&l.path) => {
+                "expected return type"
+            }
+            // The original contract contains an arrow, the subcontract is the domain of an
+            // arrow, and the polarity is positive. The function is to be blamed for calling an
+            // argument on a value of the wrong type.
+            (Some(_), Some(ty_path::Elem::Domain)) if l.polarity == Polarity::Positive => {
+                "expected type of an argument of an inner call"
+            }
+            // The original contract contains an arrow, the subcontract is the codomain of an
+            // arrow, and the polarity is positive. The function is to be blamed for calling a
+            // higher-order function argument on a function which returns a value of the wrong
+            // type.
+            (Some(_), Some(ty_path::Elem::Codomain)) if l.polarity == Polarity::Positive => {
+                "expected return type of a sub-function passed as an argument of an inner call"
+            }
+            // The original contract contains an arrow, the subcontract is the domain of an arrow,
+            // and the polarity is negative. The caller is to be blamed for providing an argument
+            // of the wrong type.
+            (Some(_), Some(ty_path::Elem::Domain)) => {
+                "expected type of the argument provided by the caller"
+            }
+            // The original contract contains an arrow, the subcontract is the codomain of an
+            // arrow, and the polarity is negative. The caller is to be blamed for providing a
+            // higher-order function argument which returns a value of the wrong type.
+            (Some(_), Some(ty_path::Elem::Codomain)) => {
+                "expected return type of a function provided by the caller"
+            }
+            // If there is a last arrow element, then there must be last element
+            (None, Some(_)) => panic!(
+                "blame error reporting: inconsistent path analysis, last_elem\
+is None but last_arrow_elem is Some"
+            ),
+            _ => "expected type",
+        };
+
+        secondary(&span).with_message(msg.to_owned())
+    }
+
+    /// Generate codespan diagnostics from blame data. Mostly used by `into_diagnostics`
+    /// implementations.
+    ///
+    /// # Parameters
+    ///
+    /// The `msg_addendum` is used to customize the main error message. It's inserted between the
+    /// leading "contract broken by .." and the custom contract diagnostic message in tail
+    /// position.
+    pub fn blame_diagnostics(
+        pos_table: &mut PosTable,
+        files: &mut Files,
+        mut label: label::Label,
+        evaluated_arg: Option<NickelValue>,
+        call_stack: &CallStack,
+        msg_addendum: &str,
+    ) -> Vec<Diagnostic<FileId>> {
+        use std::fmt::Write;
+
+        let mut diagnostics = Vec::new();
+
+        // Contract diagnostics are stacked up in order, which means the last one is
+        // usually the latest/most precise/most relevant. We ignore empty diagnostics and
+        // iterate in reverse order, to show the most relevant diagnostics first.
+        let mut contract_diagnostics = std::mem::take(&mut label.diagnostics)
+            .into_iter()
+            .rev()
+            .filter(|diag| !label::ContractDiagnostic::is_empty(diag));
+        let head_contract_diagnostic = contract_diagnostics.next();
+
+        // The addendum and the custom contract diagnostic are important, so we want to display
+        // them as part of the main error message. However, they can make the message quite long.
+        // To avoid clutter, we display each component on a new line, indented with respect to the
+        // initial "error: "
+        let new_msg_block = "\n       ";
+        let mut msg = title(&label);
+
+        if !msg_addendum.is_empty() {
+            // unwrap(): write shouldn't fail on a String
+            write!(&mut msg, "{new_msg_block}{msg_addendum}").unwrap();
+        }
+
+        if let Some(contract_msg) = head_contract_diagnostic
+            .as_ref()
+            .and_then(|diag| diag.message.as_ref())
+        {
+            // unwrap(): write shouldn't fail on a String
+            write!(&mut msg, "{new_msg_block}{}", &super::escape(contract_msg)).unwrap();
+        }
+
+        let contract_notes = head_contract_diagnostic
+            .map(|diag| diag.notes)
+            .unwrap_or_default();
+        let path_label = report_ty_path(pos_table, files, &label);
+
+        let labels = build_diagnostic_labels(pos_table, evaluated_arg, &label, path_label, files);
+
+        // If there are notes in the head contract diagnostic, we build the first
+        // diagnostic using them and will put potential generated notes on higher-order
+        // contracts in a following diagnostic.
+        if !contract_notes.is_empty() {
+            diagnostics.push(
+                Diagnostic::error()
+                    .with_message(msg)
+                    .with_labels(labels)
+                    .with_notes(contract_notes),
+            );
+        } else {
+            diagnostics.push(Diagnostic::error().with_message(msg).with_labels(labels));
+        }
+
+        for ctr_diag in contract_diagnostics {
+            let mut msg = String::from("from a parent contract violation");
+
+            if let Some(msg_contract) = ctr_diag.message {
+                msg.push_str(": ");
+                msg.push_str(&super::escape(&msg_contract));
+            }
+
+            diagnostics.push(
+                Diagnostic::note()
+                    .with_message(msg)
+                    .with_notes(ctr_diag.notes),
+            );
+        }
+
+        if !ty_path::has_no_dom(&label.path) {
+            diagnostics.extend_with_call_stack(pos_table, files, call_stack);
+        }
+
+        diagnostics
+    }
+}
+
+impl IntoDiagnostics for ParseError {
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        let diagnostic = match self {
+            ParseError::UnexpectedEOF(file_id, _expected) => {
+                let end = files.source_span(file_id).end;
+                Diagnostic::error()
+                    .with_message(format!(
+                        "unexpected end of file when parsing {}",
+                        files.name(file_id).to_string_lossy()
+                    ))
+                    .with_labels(vec![primary(&RawSpan {
+                        start: end,
+                        end,
+                        src_id: file_id,
+                    })])
+            }
+            ParseError::UnexpectedToken(span, _expected) => Diagnostic::error()
+                .with_message("unexpected token")
+                .with_labels(vec![primary(&span)]),
+            ParseError::ExtraToken(span) => Diagnostic::error()
+                .with_message("superfluous unexpected token")
+                .with_labels(vec![primary(&span)]),
+            ParseError::UnmatchedCloseBrace(span) => Diagnostic::error()
+                .with_message("unmatched closing brace \'}\'")
+                .with_labels(vec![primary(&span)]),
+            ParseError::InvalidEscapeSequence(span) => Diagnostic::error()
+                .with_message("invalid escape sequence")
+                .with_labels(vec![primary(&span)]),
+            ParseError::InvalidAsciiEscapeCode(span) => Diagnostic::error()
+                .with_message("invalid ascii escape code")
+                .with_labels(vec![primary(&span)]),
+            ParseError::StringDelimiterMismatch {
+                opening_delimiter,
+                closing_delimiter,
+            } => Diagnostic::error()
+                .with_message("string closing delimiter has too many `%`")
+                .with_labels(vec![
+                    primary(&closing_delimiter).with_message("the closing delimiter"),
+                    secondary(&opening_delimiter).with_message("the opening delimiter"),
+                ])
+                .with_notes(vec![
+                    "A special string must be opened and closed with the same number of `%` \
+                    in the corresponding delimiters."
+                        .into(),
+                    "Try removing the superflous `%` in the closing delimiter".into(),
+                ]),
+            ParseError::ExternalFormatError(format, msg, span_opt) => {
+                let labels = span_opt
+                    .as_ref()
+                    .map(|span| vec![primary(span)])
+                    .unwrap_or_default();
+
+                Diagnostic::error()
+                    .with_message(format!("{format} parse error: {msg}"))
+                    .with_labels(labels)
+            }
+            ParseError::UnboundTypeVariables(idents) => Diagnostic::error()
+                .with_message(format!(
+                    "unbound type variable(s): {}",
+                    idents
+                        .iter()
+                        .map(|x| format!("`{x}`"))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ))
+                .with_labels(
+                    idents
+                        .into_iter()
+                        .filter_map(|id| id.pos.into_opt())
+                        .map(|span| primary(&span).with_message("this identifier is unbound"))
+                        .collect(),
+                ),
+            ParseError::InvalidRecordType {
+                record_span,
+                tail_span,
+                cause,
+            } => {
+                let mut labels: Vec<_> = std::iter::once(primary(&record_span))
+                    .chain(cause.labels())
+                    .collect();
+                let mut notes: Vec<_> = std::iter::once(
+                    "A record type is a literal composed only of type annotations, of the \
+                        form `<field>: <type>`."
+                        .into(),
+                )
+                .chain(cause.notes())
+                .collect();
+
+                if let Some(tail_span) = tail_span {
+                    labels.push(secondary(&tail_span).with_message("tail"));
+                    notes.push(
+                        "This literal was interpreted as a record type because it has a \
+                        polymorphic tail; record values cannot have tails."
+                            .into(),
+                    );
+                } else {
+                    notes.push(
+                        "This literal was interpreted as a record type because it has \
+                        fields with type annotations but no value definitions; to make \
+                        this a record value, assign values to its fields."
+                            .into(),
+                    );
+                };
+                Diagnostic::error()
+                    .with_message("invalid record literal")
+                    .with_labels(labels)
+                    .with_notes(notes)
+            }
+            ParseError::RecursiveLetPattern(span) => Diagnostic::error()
+                .with_message("recursive destructuring is not supported")
+                .with_labels(vec![primary(&span)])
+                .with_notes(vec![
+                    "A destructuring let-binding can't be recursive. Try removing the `rec` \
+                        from `let rec`."
+                        .into(),
+                    "You can reference other fields of a record recursively \
+                        from within a field, so you might not need the recursive let."
+                        .into(),
+                ]),
+            ParseError::PatternInLetBlock(span) => Diagnostic::error()
+                .with_message("destructuring patterns are not currently permitted in let blocks")
+                .with_labels(vec![primary(&span)])
+                .with_notes(vec!["Try re-writing your let block as nested `let ... in` expressions.".into()]),
+            ParseError::TypeVariableKindMismatch { ty_var, span } => Diagnostic::error()
+                .with_message(format!(
+                    "the type variable `{ty_var}` is used in conflicting ways"
+                ))
+                .with_labels(vec![primary(&span)])
+                .with_notes(vec![
+                    "Type variables may be used either as types, polymorphic record tails, \
+                    or polymorphic enum tails."
+                        .into(),
+                    "Using the same type variable as more than one category at the same time \
+                    is forbidden."
+                        .into(),
+                ]),
+            ParseError::TypedFieldWithoutDefinition {
+                field_span,
+                annot_span,
+            } => Diagnostic::error()
+                .with_message("statically typed field without a definition")
+                .with_labels(vec![
+                    primary(&field_span).with_message("this field doesn't have a definition"),
+                    secondary(&annot_span).with_message("but it has a type annotation"),
+                ])
+                .with_notes(vec![
+                    "A static type annotation must be attached to an expression but \
+                    this field doesn't have a definition."
+                        .into(),
+                    "Did you mean to use `|` instead of `:`, for example when defining a \
+                    record contract?"
+                        .into(),
+                    "Typed fields without definitions are only allowed inside \
+                    record types, but the enclosing record literal doesn't qualify as a \
+                    record type. Please refer to the manual for the defining conditions of a \
+                    record type."
+                        .into(),
+                ]),
+            ParseError::InterpolationInStaticPath {
+                input: _,
+                path_elem_span,
+            } => Diagnostic::error()
+                .with_message("string interpolation is forbidden within a query")
+                .with_labels(vec![primary(&path_elem_span)])
+                .with_notes(vec![
+                    "Field paths don't support string interpolation when querying \
+                        metadata."
+                        .into(),
+                    "Only identifiers and simple string literals are allowed.".into(),
+                ]),
+            ParseError::DuplicateIdentInRecordPattern { ident, prev_ident } => Diagnostic::error()
+                .with_message(format!(
+                    "duplicated binding `{}` in record pattern",
+                    ident.label()
+                ))
+                .with_labels(vec![
+                    secondary(&prev_ident.pos.unwrap()).with_message("previous binding here"),
+                    primary(&ident.pos.unwrap()).with_message("duplicated binding here"),
+                ]),
+            ParseError::DuplicateIdentInLetBlock { ident, prev_ident } => Diagnostic::error()
+                .with_message(format!(
+                    "duplicated binding `{}` in let block",
+                    ident.label()
+                ))
+                .with_labels(vec![
+                    secondary(&prev_ident.pos.unwrap()).with_message("previous binding here"),
+                    primary(&ident.pos.unwrap()).with_message("duplicated binding here"),
+                ]),
+            ParseError::DisabledFeature { feature, span } => Diagnostic::error()
+                .with_message("interpreter compiled without required features")
+                .with_labels(vec![primary(&span).with_message(format!(
+                    "this syntax is only supported with the `{feature}` feature enabled"
+                ))])
+                .with_notes(vec![format!(
+                    "Recompile nickel with `--features {}`",
+                    feature
+                )]),
+            ParseError::InvalidContract(span) => Diagnostic::error()
+                .with_message("invalid contract expression")
+                .with_labels(vec![primary(&span).with_message("this can't be used as a contract")])
+                .with_notes(vec![
+                    "This expression is used as a contract as part of an annotation or a type expression."
+                        .to_owned(),
+                    "Only functions and records might be valid contracts".to_owned(),
+                ]),
+            ParseError::InvalidImportFormat{span} => Diagnostic::error()
+                .with_message("unknown import format tag")
+                .with_labels(vec![primary(&span)])
+                .with_notes(vec![
+                    "Examples of valid format tags: 'Nickel, 'Json, 'Yaml, 'Toml, 'Text"
+                        .to_owned()
+                ]),
+            ParseError::UnknownSigilSelector { selector, span } => {
+                Diagnostic::error()
+                .with_message(format!("unknown sigil selector `{selector}`"))
+                .with_labels(vec![primary(&span)])
+                .with_note("Available selectors are currently: `env`")
+            }
+            ParseError::UnknownSigilAttribute { selector, attribute, span } => {
+                Diagnostic::error()
+                .with_message(format!("unknown sigil attribute `{attribute}`"))
+                .with_labels(vec![primary(&span).with_message(format!("unknown attribute for sigil selector `{selector}`"))])
+                .with_note(available_sigil_attrs_note(&selector))
+            }
+            ParseError::SigilExprMissingColon(span) => {
+                Diagnostic::error()
+                .with_message("missing sigil expression separator `:`")
+                .with_labels(vec![primary(&span)])
+                .with_notes(vec![
+                    "The CLI sigil expression syntax is `@<selector>:<argument>` or `@<selector>/<attribute>:<argument>`".to_owned(),
+                    "The provided sigil expression is missing the `:` separator.".to_owned(),
+                ])
+            }
+            ParseError::MultipleFieldDecls { ident, include_span, other_span } => Diagnostic::error()
+                .with_message(format!(
+                    "multiple declarations for included field `{ident}`",
+                ))
+                .with_labels(vec![
+                    primary(&include_span).with_message("included here"),
+                    secondary(&other_span).with_message("but also declared here"),
+                ])
+                .with_notes(vec![
+                    "Piecewise definitions involving an included field are currently not supported".to_owned()
+                ]),
+        };
+
+        vec![diagnostic]
+    }
+}
+
+/// Returns the available attributes for each supported sigil
+// It's currently trivial, but might be expanded in the future
+fn available_sigil_attrs_note(selector: &str) -> String {
+    format!(
+        "No attributes are available for sigil selector `{selector}`. Use the selector directly as in `@{selector}:<argument>`"
+    )
+}
+
+impl IntoDiagnostics for TypecheckErrorData {
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        self.borrow_error().into_diagnostics(files)
+    }
+}
+
+impl<'ast> IntoDiagnostics for &'_ TypecheckErrorKind<'ast> {
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        fn mk_expr_label(span_opt: &TermPos) -> Vec<Label<FileId>> {
+            mk_expr_label_with_msg(span_opt, "this expression".into())
+        }
+
+        fn mk_expr_label_with_msg(span_opt: &TermPos, msg: String) -> Vec<Label<FileId>> {
+            span_opt
+                .as_opt_ref()
+                .map(|span| vec![primary(span).with_message(msg)])
+                .unwrap_or_default()
+        }
+
+        fn mk_expected_msg<T: std::fmt::Display>(expected: &T) -> String {
+            format!("Expected an expression of type `{expected}`")
+        }
+
+        fn mk_inferred_msg<T: std::fmt::Display>(inferred: &T) -> String {
+            format!("Found an expression of type `{inferred}`")
+        }
+
+        match self {
+            TypecheckErrorKind::UnboundIdentifier(id) =>
+            // Use the same diagnostic as `EvalError::UnboundIdentifier` for consistency.
+            {
+                EvalErrorData {
+                    ctxt: Default::default(),
+                    error: EvalErrorKind::UnboundIdentifier(*id, id.pos),
+                }
+                .into_diagnostics(files)
+            }
+            TypecheckErrorKind::MissingRow {
+                id,
+                kind: RowKind::Record,
+                expected,
+                inferred,
+                pos,
+            } => {
+                let id_access = match &expected.typ {
+                    TypeF::Record(r) => {
+                        r.find_row(id.ident()).and_then(|row| row.id.pos.into_opt())
+                    }
+                    _ => None,
+                };
+                let mut labels = mk_expr_label_with_msg(pos, format!("this record lacks `{id}`"));
+                if let Some(id_access) = id_access {
+                    labels
+                        .push(secondary(&id_access).with_message(format!("`{id}` required here")));
+                }
+                vec![
+                    Diagnostic::error()
+                        .with_message(format!("type error: missing field `{id}`"))
+                        .with_labels(labels)
+                        .with_notes(vec![format!(
+                            "Attempted to access field `{id}` on an expression of type `{inferred}`"
+                        )]),
+                ]
+            }
+            TypecheckErrorKind::MissingRow {
+                id,
+                kind: RowKind::Enum,
+                expected,
+                inferred,
+                pos,
+            } => vec![
+                Diagnostic::error()
+                    .with_message(format!("type error: missing row `{id}`"))
+                    .with_labels(mk_expr_label(pos))
+                    .with_notes(vec![
+                        format!(
+                            "{}, which contains the field `{id}`",
+                            mk_expected_msg(expected)
+                        ),
+                        format!(
+                            "{}, which does not contain the field `{id}`",
+                            mk_inferred_msg(inferred)
+                        ),
+                    ]),
+            ],
+            TypecheckErrorKind::MissingDynTail {
+                expected,
+                inferred,
+                pos,
+            } => vec![
+                Diagnostic::error()
+                    .with_message(String::from("type error: missing dynamic tail `; Dyn`"))
+                    .with_labels(mk_expr_label(pos))
+                    .with_notes(vec![
+                        format!(
+                            "{}, which contains the tail `; Dyn`",
+                            mk_expected_msg(expected)
+                        ),
+                        format!(
+                            "{}, which does not contain the tail `; Dyn`",
+                            mk_inferred_msg(inferred)
+                        ),
+                    ]),
+            ],
+            TypecheckErrorKind::ExtraRow {
+                id,
+                expected,
+                inferred,
+                pos,
+            } => vec![
+                Diagnostic::error()
+                    .with_message(format!("type error: extra row `{id}`"))
+                    .with_labels(mk_expr_label(pos))
+                    .with_notes(vec![
+                        format!(
+                            "{}, which does not contain the field `{id}`",
+                            mk_expected_msg(expected)
+                        ),
+                        format!(
+                            "{}, which contains the extra field `{id}`",
+                            mk_inferred_msg(inferred)
+                        ),
+                    ]),
+            ],
+            TypecheckErrorKind::ExtraDynTail {
+                expected,
+                inferred,
+                pos,
+            } => vec![
+                Diagnostic::error()
+                    .with_message(String::from("type error: extra dynamic tail `; Dyn`"))
+                    .with_labels(mk_expr_label(pos))
+                    .with_notes(vec![
+                        format!(
+                            "{}, which does not contain the tail `; Dyn`",
+                            mk_expected_msg(expected)
+                        ),
+                        format!(
+                            "{}, which contains the extra tail `; Dyn`",
+                            mk_inferred_msg(inferred)
+                        ),
+                    ]),
+            ],
+            TypecheckErrorKind::UnboundTypeVariable(ident) => {
+                vec![Diagnostic::error()
+                    .with_message(format!("unbound type variable `{ident}`"))
+                    .with_labels(vec![primary_alt(
+                        ident.pos.into_opt(),
+                        ident.to_string(),
+                        files,
+                    )
+                    .with_message("this type variable is unbound")])
+                    .with_notes(vec![format!(
+                    "Did you forget to put a `forall {ident}.` somewhere in the enclosing type?"
+                )])]
+            }
+            TypecheckErrorKind::TypeMismatch {
+                expected,
+                inferred,
+                pos,
+            } => {
+                fn addendum<'ast>(ty: &Type<'ast>) -> &'static str {
+                    if ty.typ.is_contract() {
+                        " (a contract)"
+                    } else {
+                        ""
+                    }
+                }
+                let last_note = if expected.typ.is_contract() ^ inferred.typ.is_contract() {
+                    "Static types and contracts are not compatible"
+                } else {
+                    "These types are not compatible"
+                };
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("incompatible types")
+                        .with_labels(mk_expr_label(pos))
+                        .with_notes(vec![
+                            format!("{}{}", mk_expected_msg(expected), addendum(expected),),
+                            format!("{}{}", mk_inferred_msg(inferred), addendum(inferred),),
+                            String::from(last_note),
+                        ]),
+                ]
+            }
+            TypecheckErrorKind::RecordRowMismatch {
+                id,
+                expected,
+                inferred,
+                cause: err,
+                pos,
+            } => {
+                let mut err = err;
+                // If the unification error is on a nested field, we will have a succession of
+                // `RowMismatch` errors wrapping the underlying error. In this case, instead of
+                // showing a cascade of similar error messages, we determine the full path of the
+                // nested field (e.g. `pkg.subpkg1.meta.url`) and only show once the row mismatch
+                // error followed by the underlying error.
+                let mut path = vec![id.ident()];
+
+                while let TypecheckErrorKind::RecordRowMismatch {
+                    id: id_next,
+                    cause: next,
+                    ..
+                } = &**err
+                {
+                    path.push(id_next.ident());
+                    err = next;
+                }
+
+                let path_str: Vec<String> = path
+                    .clone()
+                    .into_iter()
+                    .map(|ident| format!("{ident}"))
+                    .collect();
+                let field = path_str.join(".");
+
+                let mk_expected_row_msg = |field, ty| {
+                    format!("Expected an expression of a record type with the row `{field}: {ty}`")
+                };
+                let mk_inferred_row_msg = |field, ty| {
+                    format!("Found an expression of a record type with the row `{field}: {ty}`")
+                };
+
+                //TODO: we should rather have RowMismatch hold a rows, instead of a general type,
+                //than doing this match.
+                let note1 = if let TypeF::Record(rrows) = &expected.typ {
+                    match rrows.find_path(path.as_slice()) {
+                        Some(row) => mk_expected_row_msg(&field, row.typ),
+                        None => mk_expected_msg(&expected),
+                    }
+                } else {
+                    mk_expected_msg(&expected)
+                };
+
+                let note2 = if let TypeF::Record(rrows) = &inferred.typ {
+                    match rrows.find_path(path.as_slice()) {
+                        Some(row) => mk_inferred_row_msg(&field, row.typ),
+                        None => mk_inferred_msg(&inferred),
+                    }
+                } else {
+                    mk_inferred_msg(inferred)
+                };
+
+                let mut diags = vec![
+                    Diagnostic::error()
+                        .with_message("incompatible record rows declaration")
+                        .with_labels(mk_expr_label(pos))
+                        .with_notes(vec![
+                            note1,
+                            note2,
+                            format!("Could not match the two declarations of `{field}`"),
+                        ]),
+                ];
+
+                // We generate a diagnostic for the underlying error, but append a prefix to the
+                // error message to make it clear that this is not a separate error but a more
+                // precise description of why the unification of a row failed.
+                diags.extend(err.into_diagnostics(files).into_iter().map(|mut diag| {
+                    diag.message = format!("while typing field `{}`: {}", field, diag.message);
+                    diag
+                }));
+                diags
+            }
+            TypecheckErrorKind::EnumRowMismatch {
+                id,
+                expected,
+                inferred,
+                cause,
+                pos,
+            } => {
+                let mk_expected_row_msg = |row| {
+                    format!("Expected an expression of an enum type with the enum row `{row}`")
+                };
+                let mk_inferred_row_msg =
+                    |row| format!("Found an expression of an enum type with the enum row `{row}`");
+
+                //TODO: we should rather have RowMismatch hold enum rows, instead of a general
+                //type, to avoid doing this match.
+                let note1 = if let TypeF::Enum(erows) = &expected.typ {
+                    if let Some(row) = erows.find_row(id.ident()) {
+                        mk_expected_row_msg(row)
+                    } else {
+                        mk_expected_msg(expected)
+                    }
+                } else {
+                    mk_expected_msg(expected)
+                };
+
+                let note2 = if let TypeF::Enum(erows) = &inferred.typ {
+                    if let Some(row) = erows.find_row(id.ident()) {
+                        mk_inferred_row_msg(row)
+                    } else {
+                        mk_inferred_msg(expected)
+                    }
+                } else {
+                    mk_inferred_msg(inferred)
+                };
+
+                let mut diags = vec![
+                    Diagnostic::error()
+                        .with_message("incompatible enum rows declaration")
+                        .with_labels(mk_expr_label(pos))
+                        .with_notes(vec![
+                            note1,
+                            note2,
+                            format!("Could not match the two declarations of `{id}`"),
+                        ]),
+                ];
+
+                // We generate a diagnostic for the underlying error if any, but append a prefix to
+                // the error message to make it clear that this is not a separate error but a more
+                // precise description of why the unification of a row failed.
+                if let Some(err) = cause {
+                    diags.extend((*err).into_diagnostics(files).into_iter().map(|mut diag| {
+                        diag.message = format!("while typing enum row `{id}`: {}", diag.message);
+                        diag
+                    }));
+                }
+
+                diags
+            }
+            TypecheckErrorKind::RecordRowConflict {
+                row,
+                expected,
+                inferred,
+                pos,
+            } => {
+                let mut diags = Vec::new();
+
+                diags.push(
+                    Diagnostic::error()
+                        .with_message("multiple record row declarations")
+                        .with_labels(mk_expr_label(pos))
+                        .with_notes(vec![
+                            format!("Found an expression with the row `{row}`"),
+                            format!(
+                                "But this row appears inside another record type, \
+                                which already has a diffent declaration for the field `{}`",
+                                row.id
+                            ),
+                            String::from(
+                                "A type cannot have two conflicting declarations for the same row",
+                            ),
+                        ]),
+                );
+
+                diags.push(
+                    Diagnostic::note()
+                        .with_message("while matching types")
+                        .with_notes(vec![
+                            format!("Expected type {expected}"),
+                            format!("With inferred type {inferred}"),
+                        ]),
+                );
+
+                diags
+            }
+            TypecheckErrorKind::EnumRowConflict {
+                row,
+                expected,
+                inferred,
+                pos,
+            } => {
+                let mut diags = Vec::new();
+
+                diags.push(
+                    Diagnostic::error()
+                        .with_message("multiple enum row declarations")
+                        .with_labels(mk_expr_label(pos))
+                        .with_notes(vec![
+                            format!("Found an expression with the row `{row}`"),
+                            format!(
+                                "But this row appears inside another enum type, \
+                                which already has a diffent declaration for the tag `{}`",
+                                row.id
+                            ),
+                            String::from(
+                                "A type cannot have two conflicting declarations for the same row",
+                            ),
+                        ]),
+                );
+
+                diags.push(
+                    Diagnostic::note()
+                        .with_message("while matching types")
+                        .with_notes(vec![
+                            format!("Expected type {expected}"),
+                            format!("With inferred type {inferred}"),
+                        ]),
+                );
+
+                diags
+            }
+            TypecheckErrorKind::ArrowTypeMismatch {
+                expected,
+                inferred,
+                type_path,
+                cause,
+                pos,
+            } => {
+                // We locally convert the type to their runtime representation as a way to reuse
+                // the code of `blame_error::path_span`, which works on the latter.
+                let mut pos_table = PosTable::new();
+                let expected_mline = expected.to_mainline(&mut pos_table);
+                let inferred_mline = inferred.to_mainline(&mut pos_table);
+
+                let PathSpan {
+                    span: expd_span, ..
+                } = blame_error::path_span(
+                    &mut pos_table,
+                    files,
+                    type_path.iter(),
+                    &expected_mline,
+                );
+                let PathSpan {
+                    span: actual_span, ..
+                } = blame_error::path_span(
+                    &mut pos_table,
+                    files,
+                    type_path.iter(),
+                    &inferred_mline,
+                );
+
+                let mut labels = vec![
+                    secondary(&expd_span).with_message("this part of the expected type"),
+                    secondary(&actual_span)
+                        .with_message("does not match this part of the inferred type"),
+                ];
+                labels.extend(mk_expr_label(pos));
+
+                let mut diags = vec![
+                    Diagnostic::error()
+                        .with_message("function types mismatch")
+                        .with_labels(labels)
+                        .with_notes(vec![
+                            mk_expected_msg(expected),
+                            mk_inferred_msg(inferred),
+                            String::from("Could not match the two function types"),
+                        ]),
+                ];
+
+                // We generate a diagnostic for the underlying error, but append a prefix to the
+                // error message to make it clear that this is not a separated error but a more
+                // precise description of why the unification of the row failed.
+                match &**cause {
+                    // If the underlying error is a type mismatch, printing won't add any useful
+                    // information, so we just ignore it.
+                    TypecheckErrorKind::TypeMismatch { .. } => (),
+                    error => {
+                        diags.extend(error.into_diagnostics(files).into_iter().map(|mut diag| {
+                            diag.message =
+                                format!("while matching function types: {}", diag.message);
+                            diag
+                        }));
+                    }
+                }
+
+                diags
+            }
+            TypecheckErrorKind::ForallParametricityViolation {
+                kind,
+                tail,
+                violating_type,
+                pos,
+            } => {
+                let tail_kind = match kind {
+                    VarKindDiscriminant::Type => "type",
+                    VarKindDiscriminant::EnumRows => "enum tail",
+                    VarKindDiscriminant::RecordRows => "record tail",
+                };
+                vec![
+                    Diagnostic::error()
+                        .with_message(format!(
+                            "values of type `{violating_type}` are not guaranteed to be compatible \
+                        with polymorphic {tail_kind} `{tail}`"
+                        ))
+                        .with_labels(mk_expr_label(pos))
+                        .with_notes(vec![
+                        "Type variables introduced in a `forall` range over all possible types."
+                            .to_owned(),
+                    ]),
+                ]
+            }
+            TypecheckErrorKind::CtrTypeInTermPos { contract, pos_type } => {
+                vec![Diagnostic::error()
+                    .with_message(
+                        "types containing user-defined contracts cannot be converted into contracts"
+                    )
+                    .with_labels(
+                        pos_type.as_opt_ref()
+                            .map(|span| {
+                                primary(span).with_message("This type (in contract position)")
+                            })
+                            .into_iter()
+                            .chain(contract.pos.as_opt_ref().map(|span| {
+                                secondary(span).with_message("contains this user-defined contract")
+                            }))
+                            .collect(),
+                    )]
+            }
+            TypecheckErrorKind::VarLevelMismatch {
+                type_var: constant,
+                pos,
+            } => {
+                let mut labels = mk_expr_label(pos);
+
+                if let Some(span) = constant.pos.as_opt_ref() {
+                    labels.push(secondary(span).with_message("this polymorphic type variable"));
+                }
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("invalid polymorphic generalization".to_string())
+                        .with_labels(labels)
+                        .with_notes(vec![
+                            "While the type of this expression is still undetermined, it appears \
+                            indirectly in the type of another expression introduced before \
+                            the `forall` block."
+                                .into(),
+                            format!(
+                                "The type of this expression escapes the scope of the \
+                                corresponding `forall` and can't be generalized to the \
+                                polymorphic type variable `{constant}`"
+                            ),
+                        ]),
+                ]
+            }
+            TypecheckErrorKind::InhomogeneousRecord {
+                pos,
+                row_a: expected,
+                row_b: inferred,
+            } => {
+                vec![Diagnostic::error()
+                    .with_message("incompatible types")
+                    .with_labels(mk_expr_label(pos))
+                    .with_notes(vec![
+                        "Expected a dictionary type".into(),
+                        format!("Found a record with a field of type {expected} and a field of type {inferred}"),
+                        "Records are compatible with dicts only if all their fields have the same type".into(),
+                    ])]
+            }
+            TypecheckErrorKind::OrPatternVarsMismatch { var, pos } => {
+                let mut labels = vec![
+                    primary_alt(var.pos.into_opt(), var.into_label(), files)
+                        .with_message("this variable must occur in all branches"),
+                ];
+
+                if let Some(span) = pos.as_opt_ref() {
+                    labels.push(secondary(span).with_message("in this or-pattern"));
+                }
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("or-pattern variable mismatch".to_string())
+                        .with_labels(labels)
+                        .with_notes(vec![
+                        "All branches of an or-pattern must bind exactly the same set of variables"
+                            .into(),
+                    ]),
+                ]
+            }
+            // clone() here is unfortunate, but I haven't found a better way to interface typecheck
+            // errors - which can generate a diagnostic by reference - from other errors (import
+            // errors can themselves hide parsing errors), where `into_diagnostics` consume `self`
+            // in the current implementation. Maybe we should migrate from `into_diagnostics` to
+            // `to_diagnostic`, taking the error by reference, but this might cause more copying.
+            TypecheckErrorKind::ImportError(err) => err.clone().into_diagnostics(files),
+        }
+    }
+}
+
+impl IntoDiagnostics for ImportErrorKind {
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        match self {
+            ImportErrorKind::IOError(path, error, span_opt) => {
+                let labels = span_opt
+                    .as_opt_ref()
+                    .map(|span| vec![secondary(span).with_message("imported here")])
+                    .unwrap_or_default();
+
+                vec![
+                    Diagnostic::error()
+                        .with_message(format!("import of {path} failed: {error}"))
+                        .with_labels(labels),
+                ]
+            }
+            ImportErrorKind::ParseErrors(error, span_opt) => {
+                let mut diagnostic: Vec<Diagnostic<FileId>> = error
+                    .errors
+                    .into_iter()
+                    .flat_map(|e| e.into_diagnostics(files))
+                    .collect();
+
+                if let Some(span) = span_opt.as_opt_ref() {
+                    diagnostic[0]
+                        .labels
+                        .push(secondary(span).with_message("imported here"));
+                }
+
+                diagnostic
+            }
+            ImportErrorKind::MissingDependency {
+                parent,
+                missing,
+                pos,
+            } => {
+                let labels = pos
+                    .as_opt_ref()
+                    .map(|span| vec![primary(span).with_message("imported here")])
+                    .unwrap_or_default();
+                let msg = if let Some(parent_path) = parent.as_deref() {
+                    format!(
+                        "unknown package {missing}, imported from package {}",
+                        parent_path.display()
+                    )
+                } else {
+                    format!("unknown package {missing}")
+                };
+
+                vec![Diagnostic::error().with_message(msg).with_labels(labels)]
+            }
+            ImportErrorKind::NoPackageMap { pos } => {
+                let labels = pos
+                    .as_opt_ref()
+                    .map(|span| vec![primary(span).with_message("imported here")])
+                    .unwrap_or_default();
+                vec![
+                    Diagnostic::error()
+                        .with_message(
+                            "tried to import from a package, but no package manifest found",
+                        )
+                        .with_labels(labels)
+                        .with_notes(vec![
+                            "did you forget a --manifest-path argument?".to_owned(),
+                        ]),
+                ]
+            }
+        }
+    }
+}
+
+impl IntoDiagnostics for ExportErrorData {
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        let mut notes = if !self.data.path.0.is_empty() {
+            vec![format!("When exporting field `{}`", self.data.path)]
+        } else {
+            vec![]
+        };
+
+        let pos_table = self.pos_table;
+
+        match self.data.error {
+            ExportErrorKind::NotAString(rt) => vec![
+                Diagnostic::error()
+                    .with_message(format!(
+                        "raw export expects a String value, but got {}",
+                        rt.type_of().unwrap_or("<unevaluated>")
+                    ))
+                    .with_labels(vec![primary_term(&pos_table, &rt, files)])
+                    .with_notes(notes),
+            ],
+            ExportErrorKind::UnsupportedNull(format, rt) => vec![
+                Diagnostic::error()
+                    .with_message(format!("{format} format doesn't support null values"))
+                    .with_labels(vec![primary_term(&pos_table, &rt, files)])
+                    .with_notes(notes),
+            ],
+            ExportErrorKind::NonSerializable(rt) => {
+                notes.extend([
+                    "Nickel only supports serializing to and from strings, booleans, numbers, \
+                    enum tags, `null` (depending on the format), as well as records and arrays \
+                    of serializable values."
+                        .into(),
+                    "Functions and special values (such as contract labels) aren't \
+                    serializable."
+                        .into(),
+                    "If you want serialization to ignore a specific value, please use the \
+                    `not_exported` metadata."
+                        .into(),
+                ]);
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("non serializable term")
+                        .with_labels(vec![primary_term(&pos_table, &rt, files)])
+                        .with_notes(notes),
+                ]
+            }
+            ExportErrorKind::NoDocumentation(rt) => {
+                notes.push("documentation can only be collected from a record.".to_owned());
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("no documentation found")
+                        .with_labels(vec![primary_term(&pos_table, &rt, files)])
+                        .with_notes(notes),
+                ]
+            }
+            ExportErrorKind::NumberOutOfRange { term, value } => {
+                notes.push(format!(
+                    "Only numbers in the range {:e} to {:e} can be portably serialized",
+                    f64::MIN,
+                    f64::MAX
+                ));
+
+                vec![
+                    Diagnostic::error()
+                        .with_message(format!(
+                            "The number {} is too large (in absolute value) to be serialized.",
+                            value.to_sci()
+                        ))
+                        .with_labels(vec![primary_term(&pos_table, &term, files)])
+                        .with_notes(notes),
+                ]
+            }
+            ExportErrorKind::Other(msg) => {
+                notes.push(msg);
+
+                vec![
+                    Diagnostic::error()
+                        .with_message("serialization failed")
+                        .with_notes(notes),
+                ]
+            }
+            ExportErrorKind::ExpectedArray { value } => {
+                vec![
+                    Diagnostic::error()
+                        .with_message("yaml-documents export expects an array")
+                        .with_labels(vec![primary_term(&pos_table, &value, files)])
+                        .with_notes(notes),
+                ]
+            }
+        }
+    }
+}
+
+impl IntoDiagnostics for IOError {
+    fn into_diagnostics(self, _fil: &mut Files) -> Vec<Diagnostic<FileId>> {
+        match self {
+            IOError(msg) => vec![Diagnostic::error().with_message(msg)],
+        }
+    }
+}
+
+impl IntoDiagnostics for ReplErrorKind {
+    fn into_diagnostics(self, files: &mut Files) -> Vec<Diagnostic<FileId>> {
+        match self {
+            ReplErrorKind::UnknownCommand(s) => vec![
+                Diagnostic::error()
+                    .with_message(format!("unknown command `{s}`"))
+                    .with_notes(vec![String::from(
+                        "type `:?` or `:help` for a list of available commands.",
+                    )]),
+            ],
+            ReplErrorKind::InvalidQueryPath(err) => err.into_diagnostics(files),
+            ReplErrorKind::MissingArg { cmd, msg_opt } => {
+                let mut notes = msg_opt
+                    .as_ref()
+                    .map(|msg| vec![msg.clone()])
+                    .unwrap_or_default();
+                notes.push(format!(
+                    "type `:? {cmd}` or `:help {cmd}` for more information."
+                ));
+
+                vec![
+                    Diagnostic::error()
+                        .with_message(format!("{cmd}: missing argument"))
+                        .with_notes(notes),
+                ]
+            }
+        }
+    }
+}
+
+impl CloneTo for TypecheckErrorKind<'_> {
+    type Data<'ast> = TypecheckErrorKind<'ast>;
+
+    fn clone_to<'to>(data: Self::Data<'_>, dest: &'to AstAlloc) -> Self::Data<'to> {
+        match data {
+            TypecheckErrorKind::UnboundIdentifier(loc_ident) => {
+                TypecheckErrorKind::UnboundIdentifier(loc_ident)
+            }
+            TypecheckErrorKind::MissingRow {
+                id,
+                kind,
+                expected,
+                inferred,
+                pos,
+            } => TypecheckErrorKind::MissingRow {
+                id,
+                kind,
+                expected: Type::clone_to(expected, dest),
+                inferred: Type::clone_to(inferred, dest),
+                pos,
+            },
+            TypecheckErrorKind::MissingDynTail {
+                expected,
+                inferred,
+                pos,
+            } => TypecheckErrorKind::MissingDynTail {
+                expected: Type::clone_to(expected, dest),
+                inferred: Type::clone_to(inferred, dest),
+                pos,
+            },
+            TypecheckErrorKind::ExtraRow {
+                id,
+                expected,
+                inferred,
+                pos,
+            } => TypecheckErrorKind::ExtraRow {
+                id,
+                expected: Type::clone_to(expected, dest),
+                inferred: Type::clone_to(inferred, dest),
+                pos,
+            },
+            TypecheckErrorKind::ExtraDynTail {
+                expected,
+                inferred,
+                pos,
+            } => TypecheckErrorKind::ExtraDynTail {
+                expected: Type::clone_to(expected, dest),
+                inferred: Type::clone_to(inferred, dest),
+                pos,
+            },
+            TypecheckErrorKind::ForallParametricityViolation {
+                kind,
+                tail,
+                violating_type,
+                pos,
+            } => TypecheckErrorKind::ForallParametricityViolation {
+                kind,
+                tail: Type::clone_to(tail, dest),
+                violating_type: Type::clone_to(violating_type, dest),
+                pos,
+            },
+            TypecheckErrorKind::UnboundTypeVariable(loc_ident) => {
+                TypecheckErrorKind::UnboundTypeVariable(loc_ident)
+            }
+            TypecheckErrorKind::TypeMismatch {
+                expected,
+                inferred,
+                pos,
+            } => TypecheckErrorKind::TypeMismatch {
+                expected: Type::clone_to(expected, dest),
+                inferred: Type::clone_to(inferred, dest),
+                pos,
+            },
+            TypecheckErrorKind::RecordRowMismatch {
+                id,
+                expected,
+                inferred,
+                cause,
+                pos,
+            } => TypecheckErrorKind::RecordRowMismatch {
+                id,
+                expected: Type::clone_to(expected, dest),
+                inferred: Type::clone_to(inferred, dest),
+                cause: Box::new(TypecheckErrorKind::clone_to(*cause, dest)),
+                pos,
+            },
+            TypecheckErrorKind::EnumRowMismatch {
+                id,
+                expected,
+                inferred,
+                cause,
+                pos,
+            } => TypecheckErrorKind::EnumRowMismatch {
+                id,
+                expected: Type::clone_to(expected, dest),
+                inferred: Type::clone_to(inferred, dest),
+                cause: cause.map(|cause| Box::new(TypecheckErrorKind::clone_to(*cause, dest))),
+                pos,
+            },
+            TypecheckErrorKind::RecordRowConflict {
+                row,
+                expected,
+                inferred,
+                pos,
+            } => TypecheckErrorKind::RecordRowConflict {
+                row: RecordRow::clone_to(row, dest),
+                expected: Type::clone_to(expected, dest),
+                inferred: Type::clone_to(inferred, dest),
+                pos,
+            },
+            TypecheckErrorKind::EnumRowConflict {
+                row,
+                expected,
+                inferred,
+                pos,
+            } => TypecheckErrorKind::EnumRowConflict {
+                row: EnumRow::clone_to(row, dest),
+                expected: Type::clone_to(expected, dest),
+                inferred: Type::clone_to(inferred, dest),
+                pos,
+            },
+            TypecheckErrorKind::ArrowTypeMismatch {
+                expected,
+                inferred,
+                type_path,
+                cause,
+                pos,
+            } => TypecheckErrorKind::ArrowTypeMismatch {
+                expected: Type::clone_to(expected, dest),
+                inferred: Type::clone_to(inferred, dest),
+                type_path,
+                cause: Box::new(TypecheckErrorKind::clone_to(*cause, dest)),
+                pos,
+            },
+            TypecheckErrorKind::CtrTypeInTermPos { contract, pos_type } => {
+                TypecheckErrorKind::CtrTypeInTermPos {
+                    contract: Ast::clone_to(contract, dest),
+                    pos_type,
+                }
+            }
+            TypecheckErrorKind::VarLevelMismatch { type_var, pos } => {
+                TypecheckErrorKind::VarLevelMismatch { type_var, pos }
+            }
+            TypecheckErrorKind::InhomogeneousRecord { row_a, row_b, pos } => {
+                TypecheckErrorKind::InhomogeneousRecord {
+                    row_a: Type::clone_to(row_a, dest),
+                    row_b: Type::clone_to(row_b, dest),
+                    pos,
+                }
+            }
+            TypecheckErrorKind::OrPatternVarsMismatch { var, pos } => {
+                TypecheckErrorKind::OrPatternVarsMismatch { var, pos }
+            }
+            TypecheckErrorKind::ImportError(import_error) => {
+                TypecheckErrorKind::ImportError(import_error)
+            }
+        }
+    }
+}
