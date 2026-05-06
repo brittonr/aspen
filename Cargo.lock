@@ -8331,18 +8331,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "instant"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
-dependencies = [
- "cfg-if",
- "js-sys",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
 name = "intl-memoizer"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10447,8 +10435,6 @@ dependencies = [
 [[package]]
 name = "nostr"
 version = "0.44.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aa5e3b6a278ed061835fe1ee293b71641e6bf8b401cfe4e1834bbf4ef0a34e1"
 dependencies = [
  "base64 0.22.1",
  "bech32 0.11.1",
@@ -10459,13 +10445,13 @@ dependencies = [
  "chacha20poly1305",
  "getrandom 0.2.17",
  "hex",
- "instant",
  "scrypt",
  "secp256k1",
  "serde",
  "serde_json",
  "unicode-normalization",
  "url",
+ "web-time",
 ]
 
 [[package]]

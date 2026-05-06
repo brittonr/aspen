@@ -913,10 +913,14 @@ required-features = ["node-runtime"]
 name = "relay_status_test"
 required-features = ["node-runtime"]
 
-# Vendored patches: cargo-hyperlight patched to replace --build-plan
-# (removed in Cargo 1.93) with stable --message-format=json.
+# Vendored patches:
+# - cargo-hyperlight replaces --build-plan (removed in Cargo 1.93) with stable
+#   --message-format=json.
+# - nostr swaps its wasm-only unmaintained instant dependency for web-time while
+#   waiting for an upstream release with the same change.
 [patch.crates-io]
 cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
+nostr = { path = "vendor/nostr" }
 uhlc = { path = "vendor/uhlc" }
 
 # snix-glue patched to implement Fetch::Git and builtins.fetchGit.

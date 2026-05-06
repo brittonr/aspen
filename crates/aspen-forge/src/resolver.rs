@@ -799,6 +799,7 @@ impl<K: ?Sized + KeyValueStore + Send + Sync + 'static> FederationResourceResolv
 
 #[cfg(test)]
 mod tests {
+    use aspen_core::KvWrite;
     use aspen_core::WriteCommand;
     use aspen_core::WriteRequest;
     use aspen_testing::DeterministicKeyValueStore;
