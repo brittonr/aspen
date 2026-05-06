@@ -2,14 +2,15 @@
 
 - [x] Create proposal, design, tasks, and delta spec for the WASM runtime service host implementation seam.
 
-## Phase 2: Model and admission
+## Phase 2: Dependency and model alignment
 
+- [ ] Align with `define-runtime-service-core` service identity, lifecycle, route, health, capability-binding, and receipt vocabulary before implementing host-specific effects.
 - [ ] Add or update portable runtime model types for this runner/profile boundary.
 - [ ] Add fail-closed admission checks for missing capabilities, invalid artifacts, denied handles, and unsupported profiles.
 
 ## Phase 3: Runner/profile implementation
 
-- [ ] Implement the smallest node-local runner/profile surface needed to prepare, start, stop, and observe the unit without broad scheduler work.
+- [ ] Implement the smallest WASM host ABI and instantiation surface needed to validate, instantiate, call, stop, and observe a module without broad scheduler work.
 - [ ] Emit secret-safe lifecycle, admission, output, and failure receipts.
 
 ## Phase 4: Tests and docs

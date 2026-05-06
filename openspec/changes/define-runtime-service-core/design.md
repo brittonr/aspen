@@ -6,7 +6,8 @@ Current Forge wiring is direct in-process startup plus handler registration. It 
 
 ## Goals
 
-- Define a durable service/application model above Raft/KV and below Forge/Executioner/user apps.
+- Define a durable service model above Raft/KV and below Forge/Executioner/user apps.
+- Define only minimal application identity/ownership references needed by service specs; full app install/upgrade remains out of scope.
 - Keep pure model types portable and data-only.
 - Make native built-ins first-class runtime services.
 - Use Forge as the first built-in service target because it already has routes, durable state, startup wiring, and receipts-worthy lifecycle events.
@@ -29,7 +30,7 @@ Current Forge wiring is direct in-process startup plus handler registration. It 
 
 ### 2. Pure model first, runtime effects later
 
-**Choice:** The first model types stay data-only and avoid process/network/filesystem/crypto side effects. Node-local reconciler effects are a later slice.
+**Choice:** The first portable model types stay data-only and avoid process/network/filesystem/crypto side effects. Node-local effects in this change are limited to trait boundaries and Forge wrapper surfaces; a distributed reconciler/scheduler remains a later slice.
 
 **Rationale:** Portable model tests can land early without destabilizing the node runtime and will give Forge/Executioner migrations a stable target.
 

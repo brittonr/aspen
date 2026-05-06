@@ -14,6 +14,10 @@ Aspen now has an accepted runtime host-loading baseline and an active runtime-se
 - Hermit-specific unikernel profile details beyond generic guest-artifact support.
 - Live VM migration.
 
+## Dependency Order
+
+This change depends on `define-runtime-service-core` for shared service identity, lifecycle, route, health, capability-binding, and receipt vocabulary. It should drain before `lower-oci-artifacts-to-isolated-hosts`, which lowers OCI inputs into already-defined target host boundaries.
+
 ## Decisions
 
 ### 1. Keep this seam independent from OCI lowering

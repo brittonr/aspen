@@ -12,6 +12,13 @@ ID: r[runtime-host-loading.oci-lowering.microvm-default]
 - THEN the admission plan SHALL select a `MicroVm` host boundary unless node policy selects a stronger or narrower compatible isolated target
 - AND the plan SHALL reject ordinary host-container execution as the default boundary
 
+#### Scenario: OCI-backed service spec declares lowering contract
+OCI-backed service specs MUST carry the runtime service contract fields needed before lowering.
+ID: r[runtime-host-loading.oci-lowering.service-spec-contract]
+- GIVEN a runtime service spec references an OCI image artifact
+- WHEN production admission evaluates the service spec
+- THEN it SHALL include service identity, artifact identity, host-loading reference or lowering target, resources, placement, capability bindings, route policy when applicable, health policy, restart policy, upgrade policy, and receipt policy before lowering can proceed
+
 #### Scenario: OCI image lowers to compatible specialized host
 OCI artifact lowering MUST be explicit when the target is Hyperlight, WASM, or a unikernel profile.
 ID: r[runtime-host-loading.oci-lowering.specialized-target]
@@ -48,7 +55,7 @@ ID: r[runtime-host-loading.host-taxonomy.oci-container]
 - WHEN the runtime resolves the unit for production execution
 - THEN the declaration SHALL use an immutable image digest rather than a mutable tag for accepted execution
 - AND it SHALL state the lowering target, entrypoint, arguments, mounts, environment handles, network policy, and capability bindings needed before start
-- AND the selected production host boundary SHALL be `MicroVm`, `Hyperlight`, `Wasm`, or a VM/unikernel guest profile rather than a Podman/Docker-style host container
+- AND the selected production host boundary SHALL be `MicroVm`, `Hyperlight`, `Wasm`, or a VM-backed guest profile such as `Unikernel { HermitOs }` rather than a Podman/Docker-style host container
 
 ### Requirement: Content-Addressed Dynamic Artifact Loading
 Aspen MUST verify dynamic runtime artifacts by content identity before instantiating WASM modules, starting Hyperlight units, lowering OCI images into isolated hosts, launching microVM guests, or launching external native processes.
@@ -58,7 +65,8 @@ ID: r[runtime-host-loading.dynamic-artifacts]
 OCI image admission MUST verify immutable image identity and provenance before deriving rootfs, program, guest, or component artifacts for an isolated host.
 ID: r[runtime-host-loading.dynamic-artifacts.oci-verified]
 - GIVEN an OCI-backed runtime unit declares an image digest
-- WHEN the node prepares a lowering plan for `MicroVm`, `Hyperlight`, `Wasm`, or a VM/unikernel guest profile
-- THEN the runner SHALL resolve and verify the immutable image digest and signature/provenance policy before deriving executable artifacts
+- WHEN the admission/lowering planner prepares a plan for `MicroVm`, `Hyperlight`, `Wasm`, or a VM-backed guest profile such as `Unikernel { HermitOs }`
+- THEN the planner SHALL resolve and verify the immutable image digest and signature/provenance policy before deriving executable artifacts
+- AND the selected runner SHALL re-verify the derived rootfs, program, or guest artifact identity before launch
 - AND mutable tags SHALL NOT be accepted as the durable execution identity
 - AND layer/rootfs/program/guest materialization SHALL be recorded as bounded receipt data without raw credentials

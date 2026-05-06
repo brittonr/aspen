@@ -6,7 +6,8 @@ This change defines the first implementation slice for runtime service core so h
 
 ## What Changes
 
-- **Runtime service types**: Add portable service/application model types for service specs, service instances, lifecycle state, health, routes, placement, restart policy, capability bindings, and receipts.
+- **Runtime service types**: Add portable service model types for service specs, service instances, lifecycle state, health, routes, placement, restart/upgrade policy, capability bindings, and receipts.
+- **Application references**: Define only the minimal application/service grouping references needed for service ownership; full app install/upgrade is a later change.
 - **Native built-in service registry**: Define the first service factory contract for linked Aspen services rather than dynamic native plugins.
 - **Forge first slice**: Model Forge as the first native built-in runtime service without rewriting Forge internals.
 - **Route and receipt contract**: Require runtime service startup, route registration, health transitions, and stop/failure paths to emit redacted receipts.
@@ -14,6 +15,7 @@ This change defines the first implementation slice for runtime service core so h
 ## In Scope
 
 - Data-only runtime service model in or near `crates/aspen-runtime-core`.
+- Minimal application identity/ownership references for grouping services and routes.
 - Built-in service registration/lifecycle trait boundaries.
 - Forge service manifest/route/health/receipt wrapper as the first migration target.
 - Tests and docs that distinguish host loading from runtime service orchestration.

@@ -17,6 +17,7 @@ Aspen MUST provide a Hyperlight runner contract for isolated runtime units that 
 - GIVEN a Hyperlight unit requests Aspen substrate access
 - WHEN the runner constructs the host ABI
 - THEN it SHALL expose only declared capability-scoped handles for KV, blob, logging, metrics, timers, routes, or outputs
+- AND it SHALL deny undeclared devices, sockets, files, environment variables, network access, routes, secrets, and host calls with bounded diagnostics
 
 #### Scenario: Hyperlight admission fails closed [r[runtime-host-loading.hyperlight-runner.fail-closed]]
 - GIVEN a Hyperlight unit has an invalid artifact, unsupported ABI, missing runner capability, or denied capability binding

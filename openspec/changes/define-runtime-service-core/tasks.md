@@ -4,8 +4,8 @@
 
 ## Phase 2: Pure runtime service model
 
-- [ ] Add portable runtime service/application model types for service specs, instances, lifecycle state, health, route declarations, placement hints, restart policy, capability bindings, resources, and redacted receipts.
-- [ ] Add model invariant tests for service identity, lifecycle transitions, route ownership, restart policy bounds, and receipt redaction.
+- [ ] Add portable runtime service model types for service specs, instances, minimal application ownership references, lifecycle state, health, route declarations, placement hints, restart/upgrade policy, capability bindings, resources, and redacted receipts.
+- [ ] Add model invariant tests for service identity, lifecycle transitions, route ownership, restart/upgrade policy bounds, health receipts, host-loading-reference boundaries, and receipt redaction.
 
 ## Phase 3: Native built-in service boundary
 

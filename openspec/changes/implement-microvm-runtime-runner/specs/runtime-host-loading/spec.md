@@ -4,7 +4,7 @@
 Aspen MUST provide a node-local microVM runner contract for isolated runtime units that require a VM or microVM host boundary.
 
 #### Scenario: Runner capability is advertised [r[runtime-host-loading.microvm-runner.capability]]
-- GIVEN an Aspen node can launch a supported microVM engine such as Firecracker, Cloud Hypervisor, QEMU microvm, or equivalent
+- GIVEN an Aspen node can launch a supported microVM engine such as Firecracker, Cloud Hypervisor, Uhyve, QEMU microvm, or equivalent
 - WHEN the node reports runtime runner capabilities
 - THEN it SHALL advertise the supported engine, virtualization backend, resource limits, supported guest artifact profiles, and runner version
 
@@ -17,6 +17,11 @@ Aspen MUST provide a node-local microVM runner contract for isolated runtime uni
 - GIVEN a microVM runtime unit declares kernel, initrd, rootfs, disk, or guest-image artifacts
 - WHEN the runner prepares the unit
 - THEN it SHALL verify content identity before launch and SHALL record the verified artifact identities in the launch receipt
+
+#### Scenario: Launch bindings deny ambient authority [r[runtime-host-loading.microvm-runner.launch-bindings]]
+- GIVEN a microVM unit requests mounts, block devices, network interfaces, vsock channels, environment-like metadata, or capability handles
+- WHEN the runner prepares the launch
+- THEN it SHALL attach only declared and authorized bindings and SHALL deny undeclared devices, host paths, sockets, networks, secrets, and ambient host access before boot
 
 #### Scenario: Runner records lifecycle receipts [r[runtime-host-loading.microvm-runner.receipts]]
 - GIVEN a microVM unit starts, stops, fails, times out, or is killed

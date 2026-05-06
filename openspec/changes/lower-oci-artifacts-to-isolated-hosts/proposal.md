@@ -14,7 +14,7 @@ The archived runtime host-loading spec still treats `OciContainer` as a host kin
 ### Modified Capabilities
 
 - `runtime-host-loading`: refines OCI from host boundary to artifact ingestion/lowering path.
-- `runtime-capability-binding`: requires lowering plans to preserve declared mounts, env handles, network policy, and capability-scoped host calls without ambient container privileges.
+- `runtime-capability-binding`: relies on the runtime-service-core capability-binding vocabulary; this change requires OCI lowering plans to preserve declared mounts, env handles, network policy, and capability-scoped host calls without adding a separate capability-binding delta.
 
 ## Impact
 

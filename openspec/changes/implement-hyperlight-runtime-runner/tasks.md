@@ -2,8 +2,9 @@
 
 - [x] Create proposal, design, tasks, and delta spec for the Hyperlight runtime runner implementation seam.
 
-## Phase 2: Model and admission
+## Phase 2: Dependency and model alignment
 
+- [ ] Align with `define-runtime-service-core` service identity, lifecycle, route, health, capability-binding, and receipt vocabulary before implementing host-specific effects.
 - [ ] Add or update portable runtime model types for this runner/profile boundary.
 - [ ] Add fail-closed admission checks for missing capabilities, invalid artifacts, denied handles, and unsupported profiles.
 

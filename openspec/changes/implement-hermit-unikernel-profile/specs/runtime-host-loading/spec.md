@@ -23,6 +23,12 @@ Aspen MUST model HermitOS-style unikernels as verified guest artifacts that run 
 - WHEN the launch profile creates boot arguments, environment-like metadata, serial output, or receipts
 - THEN it SHALL NOT include raw tokens, tickets, private keys, cluster cookies, connection strings, or other secret material
 
+#### Scenario: Hermit input channels are explicit [r[runtime-host-loading.hermit-profile.input-channels]]
+- GIVEN a Hermit guest requires configuration or capability handles
+- WHEN the profile maps inputs into boot arguments, loader metadata, virtio/vsock channels, or host ABI shims
+- THEN every input channel SHALL be declared and authorized before launch
+- AND undeclared host filesystem, network, secret, device, and ambient access SHALL be denied by default
+
 #### Scenario: Hermit serial output is bounded and redacted [r[runtime-host-loading.hermit-profile.serial-logs]]
 - GIVEN a Hermit guest writes serial or console output
 - WHEN the runner captures logs

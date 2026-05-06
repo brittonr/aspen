@@ -21,7 +21,8 @@ Aspen MUST provide a bounded WASM host contract for deterministic hooks, policie
 #### Scenario: WASM service fragment declares route ownership [r[runtime-host-loading.wasm-service-host.service-fragment-routes]]
 - GIVEN a WASM artifact is admitted as a runtime service fragment rather than a plugin
 - WHEN it declares route ownership
-- THEN the runtime SHALL validate the route declaration against service identity, ABI, capability bindings, and route conflicts before activation
+- THEN the WASM host SHALL validate WASM-specific ABI and capability prerequisites
+- AND `runtime-service-core` SHALL remain authoritative for route ownership, route-conflict resolution, and route-registration receipts before activation
 
 #### Scenario: WASM failure emits redacted receipt [r[runtime-host-loading.wasm-service-host.failure-receipt]]
 - GIVEN WASM validation, instantiation, execution, or host-call authorization fails

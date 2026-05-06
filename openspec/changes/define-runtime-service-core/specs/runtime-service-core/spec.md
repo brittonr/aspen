@@ -1,5 +1,18 @@
 ## ADDED Requirements
 
+### Requirement: Runtime Application Ownership References [r[runtime-service-core.application-ownership]]
+Aspen MUST define minimal application ownership references for grouping runtime services, routes, capability requests, and receipts without implementing full application installation in this change.
+
+#### Scenario: Service belongs to application identity [r[runtime-service-core.application-ownership.service-belongs-to-app]]
+- GIVEN a runtime service spec is declared by a first-party or future installed application
+- WHEN the runtime service model records ownership
+- THEN it SHALL include stable application identity, service identity, generation, route namespace, and receipt ownership reference
+
+#### Scenario: Full app lifecycle is deferred [r[runtime-service-core.application-ownership.lifecycle-deferred]]
+- GIVEN a service spec contains an application ownership reference
+- WHEN the service core validates the model
+- THEN the reference SHALL NOT by itself imply app install, app upgrade, migration execution, or dynamic marketplace support
+
 ### Requirement: Runtime Service Core Model [r[runtime-service-core.model]]
 Aspen MUST define a portable runtime service model for durable application units above the Raft/KV substrate and below first-party or user-facing applications.
 
@@ -8,15 +21,21 @@ Aspen MUST define a portable runtime service model for durable application units
 - WHEN the declaration is accepted by the runtime service core
 - THEN the service spec SHALL include stable service identity, artifact identity, host-loading reference, desired replicas or singleton policy, placement hints, resources, capability bindings, route declarations, health policy, restart policy, upgrade policy, and receipt policy
 
-#### Scenario: Service instance tracks concrete assignment [r[runtime-service-core.model.service-instance]]
-- GIVEN a service spec is reconciled into a concrete runtime instance
-- WHEN the instance is assigned to a node or transitions lifecycle state
-- THEN the runtime SHALL track service identity, instance identity, generation, assigned node, lifecycle state, health state, lease epoch, heartbeat timestamp, active routes, and last receipt identity
+#### Scenario: Service instance tracks concrete assignment model [r[runtime-service-core.model.service-instance]]
+- GIVEN a service spec will later be reconciled into a concrete runtime instance
+- WHEN the portable model records the instance state
+- THEN the runtime SHALL track service identity, instance identity, generation, optional assigned node, lifecycle state, health state, lease epoch, heartbeat timestamp, active routes, and last receipt identity
+- AND the model SHALL NOT require a full distributed scheduler to exist before service instances can be represented
 
 #### Scenario: Model remains portable [r[runtime-service-core.model.portable]]
 - GIVEN the runtime service model is used by planning, tests, or future non-node tools
 - WHEN model values are constructed, serialized, or validated
 - THEN the model SHALL avoid direct process spawning, network I/O, filesystem I/O, secret material, and runtime-specific handles
+
+#### Scenario: Host loading reference is not activation [r[runtime-service-core.model.host-loading-not-activation]]
+- GIVEN a service spec references a valid runtime host-loading declaration or artifact profile
+- WHEN the service core validates the service model
+- THEN successful host-loading validation SHALL NOT by itself imply service admission, route activation, running status, or healthy status
 
 ### Requirement: Native Built-In Service Registry [r[runtime-service-core.native-built-in-registry]]
 Aspen MUST provide a linked native built-in service registry for first-party services without using in-process dynamic native plugin loading as the default service mechanism.
@@ -51,6 +70,11 @@ Aspen MUST emit secret-safe runtime service receipts for lifecycle, route, healt
 - GIVEN a service instance changes lifecycle state
 - WHEN the runtime records the transition
 - THEN the receipt SHALL include service identity, instance identity, generation, prior state, next state, reason, timestamp or logical clock, node identity when applicable, and artifact identity
+
+#### Scenario: Health receipt records transition [r[runtime-service-core.receipts.health-transition]]
+- GIVEN a service instance health state changes or is observed as degraded
+- WHEN the runtime records the health event
+- THEN the receipt SHALL include service identity, instance identity, generation, prior health when known, next health, bounded reason, route impact when applicable, and redacted capability summary
 
 #### Scenario: Receipt redacts secrets [r[runtime-service-core.receipts.secret-redaction]]
 - GIVEN service startup uses tokens, tickets, private keys, cluster cookies, connection strings, kernel arguments, environment variables, or capability handles
