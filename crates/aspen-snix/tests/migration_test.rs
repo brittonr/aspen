@@ -6,7 +6,9 @@ use std::sync::Arc;
 
 use aspen_blob::InMemoryBlobStore;
 use aspen_cache::CacheEntry;
-use aspen_cache::CacheIndex;
+use aspen_cache::CacheLookup;
+use aspen_cache::CachePublish;
+use aspen_cache::CacheStatsProvider;
 use aspen_cache::KvCacheIndex;
 use aspen_snix::CacheEntryVersion;
 use aspen_snix::IrohBlobService;

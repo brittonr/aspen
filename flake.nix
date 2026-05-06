@@ -2730,8 +2730,12 @@
                     ${pkgs.gnused}/bin/sed -i '/^cvss = "CVSS:4\./d' {} +
                 '';
                 # RUSTSEC-2023-0071: rsa crate timing sidechannel — no fix available,
-                # transitive dep via ssh-key → aspen-forge
-                cargoAuditExtraArgs = "--ignore RUSTSEC-2023-0071";
+                # transitive dep via ssh-key → aspen-forge.
+                # RUSTSEC-2026-0066: astral-tokio-tar PAX validation; fixed in 0.6.0,
+                # but snix currently pins ^0.5.6. Aspen uses this only through the
+                # snix store/NAR import path; keep this exception bounded to the
+                # upstream snix pin and recheck when snix moves to astral-tokio-tar 0.6.x.
+                cargoAuditExtraArgs = "--ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0066";
               };
 
               # Verus formal verification check
