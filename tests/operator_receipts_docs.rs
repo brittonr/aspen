@@ -34,6 +34,9 @@ fn operator_receipts_doc_tracks_receipt_schemas_and_commands() {
         assert!(operator_receipts.contains("artifact metadata"));
         assert!(operator_receipts.contains("Acceptance evidence trail"));
         assert!(operator_receipts.contains("dogfood-20260505T202756Z"));
+        assert!(operator_receipts.contains("dogfood-20260506T220958Z"));
+        assert!(operator_receipts.contains("a3f2cad78a6760f3782302bf68d15104db948123"));
+        assert!(operator_receipts.contains("Fix dogfood CI build artifact reuse"));
     }
 
     assert!(DOGFOOD_RECEIPT.contains("DOGFOOD_RUN_RECEIPT_SCHEMA"));

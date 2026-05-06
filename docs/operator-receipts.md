@@ -184,8 +184,22 @@ The operator-receipt hardening slice is intentionally backed by both focused gua
 - `b2ff3e75e` (`Fix operator receipt doc guardrail in Nix`) keeps the docs guardrail compatible with Nix cleaned Cargo sources.
 - `9549b37dc` (`Guard dogfood receipt operator output`) pins dogfood receipt summary/diagnose output, including `elapsed_ms`, artifact metadata, failure display, and secret redaction.
 - `ead4bd0a7` (`Guard CI receipt artifact output`) pins native `aspen-cli ci receipt` artifact display in human output.
+- `e92606b12` (`Fix Nix clippy vendored dependency gate`) restores the Nix clippy gate after the vendored netlink/core macro seam blocked dogfood CI.
+- `32806ccf9` (`Fix dogfood app vendored dependency builds`) makes dogfood app/package derivations compile dependency sources instead of reusing dummy local-path artifacts.
+- `07cdb8610` (`Fix dogfood CI build artifact reuse`) extends that source-compilation path to dogfood CI build/test checks.
 
-The latest full self-hosting acceptance run covering the operator-output guardrails is:
+The latest full self-hosting acceptance run for the current pushed `main` is:
+
+```text
+run_id: dogfood-20260506T220958Z
+local receipt: /tmp/aspen-dogfood-receipts/dogfood-20260506T220958Z.json
+cluster key: dogfood/receipts/dogfood-20260506T220958Z.json
+commit: a3f2cad78a6760f3782302bf68d15104db948123
+result: format-check, clippy, build-cli, build-node, and nextest-quick passed; deploy completed; node 1 healthy; verification passed; publish_receipt and cleanup succeeded; 7/7 stages succeeded
+receipt diagnosis: no failed stage found (7/7) stages succeeded
+```
+
+Earlier full dogfood acceptance for the operator-output guardrails:
 
 ```text
 run_id: dogfood-20260505T202756Z
@@ -196,7 +210,7 @@ result: deploy completed; node 1 healthy; verification passed; all stages succee
 ci_run_artifact: 497775a3-9bb7-461b-8d17-d0147b956e18
 ```
 
-A later current-head gated run captured durable failure evidence for the then-current synced `main`:
+A later current-head gated run captured durable failure evidence for the then-current synced `main`; it is superseded by the successful `dogfood-20260506T220958Z` run above:
 
 ```text
 run_id: dogfood-20260506T191239Z
