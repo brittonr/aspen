@@ -6,8 +6,8 @@
 - **Canonical class**: `service library`
 - **Crates**: `aspen-testing-core`, `aspen-testing`, `aspen-testing-fixtures`, `aspen-testing-madsim`, `aspen-testing-network`, `aspen-testing-patchbay`
 - **Intended audience**: Aspen and downstream extraction fixtures that need reusable deterministic mocks, workloads, assertions, fixtures, and simulation helpers without full Aspen cluster bootstrap.
-- **Public API owner**: architecture-modularity
-- **Readiness state**: `workspace-internal`
+- **Public API owner**: Aspen testing harness maintainers
+- **Readiness state**: `extraction-ready-in-workspace`
 
 ## Package metadata
 
@@ -21,11 +21,11 @@
 
 | Surface | Reusable default | Runtime/adapter boundary |
 | --- | --- | --- |
-| `aspen-testing-core` | deterministic in-memory traits, bounded fixtures, reusable assertion helpers. | none beyond lightweight async/time utilities. |
-| `aspen-testing-fixtures` | generic builders and sample data when runtime-free. | app/cluster-specific fixtures behind named features. |
-| `aspen-testing` | compatibility facade for existing suites. | root app, raft/blob/cluster/jobs/coordination/forge/CI integrations. |
-| `aspen-testing-madsim` | simulation helpers only if runtime dependencies are explicit and documented. | concrete cluster bootstrap, OpenRaft/Iroh runtime setup. |
-| network/patchbay crates | adapter-purpose helpers. | namespace, network, concrete transport, and host integration. |
+| `aspen-testing-core` | deterministic in-memory `DeterministicClusterController`, `DeterministicKeyValueStore`, bounded wait/assertion helpers, and generic mock state over foundational/KV/trait crates. | none beyond lightweight Tokio `sync`/`time` utilities required by async trait implementations and wait helpers. |
+| `aspen-testing-fixtures` | reusable sample data and generic builders layered on `aspen-testing-core`. | app/cluster-specific fixtures stay outside the reusable default root. |
+| `aspen-testing` | compatibility facade for existing suites and re-export owner for historical imports. | root app, Raft/blob/cluster/jobs/coordination/Forge/CI integrations. |
+| `aspen-testing-madsim` | explicit simulation adapter crate. | concrete madsim, OpenRaft/Iroh runtime setup, and cluster bootstrap behavior. |
+| `aspen-testing-network`, `aspen-testing-patchbay` | explicit adapter-purpose helper crates. | namespace, network, concrete transport, patchbay, and host integration. |
 
 ## Dependency decisions
 
@@ -51,6 +51,10 @@
 - Negative boundary: dependency-boundary checker mutation for root app, node bootstrap, handler registry, binary shell, concrete cluster runtime, and patchbay leaks.
 - Compatibility: existing madsim/network/patchbay suites or generated harness inventory checks named by implementation tasks.
 
-## First blocker
+## Readiness decision
 
-I14 adds reusable core smoke coverage, negative adapter-boundary coverage, downstream metadata, and compatibility checks. I13 inventory identifies `aspen-testing-core` as the reusable default root for deterministic helpers, bounded assertions, retry/wait utilities, and generic mock state. Generic `aspen-testing-fixtures` builders can remain reusable; `aspen-testing` stays a compatibility facade, while madsim/network/patchbay crates remain explicit adapters for concrete simulation, namespace, transport, and cluster bootstrap behavior.
+The testing harness family is `extraction-ready-in-workspace`: `aspen-testing-core` is the canonical reusable default root, `aspen-testing-fixtures` can layer generic builders on that root, `aspen-testing` remains a compatibility facade, and madsim/network/patchbay helpers are explicit adapter crates. Positive downstream fixture, negative adapter-boundary fixture, dependency-tree scan, package checks, and readiness checker evidence pass. Publishable/repo-split status remains blocked on human license/publication policy.
+
+## Evidence status
+
+I14 adds reusable core smoke coverage, negative adapter-boundary coverage, downstream metadata, and compatibility checks. I13 inventory identifies `aspen-testing-core` as the reusable default root for deterministic helpers, bounded assertions, retry/wait utilities, and generic mock state. Generic `aspen-testing-fixtures` builders can remain reusable; `aspen-testing` stays a compatibility facade, while madsim/network/patchbay crates remain explicit adapters for concrete simulation, namespace, transport, and cluster bootstrap behavior. Lightweight Tokio `sync`/`time` support in `aspen-testing-core` is allowed for async wait utilities and is not treated as a cluster/runtime adapter.

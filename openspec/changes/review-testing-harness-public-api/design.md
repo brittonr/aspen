@@ -1,37 +1,53 @@
 ## Context
 
-The testing harness family can accelerate future extraction work, but reusable defaults must be clearly separated from madsim/network/patchbay/runtime adapters before it becomes a stable public surface. This change is intentionally spec-only at creation time: it defines the implementation/evidence rail without changing Rust code yet.
+The testing harness family can accelerate future extraction work, but reusable defaults must be clearly separated from madsim/network/patchbay/runtime adapters before it becomes a stable public surface. Prior evidence identified `aspen-testing-core` as the reusable root; this change records the public API/readiness decision with fresh fixtures, dependency graph scans, and readiness checker output.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Define the smallest evidence-backed implementation slice for `review-testing-harness-public-api`.
+- Define the reusable testing-core surface and owner expectations.
 - Preserve current Aspen compatibility while proving the targeted reusable/evidence boundary.
-- Leave implementation tasks open for later autonomous drain.
+- Keep madsim, network, patchbay, VM, and concrete cluster bootstrap helpers behind explicit adapter crates.
+- Promote the testing harness family to `extraction-ready-in-workspace` with evidence.
 
 **Non-Goals:**
-- Do not raise readiness labels, archive the change, or claim dogfood acceptance before evidence exists.
+- Do not publish or split crates out of the Aspen monorepo; license/publication policy remains a blocker.
+- Do not rewrite madsim/network/patchbay/runtime adapter APIs.
 - Do not broaden scope to unrelated crate families or runtime rewrites.
-- Do not use stale storage/Redb guidance as evidence; use live checks.
 
 ## Decisions
 
-### 1. Separate spec foundation from implementation evidence
+### 1. `aspen-testing-core` is the canonical reusable root
 
-**Choice:** Mark only the spec-foundation task complete and leave all implementation/evidence tasks open.
+**Choice:** Portable consumers use `aspen-testing-core` for deterministic in-memory cluster/KV implementations, bounded wait helpers, and generic testing state over foundational/KV/trait crates.
 
-**Rationale:** The user asked to write OpenSpecs for the targets, not to implement every target in this turn. Active changes should be drainable independently.
+**Rationale:** The positive downstream fixture compiles and runs without root Aspen, cluster runtime, RPC handlers, transport/Raft runtime, concrete Iroh runtime, patchbay, madsim/turmoil, or adapter crates.
 
-**Alternative:** Collapse all targets into one umbrella change. Rejected because each target has a distinct implementation seam and verification rail.
+**Alternative:** Treat `aspen-testing` as the reusable root. Rejected because it is the compatibility facade for existing suites and can aggregate adapter/runtime-oriented helpers.
 
-### 2. Evidence must be captured under the active change
+### 2. Adapter crates stay explicit
 
-**Choice:** Implementation tasks must save command transcripts, fixture metadata, negative checks, and readiness/doc diffs under `openspec/changes/review-testing-harness-public-api/evidence/` or documented repo-local equivalents before tasks are checked off.
+**Choice:** `aspen-testing-madsim`, `aspen-testing-network`, and `aspen-testing-patchbay` remain explicit adapter crates for concrete simulation, namespace, transport, patchbay, and host integration behavior.
 
-**Rationale:** Aspen extraction and dogfood claims need rerunnable, reviewable evidence rather than console-only summaries.
+**Rationale:** The negative fixture proves adapter crates are not reachable from a consumer that depends only on `aspen-testing-core`, while package checks prove those adapters still compile.
+
+### 3. Lightweight Tokio support is reusable utility support, not a runtime adapter leak
+
+**Choice:** `tokio` `sync`/`time` support remains allowed for `aspen-testing-core` async trait implementations and wait helpers; concrete runtime/transport/cluster dependencies remain forbidden from reusable defaults.
+
+**Rationale:** `aspen-testing-core` implements async traits and bounded wait utilities. The dependency graph excludes concrete runtime app, network, patchbay, madsim, Raft, Iroh, and handler crates.
+
+## Verification Strategy
+
+- For `testing-harness-extraction.testing-core-default-reusable` and `testing-harness-extraction.testing-core-default-reusable.evidence`, run the positive downstream fixture, capture metadata, and record docs/policy/inventory updates.
+- For `testing-harness-extraction.adapters-explicit-negative-checked` and `testing-harness-extraction.adapters-explicit-negative-checked.evidence`, run the negative adapter fixture as an expected failure, run the portable dependency graph scan, and run adapter package checks.
+- For `testing-harness-extraction.workspace-readiness-evidenced` and `testing-harness-extraction.workspace-readiness-evidenced.evidence`, run the crate-extraction readiness checker for `testing-harness` after docs/policy/inventory are updated.
+- Run strict OpenSpec validation, repo preflight, and whitespace checks before committing/archive.
 
 ## Risks / Trade-offs
 
-**Scope drift** → Keep each change bounded to its named family and open follow-up changes for unrelated findings.
+**False adapter confidence** → The dependency-tree scan explicitly checks for root Aspen, cluster runtime, RPC handlers, transport/Raft runtime, concrete Iroh runtime, patchbay, madsim/turmoil, and adapter crates.
 
-**False readiness** → Require downstream/negative/compatibility evidence before readiness labels or operator acceptance claims change.
+**Tokio overclassification** → Tokio `sync`/`time` is documented as reusable utility support for async wait helpers; concrete runtime adapters remain excluded.
+
+**False publication signal** → Readiness is limited to `extraction-ready-in-workspace`; publication/repo-split remains blocked on license policy.

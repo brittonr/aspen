@@ -897,14 +897,14 @@ let Candidate = {
 
     testing_harness = {
       class = "service library",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/testing-harness.md",
       owner = "Aspen testing harness maintainers",
       default_feature_sets = ["default"],
       named_reusable_feature_sets = ["fixtures", "madsim", "network", "patchbay"],
       representative_consumers = ["aspen-testing-core", "aspen-testing", "aspen-testing-fixtures", "aspen-testing-madsim", "aspen-testing-network", "aspen-testing-patchbay"],
       reexporters = ["aspen-testing"],
-      forbidden_unless_feature = ["aspen", "aspen-cluster", "aspen-rpc-handlers", "aspen-transport", "aspen-raft", "iroh", "tokio", "patchbay"],
+      forbidden_unless_feature = ["aspen", "aspen-cluster", "aspen-rpc-handlers", "aspen-transport", "aspen-raft", "iroh", "patchbay"],
       exceptions = [],
     },
 

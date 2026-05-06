@@ -1,0 +1,426 @@
+## Testing harness compatibility evidence
+
+$ cargo test --manifest-path openspec/changes/review-testing-harness-public-api/fixtures/testing-harness-core-smoke/Cargo.toml
+    Updating crates.io index
+     Locking 19 packages to latest Rust 1.97.0-nightly compatible versions
+   Compiling tokio-macros v2.7.0
+   Compiling thiserror v2.0.18
+   Compiling serde v1.0.228
+   Compiling tokio v1.52.2
+   Compiling aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+   Compiling aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+   Compiling aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+   Compiling aspen-testing-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-core)
+   Compiling testing-harness-core-smoke v0.1.0 (/home/brittonr/git/aspen/openspec/changes/review-testing-harness-public-api/fixtures/testing-harness-core-smoke)
+warning: unused import: `std::time::Duration`
+ --> src/lib.rs:1:5
+  |
+1 | use std::time::Duration;
+  |     ^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `DeterministicClusterController`, `DeterministicKeyValueStore`, and `wait_until`
+ --> src/lib.rs:3:26
+  |
+3 | use aspen_testing_core::{wait_until, DeterministicClusterController, DeterministicKeyValueStore};
+  |                          ^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `testing-harness-core-smoke` (lib) generated 2 warnings (run `cargo fix --lib -p testing-harness-core-smoke` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.98s
+     Running unittests src/lib.rs (target/debug/deps/testing_harness_core_smoke-e0fc7c761fcb59f7)
+
+running 1 test
+test reusable_testing_core_helpers_work_without_cluster_bootstrap ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests testing_harness_core_smoke
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo metadata --manifest-path openspec/changes/review-testing-harness-public-api/fixtures/testing-harness-core-smoke/Cargo.toml --format-version 1 --no-deps
+metadata captured to testing-harness-downstream-metadata.json
+
+$ cargo check --manifest-path openspec/changes/review-testing-harness-public-api/fixtures/testing-harness-bootstrap-negative/Cargo.toml (expected failure)
+    Updating crates.io index
+     Locking 18 packages to latest Rust 1.97.0-nightly compatible versions
+    Checking aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+    Checking aspen-testing-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-core)
+    Checking testing-harness-bootstrap-negative v0.1.0 (/home/brittonr/git/aspen/openspec/changes/review-testing-harness-public-api/fixtures/testing-harness-bootstrap-negative)
+error[E0432]: unresolved import `aspen_testing_madsim`
+ --> src/lib.rs:5:5
+  |
+5 | use aspen_testing_madsim as _;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^ no external crate `aspen_testing_madsim`
+
+error[E0432]: unresolved import `aspen_testing_network`
+ --> src/lib.rs:6:5
+  |
+6 | use aspen_testing_network as _;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^ no external crate `aspen_testing_network`
+
+error[E0432]: unresolved import `aspen_testing_patchbay`
+ --> src/lib.rs:7:5
+  |
+7 | use aspen_testing_patchbay as _;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ no external crate `aspen_testing_patchbay`
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `testing-harness-bootstrap-negative` (lib) due to 3 previous errors
+PASS: negative fixture failed as expected without adapter crate dependencies
+
+$ cargo check -p aspen-testing-core
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+    Checking aspen-testing-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-core)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.56s
+
+$ cargo check -p aspen-testing-fixtures -p aspen-testing-madsim -p aspen-testing-network -p aspen-testing-patchbay
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling data-encoding-macro-internal v0.1.18
+    Checking tokio v1.52.2
+    Checking blake3 v1.8.3
+    Checking prefix-trie v0.8.3
+    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+    Checking uuid v1.23.1
+    Checking rustls-webpki v0.103.13
+    Checking chrono v0.4.44
+    Checking iroh-metrics v0.38.3 (/home/brittonr/git/aspen/vendor/iroh-metrics)
+    Checking mainline v6.1.2
+   Compiling iroh-relay v0.98.0 (/home/brittonr/git/aspen/vendor/iroh-relay)
+    Checking rust_decimal v1.41.0
+    Checking noq-udp v0.9.0
+   Compiling bon-macros v2.3.0
+   Compiling genawaiter-proc-macro v0.99.1 (/home/brittonr/git/aspen/vendor/genawaiter-proc-macro-0.99.1)
+    Checking aspen-trust v0.1.0 (/home/brittonr/git/aspen/crates/aspen-trust)
+    Checking rand v0.8.6
+    Checking rand_distr v0.5.1
+    Checking toml_parser v1.1.2+spec-1.1.0
+    Checking netlink-packet-route v0.28.0
+    Checking toml_writer v1.1.1+spec-1.1.0
+    Checking scoped-tls v1.0.1
+    Checking metrics-util v0.19.1
+    Checking moka v0.12.15
+    Checking aspen-hlc v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hlc)
+    Checking data-encoding-macro v0.1.20
+    Checking iroh-base v0.98.0
+    Checking byte-unit v5.2.0
+    Checking aspen-hooks-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hooks-types)
+    Checking toml v1.1.2+spec-1.1.0
+    Checking rustls v0.23.40
+    Checking genawaiter v0.99.1
+    Checking hickory-proto v0.26.1
+    Checking aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+    Checking aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
+    Checking iroh-tickets v0.4.0 (/home/brittonr/git/aspen/vendor/iroh-tickets)
+    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+    Checking aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+    Checking aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
+    Checking bon v2.3.0
+    Checking noq-proto v0.17.0
+    Checking rustls-platform-verifier v0.7.0
+    Checking rustls-platform-verifier v0.6.2
+    Checking noq-proto v0.16.0
+    Checking tokio-util v0.7.18
+    Checking tokio-rustls v0.26.4
+    Checking netlink-sys v0.8.8
+    Checking tower v0.5.3
+    Checking acto v0.8.0
+    Checking backon v1.6.0
+    Checking openraft v0.10.0 (/home/brittonr/git/aspen/openraft/openraft)
+    Checking iroh-io v0.6.2
+    Checking ractor v0.15.13
+    Checking aspen-testing-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-core)
+    Checking aspen-crypto v0.1.0 (/home/brittonr/git/aspen/crates/aspen-crypto)
+    Checking turmoil v0.7.2
+    Checking aspen-coordination v0.1.0 (/home/brittonr/git/aspen/crates/aspen-coordination)
+    Checking aspen-testing-network v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-network)
+    Checking netlink-proto v0.12.0
+    Checking netdev v0.42.0
+    Checking bao-tree v0.16.0
+    Checking rtnetlink v0.20.0
+    Checking tower-http v0.6.9
+    Checking swarm-discovery v0.6.0-alpha.2 (/home/brittonr/git/aspen/vendor/swarm-discovery)
+    Checking aspen-testing-fixtures v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-fixtures)
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+    Checking h2 v0.4.14
+    Checking n0-future v0.3.2
+    Checking tokio-stream v0.1.18
+    Checking tokio-websockets v0.13.2
+    Checking aspen-sharding v0.1.0 (/home/brittonr/git/aspen/crates/aspen-sharding)
+    Checking madsim v0.2.34 (/home/brittonr/git/aspen/vendor/madsim-0.2.34)
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1494:9
+     |
+1494 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1510:9
+     |
+1510 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1524:9
+     |
+1524 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1540:9
+     |
+1540 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1554:9
+     |
+1554 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1566:9
+     |
+1566 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1580:9
+     |
+1580 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:1596:9
+     |
+1596 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4322:9
+     |
+4322 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4329:9
+     |
+4329 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4336:9
+     |
+4336 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4343:9
+     |
+4343 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4350:9
+     |
+4350 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4357:9
+     |
+4357 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4364:9
+     |
+4364 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4371:9
+     |
+4371 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4411:9
+     |
+4411 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> crates/aspen-client-api/src/messages/mod.rs:4418:9
+     |
+4418 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+    Checking n0-watcher v0.6.1
+    Checking iroh-dns v0.98.0
+    Checking patchbay v0.1.0 (https://github.com/n0-computer/patchbay.git?rev=e0c48e094ae11442b1ea374b6d4d8fd55a498ac1#e0c48e09)
+    Checking mad-turmoil v0.2.0 (https://github.com/s2-streamstore/mad-turmoil?rev=ef75169ec299c4160af3052b2194b3ee5b048b0a#ef75169e)
+    Checking netwatch v0.16.0
+warning: unknown lint: `acronym_style`
+  --> openraft/openraft/src/error/mod.rs:80:13
+   |
+80 |     #[allow(acronym_style, reason = "preserve established public error variant spelling")]
+   |             ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> openraft/openraft/src/error/mod.rs:290:9
+    |
+290 | #[allow(acronym_style, reason = "preserve established public error type spelling")]
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+ --> openraft/openraft/src/network/rpc_option.rs:8:9
+  |
+8 | #[allow(acronym_style, reason = "preserve established public transport option spelling")]
+  |         ^^^^^^^^^^^^^
+
+    Checking noq v0.18.0
+    Checking noq v0.17.0
+    Checking hyper v1.9.0
+    Checking hickory-net v0.26.1
+    Checking irpc v0.13.0
+    Checking irpc v0.14.0
+    Checking hyper-util v0.1.20
+    Checking hickory-resolver v0.26.1
+    Checking hyper-rustls v0.27.9
+    Checking igd-next v0.17.0
+    Checking reqwest v0.13.3
+    Checking metrics-exporter-prometheus v0.16.2
+    Checking portmapper v0.16.0
+    Checking iroh v0.98.2 (/home/brittonr/git/aspen/vendor/iroh)
+warning: method `committed_leader_id` is never used
+  --> openraft/openraft/src/log_id/option_raft_log_id_ext.rs:22:8
+   |
+ 8 | pub(crate) trait OptionRaftLogIdExt<C>
+   |                  ------------------ method in this trait
+...
+22 |     fn committed_leader_id(&self) -> Option<&CommittedLeaderIdOf<C>>;
+   |        ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `openraft` (lib) generated 4 warnings
+    Checking aspen-raft-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv-types)
+    Checking aspen-raft-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-types)
+warning: unknown lint: `sentinel_fallback`
+  --> crates/aspen-raft-kv-types/src/lib.rs:62:9
+   |
+62 |         sentinel_fallback,
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `sentinel_fallback`
+  --> crates/aspen-raft-types/src/member.rs:63:9
+   |
+63 |         sentinel_fallback,
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: `aspen-raft-kv-types` (lib) generated 1 warning
+    Checking aspen-redb-storage v0.1.0 (/home/brittonr/git/aspen/crates/aspen-redb-storage)
+    Checking aspen-raft-kv v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-kv)
+warning: `aspen-raft-types` (lib) generated 1 warning
+warning: `aspen-client-api` (lib) generated 28 warnings
+    Checking aspen-core-shell v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-shell)
+    Checking iroh-blobs v0.99.0 (/home/brittonr/git/aspen/vendor/iroh-blobs)
+    Checking iroh-gossip v0.98.0
+    Checking aspen-auth v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth)
+    Checking aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport)
+    Checking aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
+    Checking aspen-raft-network v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft-network)
+    Checking aspen-raft v0.1.0 (/home/brittonr/git/aspen/crates/aspen-raft)
+    Checking aspen-dag v0.1.0 (/home/brittonr/git/aspen/crates/aspen-dag)
+    Checking aspen-dht-discovery v0.1.0 (/home/brittonr/git/aspen/crates/aspen-dht-discovery)
+    Checking aspen-cluster v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster)
+    Checking aspen-testing-madsim v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-madsim)
+    Checking aspen-testing-patchbay v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-patchbay)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 31.85s

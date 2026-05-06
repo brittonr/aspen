@@ -1,0 +1,14 @@
+   Compiling testing-harness-core-smoke v0.1.0 (/home/brittonr/git/aspen/openspec/changes/review-testing-harness-public-api/fixtures/testing-harness-core-smoke)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/lib.rs (target/debug/deps/testing_harness_core_smoke-e0fc7c761fcb59f7)
+
+running 1 test
+test reusable_testing_core_helpers_work_without_cluster_bootstrap ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests testing_harness_core_smoke
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

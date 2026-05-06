@@ -1,0 +1,11 @@
+[package]
+name = "testing-harness-core-smoke"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-testing-core = { path = "../../../../../crates/aspen-testing-core" }
+tokio = { version = "1.48.0", features = ["rt", "macros"] }

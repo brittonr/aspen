@@ -4,11 +4,11 @@
 
 ## Phase 2: Implementation and evidence
 
-- [ ] Inventory `aspen-testing-core` APIs and classify adapter-owned helpers.
-- [ ] Add/update reusable smoke fixture, negative adapter-boundary fixture, and extraction metadata.
-- [ ] Run fixture builds, metadata, negative checks, patchbay/harness compatibility, and update readiness docs.
+- [x] Inventory `aspen-testing-core` APIs and classify adapter-owned helpers.
+- [x] Add/update reusable smoke fixture, negative adapter-boundary fixture, and extraction metadata.
+- [x] Run fixture builds, metadata, negative checks, patchbay/harness compatibility, and update readiness docs.
 
 ## Phase 3: Closeout
 
-- [ ] Run `openspec validate {name} --strict`, helper verification, repo-specific checks, and `git diff --check`.
-- [ ] Sync/archive only after every implementation/evidence task is complete.
+- [x] Run `openspec validate {name} --strict`, helper verification, repo-specific checks, and `git diff --check`.
+- [x] Sync/archive only after every implementation/evidence task is complete.

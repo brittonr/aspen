@@ -1,0 +1,46 @@
+## Testing harness portable dependency graph
+$ cargo tree --manifest-path openspec/changes/review-testing-harness-public-api/fixtures/testing-harness-core-smoke/Cargo.toml -e normal
+testing-harness-core-smoke v0.1.0 (/home/brittonr/git/aspen/openspec/changes/review-testing-harness-public-api/fixtures/testing-harness-core-smoke)
+├── aspen-testing-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing-core)
+│   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+│   │   ├── serde v1.0.228
+│   │   │   ├── serde_core v1.0.228
+│   │   │   └── serde_derive v1.0.228 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.106
+│   │   │       │   └── unicode-ident v1.0.24
+│   │   │       ├── quote v1.0.45
+│   │   │       │   └── proc-macro2 v1.0.106 (*)
+│   │   │       └── syn v2.0.117
+│   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │           ├── quote v1.0.45 (*)
+│   │   │           └── unicode-ident v1.0.24
+│   │   └── thiserror v2.0.18
+│   │       └── thiserror-impl v2.0.18 (proc-macro)
+│   │           ├── proc-macro2 v1.0.106 (*)
+│   │           ├── quote v1.0.45 (*)
+│   │           └── syn v2.0.117 (*)
+│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+│   │   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   │   ├── serde v1.0.228 (*)
+│   │   └── thiserror v2.0.18 (*)
+│   ├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+│   │   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types) (*)
+│   │   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+│   │   └── async-trait v0.1.89 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   ├── async-trait v0.1.89 (proc-macro) (*)
+│   ├── base64 v0.22.1
+│   └── tokio v1.52.2
+│       ├── pin-project-lite v0.2.17
+│       └── tokio-macros v2.7.0 (proc-macro)
+│           ├── proc-macro2 v1.0.106 (*)
+│           ├── quote v1.0.45 (*)
+│           └── syn v2.0.117 (*)
+└── tokio v1.52.2 (*)
+
+$ forbidden adapter/runtime scan
+PASS: reusable testing-core fixture excludes root Aspen, cluster runtime, RPC handlers, transport/Raft runtime, Iroh runtime, patchbay, madsim/turmoil, and adapter crates.
+NOTE: tokio sync/time is part of aspen-testing-core reusable async wait utility support, not a cluster/runtime adapter.
