@@ -322,19 +322,22 @@ aspen-forge-handler     -> route adapter for ForgeService during migration
 3. **Migrations**: schema changes need ordered, idempotent, receipt-producing migrations with rollback/diagnosis policy.
 4. **Leases and fencing**: reassignment must prevent two nodes from completing the same exclusive execution or serving the same singleton route without an epoch check.
 5. **Idempotency**: retries and failover require idempotency keys or output commit protocols.
-6. **Artifact provenance**: runtime artifacts need hash, signer, build provenance, and compatibility metadata.
-7. **Secrets**: manifests and receipts must never contain raw tokens, tickets, private keys, cluster cookies, or connection strings; use handles and `[REDACTED]` in operator output.
-8. **Resource admission**: placement must account for CPU, memory, disk, network, concurrency, and sandbox type before assignment.
-9. **Observability cardinality**: app/service/run IDs must not create unbounded metric label sets.
-10. **Federation boundary**: app identity may federate, but service placement and execution leases are cluster-local unless explicitly modeled cross-cluster.
-11. **Compatibility edges**: HTTP/SSH/Git/Nix bridges should stay adapters; internal app calls should remain Aspen/Iroh/capability-routed.
-12. **Native built-ins versus dynamic apps**: first migration should wrap built-ins as declared services before introducing dynamic install for every implementation type.
+6. **Durable execution history**: long-running workflows need an event/side-effect history, replay rules, and deterministic awaitable/timer APIs; simple status rows are not enough for Temporal/Flawless-style resume.
+7. **Artifact provenance**: runtime artifacts need hash, signer, build provenance, and compatibility metadata.
+8. **Secrets**: manifests and receipts must never contain raw tokens, tickets, private keys, cluster cookies, or connection strings; use handles and `[REDACTED]` in operator output.
+9. **Resource admission**: placement must account for CPU, memory, disk, network, concurrency, and sandbox type before assignment.
+10. **Observability cardinality**: app/service/run IDs must not create unbounded metric label sets.
+11. **Federation boundary**: app identity may federate, but service placement and execution leases are cluster-local unless explicitly modeled cross-cluster.
+12. **Compatibility edges**: HTTP/SSH/Git/Nix bridges should stay adapters; internal app calls should remain Aspen/Iroh/capability-routed.
+13. **Native built-ins versus dynamic apps**: first migration should wrap built-ins as declared services before introducing dynamic install for every implementation type.
 
 ## Reference systems to borrow from
 
 - Kubernetes controllers: desired state in specs, observed state, reconciliation loops, jobs that retry work to completion, deployments that roll out at controlled pace. Borrow reconciliation, not YAML sprawl or container-first assumptions.
 - Erlang/OTP: applications as supervision trees; supervisors start, stop, and monitor workers. Borrow supervision semantics and failure containment, not BEAM language/runtime coupling.
-- Lunatic: WASM processes, fine-grained process permissions, supervision, channel message passing, distributed nodes. Borrow isolation and per-process capability ideas for untrusted app units.
+- Lunatic (`https://github.com/lunatic-solutions/lunatic`, local reference `../lunatic`): WASM processes, fine-grained process permissions, supervision, channel message passing, and distributed nodes. Borrow isolation and per-process capability ideas for untrusted app units.
+- Flawless (`https://flawless.dev/docs/`): Rust durable execution through WASM, deterministic replay, side-effect logs, idempotent external calls, and the ability to start a workflow on one machine and finish it on another. Borrow the side-effect/event-history model for long-running executioner workflows; do not assume every Aspen service must compile to Flawless-compatible WASM.
+- Temporal (`https://docs.temporal.io/temporal`, `https://docs.temporal.io/workflow-execution`): durable Workflow Executions, Event History, Commands, Activities, Signals, timers, Worker Processes, retries, and Workflow Id/Run Id chains. Borrow the Workflow/Activity split, replay constraints, cancellation/status vocabulary, and worker/service separation; do not import Temporal's central service/database architecture wholesale because Aspen already has Raft/KV/Iroh authority.
 - Pollen: content-addressed WASM seeds, `pln://seed/<name>/<fn>` / service-style calls, P2P artifact distribution, QUIC mesh, self-organising placement. Borrow service-call ergonomics and content-addressed distribution; reconcile with Aspen's Raft-backed authority instead of replacing it with fully coordinatorless placement.
 - Nix/snix: reproducible artifact construction and content-addressed store semantics. Borrow artifact identity/provenance for runtime packages.
 - Aspen dogfood/operator receipts: receipt-first operator evidence. Generalize from dogfood/CI receipts to runtime receipts.
