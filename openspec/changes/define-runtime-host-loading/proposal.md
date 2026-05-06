@@ -6,7 +6,8 @@ Aspen needs a spec that says how native built-ins, optional external native proc
 
 ## What Changes
 
-- **Runtime host taxonomy**: define `NativeBuiltIn`, `NativeProcess`, `Wasm`, and `Hyperlight` host kinds.
+- **Runtime host taxonomy**: define `NativeBuiltIn`, `NativeProcess`, `Wasm`, `Hyperlight`, `OciContainer`, and later `MicroVm` host kinds.
+- **Artifact profiles**: distinguish host boundary from artifact shape, including built-ins, native binaries, WASM modules, Hyperlight images/programs, OCI images, Linux guest images, and HermitOS-style unikernels.
 - **Native loading rule**: first-party services such as Forge, Executioner, snix/cache, and federation are linked into `aspen-node` as built-in service factories, not loaded as in-process native dynamic plugins.
 - **Dynamic loading rule**: WASM and Hyperlight units are content-addressed artifacts verified by hash/signature before instantiation.
 - **Capability boundary**: every host kind receives scoped runtime handles; no manifests or receipts may contain raw secrets, tickets, private keys, cluster cookies, or connection strings.

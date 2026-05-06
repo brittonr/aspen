@@ -23,6 +23,25 @@ Aspen MUST classify runtime units by an explicit host kind before resolving or s
 - WHEN the scheduler assigns the unit
 - THEN the assigned node SHALL have a compatible Hyperlight runner before the unit can transition to running
 
+#### Scenario: OCI container host selected [r[runtime-host-loading.host-taxonomy.oci-container]]
+
+- GIVEN a runtime unit declares an OCI image artifact
+- WHEN the runtime selects an OCI/container host boundary
+- THEN the declaration SHALL use an immutable image digest rather than a mutable tag for accepted execution
+- AND it SHALL state the runner, entrypoint, arguments, mounts, environment handles, network policy, and capability bindings needed before start
+
+#### Scenario: MicroVM host selected [r[runtime-host-loading.host-taxonomy.microvm]]
+
+- GIVEN a runtime unit requires a Firecracker or Cloud Hypervisor boundary
+- WHEN the scheduler assigns the unit
+- THEN the assigned node SHALL advertise compatible KVM and microVM runner capability before the unit can transition to running
+
+#### Scenario: Unikernel artifact selected [r[runtime-host-loading.host-taxonomy.unikernel]]
+
+- GIVEN a runtime unit declares a HermitOS-style unikernel artifact
+- WHEN the runtime resolves the unit
+- THEN the declaration SHALL model the unikernel as a guest artifact that runs under a VM or microVM host boundary, not as an ordinary host process
+
 #### Scenario: External native process host selected [r[runtime-host-loading.host-taxonomy.native-process]]
 
 - GIVEN an operator-installed trusted native binary is allowed by a future runtime policy
@@ -51,7 +70,7 @@ Aspen MUST load first-party native services through a linked built-in service fa
 
 ### Requirement: Content-Addressed Dynamic Artifact Loading [r[runtime-host-loading.dynamic-artifacts]]
 
-Aspen MUST verify dynamic runtime artifacts by content identity before instantiating WASM modules, starting Hyperlight units, or launching external native processes.
+Aspen MUST verify dynamic runtime artifacts by content identity before instantiating WASM modules, starting Hyperlight units, launching OCI/microVM guests, or launching external native processes.
 
 #### Scenario: WASM artifact verified before instantiation [r[runtime-host-loading.dynamic-artifacts.wasm-verified]]
 
@@ -68,6 +87,21 @@ Aspen MUST verify dynamic runtime artifacts by content identity before instantia
 - THEN the Hyperlight runner SHALL verify the artifact identity before starting the isolated unit
 - AND outputs SHALL be recorded as Aspen blob/snix artifacts or explicit receipt fields
 
+#### Scenario: OCI image verified before container start [r[runtime-host-loading.dynamic-artifacts.oci-verified]]
+
+- GIVEN an OCI-backed runtime unit declares an image digest
+- WHEN the node prepares the root filesystem or container bundle
+- THEN the runner SHALL resolve and verify the immutable image digest and signature/provenance policy before process creation
+- AND mutable tags SHALL NOT be accepted as the durable execution identity
+- AND layer/rootfs materialization SHALL be recorded as bounded receipt data without raw credentials
+
+#### Scenario: MicroVM guest artifact verified before boot [r[runtime-host-loading.dynamic-artifacts.microvm-verified]]
+
+- GIVEN a microVM-backed runtime unit declares kernel, initrd, rootfs, or unikernel artifacts
+- WHEN the node prepares the guest
+- THEN the runner SHALL verify every declared guest artifact identity before boot
+- AND guest inputs SHALL be sealed through declared capability handles rather than ambient host paths
+
 #### Scenario: External native process verified before spawn [r[runtime-host-loading.dynamic-artifacts.native-process-verified]]
 
 - GIVEN a future policy allows an external native process runtime unit
@@ -77,7 +111,7 @@ Aspen MUST verify dynamic runtime artifacts by content identity before instantia
 
 ### Requirement: Host-Independent Runtime Lifecycle [r[runtime-host-loading.lifecycle]]
 
-Aspen MUST expose a host-independent lifecycle model for runtime units regardless of whether the implementation is native, WASM, Hyperlight, or an external native process.
+Aspen MUST expose a host-independent lifecycle model for runtime units regardless of whether the implementation is native, WASM, Hyperlight, OCI/container, microVM/unikernel, or an external native process.
 
 #### Scenario: Common lifecycle fields [r[runtime-host-loading.lifecycle.common-fields]]
 
@@ -115,6 +149,20 @@ Aspen MUST bind runtime unit authority through explicit capability-scoped handle
 - WHEN the guest requests Aspen operations
 - THEN the runner SHALL expose only declared devices, sockets, files, environment variables, and host calls
 - AND denied operations SHALL fail closed with bounded diagnostics
+
+#### Scenario: OCI container receives declared runtime handles [r[runtime-host-loading.capability-bindings.oci-handles]]
+
+- GIVEN an OCI/container unit starts
+- WHEN the runner creates its bundle or process
+- THEN the runner SHALL expose only declared mounts, environment handles, network policy, user namespace, filesystem permissions, and host calls
+- AND the runtime SHALL treat ordinary container isolation as weaker than Hyperlight or microVM isolation for hostile workloads
+
+#### Scenario: MicroVM guest receives sealed inputs [r[runtime-host-loading.capability-bindings.microvm-sealed-inputs]]
+
+- GIVEN a microVM or unikernel guest starts
+- WHEN the runner injects inputs, configuration, or credentials
+- THEN the runner SHALL use sealed files, devices, sockets, or host calls declared by the capability binding
+- AND it SHALL NOT pass raw secrets through kernel arguments, serial logs, mutable image layers, or receipts
 
 #### Scenario: Secrets never serialized into manifests or receipts [r[runtime-host-loading.capability-bindings.secret-redaction]]
 

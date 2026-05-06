@@ -4,9 +4,9 @@
 
 ## Phase 2: Runtime core type design
 
-- [ ] Define portable runtime-core model types for `RuntimeHostKind`, `RuntimeArtifact`, `RuntimeUnitKind`, `RuntimeCapabilityBinding`, `RuntimeResources`, route ownership, lifecycle status, and receipts.
+- [ ] Define portable runtime-core model types for `RuntimeHostKind`, `RuntimeArtifact`, `RuntimeUnitKind`, `RuntimeCapabilityBinding`, `RuntimeResources`, route ownership, lifecycle status, and receipts, including OCI image, microVM, and unikernel artifact profiles.
 - [ ] Add serialization, redaction, and round-trip tests for runtime host-loading types.
-- [ ] Document the host taxonomy in `docs/runtime-applications.md` and keep a docs/source-anchor test for Native/WASM/Hyperlight loading.
+- [ ] Document the host taxonomy in `docs/runtime-applications.md` and keep a docs/source-anchor test for Native/WASM/Hyperlight/OCI/microVM loading.
 
 ## Phase 3: Native built-in service loading
 
@@ -18,6 +18,8 @@
 
 - [ ] Define WASM artifact loading plans that verify module hash/signature, ABI, entrypoint, fuel, memory, timeout, and capability bindings before instantiation.
 - [ ] Define Hyperlight execution-run loading plans that verify artifacts, assign to compatible runners, attach leases/heartbeats/logs, and record output artifacts/receipts.
+- [ ] Define OCI image loading plans that resolve immutable digests, verify signature/provenance policy, materialize layers/rootfs through approved stores, and attach only declared mounts/env/network/capability handles.
+- [ ] Define microVM and unikernel loading plans for Firecracker/Cloud Hypervisor and HermitOS-style guests, including KVM/node capability admission, guest artifact verification, sealed input injection, and receipt/log capture.
 - [ ] Define external native process loading as a future trusted-operator path with verified binary identity and IPC/host-ABI boundary.
 
 ## Phase 5: Capability, UCAN, and verified-logic integration

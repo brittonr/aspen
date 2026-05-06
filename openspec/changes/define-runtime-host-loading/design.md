@@ -7,7 +7,9 @@ The open architectural question is not whether all code becomes WASM. Aspen shou
 - native built-ins for trusted first-party services,
 - optional external native processes for trusted operator-installed binaries,
 - WASM for bounded extension logic and portable untrusted modules,
-- Hyperlight for isolated native-ish workloads and executioner jobs.
+- Hyperlight for isolated native-ish workloads and executioner jobs,
+- OCI images/containers for compatibility with existing Linux workload packaging,
+- microVMs and unikernel guests as later stronger-isolation host/artifact profiles.
 
 Existing code already has pieces of this model: Forge is compiled into the node behind features and wired during startup; WASM plugin manifests exist; jobs/CI/executors provide finite execution concepts; Hyperlight support exists in plugin/job-adjacent areas; receipts exist in dogfood/deploy/operator flows. This change defines the target loading contract before implementation begins.
 
@@ -15,7 +17,7 @@ Existing code already has pieces of this model: Forge is compiled into the node 
 
 **Goals:**
 
-- Define host kinds and loading behavior for native, WASM, and Hyperlight units.
+- Define host kinds and loading behavior for native, WASM, Hyperlight, OCI/container, and microVM/unikernel units.
 - Preserve native built-ins as the first implementation path for Forge and other first-party services.
 - Make route registration, lifecycle, health, capabilities, logs, and receipts host-independent.
 - Specify where `../verified-logic/` should be used for finite admission predicates.
@@ -104,13 +106,45 @@ ExecutionRun Pending
   -> receipt records result/provenance
 ```
 
-### 5. Runtime-facing lifecycle is host-independent
+### 5. OCI is a packaging/compatibility profile, not sufficient isolation by itself
+
+**Choice:** Aspen SHALL support OCI images as a runtime artifact profile and MAY run them through an OCI/container host kind when node policy allows it, but OCI image identity SHALL NOT by itself imply a strong sandbox boundary.
+
+**Rationale:** OCI is the dominant packaging format for existing Linux workloads and is useful for adapters, CI jobs, language runtimes, and migration paths. However, ordinary containers share the host kernel and should be treated as weaker isolation than Hyperlight or microVMs unless paired with stronger runtimes such as Kata/gVisor-style boundaries in a later spec.
+
+**Implementation sketch:**
+
+```text
+RuntimeArtifact::OciImage { image_digest, entrypoint, args }
+  -> resolve by digest, not mutable tag
+  -> verify signature/provenance policy
+  -> materialize rootfs/layers through an approved store
+  -> run under declared host: OciContainer | MicroVm-backed container | external runner
+  -> attach only declared mounts/env/network/capability handles
+  -> record image digest, runner, outputs, and receipt
+```
+
+### 6. MicroVMs and unikernels are stronger-isolation profiles
+
+**Choice:** Firecracker and Cloud Hypervisor SHALL be modeled as microVM host engines when adopted. HermitOS-style unikernels SHALL be modeled as guest artifact profiles that run under a VM/microVM host boundary.
+
+**Rationale:** MicroVMs are appropriate for high-isolation jobs, builds, tests, tenant workloads, and risky adapters. Unikernels are useful for small sealed Rust-native guests but are not a general Linux compatibility layer.
+
+**Implementation sketch:**
+
+```text
+RuntimeHostKind::MicroVm { engine: Firecracker | CloudHypervisor }
+RuntimeArtifact::LinuxGuest { kernel_hash, initrd_hash, rootfs_hash }
+RuntimeArtifact::Unikernel { kind: HermitOS, image_hash }
+```
+
+### 7. Runtime-facing lifecycle is host-independent
 
 **Choice:** Every host kind SHALL expose the same runtime-facing lifecycle surface: resolve artifact, start, stop, health, route/call handling, logs, receipts, and capability-scoped handles.
 
-**Rationale:** This prevents parallel schedulers for each host type and lets Forge, Executioner, WASM hooks, and Hyperlight jobs use one desired-state/reconciliation model.
+**Rationale:** This prevents parallel schedulers for each host type and lets Forge, Executioner, WASM hooks, Hyperlight jobs, OCI workloads, and microVM guests use one desired-state/reconciliation model.
 
-### 6. Capabilities use UCAN-shaped delegation and verified admission where feasible
+### 8. Capabilities use UCAN-shaped delegation and verified admission where feasible
 
 **Choice:** Runtime capability bindings SHALL be explicit data structures that can be checked before load/start and audited in receipts. The design SHALL use `../ucan/` as the reference for UCAN-style ability/resource/proof/caveat vocabulary, and use `../verified-logic/` for finite structural predicates when they are narrow enough to prove.
 
@@ -120,7 +154,9 @@ ExecutionRun Pending
 
 ## Risks / Trade-offs
 
-**Native built-ins have weak isolation** → Mitigate by using them only for trusted first-party services and preferring WASM/Hyperlight/native-process for dynamic or tenant-supplied code.
+**Native built-ins have weak isolation** → Mitigate by using them only for trusted first-party services and preferring WASM/Hyperlight/microVM/native-process for dynamic or tenant-supplied code.
+
+**OCI can be mistaken for a security boundary** → Mitigate by treating OCI primarily as a packaging format; require node policy to choose the actual host boundary, and prefer Hyperlight/microVMs for hostile workloads.
 
 **Too much abstraction before code** → Mitigate with a small first implementation slice: define portable runtime-core types and wrap Forge as `BuiltIn("forge")` without changing Forge internals.
 
