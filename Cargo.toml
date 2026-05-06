@@ -526,7 +526,6 @@ proptest = "1.0"
 sha1 = "0.10"
 
 tokio-test = "0.4"
-cargo-nextest = "0.9.60"
 tempfile = "3.10"
 # rand09 alias removed - now using rand 0.9 directly
 anyerror = { version = "0.1", features = ["anyhow"] }

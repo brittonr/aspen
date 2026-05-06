@@ -22,7 +22,7 @@ http = "1.0"
 bytes = { workspace = true }
 
 # Templating
-maud = "0.26"
+maud = "0.27"
 
 # Markdown rendering
 pulldown-cmark = "0.13"
