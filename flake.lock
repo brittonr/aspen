@@ -171,6 +171,7 @@
         "rust-overlay": "rust-overlay",
         "snix-src": "snix-src",
         "tigerstyle": "tigerstyle",
+        "ucan-src": "ucan-src",
         "unit2nix": "unit2nix",
         "verus-src": "verus-src"
       }
@@ -268,6 +269,23 @@
         "owner": "brittonr",
         "repo": "tigerstyle-rs",
         "type": "github"
+      }
+    },
+    "ucan-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778101697,
+        "narHash": "sha256-Hn0sK7y/lnGNKWxGuqiPOlqni4OTfh+aqhMxXNZ0oTI=",
+        "ref": "refs/heads/main",
+        "rev": "ad61b53e89fa45f9bf7d313ce14c45de645bf53d",
+        "revCount": 85,
+        "type": "git",
+        "url": "ssh://git@github.com/brittonr/ucan.git"
+      },
+      "original": {
+        "rev": "ad61b53e89fa45f9bf7d313ce14c45de645bf53d",
+        "type": "git",
+        "url": "ssh://git@github.com/brittonr/ucan.git"
       }
     },
     "unit2nix": {

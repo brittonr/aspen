@@ -10,7 +10,7 @@
 
 ## Phase 3: Dependency wiring
 
-- [ ] [depends:boundary-inventory] Add controlled Cargo/Nix wiring for `../ucan` / `../ucan/crates/ucan-core` with a documented local-development path and reproducible CI/release fallback or failure mode.
+- [x] [depends:boundary-inventory] Add controlled Cargo/Nix wiring for `../ucan` / `../ucan/crates/ucan-core` with a documented local-development path and reproducible CI/release fallback or failure mode. ✅ 7m 02s (started: 2026-05-06T23:32:37Z → completed: 2026-05-06T23:39:39Z) Evidence: `evidence/i4-controlled-ucan-dependency-wiring.md`.
 - [ ] [depends:dependency-wiring] Prove dependency boundaries with `cargo tree`/feature checks for `aspen-auth-core`, `aspen-auth`, and protected `aspen-core --no-default-features` paths.
 
 ## Phase 4: Adapter and migration implementation

@@ -10,6 +10,7 @@ description = "Capability-based authorization for Aspen distributed systems"
 # Core shell integration
 aspen-auth-core = { path = "../aspen-auth-core" }
 aspen-core = { package = "aspen-core-shell", path = "../aspen-core-shell" }
+ucan = { workspace = true }
 
 # Async traits
 async-trait = "0.1"

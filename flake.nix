@@ -65,6 +65,14 @@
       inputs.crane.follows = "crane";
       inputs.flake-utils.follows = "flake-utils";
     };
+
+    # UCAN auth implementation adopted by aspen-auth/aspen-auth-core.
+    # Cargo.toml pins the same revision; the flake input lets Nix replace the
+    # git checkout with a reproducible source path during vendoring.
+    ucan-src = {
+      url = "git+ssh://git@github.com/brittonr/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d";
+      flake = false;
+    };
   };
 
   nixConfig = {
@@ -123,6 +131,7 @@
     verus-src,
     unit2nix,
     tigerstyle,
+    ucan-src,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
@@ -567,11 +576,20 @@
                   && lib.hasPrefix "git+https://github.com/brittonr/subwayrat" (p.source or "")
               )
               ps;
+            isUcanRepo =
+              builtins.any (
+                p:
+                  builtins.isString (p.source or null)
+                  && lib.hasPrefix "git+ssh://git@github.com/brittonr/ucan.git" (p.source or "")
+              )
+              ps;
           in
             if isSnixRepo
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
             else if isSubwayrat
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
+            else if isUcanRepo
+            then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = ucan-src;}))
             else ensureGitCheckoutLock drv;
         });
 
@@ -999,11 +1017,20 @@
                   && lib.hasPrefix "git+https://github.com/brittonr/subwayrat" (p.source or "")
               )
               ps;
+            isUcanRepo =
+              builtins.any (
+                p:
+                  builtins.isString (p.source or null)
+                  && lib.hasPrefix "git+ssh://git@github.com/brittonr/ucan.git" (p.source or "")
+              )
+              ps;
           in
             if isSnixRepo
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
             else if isSubwayrat
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
+            else if isUcanRepo
+            then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = ucan-src;}))
             else ensureGitCheckoutLock drv;
         });
 
@@ -1250,11 +1277,20 @@
                   && lib.hasPrefix "git+https://github.com/brittonr/subwayrat" (p.source or "")
               )
               ps;
+            isUcanRepo =
+              builtins.any (
+                p:
+                  builtins.isString (p.source or null)
+                  && lib.hasPrefix "git+ssh://git@github.com/brittonr/ucan.git" (p.source or "")
+              )
+              ps;
           in
             if isSnixRepo
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
             else if isSubwayrat
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
+            else if isUcanRepo
+            then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = ucan-src;}))
             else ensureGitCheckoutLock drv;
         });
 

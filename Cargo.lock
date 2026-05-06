@@ -705,6 +705,7 @@ dependencies = [
  "sha2 0.10.9",
  "tokio",
  "tracing",
+ "ucan",
 ]
 
 [[package]]
@@ -718,6 +719,7 @@ dependencies = [
  "rand 0.9.4",
  "serde",
  "thiserror 2.0.18",
+ "ucan-core",
 ]
 
 [[package]]
@@ -4060,6 +4062,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "bs58"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
+dependencies = [
+ "tinyvec",
 ]
 
 [[package]]
@@ -15928,6 +15939,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ucan"
+version = "0.1.0"
+source = "git+ssh://git@github.com/brittonr/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
+dependencies = [
+ "base64 0.22.1",
+ "blake3",
+ "serde",
+ "serde_json",
+ "snafu",
+ "ucan-core",
+ "verified-logic",
+]
+
+[[package]]
+name = "ucan-core"
+version = "0.1.0"
+source = "git+ssh://git@github.com/brittonr/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
+
+[[package]]
 name = "ucd-trie"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16167,10 +16197,79 @@ dependencies = [
 ]
 
 [[package]]
+name = "verified-logic"
+version = "0.1.0"
+source = "git+ssh://git@github.com/brittonr/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "bs58",
+ "ed25519-dalek 2.2.0",
+ "redb 2.6.3",
+ "regex",
+ "serde",
+ "serde_json",
+ "vstd",
+]
+
+[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "verus_builtin"
+version = "0.0.0-2026-01-25-0057"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eda8cc02517ca6433d1bffbde5685e75ea8d596c30372cd6782db25820b5dac4"
+
+[[package]]
+name = "verus_builtin_macros"
+version = "0.0.0-2026-01-25-0057"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfb25e7607b9157db02674b19e073292c003217fb2fc27363d6aeac7728afa3b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+ "synstructure",
+ "verus_prettyplease",
+ "verus_syn",
+]
+
+[[package]]
+name = "verus_prettyplease"
+version = "0.0.0-2026-01-25-0057"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abadab37cde6d9fd68d92ef71a46b2c34e0b7e57584a3501d7f2a24169bacdc2"
+dependencies = [
+ "proc-macro2",
+ "verus_syn",
+]
+
+[[package]]
+name = "verus_state_machines_macros"
+version = "0.0.0-2026-01-25-0057"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9caf90585b9d3182fa7fa2180098b5d32039a9857b7780619ccd73203f339732"
+dependencies = [
+ "indexmap 1.9.3",
+ "proc-macro2",
+ "quote",
+ "verus_syn",
+]
+
+[[package]]
+name = "verus_syn"
+version = "0.0.0-2026-01-25-0057"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3efe87367e6aa49c2639208d0d5356b5c6287ae7021ff2d13354ad52924740c1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
 
 [[package]]
 name = "vhost"
@@ -16277,6 +16376,17 @@ checksum = "6ba782755fc073877e567c2253c0be48e4aa9a254c232d36d3985dfae0bd5205"
 dependencies = [
  "libc",
  "nix 0.31.2",
+]
+
+[[package]]
+name = "vstd"
+version = "0.0.0-2026-01-25-0057"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e9e087457b5c8fc9ce5b046bd290437d6089818c4c635773524fd17d9c517b7"
+dependencies = [
+ "verus_builtin",
+ "verus_builtin_macros",
+ "verus_state_machines_macros",
 ]
 
 [[package]]

@@ -9,6 +9,11 @@
 # wrapper. Override it locally so repo commands work out of the box.
 rustc-wrapper = ""
 
+[net]
+# Private sibling auth repos are pinned as SSH git dependencies; route through
+# git so the operator's SSH agent/config are honored.
+git-fetch-with-cli = true
+
 # Allow multiple definitions of zstd symbols when linking.
 # This is a workaround for duplicate symbol errors when both zstd-seekable
 # (used by libpijul) and zstd-sys (used by aspen-jobs) statically link
@@ -40,3 +45,10 @@ rustflags = ["-C", "link-arg=-Wl,-multiply_defined,suppress"]
 # snix-castore = { path = "../snix/snix/castore" }
 # snix-store = { path = "../snix/snix/store" }
 # nix-compat = { path = "../snix/snix/nix-compat" }
+
+# Local UCAN adoption work: uncomment only when ../ucan exists and you want to
+# iterate against the sibling checkout. CI/Nix use the pinned git dependency and
+# flake input instead.
+# [patch."ssh://git@github.com/brittonr/ucan.git"]
+# ucan = { path = "../ucan" }
+# ucan-core = { path = "../ucan/crates/ucan-core" }

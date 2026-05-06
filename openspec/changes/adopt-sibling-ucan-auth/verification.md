@@ -28,3 +28,13 @@
 - Scope rationale: Task I3 required a mapping table, including unsupported or Aspen-local semantics; no Rust adapter implementation was required.
 - Boundary conclusion: map Aspen resources as `aspen:<domain>:<scope>` and abilities as `aspen/<domain>/<verb>`; keep shell globs, admin implication sets, delegate issuance gate, batch all-item checks, and audit-only fields in the Aspen adapter.
 - Next best check: controlled Cargo/Nix dependency wiring for sibling `../ucan` and protected dependency graph evidence.
+
+## I4 controlled UCAN dependency wiring
+
+- Rail: Cargo/Nix dependency wiring and local-development policy
+- Status: PASS
+- Artifact: `openspec/changes/adopt-sibling-ucan-auth/evidence/i4-controlled-ucan-dependency-wiring.md`
+- Commands: `cargo metadata`, `cargo check -p aspen-auth-core --no-default-features`, `cargo check -p aspen-auth --all-targets`, `nix flake lock`, `nix flake metadata`, and locked `cargo metadata`.
+- Boundary conclusion: `aspen-auth-core` is wired only to `ucan-core`; `aspen-auth` is wired to root `ucan`; local `../ucan` path patching is opt-in and commented; Nix uses a locked `ucan-src` source override.
+- Known failure mode: private SSH fetch requires GitHub credentials until UCAN is public or mirrored into Aspen-owned cache/source distribution.
+- Next best check: prove dependency boundaries with `cargo tree`/feature checks for `aspen-auth-core`, `aspen-auth`, and protected `aspen-core --no-default-features` paths.
