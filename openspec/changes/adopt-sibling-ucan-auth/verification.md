@@ -57,3 +57,13 @@
 - Commands: `nix run .#rustfmt`; `CARGO_TARGET_DIR=target/agent cargo test -p aspen-auth ucan_adapter --all-targets`.
 - Boundary conclusion: Aspen `Capability` variants now project to sibling-validated UCAN capability documents and sets; legacy token wire format and admission paths remain unchanged pending compatibility/negative evidence.
 - Next best check: add compatibility fixtures for existing Aspen token generation/inspection/delegation behavior or document intentional migration receipts.
+
+## I7 legacy Aspen token compatibility fixtures
+
+- Rail: compatibility fixtures before runtime verifier/admission switch.
+- Status: PASS
+- Artifact: `openspec/changes/adopt-sibling-ucan-auth/evidence/i7-legacy-token-compatibility-fixtures.md`
+- Code: `crates/aspen-auth/src/tests.rs`
+- Commands: `rustfmt crates/aspen-auth/src/tests.rs`; `CARGO_TARGET_DIR=target/agent cargo test -p aspen-auth adopt_sibling_ucan_compat_fixture --all-targets`.
+- Boundary conclusion: legacy Aspen base64 token roundtrip, delegation proof/depth shape, and debug redaction receipts remain preserved; no intentional token-format migration happened in this slice.
+- Next best check: add negative evidence, then switch runtime verification/admission paths only where compatibility remains proven.

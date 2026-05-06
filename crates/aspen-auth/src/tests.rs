@@ -358,6 +358,70 @@ fn test_token_builder_capability_escalation() {
     assert!(matches!(result, Err(AuthError::CapabilityEscalation { .. })));
 }
 
+#[test]
+fn adopt_sibling_ucan_compat_fixture_preserves_legacy_base64_roundtrip() {
+    let key = test_secret_key();
+    let token = TokenBuilder::new(key.clone())
+        .with_capability(Capability::Read { prefix: "cfg/".into() })
+        .with_capability(Capability::Delegate)
+        .with_lifetime(Duration::from_secs(3600))
+        .build()
+        .expect("legacy Aspen token should build");
+
+    let encoded = token.to_base64().expect("legacy token base64 encodes");
+    let decoded = CapabilityToken::from_base64(&encoded).expect("legacy token base64 decodes");
+
+    assert_eq!(decoded.version, 1);
+    assert_eq!(decoded.issuer, key.public());
+    assert_eq!(decoded.capabilities, token.capabilities);
+    assert_eq!(decoded.facts, token.facts);
+    assert_eq!(decoded.signature, token.signature);
+}
+
+#[test]
+fn adopt_sibling_ucan_compat_fixture_preserves_delegation_receipt_shape() {
+    let root_key = test_secret_key();
+    let child_key = test_secret_key();
+    let root = TokenBuilder::new(root_key)
+        .with_capability(Capability::Full { prefix: "app/".into() })
+        .with_capability(Capability::Delegate)
+        .build()
+        .expect("delegating root token should build");
+
+    let child = TokenBuilder::new(child_key)
+        .delegated_from(root.clone())
+        .with_capability(Capability::Read {
+            prefix: "app/public/".into(),
+        })
+        .build()
+        .expect("attenuated child token should build");
+
+    assert_eq!(child.delegation_depth, root.delegation_depth + 1);
+    assert_eq!(child.proof, Some(root.hash()));
+    assert_eq!(child.capabilities, vec![Capability::Read {
+        prefix: "app/public/".into()
+    }]);
+}
+
+#[test]
+fn adopt_sibling_ucan_compat_fixture_redacts_debug_receipts() {
+    let key = test_secret_key();
+    let token = TokenBuilder::new(key)
+        .with_capability(Capability::Write {
+            prefix: "private/".into(),
+        })
+        .with_random_nonce()
+        .build()
+        .expect("token should build");
+
+    let debug = format!("{token:?}");
+
+    assert!(debug.contains("<redacted: 64 bytes>"));
+    assert!(debug.contains("has_nonce"));
+    assert!(!debug.contains("signature: ["));
+    assert!(!debug.contains("nonce: Some"));
+}
+
 // ============================================================================
 // Token Encoding Tests
 // ============================================================================
