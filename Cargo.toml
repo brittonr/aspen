@@ -918,9 +918,16 @@ required-features = ["node-runtime"]
 #   --message-format=json.
 # - nostr swaps its wasm-only unmaintained instant dependency for web-time while
 #   waiting for an upstream release with the same change.
+# - postcard removes heapless-cas from its default feature set to avoid the
+#   unmaintained atomic-polyfill edge. iroh-blobs, iroh-metrics, and
+#   iroh-tickets also disable postcard defaults at their call sites.
 [patch.crates-io]
 cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
+iroh-blobs = { path = "vendor/iroh-blobs" }
+iroh-metrics = { path = "vendor/iroh-metrics" }
+iroh-tickets = { path = "vendor/iroh-tickets" }
 nostr = { path = "vendor/nostr" }
+postcard = { path = "vendor/postcard" }
 uhlc = { path = "vendor/uhlc" }
 
 # snix-glue patched to implement Fetch::Git and builtins.fetchGit.
