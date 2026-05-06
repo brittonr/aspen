@@ -36,15 +36,14 @@ REVIEW_FIELDS = (
     "Decision",
 )
 EXPECTED_DIRECT_PACKAGES = (
+    "aspen-codec",
     "aspen-cluster-types",
     "aspen-constants",
     "aspen-hlc",
     "aspen-kv-types",
     "aspen-storage-types",
     "aspen-traits",
-    "async-trait",
     "base64",
-    "bincode",
     "hex",
     "serde",
     "snafu",
@@ -75,8 +74,8 @@ MANIFEST_RULES: dict[str, dict[str, Any]] = {
     "aspen-kv-types": {"default-features": False},
     "aspen-traits": {"default-features": False},
     "aspen-storage-types": {"default-features": False},
+    "aspen-codec": {"default-features": False, "require-features": {"alloc"}, "forbid-features": {"std"}},
     "serde": {"default-features": False, "require-features": {"alloc", "derive"}, "forbid-features": {"std"}},
-    "bincode": {"default-features": False},
     "base64": {"default-features": False, "require-features": {"alloc"}, "forbid-features": {"std"}},
     "hex": {"default-features": False, "require-features": {"alloc"}, "forbid-features": {"std"}},
     "snafu": {"default-features": False, "require-features": {"rust_1_65"}, "forbid-features": {"std"}},
@@ -252,6 +251,7 @@ def load_allowlist(path: Path) -> list[str]:
 def review_note_path(repo_root: Path, package_name: str) -> Path:
     review_file_name = f"deps-transitive-review-{package_name}.md"
     candidate_paths = [
+        repo_root / "docs/dependency-reviews/aspen-core-no-std" / review_file_name,
         repo_root / "openspec/changes/extend-no-std-foundation-and-wire/evidence" / review_file_name,
         repo_root / "openspec/changes/no-std-aspen-core/evidence" / review_file_name,
         repo_root / "openspec/changes/archive/2026-04-21-no-std-aspen-core/evidence" / review_file_name,
