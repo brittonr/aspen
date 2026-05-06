@@ -38,7 +38,7 @@ aspen-blob = { path = "../aspen-blob", optional = true }
 iroh-blobs = { version = "0.99.0", optional = true }
 
 # Serialization
-postcard = { version = "1.0", optional = true }
+postcard = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
 
 # Hash
 blake3 = { workspace = true }
@@ -58,5 +58,5 @@ aspen-cluster-types = { path = "../aspen-cluster-types", default-features = fals
 aspen-client-api = { workspace = true }
 aspen-traits = { path = "../aspen-traits" }
 async-trait = "0.1"
-postcard = "1.0"
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 tokio = { version = "1.0", features = ["full", "test-util"] }

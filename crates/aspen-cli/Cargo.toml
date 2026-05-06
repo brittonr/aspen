@@ -74,7 +74,7 @@ bitcoin_hashes = "0.15"
 rand = "0.9"
 
 # Serialization
-postcard = { version = "1.0", features = ["alloc"] }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 base64 = "0.22"
 
 # Hashing

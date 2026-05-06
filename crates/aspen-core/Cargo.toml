@@ -39,7 +39,7 @@ thiserror = "2.0"
 snafu = { version = "0.8.9", default-features = false, features = ["rust_1_65"] }
 
 [dev-dependencies]
-postcard = { version = "1.0", features = ["alloc"] }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 # Property-based testing for core module families
 proptest = "1.0"
 insta = "1.42"

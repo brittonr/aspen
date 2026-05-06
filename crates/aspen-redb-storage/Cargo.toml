@@ -25,7 +25,7 @@ tokio = { version = "1.48.0", default-features = false, features = ["sync", "rt"
 futures = { version = "0.3", optional = true }
 snafu = { version = "0.8.9", optional = true }
 tracing = { version = "0.1", optional = true }
-postcard = { version = "1.0", features = ["alloc"], optional = true }
+postcard = { version = "1.0", default-features = false, features = ["alloc"], optional = true }
 aspen-codec = { workspace = true, features = ["std"], optional = true }
 aspen-raft-kv-types = { workspace = true, optional = true }
 aspen-kv-types = { workspace = true, optional = true }

@@ -61,7 +61,7 @@ hex = "0.4"
 iroh = { version = "0.97.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }
 iroh-blobs = "0.99.0"
 tokio-util = { version = "0.7", features = ["rt"] }
-postcard = { version = "1.0", features = ["alloc"] }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 rand = { workspace = true }
 
 # Stack growth for deeply recursive Nickel evaluation (optional, only needed with nickel)

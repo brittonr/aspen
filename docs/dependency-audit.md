@@ -13,9 +13,9 @@ this file. Do not add blanket warning ignores: each new exception needs an
 advisory ID, dependency path, exposure assessment, compensating control, and
 removal trigger.
 
-After remediating the two `rand` soundness warnings by lockfile-only updates and
-accepting the SNIX/FUSE unsound cluster as bounded upstream dependency debt, the
-direct audit inventory is:
+After remediating the two `rand` soundness warnings by lockfile-only updates,
+replacing Aspen-owned bincode serialization, and accepting the SNIX/FUSE unsound
+cluster as bounded upstream dependency debt, the direct audit inventory is:
 
 ```bash
 cargo audit -n \
@@ -37,7 +37,7 @@ cargo audit -n \
 | Advisory | Crate | Old | New | Remediation |
 | --- | --- | ---: | ---: | --- |
 | `RUSTSEC-2026-0097` | `rand` | `0.8.5` | `0.8.6` | Lockfile point update; patched release stays within `0.8` ABI constraints. |
-| `RUSTSEC-2026-0097` | `rand` | `0.9.2` | `0.9.3` | Lockfile point update; patched release stays within `0.9` ABI constraints. |
+| `RUSTSEC-2026-0097` | `rand` | `0.9.2` | `0.9.4` | Lockfile point update from broad `cargo update`; patched release stays within `0.9` ABI constraints. |
 | `RUSTSEC-2026-0002` | `lru` | `0.12.5` | upstream-pinned | Advisory-specific exception. SNIX `nar-bridge`/`snix-store` pin `lru = ^0.12.4`; Aspen does not call `IterMut` through its SNIX integration. |
 | `RUSTSEC-2023-0056` | `vm-memory` | `0.10.0` | upstream-pinned | Advisory-specific exception through `snix-castore -> fuse-backend-rs`; Aspen's SNIX path uses store/NAR traits, not FUSE `VolatileMemory` helpers. |
 | `RUSTSEC-2024-0002` | `vmm-sys-util` | `0.11.2` | upstream-pinned | Advisory-specific exception through `snix-castore -> fuse-backend-rs`; Aspen does not deserialize attacker-controlled `FamStructWrapper` values through this edge. |
@@ -62,8 +62,8 @@ revisited when upstream dependency constraints move.
 
 | Priority | Advisory | Crate | Current path | Triage | Removal trigger |
 | --- | --- | --- | --- | --- | --- |
-| P2 | `RUSTSEC-2025-0141` | `bincode 1.3.3` | centralized `aspen-codec` compatibility seam; `madsim` transitive test/simulation edge | Direct Aspen crate dependencies were removed in favor of `aspen-codec`, which preserves the legacy bincode 1.x bytes for existing storage/wire compatibility. A maintained-line update is not available: the advisory applies to the package family, not just `1.3.3`. | Replace the `aspen-codec` legacy format with a versioned postcard/serde-compatible codec plus an explicit read/migration plan; upstream `madsim` must also drop its `bincode 1.x` edge before the advisory disappears from the lockfile. |
-| P2 | `RUSTSEC-2023-0089` | `atomic-polyfill 1.0.3` | `postcard 1.1.3` -> `heapless 0.7.17` -> Aspen crates | Transitive postcard/heapless no-std path. `postcard 1.1.4` was not available to `cargo update` in this index during triage. | postcard/heapless update drops `atomic-polyfill`, or Aspen replaces that transitive path. |
+| P2 | `RUSTSEC-2025-0141` | `bincode 1.3.3` | `madsim` transitive test/simulation edge | Aspen-owned `aspen-codec` now uses postcard, so no first-party storage/wire path depends on `bincode`. The remaining lockfile warning is upstream madsim-only. | Upstream `madsim` drops its `bincode 1.x` edge, or Aspen removes/replaces that simulation dependency. |
+| P2 | `RUSTSEC-2023-0089` | `atomic-polyfill 1.0.3` | `iroh-blobs` / `iroh-docs` default postcard feature -> `heapless 0.7.17` | Aspen direct postcard dependencies disable default features, but the iroh ecosystem still selects postcard `default`/`heapless-cas`. | iroh-blobs/docs disables postcard heapless-cas or updates to a postcard/heapless stack that drops `atomic-polyfill`. |
 | P2 | `RUSTSEC-2024-0384` | `instant 0.1.13` | `nostr 0.44.2` -> forge/CLI/Nostr crates | Forge/Nostr integration edge. | Upgrade Nostr stack to remove `instant`. |
 | P3 | `RUSTSEC-2025-0119` | `number_prefix 0.4.0` | `indicatif 0.17.11` -> `aspen-cli`; also nextest tooling edge | Direct CLI constraint is `indicatif = ^0.17`; `cargo update --precise 0.18.0` is rejected without a manifest bump. Runtime exposure is CLI progress rendering. | Bump `indicatif` to `0.18` after CLI compile/render check, or upstream nextest/self_update paths move. |
 | P3 | `RUSTSEC-2024-0436` | `paste 1.0.15` | DataFusion SQL path and netlink/iroh path | Proc-macro unmaintained warning. No direct runtime input exposure; remove through parent upgrades. | DataFusion/iroh/netlink stack drops `paste`. |
@@ -73,7 +73,6 @@ revisited when upstream dependency constraints move.
 
 ## Next remediation order
 
-1. Direct serialization debt: `bincode 1.3.3`.
-2. Direct CLI/web manifest bumps: `indicatif 0.18`, `maud 0.27+`.
-3. Parent-stack refreshes: Nostr, DataFusion/iroh/netlink, iroh-blobs/bao-tree, and Cloud Hypervisor client.
-4. Upstream-watch the SNIX/FUSE exceptions and remove the ignores as soon as Snix moves those pins or Aspen can make the FUSE edge unreachable in the selected feature graph.
+1. Direct CLI/web manifest bumps: `indicatif 0.18`, `maud 0.27+`.
+2. Parent-stack refreshes: Nostr, DataFusion/iroh/netlink, iroh-blobs/bao-tree, and Cloud Hypervisor client.
+3. Upstream-watch the remaining `madsim` bincode edge, iroh postcard/heapless edge, and SNIX/FUSE exceptions; remove ignores as soon as parent stacks move or Aspen can make the affected edge unreachable in the selected feature graph.

@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/brittonr/aspen"
-description = "Aspen serialization codec compatibility wrappers"
+description = "Aspen serialization codec wrappers"
 
 [dependencies]
-bincode = { version = "1.3", default-features = false }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 serde = { version = "1.0", default-features = false, features = ["alloc"] }
 
 [features]
 default = ["std"]
-std = ["serde/std"]
+std = ["postcard/use-std", "serde/std"]
 alloc = []

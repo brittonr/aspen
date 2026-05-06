@@ -15,10 +15,10 @@
 //!
 //! # Storage Layout
 //!
-//! - Table: `node_metadata` (u64 -> bincode-serialized NodeMetadata)
+//! - Table: `node_metadata` (u64 -> codec-serialized NodeMetadata)
 //! - Key: Raft node_id (u64)
 //! - Value: NodeMetadata with endpoint_id (hex string), addresses, status, timestamps
-//! - Serialization: bincode for compact, deterministic encoding
+//! - Serialization: `aspen-codec` for compact, deterministic encoding
 //!
 //! # Tiger Style
 //!
@@ -64,7 +64,7 @@ use snafu::ResultExt;
 use snafu::Snafu;
 
 /// Table definition for node metadata.
-/// Key: node_id (u64), Value: serialized NodeMetadata (bincode)
+/// Key: node_id (u64), Value: serialized NodeMetadata (`aspen-codec`)
 const NODE_METADATA_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("node_metadata");
 
 /// Persistent metadata store for cluster nodes.
@@ -375,11 +375,11 @@ pub enum MetadataError {
 
     /// Failed to serialize node metadata to bytes.
     ///
-    /// Occurs when bincode cannot encode the NodeMetadata structure,
+    /// Occurs when `aspen-codec` cannot encode the NodeMetadata structure,
     /// typically indicating a programming error or incompatible data.
     #[snafu(display("failed to serialize metadata: {source}"))]
     Serialize {
-        /// Underlying bincode serialization error.
+        /// Underlying codec serialization error.
         #[snafu(source(from(aspen_codec::Error, Box::new)))]
         source: Box<aspen_codec::Error>,
     },
@@ -390,7 +390,7 @@ pub enum MetadataError {
     /// the current NodeMetadata schema.
     #[snafu(display("failed to deserialize metadata: {source}"))]
     Deserialize {
-        /// Underlying bincode deserialization error.
+        /// Underlying codec deserialization error.
         #[snafu(source(from(aspen_codec::Error, Box::new)))]
         source: Box<aspen_codec::Error>,
     },

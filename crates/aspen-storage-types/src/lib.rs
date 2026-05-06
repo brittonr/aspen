@@ -21,7 +21,7 @@ use serde::Serialize;
 ///
 /// # Serialization
 ///
-/// Serialized using bincode for efficient storage.
+/// Serialized through `aspen-codec` for efficient storage.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct KvEntry {
     /// The value stored for this key.
@@ -114,9 +114,9 @@ mod tests {
     // ============================================================================
 
     #[test]
-    fn kv_entry_bincode_roundtrip() {
+    fn kv_entry_codec_roundtrip() {
         let original = KvEntry {
-            value: "bincode_test".to_string(),
+            value: "codec_test".to_string(),
             version: 42,
             create_revision: 1000,
             mod_revision: 1005,
@@ -124,14 +124,14 @@ mod tests {
             lease_id: Some(777),
         };
 
-        let encoded = aspen_codec::serialize(&original).expect("bincode serialize failed");
-        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&original).expect("codec serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("codec deserialize failed");
 
         assert_eq!(original, decoded);
     }
 
     #[test]
-    fn kv_entry_bincode_roundtrip_empty_value() {
+    fn kv_entry_codec_roundtrip_empty_value() {
         let original = KvEntry {
             value: "".to_string(),
             version: 1,
@@ -141,14 +141,14 @@ mod tests {
             lease_id: None,
         };
 
-        let encoded = aspen_codec::serialize(&original).expect("bincode serialize failed");
-        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&original).expect("codec serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("codec deserialize failed");
 
         assert_eq!(original, decoded);
     }
 
     #[test]
-    fn kv_entry_bincode_roundtrip_large_value() {
+    fn kv_entry_codec_roundtrip_large_value() {
         let large_value = "x".repeat(100_000);
         let original = KvEntry {
             value: large_value,
@@ -159,14 +159,14 @@ mod tests {
             lease_id: None,
         };
 
-        let encoded = aspen_codec::serialize(&original).expect("bincode serialize failed");
-        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&original).expect("codec serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("codec deserialize failed");
 
         assert_eq!(original, decoded);
     }
 
     #[test]
-    fn kv_entry_bincode_roundtrip_unicode() {
+    fn kv_entry_codec_roundtrip_unicode() {
         let original = KvEntry {
             value: "Hello, \u{1F600} World! \u{4E2D}\u{6587}".to_string(),
             version: 1,
@@ -176,8 +176,8 @@ mod tests {
             lease_id: None,
         };
 
-        let encoded = aspen_codec::serialize(&original).expect("bincode serialize failed");
-        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&original).expect("codec serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("codec deserialize failed");
 
         assert_eq!(original, decoded);
     }
@@ -214,8 +214,8 @@ mod tests {
             lease_id: Some(u64::MAX),
         };
 
-        let encoded = aspen_codec::serialize(&entry).expect("bincode serialize failed");
-        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&entry).expect("codec serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("codec deserialize failed");
 
         assert_eq!(entry, decoded);
     }
@@ -247,8 +247,8 @@ mod tests {
             lease_id: None,
         };
 
-        let encoded = aspen_codec::serialize(&entry).expect("bincode serialize failed");
-        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("bincode deserialize failed");
+        let encoded = aspen_codec::serialize(&entry).expect("codec serialize failed");
+        let decoded: KvEntry = aspen_codec::deserialize(&encoded).expect("codec deserialize failed");
 
         assert_eq!(entry, decoded);
     }

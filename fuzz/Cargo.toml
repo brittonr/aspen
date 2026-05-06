@@ -20,7 +20,7 @@ bolero-generator = "0.13"
 aspen = { path = "..", features = ["fuzzing"] }
 
 # Serialization formats used by aspen
-postcard = { version = "1.0", features = ["alloc"] }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 aspen-codec = { workspace = true, features = ["std"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -41,7 +41,7 @@ anyhow = "1.0"
 clap = { version = "4.5.4", features = ["derive"] }
 
 # Serialization
-postcard = { version = "1.0", features = ["alloc"] }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 serde_json = "1.0"
 
 # Logging

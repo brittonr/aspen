@@ -379,7 +379,7 @@ aspen-job-handler = { path = "crates/aspen-job-handler" }
 irpc = { version = "0.13.0", features = ["derive"] }
 n0-future = "0.3.2"
 nickel-lang = "2.0"
-postcard = { version = "1.0", features = ["alloc"] }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 hmac = "0.12"  # Used by aspen-cluster and aspen-raft
 sha2 = "0.10"  # Used by aspen-cluster and aspen-raft
 static_assertions = "1.1"  # Compile-time type layout verification
@@ -483,7 +483,7 @@ env_logger = "0.11"
 thiserror = "2.0"
 hex = "0.4"
 url = "2"
-postcard = { version = "1.0", features = ["alloc"] }
+postcard = { version = "1.0", default-features = false, features = ["alloc"] }
 openraft = { workspace = true }
 redb = "2.0.0"
 snafu = "0.8.9"
