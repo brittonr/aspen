@@ -67,3 +67,13 @@
 - Commands: `rustfmt crates/aspen-auth/src/tests.rs`; `CARGO_TARGET_DIR=target/agent cargo test -p aspen-auth adopt_sibling_ucan_compat_fixture --all-targets`.
 - Boundary conclusion: legacy Aspen base64 token roundtrip, delegation proof/depth shape, and debug redaction receipts remain preserved; no intentional token-format migration happened in this slice.
 - Next best check: add negative evidence, then switch runtime verification/admission paths only where compatibility remains proven.
+
+## I8 runtime verifier UCAN adapter switch
+
+- Rail: runtime verification/admission boundary.
+- Status: PASS
+- Artifact: `openspec/changes/adopt-sibling-ucan-auth/evidence/i8-runtime-verifier-ucan-adapter-switch.md`
+- Code: `crates/aspen-auth/src/verifier.rs`
+- Commands: `rustfmt crates/aspen-auth/src/verifier.rs`; `CARGO_TARGET_DIR=target/agent cargo test -p aspen-auth test_verifier --all-targets`.
+- Boundary conclusion: direct and delegation-chain token verification now require Aspen capabilities to project into sibling-validated UCAN capability documents before runtime admission proceeds; legacy token wire format and Aspen operation authorization semantics remain preserved.
+- Next best check: run final OpenSpec validation/docs/focused test suite and capture release notes.

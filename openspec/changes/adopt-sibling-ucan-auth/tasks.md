@@ -17,7 +17,7 @@
 
 - [x] [depends:capability-mapping] Implement the UCAN-backed adapter that preserves Aspen-facing `Capability`, `Operation`, token CLI/RPC, and redacted receipt behavior. ✅ 6m 02s (started: 2026-05-06T23:42:08Z → completed: 2026-05-06T23:48:10Z) Evidence: `evidence/i6-ucan-adapter-implementation.md`.
 - [x] [depends:ucan-adapter] Add compatibility fixtures for existing Aspen token generation/inspection/delegation behavior or documented migration receipts for intentional format changes. ✅ 1m 08s (started: 2026-05-06T23:49:32Z → completed: 2026-05-06T23:50:40Z) Evidence: `evidence/i7-legacy-token-compatibility-fixtures.md`.
-- [ ] [depends:ucan-adapter] Switch runtime verification/admission paths to the UCAN-backed verifier only after compatibility and negative evidence exists.
+- [x] [depends:ucan-adapter] Switch runtime verification/admission paths to the UCAN-backed verifier only after compatibility and negative evidence exists. ✅ 2m 21s (started: 2026-05-06T23:50:40Z → completed: 2026-05-06T23:53:01Z) Evidence: `evidence/i8-runtime-verifier-ucan-adapter-switch.md`.
 
 ## Phase 5: Verification and docs
 

@@ -6,17 +6,18 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::RwLock;
 
-use iroh_base::PublicKey;
-use iroh_base::Signature;
-
-use crate::builder::bytes_to_sign;
-use crate::utils::current_time_secs;
-use crate::AuthError;
 use aspen_auth_core::Audience;
 use aspen_auth_core::CapabilityToken;
 use aspen_auth_core::Operation;
 use aspen_auth_core::constants::MAX_DELEGATION_DEPTH;
 use aspen_auth_core::constants::TOKEN_CLOCK_SKEW_SECS;
+use iroh_base::PublicKey;
+use iroh_base::Signature;
+
+use crate::AuthError;
+use crate::builder::bytes_to_sign;
+use crate::ucan_adapter::capabilities_to_ucan_set;
+use crate::utils::current_time_secs;
 
 /// Verifies capability tokens and checks authorization.
 ///
@@ -147,6 +148,11 @@ impl TokenVerifier {
         let signature = Signature::from_bytes(&token.signature);
         token.issuer.verify(&sign_bytes, &signature).map_err(|_| AuthError::InvalidSignature)?;
 
+        // UCAN adapter boundary: preserve the legacy Aspen token wire format
+        // while requiring every runtime-verified capability to project to a
+        // sibling-validated UCAN capability document.
+        capabilities_to_ucan_set(&token.capabilities)?;
+
         // 2. Check expiration
         let now = current_time_secs();
 
@@ -275,6 +281,11 @@ impl TokenVerifier {
         let sign_bytes = bytes_to_sign(token);
         let signature = Signature::from_bytes(&token.signature);
         token.issuer.verify(&sign_bytes, &signature).map_err(|_| AuthError::InvalidSignature)?;
+
+        // UCAN adapter boundary: preserve the legacy Aspen token wire format
+        // while requiring every runtime-verified capability to project to a
+        // sibling-validated UCAN capability document.
+        capabilities_to_ucan_set(&token.capabilities)?;
 
         // 2. Check expiration
         let now = current_time_secs();
