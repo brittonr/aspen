@@ -1037,6 +1037,21 @@
               ));
           };
 
+        ciCompileFromSourceArgs =
+          ciBasicArgs
+          // {
+            # Some dogfood-facing binaries must compile dependencies from the real
+            # CI source tree instead of reusing ciCargoArtifacts. crane buildDepsOnly
+            # can package local path patches as dependency-only dummy crates, which
+            # hides APIs such as iroh_metrics::Counter from downstream vendored
+            # crates like portmapper.
+            cargoArtifacts = pkgs.runCommand "empty-ci-package-cargo-artifacts" {} "mkdir -p $out";
+            cargoVendorDir = ciCargoVendorDir;
+
+            nativeBuildInputs = ciCommonArgs.nativeBuildInputs;
+            buildInputs = ciCommonArgs.buildInputs;
+          };
+
         # ── CI-path VM test builds ───────────────────────────────
         # Uses ciSrc instead of fullSrc for VM test binaries.
         # fullSrc suffers from IFD caching issues that prevent snix dep
@@ -2291,7 +2306,7 @@
               # Uses ciSrc (stubbed aspen-wasm-plugin) so no --impure required.
               # Used by nix run .#dogfood-local-vmci.
               aspen-node-vmci = craneLib.buildPackage (
-                ciCommonArgs
+                ciCompileFromSourceArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
                   cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,ci-vm-executor,docs,blob,hooks,shell-worker,automerge,secrets,git-bridge";
@@ -2309,7 +2324,7 @@
               # CI node with snix-build for native in-process builds.
               # Pure eval (no --impure), uses ciSrc which keeps snix as real git deps.
               ci-aspen-node-snix-build = craneLib.buildPackage (
-                ciCommonArgs
+                ciCompileFromSourceArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
                   cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,docs,blob,hooks,shell-worker,automerge,secrets,git-bridge,deploy,federation,snix,snix-build,nix-cli-fallback";
@@ -2329,7 +2344,7 @@
               };
               # Nix cache gateway built from ciSrc (no plugins dependency).
               ci-aspen-nix-cache-gateway = craneLib.buildPackage (
-                ciCommonArgs
+                ciCompileFromSourceArgs
                 // {
                   pname = "aspen-nix-cache-gateway";
                   version = "0.1.0";
@@ -2339,7 +2354,7 @@
               );
               # Nix cache gateway with HTTP/3 over iroh QUIC support.
               ci-aspen-nix-cache-gateway-h3 = craneLib.buildPackage (
-                ciCommonArgs
+                ciCompileFromSourceArgs
                 // {
                   pname = "aspen-nix-cache-gateway";
                   version = "0.1.0";
@@ -2359,7 +2374,7 @@
               );
               # Dogfood orchestrator — typed replacement for dogfood-local.sh.
               aspen-dogfood = craneLib.buildPackage (
-                ciCommonArgs
+                ciCompileFromSourceArgs
                 // {
                   pname = "aspen-dogfood";
                   version = "0.1.0";
