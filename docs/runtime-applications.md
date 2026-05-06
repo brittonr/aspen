@@ -25,7 +25,24 @@ Extensions and adapters
   app plugins / policy hooks / Git, JJ, HTTP, SSH, Nix, federation bridges
 ```
 
-Aspen should not make every application a WASM plugin. The runtime contract should support built-in native Rust services, Nix-built binaries, WASM components, Hyperlight guests, and later VM/container adapters. The stable boundary is the declaration of lifecycle, routes, capabilities, state, artifacts, health, and receipts.
+Aspen should not make every application a WASM plugin. The runtime contract should support built-in native Rust services, Nix-built binaries, WASM components, Hyperlight guests, OCI/container compatibility adapters, and later microVM/unikernel guests. The stable boundary is the declaration of lifecycle, routes, capabilities, state, artifacts, health, and receipts.
+
+## Runtime host-loading taxonomy
+
+Portable host-loading model types live in `crates/aspen-runtime-core`. The crate is data-only: it defines host kinds, artifact profiles, lifecycle state, route ownership, capability bindings, resources, and receipts without starting processes or performing network/filesystem/crypto I/O.
+
+Host kind and artifact identity are intentionally separate:
+
+| Host kind | Artifact profile | Loading rule |
+| --- | --- | --- |
+| `NativeBuiltIn` | `BuiltIn { name, version }` | First-party services such as Forge are linked into `aspen-node` and registered through a built-in service factory registry, not loaded through `dlopen`-style native plugins. |
+| `NativeProcess` | `NativeBinary { hash, store_path, entrypoint }` | Future trusted operator-installed binaries run out-of-process behind an IPC/host-ABI boundary. |
+| `Wasm` | `WasmModule { module_hash, abi, entrypoint }` | Modules are fetched by content identity, checked against ABI/resource/capability policy, then instantiated with only scoped host functions. |
+| `Hyperlight` | `HyperlightImage { image_hash, entrypoint }` | Isolated execution runs or later services start only on compatible Hyperlight runners and record guest/output receipts. |
+| `OciContainer` | `OciImage { image_digest, entrypoint, args }` | OCI is a packaging/compatibility profile; accepted execution uses immutable digests, and ordinary containers are not treated as a strong isolation boundary by themselves. |
+| `MicroVm` | `LinuxGuest` or `Unikernel` | Firecracker, Cloud Hypervisor, Uhyve, or QEMU microvm/loader engines require compatible node runner capability; HermitOS-style unikernels are modeled as guest artifacts under a VM/microVM boundary, with guest image and loader/hypervisor artifacts verified separately. |
+
+All host kinds share the same runtime-facing lifecycle: resolve artifact, start, stop, health, route/call handling, logs, receipts, and capability-scoped handles. Manifests, logs, and receipts must carry opaque handles, hashes, or redacted summaries rather than raw secrets, tickets, private keys, cluster cookies, or connection strings.
 
 ## Definitions
 

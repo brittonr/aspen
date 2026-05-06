@@ -65,6 +65,7 @@ members = [
     "crates/aspen-ticket",
     "crates/aspen-hooks-types",
     "crates/aspen-hooks-ticket",
+    "crates/aspen-runtime-core",
     "crates/aspen-forge-protocol",
     "crates/aspen-jobs-protocol",
     "crates/aspen-coordination-protocol",
@@ -322,6 +323,7 @@ aspen-core-essentials-handler = { path = "crates/aspen-core-essentials-handler" 
 aspen-rpc-handlers = { path = "crates/aspen-rpc-handlers", default-features = false }
 aspen-ticket = { path = "crates/aspen-ticket", default-features = false }
 aspen-hooks-types = { path = "crates/aspen-hooks-types" }
+aspen-runtime-core = { path = "crates/aspen-runtime-core" }
 aspen-forge-protocol = { path = "crates/aspen-forge-protocol" }
 aspen-jobs-protocol = { path = "crates/aspen-jobs-protocol" }
 aspen-testing = { path = "crates/aspen-testing" }

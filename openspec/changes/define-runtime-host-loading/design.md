@@ -9,7 +9,7 @@ The open architectural question is not whether all code becomes WASM. Aspen shou
 - WASM for bounded extension logic and portable untrusted modules,
 - Hyperlight for isolated native-ish workloads and executioner jobs,
 - OCI images/containers for compatibility with existing Linux workload packaging,
-- microVMs and unikernel guests as later stronger-isolation host/artifact profiles.
+- microVMs and unikernel guests as later stronger-isolation host/artifact profiles, including Hermit guests launched through Uhyve or a Hermit loader under a VM boundary.
 
 Existing code already has pieces of this model: Forge is compiled into the node behind features and wired during startup; WASM plugin manifests exist; jobs/CI/executors provide finite execution concepts; Hyperlight support exists in plugin/job-adjacent areas; receipts exist in dogfood/deploy/operator flows. This change defines the target loading contract before implementation begins.
 
@@ -126,17 +126,19 @@ RuntimeArtifact::OciImage { image_digest, entrypoint, args }
 
 ### 6. MicroVMs and unikernels are stronger-isolation profiles
 
-**Choice:** Firecracker and Cloud Hypervisor SHALL be modeled as microVM host engines when adopted. HermitOS-style unikernels SHALL be modeled as guest artifact profiles that run under a VM/microVM host boundary.
+**Choice:** Firecracker, Cloud Hypervisor, Uhyve, and QEMU microvm/loader flows SHALL be modeled as VM/microVM host engines when adopted. HermitOS-style unikernels SHALL be modeled as guest artifact profiles that run under a VM/microVM host boundary.
 
-**Rationale:** MicroVMs are appropriate for high-isolation jobs, builds, tests, tenant workloads, and risky adapters. Unikernels are useful for small sealed Rust-native guests but are not a general Linux compatibility layer.
+**Rationale:** MicroVMs are appropriate for high-isolation jobs, builds, tests, tenant workloads, and risky adapters. Hermit is a Rust-based lightweight unikernel; Uhyve is a minimal Hermit-specific hypervisor, while the Hermit loader supports QEMU, UEFI/multiboot, AArch64, RISC-V, and QEMU microvm development/boot paths. These are useful for small sealed Rust-native guests but are not a general Linux compatibility layer.
 
 **Implementation sketch:**
 
 ```text
-RuntimeHostKind::MicroVm { engine: Firecracker | CloudHypervisor }
+RuntimeHostKind::MicroVm { engine: Firecracker | CloudHypervisor | Uhyve | QemuMicrovm }
 RuntimeArtifact::LinuxGuest { kernel_hash, initrd_hash, rootfs_hash }
 RuntimeArtifact::Unikernel { kind: HermitOS, image_hash }
 ```
+
+Hermit guest manifests must distinguish the guest application image from the loader/hypervisor used to boot it. Loader binaries, kernel/initrd/rootfs images, and unikernel application images remain separately content-addressed artifacts so receipts can state exactly which Uhyve/loader/guest combination ran without serializing raw kernel arguments, environment secrets, or mutable host paths.
 
 ### 7. Runtime-facing lifecycle is host-independent
 
@@ -166,10 +168,11 @@ RuntimeArtifact::Unikernel { kind: HermitOS, image_hash }
 
 **Hyperlight service complexity** → Mitigate by implementing Hyperlight first for finite Executioner runs, then considering long-lived Hyperlight services only after runner receipts/health/lease behavior are proven.
 
-## Validation Plan
+## Verification Strategy
 
-- Strict OpenSpec validation for this change.
-- Future implementation tests for `RuntimeHostKind` serialization, artifact admission, route ownership, capability binding redaction, and host-kind-specific loading plans.
-- Future docs/source-anchor tests keeping the runtime host contract discoverable from `docs/runtime-applications.md`.
-- Future verified-logic evidence for finite admission predicates when introduced.
-- Future UCAN bridge evidence showing runtime capability bindings can be expressed without leaking raw secrets into manifests or receipts.
+- Run strict OpenSpec validation for `define-runtime-host-loading` (`r[runtime-host-loading.host-taxonomy]`).
+- Run focused `aspen-runtime-core` tests for `RuntimeHostKind` serialization, artifact admission, route ownership, capability binding redaction, and host-kind-specific loading plans (`r[runtime-host-loading.lifecycle.common-fields]`, `r[runtime-host-loading.capability-bindings.secret-redaction]`).
+- Run negative/failure checks for rejected native built-in/artifact mismatches, mutable OCI tags, and raw secret receipt diagnostics (`r[runtime-host-loading.native-built-in.dynamic-plugin-rejected]`, `r[runtime-host-loading.host-taxonomy.oci-container]`, `r[runtime-host-loading.capability-bindings.secret-redaction]`).
+- Run docs/source-anchor tests keeping the runtime host contract discoverable from `docs/runtime-applications.md` (`r[runtime-host-loading.host-taxonomy.native-built-in]`, `r[runtime-host-loading.host-taxonomy.wasm]`, `r[runtime-host-loading.host-taxonomy.hyperlight]`).
+- Record verified-logic evidence for finite admission predicates and avoid overclaiming shell boundaries (`r[runtime-host-loading.verified-admission.structural-selected]`, `r[runtime-host-loading.verified-admission.boundary-not-overclaimed]`).
+- Record UCAN bridge evidence showing runtime capability bindings can be expressed without leaking raw secrets into manifests or receipts (`r[runtime-host-loading.ucan-delegation.reference-reviewed]`, `r[runtime-host-loading.ucan-delegation.boundary-preserved]`).
