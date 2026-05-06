@@ -832,7 +832,7 @@ let Candidate = {
 
     auth_ticket = {
       class = "leaf type/helper",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/auth-ticket.md",
       owner = "Aspen auth and ticket maintainers",
       default_feature_sets = ["default", "no-default-features"],

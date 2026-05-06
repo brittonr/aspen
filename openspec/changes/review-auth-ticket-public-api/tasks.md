@@ -4,11 +4,11 @@
 
 ## Phase 2: Implementation and evidence
 
-- [ ] Inventory portable auth/ticket public types and canonical imports.
-- [ ] Add/update portable downstream fixture plus negative runtime-verifier boundary fixture.
-- [ ] Run serialization goldens, malformed rejection tests, fixture metadata, and representative consumers; update extraction manifests.
+- [x] Inventory portable auth/ticket public types and canonical imports.
+- [x] Add/update portable downstream fixture plus negative runtime-verifier boundary fixture.
+- [x] Run serialization goldens, malformed rejection tests, fixture metadata, and representative consumers; update extraction manifests.
 
 ## Phase 3: Closeout
 
-- [ ] Run `openspec validate {name} --strict`, helper verification, repo-specific checks, and `git diff --check`.
-- [ ] Sync/archive only after every implementation/evidence task is complete.
+- [x] Run `openspec validate {name} --strict`, helper verification, repo-specific checks, and `git diff --check`.
+- [x] Sync/archive only after every implementation/evidence task is complete.

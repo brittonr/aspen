@@ -1,0 +1,11 @@
+{
+  "candidate_family": "auth-ticket",
+  "passed": true,
+  "failures": [],
+  "warnings": [
+    "auth_ticket: package does not exist yet; direct dependency check deferred"
+  ],
+  "checked_candidates": [
+    "auth_ticket"
+  ]
+}

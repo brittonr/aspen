@@ -1,0 +1,209 @@
+## Auth-ticket portable dependency graph
+$ cargo tree --manifest-path openspec/changes/review-auth-ticket-public-api/fixtures/auth-ticket-portable-smoke/Cargo.toml -e normal
+auth-ticket-portable-smoke v0.1.0 (/home/brittonr/git/aspen/openspec/changes/review-auth-ticket-public-api/fixtures/auth-ticket-portable-smoke)
+├── aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
+│   ├── base64 v0.22.1
+│   ├── blake3 v1.8.5
+│   │   ├── arrayref v0.3.9
+│   │   ├── arrayvec v0.7.6
+│   │   ├── cfg-if v1.0.4
+│   │   ├── constant_time_eq v0.4.2
+│   │   └── cpufeatures v0.3.0
+│   ├── iroh-base v0.98.0
+│   │   ├── curve25519-dalek v5.0.0-pre.6
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── cpufeatures v0.2.17
+│   │   │   ├── curve25519-dalek-derive v0.1.1 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.106
+│   │   │   │   │   └── unicode-ident v1.0.24
+│   │   │   │   ├── quote v1.0.45
+│   │   │   │   │   └── proc-macro2 v1.0.106 (*)
+│   │   │   │   └── syn v2.0.117
+│   │   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │   │       ├── quote v1.0.45 (*)
+│   │   │   │       └── unicode-ident v1.0.24
+│   │   │   ├── digest v0.11.3
+│   │   │   │   ├── block-buffer v0.12.0
+│   │   │   │   │   └── hybrid-array v0.4.11
+│   │   │   │   │       └── typenum v1.20.0
+│   │   │   │   ├── const-oid v0.10.2
+│   │   │   │   └── crypto-common v0.2.1
+│   │   │   │       └── hybrid-array v0.4.11 (*)
+│   │   │   ├── rand_core v0.10.1
+│   │   │   ├── serde v1.0.228
+│   │   │   │   ├── serde_core v1.0.228
+│   │   │   │   └── serde_derive v1.0.228 (proc-macro)
+│   │   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │   │       ├── quote v1.0.45 (*)
+│   │   │   │       └── syn v2.0.117 (*)
+│   │   │   ├── subtle v2.6.1
+│   │   │   └── zeroize v1.8.2
+│   │   │       └── zeroize_derive v1.4.3 (proc-macro)
+│   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │           ├── quote v1.0.45 (*)
+│   │   │           └── syn v2.0.117 (*)
+│   │   ├── data-encoding v2.11.0
+│   │   ├── data-encoding-macro v0.1.20
+│   │   │   ├── data-encoding v2.11.0
+│   │   │   └── data-encoding-macro-internal v0.1.18 (proc-macro)
+│   │   │       ├── data-encoding v2.11.0
+│   │   │       └── syn v2.0.117 (*)
+│   │   ├── derive_more v2.1.1
+│   │   │   └── derive_more-impl v2.1.1 (proc-macro)
+│   │   │       ├── convert_case v0.10.0
+│   │   │       │   └── unicode-segmentation v1.13.2
+│   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │       ├── quote v1.0.45 (*)
+│   │   │       ├── syn v2.0.117 (*)
+│   │   │       └── unicode-xid v0.2.6
+│   │   ├── digest v0.11.3 (*)
+│   │   ├── ed25519-dalek v3.0.0-pre.6
+│   │   │   ├── curve25519-dalek v5.0.0-pre.6 (*)
+│   │   │   ├── ed25519 v3.0.0
+│   │   │   │   ├── serdect v0.4.3
+│   │   │   │   │   ├── base16ct v1.0.0
+│   │   │   │   │   └── serde v1.0.228 (*)
+│   │   │   │   └── signature v3.0.0
+│   │   │   ├── rand_core v0.10.1
+│   │   │   ├── serde v1.0.228 (*)
+│   │   │   ├── sha2 v0.11.0-rc.5
+│   │   │   │   ├── cfg-if v1.0.4
+│   │   │   │   ├── cpufeatures v0.2.17
+│   │   │   │   └── digest v0.11.3 (*)
+│   │   │   ├── subtle v2.6.1
+│   │   │   └── zeroize v1.8.2 (*)
+│   │   ├── n0-error v0.1.3
+│   │   │   ├── n0-error-macros v0.1.3 (proc-macro)
+│   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   └── syn v2.0.117 (*)
+│   │   │   └── spez v0.1.2 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │       ├── quote v1.0.45 (*)
+│   │   │       └── syn v2.0.117 (*)
+│   │   ├── rand v0.10.1
+│   │   │   ├── chacha20 v0.10.0
+│   │   │   │   ├── cfg-if v1.0.4
+│   │   │   │   ├── cpufeatures v0.3.0
+│   │   │   │   └── rand_core v0.10.1
+│   │   │   ├── getrandom v0.4.2
+│   │   │   │   ├── cfg-if v1.0.4
+│   │   │   │   ├── libc v0.2.186
+│   │   │   │   └── rand_core v0.10.1
+│   │   │   └── rand_core v0.10.1
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── sha2 v0.11.0-rc.5 (*)
+│   │   ├── url v2.5.8
+│   │   │   ├── form_urlencoded v1.2.2
+│   │   │   │   └── percent-encoding v2.3.2
+│   │   │   ├── idna v1.1.0
+│   │   │   │   ├── idna_adapter v1.2.2
+│   │   │   │   │   ├── icu_normalizer v2.2.0
+│   │   │   │   │   │   ├── icu_collections v2.2.0
+│   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro)
+│   │   │   │   │   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   │   │   │   │   └── syn v2.0.117 (*)
+│   │   │   │   │   │   │   ├── potential_utf v0.1.5
+│   │   │   │   │   │   │   │   └── zerovec v0.11.6
+│   │   │   │   │   │   │   │       ├── yoke v0.8.2
+│   │   │   │   │   │   │   │       │   ├── stable_deref_trait v1.2.1
+│   │   │   │   │   │   │   │       │   ├── yoke-derive v0.8.2 (proc-macro)
+│   │   │   │   │   │   │   │       │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   │   │       │   │   ├── quote v1.0.45 (*)
+│   │   │   │   │   │   │   │       │   │   ├── syn v2.0.117 (*)
+│   │   │   │   │   │   │   │       │   │   └── synstructure v0.13.2
+│   │   │   │   │   │   │   │       │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   │   │       │   │       ├── quote v1.0.45 (*)
+│   │   │   │   │   │   │   │       │   │       └── syn v2.0.117 (*)
+│   │   │   │   │   │   │   │       │   └── zerofrom v0.1.7
+│   │   │   │   │   │   │   │       │       └── zerofrom-derive v0.1.7 (proc-macro)
+│   │   │   │   │   │   │   │       │           ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   │   │       │           ├── quote v1.0.45 (*)
+│   │   │   │   │   │   │   │       │           ├── syn v2.0.117 (*)
+│   │   │   │   │   │   │   │       │           └── synstructure v0.13.2 (*)
+│   │   │   │   │   │   │   │       ├── zerofrom v0.1.7 (*)
+│   │   │   │   │   │   │   │       └── zerovec-derive v0.11.3 (proc-macro)
+│   │   │   │   │   │   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   │   │           ├── quote v1.0.45 (*)
+│   │   │   │   │   │   │   │           └── syn v2.0.117 (*)
+│   │   │   │   │   │   │   ├── utf8_iter v1.0.4
+│   │   │   │   │   │   │   ├── yoke v0.8.2 (*)
+│   │   │   │   │   │   │   ├── zerofrom v0.1.7 (*)
+│   │   │   │   │   │   │   └── zerovec v0.11.6 (*)
+│   │   │   │   │   │   ├── icu_normalizer_data v2.2.0
+│   │   │   │   │   │   ├── icu_provider v2.2.0
+│   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
+│   │   │   │   │   │   │   ├── icu_locale_core v2.2.0
+│   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
+│   │   │   │   │   │   │   │   ├── litemap v0.8.2
+│   │   │   │   │   │   │   │   ├── tinystr v0.8.3
+│   │   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
+│   │   │   │   │   │   │   │   │   └── zerovec v0.11.6 (*)
+│   │   │   │   │   │   │   │   ├── writeable v0.6.3
+│   │   │   │   │   │   │   │   └── zerovec v0.11.6 (*)
+│   │   │   │   │   │   │   ├── writeable v0.6.3
+│   │   │   │   │   │   │   ├── yoke v0.8.2 (*)
+│   │   │   │   │   │   │   ├── zerofrom v0.1.7 (*)
+│   │   │   │   │   │   │   ├── zerotrie v0.2.4
+│   │   │   │   │   │   │   │   ├── displaydoc v0.2.5 (proc-macro) (*)
+│   │   │   │   │   │   │   │   ├── yoke v0.8.2 (*)
+│   │   │   │   │   │   │   │   └── zerofrom v0.1.7 (*)
+│   │   │   │   │   │   │   └── zerovec v0.11.6 (*)
+│   │   │   │   │   │   ├── smallvec v1.15.1
+│   │   │   │   │   │   └── zerovec v0.11.6 (*)
+│   │   │   │   │   └── icu_properties v2.2.0
+│   │   │   │   │       ├── icu_collections v2.2.0 (*)
+│   │   │   │   │       ├── icu_locale_core v2.2.0 (*)
+│   │   │   │   │       ├── icu_properties_data v2.2.0
+│   │   │   │   │       ├── icu_provider v2.2.0 (*)
+│   │   │   │   │       ├── zerotrie v0.2.4 (*)
+│   │   │   │   │       └── zerovec v0.11.6 (*)
+│   │   │   │   ├── smallvec v1.15.1
+│   │   │   │   └── utf8_iter v1.0.4
+│   │   │   ├── percent-encoding v2.3.2
+│   │   │   ├── serde v1.0.228 (*)
+│   │   │   └── serde_derive v1.0.228 (proc-macro) (*)
+│   │   ├── zeroize v1.8.2 (*)
+│   │   └── zeroize_derive v1.4.3 (proc-macro) (*)
+│   ├── postcard v1.1.3
+│   │   ├── cobs v0.3.0
+│   │   │   └── thiserror v2.0.18
+│   │   │       └── thiserror-impl v2.0.18 (proc-macro)
+│   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │           ├── quote v1.0.45 (*)
+│   │   │           └── syn v2.0.117 (*)
+│   │   └── serde v1.0.228 (*)
+│   ├── serde v1.0.228 (*)
+│   └── thiserror v2.0.18 (*)
+├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+│   ├── serde v1.0.228 (*)
+│   └── thiserror v2.0.18 (*)
+├── aspen-hooks-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hooks-ticket)
+│   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types) (*)
+│   ├── iroh-tickets v0.4.0 (/home/brittonr/git/aspen/vendor/iroh-tickets)
+│   │   ├── data-encoding v2.11.0
+│   │   ├── derive_more v2.1.1 (*)
+│   │   ├── iroh-base v0.98.0 (*)
+│   │   ├── n0-error v0.1.3 (*)
+│   │   ├── postcard v1.1.3 (*)
+│   │   └── serde v1.0.228 (*)
+│   ├── postcard v1.1.3 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.149
+│   │   ├── itoa v1.0.18
+│   │   ├── memchr v2.8.0
+│   │   ├── serde_core v1.0.228
+│   │   └── zmij v1.0.21
+│   └── thiserror v2.0.18 (*)
+├── aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
+│   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types) (*)
+│   ├── iroh-tickets v0.4.0 (/home/brittonr/git/aspen/vendor/iroh-tickets) (*)
+│   ├── postcard v1.1.3 (*)
+│   ├── serde v1.0.228 (*)
+│   └── thiserror v2.0.18 (*)
+└── iroh-base v0.98.0 (*)
+
+$ forbidden runtime scan
+PASS: portable graph excludes aspen-auth runtime shell, aspen root/runtime handlers, concrete iroh runtime, and iroh-gossip.
+NOTE: iroh-base key-only dependency is allowed for public-key types.

@@ -1,0 +1,37 @@
+## Auth-ticket positive fixture rerun
+$ cargo test --manifest-path openspec/changes/review-auth-ticket-public-api/fixtures/auth-ticket-portable-smoke/Cargo.toml
+    Updating crates.io index
+     Locking 131 packages to latest Rust 1.97.0-nightly compatible versions
+      Adding ed25519-dalek v3.0.0-pre.6 (available: v3.0.0-pre.7)
+      Adding sha2 v0.11.0-rc.5 (available: v0.11.0)
+   Compiling base16ct v1.0.0
+   Compiling memchr v2.8.0
+   Compiling data-encoding-macro v0.1.20
+   Compiling aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+   Compiling postcard v1.1.3
+   Compiling serdect v0.4.3
+   Compiling ed25519 v3.0.0
+   Compiling ed25519-dalek v3.0.0-pre.6
+   Compiling serde_json v1.0.149
+   Compiling iroh-base v0.98.0
+   Compiling iroh-tickets v0.4.0 (/home/brittonr/git/aspen/vendor/iroh-tickets)
+   Compiling aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
+   Compiling aspen-hooks-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hooks-ticket)
+   Compiling aspen-ticket v0.1.0 (/home/brittonr/git/aspen/crates/aspen-ticket)
+   Compiling auth-ticket-portable-smoke v0.1.0 (/home/brittonr/git/aspen/openspec/changes/review-auth-ticket-public-api/fixtures/auth-ticket-portable-smoke)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.86s
+     Running unittests src/lib.rs (target/debug/deps/auth_ticket_portable_smoke-457bdc5d37f5a8ed)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests auth_ticket_portable_smoke
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo metadata --manifest-path openspec/changes/review-auth-ticket-public-api/fixtures/auth-ticket-portable-smoke/Cargo.toml --format-version 1 --no-deps
+metadata captured to auth-ticket-downstream-metadata.json
