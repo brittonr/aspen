@@ -3005,12 +3005,13 @@
             }
             // {
               # Run quick tests with cargo-nextest (for CI)
-              # Uses ciCommonArgs (stubbed aspen-wasm-plugin) — works in pure
-              # evaluation without external repos. All workspace crates are real.
+              # Uses ciCompileFromSourceArgs (stubbed aspen-wasm-plugin, no
+              # dependency-only artifacts) — works in pure evaluation without
+              # external repos. All workspace crates are real.
               # Uses ci-nix profile which excludes disk-heavy tests that fail in
               # the Nix sandbox (tmpfs has limited space).
               nextest-quick = craneLib.cargoNextest (
-                ciCommonArgs
+                ciCompileFromSourceArgs
                 // {
                   cargoNextestExtraArgs = "-P ci-nix";
                   nativeBuildInputs =
@@ -3020,7 +3021,7 @@
               );
 
               nextest = craneLib.cargoNextest (
-                ciCommonArgs
+                ciCompileFromSourceArgs
                 // {
                   # Full test run in Nix sandbox — uses ci-nix profile to skip
                   # disk-heavy corruption tests that fail on tmpfs.
@@ -3031,9 +3032,10 @@
                 }
               );
               # CI build checks — verify binaries compile with CI features.
-              # Uses ciCommonArgs (stubbed git deps, no network needed).
+              # Uses ciCompileFromSourceArgs (stubbed git deps, no network
+              # needed, no dependency-only dummy local-path artifacts).
               build-node = craneLib.buildPackage (
-                ciCommonArgs
+                ciCompileFromSourceArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
                   cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,docs,hooks,shell-worker,automerge,secrets,proxy,forge,git-bridge,blob,sql,net,deploy,federation,global-discovery,jobs,kv-branch,nostr-relay,relay-server,snix,snix-http,snix-daemon,snix-eval,snix-build";
@@ -3042,7 +3044,7 @@
               );
 
               build-cli = craneLib.buildPackage (
-                ciCommonArgs
+                ciCompileFromSourceArgs
                 // {
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
                   cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features forge,ci,automerge,sql,secrets,blob,proxy";
