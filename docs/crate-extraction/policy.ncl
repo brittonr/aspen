@@ -819,7 +819,7 @@ let Candidate = {
 
     foundational_types = {
       class = "leaf type/helper",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/foundational-types.md",
       owner = "Aspen foundational type maintainers",
       default_feature_sets = ["default", "no-default-features"],

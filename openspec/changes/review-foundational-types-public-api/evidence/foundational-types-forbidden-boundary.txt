@@ -1,0 +1,54 @@
+$ cargo tree --manifest-path openspec/changes/review-foundational-types-public-api/fixtures/downstream-foundational-types/Cargo.toml -e normal
+downstream-foundational-types v0.1.0 (/home/brittonr/git/aspen/openspec/changes/review-foundational-types-public-api/fixtures/downstream-foundational-types)
+├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+│   ├── serde v1.0.228
+│   │   ├── serde_core v1.0.228
+│   │   └── serde_derive v1.0.228 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106
+│   │       │   └── unicode-ident v1.0.24
+│   │       ├── quote v1.0.45
+│   │       │   └── proc-macro2 v1.0.106 (*)
+│   │       └── syn v2.0.117
+│   │           ├── proc-macro2 v1.0.106 (*)
+│   │           ├── quote v1.0.45 (*)
+│   │           └── unicode-ident v1.0.24
+│   └── thiserror v2.0.18
+│       └── thiserror-impl v2.0.18 (proc-macro)
+│           ├── proc-macro2 v1.0.106 (*)
+│           ├── quote v1.0.45 (*)
+│           └── syn v2.0.117 (*)
+├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+├── aspen-hlc v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hlc)
+│   ├── blake3 v1.8.5
+│   │   ├── arrayref v0.3.9
+│   │   ├── arrayvec v0.7.6
+│   │   ├── cfg-if v1.0.4
+│   │   ├── constant_time_eq v0.4.2
+│   │   └── cpufeatures v0.3.0
+│   ├── serde v1.0.228 (*)
+│   └── uhlc v0.8.2
+│       ├── rand v0.8.6
+│       │   └── rand_core v0.6.4
+│       │       └── getrandom v0.2.17
+│       │           ├── cfg-if v1.0.4
+│       │           └── libc v0.2.186
+│       ├── serde v1.0.228 (*)
+│       └── spin v0.10.0
+├── aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-storage-types)
+│   ├── aspen-codec v0.1.0 (/home/brittonr/git/aspen/crates/aspen-codec)
+│   │   ├── postcard v1.1.3
+│   │   │   ├── cobs v0.3.0
+│   │   │   │   └── thiserror v2.0.18 (*)
+│   │   │   └── serde v1.0.228 (*)
+│   │   └── serde v1.0.228 (*)
+│   └── serde v1.0.228 (*)
+├── aspen-time v0.1.0 (/home/brittonr/git/aspen/crates/aspen-time)
+└── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+    ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types) (*)
+    └── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+        ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+        ├── serde v1.0.228 (*)
+        └── thiserror v2.0.18 (*)
+
+$ cargo tree --manifest-path openspec/changes/review-foundational-types-public-api/fixtures/downstream-foundational-types/Cargo.toml -e normal | grep -E "redb|iroh|axum|hyper|tokio|snix"
+PASS: no forbidden runtime dependency found in downstream foundational fixture normal graph

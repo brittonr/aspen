@@ -6,8 +6,8 @@
 - **Canonical class**: `leaf type/helper`
 - **Crates**: `aspen-storage-types`, `aspen-traits`, `aspen-cluster-types`, `aspen-hlc`, `aspen-time`, `aspen-constants`
 - **Intended audience**: Rust projects that need Aspen bounded constants, portable clocks/types, KV/storage contracts, cluster address types, or shared traits without Aspen runtime shells.
-- **Public API owner**: owner needed
-- **Readiness state**: `workspace-internal`
+- **Public API owner**: Aspen foundational type maintainers
+- **Readiness state**: `extraction-ready-in-workspace`
 
 ## Package metadata
 
@@ -19,14 +19,14 @@
 
 ## Feature contract
 
-| Crate | Default contract | Optional adapter/runtime features | First action |
+| Crate | Public API classification | Canonical imports and compatibility | Readiness evidence |
 | --- | --- | --- | --- |
-| `aspen-constants` | Leaf constants only. | none expected | Document semver and examples. |
-| `aspen-hlc` | Portable HLC/timestamp types with `uhlc` default features disabled. | explicit std/runtime only if needed | Prove no rand/getrandom leak. |
-| `aspen-storage-types` | Reusable data types only; no Redb dependency in reusable defaults. | Shell-facing Redb table definitions remain in `aspen-core-shell::storage`. | I4 evidence proves `SM_KV_TABLE` is unavailable from no-default `aspen-core::storage` and available through the shell alias fixture. |
-| `aspen-cluster-types` | Alloc-safe defaults. | `iroh` conversion helpers. | Keep `default = []` and prove consumer feature unification. |
-| `aspen-traits` | Narrow reusable KV capability traits, with no-default type re-exports only. | `async` feature exposes async traits and Arc/reference blanket impls. | I5 evidence proves narrow KV traits, no-default gating, representative consumers, and negative async-boundary fixture. |
-| `aspen-time` | Explicit wall-clock boundary helpers. | simulation helpers as documented. | Keep ambient time owned here. |
+| `aspen-constants` | Reusable API. Leaf Tiger Style constants only. | Canonical import is `aspen_constants::*`; no compatibility shell is required. | Downstream fixture imports bounded API constants without root `aspen`; forbidden-boundary evidence shows no Redb/Iroh/runtime dependency. |
+| `aspen-hlc` | Reusable API. HLC/timestamp helpers with `uhlc` defaults disabled for no-default consumers. | Canonical import is `aspen_hlc::{create_hlc, new_timestamp, SerializableTimestamp}`; no compatibility shell is required. | Downstream fixture uses HLC timestamp construction; no-std boundary evidence covers the live `blake3`/`uhlc` graph. |
+| `aspen-storage-types` | Reusable API. Portable storage records only. | Canonical import is `aspen_storage_types::KvEntry`; shell-facing Redb table definitions remain in `aspen-core-shell::storage`. | Downstream fixture imports `KvEntry`; no-std boundary and forbidden-boundary evidence confirm `SM_KV_TABLE`/Redb stay out of portable defaults. |
+| `aspen-cluster-types` | Reusable API with optional runtime adapter helpers. | Canonical import is `aspen_cluster_types::{NodeId, NodeAddress, NodeTransportAddr, ClusterNode}`; Iroh conversions require the explicit `iroh` feature. | Downstream fixture uses alloc-safe address parts with `default-features = false`; forbidden-boundary evidence confirms no default Iroh/runtime leak. |
+| `aspen-traits` | Reusable API plus compatibility type re-exports. | Canonical imports are narrow capability traits and re-exported KV/cluster request types from `aspen_traits`; async trait definitions are behind the `async` feature. | Downstream fixture consumes re-exported `ReadRequest`/`WriteRequest` with `default-features = false`; compatibility evidence covers representative consumers. |
+| `aspen-time` | Reusable API for explicit wall-clock boundary helpers. | Canonical imports are `aspen_time::{TimeProvider, current_time_ms, current_time_secs}`; simulation helpers are feature-gated. | Downstream fixture implements `TimeProvider`; compatibility evidence confirms current shell consumers still compile. |
 
 ## Dependency decisions
 
@@ -53,6 +53,6 @@
 - Negative boundary: dependency-boundary checker mutations for forbidden Redb/runtime/Iroh defaults and representative-consumer feature unification.
 - Compatibility: compile consumers named above after any moved path.
 
-## First blocker
+## Readiness decision
 
-I4 resolved the `SM_KV_TABLE` / `redb::TableDefinition` storage-types boundary and I5 proved narrower `aspen-traits` KV capabilities; next blocker moves to auth/ticket canonical imports and goldens.
+The foundational family is `extraction-ready-in-workspace`: public API ownership is assigned, canonical imports and compatibility shims are recorded, downstream fixture and negative-boundary evidence pass, and the live no-std checker confirms the current dependency graph. Publishable/repo-split states remain blocked on the global license/publication decision.

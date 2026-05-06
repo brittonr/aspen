@@ -1,0 +1,15 @@
+[package]
+name = "downstream-foundational-types"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-constants = { path = "../../../../../crates/aspen-constants", default-features = false }
+aspen-storage-types = { path = "../../../../../crates/aspen-storage-types", default-features = false }
+aspen-cluster-types = { path = "../../../../../crates/aspen-cluster-types", default-features = false }
+aspen-hlc = { path = "../../../../../crates/aspen-hlc", default-features = false }
+aspen-time = { path = "../../../../../crates/aspen-time", default-features = false }
+aspen-traits = { path = "../../../../../crates/aspen-traits", default-features = false }
