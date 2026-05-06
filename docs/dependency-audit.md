@@ -8,35 +8,48 @@ The authoritative dependency-security gate is:
 nix build .#checks.x86_64-linux.audit --no-link -L
 ```
 
-The gate currently ignores only the advisory-specific exceptions documented in
-`flake.nix` (`RUSTSEC-2023-0071` and `RUSTSEC-2026-0066`). Do not add blanket
-warning ignores: each new exception needs an advisory ID, dependency path,
-exposure assessment, compensating control, and removal trigger.
+The gate ignores only advisory-specific exceptions documented in `flake.nix` and
+this file. Do not add blanket warning ignores: each new exception needs an
+advisory ID, dependency path, exposure assessment, compensating control, and
+removal trigger.
 
-After remediating the two `rand` soundness warnings by lockfile-only updates to
-`rand 0.8.6` and `rand 0.9.3`, the direct audit inventory is:
+After remediating the two `rand` soundness warnings by lockfile-only updates and
+accepting the SNIX/FUSE unsound cluster as bounded upstream dependency debt, the
+direct audit inventory is:
 
 ```bash
 cargo audit -n \
   --ignore RUSTSEC-2023-0071 \
-  --ignore RUSTSEC-2026-0066
+  --ignore RUSTSEC-2026-0066 \
+  --ignore RUSTSEC-2026-0002 \
+  --ignore RUSTSEC-2023-0056 \
+  --ignore RUSTSEC-2024-0002 \
+  --ignore RUSTSEC-2023-0086
 ```
 
 - vulnerabilities: `0`
-- allowed warnings: `12`
+- allowed warnings: `8`
   - unmaintained: `8`
-  - unsound: `4`
+  - unsound: `0`
 
-## Remediated in this triage slice
+## Remediated or bounded in this triage slice
 
 | Advisory | Crate | Old | New | Remediation |
 | --- | --- | ---: | ---: | --- |
 | `RUSTSEC-2026-0097` | `rand` | `0.8.5` | `0.8.6` | Lockfile point update; patched release stays within `0.8` ABI constraints. |
 | `RUSTSEC-2026-0097` | `rand` | `0.9.2` | `0.9.3` | Lockfile point update; patched release stays within `0.9` ABI constraints. |
+| `RUSTSEC-2026-0002` | `lru` | `0.12.5` | upstream-pinned | Advisory-specific exception. SNIX `nar-bridge`/`snix-store` pin `lru = ^0.12.4`; Aspen does not call `IterMut` through its SNIX integration. |
+| `RUSTSEC-2023-0056` | `vm-memory` | `0.10.0` | upstream-pinned | Advisory-specific exception through `snix-castore -> fuse-backend-rs`; Aspen's SNIX path uses store/NAR traits, not FUSE `VolatileMemory` helpers. |
+| `RUSTSEC-2024-0002` | `vmm-sys-util` | `0.11.2` | upstream-pinned | Advisory-specific exception through `snix-castore -> fuse-backend-rs`; Aspen does not deserialize attacker-controlled `FamStructWrapper` values through this edge. |
+| `RUSTSEC-2023-0086` | `lexical-core` | `0.8.5` | upstream-pinned | Advisory-specific exception. This remains a `snix-eval` lockfile edge and is not selected by default locked metadata after the current triage. |
 
 ## Remaining warning backlog
 
-### Unsound warnings
+Only unmaintained warnings remain after applying the advisory-specific exceptions
+above. The SNIX/FUSE exceptions stay removal-tracked here because they must be
+revisited when upstream dependency constraints move.
+
+### Removal-tracked SNIX/FUSE exceptions
 
 | Priority | Advisory | Crate | Current path | Triage | Removal trigger |
 | --- | --- | --- | --- | --- | --- |
@@ -60,7 +73,7 @@ cargo audit -n \
 
 ## Next remediation order
 
-1. SNIX/FUSE unsound cluster: `lru`, `vm-memory`, `vmm-sys-util`, and the lockfile-only `lexical-core` edge.
-2. Direct serialization debt: `bincode 1.3.3`.
-3. Direct CLI/web manifest bumps: `indicatif 0.18`, `maud 0.27+`.
-4. Parent-stack refreshes: Nostr, DataFusion/iroh/netlink, iroh-blobs/bao-tree, and Cloud Hypervisor client.
+1. Direct serialization debt: `bincode 1.3.3`.
+2. Direct CLI/web manifest bumps: `indicatif 0.18`, `maud 0.27+`.
+3. Parent-stack refreshes: Nostr, DataFusion/iroh/netlink, iroh-blobs/bao-tree, and Cloud Hypervisor client.
+4. Upstream-watch the SNIX/FUSE exceptions and remove the ignores as soon as Snix moves those pins or Aspen can make the FUSE edge unreachable in the selected feature graph.

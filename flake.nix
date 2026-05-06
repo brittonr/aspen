@@ -2735,7 +2735,19 @@
                 # but snix currently pins ^0.5.6. Aspen uses this only through the
                 # snix store/NAR import path; keep this exception bounded to the
                 # upstream snix pin and recheck when snix moves to astral-tokio-tar 0.6.x.
-                cargoAuditExtraArgs = "--ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0066";
+                # RUSTSEC-2026-0002: lru 0.12.5 IterMut soundness; fixed in lru 0.16.x,
+                # but snix nar-bridge/snix-store pin ^0.12.4. Aspen does not call IterMut
+                # through its SNIX integration; remove when snix upgrades lru.
+                # RUSTSEC-2023-0056 / RUSTSEC-2024-0002: vm-memory/vmm-sys-util issues
+                # enter through snix-castore -> fuse-backend-rs 0.12.0. Aspen's SNIX path
+                # uses DirectoryService/PathInfoService/NAR import/export, not FUSE request
+                # deserialization or VolatileMemory default helpers; remove when snix moves
+                # fuse-backend-rs/vm-memory/vmm-sys-util to patched lines or makes FUSE optional
+                # outside Aspen's selected feature graph.
+                # RUSTSEC-2023-0086: lexical-core 0.8.5 remains as a lockfile edge from
+                # snix-eval; default locked metadata does not select it. Remove when snix-eval
+                # updates lexical-core or the lockfile edge disappears.
+                cargoAuditExtraArgs = "--ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0066 --ignore RUSTSEC-2026-0002 --ignore RUSTSEC-2023-0056 --ignore RUSTSEC-2024-0002 --ignore RUSTSEC-2023-0086";
               };
 
               # Verus formal verification check
