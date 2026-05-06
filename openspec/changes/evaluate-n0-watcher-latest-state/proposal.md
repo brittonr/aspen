@@ -29,7 +29,15 @@ Aspen has several local control-plane seams that need many tasks to observe the 
 
 ## Impact
 
-- **Files:** Candidate crates include `crates/aspen-cluster`, `crates/aspen-blob`, status/TUI-adjacent code, and docs explaining watcher semantics.
-- **APIs:** Any public API change must be justified by the prototype; internal-only adoption is preferred.
-- **Dependencies:** `n0-watcher` must remain targeted to crates that use it and must not leak into alloc-only/core crates unless separately justified.
-- **Testing:** Targeted unit/integration tests plus dependency-tree review must demonstrate bounded latest-state semantics and no accidental durable-stream replacement.
+- **Files:** `crates/aspen-blob/Cargo.toml`, `crates/aspen-blob/src/replication/topology_watcher.rs`, docs explaining latest-state semantics, and OpenSpec evidence.
+- **APIs:** Adds a local `LatestTopologyNodeIds` prototype in the blob replication topology seam; no network or durable protocol changes.
+- **Dependencies:** `n0-watcher` remains targeted to `aspen-blob` and must not leak into alloc-only/core crates.
+- **Testing:** Targeted unit tests plus dependency-tree review demonstrate bounded latest-state semantics and no accidental durable-stream replacement.
+
+## Verification Expectations
+
+- Cover `r[latest-state-observation.evaluation.candidate-selected]` by documenting the selected topology node-id seam and why latest-state semantics are correct.
+- Cover `r[latest-state-observation.semantic-boundary.durable-stream-rejected]` by recording rejected Raft/log/CI/Forge/hook/audit streams.
+- Cover `r[latest-state-observation.semantic-boundary.slow-observer]` with focused tests for initialization, latest-value convergence, skipped intermediate states, and disconnect behavior.
+- Cover `r[latest-state-observation.dependency-boundary.core-protected]` with `cargo tree` evidence proving `n0-watcher` stays out of `aspen-core --no-default-features`.
+- Validate with `openspec validate evaluate-n0-watcher-latest-state --strict`, `scripts/openspec-preflight.sh evaluate-n0-watcher-latest-state`, and `git diff --check` before archive.

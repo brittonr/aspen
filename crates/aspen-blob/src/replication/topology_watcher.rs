@@ -28,6 +28,7 @@
 //! - Safe borrow pattern: extract data while holding borrow, release before async calls
 
 use iroh::PublicKey;
+use n0_watcher::Watchable;
 use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use tracing::info;
@@ -35,6 +36,52 @@ use tracing::warn;
 
 use super::NodeInfo;
 use super::manager::BlobReplicationManager;
+
+/// Prototype latest-state holder for topology node IDs.
+///
+/// This is intentionally a local, latest-value-only seam. It is suitable for
+/// placement/topology observers that only need the newest membership-derived
+/// node set and can tolerate skipped intermediate states. It is not a log,
+/// audit stream, CI/job output stream, hook stream, Raft history, or any other
+/// durable ordered source where every transition must be observed.
+#[derive(Clone, Debug)]
+pub struct LatestTopologyNodeIds {
+    inner: Watchable<Vec<u64>>,
+}
+
+impl LatestTopologyNodeIds {
+    /// Create a latest-state topology holder with a normalized node-id set.
+    pub fn new(mut node_ids: Vec<u64>) -> Self {
+        node_ids.sort_unstable();
+        node_ids.dedup();
+        Self {
+            inner: Watchable::new(node_ids),
+        }
+    }
+
+    /// Return the current normalized node-id set.
+    pub fn current(&self) -> Vec<u64> {
+        self.inner.get()
+    }
+
+    /// Watch the latest normalized node-id set.
+    ///
+    /// Slow observers may skip intermediate node sets and should always treat
+    /// the newest observed value as authoritative for this local topology view.
+    pub fn watch(&self) -> n0_watcher::Direct<Vec<u64>> {
+        self.inner.watch()
+    }
+
+    /// Publish a new normalized node-id set.
+    ///
+    /// Returns `true` when watchers were notified because the latest state
+    /// changed, and `false` when the normalized set was unchanged.
+    pub fn publish(&self, mut node_ids: Vec<u64>) -> bool {
+        node_ids.sort_unstable();
+        node_ids.dedup();
+        self.inner.set(node_ids).is_ok()
+    }
+}
 
 /// Callback type for extracting node info from Raft metrics.
 ///
@@ -173,6 +220,7 @@ mod tests {
     use std::time::Duration;
 
     use iroh::SecretKey;
+    use n0_watcher::Watcher as _;
     use tokio::sync::watch;
 
     use super::*;
@@ -192,10 +240,67 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cancellation_token_stops_watcher() {
-        let (tx, rx) = watch::channel(TestMetrics { nodes: vec![] });
+    async fn latest_topology_node_ids_initializes_with_current_value() {
+        let topology = LatestTopologyNodeIds::new(vec![3, 1, 1, 2]);
+        let mut watcher = topology.watch();
 
-        let extractor: NodeInfoExtractor<TestMetrics> =
+        assert_eq!(topology.current(), vec![1, 2, 3]);
+        assert_eq!(watcher.get(), vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn latest_topology_node_ids_converges_on_latest_value() {
+        let topology = LatestTopologyNodeIds::new(vec![]);
+        let mut watcher = topology.watch();
+
+        assert!(topology.publish(vec![2, 1]));
+        let observed = tokio::time::timeout(Duration::from_secs(1), watcher.updated())
+            .await
+            .expect("watcher update should not time out")
+            .expect("watcher should remain connected");
+
+        assert_eq!(observed, vec![1, 2]);
+        assert_eq!(watcher.get(), vec![1, 2]);
+    }
+
+    #[tokio::test]
+    async fn latest_topology_node_ids_slow_observer_may_skip_values() {
+        let topology = LatestTopologyNodeIds::new(vec![]);
+        let mut watcher = topology.watch();
+
+        assert!(topology.publish(vec![1]));
+        assert!(topology.publish(vec![1, 2]));
+        assert!(topology.publish(vec![1, 2, 3]));
+
+        let observed = tokio::time::timeout(Duration::from_secs(1), watcher.updated())
+            .await
+            .expect("watcher update should not time out")
+            .expect("watcher should remain connected");
+
+        assert_eq!(observed, vec![1, 2, 3]);
+        assert_eq!(watcher.get(), vec![1, 2, 3]);
+    }
+
+    #[tokio::test]
+    async fn latest_topology_node_ids_disconnects_when_source_drops() {
+        let mut watcher = {
+            let topology = LatestTopologyNodeIds::new(vec![1]);
+            topology.watch()
+        };
+
+        let disconnected = tokio::time::timeout(Duration::from_secs(1), watcher.updated())
+            .await
+            .expect("disconnect should not time out");
+
+        assert!(disconnected.is_err());
+        assert!(!watcher.is_connected());
+    }
+
+    #[tokio::test]
+    async fn test_cancellation_token_stops_watcher() {
+        let (_tx, _rx) = watch::channel(TestMetrics { nodes: vec![] });
+
+        let _extractor: NodeInfoExtractor<TestMetrics> =
             Box::new(|m| m.nodes.iter().map(|(id, pk)| NodeInfo::new(*id, *pk)).collect());
 
         // Create a mock manager (we can't easily test with a real one here)

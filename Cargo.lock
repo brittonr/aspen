@@ -758,6 +758,7 @@ dependencies = [
  "iroh",
  "iroh-blobs 0.99.0",
  "n0-future",
+ "n0-watcher",
  "parking_lot",
  "postcard",
  "rand 0.9.4",

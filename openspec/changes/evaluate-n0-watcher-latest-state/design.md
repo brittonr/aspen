@@ -55,9 +55,10 @@
 
 **Tokio watch is sufficient** → Mitigate by requiring a comparison note; if `n0-watcher` does not materially improve the seam, close the change without adoption.
 
-## Validation Plan
+## Verification Strategy
 
-- Run `cargo tree` or equivalent dependency review for the candidate crate and relevant core/no-default feature graph.
-- Add tests for initialization, latest-value convergence, and slow-observer skip behavior.
-- Add or update docs/comments describing where latest-state observation is allowed and forbidden.
+- Run `cargo tree` or equivalent dependency review for the candidate crate and relevant core/no-default feature graph (`r[latest-state-observation.dependency-boundary.core-protected]`).
+- Add tests for initialization, latest-value convergence, slow-observer skip behavior, and disconnect behavior (`r[latest-state-observation.semantic-boundary.slow-observer]`).
+- Add or update docs/comments describing where latest-state observation is allowed and forbidden (`r[latest-state-observation.evaluation.candidate-selected]`, `r[latest-state-observation.semantic-boundary.durable-stream-rejected]`).
 - Run the targeted crate tests and the appropriate quick verification gate for the touched workspace slice.
+- Record all commands and evidence artifacts in `verification.md` before archive.

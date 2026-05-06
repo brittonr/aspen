@@ -935,14 +935,13 @@ where
 #[cfg(test)]
 mod tests {
     use iroh::SecretKey;
-    use rand::SeedableRng;
 
     use super::*;
 
     fn make_test_key(seed: u8) -> PublicKey {
-        // Use seed to create deterministic but valid keys
-        let mut rng = rand::rngs::StdRng::seed_from_u64(seed as u64);
-        SecretKey::generate(&mut rng).public()
+        let mut key_bytes = [0u8; 32];
+        key_bytes[0] = seed;
+        SecretKey::from_bytes(&key_bytes).public()
     }
 
     #[test]

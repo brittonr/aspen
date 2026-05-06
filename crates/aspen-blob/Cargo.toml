@@ -37,6 +37,7 @@ snafu = "0.8.9"
 # Async utilities
 bytes = "1.7"
 n0-future = "0.3.2"
+n0-watcher = "0.6.1"
 tokio = { version = "1.48.0", features = ["rt-multi-thread", "macros", "time", "sync", "io-util"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
