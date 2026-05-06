@@ -1,0 +1,24 @@
+[package]
+name = "downstream-cache-castore-fixture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+aspen-cache = { path = "../../../../../crates/aspen-cache", default-features = false }
+aspen-castore = { path = "../../../../../crates/aspen-castore" }
+blake3 = "=1.8.3"
+
+[dev-dependencies]
+tokio = { version = "1.48", features = ["rt", "macros"] }
+
+[patch.crates-io]
+iroh = { path = "../../../../../vendor/iroh" }
+iroh-blobs = { path = "../../../../../vendor/iroh-blobs" }
+iroh-metrics = { path = "../../../../../vendor/iroh-metrics" }
+iroh-relay = { path = "../../../../../vendor/iroh-relay" }
+iroh-tickets = { path = "../../../../../vendor/iroh-tickets" }
+postcard = { path = "../../../../../vendor/postcard" }
+swarm-discovery = { path = "../../../../../vendor/swarm-discovery" }

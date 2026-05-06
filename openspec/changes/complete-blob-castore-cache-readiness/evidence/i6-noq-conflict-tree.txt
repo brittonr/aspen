@@ -1,0 +1,39 @@
+--- noq 0.17 inverse ---
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+noq v0.17.0
+├── iroh-blobs v0.99.0 (/home/brittonr/git/aspen/vendor/iroh-blobs)
+│   └── aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob)
+│       └── aspen-castore v0.1.0 (/home/brittonr/git/aspen/crates/aspen-castore)
+│       [dev-dependencies]
+│       └── aspen-castore v0.1.0 (/home/brittonr/git/aspen/crates/aspen-castore)
+└── irpc v0.13.0
+    ├── aspen-castore v0.1.0 (/home/brittonr/git/aspen/crates/aspen-castore)
+    └── iroh-blobs v0.99.0 (/home/brittonr/git/aspen/vendor/iroh-blobs) (*)
+--- noq 0.18 inverse ---
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+noq v0.18.0
+├── iroh v0.98.2 (/home/brittonr/git/aspen/vendor/iroh)
+│   ├── aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob)
+│   │   └── aspen-castore v0.1.0 (/home/brittonr/git/aspen/crates/aspen-castore)
+│   │   [dev-dependencies]
+│   │   └── aspen-castore v0.1.0 (/home/brittonr/git/aspen/crates/aspen-castore)
+│   ├── aspen-castore v0.1.0 (/home/brittonr/git/aspen/crates/aspen-castore)
+│   └── iroh-blobs v0.99.0 (/home/brittonr/git/aspen/vendor/iroh-blobs)
+│       └── aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob) (*)
+└── iroh-relay v0.98.0 (/home/brittonr/git/aspen/vendor/iroh-relay)
+    └── iroh v0.98.2 (/home/brittonr/git/aspen/vendor/iroh) (*)
+--- irpc RemoteConnection trait ---
+/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/irpc-0.13.0/src/lib.rs:1936:    pub trait RemoteConnection: Send + Sync + Debug + 'static {
+/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/irpc-0.13.0/src/lib.rs:1941:        fn open_bi(
+/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/irpc-0.13.0/src/lib.rs:1970:        fn open_bi(
+/home/brittonr/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/irpc-0.13.0/src/lib.rs:2001:        fn open_bi(

@@ -35,3 +35,12 @@ Blob/castore/cache is high-value for self-hosting and cache infrastructure; curr
 **Scope drift** → Keep each change bounded to its named family and open follow-up changes for unrelated findings.
 
 **False readiness** → Require downstream/negative/compatibility evidence before readiness labels or operator acceptance claims change.
+
+## Verification Strategy
+
+- Requirement coverage: `blob-castore-cache-extraction.promotion-requires-complete-evidence`, `blob-castore-cache-extraction.promotion-requires-complete-evidence.evidence`, `blob-castore-cache-extraction.adapter-paths-explicit`, and `blob-castore-cache-extraction.adapter-paths-explicit.evidence`.
+- Treat `scripts/check-crate-extraction-readiness.rs --candidate-family blob-castore-cache` as the readiness-policy oracle for `aspen_blob`, `aspen_castore`, and `aspen_cache`.
+- Prove reusable-consumer compatibility with standalone downstream fixtures for blob and cache/castore imports, plus metadata/forbidden-dependency artifacts.
+- Prove workspace compatibility with focused package checks: `aspen-blob` no-default/replication, `aspen-cache` no-default and `kv-index`, and the `aspen-castore` circuit-breaker regression.
+- When dependency lockfile revisions change, rerun the `aspen-core --no-default-features` boundary checker and update dependency-review notes in the same slice.
+- Close the change only after `openspec validate`, repo-local `scripts/openspec-preflight.sh`, and whitespace checks pass with staged evidence.

@@ -1,0 +1,49 @@
+# Downstream fixture checks
+
+$ cargo test --manifest-path openspec/changes/complete-blob-castore-cache-readiness/fixtures/downstream-blob/Cargo.toml
+   Compiling iroh-blobs v0.99.0 (/home/brittonr/git/aspen/vendor/iroh-blobs)
+   Compiling iroh-relay v0.98.0 (/home/brittonr/git/aspen/vendor/iroh-relay)
+   Compiling iroh v0.98.2 (/home/brittonr/git/aspen/vendor/iroh)
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob)
+   Compiling downstream-blob-fixture v0.1.0 (/home/brittonr/git/aspen/openspec/changes/complete-blob-castore-cache-readiness/fixtures/downstream-blob)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.71s
+     Running unittests src/lib.rs (target/debug/deps/downstream_blob_fixture-90e839fe1a10a3fe)
+
+running 1 test
+test tests::downstream_can_use_public_blob_traits ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests downstream_blob_fixture
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo test --manifest-path openspec/changes/complete-blob-castore-cache-readiness/fixtures/downstream-cache-castore/Cargo.toml
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling iroh-relay v0.98.0 (/home/brittonr/git/aspen/vendor/iroh-relay)
+   Compiling iroh v0.98.2 (/home/brittonr/git/aspen/vendor/iroh)
+   Compiling iroh-blobs v0.99.0 (/home/brittonr/git/aspen/vendor/iroh-blobs)
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob)
+   Compiling aspen-castore v0.1.0 (/home/brittonr/git/aspen/crates/aspen-castore)
+   Compiling downstream-cache-castore-fixture v0.1.0 (/home/brittonr/git/aspen/openspec/changes/complete-blob-castore-cache-readiness/fixtures/downstream-cache-castore)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.92s
+     Running unittests src/lib.rs (target/debug/deps/downstream_cache_castore_fixture-3cd0914f0536398d)
+
+running 3 tests
+test tests::downstream_can_parse_store_paths ... ok
+test tests::downstream_can_use_cache_metadata_without_kv_adapter ... ok
+test tests::downstream_can_use_signing_and_castore_adapter_constants ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests downstream_cache_castore_fixture
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

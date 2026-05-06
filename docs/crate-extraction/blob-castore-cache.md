@@ -7,7 +7,7 @@
 - **Canonical crate/path**: `crates/aspen-blob`, `crates/aspen-castore`, `crates/aspen-cache`
 - **Intended audience**: Rust projects that want reusable iroh-backed blob storage, snix castore client/server adapters, or Nix binary cache metadata/signing helpers without the Aspen node app, handler registry, or CLI/web shells.
 - **Public API owner**: Aspen storage/cache maintainers
-- **Readiness state**: `workspace-internal`
+- **Readiness state**: `extraction-ready-in-workspace`
 - **Dependency policy class**: runtime-capable reusable storage/cache family
 
 ## Package and release metadata
@@ -138,12 +138,14 @@ No binary, CLI, TUI, web, dogfood, bridge, or gateway crate is allowed in the de
 - compatibility checks for `aspen-rpc-core`, blob handlers, `aspen-snix`, `aspen-snix-bridge`, `aspen-nix-cache-gateway`, and CI/cache executors
 - dependency-boundary checker with `--candidate-family blob-castore-cache`, including mutation checks for forbidden app-shell dependencies, undocumented backend exceptions, missing owner, invalid readiness state, and missing downstream fixture evidence
 
-## First-slice status
+## Readiness decision
 
-Current status is `workspace-internal`. I3/I4/I5 have moved the highest-risk app couplings behind features or local helpers:
+Current status is `extraction-ready-in-workspace`. I3/I4/I5 moved the highest-risk app couplings behind features or local helpers, and `complete-blob-castore-cache-readiness` added the missing downstream/checker/compatibility evidence:
 
 - `aspen-blob/replication` owns client-RPC replication coupling while replica metadata storage uses leaf KV traits/types, not root `aspen-core`.
 - `aspen-castore` owns its local irpc circuit breaker without `aspen-core-shell`.
 - `aspen-cache` default owns narinfo/NAR/signing helpers only; `kv-index` owns Aspen KV publication.
+- Downstream fixtures under `openspec/changes/complete-blob-castore-cache-readiness/fixtures/` prove direct external-style use of blob traits, iroh backend types, castore constants, cache metadata, store-path parsing, and signing helpers.
+- Negative cargo-tree checks prove reusable fixture graphs exclude Aspen app/runtime shells, handlers, and root app crates; the dependency-boundary checker now requires the fixture metadata and forbidden-boundary artifacts before this family can pass.
 
-The family is not yet marked `extraction-ready-in-workspace` until downstream fixtures, policy checker updates, and full compatibility evidence are completed.
+Publishable/repo-split readiness remains blocked on human license/publication policy.

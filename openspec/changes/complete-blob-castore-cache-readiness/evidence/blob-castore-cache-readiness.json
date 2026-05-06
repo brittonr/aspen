@@ -1,0 +1,11 @@
+{
+  "candidate_family": "blob-castore-cache",
+  "passed": true,
+  "failures": [],
+  "warnings": [],
+  "checked_candidates": [
+    "aspen_blob",
+    "aspen_castore",
+    "aspen_cache"
+  ]
+}

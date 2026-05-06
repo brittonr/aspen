@@ -645,7 +645,7 @@ dependencies = [
  "iroh-docs",
  "iroh-gossip",
  "iroh-tickets 0.4.0",
- "irpc 0.13.0",
+ "irpc 0.14.0",
  "libc",
  "mad-turmoil",
  "madsim",
@@ -832,7 +832,7 @@ dependencies = [
  "futures",
  "hex",
  "iroh",
- "irpc 0.13.0",
+ "irpc 0.14.0",
  "n0-error",
  "n0-future",
  "nix-compat",
@@ -2412,7 +2412,7 @@ dependencies = [
  "hmac",
  "iroh",
  "iroh-base",
- "irpc 0.13.0",
+ "irpc 0.14.0",
  "madsim",
  "metrics",
  "metrics-exporter-prometheus",
@@ -2478,7 +2478,7 @@ dependencies = [
  "aspen-transport",
  "async-trait",
  "iroh",
- "irpc 0.13.0",
+ "irpc 0.14.0",
  "madsim",
  "openraft",
  "parking_lot",
@@ -2499,7 +2499,7 @@ dependencies = [
  "aspen-constants",
  "aspen-core",
  "aspen-trust",
- "irpc 0.13.0",
+ "irpc 0.14.0",
  "openraft",
  "postcard",
  "serde",
@@ -2609,7 +2609,7 @@ dependencies = [
  "bolero-generator 0.13.5",
  "iroh",
  "iroh-gossip",
- "irpc 0.13.0",
+ "irpc 0.14.0",
  "metrics",
  "metrics-exporter-prometheus",
  "postcard",
@@ -3767,17 +3767,17 @@ dependencies = [
 
 [[package]]
 name = "blake3"
-version = "1.8.5"
+version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0aa83c34e62843d924f905e0f5c866eb1dd6545fc4d719e803d9ba6030371fce"
+checksum = "2468ef7d57b3fb7e16b576e8377cdbde2320c60e1491e961d11da40fc4f02a2d"
 dependencies = [
  "arrayref",
  "arrayvec 0.7.6",
  "cc",
  "cfg-if",
  "constant_time_eq",
- "cpufeatures 0.3.0",
- "digest 0.11.3",
+ "cpufeatures 0.2.17",
+ "digest 0.10.7",
  "rayon-core",
 ]
 
@@ -5935,7 +5935,6 @@ dependencies = [
  "block-buffer 0.12.0",
  "const-oid 0.10.2",
  "crypto-common 0.2.1",
- "ctutils",
 ]
 
 [[package]]

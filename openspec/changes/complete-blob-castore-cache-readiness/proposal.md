@@ -19,6 +19,14 @@ Blob/castore/cache is high-value for self-hosting and cache infrastructure; curr
 ## Impact
 
 - **Files**: OpenSpec artifacts under `openspec/changes/complete-blob-castore-cache-readiness/`.
-- **APIs**: No immediate code API change; implementation tasks will decide stable public API or evidence surfaces.
-- **Dependencies**: No dependency change in this spec-only slice.
+- **APIs**: Blob/castore/cache API evidence remains bounded to reusable defaults plus explicit Aspen adapter paths.
+- **Dependencies**: The implementation may adjust compatible dependency patch levels only when package and fixture evidence proves the final graph.
 - **Testing**: `openspec validate complete-blob-castore-cache-readiness --strict`, helper verification, `git diff --check`, and the change-specific verification tasks.
+
+## Verification Expectations
+
+- Covered IDs: `blob-castore-cache-extraction.promotion-requires-complete-evidence`, `blob-castore-cache-extraction.promotion-requires-complete-evidence.evidence`, `blob-castore-cache-extraction.adapter-paths-explicit`, `blob-castore-cache-extraction.adapter-paths-explicit.evidence`.
+- Capture downstream fixture checks for `aspen-blob` and `aspen-cache`/`aspen-castore` consumers under the change-local `evidence/` directory, including negative-path expectations for forbidden app-shell dependency leakage.
+- Capture package checks for `aspen-blob`, `aspen-cache`, and `aspen-castore`, including the castore circuit-breaker regression.
+- Regenerate readiness checker Markdown/JSON for the `blob-castore-cache` candidate family after policy/doc updates.
+- Run strict OpenSpec validation, repo-local preflight, no-std boundary verification for any lockfile dependency adjustments, and whitespace checks before archive.

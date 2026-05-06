@@ -1,0 +1,143 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling bitflags v2.11.1
+   Compiling prost-derive v0.14.3
+   Compiling fastrand v2.4.1
+   Compiling ring v0.17.14
+    Checking ipnet v2.12.0
+   Compiling getrandom v0.4.2
+   Compiling regex-automata v0.4.14
+    Checking tokio v1.52.2
+    Checking http v1.4.0
+    Checking either v1.15.0
+    Checking parking_lot_core v0.9.12
+   Compiling prost-derive v0.13.5
+   Compiling petgraph v0.8.3
+    Checking ed25519 v3.0.0-rc.4
+    Checking curve25519-dalek v5.0.0-pre.6
+    Checking postcard v1.1.3 (/home/brittonr/git/aspen/vendor/postcard)
+    Checking digest v0.10.7
+    Checking icu_normalizer v2.2.0
+    Checking chrono v0.4.44
+    Checking noq-udp v0.10.0
+   Compiling blake3 v1.8.3
+    Checking serde_json v1.0.149
+   Compiling noq v0.18.0
+   Compiling fixedbitset v0.4.2
+    Checking inventory v0.3.24
+    Checking vt100 v0.16.2
+    Checking noq-udp v0.9.0
+    Checking tracing-subscriber v0.3.23
+   Compiling serde_with_macros v3.19.0
+    Checking serde_urlencoded v0.7.1
+    Checking tracing-futures v0.2.5
+    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+    Checking clap-verbosity-flag v3.0.4
+    Checking typetag v0.2.21
+    Checking xattr v1.6.1
+   Compiling rustix v1.1.4
+   Compiling pulldown-cmark v0.13.3
+    Checking md-5 v0.10.6
+    Checking quick-xml v0.39.3
+    Checking aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+   Compiling petgraph v0.6.5
+    Checking redb v3.1.3
+    Checking itertools v0.14.0
+    Checking parking_lot v0.12.5
+    Checking bstr v1.12.1
+    Checking tower v0.4.13
+    Checking prefix-trie v0.8.3
+    Checking idna_adapter v1.2.2
+    Checking moka v0.12.15
+    Checking indicatif v0.18.4
+    Checking idna v1.1.0
+    Checking iroh-metrics v0.38.3 (/home/brittonr/git/aspen/vendor/iroh-metrics)
+    Checking serde_with v3.19.0
+    Checking url v2.5.8
+    Checking http-body v1.0.1
+    Checking http-body-util v0.1.3
+   Compiling rustls v0.23.40
+    Checking axum-core v0.5.6
+   Compiling prost v0.14.3
+    Checking ed25519-dalek v3.0.0-pre.6
+   Compiling prost v0.13.5
+    Checking tracing-indicatif v0.3.14
+    Checking hickory-proto v0.26.1
+    Checking attohttpc v0.30.1
+    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+    Checking iroh-base v0.98.0
+    Checking mainline v6.1.2
+   Compiling pulldown-cmark-to-cmark v22.0.0
+   Compiling prost-types v0.13.5
+    Checking prost-wkt v0.7.1
+    Checking prost-types v0.14.3
+   Compiling tempfile v3.27.0
+    Checking iroh-tickets v0.4.0 (/home/brittonr/git/aspen/vendor/iroh-tickets)
+   Compiling regex v1.12.3
+    Checking rustls-webpki v0.103.13
+    Checking rcgen v0.14.7
+   Compiling prost-build v0.13.5
+   Compiling prost-build v0.14.3
+   Compiling tonic-build v0.13.1
+   Compiling prost-wkt-build v0.7.1
+   Compiling tonic-prost-build v0.14.5
+   Compiling prost-wkt-types v0.7.1
+   Compiling bigtable_rs v0.2.21
+   Compiling snix-castore v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+    Checking tokio-util v0.7.18
+    Checking netlink-sys v0.8.8
+    Checking acto v0.8.0
+    Checking iroh-io v0.6.2
+    Checking backon v1.6.0
+    Checking async-compression v0.4.19
+    Checking netlink-proto v0.12.0
+    Checking netdev v0.42.0
+    Checking bao-tree v0.16.0
+    Checking tokio-rustls v0.26.4
+    Checking noq-proto v0.17.0
+    Checking rustls-platform-verifier v0.6.2
+    Checking rustls-platform-verifier v0.7.0
+    Checking swarm-discovery v0.6.0-alpha.2 (/home/brittonr/git/aspen/vendor/swarm-discovery)
+    Checking noq-proto v0.16.0
+    Checking h2 v0.4.14
+    Checking tokio-stream v0.1.18
+    Checking tower v0.5.3
+    Checking n0-future v0.3.2
+    Checking tokio-websockets v0.13.2
+    Checking n0-watcher v0.6.1
+    Checking iroh-dns v0.98.0
+    Checking netwatch v0.16.0
+    Checking fastcdc v3.2.1
+    Checking astral-tokio-tar v0.5.6
+    Checking tower-http v0.6.9
+    Checking axum v0.8.9
+    Checking hyper v1.9.0
+    Checking hickory-net v0.26.1
+    Checking noq v0.17.0
+    Checking irpc v0.14.0
+    Checking irpc v0.13.0
+    Checking hyper-util v0.1.20
+    Checking hickory-resolver v0.26.1
+    Checking hyper-rustls v0.27.9
+    Checking hyper-timeout v0.5.2
+    Checking igd-next v0.17.0
+    Checking reqwest v0.13.3
+    Checking gcp_auth v0.12.6
+    Checking reqwest v0.12.28
+    Checking tonic v0.14.5
+    Checking tonic v0.13.1
+    Checking portmapper v0.16.0
+    Checking object_store v0.13.2
+    Checking iroh-relay v0.98.0 (/home/brittonr/git/aspen/vendor/iroh-relay)
+    Checking snix-tracing v0.1.0 (https://git.snix.dev/snix/snix.git?rev=e20f82dd6fdebe953fb71bb2fde2f32841015c47#e20f82dd)
+    Checking tonic-health v0.13.1
+    Checking tonic-prost v0.14.5
+    Checking iroh v0.98.2 (/home/brittonr/git/aspen/vendor/iroh)
+    Checking iroh-blobs v0.99.0 (/home/brittonr/git/aspen/vendor/iroh-blobs)
+    Checking aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob)
+    Checking aspen-castore v0.1.0 (/home/brittonr/git/aspen/crates/aspen-castore)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 58.90s

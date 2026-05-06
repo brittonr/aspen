@@ -574,7 +574,7 @@ let Candidate = {
 
     aspen_blob = {
       class = "service library",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/blob-castore-cache.md",
       owner = "Aspen storage/cache maintainers",
       default_feature_sets = ["default"],
@@ -623,7 +623,7 @@ let Candidate = {
 
     aspen_castore = {
       class = "runtime adapter",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/blob-castore-cache.md",
       owner = "Aspen storage/cache maintainers",
       default_feature_sets = ["default"],
@@ -665,7 +665,7 @@ let Candidate = {
 
     aspen_cache = {
       class = "service library",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/blob-castore-cache.md",
       owner = "Aspen storage/cache maintainers",
       default_feature_sets = ["default"],

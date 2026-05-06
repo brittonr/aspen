@@ -14,7 +14,7 @@ use bao_tree::{
 };
 use genawaiter::sync::{Co, Gen};
 use iroh::endpoint::Connection;
-use irpc::util::{AsyncReadVarintExt, WriteVarintExt};
+use irpc::util::WriteVarintExt;
 use n0_error::{e, stack_error, AnyError, Result, StdResultExt};
 use n0_future::{io, Stream, StreamExt};
 use ref_cast::RefCast;
@@ -36,14 +36,14 @@ use crate::{
     },
     hashseq::{HashSeq, HashSeqIter},
     protocol::{
-        ChunkRangesSeq, GetManyRequest, GetRequest, ObserveItem, ObserveRequest, PushRequest,
-        Request, RequestType, MAX_MESSAGE_SIZE,
+        ChunkRangesSeq, GetManyRequest, GetRequest, ObserveRequest, PushRequest, Request,
+        RequestType, MAX_MESSAGE_SIZE,
     },
     provider::events::{ClientResult, ProgressError},
     store::IROH_BLOCK_SIZE,
     util::{
         sink::{Sink, TokioMpscSenderSink},
-        RecvStream, SendStream,
+        RecvStream, RecvStreamExt, SendStream,
     },
     Hash, HashAndFormat,
 };
@@ -569,9 +569,7 @@ impl Remote {
         write_observe_request(request, &mut send).await?;
         send.finish()?;
         loop {
-            let msg = recv
-                .read_length_prefixed::<ObserveItem>(MAX_MESSAGE_SIZE)
-                .await?;
+            let msg = RecvStreamExt::read_length_prefixed(&mut recv, MAX_MESSAGE_SIZE).await?;
             co.yield_(Ok(Bitfield::from(&msg))).await;
         }
     }
