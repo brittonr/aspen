@@ -202,9 +202,9 @@ impl DocsSyncProvider for DocsSyncProviderAdapter {
         // Store content in blob store if available, otherwise compute hash only
         let (hash, len) = if let Some(ref blob_store) = self.blob_store {
             let result = blob_store.add_bytes(&value).await.map_err(|e| e.to_string())?;
-            (result.blob_ref.hash, result.blob_ref.size_bytes)
+            (iroh_blobs_docs::Hash::from_bytes(*result.blob_ref.hash.as_bytes()), result.blob_ref.size_bytes)
         } else {
-            (iroh_blobs::Hash::new(&value), value.len() as u64)
+            (iroh_blobs_docs::Hash::new(&value), value.len() as u64)
         };
 
         let author_id = self.inner.author.id();
@@ -235,14 +235,15 @@ impl DocsSyncProvider for DocsSyncProviderAdapter {
                 if content_len == 1 {
                     // Might be a tombstone, check the hash
                     const TOMBSTONE: &[u8] = b"\x00";
-                    if content_hash == iroh_blobs::Hash::new(TOMBSTONE) {
+                    if content_hash == iroh_blobs_docs::Hash::new(TOMBSTONE) {
                         return Ok(None);
                     }
                 }
 
                 // Fetch content from blob store if available
                 let value = if let Some(ref blob_store) = self.blob_store {
-                    match blob_store.get_bytes(&content_hash).await {
+                    let blob_content_hash = iroh_blobs::Hash::from_bytes(*content_hash.as_bytes());
+                    match blob_store.get_bytes(&blob_content_hash).await {
                         Ok(Some(bytes)) => bytes.to_vec(),
                         Ok(None) => {
                             // Content not in blob store, return empty with metadata
@@ -268,9 +269,9 @@ impl DocsSyncProvider for DocsSyncProviderAdapter {
 
         let (hash, len) = if let Some(ref blob_store) = self.blob_store {
             let result = blob_store.add_bytes(TOMBSTONE).await.map_err(|e| e.to_string())?;
-            (result.blob_ref.hash, result.blob_ref.size_bytes)
+            (iroh_blobs_docs::Hash::from_bytes(*result.blob_ref.hash.as_bytes()), result.blob_ref.size_bytes)
         } else {
-            (iroh_blobs::Hash::new(TOMBSTONE), TOMBSTONE.len() as u64)
+            (iroh_blobs_docs::Hash::new(TOMBSTONE), TOMBSTONE.len() as u64)
         };
 
         let author_id = self.inner.author.id();
@@ -318,7 +319,7 @@ impl DocsSyncProvider for DocsSyncProviderAdapter {
                         // Skip tombstones
                         if size_bytes == 1 {
                             const TOMBSTONE: &[u8] = b"\x00";
-                            if entry.content_hash() == iroh_blobs::Hash::new(TOMBSTONE) {
+                            if entry.content_hash() == iroh_blobs_docs::Hash::new(TOMBSTONE) {
                                 continue;
                             }
                         }

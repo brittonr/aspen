@@ -80,6 +80,7 @@ async fn handle_remote_insert_event(
 ) {
     let key = entry.key().to_vec();
     let content_hash = entry.content_hash();
+    let blob_content_hash = iroh_blobs::Hash::from_bytes(*content_hash.as_bytes());
     let content_len = entry.content_len();
 
     debug!(
@@ -101,7 +102,7 @@ async fn handle_remote_insert_event(
 
     // Fetch content (local or remote)
     let content = match fetch_entry_content(
-        &content_hash,
+        &blob_content_hash,
         from,
         should_download,
         namespace_id,

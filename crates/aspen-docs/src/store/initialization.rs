@@ -63,7 +63,7 @@ fn init_in_memory_resources(
     let namespace_secret = match namespace_secret_hex {
         Some(hex) => parse_namespace_secret(hex)?,
         None => {
-            let secret = NamespaceSecret::new(&mut rand::rng());
+            let secret = NamespaceSecret::new(&mut rand_010::rng());
             debug!("generated new namespace secret for in-memory store");
             secret
         }
@@ -74,7 +74,7 @@ fn init_in_memory_resources(
     let author = match author_secret_hex {
         Some(hex) => parse_author_secret(hex)?,
         None => {
-            let author = Author::new(&mut rand::rng());
+            let author = Author::new(&mut rand_010::rng());
             debug!("generated new author for in-memory store");
             author
         }
@@ -168,7 +168,7 @@ fn load_or_create_namespace_secret(path: &Path, config_hex: Option<&str>) -> Res
     }
 
     // Priority 3: Generate new
-    let secret = NamespaceSecret::new(&mut rand::rng());
+    let secret = NamespaceSecret::new(&mut rand_010::rng());
     let hex = hex::encode(secret.to_bytes());
     write_secret_hex_file(path, &hex, "namespace secret")?;
     info!(path = %path.display(), "generated and persisted new namespace secret");
@@ -229,7 +229,7 @@ fn load_or_create_author(path: &Path, config_hex: Option<&str>) -> Result<Author
     }
 
     // Priority 3: Generate new
-    let author = Author::new(&mut rand::rng());
+    let author = Author::new(&mut rand_010::rng());
     let hex = hex::encode(author.to_bytes());
     write_secret_hex_file(path, &hex, "author secret")?;
     info!(path = %path.display(), "generated and persisted new author");
@@ -274,8 +274,8 @@ mod tests {
     #[test]
     fn test_init_in_memory_with_config_secrets() {
         // Generate valid secrets
-        let ns_secret = NamespaceSecret::new(&mut rand::rng());
-        let author = Author::new(&mut rand::rng());
+        let ns_secret = NamespaceSecret::new(&mut rand_010::rng());
+        let author = Author::new(&mut rand_010::rng());
         let ns_hex = hex::encode(ns_secret.to_bytes());
         let author_hex = hex::encode(author.to_bytes());
 
@@ -339,7 +339,7 @@ mod tests {
         std::fs::write(&secret_path, "stale\n").unwrap();
         std::fs::set_permissions(&secret_path, std::fs::Permissions::from_mode(0o644)).unwrap();
 
-        let secret = NamespaceSecret::new(&mut rand::rng());
+        let secret = NamespaceSecret::new(&mut rand_010::rng());
         let hex = hex::encode(secret.to_bytes());
         write_secret_hex_file(&secret_path, &hex, "test secret").unwrap();
 
@@ -350,7 +350,7 @@ mod tests {
 
     #[test]
     fn test_parse_namespace_secret_valid() {
-        let secret = NamespaceSecret::new(&mut rand::rng());
+        let secret = NamespaceSecret::new(&mut rand_010::rng());
         let hex = hex::encode(secret.to_bytes());
         let parsed = parse_namespace_secret(&hex).unwrap();
         assert_eq!(parsed.id(), secret.id());
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_parse_author_secret_valid() {
-        let author = Author::new(&mut rand::rng());
+        let author = Author::new(&mut rand_010::rng());
         let hex = hex::encode(author.to_bytes());
         let parsed = parse_author_secret(&hex).unwrap();
         assert_eq!(parsed.id(), author.id());

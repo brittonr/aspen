@@ -39,9 +39,9 @@ pub const MAX_HASH_MAPPING_BATCH_SIZE: usize = 1_000;
 ///
 /// Tiger Style: Prevents memory exhaustion during large imports.
 /// The chunked push protocol splits objects into chunks, but tree objects
-/// may arrive in a single batch due to interdependencies. 50K supports
-/// repositories with ~12K+ trees (e.g., Aspen's 72-crate workspace).
-pub const MAX_IMPORT_BATCH_SIZE: usize = 50_000;
+/// may arrive in a single batch due to interdependencies. 75K supports
+/// Aspen current-head dogfood imports while preserving a fixed upper bound.
+pub const MAX_IMPORT_BATCH_SIZE: usize = 75_000;
 
 /// Maximum objects to include in a single push/export.
 ///
@@ -57,8 +57,9 @@ pub const MAX_DAG_TRAVERSAL_DEPTH: usize = 100_000;
 
 /// Maximum objects to collect before forcing incremental processing.
 ///
-/// Tiger Style: Provides backpressure during large operations.
-pub const MAX_PENDING_OBJECTS: usize = 50_000;
+/// Tiger Style: Provides backpressure during large operations. Kept aligned
+/// with MAX_IMPORT_BATCH_SIZE so a valid dogfood import can be sorted.
+pub const MAX_PENDING_OBJECTS: usize = 75_000;
 
 // ============================================================================
 // Network Timeouts

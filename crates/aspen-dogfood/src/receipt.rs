@@ -29,6 +29,7 @@ pub struct DogfoodStageContract {
 pub struct DogfoodRunReceipt {
     pub schema: String,
     pub run_id: String,
+    pub git_commit: String,
     pub command: String,
     pub created_at: String,
     pub mode: DogfoodRunMode,
@@ -42,6 +43,7 @@ impl DogfoodRunReceipt {
         Self {
             schema: DOGFOOD_RUN_RECEIPT_SCHEMA.to_string(),
             run_id: init.run_id,
+            git_commit: init.git_commit,
             command: init.command,
             created_at: init.created_at,
             mode: init.mode,
@@ -60,6 +62,7 @@ impl DogfoodRunReceipt {
             });
         }
         validate_required("run_id", &self.run_id)?;
+        validate_required("git_commit", &self.git_commit)?;
         validate_required("command", &self.command)?;
         validate_required("created_at", &self.created_at)?;
         validate_required("project_dir", &self.project_dir)?;
@@ -99,6 +102,7 @@ impl DogfoodRunReceipt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DogfoodRunReceiptInit {
     pub run_id: String,
+    pub git_commit: String,
     pub command: String,
     pub created_at: String,
     pub mode: DogfoodRunMode,
@@ -409,6 +413,7 @@ mod tests {
     fn sample_receipt() -> DogfoodRunReceipt {
         DogfoodRunReceipt::new(DogfoodRunReceiptInit {
             run_id: "dogfood-20260503T040709Z".to_string(),
+            git_commit: "0123456789abcdef0123456789abcdef01234567".to_string(),
             command: "full".to_string(),
             created_at: "2026-05-03T04:07:09Z".to_string(),
             mode: DogfoodRunMode {
@@ -462,7 +467,7 @@ mod tests {
 
     #[test]
     fn legacy_receipt_without_elapsed_ms_round_trips_as_none() {
-        let json = br#"{"schema":"aspen.dogfood.run-receipt.v1","run_id":"dogfood-legacy","command":"full","created_at":"2026-05-03T04:07:09Z","mode":{"federation":false,"vm_ci":false},"project_dir":"/repo","cluster_dir":"/tmp/aspen-dogfood","stages":[{"stage":"build","status":"succeeded","started_at":"2026-05-03T04:08:00Z","finished_at":"2026-05-03T04:09:00Z","failure":null,"artifacts":[]}]}"#;
+        let json = br#"{"schema":"aspen.dogfood.run-receipt.v1","run_id":"dogfood-legacy","git_commit":"0123456789abcdef0123456789abcdef01234567","command":"full","created_at":"2026-05-03T04:07:09Z","mode":{"federation":false,"vm_ci":false},"project_dir":"/repo","cluster_dir":"/tmp/aspen-dogfood","stages":[{"stage":"build","status":"succeeded","started_at":"2026-05-03T04:08:00Z","finished_at":"2026-05-03T04:09:00Z","failure":null,"artifacts":[]}]}"#;
 
         let parsed = DogfoodRunReceipt::from_canonical_json_bytes(json).unwrap();
 

@@ -26,9 +26,9 @@ async fn test_iroh_docs_writer_integration() -> Result<()> {
     let mut store = Store::memory();
 
     // Generate namespace and author
-    let namespace_secret = NamespaceSecret::new(&mut rand::rng());
+    let namespace_secret = NamespaceSecret::new(&mut rand_010::rng());
     let namespace_id = namespace_secret.id();
-    let author = Author::new(&mut rand::rng());
+    let author = Author::new(&mut rand_010::rng());
 
     // Create replica for the namespace
     store.new_replica(namespace_secret)?;
@@ -57,9 +57,9 @@ async fn test_docs_exporter_with_real_store() -> Result<()> {
     let mut store = Store::memory();
 
     // Generate namespace and author
-    let namespace_secret = NamespaceSecret::new(&mut rand::rng());
+    let namespace_secret = NamespaceSecret::new(&mut rand_010::rng());
     let namespace_id = namespace_secret.id();
-    let author = Author::new(&mut rand::rng());
+    let author = Author::new(&mut rand_010::rng());
 
     // Create replica
     store.new_replica(namespace_secret)?;
@@ -126,9 +126,9 @@ async fn test_persistent_store_survives_restart() -> Result<()> {
     let db_path = temp_dir.path().join("docs.redb");
 
     // Generate secrets that we'll reuse
-    let namespace_secret = NamespaceSecret::new(&mut rand::rng());
+    let namespace_secret = NamespaceSecret::new(&mut rand_010::rng());
     let namespace_id = namespace_secret.id();
-    let author = Author::new(&mut rand::rng());
+    let author = Author::new(&mut rand_010::rng());
 
     // First session: write some data
     {
@@ -162,9 +162,9 @@ async fn test_multiple_namespaces() -> Result<()> {
     let mut store = Store::memory();
 
     // Create two separate namespaces
-    let ns1_secret = NamespaceSecret::new(&mut rand::rng());
+    let ns1_secret = NamespaceSecret::new(&mut rand_010::rng());
     let ns1_id = ns1_secret.id();
-    let ns2_secret = NamespaceSecret::new(&mut rand::rng());
+    let ns2_secret = NamespaceSecret::new(&mut rand_010::rng());
     let ns2_id = ns2_secret.id();
 
     store.new_replica(ns1_secret)?;
@@ -233,8 +233,8 @@ async fn test_init_docs_resources_with_config_secrets() -> Result<()> {
     let temp_dir = TempDir::new()?;
 
     // Generate secrets
-    let ns_secret = NamespaceSecret::new(&mut rand::rng());
-    let author = Author::new(&mut rand::rng());
+    let ns_secret = NamespaceSecret::new(&mut rand_010::rng());
+    let author = Author::new(&mut rand_010::rng());
     let ns_hex = hex::encode(ns_secret.to_bytes());
     let author_hex = hex::encode(author.to_bytes());
 

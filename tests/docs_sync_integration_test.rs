@@ -105,7 +105,7 @@ async fn test_two_node_docs_sync() -> Result<()> {
     // Node 2 - the "client" that will sync from node 1
     let endpoint2 = create_test_endpoint().await?;
     // Use a different namespace (this test verifies protocol handling with different namespaces)
-    let ns_secret_hex = hex::encode(iroh_docs::NamespaceSecret::new(&mut rand::rng()).to_bytes());
+    let ns_secret_hex = hex::encode(iroh_docs::NamespaceSecret::new(&mut rand_010::rng()).to_bytes());
     let resources2 = init_docs_resources(temp_dir2.path(), true, Some(&ns_secret_hex), None)?;
     let docs_sync2 = DocsSyncResources::from_docs_resources(resources2, "node-2");
     docs_sync2.open_replica().await?;
@@ -178,7 +178,7 @@ async fn test_same_namespace_sync() -> Result<()> {
     let temp_dir2 = TempDir::new()?;
 
     // Generate a shared namespace secret
-    let ns_secret = iroh_docs::NamespaceSecret::new(&mut rand::rng());
+    let ns_secret = iroh_docs::NamespaceSecret::new(&mut rand_010::rng());
     let ns_secret_hex = hex::encode(ns_secret.to_bytes());
     let namespace_id = ns_secret.id();
 
@@ -257,7 +257,7 @@ async fn test_bidirectional_sync() -> Result<()> {
     let temp_dir2 = TempDir::new()?;
 
     // Shared namespace
-    let ns_secret = iroh_docs::NamespaceSecret::new(&mut rand::rng());
+    let ns_secret = iroh_docs::NamespaceSecret::new(&mut rand_010::rng());
     let ns_secret_hex = hex::encode(ns_secret.to_bytes());
 
     // Node 1
@@ -388,7 +388,7 @@ async fn test_docs_sync_service_with_peer_provider() -> Result<()> {
     let temp_dir2 = TempDir::new()?;
 
     // Shared namespace
-    let ns_secret = iroh_docs::NamespaceSecret::new(&mut rand::rng());
+    let ns_secret = iroh_docs::NamespaceSecret::new(&mut rand_010::rng());
     let ns_secret_hex = hex::encode(ns_secret.to_bytes());
 
     // Node 1 (server)

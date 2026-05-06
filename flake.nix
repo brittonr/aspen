@@ -550,7 +550,7 @@
         };
 
         # Must use vendorCargoDeps directly to pass overrideVendorGitCheckout
-        cargoVendorDir = craneLib.vendorCargoDeps {
+        cargoVendorDir = patchVendorForNetlinkRouteMacros (craneLib.vendorCargoDeps {
           src = rawSrc;
           overrideVendorGitCheckout = ps: drv: let
             isSnixRepo =
@@ -573,7 +573,7 @@
             else if isSubwayrat
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
             else ensureGitCheckoutLock drv;
-        };
+        });
 
         # ── Cargo Dependency Artifacts ───────────────────────────────
         # Split by feature set so each build variant hits a warm cache.
@@ -930,7 +930,7 @@
             cargoExtraArgs = "";
           };
 
-        ciCargoVendorDir = craneLib.vendorCargoDeps {
+        ciCargoVendorDir = patchVendorForNetlinkRouteMacros (craneLib.vendorCargoDeps {
           src = ciSrc + "/aspen";
           overrideVendorGitCheckout = ps: drv: let
             isSnixRepo =
@@ -953,7 +953,7 @@
             else if isSubwayrat
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
             else ensureGitCheckoutLock drv;
-        };
+        });
 
         ciCargoArtifacts = craneLib.buildDepsOnly (
           ciBasicArgs
@@ -1083,7 +1083,40 @@
               '';
           });
 
-        fullCargoVendorDir = craneLib.vendorCargoDeps {
+        # Rust 1.97 resolves 2018-edition #[macro_use] imports from the point
+        # where the extern crate item appears. netlink-packet-route 0.29/0.30
+        # declare it after their modules, so generated buffer! call sites are
+        # missing during Nix's dependency-only build. Patch the vendored cargo
+        # source in-place without changing the workspace lock graph.
+        patchVendorForNetlinkRouteMacros = vendorDir:
+          pkgs.runCommand "${vendorDir.name or "cargo-vendor"}-netlink-route-macros" {nativeBuildInputs = [pkgs.python3 pkgs.gnused];} ''
+                        mkdir -p $out
+                        cp -rL ${vendorDir}/. $out/
+                        chmod -R u+w $out
+                        if [ -f "$out/config.toml" ]; then
+                          sed -i "s|${vendorDir}|$out|g" "$out/config.toml"
+                        fi
+                        python - <<'PY'
+            from pathlib import Path
+            import os
+            root = Path(os.environ["out"])
+            macro_import = "#[allow(unused_imports)]\nuse netlink_packet_core::{buffer, fields};\n\n"
+            for path in root.glob("*/netlink-packet-route-0.*/src/**/*.rs"):
+                text = path.read_text()
+                if "buffer!(" not in text or macro_import in text:
+                    continue
+                # Make the exported buffer!/fields! macros visible at each call site.
+                # This is robust across Rust 1.97's point-of-import macro resolution and
+                # preserves the crate's normal item imports from netlink-packet-core.
+                if text.startswith("// SPDX-License-Identifier: MIT\n\n"):
+                    text = text.replace("// SPDX-License-Identifier: MIT\n\n", "// SPDX-License-Identifier: MIT\n\n" + macro_import, 1)
+                else:
+                    text = macro_import + text
+                path.write_text(text)
+            PY
+          '';
+
+        fullCargoVendorDir = patchVendorForNetlinkRouteMacros (craneLib.vendorCargoDeps {
           src = fullSrc + "/aspen";
           overrideVendorGitCheckout = ps: drv: let
             isSnixRepo =
@@ -1106,7 +1139,7 @@
             else if isSubwayrat
             then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
             else ensureGitCheckoutLock drv;
-        };
+        });
 
         fullNodeCargoArtifacts = craneLib.buildDepsOnly (
           fullBasicArgs

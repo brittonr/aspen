@@ -163,7 +163,7 @@ impl DocsWriter for SyncHandleDocsWriter {
     #[instrument(skip(self, value), fields(key_len = key.len(), value_len = value.len()))]
     async fn set_entry(&self, key: Vec<u8>, value: Vec<u8>) -> Result<()> {
         // Compute BLAKE3 hash of the value (same as iroh-blobs uses)
-        let hash = iroh_blobs::Hash::new(&value);
+        let hash = iroh_blobs_docs::Hash::new(&value);
         let len = value.len() as u64;
         let author_id = self.author.id();
 
@@ -184,7 +184,7 @@ impl DocsWriter for SyncHandleDocsWriter {
         // iroh-docs doesn't support empty entries, so we use a tombstone marker
         // This is a convention: a single null byte indicates deletion
         const TOMBSTONE: &[u8] = b"\x00";
-        let hash = iroh_blobs::Hash::new(TOMBSTONE);
+        let hash = iroh_blobs_docs::Hash::new(TOMBSTONE);
         let author_id = self.author.id();
 
         self.sync_handle
@@ -254,7 +254,8 @@ impl DocsWriter for BlobBackedDocsWriter {
         // Store content in iroh-blobs first
         let blob_result = self.blob_store.add_bytes(&value).await.context("failed to store content in blob store")?;
 
-        let hash = blob_result.blob_ref.hash;
+        let blob_hash = blob_result.blob_ref.hash;
+        let hash = iroh_blobs_docs::Hash::from_bytes(*blob_hash.as_bytes());
         let len = blob_result.blob_ref.size_bytes;
         let author_id = self.author.id();
 
@@ -283,7 +284,8 @@ impl DocsWriter for BlobBackedDocsWriter {
         let blob_result =
             self.blob_store.add_bytes(TOMBSTONE).await.context("failed to store tombstone in blob store")?;
 
-        let hash = blob_result.blob_ref.hash;
+        let blob_hash = blob_result.blob_ref.hash;
+        let hash = iroh_blobs_docs::Hash::from_bytes(*blob_hash.as_bytes());
         let author_id = self.author.id();
 
         self.sync_handle

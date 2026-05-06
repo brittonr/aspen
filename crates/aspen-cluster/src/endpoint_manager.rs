@@ -10,21 +10,9 @@ use iroh::Endpoint as IrohEndpoint;
 use iroh::EndpointAddr;
 use iroh::RelayMode;
 use iroh::SecretKey;
-use iroh::endpoint::Builder;
-use iroh::endpoint::presets::Preset;
+use iroh::endpoint::presets::Minimal;
 use iroh::protocol::Router;
 use iroh_gossip::net::Gossip;
-
-/// Empty preset that doesn't configure any defaults.
-/// Aspen manages relay, address lookup, and transport config itself.
-#[derive(Debug, Clone, Copy)]
-struct EmptyPreset;
-
-impl Preset for EmptyPreset {
-    fn apply(self, builder: Builder) -> Builder {
-        builder
-    }
-}
 
 use crate::IrohEndpointConfig;
 use crate::RouterBuilder;
@@ -80,7 +68,7 @@ impl IrohEndpointManager {
         let transport_config = Self::build_transport_config();
 
         // Build endpoint with explicit configuration
-        let mut builder = IrohEndpoint::builder(EmptyPreset);
+        let mut builder = IrohEndpoint::builder(Minimal);
         builder = builder.secret_key(secret_key.clone());
         builder = builder.transport_config(transport_config);
 

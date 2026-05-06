@@ -206,7 +206,8 @@ impl RpcClient {
         // V2 tickets have direct addresses - prefer direct connection but keep
         // discovery as fallback. V1 tickets require discovery to resolve addresses.
         //
-        // For local-only connections, use empty_builder() to skip DNS/relay overhead.
+        // For local-only connections, use the minimal preset to skip DNS/relay
+        // overhead while still configuring iroh's required crypto provider.
         // For remote connections, use N0 preset for relay fallback.
         let all_local = has_direct_addrs
             && bootstrap_addrs.iter().all(|addr| {
@@ -228,7 +229,7 @@ impl RpcClient {
 
         let builder = if has_direct_addrs && (all_local || force_direct) {
             eprintln!("git-remote-aspen: using direct connection (discovery disabled)");
-            iroh::Endpoint::empty_builder()
+            iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
         } else {
             if !has_direct_addrs {
                 eprintln!("git-remote-aspen: discovery enabled (no direct addresses in ticket)");

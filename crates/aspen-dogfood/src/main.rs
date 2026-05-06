@@ -721,6 +721,7 @@ fn render_receipt_summary(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> 
     let mut output = String::new();
     let _ = writeln!(output, "Dogfood receipt: {}", receipt.run_id);
     let _ = writeln!(output, "  schema: {}", receipt.schema);
+    let _ = writeln!(output, "  git_commit: {}", receipt.git_commit);
     let _ = writeln!(output, "  command: {}", receipt.command);
     let _ = writeln!(output, "  created_at: {}", receipt.created_at);
     let _ = writeln!(output, "  mode: federation={}, vm_ci={}", receipt.mode.federation, receipt.mode.vm_ci);
@@ -765,6 +766,7 @@ fn diagnose_receipt(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> String
     let mut output = String::new();
     let _ = writeln!(output, "Dogfood receipt diagnosis: {}", receipt.run_id);
     let _ = writeln!(output, "  path: {}", path.display());
+    let _ = writeln!(output, "  git_commit: {}", receipt.git_commit);
     let _ = writeln!(output, "  command: {}", receipt.command);
     let _ = writeln!(output, "  created_at: {}", receipt.created_at);
 
@@ -952,6 +954,7 @@ impl DogfoodReceiptRecorder {
         let path = config.receipt_file_path(&run_id);
         let receipt = receipt::DogfoodRunReceipt::new(receipt::DogfoodRunReceiptInit {
             run_id,
+            git_commit: current_git_commit(&config.project_dir)?,
             command: command.to_string(),
             created_at: current_timestamp_utc(),
             mode: receipt::DogfoodRunMode {
@@ -1148,6 +1151,38 @@ fn dogfood_run_id() -> String {
     format!("dogfood-{}", current_timestamp_utc().replace([':', '-'], ""))
 }
 
+fn process_output_detail(output: &std::process::Output) -> String {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    format!("status={} stdout={} stderr={}", output.status, stdout.trim(), stderr.trim())
+}
+
+fn current_git_commit(project_dir: &str) -> DogfoodResult<String> {
+    let output = std::process::Command::new("git")
+        .arg("rev-parse")
+        .arg("HEAD")
+        .current_dir(project_dir)
+        .output()
+        .map_err(|source| DogfoodError::Receipt {
+            operation: "git_commit".to_string(),
+            reason: format!("failed to run git rev-parse HEAD: {source}"),
+        })?;
+    if !output.status.success() {
+        return Err(DogfoodError::Receipt {
+            operation: "git_commit".to_string(),
+            reason: process_output_detail(&output),
+        });
+    }
+    let commit = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if commit.is_empty() {
+        return Err(DogfoodError::Receipt {
+            operation: "git_commit".to_string(),
+            reason: "git rev-parse HEAD returned empty output".to_string(),
+        });
+    }
+    Ok(commit)
+}
+
 #[allow(unknown_lints)]
 #[allow(
     ambient_clock,
@@ -1181,6 +1216,7 @@ mod tests {
     ) -> receipt::DogfoodRunReceipt {
         receipt::DogfoodRunReceipt::new(receipt::DogfoodRunReceiptInit {
             run_id: run_id.to_string(),
+            git_commit: "0123456789abcdef0123456789abcdef01234567".to_string(),
             command: "full".to_string(),
             created_at: created_at.to_string(),
             mode: receipt::DogfoodRunMode {
