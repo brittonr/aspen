@@ -41,11 +41,12 @@ mod builder;
 mod credential;
 pub mod hmac_auth;
 mod revocation;
+pub mod ucan_adapter;
 mod utils;
 mod verifier;
 
-pub use aspen_auth_core::AuthError;
 pub use aspen_auth_core::Audience;
+pub use aspen_auth_core::AuthError;
 pub use aspen_auth_core::Capability;
 pub use aspen_auth_core::CapabilityToken;
 pub use aspen_auth_core::Operation;

@@ -47,3 +47,13 @@
 - Commands: `cargo tree -p aspen-auth-core --no-default-features`, `cargo tree -p aspen-auth`, `cargo tree -p aspen-core --no-default-features`, feature-tree variants, and `scripts/check-aspen-core-no-std-boundary.py`.
 - Boundary conclusion: `aspen-auth-core` includes only `ucan-core`; `aspen-auth` includes root `ucan` and `verified-logic`; protected `aspen-core --no-default-features` excludes Aspen auth and all UCAN dependencies.
 - Next best check: implement the UCAN-backed adapter while preserving Aspen-facing capability/token/RPC/CLI behavior.
+
+## I6 UCAN adapter implementation
+
+- Rail: runtime adapter implementation without changing legacy token/RPC/CLI behavior yet.
+- Status: PASS
+- Artifact: `openspec/changes/adopt-sibling-ucan-auth/evidence/i6-ucan-adapter-implementation.md`
+- Code: `crates/aspen-auth/src/ucan_adapter.rs`; exported by `crates/aspen-auth/src/lib.rs`.
+- Commands: `nix run .#rustfmt`; `CARGO_TARGET_DIR=target/agent cargo test -p aspen-auth ucan_adapter --all-targets`.
+- Boundary conclusion: Aspen `Capability` variants now project to sibling-validated UCAN capability documents and sets; legacy token wire format and admission paths remain unchanged pending compatibility/negative evidence.
+- Next best check: add compatibility fixtures for existing Aspen token generation/inspection/delegation behavior or document intentional migration receipts.
