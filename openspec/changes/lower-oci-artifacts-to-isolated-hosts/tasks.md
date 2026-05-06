@@ -2,7 +2,11 @@
 
 - [x] Create proposal, design, tasks, and delta spec for OCI artifact lowering.
 
-## Phase 2: Runtime model update
+## Phase 2: Dependency alignment
+
+- [ ] Keep OCI implementation tasks dependent on `define-runtime-service-core` plus the selected target runner/profile OpenSpecs: `implement-microvm-runtime-runner`, `implement-hyperlight-runtime-runner`, `implement-wasm-runtime-service-host`, and `implement-hermit-unikernel-profile`.
+
+## Phase 3: Runtime model update
 
 - [ ] Replace or demote `RuntimeHostKind::OciContainer` so production runtime declarations use `RuntimeArtifact::OciImage` plus an isolated lowering target rather than a plain container host.
 - [ ] Add portable lowering-plan model types for original OCI digest, selected target host, derived artifact identities, declared handles, and unsupported-image diagnostics.

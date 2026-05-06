@@ -48,6 +48,19 @@ Aspen's canonical runtime host-loading spec currently names `OciContainer` along
 
 **MicroVM startup/resource overhead** → Mitigate with pooling/snapshotting later; do not weaken the production boundary for convenience.
 
+## Drain Order
+
+OCI lowering is intentionally later than the concrete target boundaries it can lower into. Drain the runtime-service/core and runner/profile OpenSpecs first:
+
+1. `define-runtime-service-core`
+2. `implement-microvm-runtime-runner`
+3. `implement-hyperlight-runtime-runner`
+4. `implement-wasm-runtime-service-host`
+5. `implement-hermit-unikernel-profile`
+6. `lower-oci-artifacts-to-isolated-hosts`
+
+The OCI change should remain active as an architectural guardrail against Podman/Docker-style production admission, but implementation tasks should depend on the selected target runner/profile contracts.
+
 ## Validation Plan
 
 - Strict OpenSpec validation for this change.
