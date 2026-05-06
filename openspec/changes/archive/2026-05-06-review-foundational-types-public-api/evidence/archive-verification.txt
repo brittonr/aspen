@@ -1,0 +1,12 @@
+$ openspec archive review-foundational-types-public-api --yes
+Task status: ✓ Complete
+Specs to update:
+  foundational-types-extraction: create
+Specs updated successfully.
+Change archived as 2026-05-06-review-foundational-types-public-api.
+
+$ openspec validate foundational-types-extraction --strict
+Specification 'foundational-types-extraction' is valid
+
+$ git diff --check
+PASS
