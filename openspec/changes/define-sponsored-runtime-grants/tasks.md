@@ -1,0 +1,29 @@
+## Phase 1: Spec foundation
+
+- [x] Create proposal, design, tasks, and delta specs for sponsored runtime resource grants.
+
+## Phase 2: Core model and admission semantics
+
+- [ ] Add portable Rust-owned DTOs for resource grants, grant scopes, sponsor/beneficiary/provider identities, resource limits, quota reservations, quota consumption, revocation refs, settlement references, and usage receipts.
+- [ ] Add pure tests for bounded resources, validity windows, workload/provider scopes, settlement-reference opacity, redaction, and quota arithmetic.
+- [ ] Add fail-closed admission tests covering missing proof, expired grant, revoked grant, provider rejection, unsupported settlement tag, quota exhaustion, isolation mismatch, and workload-scope mismatch.
+
+## Phase 3: Provider and sponsor policy contracts
+
+- [ ] Add Nickel-authored contracts and fixtures for provider offers, sponsor policies, resource class catalogs, and admission profiles.
+- [ ] Add positive/negative Nickel fixture tests proving policy defaults, bounded limits, secret-free settlement refs, and invalid provider/sponsor combinations are rejected before Rust runtime side effects.
+
+## Phase 4: Rust-derived evidence contracts
+
+- [ ] Register sponsored runtime grant, quota ledger, and usage receipt DTOs as `rust-derived` Nickel contract families.
+- [ ] Add generated-contract freshness, Rust serialization round-trip, and Nickel validation tests for valid receipts plus malformed, missing, out-of-range, unknown-field, and secret-bearing receipt fixtures.
+
+## Phase 5: Runtime integration and receipts
+
+- [ ] Wire sponsored admission as an optional runtime-service/job/CI placement constraint that does not admit workloads without an accepted grant when sponsorship is required.
+- [ ] Emit signed, redacted usage receipts for sponsored runtime execution start, reservation, consumption, completion, failure, and revocation-denial paths.
+
+## Phase 6: Documentation and validation
+
+- [ ] Document the sponsored execution boundary: Aspen enforces resource authority and receipts, while bilateral settlement stays external and currency-neutral.
+- [ ] Run focused Rust/Nickel tests, strict OpenSpec validation, and whitespace checks.
