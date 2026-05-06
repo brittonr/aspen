@@ -1,0 +1,9 @@
+# Archive verification
+
+Commands run after `openspec archive review-testing-harness-public-api --yes`:
+
+```bash
+openspec validate testing-harness-extraction --strict
+```
+
+Result: passed; canonical `testing-harness-extraction` spec is valid.
