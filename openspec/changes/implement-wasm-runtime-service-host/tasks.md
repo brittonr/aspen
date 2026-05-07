@@ -16,5 +16,5 @@
 ## Phase 4: Tests and docs
 
 - [x] Add positive and negative tests for artifact verification, capability binding, lifecycle transitions, and receipt redaction. ✅ evidence: `openspec/changes/implement-wasm-runtime-service-host/evidence/wasm-portable-model-admission.md`
-- [ ] Update runtime architecture documentation or source-anchor tests if this change introduces new public terminology.
+- [x] Update runtime architecture documentation or source-anchor tests if this change introduces new public terminology. ✅ evidence: `openspec/changes/implement-wasm-runtime-service-host/evidence/wasm-runtime-docs.md`
 - [ ] Run focused tests, strict OpenSpec validation, and whitespace checks.
