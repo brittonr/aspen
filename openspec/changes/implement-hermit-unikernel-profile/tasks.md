@@ -16,5 +16,5 @@
 ## Phase 4: Tests and docs
 
 - [x] Add positive and negative tests for artifact verification, capability binding, lifecycle transitions, and receipt redaction. ✅ 2m 21s (2026-05-07T02:18:25Z → 2026-05-07T02:20:46Z; evidence: `evidence/hermit-portable-model-admission.md`)
-- [ ] Update runtime architecture documentation or source-anchor tests if this change introduces new public terminology.
+- [x] Update runtime architecture documentation or source-anchor tests if this change introduces new public terminology. ✅ 41s (2026-05-07T02:21:30Z → 2026-05-07T02:22:11Z; evidence: `evidence/hermit-runtime-docs.md`)
 - [ ] Run focused tests, strict OpenSpec validation, and whitespace checks.

@@ -59,6 +59,8 @@ Host kind and artifact identity are intentionally separate:
 
 All host kinds share the same runtime-facing lifecycle: resolve artifact, start, stop, health, route/call handling, logs, receipts, and capability-scoped handles. Manifests, logs, and receipts must carry opaque handles, hashes, or redacted summaries rather than raw secrets, tickets, private keys, cluster cookies, or connection strings.
 
+HermitOS-style unikernels use the `HermitUnikernelArtifact` profile in `aspen-runtime-core`. The profile records the application image, `x86_64`/future target architecture, Hermit guest ABI, immutable image hash, launch profile (`Uhyve` or loader/QEMU), declared input channels, and redacted boot/serial evidence. Admission must prove a compatible microVM runner capability before launch: Uhyve profiles map to `MicroVmEngine::Uhyve`; loader/QEMU profiles map to `MicroVmEngine::QemuMicrovm` and must verify loader plus boot-profile hashes separately. Hermit remains a guest artifact under a VM/microVM host boundary, not an OCI container, native process, or generic ambient host execution path.
+
 ## Definitions
 
 ### Application
