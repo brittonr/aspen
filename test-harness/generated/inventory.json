@@ -8,9 +8,10 @@
       "test-harness/suites/rust/blob-replication.ncl",
       "test-harness/suites/rust/job-integration.ncl",
       "test-harness/suites/vm/multi-node-blob.ncl",
-      "test-harness/suites/vm/multi-node-kv.ncl"
+      "test-harness/suites/vm/multi-node-kv.ncl",
+      "test-harness/suites/vm/runtime-host-microvm-ci.ncl"
     ],
-    "inputs_sha256": "9f386b98ab0b624e2213daae412704fb8cda8aa849c1be9c1de90c9ed740b088"
+    "inputs_sha256": "228bf80265b106282ac95e1e47d685ad6f87df11bd95b542273063aa0f5a1424"
   },
   "suites": [
     {
@@ -203,6 +204,41 @@
         "flake_attr": null,
         "check_attr": null,
         "nix_file": null,
+        "package_presets": {},
+        "register_flake_check": false
+      }
+    },
+    {
+      "id": "runtime-host-microvm-ci-vm",
+      "display_name": "Runtime host microVM CI worker E2E",
+      "description": "Aspen-spawned CloudHypervisorWorker path: start Aspen, create a CI VM golden snapshot, submit ci_vm jobs through aspen-cli, and observe guest-backed completion.",
+      "layer": "vm",
+      "owner": "runtime-host-loading",
+      "runtime_class": "nixos-vm",
+      "prerequisites": [
+        "nested-kvm",
+        "nix-command"
+      ],
+      "tags": [
+        "aspen-spawned",
+        "ci-vm",
+        "cloud-hypervisor",
+        "expensive",
+        "impure",
+        "microvm",
+        "runtime-host"
+      ],
+      "manifest_path": "test-harness/suites/vm/runtime-host-microvm-ci.ncl",
+      "target": {
+        "kind": "nix-build",
+        "package": null,
+        "test": null,
+        "profile": null,
+        "features": [],
+        "run_ignored": null,
+        "flake_attr": "checks.x86_64-linux.vm-snapshot-e2e-test",
+        "check_attr": "vm-snapshot-e2e-test",
+        "nix_file": "nix/tests/vm-snapshot-e2e.nix",
         "package_presets": {},
         "register_flake_check": false
       }

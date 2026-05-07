@@ -105,6 +105,7 @@ pub enum RuntimeClass {
 #[serde(rename_all = "kebab-case")]
 pub enum Prerequisite {
     LinuxUserns,
+    NestedKvm,
     NetworkAccess,
     Nftables,
     NixCommand,
@@ -553,6 +554,7 @@ fn parse_prerequisites(values: &[String], manifest_path: &Path) -> Result<Vec<Pr
         .iter()
         .map(|value| match value.as_str() {
             "linux-userns" => Ok(Prerequisite::LinuxUserns),
+            "nested-kvm" => Ok(Prerequisite::NestedKvm),
             "network-access" => Ok(Prerequisite::NetworkAccess),
             "nftables" => Ok(Prerequisite::Nftables),
             "nix-command" => Ok(Prerequisite::NixCommand),

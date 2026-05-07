@@ -32,6 +32,7 @@ let runtime_class_contract = enum_string "runtime_class" [
 let prerequisite_contract = enum_string "prerequisite" [
   "network-access",
   "linux-userns",
+  "nested-kvm",
   "nftables",
   "traffic-control",
   "nix-command",
