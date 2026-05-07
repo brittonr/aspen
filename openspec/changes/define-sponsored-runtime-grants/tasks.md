@@ -26,4 +26,4 @@
 ## Phase 6: Documentation and validation
 
 - [x] Document the sponsored execution boundary: Aspen enforces resource authority and receipts, while bilateral settlement stays external and currency-neutral. ✅ 1m 28s (2026-05-07T02:05:05Z → 2026-05-07T02:06:33Z; evidence: `evidence/sponsored-execution-boundary-docs.md`)
-- [ ] Run focused Rust/Nickel tests, strict OpenSpec validation, and whitespace checks.
+- [x] Run focused Rust/Nickel tests, strict OpenSpec validation, and whitespace checks. ✅ 54s (2026-05-07T02:07:09Z → 2026-05-07T02:08:03Z; evidence: `evidence/final-validation.md`)
