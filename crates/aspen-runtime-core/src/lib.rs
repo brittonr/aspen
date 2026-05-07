@@ -85,6 +85,108 @@ pub enum UnikernelKind {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+pub enum RuntimeArchitecture {
+    X86_64,
+    Aarch64,
+    Other(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HermitGuestAbi {
+    Hermit,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HermitLaunchProfileKind {
+    Uhyve,
+    LoaderQemu,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HermitLoaderArtifact {
+    pub loader_hash: String,
+    pub boot_profile_hash: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HermitLaunchProfile {
+    pub profile_kind: HermitLaunchProfileKind,
+    pub runner_capability: String,
+    pub loader: Option<HermitLoaderArtifact>,
+    pub boot_args: Vec<RedactedValue>,
+    pub input_channels: Vec<HermitInputChannel>,
+    pub serial_log_limit_bytes: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HermitInputChannelKind {
+    BootArg,
+    LoaderMetadata,
+    VirtioVsock,
+    HostAbiShim,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HermitInputChannel {
+    pub channel_id: String,
+    pub kind: HermitInputChannelKind,
+    pub authorized_handle_id: String,
+    pub secret_safe: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HermitUnikernelArtifact {
+    pub application_image: String,
+    pub target_arch: RuntimeArchitecture,
+    pub guest_abi: HermitGuestAbi,
+    pub image_hash: String,
+    pub profile: HermitLaunchProfile,
+}
+
+impl HermitUnikernelArtifact {
+    #[must_use]
+    pub fn as_runtime_artifact(&self) -> RuntimeArtifact {
+        RuntimeArtifact::Unikernel {
+            unikernel_kind: UnikernelKind::HermitOs,
+            image_hash: self.image_hash.clone(),
+        }
+    }
+
+    #[must_use]
+    pub fn host_kind(&self) -> RuntimeHostKind {
+        RuntimeHostKind::MicroVm {
+            engine: self.profile.engine(),
+        }
+    }
+
+    #[must_use]
+    pub fn declared_capability_handles(&self) -> Vec<&str> {
+        let mut handles = vec![self.profile.runner_capability.as_str()];
+        handles.extend(self.profile.input_channels.iter().map(|channel| channel.authorized_handle_id.as_str()));
+        handles
+    }
+}
+
+impl HermitLaunchProfile {
+    #[must_use]
+    pub fn engine(&self) -> MicroVmEngine {
+        match self.profile_kind {
+            HermitLaunchProfileKind::Uhyve => MicroVmEngine::Uhyve,
+            HermitLaunchProfileKind::LoaderQemu => MicroVmEngine::QemuMicrovm,
+        }
+    }
+
+    #[must_use]
+    pub fn contains_raw_secret(&self) -> bool {
+        self.boot_args.iter().any(RedactedValue::looks_secret)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum RuntimeUnitKind {
     Service,
     ExecutionRun,
@@ -754,6 +856,135 @@ pub enum AdmissionError {
     InvalidLifecycleTransition,
     NativeFactoryNameMismatch,
     NativeFactoryMissingLinkedSymbol,
+    HermitRequiresHermitArtifact,
+    HermitRequiresMicroVmHost,
+    HermitRequiresCompatibleRunner,
+    HermitRequiresRunnerCapability,
+    HermitRequiresVerifiedImage,
+    HermitRequiresDeclaredInputCapability,
+    HermitRequiresSecretSafeInput,
+    HermitRequiresLoaderArtifacts,
+    HermitRejectsLoaderForUhyve,
+    HermitReceiptContainsRawSecret,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HermitProfileReceipt {
+    pub receipt_id: String,
+    pub unit_id: String,
+    pub host_kind: RuntimeHostKind,
+    pub artifact_hash: String,
+    pub runner_engine: MicroVmEngine,
+    pub profile_kind: HermitLaunchProfileKind,
+    pub lifecycle_status: RuntimeLifecycleStatus,
+    pub granted_authority: Vec<RedactedValue>,
+    pub loader_hash: Option<String>,
+    pub boot_profile_hash: Option<String>,
+    pub serial_log_excerpt: RedactedValue,
+    pub diagnostics: Vec<RuntimeDiagnostic>,
+}
+
+impl HermitProfileReceipt {
+    #[must_use]
+    pub fn contains_raw_secret(&self) -> bool {
+        self.granted_authority.iter().any(RedactedValue::looks_secret)
+            || self.serial_log_excerpt.looks_secret()
+            || self.diagnostics.iter().any(|diag| diag.value.looks_secret())
+    }
+}
+
+pub fn admit_hermit_profile(
+    decl: &RuntimeUnitDeclaration,
+    profile: &HermitUnikernelArtifact,
+) -> Result<(), AdmissionError> {
+    if !matches!(decl.artifact, RuntimeArtifact::Unikernel {
+        unikernel_kind: UnikernelKind::HermitOs,
+        ..
+    }) {
+        return Err(AdmissionError::HermitRequiresHermitArtifact);
+    }
+    if !matches!(decl.host_kind, RuntimeHostKind::MicroVm { .. }) {
+        return Err(AdmissionError::HermitRequiresMicroVmHost);
+    }
+    if decl.host_kind != profile.host_kind() {
+        return Err(AdmissionError::HermitRequiresCompatibleRunner);
+    }
+    if !matches!(profile.as_runtime_artifact(), RuntimeArtifact::Unikernel { ref image_hash, .. } if image_hash == &profile.image_hash)
+        || !profile.image_hash.starts_with("sha256:")
+        || !matches!(decl.artifact, RuntimeArtifact::Unikernel { ref image_hash, .. } if image_hash == &profile.image_hash)
+    {
+        return Err(AdmissionError::HermitRequiresVerifiedImage);
+    }
+    let has_runner_capability =
+        decl.capabilities.iter().any(|binding| binding.handle_id == profile.profile.runner_capability);
+    if !has_runner_capability {
+        return Err(AdmissionError::HermitRequiresRunnerCapability);
+    }
+    for channel in &profile.profile.input_channels {
+        if channel.channel_id.trim().is_empty()
+            || channel.authorized_handle_id.trim().is_empty()
+            || !decl.capabilities.iter().any(|binding| binding.handle_id == channel.authorized_handle_id)
+        {
+            return Err(AdmissionError::HermitRequiresDeclaredInputCapability);
+        }
+        if !channel.secret_safe {
+            return Err(AdmissionError::HermitRequiresSecretSafeInput);
+        }
+    }
+    if profile.profile.contains_raw_secret() {
+        return Err(AdmissionError::HermitRequiresSecretSafeInput);
+    }
+    match profile.profile.profile_kind {
+        HermitLaunchProfileKind::Uhyve if profile.profile.loader.is_some() => {
+            return Err(AdmissionError::HermitRejectsLoaderForUhyve);
+        }
+        HermitLaunchProfileKind::LoaderQemu => {
+            let Some(loader) = &profile.profile.loader else {
+                return Err(AdmissionError::HermitRequiresLoaderArtifacts);
+            };
+            if !loader.loader_hash.starts_with("sha256:") || !loader.boot_profile_hash.starts_with("sha256:") {
+                return Err(AdmissionError::HermitRequiresLoaderArtifacts);
+            }
+        }
+        HermitLaunchProfileKind::Uhyve => {}
+    }
+    admit_unit(decl)
+}
+
+pub fn admit_hermit_receipt(receipt: &HermitProfileReceipt) -> Result<(), AdmissionError> {
+    if receipt.contains_raw_secret() {
+        return Err(AdmissionError::HermitReceiptContainsRawSecret);
+    }
+    Ok(())
+}
+
+pub fn hermit_lifecycle_receipt(
+    receipt_id: impl Into<String>,
+    decl: &RuntimeUnitDeclaration,
+    profile: &HermitUnikernelArtifact,
+    lifecycle_status: RuntimeLifecycleStatus,
+    serial_log_excerpt: RedactedValue,
+    diagnostics: Vec<RuntimeDiagnostic>,
+) -> HermitProfileReceipt {
+    let loader = profile.profile.loader.as_ref();
+    HermitProfileReceipt {
+        receipt_id: receipt_id.into(),
+        unit_id: decl.unit_id.clone(),
+        host_kind: decl.host_kind.clone(),
+        artifact_hash: profile.image_hash.clone(),
+        runner_engine: profile.profile.engine(),
+        profile_kind: profile.profile.profile_kind.clone(),
+        lifecycle_status,
+        granted_authority: profile
+            .declared_capability_handles()
+            .into_iter()
+            .map(|handle| RedactedValue::OpaqueHandle(handle.to_string()))
+            .collect(),
+        loader_hash: loader.map(|artifact| artifact.loader_hash.clone()),
+        boot_profile_hash: loader.map(|artifact| artifact.boot_profile_hash.clone()),
+        serial_log_excerpt,
+        diagnostics,
+    }
 }
 
 pub fn admit_native_factory(factory: &NativeBuiltInServiceFactory) -> Result<(), AdmissionError> {
@@ -973,6 +1204,164 @@ mod tests {
         let decoded: RuntimeUnitDeclaration = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, decl);
         admit_unit(&decoded).unwrap();
+    }
+
+    fn hermit_profile(profile_kind: HermitLaunchProfileKind) -> HermitUnikernelArtifact {
+        let loader = match profile_kind {
+            HermitLaunchProfileKind::Uhyve => None,
+            HermitLaunchProfileKind::LoaderQemu => Some(HermitLoaderArtifact {
+                loader_hash: "sha256:loader".to_string(),
+                boot_profile_hash: "sha256:boot-profile".to_string(),
+            }),
+        };
+        HermitUnikernelArtifact {
+            application_image: "aspen://blobs/hermit/demo".to_string(),
+            target_arch: RuntimeArchitecture::X86_64,
+            guest_abi: HermitGuestAbi::Hermit,
+            image_hash: "sha256:hermit-image".to_string(),
+            profile: HermitLaunchProfile {
+                profile_kind,
+                runner_capability: "runner:uhyve".to_string(),
+                loader,
+                boot_args: vec![RedactedValue::OpaqueHandle("boot-args:demo".to_string())],
+                input_channels: vec![HermitInputChannel {
+                    channel_id: "vsock/config".to_string(),
+                    kind: HermitInputChannelKind::VirtioVsock,
+                    authorized_handle_id: "cap:config".to_string(),
+                    secret_safe: true,
+                }],
+                serial_log_limit_bytes: 4096,
+            },
+        }
+    }
+
+    fn hermit_decl(profile: &HermitUnikernelArtifact) -> RuntimeUnitDeclaration {
+        RuntimeUnitDeclaration {
+            unit_id: "run/hermit-demo".to_string(),
+            unit_kind: RuntimeUnitKind::ExecutionRun,
+            host_kind: profile.host_kind(),
+            artifact: profile.as_runtime_artifact(),
+            capabilities: vec![
+                RuntimeCapabilityBinding {
+                    handle_id: profile.profile.runner_capability.clone(),
+                    ability: "runtime/launch".to_string(),
+                    resource: "aspen://runtime/runner/uhyve".to_string(),
+                    proof_refs: vec!["ucan-proof:runner".to_string()],
+                    caveats: vec![],
+                },
+                RuntimeCapabilityBinding {
+                    handle_id: "cap:config".to_string(),
+                    ability: "runtime/read-config".to_string(),
+                    resource: "aspen://runtime/config/hermit-demo".to_string(),
+                    proof_refs: vec!["ucan-proof:config".to_string()],
+                    caveats: vec![],
+                },
+            ],
+            resources: RuntimeResources {
+                memory_bytes: Some(64 * 1024 * 1024),
+                cpu_millis: Some(500),
+                wall_time_ms: Some(5_000),
+                wasm_fuel: None,
+                max_open_files: Some(8),
+            },
+            routes: vec![],
+        }
+    }
+
+    #[test]
+    fn hermit_profile_aligns_with_runtime_core_vocabulary() {
+        let profile = hermit_profile(HermitLaunchProfileKind::Uhyve);
+        let decl = hermit_decl(&profile);
+        assert_eq!(decl.unit_kind, RuntimeUnitKind::ExecutionRun);
+        assert_eq!(decl.host_kind, RuntimeHostKind::MicroVm {
+            engine: MicroVmEngine::Uhyve
+        });
+        assert!(
+            matches!(decl.artifact, RuntimeArtifact::Unikernel { unikernel_kind: UnikernelKind::HermitOs, ref image_hash } if image_hash == "sha256:hermit-image")
+        );
+        assert_eq!(profile.target_arch, RuntimeArchitecture::X86_64);
+        assert_eq!(profile.guest_abi, HermitGuestAbi::Hermit);
+        assert_eq!(profile.profile.input_channels[0].kind, HermitInputChannelKind::VirtioVsock);
+        admit_hermit_profile(&decl, &profile).unwrap();
+    }
+
+    #[test]
+    fn hermit_loader_qemu_profile_records_loader_identities() {
+        let mut profile = hermit_profile(HermitLaunchProfileKind::LoaderQemu);
+        profile.profile.runner_capability = "runner:qemu-loader".to_string();
+        let mut decl = hermit_decl(&profile);
+        decl.capabilities[0].handle_id = "runner:qemu-loader".to_string();
+        admit_hermit_profile(&decl, &profile).unwrap();
+        let receipt = hermit_lifecycle_receipt(
+            "receipt/hermit-loader",
+            &decl,
+            &profile,
+            RuntimeLifecycleStatus::Starting,
+            RedactedValue::Plain("hermit boot: starting".to_string()),
+            vec![],
+        );
+        assert_eq!(receipt.runner_engine, MicroVmEngine::QemuMicrovm);
+        assert_eq!(receipt.loader_hash.as_deref(), Some("sha256:loader"));
+        assert_eq!(receipt.boot_profile_hash.as_deref(), Some("sha256:boot-profile"));
+        admit_hermit_receipt(&receipt).unwrap();
+    }
+
+    #[test]
+    fn hermit_admission_fails_closed_before_runtime_handles() {
+        let profile = hermit_profile(HermitLaunchProfileKind::Uhyve);
+        let mut decl = hermit_decl(&profile);
+        decl.capabilities.clear();
+        assert_eq!(admit_hermit_profile(&decl, &profile), Err(AdmissionError::HermitRequiresRunnerCapability));
+
+        let mut decl = hermit_decl(&profile);
+        decl.artifact = RuntimeArtifact::OciImage {
+            image_digest: "sha256:oci".to_string(),
+            entrypoint: "/bin/demo".to_string(),
+            args: vec![],
+        };
+        assert_eq!(admit_hermit_profile(&decl, &profile), Err(AdmissionError::HermitRequiresHermitArtifact));
+
+        let mut bad_profile = profile.clone();
+        bad_profile.profile.input_channels[0].secret_safe = false;
+        assert_eq!(
+            admit_hermit_profile(&hermit_decl(&profile), &bad_profile),
+            Err(AdmissionError::HermitRequiresSecretSafeInput)
+        );
+
+        let mut bad_profile = profile.clone();
+        bad_profile.profile.boot_args = vec![RedactedValue::Plain("token=raw".to_string())];
+        assert_eq!(
+            admit_hermit_profile(&hermit_decl(&profile), &bad_profile),
+            Err(AdmissionError::HermitRequiresSecretSafeInput)
+        );
+    }
+
+    #[test]
+    fn hermit_receipts_redact_handles_serial_and_failures() {
+        let profile = hermit_profile(HermitLaunchProfileKind::Uhyve);
+        let decl = hermit_decl(&profile);
+        let receipt = hermit_lifecycle_receipt(
+            "receipt/hermit-running",
+            &decl,
+            &profile,
+            RuntimeLifecycleStatus::Running,
+            RedactedValue::Plain("hermit-demo: hello".to_string()),
+            vec![RuntimeDiagnostic {
+                key: "exit".to_string(),
+                value: RedactedValue::Plain("code=0".to_string()),
+            }],
+        );
+        assert!(
+            receipt
+                .granted_authority
+                .iter()
+                .all(|authority| matches!(authority, RedactedValue::OpaqueHandle(_)))
+        );
+        admit_hermit_receipt(&receipt).unwrap();
+
+        let mut leaking = receipt;
+        leaking.serial_log_excerpt = RedactedValue::Plain("token=raw".to_string());
+        assert_eq!(admit_hermit_receipt(&leaking), Err(AdmissionError::HermitReceiptContainsRawSecret));
     }
 
     #[test]
