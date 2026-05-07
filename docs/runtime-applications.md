@@ -7,6 +7,7 @@ Implemented in the current slice:
 - `crates/aspen-runtime-core` contains portable, serializable host-loading/model contracts for runtime host kinds, artifacts, service specs, service instances, lifecycle/health state, route declarations, placement hints, restart/upgrade/health policy, capability bindings, and redacted receipts.
 - `NativeBuiltIn` services are modeled as linked built-ins through `NativeBuiltInServiceFactory`, `NativeServiceManifest`, and `NativeLoadingPolicy::LinkedBuiltInOnly`; this is intentionally not dynamic native plugin loading.
 - `crates/aspen-forge/src/runtime_service.rs` exposes Forge as the first linked native runtime-service wrapper with manifest, route declarations, health receipts, and lifecycle receipts while preserving existing `ForgeNode` internals.
+- [`runtime-sponsorship.md`](runtime-sponsorship.md) documents the sponsored runtime grant boundary: Aspen enforces resource authority, placement admission, quota ledgers, and redacted receipts while settlement stays external and currency-neutral.
 
 Still active/future work:
 

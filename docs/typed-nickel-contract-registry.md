@@ -72,6 +72,7 @@ nix run nixpkgs#nickel -- typecheck schemas/sponsored-runtime-policy.ncl
 nix run nixpkgs#nickel -- typecheck schemas/sponsored-runtime-grant.ncl
 nix run nixpkgs#nickel -- typecheck schemas/sponsored-quota-ledger.ncl
 nix run nixpkgs#nickel -- typecheck schemas/sponsored-usage-receipt.ncl
+CARGO_TARGET_DIR=target/agent cargo test -p aspen-runtime-core --all-targets
 cargo test -p aspen-ci test_deploy_protocol_schema_snapshot
 cargo nextest run -p aspen-ci test_deploy_protocol_schema_snapshot
 cargo test -p aspen-client-api ci_receipt_schema_and_status_labels_are_documented --features ci
