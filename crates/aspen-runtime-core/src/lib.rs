@@ -265,6 +265,147 @@ impl HyperlightRuntimeProfile {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+pub enum MicroVmVirtualizationBackend {
+    Kvm,
+    Hvf,
+    Whpx,
+    TcgDevelopmentOnly,
+    Other(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MicroVmGuestArtifactProfile {
+    LinuxKernelInitrdRootfs,
+    LinuxKernelDisk,
+    Unikernel,
+    Other(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MicroVmRunnerCapability {
+    pub capability_handle_id: String,
+    pub engine: MicroVmEngine,
+    pub virtualization_backend: MicroVmVirtualizationBackend,
+    pub runner_version: String,
+    pub supported_guest_profiles: Vec<MicroVmGuestArtifactProfile>,
+    pub max_resources: RuntimeResources,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MicroVmLaunchBindingKind {
+    Mount,
+    BlockDevice,
+    NetworkInterface,
+    VsockChannel,
+    Metadata,
+    CapabilityHandle,
+    OutputArtifact,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MicroVmLaunchBinding {
+    pub binding_id: String,
+    pub kind: MicroVmLaunchBindingKind,
+    pub capability_handle_id: String,
+    pub secret_safe: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MicroVmGuestArtifacts {
+    pub guest_profile: MicroVmGuestArtifactProfile,
+    pub kernel_hash: Option<String>,
+    pub initrd_hash: Option<String>,
+    pub rootfs_hash: Option<String>,
+    pub disk_hashes: Vec<String>,
+    pub guest_image_hash: Option<String>,
+}
+
+impl MicroVmGuestArtifacts {
+    #[must_use]
+    pub fn content_identities(&self) -> Vec<&str> {
+        let mut identities = Vec::new();
+        if let Some(hash) = self.kernel_hash.as_deref() {
+            identities.push(hash);
+        }
+        if let Some(hash) = self.initrd_hash.as_deref() {
+            identities.push(hash);
+        }
+        if let Some(hash) = self.rootfs_hash.as_deref() {
+            identities.push(hash);
+        }
+        identities.extend(self.disk_hashes.iter().map(String::as_str));
+        if let Some(hash) = self.guest_image_hash.as_deref() {
+            identities.push(hash);
+        }
+        identities
+    }
+
+    #[must_use]
+    pub fn all_hashes_verified(&self) -> bool {
+        let identities = self.content_identities();
+        !identities.is_empty() && identities.iter().all(|hash| hash.starts_with("sha256:"))
+    }
+
+    #[must_use]
+    pub fn matches_runtime_artifact(&self, artifact: &RuntimeArtifact) -> bool {
+        match (artifact, &self.guest_profile) {
+            (
+                RuntimeArtifact::LinuxGuest {
+                    kernel_hash,
+                    initrd_hash,
+                    rootfs_hash,
+                },
+                MicroVmGuestArtifactProfile::LinuxKernelInitrdRootfs | MicroVmGuestArtifactProfile::LinuxKernelDisk,
+            ) => {
+                self.kernel_hash.as_ref() == Some(kernel_hash)
+                    && self.initrd_hash.as_ref() == initrd_hash.as_ref()
+                    && self.rootfs_hash.as_ref() == Some(rootfs_hash)
+            }
+            (RuntimeArtifact::Unikernel { image_hash, .. }, MicroVmGuestArtifactProfile::Unikernel) => {
+                self.guest_image_hash.as_ref() == Some(image_hash)
+            }
+            _ => false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MicroVmRuntimeProfile {
+    pub runner_capability: MicroVmRunnerCapability,
+    pub guest_artifacts: MicroVmGuestArtifacts,
+    pub resources: RuntimeResources,
+    pub launch_bindings: Vec<MicroVmLaunchBinding>,
+    pub lease_id: String,
+    pub heartbeat_interval_ms: u64,
+    pub log_limit_bytes: u32,
+    pub output_artifacts: Vec<RedactedValue>,
+}
+
+impl MicroVmRuntimeProfile {
+    #[must_use]
+    pub fn host_kind(&self) -> RuntimeHostKind {
+        RuntimeHostKind::MicroVm {
+            engine: self.runner_capability.engine.clone(),
+        }
+    }
+
+    #[must_use]
+    pub fn declared_capability_handles(&self) -> Vec<&str> {
+        let mut handles = vec![self.runner_capability.capability_handle_id.as_str()];
+        handles.extend(self.launch_bindings.iter().map(|binding| binding.capability_handle_id.as_str()));
+        handles
+    }
+
+    #[must_use]
+    pub fn outputs_contain_raw_secret(&self) -> bool {
+        self.output_artifacts.iter().any(RedactedValue::looks_secret)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum RuntimeUnitKind {
     Service,
     ExecutionRun,
@@ -954,6 +1095,144 @@ pub enum AdmissionError {
     HyperlightRequiresDeclaredHostCallCapability,
     HyperlightRejectsAmbientHostAccess,
     HyperlightReceiptContainsRawSecret,
+    MicroVmRequiresMicroVmHost,
+    MicroVmRequiresCompatibleRunner,
+    MicroVmRequiresRunnerCapability,
+    MicroVmRequiresVerifiedGuestArtifact,
+    MicroVmUnsupportedGuestProfile,
+    MicroVmResourcePolicyExceeded,
+    MicroVmRequiresDeclaredLaunchBinding,
+    MicroVmRejectsAmbientAuthority,
+    MicroVmInvalidLifecycleLease,
+    MicroVmReceiptContainsRawSecret,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MicroVmProfileReceipt {
+    pub receipt_id: String,
+    pub unit_id: String,
+    pub assigned_node_id: String,
+    pub engine: MicroVmEngine,
+    pub virtualization_backend: MicroVmVirtualizationBackend,
+    pub runner_version: String,
+    pub attempt: u32,
+    pub lease_id: String,
+    pub heartbeat_interval_ms: u64,
+    pub lifecycle_status: RuntimeLifecycleStatus,
+    pub resource_summary: RuntimeResources,
+    pub artifact_identities: Vec<String>,
+    pub granted_authority: Vec<RedactedValue>,
+    pub log_summary: RedactedValue,
+    pub output_artifacts: Vec<RedactedValue>,
+    pub diagnostics: Vec<RuntimeDiagnostic>,
+}
+
+impl MicroVmProfileReceipt {
+    #[must_use]
+    pub fn contains_raw_secret(&self) -> bool {
+        self.granted_authority.iter().any(RedactedValue::looks_secret)
+            || self.log_summary.looks_secret()
+            || self.output_artifacts.iter().any(RedactedValue::looks_secret)
+            || self.diagnostics.iter().any(|diag| diag.value.looks_secret())
+    }
+}
+
+pub fn admit_microvm_profile(
+    decl: &RuntimeUnitDeclaration,
+    profile: &MicroVmRuntimeProfile,
+) -> Result<(), AdmissionError> {
+    if !matches!(decl.host_kind, RuntimeHostKind::MicroVm { .. }) {
+        return Err(AdmissionError::MicroVmRequiresMicroVmHost);
+    }
+    if decl.host_kind != profile.host_kind() {
+        return Err(AdmissionError::MicroVmRequiresCompatibleRunner);
+    }
+    if !profile.guest_artifacts.matches_runtime_artifact(&decl.artifact)
+        || !profile.guest_artifacts.all_hashes_verified()
+    {
+        return Err(AdmissionError::MicroVmRequiresVerifiedGuestArtifact);
+    }
+    if !profile.runner_capability.supported_guest_profiles.contains(&profile.guest_artifacts.guest_profile) {
+        return Err(AdmissionError::MicroVmUnsupportedGuestProfile);
+    }
+    if !decl
+        .capabilities
+        .iter()
+        .any(|binding| binding.handle_id == profile.runner_capability.capability_handle_id)
+    {
+        return Err(AdmissionError::MicroVmRequiresRunnerCapability);
+    }
+    if !resources_fit_within(&profile.resources, &profile.runner_capability.max_resources) {
+        return Err(AdmissionError::MicroVmResourcePolicyExceeded);
+    }
+    if profile.lease_id.trim().is_empty() || profile.heartbeat_interval_ms == 0 {
+        return Err(AdmissionError::MicroVmInvalidLifecycleLease);
+    }
+    for binding in &profile.launch_bindings {
+        if binding.binding_id.trim().is_empty() || binding.capability_handle_id.trim().is_empty() {
+            return Err(AdmissionError::MicroVmRejectsAmbientAuthority);
+        }
+        if !decl.capabilities.iter().any(|capability| capability.handle_id == binding.capability_handle_id) {
+            return Err(AdmissionError::MicroVmRequiresDeclaredLaunchBinding);
+        }
+        if !binding.secret_safe {
+            return Err(AdmissionError::MicroVmRejectsAmbientAuthority);
+        }
+    }
+    if profile.outputs_contain_raw_secret() {
+        return Err(AdmissionError::MicroVmReceiptContainsRawSecret);
+    }
+    admit_unit(decl)
+}
+
+pub fn admit_microvm_receipt(receipt: &MicroVmProfileReceipt) -> Result<(), AdmissionError> {
+    if receipt.contains_raw_secret() {
+        return Err(AdmissionError::MicroVmReceiptContainsRawSecret);
+    }
+    Ok(())
+}
+
+pub struct MicroVmReceiptInput<'a> {
+    pub receipt_id: String,
+    pub assigned_node_id: String,
+    pub attempt: u32,
+    pub decl: &'a RuntimeUnitDeclaration,
+    pub profile: &'a MicroVmRuntimeProfile,
+    pub lifecycle_status: RuntimeLifecycleStatus,
+    pub log_summary: RedactedValue,
+    pub diagnostics: Vec<RuntimeDiagnostic>,
+}
+
+pub fn microvm_lifecycle_receipt(input: MicroVmReceiptInput<'_>) -> MicroVmProfileReceipt {
+    MicroVmProfileReceipt {
+        receipt_id: input.receipt_id,
+        unit_id: input.decl.unit_id.clone(),
+        assigned_node_id: input.assigned_node_id,
+        engine: input.profile.runner_capability.engine.clone(),
+        virtualization_backend: input.profile.runner_capability.virtualization_backend.clone(),
+        runner_version: input.profile.runner_capability.runner_version.clone(),
+        attempt: input.attempt,
+        lease_id: input.profile.lease_id.clone(),
+        heartbeat_interval_ms: input.profile.heartbeat_interval_ms,
+        lifecycle_status: input.lifecycle_status,
+        resource_summary: input.profile.resources.clone(),
+        artifact_identities: input
+            .profile
+            .guest_artifacts
+            .content_identities()
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
+        granted_authority: input
+            .profile
+            .declared_capability_handles()
+            .into_iter()
+            .map(|handle| RedactedValue::OpaqueHandle(handle.to_string()))
+            .collect(),
+        log_summary: input.log_summary,
+        output_artifacts: input.profile.output_artifacts.clone(),
+        diagnostics: input.diagnostics,
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -1416,6 +1695,203 @@ mod tests {
         let decoded: RuntimeUnitDeclaration = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, decl);
         admit_unit(&decoded).unwrap();
+    }
+
+    fn microvm_profile(engine: MicroVmEngine) -> MicroVmRuntimeProfile {
+        MicroVmRuntimeProfile {
+            runner_capability: MicroVmRunnerCapability {
+                capability_handle_id: "runner:microvm".to_string(),
+                engine,
+                virtualization_backend: MicroVmVirtualizationBackend::Kvm,
+                runner_version: "microvm-runner-0.1".to_string(),
+                supported_guest_profiles: vec![
+                    MicroVmGuestArtifactProfile::LinuxKernelInitrdRootfs,
+                    MicroVmGuestArtifactProfile::LinuxKernelDisk,
+                    MicroVmGuestArtifactProfile::Unikernel,
+                ],
+                max_resources: RuntimeResources {
+                    memory_bytes: Some(1024 * 1024 * 1024),
+                    cpu_millis: Some(4_000),
+                    wall_time_ms: Some(60_000),
+                    wasm_fuel: None,
+                    max_open_files: Some(16),
+                },
+            },
+            guest_artifacts: MicroVmGuestArtifacts {
+                guest_profile: MicroVmGuestArtifactProfile::LinuxKernelInitrdRootfs,
+                kernel_hash: Some("sha256:kernel".to_string()),
+                initrd_hash: Some("sha256:initrd".to_string()),
+                rootfs_hash: Some("sha256:rootfs".to_string()),
+                disk_hashes: vec!["sha256:data-disk".to_string()],
+                guest_image_hash: None,
+            },
+            resources: RuntimeResources {
+                memory_bytes: Some(256 * 1024 * 1024),
+                cpu_millis: Some(1_000),
+                wall_time_ms: Some(10_000),
+                wasm_fuel: None,
+                max_open_files: Some(8),
+            },
+            launch_bindings: vec![
+                MicroVmLaunchBinding {
+                    binding_id: "vsock/control".to_string(),
+                    kind: MicroVmLaunchBindingKind::VsockChannel,
+                    capability_handle_id: "cap:vsock-control".to_string(),
+                    secret_safe: true,
+                },
+                MicroVmLaunchBinding {
+                    binding_id: "output/result".to_string(),
+                    kind: MicroVmLaunchBindingKind::OutputArtifact,
+                    capability_handle_id: "cap:output".to_string(),
+                    secret_safe: true,
+                },
+            ],
+            lease_id: "lease/microvm/1".to_string(),
+            heartbeat_interval_ms: 1_000,
+            log_limit_bytes: 8192,
+            output_artifacts: vec![RedactedValue::OpaqueHandle("blob:microvm-output".to_string())],
+        }
+    }
+
+    fn microvm_decl(profile: &MicroVmRuntimeProfile) -> RuntimeUnitDeclaration {
+        RuntimeUnitDeclaration {
+            unit_id: "run/microvm-demo".to_string(),
+            unit_kind: RuntimeUnitKind::ExecutionRun,
+            host_kind: profile.host_kind(),
+            artifact: RuntimeArtifact::LinuxGuest {
+                kernel_hash: "sha256:kernel".to_string(),
+                initrd_hash: Some("sha256:initrd".to_string()),
+                rootfs_hash: "sha256:rootfs".to_string(),
+            },
+            capabilities: vec![
+                RuntimeCapabilityBinding {
+                    handle_id: "runner:microvm".to_string(),
+                    ability: "runtime/launch".to_string(),
+                    resource: "aspen://runtime/runner/microvm".to_string(),
+                    proof_refs: vec!["ucan-proof:runner".to_string()],
+                    caveats: vec![],
+                },
+                RuntimeCapabilityBinding {
+                    handle_id: "cap:vsock-control".to_string(),
+                    ability: "runtime/vsock".to_string(),
+                    resource: "aspen://runtime/vsock/microvm-demo".to_string(),
+                    proof_refs: vec!["ucan-proof:vsock".to_string()],
+                    caveats: vec![],
+                },
+                RuntimeCapabilityBinding {
+                    handle_id: "cap:output".to_string(),
+                    ability: "blob/write".to_string(),
+                    resource: "aspen://blob/runtime/microvm-demo".to_string(),
+                    proof_refs: vec!["ucan-proof:output".to_string()],
+                    caveats: vec![],
+                },
+            ],
+            resources: profile.resources.clone(),
+            routes: vec![],
+        }
+    }
+
+    #[test]
+    fn microvm_runner_profile_aligns_with_runtime_core_vocabulary() {
+        let profile = microvm_profile(MicroVmEngine::CloudHypervisor);
+        let decl = microvm_decl(&profile);
+        assert_eq!(decl.unit_kind, RuntimeUnitKind::ExecutionRun);
+        assert_eq!(decl.host_kind, RuntimeHostKind::MicroVm {
+            engine: MicroVmEngine::CloudHypervisor
+        });
+        assert!(
+            matches!(decl.artifact, RuntimeArtifact::LinuxGuest { ref kernel_hash, ref initrd_hash, ref rootfs_hash }
+                if kernel_hash == "sha256:kernel" && initrd_hash.as_deref() == Some("sha256:initrd") && rootfs_hash == "sha256:rootfs")
+        );
+        assert_eq!(profile.runner_capability.virtualization_backend, MicroVmVirtualizationBackend::Kvm);
+        assert_eq!(profile.launch_bindings[0].kind, MicroVmLaunchBindingKind::VsockChannel);
+        admit_microvm_profile(&decl, &profile).unwrap();
+    }
+
+    #[test]
+    fn microvm_admission_fails_closed_before_boot() {
+        let profile = microvm_profile(MicroVmEngine::Firecracker);
+        let mut decl = microvm_decl(&profile);
+        decl.host_kind = RuntimeHostKind::Hyperlight;
+        assert_eq!(admit_microvm_profile(&decl, &profile), Err(AdmissionError::MicroVmRequiresMicroVmHost));
+
+        let mut decl = microvm_decl(&profile);
+        decl.host_kind = RuntimeHostKind::MicroVm {
+            engine: MicroVmEngine::CloudHypervisor,
+        };
+        assert_eq!(admit_microvm_profile(&decl, &profile), Err(AdmissionError::MicroVmRequiresCompatibleRunner));
+
+        let mut decl = microvm_decl(&profile);
+        decl.capabilities.retain(|cap| cap.handle_id != "runner:microvm");
+        assert_eq!(admit_microvm_profile(&decl, &profile), Err(AdmissionError::MicroVmRequiresRunnerCapability));
+
+        let mut bad_artifact = profile.clone();
+        bad_artifact.guest_artifacts.kernel_hash = Some("sha1:kernel".to_string());
+        assert_eq!(
+            admit_microvm_profile(&microvm_decl(&profile), &bad_artifact),
+            Err(AdmissionError::MicroVmRequiresVerifiedGuestArtifact)
+        );
+
+        let mut unsupported = profile.clone();
+        unsupported.runner_capability.supported_guest_profiles.clear();
+        assert_eq!(
+            admit_microvm_profile(&microvm_decl(&profile), &unsupported),
+            Err(AdmissionError::MicroVmUnsupportedGuestProfile)
+        );
+
+        let mut denied_binding = profile.clone();
+        denied_binding.launch_bindings[0].capability_handle_id = "cap:ambient-host-path".to_string();
+        assert_eq!(
+            admit_microvm_profile(&microvm_decl(&profile), &denied_binding),
+            Err(AdmissionError::MicroVmRequiresDeclaredLaunchBinding)
+        );
+
+        let mut ambient = profile.clone();
+        ambient.launch_bindings[0].secret_safe = false;
+        assert_eq!(
+            admit_microvm_profile(&microvm_decl(&profile), &ambient),
+            Err(AdmissionError::MicroVmRejectsAmbientAuthority)
+        );
+
+        let mut oversized = profile.clone();
+        oversized.resources.memory_bytes = Some(2 * 1024 * 1024 * 1024);
+        assert_eq!(
+            admit_microvm_profile(&microvm_decl(&profile), &oversized),
+            Err(AdmissionError::MicroVmResourcePolicyExceeded)
+        );
+    }
+
+    #[test]
+    fn microvm_receipts_redact_logs_outputs_and_handles() {
+        let profile = microvm_profile(MicroVmEngine::CloudHypervisor);
+        let decl = microvm_decl(&profile);
+        let receipt = microvm_lifecycle_receipt(MicroVmReceiptInput {
+            receipt_id: "receipt/microvm-running".to_string(),
+            assigned_node_id: "node/n1".to_string(),
+            attempt: 1,
+            decl: &decl,
+            profile: &profile,
+            lifecycle_status: RuntimeLifecycleStatus::Running,
+            log_summary: RedactedValue::Plain("serial log stored: 8192 bytes".to_string()),
+            diagnostics: vec![RuntimeDiagnostic {
+                key: "exit".to_string(),
+                value: RedactedValue::Plain("code=0".to_string()),
+            }],
+        });
+        assert_eq!(receipt.engine, MicroVmEngine::CloudHypervisor);
+        assert_eq!(receipt.artifact_identities.len(), 4);
+        assert!(receipt.artifact_identities.iter().all(|hash| hash.starts_with("sha256:")));
+        assert!(
+            receipt
+                .granted_authority
+                .iter()
+                .all(|authority| matches!(authority, RedactedValue::OpaqueHandle(_)))
+        );
+        admit_microvm_receipt(&receipt).unwrap();
+
+        let mut leaking = receipt;
+        leaking.log_summary = RedactedValue::Plain("token=raw".to_string());
+        assert_eq!(admit_microvm_receipt(&leaking), Err(AdmissionError::MicroVmReceiptContainsRawSecret));
     }
 
     fn hyperlight_profile() -> HyperlightRuntimeProfile {
