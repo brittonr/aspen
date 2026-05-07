@@ -19,6 +19,13 @@ Aspen MUST maintain explicit runtime-host E2E coverage metadata that distinguish
 - GIVEN WASM runner, OCI lowering, Hyperlight, or Hermit host classes lack full Aspen-spawned execution tests
 - WHEN the runtime-host matrix is reviewed
 - THEN those rows SHALL remain labeled as gaps or future work until an E2E suite executes through the real Aspen runtime path and produces product-visible output or receipt evidence
+- AND metadata-only rows SHALL be non-runnable evidence inventory entries rather than substitutes for product execution tests
+
+#### Scenario: Metadata rows carry explicit host proof labels [r[runtime-host-loading.e2e-matrix.metadata-labels]]
+- GIVEN the harness inventory records a runtime-host row
+- WHEN the row is exported for operators or CI tooling
+- THEN it SHALL include the runtime host kind, proof level, and support status when the row is part of the runtime-host matrix
+- AND metadata-only gap rows SHALL include a human-readable gap reason and no runnable build target
 
 #### Scenario: Secret-safe receipt evidence [r[runtime-host-loading.e2e-matrix.secret-safe-evidence]]
 - GIVEN a runtime-host E2E suite records logs, receipts, manifests, or output artifacts

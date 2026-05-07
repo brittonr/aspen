@@ -27,6 +27,7 @@ let runtime_class_contract = enum_string "runtime_class" [
   "real-network",
   "linux-namespaces",
   "nixos-vm",
+  "metadata-only",
 ] in
 
 let prerequisite_contract = enum_string "prerequisite" [
@@ -41,6 +42,27 @@ let prerequisite_contract = enum_string "prerequisite" [
 let target_kind_contract = enum_string "target.kind" [
   "cargo-nextest",
   "nix-build",
+  "metadata-only",
+] in
+
+let runtime_host_kind_contract = enum_string "runtime_host.kind" [
+  "microvm",
+  "wasm",
+  "oci-lowering",
+  "hyperlight",
+  "hermit",
+] in
+
+let runtime_host_proof_level_contract = enum_string "runtime_host.proof_level" [
+  "model-only",
+  "real-host-execution",
+  "aspen-spawned-execution",
+  "gap",
+] in
+
+let runtime_host_support_status_contract = enum_string "runtime_host.support_status" [
+  "e2e-registered",
+  "gap",
 ] in
 
 let run_ignored_contract = enum_string "target.run_ignored" [
@@ -88,6 +110,12 @@ let FaultDimension = {
     tags | Array String | default = [],
     capabilities | Array String | default = [],
     isolation_assumptions | Array String | default = [],
+    runtime_host | {
+      kind | runtime_host_kind_contract,
+      proof_level | runtime_host_proof_level_contract,
+      support_status | runtime_host_support_status_contract,
+      gap_reason | String | optional,
+    } | optional,
     timeout_class | timeout_class_contract | default = "standard",
     expected_artifacts | Array ArtifactExpectation | default = [],
     faults | Array FaultDimension | default = [],

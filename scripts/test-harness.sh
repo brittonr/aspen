@@ -97,6 +97,12 @@ command_from_suite() {
       flake_attr=$(jq -r '.target.flake_attr' <<<"$suite_json")
       printf 'nix build .#%q\n' "$flake_attr"
       ;;
+    metadata-only)
+      local suite_id gap_reason
+      suite_id=$(jq -r '.id' <<<"$suite_json")
+      gap_reason=$(jq -r '.runtime_host.gap_reason // "metadata-only suite"' <<<"$suite_json")
+      printf '# metadata-only: %s (%s)\n' "$suite_id" "$gap_reason"
+      ;;
     *)
       echo "unsupported suite target kind: $kind" >&2
       exit 1

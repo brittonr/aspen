@@ -9,9 +9,13 @@
       "test-harness/suites/rust/job-integration.ncl",
       "test-harness/suites/vm/multi-node-blob.ncl",
       "test-harness/suites/vm/multi-node-kv.ncl",
-      "test-harness/suites/vm/runtime-host-microvm-ci.ncl"
+      "test-harness/suites/vm/runtime-host-hermit-gap.ncl",
+      "test-harness/suites/vm/runtime-host-hyperlight-gap.ncl",
+      "test-harness/suites/vm/runtime-host-microvm-ci.ncl",
+      "test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl",
+      "test-harness/suites/vm/runtime-host-wasm-gap.ncl"
     ],
-    "inputs_sha256": "228bf80265b106282ac95e1e47d685ad6f87df11bd95b542273063aa0f5a1424"
+    "inputs_sha256": "362f7646ba638579d24aa8c73484f7970d134cda6cc0603f42b3060210a7ccd5"
   },
   "suites": [
     {
@@ -21,6 +25,7 @@
       "layer": "rust-integration",
       "owner": "blob",
       "runtime_class": "real-network",
+      "runtime_host": null,
       "prerequisites": [
         "network-access"
       ],
@@ -53,6 +58,7 @@
       "layer": "rust-integration",
       "owner": "jobs",
       "runtime_class": "real-network",
+      "runtime_host": null,
       "prerequisites": [
         "network-access"
       ],
@@ -85,6 +91,7 @@
       "layer": "vm",
       "owner": "blob",
       "runtime_class": "nixos-vm",
+      "runtime_host": null,
       "prerequisites": [
         "nix-command"
       ],
@@ -118,6 +125,7 @@
       "layer": "vm",
       "owner": "kv",
       "runtime_class": "nixos-vm",
+      "runtime_host": null,
       "prerequisites": [
         "nix-command"
       ],
@@ -151,6 +159,7 @@
       "layer": "patchbay",
       "owner": "networking",
       "runtime_class": "linux-namespaces",
+      "runtime_host": null,
       "prerequisites": [
         "linux-userns",
         "nftables",
@@ -183,6 +192,7 @@
       "layer": "patchbay",
       "owner": "networking",
       "runtime_class": "linux-namespaces",
+      "runtime_host": null,
       "prerequisites": [
         "linux-userns",
         "nftables",
@@ -209,12 +219,89 @@
       }
     },
     {
+      "id": "runtime-host-hermit-gap",
+      "display_name": "Runtime host Hermit/unikernel E2E gap",
+      "description": "Metadata-only row: Aspen has Hermit/unikernel profile/admission/receipt model coverage, but no registered suite that spawns and observes a real Hermit/unikernel workload through Aspen.",
+      "layer": "vm",
+      "owner": "runtime-host-loading",
+      "runtime_class": "metadata-only",
+      "runtime_host": {
+        "kind": "hermit",
+        "proof_level": "gap",
+        "support_status": "gap",
+        "gap_reason": "No suite currently launches a Hermit/unikernel workload through Aspen's runtime path and records bounded lifecycle/output/receipt evidence."
+      },
+      "prerequisites": [],
+      "tags": [
+        "gap",
+        "hermit",
+        "metadata-only",
+        "runtime-host",
+        "unikernel"
+      ],
+      "manifest_path": "test-harness/suites/vm/runtime-host-hermit-gap.ncl",
+      "target": {
+        "kind": "metadata-only",
+        "package": null,
+        "test": null,
+        "profile": null,
+        "features": [],
+        "run_ignored": null,
+        "flake_attr": null,
+        "check_attr": null,
+        "nix_file": null,
+        "package_presets": {},
+        "register_flake_check": false
+      }
+    },
+    {
+      "id": "runtime-host-hyperlight-gap",
+      "display_name": "Runtime host Hyperlight E2E gap",
+      "description": "Metadata-only row: Aspen has Hyperlight profile/admission/receipt model coverage and build plumbing, but no registered real Aspen-spawned Hyperlight execution suite.",
+      "layer": "vm",
+      "owner": "runtime-host-loading",
+      "runtime_class": "metadata-only",
+      "runtime_host": {
+        "kind": "hyperlight",
+        "proof_level": "gap",
+        "support_status": "gap",
+        "gap_reason": "No suite currently launches a Hyperlight workload through Aspen's runtime path and records product-visible lifecycle/output/receipt evidence."
+      },
+      "prerequisites": [],
+      "tags": [
+        "gap",
+        "hyperlight",
+        "metadata-only",
+        "runtime-host"
+      ],
+      "manifest_path": "test-harness/suites/vm/runtime-host-hyperlight-gap.ncl",
+      "target": {
+        "kind": "metadata-only",
+        "package": null,
+        "test": null,
+        "profile": null,
+        "features": [],
+        "run_ignored": null,
+        "flake_attr": null,
+        "check_attr": null,
+        "nix_file": null,
+        "package_presets": {},
+        "register_flake_check": false
+      }
+    },
+    {
       "id": "runtime-host-microvm-ci-vm",
       "display_name": "Runtime host microVM CI worker E2E",
       "description": "Aspen-spawned CloudHypervisorWorker path: start Aspen, create a CI VM golden snapshot, submit ci_vm jobs through aspen-cli, and observe guest-backed completion.",
       "layer": "vm",
       "owner": "runtime-host-loading",
       "runtime_class": "nixos-vm",
+      "runtime_host": {
+        "kind": "microvm",
+        "proof_level": "aspen-spawned-execution",
+        "support_status": "e2e-registered",
+        "gap_reason": null
+      },
       "prerequisites": [
         "nested-kvm",
         "nix-command"
@@ -239,6 +326,77 @@
         "flake_attr": "checks.x86_64-linux.vm-snapshot-e2e-test",
         "check_attr": "vm-snapshot-e2e-test",
         "nix_file": "nix/tests/vm-snapshot-e2e.nix",
+        "package_presets": {},
+        "register_flake_check": false
+      }
+    },
+    {
+      "id": "runtime-host-oci-lowering-gap",
+      "display_name": "Runtime host OCI lowering execution E2E gap",
+      "description": "Metadata-only row: Aspen has OCI lowering admission/receipt model coverage, but no registered suite that ingests an immutable OCI artifact, lowers it into an isolated host, executes it, and reads a secret-safe receipt.",
+      "layer": "vm",
+      "owner": "runtime-host-loading",
+      "runtime_class": "metadata-only",
+      "runtime_host": {
+        "kind": "oci-lowering",
+        "proof_level": "gap",
+        "support_status": "gap",
+        "gap_reason": "No suite currently proves OCI artifact ingestion plus lowering into a supported isolated host with execution and secret-safe receipt evidence; raw container execution remains out of scope."
+      },
+      "prerequisites": [],
+      "tags": [
+        "gap",
+        "metadata-only",
+        "oci",
+        "oci-lowering",
+        "runtime-host"
+      ],
+      "manifest_path": "test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl",
+      "target": {
+        "kind": "metadata-only",
+        "package": null,
+        "test": null,
+        "profile": null,
+        "features": [],
+        "run_ignored": null,
+        "flake_attr": null,
+        "check_attr": null,
+        "nix_file": null,
+        "package_presets": {},
+        "register_flake_check": false
+      }
+    },
+    {
+      "id": "runtime-host-wasm-gap",
+      "display_name": "Runtime host WASM runner E2E gap",
+      "description": "Metadata-only row: Aspen has WASM admission/lifecycle model coverage and plugin plumbing, but no registered suite that boots Aspen and executes a WASM component through the real runtime path.",
+      "layer": "vm",
+      "owner": "runtime-host-loading",
+      "runtime_class": "metadata-only",
+      "runtime_host": {
+        "kind": "wasm",
+        "proof_level": "gap",
+        "support_status": "gap",
+        "gap_reason": "No suite currently starts Aspen with the real WASM runtime path, invokes a component through product RPC/host-call flow, and asserts product-visible output or receipt evidence."
+      },
+      "prerequisites": [],
+      "tags": [
+        "gap",
+        "metadata-only",
+        "runtime-host",
+        "wasm"
+      ],
+      "manifest_path": "test-harness/suites/vm/runtime-host-wasm-gap.ncl",
+      "target": {
+        "kind": "metadata-only",
+        "package": null,
+        "test": null,
+        "profile": null,
+        "features": [],
+        "run_ignored": null,
+        "flake_attr": null,
+        "check_attr": null,
+        "nix_file": null,
         "package_presets": {},
         "register_flake_check": false
       }

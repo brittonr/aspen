@@ -79,6 +79,7 @@ pub struct SuiteInventoryRecord {
     pub layer: SuiteLayer,
     pub owner: String,
     pub runtime_class: RuntimeClass,
+    pub runtime_host: Option<RuntimeHostMetadata>,
     pub prerequisites: Vec<Prerequisite>,
     pub tags: Vec<String>,
     pub manifest_path: String,
@@ -99,6 +100,41 @@ pub enum RuntimeClass {
     RealNetwork,
     LinuxNamespaces,
     NixosVm,
+    MetadataOnly,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RuntimeHostMetadata {
+    pub kind: RuntimeHostKind,
+    pub proof_level: RuntimeHostProofLevel,
+    pub support_status: RuntimeHostSupportStatus,
+    pub gap_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeHostKind {
+    Microvm,
+    Wasm,
+    OciLowering,
+    Hyperlight,
+    Hermit,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeHostProofLevel {
+    ModelOnly,
+    RealHostExecution,
+    AspenSpawnedExecution,
+    Gap,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeHostSupportStatus {
+    E2eRegistered,
+    Gap,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -132,6 +168,7 @@ pub struct SuiteTarget {
 pub enum SuiteTargetKind {
     CargoNextest,
     NixBuild,
+    MetadataOnly,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -152,11 +189,22 @@ struct SuiteManifest {
     layer: String,
     owner: String,
     runtime_class: String,
+    #[serde(default)]
+    runtime_host: Option<RawRuntimeHostMetadata>,
     #[serde(default = "default_string_vec")]
     prerequisites: Vec<String>,
     #[serde(default = "default_string_vec")]
     tags: Vec<String>,
     target: RawSuiteTarget,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct RawRuntimeHostMetadata {
+    kind: String,
+    proof_level: String,
+    support_status: String,
+    #[serde(default = "default_option_string")]
+    gap_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -330,17 +378,21 @@ fn validate_manifest(manifest: &SuiteManifest, manifest_path: &Path, repo_root: 
         }
         SuiteLayer::Vm => {
             ensure!(
-                target_kind == SuiteTargetKind::NixBuild,
-                "{} must use target.kind = nix-build for vm suites",
+                matches!(target_kind, SuiteTargetKind::NixBuild | SuiteTargetKind::MetadataOnly),
+                "{} must use target.kind = nix-build or metadata-only for vm suites",
                 manifest_path.display()
             );
         }
     }
     debug_assert!(matches!(layer, SuiteLayer::RustIntegration | SuiteLayer::Patchbay | SuiteLayer::Vm));
-    debug_assert!(matches!(target_kind, SuiteTargetKind::CargoNextest | SuiteTargetKind::NixBuild));
+    debug_assert!(matches!(
+        target_kind,
+        SuiteTargetKind::CargoNextest | SuiteTargetKind::NixBuild | SuiteTargetKind::MetadataOnly
+    ));
     match target_kind {
         SuiteTargetKind::CargoNextest => validate_cargo_target(&manifest.target, manifest_path, repo_root),
         SuiteTargetKind::NixBuild => validate_nix_target(&manifest.target, manifest_path, repo_root),
+        SuiteTargetKind::MetadataOnly => validate_metadata_target(manifest, manifest_path),
     }
 }
 
@@ -363,6 +415,55 @@ fn validate_cargo_target(target: &RawSuiteTarget, manifest_path: &Path, _repo_ro
         "{} cannot enable register_flake_check for cargo-nextest targets",
         manifest_path.display()
     );
+    Ok(())
+}
+
+fn validate_metadata_target(manifest: &SuiteManifest, manifest_path: &Path) -> Result<()> {
+    let target = &manifest.target;
+    ensure!(
+        manifest.runtime_host.is_some(),
+        "{} metadata-only target requires runtime_host metadata",
+        manifest_path.display()
+    );
+    ensure!(
+        !target.register_flake_check,
+        "{} cannot enable register_flake_check for metadata-only targets",
+        manifest_path.display()
+    );
+    ensure!(
+        target.package.is_none(),
+        "{} metadata-only target cannot set target.package",
+        manifest_path.display()
+    );
+    ensure!(target.test.is_none(), "{} metadata-only target cannot set target.test", manifest_path.display());
+    ensure!(
+        target.flake_attr.is_none(),
+        "{} metadata-only target cannot set target.flake_attr",
+        manifest_path.display()
+    );
+    ensure!(
+        target.check_attr.is_none(),
+        "{} metadata-only target cannot set target.check_attr",
+        manifest_path.display()
+    );
+    ensure!(
+        target.nix_file.is_none(),
+        "{} metadata-only target cannot set target.nix_file",
+        manifest_path.display()
+    );
+    if let Some(runtime_host) = &manifest.runtime_host {
+        ensure!(
+            runtime_host.proof_level == "gap" || runtime_host.support_status == "e2e-registered",
+            "{} metadata-only target must be a gap or explicitly registered evidence pointer",
+            manifest_path.display()
+        );
+        ensure!(
+            runtime_host.proof_level != "gap"
+                || runtime_host.gap_reason.as_deref().is_some_and(|value| !value.trim().is_empty()),
+            "{} gap runtime_host metadata requires a non-empty gap_reason",
+            manifest_path.display()
+        );
+    }
     Ok(())
 }
 
@@ -474,6 +575,7 @@ fn to_inventory_record(
         layer,
         owner,
         runtime_class,
+        runtime_host,
         prerequisites,
         mut tags,
         target,
@@ -494,6 +596,7 @@ fn to_inventory_record(
 
     let layer = parse_layer(&layer, manifest_path)?;
     let runtime_class = parse_runtime_class(&runtime_class, manifest_path)?;
+    let runtime_host = runtime_host.map(|metadata| parse_runtime_host(metadata, manifest_path)).transpose()?;
     let mut prerequisites = parse_prerequisites(&prerequisites, manifest_path)?;
     let kind = parse_target_kind(&kind, manifest_path)?;
     let run_ignored = run_ignored.as_deref().map(|value| parse_run_ignored(value, manifest_path)).transpose()?;
@@ -512,6 +615,7 @@ fn to_inventory_record(
         layer,
         owner,
         runtime_class,
+        runtime_host,
         prerequisites,
         tags,
         manifest_path,
@@ -545,8 +649,42 @@ fn parse_runtime_class(value: &str, manifest_path: &Path) -> Result<RuntimeClass
         "real-network" => Ok(RuntimeClass::RealNetwork),
         "linux-namespaces" => Ok(RuntimeClass::LinuxNamespaces),
         "nixos-vm" => Ok(RuntimeClass::NixosVm),
+        "metadata-only" => Ok(RuntimeClass::MetadataOnly),
         _ => bail!("{} has unsupported runtime_class `{}`", manifest_path.display(), value),
     }
+}
+
+fn parse_runtime_host(metadata: RawRuntimeHostMetadata, manifest_path: &Path) -> Result<RuntimeHostMetadata> {
+    let kind = match metadata.kind.as_str() {
+        "microvm" => RuntimeHostKind::Microvm,
+        "wasm" => RuntimeHostKind::Wasm,
+        "oci-lowering" => RuntimeHostKind::OciLowering,
+        "hyperlight" => RuntimeHostKind::Hyperlight,
+        "hermit" => RuntimeHostKind::Hermit,
+        _ => bail!("{} has unsupported runtime_host.kind `{}`", manifest_path.display(), metadata.kind),
+    };
+    let proof_level = match metadata.proof_level.as_str() {
+        "model-only" => RuntimeHostProofLevel::ModelOnly,
+        "real-host-execution" => RuntimeHostProofLevel::RealHostExecution,
+        "aspen-spawned-execution" => RuntimeHostProofLevel::AspenSpawnedExecution,
+        "gap" => RuntimeHostProofLevel::Gap,
+        _ => bail!("{} has unsupported runtime_host.proof_level `{}`", manifest_path.display(), metadata.proof_level),
+    };
+    let support_status = match metadata.support_status.as_str() {
+        "e2e-registered" => RuntimeHostSupportStatus::E2eRegistered,
+        "gap" => RuntimeHostSupportStatus::Gap,
+        _ => bail!(
+            "{} has unsupported runtime_host.support_status `{}`",
+            manifest_path.display(),
+            metadata.support_status
+        ),
+    };
+    Ok(RuntimeHostMetadata {
+        kind,
+        proof_level,
+        support_status,
+        gap_reason: metadata.gap_reason,
+    })
 }
 
 fn parse_prerequisites(values: &[String], manifest_path: &Path) -> Result<Vec<Prerequisite>> {
@@ -568,6 +706,7 @@ fn parse_target_kind(value: &str, manifest_path: &Path) -> Result<SuiteTargetKin
     match value {
         "cargo-nextest" => Ok(SuiteTargetKind::CargoNextest),
         "nix-build" => Ok(SuiteTargetKind::NixBuild),
+        "metadata-only" => Ok(SuiteTargetKind::MetadataOnly),
         _ => bail!("{} has unsupported target.kind `{}`", manifest_path.display(), value),
     }
 }
@@ -667,12 +806,49 @@ mod tests {
         assert_eq!(inventory.metadata.inputs_sha256.len(), 64);
         assert_eq!(inventory.suites.len(), 2);
         assert_eq!(inventory.suites[0].id, "multi-node-kv-vm");
+        assert_eq!(inventory.suites[0].runtime_host, None);
         assert_eq!(inventory.suites[0].tags, vec!["kv".to_string(), "replication".to_string(), "vm".to_string()]);
         assert_eq!(inventory.suites[1].prerequisites, vec![
             Prerequisite::LinuxUserns,
             Prerequisite::Nftables,
             Prerequisite::TrafficControl,
         ]);
+    }
+
+    #[test]
+    fn metadata_only_runtime_host_gap_rows_are_inventory_records() {
+        let repo = TestRepo::new();
+        repo.write_manifest(
+            "vm/runtime-host-wasm-gap.ncl",
+            r#"
+            {
+              id = "runtime-host-wasm-gap",
+              layer = "vm",
+              owner = "runtime-host-loading",
+              runtime_class = "metadata-only",
+              runtime_host = {
+                kind = "wasm",
+                proof_level = "gap",
+                support_status = "gap",
+                gap_reason = "No real Aspen-spawned WASM runner E2E is registered.",
+              },
+              tags = ["runtime-host", "gap", "wasm"],
+              target = {
+                kind = "metadata-only",
+              },
+            }
+            "#,
+        );
+
+        let inventory = load_inventory(&repo.paths()).expect("metadata-only gap row should load");
+        let suite = &inventory.suites[0];
+        assert_eq!(suite.runtime_class, RuntimeClass::MetadataOnly);
+        assert_eq!(suite.target.kind, SuiteTargetKind::MetadataOnly);
+        let runtime_host = suite.runtime_host.as_ref().expect("runtime host metadata is exported");
+        assert_eq!(runtime_host.kind, RuntimeHostKind::Wasm);
+        assert_eq!(runtime_host.proof_level, RuntimeHostProofLevel::Gap);
+        assert_eq!(runtime_host.support_status, RuntimeHostSupportStatus::Gap);
+        assert!(runtime_host.gap_reason.as_deref().unwrap().contains("WASM runner E2E"));
     }
 
     #[test]

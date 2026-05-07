@@ -8,6 +8,6 @@
 
 ## Phase 2: Follow-up host rows
 
-- [ ] [depends:runtime-host-microvm-suite] Add a WASM runner E2E that executes through the real Aspen runtime path rather than only plugin install/reload plumbing.
-- [ ] [depends:runtime-host-microvm-suite] Add an OCI lowering E2E that ingests an immutable OCI artifact, lowers it into an isolated host, executes it, and reads a secret-safe receipt.
-- [ ] [depends:runtime-host-microvm-suite] Add Hyperlight/Hermit E2E rows once their runner paths are stable enough for bounded nested-KVM verification.
+- [x] [depends:runtime-host-microvm-suite] Add explicit runtime-host matrix metadata support for host kind, proof level, support status, and metadata-only gap rows. ✅ 24m (started: 2026-05-07T18:20:00Z → completed: 2026-05-07T18:44:00Z)
+- [x] [depends:runtime-host-metadata] Add WASM, OCI lowering, Hyperlight, and Hermit/unikernel metadata-only gap rows without overclaiming E2E execution. ✅ 10m (started: 2026-05-07T18:34:00Z → completed: 2026-05-07T18:44:00Z)
+- [x] [depends:runtime-host-gap-rows] Regenerate inventory and validate OpenSpec, harness, Rust, command-list, and gated Nix metadata checks before archive. ✅ 12m (started: 2026-05-07T18:44:00Z → completed: 2026-05-07T18:56:00Z)

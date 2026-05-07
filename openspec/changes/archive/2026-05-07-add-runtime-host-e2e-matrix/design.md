@@ -31,11 +31,11 @@ Existing coverage is uneven: several NixOS tests launch real Cloud Hypervisor gu
 
 **Rationale:** Operators need to list and select the suite without accidentally launching a nested virtualization workload. Existing prerequisite values did not distinguish ordinary Nix command support from nested KVM.
 
-### 3. Matrix gaps stay active
+### 3. Matrix gaps stay active as metadata-only rows
 
-**Choice:** Keep this OpenSpec active after landing the first microVM row.
+**Choice:** Add non-runnable `metadata-only` harness rows for WASM, OCI lowering, Hyperlight, and Hermit while retaining only the microVM row as `aspen-spawned-execution` evidence.
 
-**Rationale:** The matrix is not complete until WASM runner execution, OCI lowering execution, Hyperlight, and Hermit rows have real Aspen-spawned evidence or explicit unsupported/future labels.
+**Rationale:** The matrix is more useful when every intended host class is visible, but gap rows must not masquerade as runnable proof. Metadata-only rows carry `runtime_host.kind`, `proof_level`, `support_status`, and `gap_reason`; command listing prints comments and `run` treats them as no-op comments rather than build commands. Future work promotes a gap by replacing the metadata-only target with a real suite target and evidence.
 
 ## Risks / Trade-offs
 

@@ -5,6 +5,11 @@
   layer = "vm",
   owner = "runtime-host-loading",
   runtime_class = "nixos-vm",
+  runtime_host = {
+    kind = "microvm",
+    proof_level = "aspen-spawned-execution",
+    support_status = "e2e-registered",
+  },
   prerequisites = ["nix-command", "nested-kvm"],
   tags = ["runtime-host", "microvm", "cloud-hypervisor", "ci-vm", "aspen-spawned", "expensive", "impure"],
   capabilities = [
