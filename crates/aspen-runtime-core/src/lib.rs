@@ -1108,6 +1108,71 @@ mod tests {
     }
 
     #[test]
+    fn sponsored_rust_derived_dtos_serialize_roundtrip() {
+        let grant = sponsored_grant();
+        let grant_json = serde_json::to_string(&grant).unwrap();
+        assert!(grant_json.contains("sponsor"));
+        assert!(grant_json.contains("native-built-in"));
+        let decoded_grant: SponsoredRuntimeGrant = serde_json::from_str(&grant_json).unwrap();
+        assert_eq!(decoded_grant, grant);
+
+        let ledger = SponsoredQuotaLedger {
+            grant_id: "grant-open-source-ci".to_string(),
+            total: sponsored_limits(),
+            reserved: SponsoredResourceLimits {
+                cpu_millis: 1_000,
+                memory_bytes: 128 * 1024 * 1024,
+                storage_bytes_ms: 1_000,
+                network_bytes: 10_000,
+                wall_time_ms: 5_000,
+                max_concurrent: 0,
+            },
+            consumed: SponsoredResourceLimits {
+                cpu_millis: 2_000,
+                memory_bytes: 256 * 1024 * 1024,
+                storage_bytes_ms: 2_000,
+                network_bytes: 20_000,
+                wall_time_ms: 10_000,
+                max_concurrent: 0,
+            },
+            active_concurrency: 1,
+        };
+        let ledger_json = serde_json::to_string(&ledger).unwrap();
+        let decoded_ledger: SponsoredQuotaLedger = serde_json::from_str(&ledger_json).unwrap();
+        assert_eq!(decoded_ledger, ledger);
+
+        let receipt = SponsoredUsageReceipt {
+            schema: "aspen.sponsored-usage-receipt.v1".to_string(),
+            receipt_id: "receipt/sponsored/roundtrip".to_string(),
+            execution_id: "run/ci/roundtrip".to_string(),
+            workload_principal_id: "workload/aspen-ci".to_string(),
+            service_principal_id: Some("service/forge".to_string()),
+            provider_principal_id: "provider/nodepool-a".to_string(),
+            sponsor_principal_id: "org/aspen-foundation".to_string(),
+            grant_id: "grant-open-source-ci".to_string(),
+            measured: sponsored_limits(),
+            started_at_ms: 2_000,
+            completed_at_ms: Some(3_000),
+            outcome: SponsoredReceiptOutcome::Completed,
+            artifact_refs: vec!["blake3:artifact".to_string()],
+            isolation_summary: "native-built-in".to_string(),
+            settlement: SponsoredSettlementReference {
+                method_tag: "voucher".to_string(),
+                opaque_ref: RedactedValue::Redacted,
+            },
+            diagnostics: vec![RuntimeDiagnostic {
+                key: "operator-note".to_string(),
+                value: RedactedValue::Redacted,
+            }],
+        };
+        let receipt_json = serde_json::to_string(&receipt).unwrap();
+        assert!(receipt_json.contains("completed"));
+        assert!(!receipt_json.contains("token="));
+        let decoded_receipt: SponsoredUsageReceipt = serde_json::from_str(&receipt_json).unwrap();
+        assert_eq!(decoded_receipt, receipt);
+    }
+
+    #[test]
     fn sponsored_usage_receipts_redact_settlement_and_diagnostics() {
         let grant = sponsored_grant();
         let receipt = SponsoredUsageReceipt {

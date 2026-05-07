@@ -104,11 +104,11 @@ PRIMITIVES = {
     "String": "String",
     "str": "String",
     "bool": "Bool",
-    "u8": "Number",
-    "u16": "Number",
-    "u32": "Number",
-    "u64": "Number",
-    "usize": "Number",
+    "u8": "NonNegativeNumber",
+    "u16": "NonNegativeNumber",
+    "u32": "NonNegativeNumber",
+    "u64": "NonNegativeNumber",
+    "usize": "NonNegativeNumber",
     "i8": "Number",
     "i16": "Number",
     "i32": "Number",
@@ -133,6 +133,14 @@ class EnumDef:
 
 
 RustDef = StructDef | EnumDef
+
+
+def rename_variant(name: str, rename_all: str | None) -> str:
+    if rename_all == "snake_case":
+        return snake_case(name)
+    if rename_all == "kebab-case":
+        return snake_case(name).replace("_", "-")
+    return name
 
 
 def snake_case(name: str) -> str:
@@ -181,7 +189,7 @@ def parse_rust_defs(source: str) -> dict[str, RustDef]:
             pending_derives = [item.strip() for item in stripped.removeprefix("#[derive(").removesuffix(")] ").removesuffix(")]").split(",")]
             i += 1
             continue
-        rename_match = re.match(r'#\[serde\(rename_all = "([^"]+)"\)\]', stripped)
+        rename_match = re.match(r'#\[serde\([^\]]*rename_all = "([^"]+)"', stripped)
         if rename_match:
             pending_rename_all = rename_match.group(1)
             i += 1
@@ -286,15 +294,19 @@ def render_contract_set(contract_set: ContractSet, all_defs: dict[str, RustDef])
         "      'Error { message = \"%{field} must be one of %{std.serialize 'Json allowed}\" }",
         "  ) in",
         "",
+        "let NonNegativeNumber = std.contract.from_validator (fun value =>",
+        "  if std.is_number value && value >= 0 then",
+        "    'Ok",
+        "  else",
+        "    'Error { message = \"number must be non-negative\" }",
+        ") in",
+        "",
     ]
 
     for type_name in contract_set.types:
         definition = all_defs[type_name]
         if isinstance(definition, EnumDef):
-            if definition.rename_all == "snake_case":
-                values = [snake_case(variant) for variant in definition.variants]
-            else:
-                values = list(definition.variants)
+            values = [rename_variant(variant, definition.rename_all) for variant in definition.variants]
             rendered_values = ", ".join(f'"{value}"' for value in values)
             lines.append(f"let {definition.name} = enum_string \"{definition.name}\" [{rendered_values}] in")
             lines.append("")
@@ -307,9 +319,12 @@ def render_contract_set(contract_set: ContractSet, all_defs: dict[str, RustDef])
             lines.append("} in")
             lines.append("")
 
+    for type_name in contract_set.types:
+        lines.append(f"let {type_name}Contract = {type_name} in")
+    lines.append("")
     lines.append("{")
     for type_name in contract_set.types:
-        lines.append(f"  {type_name},")
+        lines.append(f"  {type_name} = {type_name}Contract,")
     lines.append("}")
     lines.append("")
     return "\n".join(lines)

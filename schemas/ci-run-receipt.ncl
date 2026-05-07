@@ -14,10 +14,17 @@ let enum_string = fun field allowed =>
       'Error { message = "%{field} must be one of %{std.serialize 'Json allowed}" }
   ) in
 
+let NonNegativeNumber = std.contract.from_validator (fun value =>
+  if std.is_number value && value >= 0 then
+    'Ok
+  else
+    'Error { message = "number must be non-negative" }
+) in
+
 let CiArtifactInfo = {
   blob_hash | String,
   name | String,
-  size_bytes | Number,
+  size_bytes | NonNegativeNumber,
   content_type | String,
   created_at | String,
   metadata | { _ : String },
@@ -27,8 +34,8 @@ let CiRunReceiptJob = {
   name | String,
   job_id | String | optional,
   status | String,
-  started_at_ms | Number | optional,
-  completed_at_ms | Number | optional,
+  started_at_ms | NonNegativeNumber | optional,
+  completed_at_ms | NonNegativeNumber | optional,
   error | String | optional,
   artifacts | Array CiArtifactInfo,
 } in
@@ -36,8 +43,8 @@ let CiRunReceiptJob = {
 let CiRunReceiptStage = {
   name | String,
   status | String,
-  started_at_ms | Number | optional,
-  completed_at_ms | Number | optional,
+  started_at_ms | NonNegativeNumber | optional,
+  completed_at_ms | NonNegativeNumber | optional,
   jobs | Array CiRunReceiptJob,
 } in
 
@@ -49,16 +56,21 @@ let CiRunReceipt = {
   ref_name | String,
   commit_hash | String,
   status | String,
-  created_at_ms | Number,
-  started_at_ms | Number | optional,
-  completed_at_ms | Number | optional,
+  created_at_ms | NonNegativeNumber,
+  started_at_ms | NonNegativeNumber | optional,
+  completed_at_ms | NonNegativeNumber | optional,
   error | String | optional,
   stages | Array CiRunReceiptStage,
 } in
 
+let CiArtifactInfoContract = CiArtifactInfo in
+let CiRunReceiptJobContract = CiRunReceiptJob in
+let CiRunReceiptStageContract = CiRunReceiptStage in
+let CiRunReceiptContract = CiRunReceipt in
+
 {
-  CiArtifactInfo,
-  CiRunReceiptJob,
-  CiRunReceiptStage,
-  CiRunReceipt,
+  CiArtifactInfo = CiArtifactInfoContract,
+  CiRunReceiptJob = CiRunReceiptJobContract,
+  CiRunReceiptStage = CiRunReceiptStageContract,
+  CiRunReceipt = CiRunReceiptContract,
 }

@@ -14,7 +14,14 @@ let enum_string = fun field allowed =>
       'Error { message = "%{field} must be one of %{std.serialize 'Json allowed}" }
   ) in
 
-let SponsoredPrincipalRole = enum_string "SponsoredPrincipalRole" ["Sponsor", "Beneficiary", "Provider", "Workload", "Service", "Organization", "User", "Node", "Plugin"] in
+let NonNegativeNumber = std.contract.from_validator (fun value =>
+  if std.is_number value && value >= 0 then
+    'Ok
+  else
+    'Error { message = "number must be non-negative" }
+) in
+
+let SponsoredPrincipalRole = enum_string "SponsoredPrincipalRole" ["sponsor", "beneficiary", "provider", "workload", "service", "organization", "user", "node", "plugin"] in
 
 let SponsoredPrincipalRef = {
   principal_id | String,
@@ -22,7 +29,7 @@ let SponsoredPrincipalRef = {
   proof_ref | String | optional,
 } in
 
-let RedactedValue = enum_string "RedactedValue" ["Redacted"] in
+let RedactedValue = enum_string "RedactedValue" ["redacted"] in
 
 let SponsoredSettlementReference = {
   method_tag | String,
@@ -30,15 +37,15 @@ let SponsoredSettlementReference = {
 } in
 
 let SponsoredResourceLimits = {
-  cpu_millis | Number,
-  memory_bytes | Number,
-  storage_bytes_ms | Number,
-  network_bytes | Number,
-  wall_time_ms | Number,
-  max_concurrent | Number,
+  cpu_millis | NonNegativeNumber,
+  memory_bytes | NonNegativeNumber,
+  storage_bytes_ms | NonNegativeNumber,
+  network_bytes | NonNegativeNumber,
+  wall_time_ms | NonNegativeNumber,
+  max_concurrent | NonNegativeNumber,
 } in
 
-let RuntimeHostKind = enum_string "RuntimeHostKind" ["NativeBuiltIn", "NativeProcess", "Wasm", "Hyperlight", "OciContainer"] in
+let RuntimeHostKind = enum_string "RuntimeHostKind" ["native-built-in", "native-process", "wasm", "hyperlight", "oci-container"] in
 
 let SponsoredGrantScope = {
   workload_principal_ids | Array String,
@@ -62,21 +69,31 @@ let SponsoredRuntimeGrant = {
   provider_scope | Array SponsoredPrincipalRef,
   workload_scope | SponsoredGrantScope,
   limits | SponsoredResourceLimits,
-  valid_from_ms | Number,
-  valid_until_ms | Number,
+  valid_from_ms | NonNegativeNumber,
+  valid_until_ms | NonNegativeNumber,
   revocation | SponsoredRevocationRef,
   settlement | SponsoredSettlementReference,
   policy_tags | Array String,
 } in
 
+let SponsoredPrincipalRoleContract = SponsoredPrincipalRole in
+let SponsoredPrincipalRefContract = SponsoredPrincipalRef in
+let RedactedValueContract = RedactedValue in
+let SponsoredSettlementReferenceContract = SponsoredSettlementReference in
+let SponsoredResourceLimitsContract = SponsoredResourceLimits in
+let RuntimeHostKindContract = RuntimeHostKind in
+let SponsoredGrantScopeContract = SponsoredGrantScope in
+let SponsoredRevocationRefContract = SponsoredRevocationRef in
+let SponsoredRuntimeGrantContract = SponsoredRuntimeGrant in
+
 {
-  SponsoredPrincipalRole,
-  SponsoredPrincipalRef,
-  RedactedValue,
-  SponsoredSettlementReference,
-  SponsoredResourceLimits,
-  RuntimeHostKind,
-  SponsoredGrantScope,
-  SponsoredRevocationRef,
-  SponsoredRuntimeGrant,
+  SponsoredPrincipalRole = SponsoredPrincipalRoleContract,
+  SponsoredPrincipalRef = SponsoredPrincipalRefContract,
+  RedactedValue = RedactedValueContract,
+  SponsoredSettlementReference = SponsoredSettlementReferenceContract,
+  SponsoredResourceLimits = SponsoredResourceLimitsContract,
+  RuntimeHostKind = RuntimeHostKindContract,
+  SponsoredGrantScope = SponsoredGrantScopeContract,
+  SponsoredRevocationRef = SponsoredRevocationRefContract,
+  SponsoredRuntimeGrant = SponsoredRuntimeGrantContract,
 }

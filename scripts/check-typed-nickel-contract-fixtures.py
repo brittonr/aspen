@@ -240,6 +240,30 @@ FIXTURES: dict[str, tuple[str, bool]] = {
 ''',
         False,
     ),
+    'sponsored-usage-receipt-positive.ncl': (
+        'let schema = import "@REPO@/schemas/sponsored-usage-receipt.ncl" in\n{\n  schema = "aspen.sponsored-usage-receipt.v1",\n  receipt_id = "receipt/sponsored/1",\n  execution_id = "run/ci/1",\n  workload_principal_id = "workload/aspen-ci",\n  service_principal_id = "service/forge",\n  provider_principal_id = "provider/nodepool-a",\n  sponsor_principal_id = "org/aspen-foundation",\n  grant_id = "grant-open-source-ci",\n  measured = { cpu_millis = 1000, memory_bytes = 1024, storage_bytes_ms = 10, network_bytes = 20, wall_time_ms = 3000, max_concurrent = 1 },\n  started_at_ms = 2000,\n  completed_at_ms = 3000,\n  outcome = "completed",\n  artifact_refs = ["blake3:artifact"],\n  isolation_summary = "native-built-in",\n  settlement = { method_tag = "voucher", opaque_ref = "redacted" },\n  diagnostics = [{ key = "operator-note", value = "redacted" }],\n} | schema.SponsoredUsageReceipt\n',
+        True,
+    ),
+    'sponsored-usage-receipt-negative-malformed-outcome.ncl': (
+        'let schema = import "@REPO@/schemas/sponsored-usage-receipt.ncl" in\n{\n  schema = "aspen.sponsored-usage-receipt.v1",\n  receipt_id = "receipt/sponsored/1",\n  execution_id = "run/ci/1",\n  workload_principal_id = "workload/aspen-ci",\n  service_principal_id = "service/forge",\n  provider_principal_id = "provider/nodepool-a",\n  sponsor_principal_id = "org/aspen-foundation",\n  grant_id = "grant-open-source-ci",\n  measured = { cpu_millis = 1000, memory_bytes = 1024, storage_bytes_ms = 10, network_bytes = 20, wall_time_ms = 3000, max_concurrent = 1 },\n  started_at_ms = 2000,\n  completed_at_ms = 3000,\n  outcome = "not-a-real-outcome",\n  artifact_refs = ["blake3:artifact"],\n  isolation_summary = "native-built-in",\n  settlement = { method_tag = "voucher", opaque_ref = "redacted" },\n  diagnostics = [{ key = "operator-note", value = "redacted" }],\n} | schema.SponsoredUsageReceipt\n',
+        False,
+    ),
+    'sponsored-usage-receipt-negative-missing-field.ncl': (
+        'let schema = import "@REPO@/schemas/sponsored-usage-receipt.ncl" in\n{ schema = "aspen.sponsored-usage-receipt.v1" } | schema.SponsoredUsageReceipt\n',
+        False,
+    ),
+    'sponsored-usage-receipt-negative-out-of-range.ncl': (
+        'let schema = import "@REPO@/schemas/sponsored-usage-receipt.ncl" in\n{\n  schema = "aspen.sponsored-usage-receipt.v1",\n  receipt_id = "receipt/sponsored/1",\n  execution_id = "run/ci/1",\n  workload_principal_id = "workload/aspen-ci",\n  service_principal_id = "service/forge",\n  provider_principal_id = "provider/nodepool-a",\n  sponsor_principal_id = "org/aspen-foundation",\n  grant_id = "grant-open-source-ci",\n  measured = { cpu_millis = -1, memory_bytes = 1024, storage_bytes_ms = 10, network_bytes = 20, wall_time_ms = 3000, max_concurrent = 1 },\n  started_at_ms = 2000,\n  completed_at_ms = 3000,\n  outcome = "completed",\n  artifact_refs = ["blake3:artifact"],\n  isolation_summary = "native-built-in",\n  settlement = { method_tag = "voucher", opaque_ref = "redacted" },\n  diagnostics = [{ key = "operator-note", value = "redacted" }],\n} | schema.SponsoredUsageReceipt\n',
+        False,
+    ),
+    'sponsored-usage-receipt-negative-unknown-field.ncl': (
+        'let schema = import "@REPO@/schemas/sponsored-usage-receipt.ncl" in\n{\n  schema = "aspen.sponsored-usage-receipt.v1",\n  receipt_id = "receipt/sponsored/1",\n  execution_id = "run/ci/1",\n  workload_principal_id = "workload/aspen-ci",\n  service_principal_id = "service/forge",\n  provider_principal_id = "provider/nodepool-a",\n  sponsor_principal_id = "org/aspen-foundation",\n  grant_id = "grant-open-source-ci",\n  measured = { cpu_millis = 1000, memory_bytes = 1024, storage_bytes_ms = 10, network_bytes = 20, wall_time_ms = 3000, max_concurrent = 1 },\n  started_at_ms = 2000,\n  completed_at_ms = 3000,\n  outcome = "completed",\n  artifact_refs = ["blake3:artifact"],\n  isolation_summary = "native-built-in",\n  settlement = { method_tag = "voucher", opaque_ref = "redacted" },\n  diagnostics = [{ key = "operator-note", value = "redacted" }],\n  raw_secret = "token=bad",\n} | schema.SponsoredUsageReceipt\n',
+        False,
+    ),
+    'sponsored-usage-receipt-negative-secret-bearing.ncl': (
+        'let schema = import "@REPO@/schemas/sponsored-usage-receipt.ncl" in\n{\n  schema = "aspen.sponsored-usage-receipt.v1",\n  receipt_id = "receipt/sponsored/1",\n  execution_id = "run/ci/1",\n  workload_principal_id = "workload/aspen-ci",\n  service_principal_id = "service/forge",\n  provider_principal_id = "provider/nodepool-a",\n  sponsor_principal_id = "org/aspen-foundation",\n  grant_id = "grant-open-source-ci",\n  measured = { cpu_millis = 1000, memory_bytes = 1024, storage_bytes_ms = 10, network_bytes = 20, wall_time_ms = 3000, max_concurrent = 1 },\n  started_at_ms = 2000,\n  completed_at_ms = 3000,\n  outcome = "completed",\n  artifact_refs = ["blake3:artifact"],\n  isolation_summary = "native-built-in",\n  settlement = { method_tag = "voucher", opaque_ref = "token=bad" },\n  diagnostics = [{ key = "operator-note", value = "redacted" }],\n} | schema.SponsoredUsageReceipt\n',
+        False,
+    ),
     "trust-negative-inline-secret.ncl": (
         '''let schema = import "@REPO@/schemas/trust-bootstrap-policy.ncl" in
 {

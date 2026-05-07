@@ -14,7 +14,14 @@ let enum_string = fun field allowed =>
       'Error { message = "%{field} must be one of %{std.serialize 'Json allowed}" }
   ) in
 
-let RedactedValue = enum_string "RedactedValue" ["Redacted"] in
+let NonNegativeNumber = std.contract.from_validator (fun value =>
+  if std.is_number value && value >= 0 then
+    'Ok
+  else
+    'Error { message = "number must be non-negative" }
+) in
+
+let RedactedValue = enum_string "RedactedValue" ["redacted"] in
 
 let RuntimeDiagnostic = {
   key | String,
@@ -27,15 +34,15 @@ let SponsoredSettlementReference = {
 } in
 
 let SponsoredResourceLimits = {
-  cpu_millis | Number,
-  memory_bytes | Number,
-  storage_bytes_ms | Number,
-  network_bytes | Number,
-  wall_time_ms | Number,
-  max_concurrent | Number,
+  cpu_millis | NonNegativeNumber,
+  memory_bytes | NonNegativeNumber,
+  storage_bytes_ms | NonNegativeNumber,
+  network_bytes | NonNegativeNumber,
+  wall_time_ms | NonNegativeNumber,
+  max_concurrent | NonNegativeNumber,
 } in
 
-let SponsoredReceiptOutcome = enum_string "SponsoredReceiptOutcome" ["Started", "Reserved", "Consumed", "Completed", "Failed", "RevocationDenied", "QuotaDenied", "PolicyDenied"] in
+let SponsoredReceiptOutcome = enum_string "SponsoredReceiptOutcome" ["started", "reserved", "consumed", "completed", "failed", "revocation-denied", "quota-denied", "policy-denied"] in
 
 let SponsoredUsageReceipt = {
   schema | String,
@@ -47,8 +54,8 @@ let SponsoredUsageReceipt = {
   sponsor_principal_id | String,
   grant_id | String,
   measured | SponsoredResourceLimits,
-  started_at_ms | Number,
-  completed_at_ms | Number | optional,
+  started_at_ms | NonNegativeNumber,
+  completed_at_ms | NonNegativeNumber | optional,
   outcome | SponsoredReceiptOutcome,
   artifact_refs | Array String,
   isolation_summary | String,
@@ -56,11 +63,18 @@ let SponsoredUsageReceipt = {
   diagnostics | Array RuntimeDiagnostic,
 } in
 
+let RedactedValueContract = RedactedValue in
+let RuntimeDiagnosticContract = RuntimeDiagnostic in
+let SponsoredSettlementReferenceContract = SponsoredSettlementReference in
+let SponsoredResourceLimitsContract = SponsoredResourceLimits in
+let SponsoredReceiptOutcomeContract = SponsoredReceiptOutcome in
+let SponsoredUsageReceiptContract = SponsoredUsageReceipt in
+
 {
-  RedactedValue,
-  RuntimeDiagnostic,
-  SponsoredSettlementReference,
-  SponsoredResourceLimits,
-  SponsoredReceiptOutcome,
-  SponsoredUsageReceipt,
+  RedactedValue = RedactedValueContract,
+  RuntimeDiagnostic = RuntimeDiagnosticContract,
+  SponsoredSettlementReference = SponsoredSettlementReferenceContract,
+  SponsoredResourceLimits = SponsoredResourceLimitsContract,
+  SponsoredReceiptOutcome = SponsoredReceiptOutcomeContract,
+  SponsoredUsageReceipt = SponsoredUsageReceiptContract,
 }

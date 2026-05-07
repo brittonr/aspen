@@ -14,13 +14,20 @@ let enum_string = fun field allowed =>
       'Error { message = "%{field} must be one of %{std.serialize 'Json allowed}" }
   ) in
 
+let NonNegativeNumber = std.contract.from_validator (fun value =>
+  if std.is_number value && value >= 0 then
+    'Ok
+  else
+    'Error { message = "number must be non-negative" }
+) in
+
 let SponsoredResourceLimits = {
-  cpu_millis | Number,
-  memory_bytes | Number,
-  storage_bytes_ms | Number,
-  network_bytes | Number,
-  wall_time_ms | Number,
-  max_concurrent | Number,
+  cpu_millis | NonNegativeNumber,
+  memory_bytes | NonNegativeNumber,
+  storage_bytes_ms | NonNegativeNumber,
+  network_bytes | NonNegativeNumber,
+  wall_time_ms | NonNegativeNumber,
+  max_concurrent | NonNegativeNumber,
 } in
 
 let SponsoredQuotaReservation = {
@@ -42,12 +49,17 @@ let SponsoredQuotaLedger = {
   total | SponsoredResourceLimits,
   reserved | SponsoredResourceLimits,
   consumed | SponsoredResourceLimits,
-  active_concurrency | Number,
+  active_concurrency | NonNegativeNumber,
 } in
 
+let SponsoredResourceLimitsContract = SponsoredResourceLimits in
+let SponsoredQuotaReservationContract = SponsoredQuotaReservation in
+let SponsoredQuotaConsumptionContract = SponsoredQuotaConsumption in
+let SponsoredQuotaLedgerContract = SponsoredQuotaLedger in
+
 {
-  SponsoredResourceLimits,
-  SponsoredQuotaReservation,
-  SponsoredQuotaConsumption,
-  SponsoredQuotaLedger,
+  SponsoredResourceLimits = SponsoredResourceLimitsContract,
+  SponsoredQuotaReservation = SponsoredQuotaReservationContract,
+  SponsoredQuotaConsumption = SponsoredQuotaConsumptionContract,
+  SponsoredQuotaLedger = SponsoredQuotaLedgerContract,
 }

@@ -16,7 +16,7 @@
 ## Phase 4: Rust-derived evidence contracts
 
 - [x] Register sponsored runtime grant, quota ledger, and usage receipt DTOs as `rust-derived` Nickel contract families. ✅ 2m 10s (2026-05-07T01:49:56Z → 2026-05-07T01:52:06Z; evidence: `evidence/sponsored-runtime-rust-derived-contract-registration.md`)
-- [ ] Add generated-contract freshness, Rust serialization round-trip, and Nickel validation tests for valid receipts plus malformed, missing, out-of-range, unknown-field, and secret-bearing receipt fixtures.
+- [x] Add generated-contract freshness, Rust serialization round-trip, and Nickel validation tests for valid receipts plus malformed, missing, out-of-range, unknown-field, and secret-bearing receipt fixtures. ✅ 3m 32s (2026-05-07T01:53:16Z → 2026-05-07T01:56:48Z; evidence: `evidence/sponsored-runtime-generated-contract-validation.md`)
 
 ## Phase 5: Runtime integration and receipts
 

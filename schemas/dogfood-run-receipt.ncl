@@ -14,6 +14,13 @@ let enum_string = fun field allowed =>
       'Error { message = "%{field} must be one of %{std.serialize 'Json allowed}" }
   ) in
 
+let NonNegativeNumber = std.contract.from_validator (fun value =>
+  if std.is_number value && value >= 0 then
+    'Ok
+  else
+    'Error { message = "number must be non-negative" }
+) in
+
 let DogfoodRunMode = {
   federation | Bool,
   vm_ci | Bool,
@@ -37,7 +44,7 @@ let DogfoodArtifactReceipt = {
   store_id | String | optional,
   blob_id | String | optional,
   digest | String | optional,
-  size_bytes | Number | optional,
+  size_bytes | NonNegativeNumber | optional,
   relative_path | String | optional,
 } in
 
@@ -46,7 +53,7 @@ let DogfoodStageReceipt = {
   status | DogfoodStageStatus,
   started_at | String,
   finished_at | String | optional,
-  elapsed_ms | Number | optional,
+  elapsed_ms | NonNegativeNumber | optional,
   failure | DogfoodFailureSummary | optional,
   artifacts | Array DogfoodArtifactReceipt,
 } in
@@ -54,6 +61,7 @@ let DogfoodStageReceipt = {
 let DogfoodRunReceipt = {
   schema | String,
   run_id | String,
+  git_commit | String,
   command | String,
   created_at | String,
   mode | DogfoodRunMode,
@@ -62,13 +70,22 @@ let DogfoodRunReceipt = {
   stages | Array DogfoodStageReceipt,
 } in
 
+let DogfoodRunModeContract = DogfoodRunMode in
+let DogfoodStageKindContract = DogfoodStageKind in
+let DogfoodStageStatusContract = DogfoodStageStatus in
+let DogfoodFailureSummaryContract = DogfoodFailureSummary in
+let DogfoodArtifactKindContract = DogfoodArtifactKind in
+let DogfoodArtifactReceiptContract = DogfoodArtifactReceipt in
+let DogfoodStageReceiptContract = DogfoodStageReceipt in
+let DogfoodRunReceiptContract = DogfoodRunReceipt in
+
 {
-  DogfoodRunMode,
-  DogfoodStageKind,
-  DogfoodStageStatus,
-  DogfoodFailureSummary,
-  DogfoodArtifactKind,
-  DogfoodArtifactReceipt,
-  DogfoodStageReceipt,
-  DogfoodRunReceipt,
+  DogfoodRunMode = DogfoodRunModeContract,
+  DogfoodStageKind = DogfoodStageKindContract,
+  DogfoodStageStatus = DogfoodStageStatusContract,
+  DogfoodFailureSummary = DogfoodFailureSummaryContract,
+  DogfoodArtifactKind = DogfoodArtifactKindContract,
+  DogfoodArtifactReceipt = DogfoodArtifactReceiptContract,
+  DogfoodStageReceipt = DogfoodStageReceiptContract,
+  DogfoodRunReceipt = DogfoodRunReceiptContract,
 }
