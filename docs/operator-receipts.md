@@ -1,5 +1,14 @@
 # Operator Receipts
 
+## Auth/UCAN dependency receipt policy
+
+When operator receipts mention auth admission, use the boundary in
+[`auth-ucan-adapter.md`](auth-ucan-adapter.md): Aspen tokens remain the
+user-facing wire format in this slice, while runtime verification projects
+capabilities through the sibling UCAN validator. Redact token bodies, signatures,
+private keys, bearer values, and local patch paths that reveal private checkout
+locations; record only commit hashes, test commands, and pass/fail status.
+
 Aspen has two operator-facing receipt surfaces for self-hosting evidence:
 
 1. **Dogfood run receipts** from `nix run .#dogfood-local -- full`, which prove the local self-hosting loop reached Forge push, native CI build, deploy, verification, receipt publish, and cleanup.

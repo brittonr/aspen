@@ -22,5 +22,5 @@
 ## Phase 5: Verification and docs
 
 - [x] [depends:runtime-switch] Add positive UCAN/Aspen round-trip tests and negative escalation, expiry, malformed proof, wrong audience, replay/revocation, and denied capability mapping tests. ✅ 1m 21s (started: 2026-05-06T23:56:02Z → completed: 2026-05-06T23:57:23Z) Evidence: `evidence/i9-ucan-aspen-positive-negative-tests.md`.
-- [ ] [depends:verification-tests] Update auth/federation/operator docs with the adapter boundary, sibling dependency policy, migration notes, and unsupported UCAN interoperability caveats.
-- [ ] [depends:docs] Run targeted Rust tests, dependency graph checks, Nix/source-boundary checks, `openspec validate adopt-sibling-ucan-auth --strict`, helper verification, and `git diff --check`; archive only after all retained evidence tasks are complete.
+- [x] [depends:verification-tests] Update auth/federation/operator docs with the adapter boundary, sibling dependency policy, migration notes, and unsupported UCAN interoperability caveats. ✅ 1m 07s (started: 2026-05-06T23:58:22Z → completed: 2026-05-06T23:59:29Z) Evidence: `evidence/i10-auth-ucan-docs.md`.
+- [x] [depends:docs] Run targeted Rust tests, dependency graph checks, Nix/source-boundary checks, `openspec validate adopt-sibling-ucan-auth --strict`, helper verification, and `git diff --check`; archive only after all retained evidence tasks are complete. ✅ 1m 11s (started: 2026-05-07T00:11:50Z → completed: 2026-05-07T00:13:01Z) Evidence: `evidence/i11-final-verification.md`.

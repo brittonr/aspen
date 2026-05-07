@@ -87,3 +87,21 @@
 - Commands: `rustfmt crates/aspen-auth/src/ucan_adapter.rs`; `CARGO_TARGET_DIR=target/agent cargo test -p aspen-auth ucan_adapter --all-targets`; `CARGO_TARGET_DIR=target/agent cargo test -p aspen-auth test_verifier --all-targets`.
 - Boundary conclusion: positive UCAN projection tests and denied empty UCAN capability-set mapping are retained; existing verifier negatives cover signature, expiry, audience, revocation, and proof-chain failures.
 - Next best check: update auth/federation/operator docs with adapter boundary and migration caveats.
+
+## I10 auth/federation/operator UCAN docs
+
+- Rail: operator-facing documentation and migration caveat evidence.
+- Status: PASS
+- Artifact: `openspec/changes/adopt-sibling-ucan-auth/evidence/i10-auth-ucan-docs.md`
+- Docs: `docs/auth-ucan-adapter.md`, `docs/FEDERATION.md`, `docs/operator-receipts.md`
+- Scope rationale: docs-only task documenting the adapter boundary, sibling dependency policy, migration notes, unsupported compact-UCAN interoperability caveat, and operator redaction policy.
+- Next best check: run final targeted Rust tests, dependency graph checks, Nix/source-boundary checks, OpenSpec validation, helper verification, and `git diff --check` before archive.
+
+## I11 final UCAN adoption verification
+
+- Rail: final targeted Rust, dependency graph, protected no-std, OpenSpec, and whitespace verification.
+- Status: PASS
+- Artifact: `openspec/changes/adopt-sibling-ucan-auth/evidence/i11-final-verification.md`
+- Commands: `cargo test -p aspen-auth --all-targets`, `cargo check -p aspen-auth-core --no-default-features`, `cargo check -p aspen-auth --all-targets`, final `cargo tree` normal/feature checks, `scripts/check-aspen-core-no-std-boundary.py`, dependency-boundary assertion script, `openspec validate adopt-sibling-ucan-auth --strict`, and `git diff --check`.
+- Boundary conclusion: retained auth checks pass, protected dependency boundaries remain intact, OpenSpec strict validation passes, and the diff has no whitespace errors.
+- Next best check: run helper verification after this task is marked complete, then archive the completed change.

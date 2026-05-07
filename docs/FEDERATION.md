@@ -39,6 +39,7 @@ Key properties:
 - **Pure P2P**: Built on iroh QUIC transport. No HTTP, no DNS, no central relay.
 - **Self-sovereign identity**: Ed25519 keypairs. No external identity provider.
 - **Strong consistency within cluster**: Raft for authoritative state.
+- **UCAN-adapter auth boundary**: runtime auth continues to use Aspen tokens while capabilities are projected through the sibling UCAN validator; see [`auth-ucan-adapter.md`](auth-ucan-adapter.md).
 - **Eventual consistency across clusters**: Pull-based sync with cryptographic verification.
 - **DHT-based discovery**: BitTorrent Mainline DHT (BEP-44) for finding peers.
 
