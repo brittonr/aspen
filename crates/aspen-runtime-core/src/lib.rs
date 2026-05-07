@@ -187,6 +187,99 @@ impl HermitLaunchProfile {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+pub enum WasmExecutionMode {
+    /// Deterministic hook/policy/plugin extension with no ambient effects.
+    DeterministicExtension,
+    /// Service fragment that may own routes through runtime-service-core.
+    ServiceFragment,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WasmHostFunctionKind {
+    Kv,
+    Blob,
+    Route,
+    Network,
+    Clock,
+    Secret,
+    Log,
+    Metrics,
+    Timer,
+    Output,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WasmHostFunctionBinding {
+    pub function_name: String,
+    pub kind: WasmHostFunctionKind,
+    pub capability_handle_id: String,
+    pub deterministic_safe: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WasmRunnerCapability {
+    pub capability_handle_id: String,
+    pub runner_version: String,
+    pub supported_abi_versions: Vec<String>,
+    pub allowed_host_functions: Vec<WasmHostFunctionKind>,
+    pub max_resources: RuntimeResources,
+    pub max_input_bytes: u32,
+    pub max_output_bytes: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WasmRuntimeProfile {
+    pub module_hash: String,
+    pub abi: String,
+    pub entrypoint: String,
+    pub mode: WasmExecutionMode,
+    pub runner_capability: WasmRunnerCapability,
+    pub host_functions: Vec<WasmHostFunctionBinding>,
+    pub resources: RuntimeResources,
+    pub input_limit_bytes: u32,
+    pub output_limit_bytes: u32,
+    pub output_summary: Option<RedactedValue>,
+}
+
+impl WasmRuntimeProfile {
+    #[must_use]
+    pub fn as_runtime_artifact(&self) -> RuntimeArtifact {
+        RuntimeArtifact::WasmModule {
+            module_hash: self.module_hash.clone(),
+            abi: self.abi.clone(),
+            entrypoint: self.entrypoint.clone(),
+        }
+    }
+
+    #[must_use]
+    pub fn declared_capability_handles(&self) -> Vec<&str> {
+        let mut handles = vec![self.runner_capability.capability_handle_id.as_str()];
+        handles.extend(self.host_functions.iter().map(|function| function.capability_handle_id.as_str()));
+        handles
+    }
+
+    #[must_use]
+    pub fn output_contains_raw_secret(&self) -> bool {
+        self.output_summary.as_ref().is_some_and(RedactedValue::looks_secret)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WasmModuleInstance {
+    pub instance_id: String,
+    pub unit_id: String,
+    pub module_hash: String,
+    pub abi: String,
+    pub entrypoint: String,
+    pub lifecycle_status: RuntimeLifecycleStatus,
+    pub fuel_remaining: u64,
+    pub memory_limit_bytes: u64,
+    pub observed_at_ms: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum HyperlightAbiProfile {
     CGuestV0,
     RustGuestV0,
@@ -1075,6 +1168,18 @@ pub enum AdmissionError {
     InvalidLifecycleTransition,
     NativeFactoryNameMismatch,
     NativeFactoryMissingLinkedSymbol,
+    WasmRequiresWasmHost,
+    WasmRequiresWasmArtifact,
+    WasmRequiresVerifiedModule,
+    WasmRequiresRunnerCapability,
+    WasmUnsupportedAbi,
+    WasmResourcePolicyExceeded,
+    WasmInvalidLimits,
+    WasmRequiresDeclaredHostFunctionCapability,
+    WasmRejectsAmbientHostAccess,
+    WasmServiceFragmentRequiresRoute,
+    WasmInstanceNotRunning,
+    WasmReceiptContainsRawSecret,
     HermitRequiresHermitArtifact,
     HermitRequiresMicroVmHost,
     HermitRequiresCompatibleRunner,
@@ -1105,6 +1210,189 @@ pub enum AdmissionError {
     MicroVmRejectsAmbientAuthority,
     MicroVmInvalidLifecycleLease,
     MicroVmReceiptContainsRawSecret,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WasmProfileReceipt {
+    pub receipt_id: String,
+    pub unit_id: String,
+    pub runner_version: String,
+    pub module_hash: String,
+    pub abi: String,
+    pub entrypoint: String,
+    pub mode: WasmExecutionMode,
+    pub lifecycle_status: RuntimeLifecycleStatus,
+    pub granted_authority: Vec<RedactedValue>,
+    pub input_limit_bytes: u32,
+    pub output_limit_bytes: u32,
+    pub output_summary: Option<RedactedValue>,
+    pub diagnostics: Vec<RuntimeDiagnostic>,
+}
+
+impl WasmProfileReceipt {
+    #[must_use]
+    pub fn contains_raw_secret(&self) -> bool {
+        self.granted_authority.iter().any(RedactedValue::looks_secret)
+            || self.output_summary.as_ref().is_some_and(RedactedValue::looks_secret)
+            || self.diagnostics.iter().any(|diag| diag.value.looks_secret())
+    }
+}
+
+pub fn admit_wasm_profile(decl: &RuntimeUnitDeclaration, profile: &WasmRuntimeProfile) -> Result<(), AdmissionError> {
+    if decl.host_kind != RuntimeHostKind::Wasm {
+        return Err(AdmissionError::WasmRequiresWasmHost);
+    }
+    if !matches!(decl.artifact, RuntimeArtifact::WasmModule { .. }) {
+        return Err(AdmissionError::WasmRequiresWasmArtifact);
+    }
+    if !profile.module_hash.starts_with("sha256:")
+        || profile.entrypoint.trim().is_empty()
+        || !matches!(
+            decl.artifact,
+            RuntimeArtifact::WasmModule { ref module_hash, ref abi, ref entrypoint }
+                if module_hash == &profile.module_hash && abi == &profile.abi && entrypoint == &profile.entrypoint
+        )
+    {
+        return Err(AdmissionError::WasmRequiresVerifiedModule);
+    }
+    if !decl
+        .capabilities
+        .iter()
+        .any(|binding| binding.handle_id == profile.runner_capability.capability_handle_id)
+    {
+        return Err(AdmissionError::WasmRequiresRunnerCapability);
+    }
+    if !profile.runner_capability.supported_abi_versions.contains(&profile.abi) {
+        return Err(AdmissionError::WasmUnsupportedAbi);
+    }
+    if !resources_fit_within(&profile.resources, &profile.runner_capability.max_resources) {
+        return Err(AdmissionError::WasmResourcePolicyExceeded);
+    }
+    if profile.resources.memory_bytes.unwrap_or_default() == 0
+        || profile.resources.wasm_fuel.unwrap_or_default() == 0
+        || profile.resources.wall_time_ms.unwrap_or_default() == 0
+        || profile.input_limit_bytes == 0
+        || profile.output_limit_bytes == 0
+        || profile.input_limit_bytes > profile.runner_capability.max_input_bytes
+        || profile.output_limit_bytes > profile.runner_capability.max_output_bytes
+    {
+        return Err(AdmissionError::WasmInvalidLimits);
+    }
+    if profile.mode == WasmExecutionMode::ServiceFragment && decl.routes.is_empty() {
+        return Err(AdmissionError::WasmServiceFragmentRequiresRoute);
+    }
+    for function in &profile.host_functions {
+        if function.function_name.trim().is_empty() || function.capability_handle_id.trim().is_empty() {
+            return Err(AdmissionError::WasmRejectsAmbientHostAccess);
+        }
+        if function.kind == WasmHostFunctionKind::Secret
+            || (profile.mode == WasmExecutionMode::DeterministicExtension
+                && (!function.deterministic_safe
+                    || matches!(function.kind, WasmHostFunctionKind::Network | WasmHostFunctionKind::Clock)))
+            || !profile.runner_capability.allowed_host_functions.contains(&function.kind)
+        {
+            return Err(AdmissionError::WasmRejectsAmbientHostAccess);
+        }
+        if !decl.capabilities.iter().any(|binding| binding.handle_id == function.capability_handle_id) {
+            return Err(AdmissionError::WasmRequiresDeclaredHostFunctionCapability);
+        }
+    }
+    if profile.output_contains_raw_secret() {
+        return Err(AdmissionError::WasmReceiptContainsRawSecret);
+    }
+    admit_unit(decl)
+}
+
+pub fn instantiate_wasm_module(
+    decl: &RuntimeUnitDeclaration,
+    profile: &WasmRuntimeProfile,
+    instance_id: impl Into<String>,
+    observed_at_ms: u64,
+) -> Result<WasmModuleInstance, AdmissionError> {
+    admit_wasm_profile(decl, profile)?;
+    Ok(WasmModuleInstance {
+        instance_id: instance_id.into(),
+        unit_id: decl.unit_id.clone(),
+        module_hash: profile.module_hash.clone(),
+        abi: profile.abi.clone(),
+        entrypoint: profile.entrypoint.clone(),
+        lifecycle_status: RuntimeLifecycleStatus::Running,
+        fuel_remaining: profile.resources.wasm_fuel.unwrap_or_default(),
+        memory_limit_bytes: profile.resources.memory_bytes.unwrap_or_default(),
+        observed_at_ms,
+    })
+}
+
+pub fn call_wasm_entrypoint(
+    instance: &WasmModuleInstance,
+    fuel_used: u64,
+    output_bytes: u32,
+    profile: &WasmRuntimeProfile,
+    observed_at_ms: u64,
+) -> Result<WasmModuleInstance, AdmissionError> {
+    if instance.lifecycle_status != RuntimeLifecycleStatus::Running {
+        return Err(AdmissionError::WasmInstanceNotRunning);
+    }
+    if fuel_used > instance.fuel_remaining || output_bytes > profile.output_limit_bytes {
+        return Err(AdmissionError::WasmInvalidLimits);
+    }
+    let mut next = instance.clone();
+    next.fuel_remaining -= fuel_used;
+    next.observed_at_ms = observed_at_ms;
+    Ok(next)
+}
+
+pub fn stop_wasm_instance(
+    instance: &WasmModuleInstance,
+    observed_at_ms: u64,
+) -> Result<WasmModuleInstance, AdmissionError> {
+    if instance.lifecycle_status != RuntimeLifecycleStatus::Running {
+        return Err(AdmissionError::WasmInstanceNotRunning);
+    }
+    let mut next = instance.clone();
+    next.lifecycle_status = RuntimeLifecycleStatus::Stopped;
+    next.observed_at_ms = observed_at_ms;
+    Ok(next)
+}
+
+pub fn observe_wasm_instance(instance: &WasmModuleInstance) -> WasmModuleInstance {
+    instance.clone()
+}
+
+pub fn admit_wasm_receipt(receipt: &WasmProfileReceipt) -> Result<(), AdmissionError> {
+    if receipt.contains_raw_secret() {
+        return Err(AdmissionError::WasmReceiptContainsRawSecret);
+    }
+    Ok(())
+}
+
+pub fn wasm_lifecycle_receipt(
+    receipt_id: impl Into<String>,
+    decl: &RuntimeUnitDeclaration,
+    profile: &WasmRuntimeProfile,
+    lifecycle_status: RuntimeLifecycleStatus,
+    output_summary: Option<RedactedValue>,
+    diagnostics: Vec<RuntimeDiagnostic>,
+) -> WasmProfileReceipt {
+    WasmProfileReceipt {
+        receipt_id: receipt_id.into(),
+        unit_id: decl.unit_id.clone(),
+        runner_version: profile.runner_capability.runner_version.clone(),
+        module_hash: profile.module_hash.clone(),
+        abi: profile.abi.clone(),
+        entrypoint: profile.entrypoint.clone(),
+        mode: profile.mode.clone(),
+        lifecycle_status,
+        granted_authority: profile
+            .declared_capability_handles()
+            .into_iter()
+            .map(|handle| RedactedValue::OpaqueHandle(handle.to_string()))
+            .collect(),
+        input_limit_bytes: profile.input_limit_bytes,
+        output_limit_bytes: profile.output_limit_bytes,
+        output_summary,
+        diagnostics,
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -1546,6 +1834,12 @@ pub fn admit_unit(decl: &RuntimeUnitDeclaration) -> Result<(), AdmissionError> {
     match (&decl.host_kind, &decl.artifact) {
         (RuntimeHostKind::NativeBuiltIn, RuntimeArtifact::BuiltIn { .. }) => {}
         (RuntimeHostKind::NativeBuiltIn, _) => return Err(AdmissionError::NativeBuiltInRequiresBuiltInArtifact),
+        (RuntimeHostKind::Wasm, RuntimeArtifact::WasmModule { module_hash, .. })
+            if module_hash.starts_with("sha256:") => {}
+        (RuntimeHostKind::Wasm, RuntimeArtifact::WasmModule { .. }) => {
+            return Err(AdmissionError::WasmRequiresVerifiedModule);
+        }
+        (RuntimeHostKind::Wasm, _) => return Err(AdmissionError::WasmRequiresWasmArtifact),
         (RuntimeHostKind::OciContainer, RuntimeArtifact::OciImage { image_digest, .. })
             if image_digest.starts_with("sha256:") => {}
         (RuntimeHostKind::OciContainer, RuntimeArtifact::OciImage { .. }) => {
@@ -1695,6 +1989,217 @@ mod tests {
         let decoded: RuntimeUnitDeclaration = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, decl);
         admit_unit(&decoded).unwrap();
+    }
+
+    fn wasm_profile(mode: WasmExecutionMode) -> WasmRuntimeProfile {
+        WasmRuntimeProfile {
+            module_hash: "sha256:wasm-module".to_string(),
+            abi: "aspen-wasm-abi-v1".to_string(),
+            entrypoint: "_aspen_start".to_string(),
+            mode,
+            runner_capability: WasmRunnerCapability {
+                capability_handle_id: "runner:wasm".to_string(),
+                runner_version: "wasmtime-0.1".to_string(),
+                supported_abi_versions: vec!["aspen-wasm-abi-v1".to_string()],
+                allowed_host_functions: vec![
+                    WasmHostFunctionKind::Kv,
+                    WasmHostFunctionKind::Blob,
+                    WasmHostFunctionKind::Output,
+                ],
+                max_resources: RuntimeResources {
+                    memory_bytes: Some(64 * 1024 * 1024),
+                    cpu_millis: Some(500),
+                    wall_time_ms: Some(5_000),
+                    wasm_fuel: Some(1_000_000),
+                    max_open_files: Some(0),
+                },
+                max_input_bytes: 16 * 1024,
+                max_output_bytes: 16 * 1024,
+            },
+            host_functions: vec![
+                WasmHostFunctionBinding {
+                    function_name: "aspen_kv_get".to_string(),
+                    kind: WasmHostFunctionKind::Kv,
+                    capability_handle_id: "cap:kv-read".to_string(),
+                    deterministic_safe: true,
+                },
+                WasmHostFunctionBinding {
+                    function_name: "aspen_output_write".to_string(),
+                    kind: WasmHostFunctionKind::Output,
+                    capability_handle_id: "cap:output".to_string(),
+                    deterministic_safe: true,
+                },
+            ],
+            resources: RuntimeResources {
+                memory_bytes: Some(16 * 1024 * 1024),
+                cpu_millis: Some(250),
+                wall_time_ms: Some(1_000),
+                wasm_fuel: Some(100_000),
+                max_open_files: Some(0),
+            },
+            input_limit_bytes: 4 * 1024,
+            output_limit_bytes: 4 * 1024,
+            output_summary: Some(RedactedValue::OpaqueHandle("blob:wasm-output".to_string())),
+        }
+    }
+
+    fn wasm_decl(profile: &WasmRuntimeProfile) -> RuntimeUnitDeclaration {
+        RuntimeUnitDeclaration {
+            unit_id: "plugin/wasm-policy".to_string(),
+            unit_kind: RuntimeUnitKind::Hook,
+            host_kind: RuntimeHostKind::Wasm,
+            artifact: profile.as_runtime_artifact(),
+            capabilities: vec![
+                RuntimeCapabilityBinding {
+                    handle_id: profile.runner_capability.capability_handle_id.clone(),
+                    ability: "runtime/instantiate".to_string(),
+                    resource: "aspen://runtime/runner/wasm".to_string(),
+                    proof_refs: vec!["ucan-proof:wasm-runner".to_string()],
+                    caveats: vec![],
+                },
+                RuntimeCapabilityBinding {
+                    handle_id: "cap:kv-read".to_string(),
+                    ability: "kv/read".to_string(),
+                    resource: "aspen://kv/policy-input".to_string(),
+                    proof_refs: vec!["ucan-proof:kv".to_string()],
+                    caveats: vec![],
+                },
+                RuntimeCapabilityBinding {
+                    handle_id: "cap:output".to_string(),
+                    ability: "blob/write".to_string(),
+                    resource: "aspen://blob/wasm-output".to_string(),
+                    proof_refs: vec!["ucan-proof:output".to_string()],
+                    caveats: vec![],
+                },
+            ],
+            resources: profile.resources.clone(),
+            routes: match profile.mode {
+                WasmExecutionMode::DeterministicExtension => vec![],
+                WasmExecutionMode::ServiceFragment => vec![RuntimeRouteDeclaration {
+                    route_id: "wasm.fragment".to_string(),
+                    protocol: "iroh-alpn".to_string(),
+                    owner_unit: "plugin/wasm-policy".to_string(),
+                    handler: "_aspen_start".to_string(),
+                }],
+            },
+        }
+    }
+
+    #[test]
+    fn wasm_runtime_profile_aligns_with_service_core_vocabulary() {
+        let profile = wasm_profile(WasmExecutionMode::ServiceFragment);
+        let decl = wasm_decl(&profile);
+        assert_eq!(decl.host_kind, RuntimeHostKind::Wasm);
+        assert_eq!(decl.unit_kind, RuntimeUnitKind::Hook);
+        assert!(matches!(decl.artifact, RuntimeArtifact::WasmModule { ref module_hash, ref abi, ref entrypoint }
+                if module_hash == "sha256:wasm-module" && abi == "aspen-wasm-abi-v1" && entrypoint == "_aspen_start"));
+        assert_eq!(decl.routes[0].owner_unit, decl.unit_id);
+        assert!(profile.host_functions.iter().any(|function| function.kind == WasmHostFunctionKind::Kv));
+        admit_wasm_profile(&decl, &profile).unwrap();
+    }
+
+    #[test]
+    fn wasm_host_instantiates_calls_stops_and_observes_module() {
+        let profile = wasm_profile(WasmExecutionMode::DeterministicExtension);
+        let decl = wasm_decl(&profile);
+        let instance = instantiate_wasm_module(&decl, &profile, "wasm-instance/1", 100).unwrap();
+        assert_eq!(instance.lifecycle_status, RuntimeLifecycleStatus::Running);
+        assert_eq!(instance.fuel_remaining, 100_000);
+        assert_eq!(instance.memory_limit_bytes, 16 * 1024 * 1024);
+
+        let called = call_wasm_entrypoint(&instance, 10_000, 128, &profile, 150).unwrap();
+        assert_eq!(called.fuel_remaining, 90_000);
+        assert_eq!(observe_wasm_instance(&called).observed_at_ms, 150);
+
+        let stopped = stop_wasm_instance(&called, 200).unwrap();
+        assert_eq!(stopped.lifecycle_status, RuntimeLifecycleStatus::Stopped);
+        assert_eq!(call_wasm_entrypoint(&stopped, 1, 1, &profile, 201), Err(AdmissionError::WasmInstanceNotRunning));
+    }
+
+    #[test]
+    fn wasm_admission_fails_closed_before_instantiation_or_host_calls() {
+        let profile = wasm_profile(WasmExecutionMode::DeterministicExtension);
+        let mut decl = wasm_decl(&profile);
+        decl.host_kind = RuntimeHostKind::NativeProcess;
+        assert_eq!(admit_wasm_profile(&decl, &profile), Err(AdmissionError::WasmRequiresWasmHost));
+
+        let mut decl = wasm_decl(&profile);
+        decl.artifact = RuntimeArtifact::NativeBinary {
+            hash: "sha256:native".to_string(),
+            store_path: None,
+            entrypoint: "run".to_string(),
+        };
+        assert_eq!(admit_wasm_profile(&decl, &profile), Err(AdmissionError::WasmRequiresWasmArtifact));
+
+        let mut bad_hash = profile.clone();
+        bad_hash.module_hash = "sha1:wasm-module".to_string();
+        assert_eq!(
+            admit_wasm_profile(&wasm_decl(&profile), &bad_hash),
+            Err(AdmissionError::WasmRequiresVerifiedModule)
+        );
+
+        let mut no_runner = wasm_decl(&profile);
+        no_runner.capabilities.retain(|cap| cap.handle_id != "runner:wasm");
+        assert_eq!(admit_wasm_profile(&no_runner, &profile), Err(AdmissionError::WasmRequiresRunnerCapability));
+
+        let mut unsupported_abi = profile.clone();
+        unsupported_abi.runner_capability.supported_abi_versions.clear();
+        assert_eq!(admit_wasm_profile(&wasm_decl(&profile), &unsupported_abi), Err(AdmissionError::WasmUnsupportedAbi));
+
+        let mut ambient = profile.clone();
+        ambient.host_functions[0].capability_handle_id.clear();
+        assert_eq!(
+            admit_wasm_profile(&wasm_decl(&profile), &ambient),
+            Err(AdmissionError::WasmRejectsAmbientHostAccess)
+        );
+
+        let mut denied = profile.clone();
+        denied.host_functions[0].capability_handle_id = "cap:ambient-kv".to_string();
+        assert_eq!(
+            admit_wasm_profile(&wasm_decl(&profile), &denied),
+            Err(AdmissionError::WasmRequiresDeclaredHostFunctionCapability)
+        );
+
+        let mut clock = profile.clone();
+        clock.host_functions[0].kind = WasmHostFunctionKind::Clock;
+        clock.runner_capability.allowed_host_functions.push(WasmHostFunctionKind::Clock);
+        assert_eq!(admit_wasm_profile(&wasm_decl(&profile), &clock), Err(AdmissionError::WasmRejectsAmbientHostAccess));
+
+        let mut oversized = profile.clone();
+        oversized.resources.wasm_fuel = Some(2_000_000);
+        assert_eq!(
+            admit_wasm_profile(&wasm_decl(&profile), &oversized),
+            Err(AdmissionError::WasmResourcePolicyExceeded)
+        );
+    }
+
+    #[test]
+    fn wasm_receipts_redact_outputs_failures_and_capability_handles() {
+        let profile = wasm_profile(WasmExecutionMode::DeterministicExtension);
+        let decl = wasm_decl(&profile);
+        let receipt = wasm_lifecycle_receipt(
+            "receipt/wasm-running",
+            &decl,
+            &profile,
+            RuntimeLifecycleStatus::Running,
+            Some(RedactedValue::OpaqueHandle("blob:wasm-output".to_string())),
+            vec![RuntimeDiagnostic {
+                key: "execution".to_string(),
+                value: RedactedValue::Plain("fuel=90000 output=128".to_string()),
+            }],
+        );
+        assert_eq!(receipt.abi, "aspen-wasm-abi-v1");
+        assert!(
+            receipt
+                .granted_authority
+                .iter()
+                .all(|authority| matches!(authority, RedactedValue::OpaqueHandle(_)))
+        );
+        admit_wasm_receipt(&receipt).unwrap();
+
+        let mut leaking = receipt;
+        leaking.diagnostics[0].value = RedactedValue::Plain("token=raw".to_string());
+        assert_eq!(admit_wasm_receipt(&leaking), Err(AdmissionError::WasmReceiptContainsRawSecret));
     }
 
     fn microvm_profile(engine: MicroVmEngine) -> MicroVmRuntimeProfile {
