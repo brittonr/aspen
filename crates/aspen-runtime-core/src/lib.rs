@@ -458,6 +458,101 @@ impl SponsoredUsageReceipt {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredProviderPolicy {
+    pub provider_principal_id: String,
+    pub accepted_sponsor_principal_ids: Vec<String>,
+    pub accepted_workload_principal_ids: Vec<String>,
+    pub accepted_service_principal_ids: Vec<String>,
+    pub accepted_settlement_tags: Vec<String>,
+    pub accepted_isolation_modes: Vec<RuntimeHostKind>,
+    pub max_request: SponsoredResourceLimits,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredAdmissionRequest {
+    pub grant: SponsoredRuntimeGrant,
+    pub provider_policy: SponsoredProviderPolicy,
+    pub ledger: SponsoredQuotaLedger,
+    pub workload_principal_id: String,
+    pub service_principal_id: Option<String>,
+    pub provider_principal_id: String,
+    pub isolation_mode: RuntimeHostKind,
+    pub requested: SponsoredResourceLimits,
+    pub now_ms: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SponsoredAdmissionError {
+    MissingPrincipalProof,
+    ExpiredGrant,
+    RevokedGrant,
+    ProviderRejected,
+    UnsupportedSettlementTag,
+    QuotaExhausted,
+    IsolationMismatch,
+    ScopeMismatch,
+    SecretBearingSettlementRef,
+}
+
+pub fn admit_sponsored_request(request: &SponsoredAdmissionRequest) -> Result<(), SponsoredAdmissionError> {
+    let grant = &request.grant;
+    if grant.sponsor.proof_ref.as_deref().unwrap_or_default().trim().is_empty()
+        || grant.beneficiary.proof_ref.as_deref().unwrap_or_default().trim().is_empty()
+        || grant
+            .provider_scope
+            .iter()
+            .any(|principal| principal.proof_ref.as_deref().unwrap_or_default().trim().is_empty())
+    {
+        return Err(SponsoredAdmissionError::MissingPrincipalProof);
+    }
+    if request.now_ms < grant.valid_from_ms || request.now_ms >= grant.valid_until_ms {
+        return Err(SponsoredAdmissionError::ExpiredGrant);
+    }
+    if grant.revocation.revoked {
+        return Err(SponsoredAdmissionError::RevokedGrant);
+    }
+    if grant.settlement.contains_raw_secret() {
+        return Err(SponsoredAdmissionError::SecretBearingSettlementRef);
+    }
+    if !grant.workload_scope.provider_principal_ids.contains(&request.provider_principal_id)
+        || !grant.provider_scope.iter().any(|principal| principal.principal_id == request.provider_principal_id)
+        || request.provider_policy.provider_principal_id != request.provider_principal_id
+        || !request.provider_policy.accepted_sponsor_principal_ids.contains(&grant.sponsor.principal_id)
+    {
+        return Err(SponsoredAdmissionError::ProviderRejected);
+    }
+    if !request.provider_policy.accepted_settlement_tags.contains(&grant.settlement.method_tag) {
+        return Err(SponsoredAdmissionError::UnsupportedSettlementTag);
+    }
+    if !grant.workload_scope.isolation_modes.contains(&request.isolation_mode)
+        || !request.provider_policy.accepted_isolation_modes.contains(&request.isolation_mode)
+    {
+        return Err(SponsoredAdmissionError::IsolationMismatch);
+    }
+    if !grant.workload_scope.workload_principal_ids.contains(&request.workload_principal_id)
+        || !request.provider_policy.accepted_workload_principal_ids.contains(&request.workload_principal_id)
+        || request.service_principal_id.as_ref().is_some_and(|service| {
+            !grant.workload_scope.service_principal_ids.contains(service)
+                || !request.provider_policy.accepted_service_principal_ids.contains(service)
+        })
+    {
+        return Err(SponsoredAdmissionError::ScopeMismatch);
+    }
+    if !request.requested.fits_within(&grant.limits)
+        || !request.requested.fits_within(&request.provider_policy.max_request)
+    {
+        return Err(SponsoredAdmissionError::QuotaExhausted);
+    }
+    let Some(remaining) = request.ledger.remaining() else {
+        return Err(SponsoredAdmissionError::QuotaExhausted);
+    };
+    if !request.requested.fits_within(&remaining) {
+        return Err(SponsoredAdmissionError::QuotaExhausted);
+    }
+    Ok(())
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RuntimeDiagnostic {
     pub key: String,
     pub value: RedactedValue,
@@ -1046,6 +1141,117 @@ mod tests {
             ..receipt
         };
         assert!(unsafe_receipt.contains_raw_secret());
+    }
+
+    fn sponsored_provider_policy() -> SponsoredProviderPolicy {
+        SponsoredProviderPolicy {
+            provider_principal_id: "provider/nodepool-a".to_string(),
+            accepted_sponsor_principal_ids: vec!["org/aspen-foundation".to_string()],
+            accepted_workload_principal_ids: vec!["workload/aspen-ci".to_string()],
+            accepted_service_principal_ids: vec!["service/forge".to_string()],
+            accepted_settlement_tags: vec!["none:internal-grant".to_string()],
+            accepted_isolation_modes: vec![RuntimeHostKind::NativeBuiltIn],
+            max_request: sponsored_limits(),
+        }
+    }
+
+    fn sponsored_admission_request() -> SponsoredAdmissionRequest {
+        SponsoredAdmissionRequest {
+            grant: sponsored_grant(),
+            provider_policy: sponsored_provider_policy(),
+            ledger: SponsoredQuotaLedger {
+                grant_id: "grant-open-source-ci".to_string(),
+                total: sponsored_limits(),
+                reserved: SponsoredResourceLimits {
+                    cpu_millis: 1_000,
+                    memory_bytes: 128 * 1024 * 1024,
+                    storage_bytes_ms: 1_000,
+                    network_bytes: 10_000,
+                    wall_time_ms: 5_000,
+                    max_concurrent: 0,
+                },
+                consumed: SponsoredResourceLimits {
+                    cpu_millis: 1_000,
+                    memory_bytes: 128 * 1024 * 1024,
+                    storage_bytes_ms: 1_000,
+                    network_bytes: 10_000,
+                    wall_time_ms: 5_000,
+                    max_concurrent: 0,
+                },
+                active_concurrency: 0,
+            },
+            workload_principal_id: "workload/aspen-ci".to_string(),
+            service_principal_id: Some("service/forge".to_string()),
+            provider_principal_id: "provider/nodepool-a".to_string(),
+            isolation_mode: RuntimeHostKind::NativeBuiltIn,
+            requested: SponsoredResourceLimits {
+                cpu_millis: 1_000,
+                memory_bytes: 128 * 1024 * 1024,
+                storage_bytes_ms: 1_000,
+                network_bytes: 10_000,
+                wall_time_ms: 5_000,
+                max_concurrent: 1,
+            },
+            now_ms: 2_000,
+        }
+    }
+
+    #[test]
+    fn sponsored_admission_accepts_only_complete_in_scope_grants() {
+        let request = sponsored_admission_request();
+        admit_sponsored_request(&request).unwrap();
+    }
+
+    #[test]
+    fn sponsored_admission_fails_closed_for_principal_time_revocation_and_provider_policy() {
+        let mut missing_proof = sponsored_admission_request();
+        missing_proof.grant.sponsor.proof_ref = None;
+        assert_eq!(admit_sponsored_request(&missing_proof), Err(SponsoredAdmissionError::MissingPrincipalProof));
+
+        let mut expired = sponsored_admission_request();
+        expired.now_ms = expired.grant.valid_until_ms;
+        assert_eq!(admit_sponsored_request(&expired), Err(SponsoredAdmissionError::ExpiredGrant));
+
+        let mut revoked = sponsored_admission_request();
+        revoked.grant.revocation.revoked = true;
+        assert_eq!(admit_sponsored_request(&revoked), Err(SponsoredAdmissionError::RevokedGrant));
+
+        let mut rejected_provider = sponsored_admission_request();
+        rejected_provider.provider_principal_id = "provider/other".to_string();
+        assert_eq!(admit_sponsored_request(&rejected_provider), Err(SponsoredAdmissionError::ProviderRejected));
+    }
+
+    #[test]
+    fn sponsored_admission_fails_closed_for_settlement_quota_isolation_and_scope() {
+        let mut unsupported_settlement = sponsored_admission_request();
+        unsupported_settlement.grant.settlement.method_tag = "crypto:chain-x".to_string();
+        assert_eq!(
+            admit_sponsored_request(&unsupported_settlement),
+            Err(SponsoredAdmissionError::UnsupportedSettlementTag)
+        );
+
+        let mut secret_settlement = sponsored_admission_request();
+        secret_settlement.grant.settlement.opaque_ref = RedactedValue::Plain("token=secret".to_string());
+        assert_eq!(
+            admit_sponsored_request(&secret_settlement),
+            Err(SponsoredAdmissionError::SecretBearingSettlementRef)
+        );
+
+        let mut quota_exhausted = sponsored_admission_request();
+        quota_exhausted.requested.cpu_millis = sponsored_limits().cpu_millis;
+        assert_eq!(admit_sponsored_request(&quota_exhausted), Err(SponsoredAdmissionError::QuotaExhausted));
+
+        let mut isolation_mismatch = sponsored_admission_request();
+        isolation_mismatch.isolation_mode = RuntimeHostKind::Wasm;
+        assert_eq!(admit_sponsored_request(&isolation_mismatch), Err(SponsoredAdmissionError::IsolationMismatch));
+
+        let mut workload_mismatch = sponsored_admission_request();
+        workload_mismatch.workload_principal_id = "workload/other".to_string();
+        assert_eq!(admit_sponsored_request(&workload_mismatch), Err(SponsoredAdmissionError::ScopeMismatch));
+
+        let mut service_mismatch = sponsored_admission_request();
+        service_mismatch.service_principal_id = Some("service/ci".to_string());
+        assert_eq!(admit_sponsored_request(&service_mismatch), Err(SponsoredAdmissionError::ScopeMismatch));
     }
 
     #[test]
