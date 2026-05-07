@@ -21,7 +21,7 @@
 ## Phase 5: Runtime integration and receipts
 
 - [x] Wire sponsored admission as an optional runtime-service/job/CI placement constraint that does not admit workloads without an accepted grant when sponsorship is required. ✅ 1m 20s (2026-05-07T01:57:42Z → 2026-05-07T01:59:02Z; evidence: `evidence/sponsored-runtime-placement-constraint.md`)
-- [ ] Emit signed, redacted usage receipts for sponsored runtime execution start, reservation, consumption, completion, failure, and revocation-denial paths.
+- [x] Emit signed, redacted usage receipts for sponsored runtime execution start, reservation, consumption, completion, failure, and revocation-denial paths. ✅ 4m 41s (2026-05-07T01:59:39Z → 2026-05-07T02:04:20Z; evidence: `evidence/signed-sponsored-usage-receipts.md`)
 
 ## Phase 6: Documentation and validation
 

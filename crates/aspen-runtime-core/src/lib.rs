@@ -458,6 +458,66 @@ impl SponsoredUsageReceipt {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SignedSponsoredUsageReceipt {
+    pub receipt: SponsoredUsageReceipt,
+    pub signer_principal_id: String,
+    pub signature_ref: RedactedValue,
+}
+
+impl SignedSponsoredUsageReceipt {
+    #[must_use]
+    pub fn contains_raw_secret(&self) -> bool {
+        self.receipt.contains_raw_secret() || self.signature_ref.looks_secret()
+    }
+}
+
+pub struct SponsoredUsageReceiptInput {
+    pub receipt_id: String,
+    pub execution_id: String,
+    pub workload_principal_id: String,
+    pub service_principal_id: Option<String>,
+    pub provider_principal_id: String,
+    pub sponsor_principal_id: String,
+    pub grant_id: String,
+    pub measured: SponsoredResourceLimits,
+    pub started_at_ms: u64,
+    pub completed_at_ms: Option<u64>,
+    pub outcome: SponsoredReceiptOutcome,
+    pub artifact_refs: Vec<String>,
+    pub isolation_summary: String,
+    pub settlement: SponsoredSettlementReference,
+    pub diagnostics: Vec<RuntimeDiagnostic>,
+    pub signer_principal_id: String,
+    pub signature_ref: RedactedValue,
+}
+
+#[must_use]
+pub fn signed_sponsored_usage_receipt(input: SponsoredUsageReceiptInput) -> SignedSponsoredUsageReceipt {
+    SignedSponsoredUsageReceipt {
+        receipt: SponsoredUsageReceipt {
+            schema: "aspen.sponsored-usage-receipt.v1".to_string(),
+            receipt_id: input.receipt_id,
+            execution_id: input.execution_id,
+            workload_principal_id: input.workload_principal_id,
+            service_principal_id: input.service_principal_id,
+            provider_principal_id: input.provider_principal_id,
+            sponsor_principal_id: input.sponsor_principal_id,
+            grant_id: input.grant_id,
+            measured: input.measured,
+            started_at_ms: input.started_at_ms,
+            completed_at_ms: input.completed_at_ms,
+            outcome: input.outcome,
+            artifact_refs: input.artifact_refs,
+            isolation_summary: input.isolation_summary,
+            settlement: input.settlement,
+            diagnostics: input.diagnostics,
+        },
+        signer_principal_id: input.signer_principal_id,
+        signature_ref: input.signature_ref,
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SponsoredProviderPolicy {
     pub provider_principal_id: String,
     pub accepted_sponsor_principal_ids: Vec<String>,
@@ -1200,6 +1260,60 @@ mod tests {
         assert!(!receipt_json.contains("token="));
         let decoded_receipt: SponsoredUsageReceipt = serde_json::from_str(&receipt_json).unwrap();
         assert_eq!(decoded_receipt, receipt);
+    }
+
+    fn signed_receipt_for_outcome(outcome: SponsoredReceiptOutcome) -> SignedSponsoredUsageReceipt {
+        signed_sponsored_usage_receipt(SponsoredUsageReceiptInput {
+            receipt_id: format!("receipt/sponsored/{outcome:?}"),
+            execution_id: "run/ci/1".to_string(),
+            workload_principal_id: "workload/aspen-ci".to_string(),
+            service_principal_id: Some("service/forge".to_string()),
+            provider_principal_id: "provider/nodepool-a".to_string(),
+            sponsor_principal_id: "org/aspen-foundation".to_string(),
+            grant_id: "grant-open-source-ci".to_string(),
+            measured: sponsored_limits(),
+            started_at_ms: 2_000,
+            completed_at_ms: Some(3_000),
+            outcome,
+            artifact_refs: vec!["blake3:artifact".to_string()],
+            isolation_summary: "native-built-in".to_string(),
+            settlement: SponsoredSettlementReference {
+                method_tag: "voucher".to_string(),
+                opaque_ref: RedactedValue::Redacted,
+            },
+            diagnostics: vec![RuntimeDiagnostic {
+                key: "operator-note".to_string(),
+                value: RedactedValue::Redacted,
+            }],
+            signer_principal_id: "provider/nodepool-a".to_string(),
+            signature_ref: RedactedValue::Redacted,
+        })
+    }
+
+    #[test]
+    fn signed_sponsored_usage_receipts_cover_all_required_paths_and_redact_handles() {
+        let required = [
+            SponsoredReceiptOutcome::Started,
+            SponsoredReceiptOutcome::Reserved,
+            SponsoredReceiptOutcome::Consumed,
+            SponsoredReceiptOutcome::Completed,
+            SponsoredReceiptOutcome::Failed,
+            SponsoredReceiptOutcome::RevocationDenied,
+        ];
+        for outcome in required {
+            let signed = signed_receipt_for_outcome(outcome.clone());
+            assert_eq!(signed.receipt.schema, "aspen.sponsored-usage-receipt.v1");
+            assert_eq!(signed.receipt.outcome, outcome);
+            assert_eq!(signed.signer_principal_id, "provider/nodepool-a");
+            assert!(matches!(signed.signature_ref, RedactedValue::Redacted));
+            assert!(!signed.contains_raw_secret());
+        }
+
+        let unsafe_signed = SignedSponsoredUsageReceipt {
+            signature_ref: RedactedValue::Plain("token=raw-secret".to_string()),
+            ..signed_receipt_for_outcome(SponsoredReceiptOutcome::Failed)
+        };
+        assert!(unsafe_signed.contains_raw_secret());
     }
 
     #[test]

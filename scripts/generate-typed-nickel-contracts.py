@@ -96,6 +96,7 @@ CONTRACT_SETS = (
             "SponsoredResourceLimits",
             "SponsoredReceiptOutcome",
             "SponsoredUsageReceipt",
+            "SignedSponsoredUsageReceipt",
         ),
     ),
 )

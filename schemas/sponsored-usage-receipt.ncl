@@ -63,12 +63,19 @@ let SponsoredUsageReceipt = {
   diagnostics | Array RuntimeDiagnostic,
 } in
 
+let SignedSponsoredUsageReceipt = {
+  receipt | SponsoredUsageReceipt,
+  signer_principal_id | String,
+  signature_ref | RedactedValue,
+} in
+
 let RedactedValueContract = RedactedValue in
 let RuntimeDiagnosticContract = RuntimeDiagnostic in
 let SponsoredSettlementReferenceContract = SponsoredSettlementReference in
 let SponsoredResourceLimitsContract = SponsoredResourceLimits in
 let SponsoredReceiptOutcomeContract = SponsoredReceiptOutcome in
 let SponsoredUsageReceiptContract = SponsoredUsageReceipt in
+let SignedSponsoredUsageReceiptContract = SignedSponsoredUsageReceipt in
 
 {
   RedactedValue = RedactedValueContract,
@@ -77,4 +84,5 @@ let SponsoredUsageReceiptContract = SponsoredUsageReceipt in
   SponsoredResourceLimits = SponsoredResourceLimitsContract,
   SponsoredReceiptOutcome = SponsoredReceiptOutcomeContract,
   SponsoredUsageReceipt = SponsoredUsageReceiptContract,
+  SignedSponsoredUsageReceipt = SignedSponsoredUsageReceiptContract,
 }
