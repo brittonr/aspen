@@ -2,63 +2,20 @@
 
 ## Purpose
 
-This specification defines Aspen's runtime host-loading taxonomy and shared lifecycle, artifact-verification, capability-binding, UCAN-delegation, and verified-admission requirements for native built-ins, external native processes, WASM, Hyperlight, OCI/container, microVM, and unikernel runtime units.
+This specification defines Aspen's runtime host-loading taxonomy and shared lifecycle, artifact-verification, capability-binding, UCAN-delegation, and verified-admission requirements for native built-ins, external native processes, WASM, Hyperlight, OCI artifact lowering, microVM, and unikernel runtime units.
 ## Requirements
 ### Requirement: Runtime Host Taxonomy [r[runtime-host-loading.host-taxonomy]]
-Aspen MUST classify runtime units by an explicit host kind before resolving or starting their executable artifact.
-ID: r[runtime-host-loading.host-taxonomy]
+Aspen MUST classify runtime units by an explicit host kind before resolving or starting their executable artifact, and OCI image identity SHALL be modeled as an artifact/lowering input rather than a production host boundary.
+ID: [r[runtime-host-loading.host-taxonomy]]
 
-#### Scenario: Native built-in host selected
-First-party service declarations MUST use a built-in native host kind rather than dynamic native libraries.
-ID: r[runtime-host-loading.host-taxonomy.native-built-in]
-- GIVEN a first-party Aspen service such as Forge, Executioner, snix/cache, or federation
-- WHEN the service is enabled as a native runtime unit
-- THEN its runtime declaration SHALL use a built-in native host kind
-- AND the artifact identity SHALL be the built-in service name plus node/build version rather than a dynamically loaded native library path
-
-#### Scenario: WASM host selected
-WASM runtime declarations MUST include content identity, ABI, entrypoint, limits, and capabilities.
-ID: r[runtime-host-loading.host-taxonomy.wasm]
-- GIVEN a runtime unit supplied as a WASM artifact
-- WHEN the runtime resolves the unit
-- THEN the declaration SHALL include the module hash, ABI version, entrypoint, resource limits, and capability bindings required for instantiation
-
-#### Scenario: Hyperlight host selected
-Hyperlight runtime assignments MUST require compatible node runner capability.
-ID: r[runtime-host-loading.host-taxonomy.hyperlight]
-- GIVEN an isolated execution task or service declares a Hyperlight artifact
-- WHEN the scheduler assigns the unit
-- THEN the assigned node SHALL have a compatible Hyperlight runner before the unit can transition to running
-
-#### Scenario: OCI container host selected
-OCI runtime declarations MUST use immutable image identity and bounded host handles.
-ID: r[runtime-host-loading.host-taxonomy.oci-container]
+#### Scenario: OCI image artifact selected [r[runtime-host-loading.host-taxonomy.oci-container]]
+OCI runtime declarations MUST use immutable image identity and an isolated lowering target rather than selecting a plain container host as the production boundary.
+ID: [r[runtime-host-loading.host-taxonomy.oci-container]]
 - GIVEN a runtime unit declares an OCI image artifact
-- WHEN the runtime selects an OCI/container host boundary
+- WHEN the runtime resolves the unit for production execution
 - THEN the declaration SHALL use an immutable image digest rather than a mutable tag for accepted execution
-- AND it SHALL state the runner, entrypoint, arguments, mounts, environment handles, network policy, and capability bindings needed before start
-
-#### Scenario: MicroVM host selected
-MicroVM runtime assignments MUST require compatible virtualization and runner capability.
-ID: r[runtime-host-loading.host-taxonomy.microvm]
-- GIVEN a runtime unit requires a Firecracker, Cloud Hypervisor, Uhyve, QEMU microvm, or equivalent VM boundary
-- WHEN the scheduler assigns the unit
-- THEN the assigned node SHALL advertise compatible virtualization and runner capability before the unit can transition to running
-
-#### Scenario: Unikernel artifact selected
-Unikernel artifacts MUST be modeled as guest artifacts under a VM or microVM boundary.
-ID: r[runtime-host-loading.host-taxonomy.unikernel]
-- GIVEN a runtime unit declares a HermitOS-style unikernel artifact
-- WHEN the runtime resolves the unit
-- THEN the declaration SHALL model the unikernel as a guest artifact that runs under a VM or microVM host boundary, not as an ordinary host process
-- AND it SHALL separately identify the Hermit application image and any loader, hypervisor, or boot profile artifacts required to launch it
-
-#### Scenario: External native process host selected
-External native process units MUST use a separate process artifact and host-ABI boundary.
-ID: r[runtime-host-loading.host-taxonomy.native-process]
-- GIVEN an operator-installed trusted native binary is allowed by a future runtime policy
-- WHEN the runtime resolves the unit
-- THEN the declaration SHALL model it as a separate native process artifact with a hash or store path and a host-ABI boundary
+- AND it SHALL state the lowering target, entrypoint, arguments, mounts, environment handles, network policy, and capability bindings needed before start
+- AND the selected production host boundary SHALL be `MicroVm`, `Hyperlight`, `Wasm`, or a VM-backed guest profile such as `Unikernel { HermitOs }` rather than a Podman/Docker-style host container
 
 ### Requirement: Native Built-In Service Loading
 Aspen MUST load first-party native services through a linked built-in service factory registry rather than an in-process native dynamic plugin system.
@@ -83,41 +40,18 @@ ID: r[runtime-host-loading.native-built-in.dynamic-plugin-rejected]
 - AND the rejection rationale SHALL prefer linked built-ins, external native processes, WASM, or Hyperlight depending on trust and isolation needs
 
 ### Requirement: Content-Addressed Dynamic Artifact Loading [r[runtime-host-loading.dynamic-artifacts]]
-Aspen MUST verify dynamic runtime artifacts by content identity before instantiating WASM modules, starting Hyperlight units, launching OCI/microVM guests, or launching external native processes.
-ID: r[runtime-host-loading.dynamic-artifacts]
+Aspen MUST verify dynamic runtime artifacts by content identity before instantiating WASM modules, starting Hyperlight units, lowering OCI images into isolated hosts, launching microVM guests, or launching external native processes.
+ID: [r[runtime-host-loading.dynamic-artifacts]]
 
-#### Scenario: WASM artifact verified before instantiation
-WASM artifact admission MUST fail closed before host functions are exposed when identity, ABI, or resource policy is invalid.
-ID: r[runtime-host-loading.dynamic-artifacts.wasm-verified]
-- GIVEN a WASM runtime unit declares a module hash and ABI version
-- WHEN a node prepares to instantiate the module
-- THEN the node SHALL fetch the module from an Aspen-approved artifact store
-- AND it SHALL verify the content identity before exposing any host functions
-- AND it SHALL fail closed if the hash, signature, ABI, fuel, memory, or timeout policy is invalid
-
-#### Scenario: Hyperlight artifact verified before start
-Hyperlight artifact admission MUST verify guest identity before start and record outputs as artifacts or receipt fields.
-ID: r[runtime-host-loading.dynamic-artifacts.hyperlight-verified]
-- GIVEN a Hyperlight execution run is assigned to a node
-- WHEN the node prepares the guest image or program
-- THEN the Hyperlight runner SHALL verify the artifact identity before starting the isolated unit
-- AND outputs SHALL be recorded as Aspen blob/snix artifacts or explicit receipt fields
-
-#### Scenario: Hermit guest artifact verified before start
-Hermit unikernel guest admission MUST distinguish guest application image, loader, hypervisor, and boot-profile artifacts before start.
-ID: r[runtime-host-loading.dynamic-artifacts.hermit-guest-verified]
-- GIVEN a HermitOS-style unikernel runtime unit is assigned to a microVM-capable node
-- WHEN the node prepares the guest application image and loader or hypervisor profile
-- THEN the runner SHALL verify the guest artifact identity before start
-- AND the receipt SHALL record selected engine and artifact hashes rather than mutable host paths, raw kernel args, or environment secrets
-
-#### Scenario: External native process verified before spawn
-External native process admission MUST verify binary identity before process creation and attach only declared handles.
-ID: r[runtime-host-loading.dynamic-artifacts.native-process-verified]
-- GIVEN a future policy allows an external native process runtime unit
-- WHEN the runtime prepares to spawn it
-- THEN the runtime SHALL verify the binary artifact identity before process creation
-- AND it SHALL attach only declared IPC, filesystem, environment, and capability handles
+#### Scenario: OCI image verified before isolated lowering [r[runtime-host-loading.dynamic-artifacts.oci-verified]]
+OCI image admission MUST verify immutable image identity and provenance before deriving rootfs, program, guest, or component artifacts for an isolated host.
+ID: [r[runtime-host-loading.dynamic-artifacts.oci-verified]]
+- GIVEN an OCI-backed runtime unit declares an image digest
+- WHEN the admission/lowering planner prepares a plan for `MicroVm`, `Hyperlight`, `Wasm`, or a VM-backed guest profile such as `Unikernel { HermitOs }`
+- THEN the planner SHALL resolve and verify the immutable image digest and signature/provenance policy before deriving executable artifacts
+- AND the selected runner SHALL re-verify the derived rootfs, program, or guest artifact identity before launch
+- AND mutable tags SHALL NOT be accepted as the durable execution identity
+- AND layer/rootfs/program/guest materialization SHALL be recorded as bounded receipt data without raw credentials
 
 ### Requirement: Host-Independent Runtime Lifecycle
 Aspen MUST expose a host-independent lifecycle model for runtime units regardless of whether the implementation is native, WASM, Hyperlight, OCI/container, microVM, unikernel, or an external native process.
@@ -341,3 +275,45 @@ Aspen MUST provide a bounded WASM host contract for deterministic hooks, policie
 - GIVEN WASM validation, instantiation, execution, or host-call authorization fails
 - WHEN the host records the failure
 - THEN it SHALL emit a receipt with module identity, ABI, failure class, bounded diagnostics, and redacted capability summary
+
+### Requirement: OCI Artifact Lowering [r[runtime-host-loading.oci-lowering]]
+Aspen MUST treat OCI images as content-addressed artifact inputs that lower into isolated runtime host boundaries rather than as production host boundaries themselves.
+ID: [r[runtime-host-loading.oci-lowering]]
+
+#### Scenario: OCI image lowers to microVM by default [r[runtime-host-loading.oci-lowering.microvm-default]]
+Production OCI execution MUST use a microVM-backed lowering target by default for tenant, CI, remote application, and risky adapter workloads.
+ID: [r[runtime-host-loading.oci-lowering.microvm-default]]
+- GIVEN a runtime unit declares an OCI image artifact for a tenant, CI, remote application, or risky adapter workload
+- WHEN the runtime admits the unit for production execution
+- THEN the admission plan SHALL select a `MicroVm` host boundary unless node policy selects a stronger or narrower compatible isolated target
+- AND the plan SHALL reject ordinary host-container execution as the default boundary
+
+#### Scenario: OCI-backed service spec declares lowering contract [r[runtime-host-loading.oci-lowering.service-spec-contract]]
+OCI-backed service specs MUST carry the runtime service contract fields needed before lowering.
+ID: [r[runtime-host-loading.oci-lowering.service-spec-contract]]
+- GIVEN a runtime service spec references an OCI image artifact
+- WHEN production admission evaluates the service spec
+- THEN it SHALL include service identity, artifact identity, host-loading reference or lowering target, resources, placement, capability bindings, route policy when applicable, health policy, restart policy, upgrade policy, and receipt policy before lowering can proceed
+
+#### Scenario: OCI image lowers to compatible specialized host [r[runtime-host-loading.oci-lowering.specialized-target]]
+OCI artifact lowering MUST be explicit when the target is Hyperlight, WASM, or a unikernel profile.
+ID: [r[runtime-host-loading.oci-lowering.specialized-target]]
+- GIVEN an OCI image contains or can be rebuilt into a Hyperlight program, WASM component, or unikernel guest artifact
+- WHEN the runtime selects that specialized target
+- THEN the lowering plan SHALL record the transformation or rebuild provenance, derived artifact identity, selected host kind, and unsupported-feature diagnostics if lowering fails
+
+#### Scenario: OCI lowering receipt preserves original and derived identities [r[runtime-host-loading.oci-lowering.receipt]]
+OCI lowering receipts MUST identify both the source OCI image and the isolated execution artifact without exposing secrets.
+ID: [r[runtime-host-loading.oci-lowering.receipt]]
+- GIVEN an OCI-backed runtime unit is admitted and started through an isolated host boundary
+- WHEN the runtime emits the start or completion receipt
+- THEN the receipt SHALL include the original immutable OCI digest, selected lowering target, derived rootfs/program/guest artifact hashes, runner identity, and bounded redacted handle summary
+- AND it SHALL NOT include registry credentials, raw environment secrets, mutable tags as durable identity, or ambient host paths
+
+#### Scenario: Plain container runner is dev or unsafe only [r[runtime-host-loading.oci-lowering.raw-container-dev-only]]
+Plain Podman/Docker-style host-container execution MUST NOT be part of the default production runtime contract.
+ID: [r[runtime-host-loading.oci-lowering.raw-container-dev-only]]
+- GIVEN a future local runner supports ordinary host-container execution for development or trusted operator smokes
+- WHEN a production runtime declaration requests that raw container runner
+- THEN Aspen SHALL reject the declaration unless explicit dev/unsafe policy is enabled
+- AND any accepted dev/unsafe run SHALL be marked in receipts as weaker isolation than microVM, Hyperlight, WASM, or unikernel execution
