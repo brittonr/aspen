@@ -893,6 +893,161 @@ mod tests {
         admit_receipt(&health_receipt).unwrap();
     }
 
+    fn sponsored_limits() -> SponsoredResourceLimits {
+        SponsoredResourceLimits {
+            cpu_millis: 10_000,
+            memory_bytes: 1024 * 1024 * 1024,
+            storage_bytes_ms: 50_000,
+            network_bytes: 1_000_000,
+            wall_time_ms: 60_000,
+            max_concurrent: 2,
+        }
+    }
+
+    fn sponsored_grant() -> SponsoredRuntimeGrant {
+        SponsoredRuntimeGrant {
+            grant_id: "grant-open-source-ci".to_string(),
+            sponsor: SponsoredPrincipalRef {
+                principal_id: "org/aspen-foundation".to_string(),
+                role: SponsoredPrincipalRole::Sponsor,
+                proof_ref: Some("ucan:proof:sponsor".to_string()),
+            },
+            beneficiary: SponsoredPrincipalRef {
+                principal_id: "workload/aspen-ci".to_string(),
+                role: SponsoredPrincipalRole::Beneficiary,
+                proof_ref: Some("ucan:proof:beneficiary".to_string()),
+            },
+            provider_scope: vec![SponsoredPrincipalRef {
+                principal_id: "provider/nodepool-a".to_string(),
+                role: SponsoredPrincipalRole::Provider,
+                proof_ref: Some("ucan:proof:provider".to_string()),
+            }],
+            workload_scope: SponsoredGrantScope {
+                workload_principal_ids: vec!["workload/aspen-ci".to_string()],
+                service_principal_ids: vec!["service/forge".to_string()],
+                provider_principal_ids: vec!["provider/nodepool-a".to_string()],
+                node_principal_ids: vec!["node/n1".to_string()],
+                plugin_principal_ids: vec!["plugin/internal-budget".to_string()],
+                resource_classes: vec!["ci-small".to_string()],
+                isolation_modes: vec![RuntimeHostKind::NativeBuiltIn],
+            },
+            limits: sponsored_limits(),
+            valid_from_ms: 1_000,
+            valid_until_ms: 10_000,
+            revocation: SponsoredRevocationRef {
+                revocation_id: "rev/grant-open-source-ci".to_string(),
+                revoked: false,
+            },
+            settlement: SponsoredSettlementReference {
+                method_tag: "none:internal-grant".to_string(),
+                opaque_ref: RedactedValue::OpaqueHandle("settlement:internal:42".to_string()),
+            },
+            policy_tags: vec!["open-source-ci".to_string()],
+        }
+    }
+
+    #[test]
+    fn sponsored_grant_model_is_bounded_scoped_and_settlement_opaque() {
+        let grant = sponsored_grant();
+        assert!(grant.workload_scope.workload_principal_ids.contains(&"workload/aspen-ci".to_string()));
+        assert!(grant.workload_scope.provider_principal_ids.contains(&"provider/nodepool-a".to_string()));
+        assert!(grant.workload_scope.isolation_modes.contains(&RuntimeHostKind::NativeBuiltIn));
+        assert!(!grant.settlement.contains_raw_secret());
+        assert!(matches!(grant.settlement.opaque_ref, RedactedValue::OpaqueHandle(_)));
+        assert_eq!(grant.valid_from_ms, 1_000);
+        assert_eq!(grant.valid_until_ms, 10_000);
+
+        let request = SponsoredResourceLimits {
+            cpu_millis: 2_000,
+            memory_bytes: 128 * 1024 * 1024,
+            storage_bytes_ms: 10_000,
+            network_bytes: 100_000,
+            wall_time_ms: 30_000,
+            max_concurrent: 1,
+        };
+        assert!(request.fits_within(&grant.limits));
+
+        let too_large = SponsoredResourceLimits {
+            memory_bytes: grant.limits.memory_bytes + 1,
+            ..request.clone()
+        };
+        assert!(!too_large.fits_within(&grant.limits));
+    }
+
+    #[test]
+    fn sponsored_quota_arithmetic_tracks_remaining_reservation_and_consumption() {
+        let ledger = SponsoredQuotaLedger {
+            grant_id: "grant-open-source-ci".to_string(),
+            total: sponsored_limits(),
+            reserved: SponsoredResourceLimits {
+                cpu_millis: 1_000,
+                memory_bytes: 128 * 1024 * 1024,
+                storage_bytes_ms: 1_000,
+                network_bytes: 10_000,
+                wall_time_ms: 5_000,
+                max_concurrent: 0,
+            },
+            consumed: SponsoredResourceLimits {
+                cpu_millis: 2_000,
+                memory_bytes: 256 * 1024 * 1024,
+                storage_bytes_ms: 2_000,
+                network_bytes: 20_000,
+                wall_time_ms: 10_000,
+                max_concurrent: 0,
+            },
+            active_concurrency: 1,
+        };
+        let remaining = ledger.remaining().unwrap();
+        assert_eq!(remaining.cpu_millis, 7_000);
+        assert_eq!(remaining.memory_bytes, 640 * 1024 * 1024);
+        assert_eq!(remaining.max_concurrent, 1);
+
+        let overdrawn = SponsoredQuotaLedger {
+            reserved: SponsoredResourceLimits {
+                cpu_millis: 20_000,
+                ..ledger.reserved.clone()
+            },
+            ..ledger
+        };
+        assert!(overdrawn.remaining().is_none());
+    }
+
+    #[test]
+    fn sponsored_usage_receipts_redact_settlement_and_diagnostics() {
+        let grant = sponsored_grant();
+        let receipt = SponsoredUsageReceipt {
+            schema: "aspen.sponsored-usage-receipt.v1".to_string(),
+            receipt_id: "receipt/sponsored/1".to_string(),
+            execution_id: "run/ci/1".to_string(),
+            workload_principal_id: grant.beneficiary.principal_id.clone(),
+            service_principal_id: Some("service/forge".to_string()),
+            provider_principal_id: "provider/nodepool-a".to_string(),
+            sponsor_principal_id: grant.sponsor.principal_id.clone(),
+            grant_id: grant.grant_id,
+            measured: sponsored_limits(),
+            started_at_ms: 2_000,
+            completed_at_ms: Some(3_000),
+            outcome: SponsoredReceiptOutcome::Completed,
+            artifact_refs: vec!["blake3:artifact".to_string()],
+            isolation_summary: "native-built-in".to_string(),
+            settlement: grant.settlement,
+            diagnostics: vec![RuntimeDiagnostic {
+                key: "operator-note".to_string(),
+                value: RedactedValue::Plain("completed".to_string()),
+            }],
+        };
+        assert!(!receipt.contains_raw_secret());
+
+        let unsafe_receipt = SponsoredUsageReceipt {
+            settlement: SponsoredSettlementReference {
+                method_tag: "voucher".to_string(),
+                opaque_ref: RedactedValue::Plain("token=raw-payment-credential".to_string()),
+            },
+            ..receipt
+        };
+        assert!(unsafe_receipt.contains_raw_secret());
+    }
+
     #[test]
     fn admission_rejects_unsafe_shapes() {
         let bad_native = RuntimeUnitDeclaration {

@@ -5,7 +5,7 @@
 ## Phase 2: Core model and admission semantics
 
 - [x] Add portable Rust-owned DTOs for principal references, resource grants, grant scopes, sponsor/beneficiary/provider/workload/service principal roles, node/plugin principal refs, resource limits, quota reservations, quota consumption, revocation refs, settlement references, and usage receipts. ✅ 1m 14s (2026-05-07T01:34:06Z → 2026-05-07T01:35:20Z; evidence: `evidence/sponsored-runtime-dtos.md`)
-- [ ] Add pure tests for bounded resources, validity windows, workload/provider scopes, settlement-reference opacity, redaction, and quota arithmetic.
+- [x] Add pure tests for bounded resources, validity windows, workload/provider scopes, settlement-reference opacity, redaction, and quota arithmetic. ✅ 1m 04s (2026-05-07T01:36:02Z → 2026-05-07T01:37:06Z; evidence: `evidence/sponsored-runtime-model-tests.md`)
 - [ ] Add fail-closed admission tests covering missing principal proof, expired grant, revoked grant, provider-principal rejection, unsupported settlement tag, quota exhaustion, isolation mismatch, and workload/service-principal scope mismatch.
 
 ## Phase 3: Provider and sponsor policy contracts
