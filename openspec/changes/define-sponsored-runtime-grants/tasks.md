@@ -11,7 +11,7 @@
 ## Phase 3: Provider and sponsor policy contracts
 
 - [x] Add Nickel-authored contracts and fixtures for provider offers, sponsor policies, resource class catalogs, and admission profiles. ✅ 4m 27s (2026-05-07T01:42:38Z → 2026-05-07T01:47:05Z; evidence: `evidence/sponsored-runtime-nickel-policy-contracts.md`)
-- [ ] Add positive/negative Nickel fixture tests proving policy defaults, bounded limits, secret-free settlement refs, and invalid provider/sponsor principal combinations are rejected before Rust runtime side effects.
+- [x] Add positive/negative Nickel fixture tests proving policy defaults, bounded limits, secret-free settlement refs, and invalid provider/sponsor principal combinations are rejected before Rust runtime side effects. ✅ 49s (2026-05-07T01:47:44Z → 2026-05-07T01:48:33Z; evidence: `evidence/sponsored-runtime-nickel-fixtures.md`)
 
 ## Phase 4: Rust-derived evidence contracts
 

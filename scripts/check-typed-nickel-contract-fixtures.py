@@ -189,6 +189,54 @@ FIXTURES: dict[str, tuple[str, bool]] = {
 ''',
         False,
     ),
+    "sponsored-policy-positive-defaults.ncl": (
+        '''let schema = import "@REPO@/schemas/sponsored-runtime-policy.ncl" in
+{
+  id = "provider-defaults",
+  provider = { id = "provider/node-a", kind = "provider" },
+  catalog_ref = "small",
+  isolation_classes = ["wasm"],
+  settlement_kinds = ["voucher"],
+} | schema.ProviderOffer
+''',
+        True,
+    ),
+    "sponsored-policy-negative-zero-limit.ncl": (
+        '''let schema = import "@REPO@/schemas/sponsored-runtime-policy.ncl" in
+{
+  class = "cpu",
+  limit = 0,
+  unit = "vcpu",
+} | schema.ResourceLimit
+''',
+        False,
+    ),
+    "sponsored-policy-negative-sponsor-kind.ncl": (
+        '''let schema = import "@REPO@/schemas/sponsored-runtime-policy.ncl" in
+{
+  id = "bad-sponsor-kind",
+  sponsor = { id = "provider/node-a", kind = "provider" },
+  beneficiaries = [{ id = "user/alice", kind = "beneficiary" }],
+  max_grant_seconds = 600,
+  revocation_ref = "raft://sponsorship/revocations/team-a",
+} | schema.SponsorPolicy
+''',
+        False,
+    ),
+    "sponsored-policy-negative-negative-cost.ncl": (
+        '''let schema = import "@REPO@/schemas/sponsored-runtime-policy.ncl" in
+{
+  id = "bad-cost",
+  provider_offer_ref = "provider-small",
+  sponsor_policy_ref = "sponsor-team-a",
+  workload = { id = "workload/ci", kind = "workload" },
+  service = { id = "service/forge-ci", kind = "service" },
+  requested = [{ class = "cpu", limit = 1, unit = "vcpu" }],
+  estimated_cost = -1,
+} | schema.AdmissionProfile
+''',
+        False,
+    ),
     "trust-negative-inline-secret.ncl": (
         '''let schema = import "@REPO@/schemas/trust-bootstrap-policy.ncl" in
 {
