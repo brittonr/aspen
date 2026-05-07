@@ -187,6 +187,84 @@ impl HermitLaunchProfile {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
+pub enum HyperlightAbiProfile {
+    CGuestV0,
+    RustGuestV0,
+    WasmGuestV0,
+    Other(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HyperlightArtifactProfile {
+    NativeGuest,
+    WasmGuest,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum HyperlightHostCallKind {
+    Kv,
+    Blob,
+    Logging,
+    Metrics,
+    Timer,
+    Route,
+    Output,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HyperlightHostCallBinding {
+    pub call_id: String,
+    pub kind: HyperlightHostCallKind,
+    pub capability_handle_id: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HyperlightRunnerCapability {
+    pub capability_handle_id: String,
+    pub runner_version: String,
+    pub supported_abi_profiles: Vec<HyperlightAbiProfile>,
+    pub supported_artifact_profiles: Vec<HyperlightArtifactProfile>,
+    pub max_resources: RuntimeResources,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HyperlightRuntimeProfile {
+    pub image_hash: String,
+    pub entrypoint: String,
+    pub abi_profile: HyperlightAbiProfile,
+    pub artifact_profile: HyperlightArtifactProfile,
+    pub runner_capability: HyperlightRunnerCapability,
+    pub host_calls: Vec<HyperlightHostCallBinding>,
+    pub resources: RuntimeResources,
+    pub output_artifact: Option<RedactedValue>,
+}
+
+impl HyperlightRuntimeProfile {
+    #[must_use]
+    pub fn as_runtime_artifact(&self) -> RuntimeArtifact {
+        RuntimeArtifact::HyperlightImage {
+            image_hash: self.image_hash.clone(),
+            entrypoint: self.entrypoint.clone(),
+        }
+    }
+
+    #[must_use]
+    pub fn declared_capability_handles(&self) -> Vec<&str> {
+        let mut handles = vec![self.runner_capability.capability_handle_id.as_str()];
+        handles.extend(self.host_calls.iter().map(|call| call.capability_handle_id.as_str()));
+        handles
+    }
+
+    #[must_use]
+    pub fn output_contains_raw_secret(&self) -> bool {
+        self.output_artifact.as_ref().is_some_and(RedactedValue::looks_secret)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum RuntimeUnitKind {
     Service,
     ExecutionRun,
@@ -866,6 +944,140 @@ pub enum AdmissionError {
     HermitRequiresLoaderArtifacts,
     HermitRejectsLoaderForUhyve,
     HermitReceiptContainsRawSecret,
+    HyperlightRequiresHyperlightHost,
+    HyperlightRequiresHyperlightArtifact,
+    HyperlightRequiresVerifiedImage,
+    HyperlightRequiresRunnerCapability,
+    HyperlightUnsupportedAbi,
+    HyperlightUnsupportedArtifactProfile,
+    HyperlightResourcePolicyExceeded,
+    HyperlightRequiresDeclaredHostCallCapability,
+    HyperlightRejectsAmbientHostAccess,
+    HyperlightReceiptContainsRawSecret,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct HyperlightProfileReceipt {
+    pub receipt_id: String,
+    pub unit_id: String,
+    pub runner_version: String,
+    pub artifact_hash: String,
+    pub entrypoint: String,
+    pub abi_profile: HyperlightAbiProfile,
+    pub lifecycle_status: RuntimeLifecycleStatus,
+    pub granted_authority: Vec<RedactedValue>,
+    pub output_summary: Option<RedactedValue>,
+    pub diagnostics: Vec<RuntimeDiagnostic>,
+}
+
+impl HyperlightProfileReceipt {
+    #[must_use]
+    pub fn contains_raw_secret(&self) -> bool {
+        self.granted_authority.iter().any(RedactedValue::looks_secret)
+            || self.output_summary.as_ref().is_some_and(RedactedValue::looks_secret)
+            || self.diagnostics.iter().any(|diag| diag.value.looks_secret())
+    }
+}
+
+pub fn admit_hyperlight_profile(
+    decl: &RuntimeUnitDeclaration,
+    profile: &HyperlightRuntimeProfile,
+) -> Result<(), AdmissionError> {
+    if decl.host_kind != RuntimeHostKind::Hyperlight {
+        return Err(AdmissionError::HyperlightRequiresHyperlightHost);
+    }
+    if !matches!(decl.artifact, RuntimeArtifact::HyperlightImage { .. }) {
+        return Err(AdmissionError::HyperlightRequiresHyperlightArtifact);
+    }
+    if !profile.image_hash.starts_with("sha256:")
+        || !matches!(decl.artifact, RuntimeArtifact::HyperlightImage { ref image_hash, ref entrypoint } if image_hash == &profile.image_hash && entrypoint == &profile.entrypoint)
+    {
+        return Err(AdmissionError::HyperlightRequiresVerifiedImage);
+    }
+    if !decl
+        .capabilities
+        .iter()
+        .any(|binding| binding.handle_id == profile.runner_capability.capability_handle_id)
+    {
+        return Err(AdmissionError::HyperlightRequiresRunnerCapability);
+    }
+    if !profile.runner_capability.supported_abi_profiles.contains(&profile.abi_profile) {
+        return Err(AdmissionError::HyperlightUnsupportedAbi);
+    }
+    if !profile.runner_capability.supported_artifact_profiles.contains(&profile.artifact_profile) {
+        return Err(AdmissionError::HyperlightUnsupportedArtifactProfile);
+    }
+    if !resources_fit_within(&profile.resources, &profile.runner_capability.max_resources) {
+        return Err(AdmissionError::HyperlightResourcePolicyExceeded);
+    }
+    for call in &profile.host_calls {
+        if call.call_id.trim().is_empty() || call.capability_handle_id.trim().is_empty() {
+            return Err(AdmissionError::HyperlightRejectsAmbientHostAccess);
+        }
+        if !decl.capabilities.iter().any(|binding| binding.handle_id == call.capability_handle_id) {
+            return Err(AdmissionError::HyperlightRequiresDeclaredHostCallCapability);
+        }
+    }
+    if profile.output_contains_raw_secret() {
+        return Err(AdmissionError::HyperlightReceiptContainsRawSecret);
+    }
+    admit_unit(decl)
+}
+
+pub fn admit_hyperlight_receipt(receipt: &HyperlightProfileReceipt) -> Result<(), AdmissionError> {
+    if receipt.contains_raw_secret() {
+        return Err(AdmissionError::HyperlightReceiptContainsRawSecret);
+    }
+    Ok(())
+}
+
+pub fn hyperlight_lifecycle_receipt(
+    receipt_id: impl Into<String>,
+    decl: &RuntimeUnitDeclaration,
+    profile: &HyperlightRuntimeProfile,
+    lifecycle_status: RuntimeLifecycleStatus,
+    output_summary: Option<RedactedValue>,
+    diagnostics: Vec<RuntimeDiagnostic>,
+) -> HyperlightProfileReceipt {
+    HyperlightProfileReceipt {
+        receipt_id: receipt_id.into(),
+        unit_id: decl.unit_id.clone(),
+        runner_version: profile.runner_capability.runner_version.clone(),
+        artifact_hash: profile.image_hash.clone(),
+        entrypoint: profile.entrypoint.clone(),
+        abi_profile: profile.abi_profile.clone(),
+        lifecycle_status,
+        granted_authority: profile
+            .declared_capability_handles()
+            .into_iter()
+            .map(|handle| RedactedValue::OpaqueHandle(handle.to_string()))
+            .collect(),
+        output_summary,
+        diagnostics,
+    }
+}
+
+#[must_use]
+pub fn resources_fit_within(requested: &RuntimeResources, limit: &RuntimeResources) -> bool {
+    fn opt_fits_u64(requested: Option<u64>, limit: Option<u64>) -> bool {
+        match (requested, limit) {
+            (Some(requested), Some(limit)) => requested <= limit,
+            (Some(_), None) => false,
+            (None, _) => true,
+        }
+    }
+    fn opt_fits_u32(requested: Option<u32>, limit: Option<u32>) -> bool {
+        match (requested, limit) {
+            (Some(requested), Some(limit)) => requested <= limit,
+            (Some(_), None) => false,
+            (None, _) => true,
+        }
+    }
+    opt_fits_u64(requested.memory_bytes, limit.memory_bytes)
+        && opt_fits_u64(requested.cpu_millis, limit.cpu_millis)
+        && opt_fits_u64(requested.wall_time_ms, limit.wall_time_ms)
+        && opt_fits_u64(requested.wasm_fuel, limit.wasm_fuel)
+        && opt_fits_u32(requested.max_open_files, limit.max_open_files)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -1204,6 +1416,169 @@ mod tests {
         let decoded: RuntimeUnitDeclaration = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, decl);
         admit_unit(&decoded).unwrap();
+    }
+
+    fn hyperlight_profile() -> HyperlightRuntimeProfile {
+        HyperlightRuntimeProfile {
+            image_hash: "sha256:hyperlight-image".to_string(),
+            entrypoint: "aspen_guest_main".to_string(),
+            abi_profile: HyperlightAbiProfile::RustGuestV0,
+            artifact_profile: HyperlightArtifactProfile::NativeGuest,
+            runner_capability: HyperlightRunnerCapability {
+                capability_handle_id: "runner:hyperlight".to_string(),
+                runner_version: "hyperlight-0.9".to_string(),
+                supported_abi_profiles: vec![HyperlightAbiProfile::RustGuestV0],
+                supported_artifact_profiles: vec![HyperlightArtifactProfile::NativeGuest],
+                max_resources: RuntimeResources {
+                    memory_bytes: Some(128 * 1024 * 1024),
+                    cpu_millis: Some(1000),
+                    wall_time_ms: Some(10_000),
+                    wasm_fuel: None,
+                    max_open_files: Some(4),
+                },
+            },
+            host_calls: vec![
+                HyperlightHostCallBinding {
+                    call_id: "kv/read".to_string(),
+                    kind: HyperlightHostCallKind::Kv,
+                    capability_handle_id: "cap:kv".to_string(),
+                },
+                HyperlightHostCallBinding {
+                    call_id: "output/write".to_string(),
+                    kind: HyperlightHostCallKind::Output,
+                    capability_handle_id: "cap:output".to_string(),
+                },
+            ],
+            resources: RuntimeResources {
+                memory_bytes: Some(64 * 1024 * 1024),
+                cpu_millis: Some(500),
+                wall_time_ms: Some(5_000),
+                wasm_fuel: None,
+                max_open_files: Some(2),
+            },
+            output_artifact: Some(RedactedValue::OpaqueHandle("blob:output".to_string())),
+        }
+    }
+
+    fn hyperlight_decl(profile: &HyperlightRuntimeProfile) -> RuntimeUnitDeclaration {
+        RuntimeUnitDeclaration {
+            unit_id: "run/hyperlight-demo".to_string(),
+            unit_kind: RuntimeUnitKind::ExecutionRun,
+            host_kind: RuntimeHostKind::Hyperlight,
+            artifact: profile.as_runtime_artifact(),
+            capabilities: vec![
+                RuntimeCapabilityBinding {
+                    handle_id: profile.runner_capability.capability_handle_id.clone(),
+                    ability: "runtime/launch".to_string(),
+                    resource: "aspen://runtime/runner/hyperlight".to_string(),
+                    proof_refs: vec!["ucan-proof:hyperlight-runner".to_string()],
+                    caveats: vec![],
+                },
+                RuntimeCapabilityBinding {
+                    handle_id: "cap:kv".to_string(),
+                    ability: "kv/read".to_string(),
+                    resource: "aspen://kv/runtime-demo".to_string(),
+                    proof_refs: vec!["ucan-proof:kv".to_string()],
+                    caveats: vec![],
+                },
+                RuntimeCapabilityBinding {
+                    handle_id: "cap:output".to_string(),
+                    ability: "blob/write".to_string(),
+                    resource: "aspen://blob/runtime-output".to_string(),
+                    proof_refs: vec!["ucan-proof:output".to_string()],
+                    caveats: vec![],
+                },
+            ],
+            resources: profile.resources.clone(),
+            routes: vec![],
+        }
+    }
+
+    #[test]
+    fn hyperlight_runner_profile_aligns_with_runtime_core_vocabulary() {
+        let profile = hyperlight_profile();
+        let decl = hyperlight_decl(&profile);
+        assert_eq!(decl.unit_kind, RuntimeUnitKind::ExecutionRun);
+        assert_eq!(decl.host_kind, RuntimeHostKind::Hyperlight);
+        assert!(
+            matches!(decl.artifact, RuntimeArtifact::HyperlightImage { ref image_hash, ref entrypoint } if image_hash == "sha256:hyperlight-image" && entrypoint == "aspen_guest_main")
+        );
+        assert_eq!(profile.abi_profile, HyperlightAbiProfile::RustGuestV0);
+        assert!(profile.host_calls.iter().any(|call| call.kind == HyperlightHostCallKind::Kv));
+        admit_hyperlight_profile(&decl, &profile).unwrap();
+    }
+
+    #[test]
+    fn hyperlight_admission_fails_closed_before_host_calls() {
+        let profile = hyperlight_profile();
+        let mut decl = hyperlight_decl(&profile);
+        decl.host_kind = RuntimeHostKind::NativeProcess;
+        assert_eq!(admit_hyperlight_profile(&decl, &profile), Err(AdmissionError::HyperlightRequiresHyperlightHost));
+
+        let mut decl = hyperlight_decl(&profile);
+        decl.artifact = RuntimeArtifact::NativeBinary {
+            hash: "sha256:native".to_string(),
+            store_path: None,
+            entrypoint: "demo".to_string(),
+        };
+        assert_eq!(
+            admit_hyperlight_profile(&decl, &profile),
+            Err(AdmissionError::HyperlightRequiresHyperlightArtifact)
+        );
+
+        let mut decl = hyperlight_decl(&profile);
+        decl.capabilities.retain(|cap| cap.handle_id != "runner:hyperlight");
+        assert_eq!(admit_hyperlight_profile(&decl, &profile), Err(AdmissionError::HyperlightRequiresRunnerCapability));
+
+        let mut unsupported = profile.clone();
+        unsupported.abi_profile = HyperlightAbiProfile::CGuestV0;
+        assert_eq!(
+            admit_hyperlight_profile(&hyperlight_decl(&profile), &unsupported),
+            Err(AdmissionError::HyperlightUnsupportedAbi)
+        );
+
+        let mut denied = profile.clone();
+        denied.host_calls[0].capability_handle_id = "cap:ambient-network".to_string();
+        assert_eq!(
+            admit_hyperlight_profile(&hyperlight_decl(&profile), &denied),
+            Err(AdmissionError::HyperlightRequiresDeclaredHostCallCapability)
+        );
+
+        let mut oversized = profile.clone();
+        oversized.resources.memory_bytes = Some(256 * 1024 * 1024);
+        assert_eq!(
+            admit_hyperlight_profile(&hyperlight_decl(&profile), &oversized),
+            Err(AdmissionError::HyperlightResourcePolicyExceeded)
+        );
+    }
+
+    #[test]
+    fn hyperlight_receipts_redact_outputs_and_capability_handles() {
+        let profile = hyperlight_profile();
+        let decl = hyperlight_decl(&profile);
+        let receipt = hyperlight_lifecycle_receipt(
+            "receipt/hyperlight-running",
+            &decl,
+            &profile,
+            RuntimeLifecycleStatus::Running,
+            Some(RedactedValue::OpaqueHandle("blob:output".to_string())),
+            vec![RuntimeDiagnostic {
+                key: "exit".to_string(),
+                value: RedactedValue::Plain("code=0".to_string()),
+            }],
+        );
+        assert_eq!(receipt.runner_version, "hyperlight-0.9");
+        assert!(
+            receipt
+                .granted_authority
+                .iter()
+                .all(|authority| matches!(authority, RedactedValue::OpaqueHandle(_)))
+        );
+        admit_hyperlight_receipt(&receipt).unwrap();
+
+        let mut leaking = receipt;
+        leaking.output_summary = Some(RedactedValue::Plain("token=raw".to_string()));
+        assert_eq!(admit_hyperlight_receipt(&leaking), Err(AdmissionError::HyperlightReceiptContainsRawSecret));
     }
 
     fn hermit_profile(profile_kind: HermitLaunchProfileKind) -> HermitUnikernelArtifact {
