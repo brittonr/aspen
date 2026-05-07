@@ -494,6 +494,36 @@ pub enum SponsoredAdmissionError {
     SecretBearingSettlementRef,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SponsoredPlacementSurface {
+    RuntimeService,
+    Job,
+    CiRun,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredPlacementConstraint {
+    pub surface: SponsoredPlacementSurface,
+    pub unit_id: String,
+    pub sponsorship_required: bool,
+    pub request: Option<SponsoredAdmissionRequest>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum SponsoredPlacementError {
+    MissingRequiredGrant,
+    Rejected(SponsoredAdmissionError),
+}
+
+pub fn admit_sponsored_placement(constraint: &SponsoredPlacementConstraint) -> Result<(), SponsoredPlacementError> {
+    match (constraint.sponsorship_required, constraint.request.as_ref()) {
+        (false, None) => Ok(()),
+        (_, Some(request)) => admit_sponsored_request(request).map_err(SponsoredPlacementError::Rejected),
+        (true, None) => Err(SponsoredPlacementError::MissingRequiredGrant),
+    }
+}
+
 pub fn admit_sponsored_request(request: &SponsoredAdmissionRequest) -> Result<(), SponsoredAdmissionError> {
     let grant = &request.grant;
     if grant.sponsor.proof_ref.as_deref().unwrap_or_default().trim().is_empty()
@@ -1259,6 +1289,46 @@ mod tests {
             },
             now_ms: 2_000,
         }
+    }
+
+    #[test]
+    fn sponsored_placement_constraint_is_optional_but_fails_closed_when_required() {
+        let request = sponsored_admission_request();
+        let optional = SponsoredPlacementConstraint {
+            surface: SponsoredPlacementSurface::RuntimeService,
+            unit_id: "service/forge".to_string(),
+            sponsorship_required: false,
+            request: None,
+        };
+        assert_eq!(admit_sponsored_placement(&optional), Ok(()));
+
+        let required_missing = SponsoredPlacementConstraint {
+            surface: SponsoredPlacementSurface::Job,
+            unit_id: "job/ci-build".to_string(),
+            sponsorship_required: true,
+            request: None,
+        };
+        assert_eq!(admit_sponsored_placement(&required_missing), Err(SponsoredPlacementError::MissingRequiredGrant));
+
+        let required_accepted = SponsoredPlacementConstraint {
+            surface: SponsoredPlacementSurface::CiRun,
+            unit_id: "ci/run/1".to_string(),
+            sponsorship_required: true,
+            request: Some(request.clone()),
+        };
+        assert_eq!(admit_sponsored_placement(&required_accepted), Ok(()));
+
+        let rejected = SponsoredPlacementConstraint {
+            request: Some(SponsoredAdmissionRequest {
+                now_ms: 99_999,
+                ..request
+            }),
+            ..required_accepted
+        };
+        assert_eq!(
+            admit_sponsored_placement(&rejected),
+            Err(SponsoredPlacementError::Rejected(SponsoredAdmissionError::ExpiredGrant))
+        );
     }
 
     #[test]
