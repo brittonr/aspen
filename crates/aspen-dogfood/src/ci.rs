@@ -3,6 +3,13 @@
 use std::time::Duration;
 
 use aspen_client::AspenClient;
+use aspen_client_api::CI_STATUS_CANCELLED;
+use aspen_client_api::CI_STATUS_CHECKOUT_FAILED;
+use aspen_client_api::CI_STATUS_FAILED;
+use aspen_client_api::CI_STATUS_PENDING;
+use aspen_client_api::CI_STATUS_RUNNING;
+use aspen_client_api::CI_STATUS_SUCCESS;
+use aspen_client_api::CI_TERMINAL_STATUS_LABELS;
 use aspen_client_api::CiGetStatusResponse;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
@@ -48,6 +55,8 @@ struct RpcContext<'a> {
     operation: &'a str,
     ticket: &'a str,
 }
+
+const CI_RPC_TIMEOUT_SECS: u64 = 20;
 
 #[allow(unknown_lints)]
 #[allow(ambient_clock, reason = "dogfood CI polling needs monotonic elapsed timing")]
@@ -196,6 +205,15 @@ async fn trigger_pipeline(client: &AspenClient, target: RepoRunLookup<'_>) -> Do
     }
 }
 
+fn is_success_status(status: &str) -> bool {
+    // `succeeded` is retained for legacy receipts/logs; `success` is the stable CI label.
+    status == CI_STATUS_SUCCESS || status == "succeeded"
+}
+
+fn is_terminal_failure_status(status: &str) -> bool {
+    CI_TERMINAL_STATUS_LABELS.contains(&status) && !is_success_status(status)
+}
+
 /// Poll pipeline status with exponential backoff until terminal state.
 async fn poll_pipeline(client: &AspenClient, target: PipelineRunTarget<'_>, timeout_secs: u64) -> DogfoodResult<()> {
     debug_assert!(!target.run_id.is_empty(), "run id must not be empty");
@@ -208,7 +226,7 @@ async fn poll_pipeline(client: &AspenClient, target: PipelineRunTarget<'_>, time
     let max_backoff = Duration::from_secs(10);
 
     while start.elapsed() <= poll_window {
-        let resp = send(
+        let resp = match send(
             client,
             ClientRpcRequest::CiGetStatus {
                 run_id: target.run_id.to_string(),
@@ -218,27 +236,35 @@ async fn poll_pipeline(client: &AspenClient, target: PipelineRunTarget<'_>, time
                 ticket: target.ticket,
             },
         )
-        .await?;
+        .await
+        {
+            Ok(resp) => resp,
+            Err(err) => {
+                return CiPipelineSnafu {
+                    run_id: target.run_id,
+                    status: "status_rpc_failed",
+                    detail: err.to_string(),
+                }
+                .fail();
+            }
+        };
 
         if let ClientRpcResponse::CiGetStatusResult(status) = &resp
             && let Some(pipeline_status) = &status.status
         {
-            match pipeline_status.as_str() {
-                "succeeded" | "success" => {
-                    print_pipeline_summary(status);
-                    return Ok(());
+            if is_success_status(pipeline_status) {
+                print_pipeline_summary(status);
+                return Ok(());
+            }
+            if is_terminal_failure_status(pipeline_status) {
+                print_pipeline_summary(status);
+                let log_detail = fetch_failure_logs(client, target, status).await;
+                return CiPipelineSnafu {
+                    run_id: target.run_id,
+                    status: pipeline_status,
+                    detail: log_detail,
                 }
-                "failed" | "cancelled" => {
-                    print_pipeline_summary(status);
-                    let log_detail = fetch_failure_logs(client, target, status).await;
-                    return CiPipelineSnafu {
-                        run_id: target.run_id,
-                        status: pipeline_status,
-                        detail: log_detail,
-                    }
-                    .fail();
-                }
-                _ => {}
+                .fail();
             }
         }
 
@@ -296,7 +322,7 @@ async fn fetch_failure_logs(
 
     for stage in &status.stages {
         for job in &stage.jobs {
-            if job.status != "failed" {
+            if !is_terminal_failure_status(&job.status) {
                 continue;
             }
 
@@ -362,11 +388,11 @@ async fn fetch_job_log_chunks(client: &AspenClient, target: JobLogTarget<'_>) ->
 fn print_pipeline_summary(status: &CiGetStatusResponse) {
     debug_assert!(status.stages.iter().all(|stage| !stage.name.is_empty()), "stages should have names");
     let icon = |s: &str| match s {
-        "succeeded" | "success" => "✅",
-        "failed" => "❌",
-        "cancelled" => "⏹️",
-        "running" => "🔄",
-        "pending" => "⏳",
+        "succeeded" | CI_STATUS_SUCCESS => "✅",
+        CI_STATUS_FAILED | CI_STATUS_CHECKOUT_FAILED => "❌",
+        CI_STATUS_CANCELLED => "⏹️",
+        CI_STATUS_RUNNING => "🔄",
+        CI_STATUS_PENDING => "⏳",
         _ => "❓",
     };
 
@@ -401,6 +427,78 @@ fn format_pipeline_summary(status: &CiGetStatusResponse) -> String {
     summary
 }
 
+#[cfg(test)]
+mod tests {
+    use aspen_client_api::CI_STATUS_CANCELLED;
+    use aspen_client_api::CI_STATUS_CHECKING_OUT;
+    use aspen_client_api::CI_STATUS_CHECKOUT_FAILED;
+    use aspen_client_api::CI_STATUS_FAILED;
+    use aspen_client_api::CI_STATUS_PENDING;
+    use aspen_client_api::CI_STATUS_SUCCESS;
+    use aspen_client_api::CiJobInfo;
+    use aspen_client_api::CiStageInfo;
+
+    use super::*;
+
+    #[test]
+    fn dogfood_ci_terminal_status_contract_matches_client_api() {
+        assert!(is_success_status(CI_STATUS_SUCCESS));
+        assert!(is_success_status("succeeded"));
+
+        for label in CI_TERMINAL_STATUS_LABELS {
+            if *label == CI_STATUS_SUCCESS {
+                assert!(!is_terminal_failure_status(label), "success is terminal but not a failure");
+            } else {
+                assert!(is_terminal_failure_status(label), "dogfood must stop on terminal failure `{label}`");
+            }
+        }
+
+        for label in [CI_STATUS_CHECKING_OUT, CI_STATUS_PENDING] {
+            assert!(!is_success_status(label));
+            assert!(!is_terminal_failure_status(label));
+        }
+    }
+
+    #[test]
+    fn checkout_failed_summary_is_operator_visible() {
+        let status = CiGetStatusResponse {
+            was_found: true,
+            run_id: Some("run-1".to_string()),
+            repo_id: Some("repo-1".to_string()),
+            ref_name: Some("refs/heads/main".to_string()),
+            commit_hash: Some("0123456789abcdef0123456789abcdef01234567".to_string()),
+            status: Some(CI_STATUS_CHECKOUT_FAILED.to_string()),
+            stages: vec![CiStageInfo {
+                name: "checkout".to_string(),
+                status: CI_STATUS_CHECKOUT_FAILED.to_string(),
+                jobs: vec![CiJobInfo {
+                    id: "job-1".to_string(),
+                    name: "checkout-source".to_string(),
+                    status: CI_STATUS_CHECKOUT_FAILED.to_string(),
+                    started_at_ms: Some(1),
+                    ended_at_ms: Some(2),
+                    error: Some("source checkout failed".to_string()),
+                }],
+            }],
+            created_at_ms: Some(1),
+            completed_at_ms: Some(2),
+            error: Some("checkout failed".to_string()),
+        };
+
+        let summary = format_pipeline_summary(&status);
+        assert!(summary.contains("pipeline status: checkout_failed"));
+        assert!(summary.contains("stage checkout: checkout_failed"));
+        assert!(summary.contains("job checkout-source: checkout_failed — source checkout failed"));
+        assert!(!summary.contains("aspen://"));
+    }
+
+    #[test]
+    fn failed_and_cancelled_remain_terminal_failures() {
+        assert!(is_terminal_failure_status(CI_STATUS_FAILED));
+        assert!(is_terminal_failure_status(CI_STATUS_CANCELLED));
+    }
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 async fn connect(ticket: &str) -> DogfoodResult<AspenClient> {
@@ -418,7 +516,15 @@ async fn send(
     request: ClientRpcRequest,
     context: RpcContext<'_>,
 ) -> DogfoodResult<ClientRpcResponse> {
-    client.send(request).await.map_err(|e| crate::error::DogfoodError::ClientRpc {
+    let response =
+        tokio::time::timeout(Duration::from_secs(CI_RPC_TIMEOUT_SECS), client.send(request))
+            .await
+            .map_err(|_| crate::error::DogfoodError::Timeout {
+                operation: context.operation.to_string(),
+                timeout_secs: CI_RPC_TIMEOUT_SECS,
+            })?;
+
+    response.map_err(|e| crate::error::DogfoodError::ClientRpc {
         operation: context.operation.to_string(),
         target: crate::cluster::ticket_preview(context.ticket),
         source: e,

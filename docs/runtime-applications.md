@@ -131,7 +131,7 @@ ServiceInstance {
 
 ### Executioner
 
-The existing CI/job machinery should evolve into a generic execution service. `CI` becomes one producer of execution plans, not the name of the runtime primitive.
+The existing CI/job machinery should evolve into a generic execution service. `CI` becomes one producer of execution plans, not the name of the runtime primitive. Do not start by rewriting CI or Forge; first wrap their existing, working surfaces as native built-in runtime services and executioner producers so the boundary can be proven incrementally.
 
 ```text
 ExecutionPlan = finite workflow template

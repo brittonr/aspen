@@ -167,6 +167,10 @@ fn build_run_config(cli: &Cli) -> RunConfig {
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(7200);
+    let git_push_timeout_secs = std::env::var("ASPEN_DOGFOOD_GIT_PUSH_TIMEOUT_SECS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(600);
 
     RunConfig {
         cluster_dir: cli.cluster_dir.clone(),
@@ -177,6 +181,7 @@ fn build_run_config(cli: &Cli) -> RunConfig {
         project_dir: std::env::var("PROJECT_DIR").unwrap_or_else(|_| ".".to_string()),
         nix_cache_gateway_bin: std::env::var("ASPEN_NIX_CACHE_GATEWAY_BIN").ok(),
         ci_timeout_secs,
+        git_push_timeout_secs,
     }
 }
 
@@ -210,6 +215,7 @@ pub struct RunConfig {
     pub project_dir: String,
     pub nix_cache_gateway_bin: Option<String>,
     pub ci_timeout_secs: u64,
+    pub git_push_timeout_secs: u64,
 }
 
 impl RunConfig {
@@ -789,6 +795,19 @@ fn diagnose_receipt(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> String
 
     let _ = writeln!(output, "  status: failed");
     let _ = writeln!(output, "  failed_stage: {}", stage.stage.as_str());
+    for artifact in &stage.artifacts {
+        if artifact.kind == receipt::DogfoodArtifactKind::CiRun {
+            let _ = writeln!(output, "  ci_run_id: {}", artifact.store_id.as_deref().unwrap_or("-"));
+        } else {
+            let _ = writeln!(
+                output,
+                "  artifact: {} [{}] store_id={}",
+                artifact.name,
+                artifact.kind.as_str(),
+                artifact.store_id.as_deref().unwrap_or("-")
+            );
+        }
+    }
     if let Some(failure) = &stage.failure {
         let _ = writeln!(output, "  failure_category: {}", failure.category);
         let _ = writeln!(output, "  failure_operation: {}", failure.operation);
@@ -931,10 +950,14 @@ async fn run_full_pipeline_with_receipts(
 ) -> DogfoodResult<()> {
     recorder.run_stage(receipt::DogfoodStageKind::Push, || cmd_push(config)).await?;
     let build_run_id = recorder
-        .run_stage_with_artifacts(receipt::DogfoodStageKind::Build, || async {
-            let run_id = build_ci_pipeline(config).await?;
-            Ok((run_id.clone(), vec![ci_run_artifact(run_id)]))
-        })
+        .run_stage_with_artifacts_and_failure_artifacts(
+            receipt::DogfoodStageKind::Build,
+            || async {
+                let run_id = build_ci_pipeline(config).await?;
+                Ok((run_id.clone(), vec![ci_run_artifact(run_id)]))
+            },
+            ci_failure_artifacts,
+        )
         .await?;
     recorder
         .run_stage(receipt::DogfoodStageKind::Deploy, || cmd_deploy_run(config, Some(&build_run_id)))
@@ -975,21 +998,27 @@ impl DogfoodReceiptRecorder {
         F: FnOnce() -> Fut,
         Fut: Future<Output = DogfoodResult<()>>,
     {
-        self.run_stage_with_artifacts(stage, || async {
-            operation().await?;
-            Ok(((), Vec::new()))
-        })
+        self.run_stage_with_artifacts_and_failure_artifacts(
+            stage,
+            || async {
+                operation().await?;
+                Ok(((), Vec::new()))
+            },
+            |_| Vec::new(),
+        )
         .await
     }
 
-    async fn run_stage_with_artifacts<F, Fut, T>(
+    async fn run_stage_with_artifacts_and_failure_artifacts<F, Fut, T, A>(
         &mut self,
         stage: receipt::DogfoodStageKind,
         operation: F,
+        failure_artifacts: A,
     ) -> DogfoodResult<T>
     where
         F: FnOnce() -> Fut,
         Fut: Future<Output = DogfoodResult<(T, Vec<receipt::DogfoodArtifactReceipt>)>>,
+        A: FnOnce(&DogfoodError) -> Vec<receipt::DogfoodArtifactReceipt>,
     {
         let started_at = current_timestamp_utc();
         let started_instant = Instant::now();
@@ -1016,7 +1045,7 @@ impl DogfoodReceiptRecorder {
                     finished_at: Some(current_timestamp_utc()),
                     elapsed_ms: Some(elapsed_ms_since(started_instant)),
                     failure: Some(failure),
-                    artifacts: Vec::new(),
+                    artifacts: failure_artifacts(&error),
                 });
                 if let Err(write_error) = self.write() {
                     tracing::warn!("failed to write dogfood receipt after stage failure: {write_error}");
@@ -1103,6 +1132,15 @@ fn ci_run_artifact(run_id: String) -> receipt::DogfoodArtifactReceipt {
         digest: None,
         size_bytes: None,
         relative_path: None,
+    }
+}
+
+fn ci_failure_artifacts(error: &DogfoodError) -> Vec<receipt::DogfoodArtifactReceipt> {
+    match error {
+        DogfoodError::CiPipeline { run_id, .. } if !run_id.is_empty() && run_id != "?" => {
+            vec![ci_run_artifact(run_id.clone())]
+        }
+        _ => Vec::new(),
     }
 }
 
@@ -1206,6 +1244,7 @@ mod tests {
             project_dir: ".".to_string(),
             nix_cache_gateway_bin: None,
             ci_timeout_secs: 60,
+            git_push_timeout_secs: 60,
         }
     }
 
@@ -1512,6 +1551,7 @@ mod tests {
 
         assert!(output.contains("status: failed"));
         assert!(output.contains("failed_stage: build"));
+        assert!(output.contains("ci_run_id: run-123"));
         assert!(output.contains("failure_category: ci_pipeline"));
         assert!(output.contains("failure_message: failed to push aspen://<cluster-ticket>/repo-123"));
         assert!(output.contains("Use the CI run artifact from the receipt"));
@@ -1531,6 +1571,33 @@ mod tests {
         assert_eq!(artifact.name, "ci-run");
         assert_eq!(artifact.kind, receipt::DogfoodArtifactKind::CiRun);
         assert_eq!(artifact.store_id.as_deref(), Some("run-123"));
+    }
+
+    #[test]
+    fn ci_failure_artifacts_record_exact_failed_pipeline_run_id() {
+        let error = DogfoodError::CiPipeline {
+            run_id: "run-timeout-123".to_string(),
+            status: "timeout".to_string(),
+            detail: "pipeline status: running\nstage build: running".to_string(),
+        };
+
+        let artifacts = ci_failure_artifacts(&error);
+
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(artifacts[0].name, "ci-run");
+        assert_eq!(artifacts[0].kind, receipt::DogfoodArtifactKind::CiRun);
+        assert_eq!(artifacts[0].store_id.as_deref(), Some("run-timeout-123"));
+    }
+
+    #[test]
+    fn ci_failure_artifacts_ignore_unknown_pipeline_run_id() {
+        let error = DogfoodError::CiPipeline {
+            run_id: "?".to_string(),
+            status: "trigger_failed".to_string(),
+            detail: "no run id allocated".to_string(),
+        };
+
+        assert!(ci_failure_artifacts(&error).is_empty());
     }
 
     #[test]

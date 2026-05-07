@@ -5,6 +5,7 @@ use std::time::Duration;
 use aspen_client::AspenClient;
 use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
+use tokio::time::timeout;
 use tracing::info;
 
 use crate::RunConfig;
@@ -172,20 +173,28 @@ pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> Dogfoo
 
     // Push to the forge remote
     info!("  git push aspen-dogfood main...");
-    let push_output = tokio::process::Command::new("git")
-        .args(["push", "aspen-dogfood", "HEAD:refs/heads/main", "--force"])
-        .current_dir(&config.project_dir)
-        .env("PATH", augmented_path(&config.git_remote_aspen_bin))
-        .env("ASPEN_RELAY_DISABLED", "1")
-        .env("ASPEN_DISCOVERY_DISABLED", "1")
-        .env("GIT_TRANSPORT_HELPER_DEBUG", "1")
-        .env("GIT_TRACE", "1")
-        .output()
-        .await
-        .map_err(|e| crate::error::DogfoodError::ProcessSpawn {
-            binary: "git push".to_string(),
-            source: e,
-        })?;
+    let push_output = timeout(
+        Duration::from_secs(config.git_push_timeout_secs),
+        tokio::process::Command::new("git")
+            .args(["push", "aspen-dogfood", "HEAD:refs/heads/main", "--force"])
+            .current_dir(&config.project_dir)
+            .env("PATH", augmented_path(&config.git_remote_aspen_bin))
+            .env("ASPEN_RELAY_DISABLED", "1")
+            .env("ASPEN_DISCOVERY_DISABLED", "1")
+            .env("GIT_TRANSPORT_HELPER_DEBUG", "1")
+            .env("GIT_TRACE", "1")
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .map_err(|_| crate::error::DogfoodError::Timeout {
+        operation: "git push aspen-dogfood".to_string(),
+        timeout_secs: config.git_push_timeout_secs,
+    })?
+    .map_err(|e| crate::error::DogfoodError::ProcessSpawn {
+        binary: "git push".to_string(),
+        source: e,
+    })?;
 
     if !push_output.status.success() {
         let raw_stderr = String::from_utf8_lossy(&push_output.stderr);
