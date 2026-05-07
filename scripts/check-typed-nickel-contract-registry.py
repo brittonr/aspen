@@ -32,6 +32,9 @@ REQUIRED_FAMILIES = {
     "trust-bootstrap-policy",
     "operator-diagnostics-evidence",
     "sponsored-runtime-policy",
+    "sponsored-runtime-grant",
+    "sponsored-quota-ledger",
+    "sponsored-usage-receipt",
 }
 
 REQUIRED_CRUNCH = {

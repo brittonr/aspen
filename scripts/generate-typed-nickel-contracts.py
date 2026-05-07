@@ -55,6 +55,49 @@ CONTRACT_SETS = (
             "CiRunReceipt",
         ),
     ),
+    ContractSet(
+        id="sponsored-runtime-grant",
+        title="Sponsored runtime grant",
+        source_path=Path("crates/aspen-runtime-core/src/lib.rs"),
+        output_path=Path("schemas/sponsored-runtime-grant.ncl"),
+        types=(
+            "SponsoredPrincipalRole",
+            "SponsoredPrincipalRef",
+            "RedactedValue",
+            "SponsoredSettlementReference",
+            "SponsoredResourceLimits",
+            "RuntimeHostKind",
+            "SponsoredGrantScope",
+            "SponsoredRevocationRef",
+            "SponsoredRuntimeGrant",
+        ),
+    ),
+    ContractSet(
+        id="sponsored-quota-ledger",
+        title="Sponsored quota ledger",
+        source_path=Path("crates/aspen-runtime-core/src/lib.rs"),
+        output_path=Path("schemas/sponsored-quota-ledger.ncl"),
+        types=(
+            "SponsoredResourceLimits",
+            "SponsoredQuotaReservation",
+            "SponsoredQuotaConsumption",
+            "SponsoredQuotaLedger",
+        ),
+    ),
+    ContractSet(
+        id="sponsored-usage-receipt",
+        title="Sponsored usage receipt",
+        source_path=Path("crates/aspen-runtime-core/src/lib.rs"),
+        output_path=Path("schemas/sponsored-usage-receipt.ncl"),
+        types=(
+            "RedactedValue",
+            "RuntimeDiagnostic",
+            "SponsoredSettlementReference",
+            "SponsoredResourceLimits",
+            "SponsoredReceiptOutcome",
+            "SponsoredUsageReceipt",
+        ),
+    ),
 )
 
 PRIMITIVES = {

@@ -25,6 +25,9 @@ This registry records the source-of-truth decision for Aspen's typed Nickel cont
 | Trust/bootstrap policy | `nickel-authored` | `schemas/trust-bootstrap-policy.ncl` | Existing secret-free quorum/bootstrap policy contract with raw-secret rejection fixtures. |
 | Operator diagnostics evidence | `rust-derived` | `schemas/operator-diagnostics-evidence.ncl` | Existing common diagnostic-envelope boundary contract; promoted DTO-specific contracts remain Rust-derived follow-up. |
 | Sponsored runtime policy | `nickel-authored` | `schemas/sponsored-runtime-policy.ncl` | Provider offers, sponsor policies, resource class catalogs, and admission profiles; Rust owns admission behavior, quota ledgers, and usage receipts. |
+| Sponsored runtime grant | `rust-derived` | `crates/aspen-runtime-core/src/lib.rs` | Generated `schemas/sponsored-runtime-grant.ncl`; Rust owns grant semantics and authorization checks. |
+| Sponsored quota ledger | `rust-derived` | `crates/aspen-runtime-core/src/lib.rs` | Generated `schemas/sponsored-quota-ledger.ncl`; Rust owns quota arithmetic and ledger state transitions. |
+| Sponsored usage receipt | `rust-derived` | `crates/aspen-runtime-core/src/lib.rs` | Generated `schemas/sponsored-usage-receipt.ncl`; Rust owns metering/receipt emission and Nickel validates evidence shape. |
 
 ## Crunch prior-art classification
 
@@ -66,6 +69,9 @@ python3 scripts/check-typed-nickel-contract-registry.py
 python3 scripts/generate-typed-nickel-contracts.py --check
 nix run nixpkgs#nickel -- typecheck schemas/deploy-protocol.ncl
 nix run nixpkgs#nickel -- typecheck schemas/sponsored-runtime-policy.ncl
+nix run nixpkgs#nickel -- typecheck schemas/sponsored-runtime-grant.ncl
+nix run nixpkgs#nickel -- typecheck schemas/sponsored-quota-ledger.ncl
+nix run nixpkgs#nickel -- typecheck schemas/sponsored-usage-receipt.ncl
 cargo test -p aspen-ci test_deploy_protocol_schema_snapshot
 cargo nextest run -p aspen-ci test_deploy_protocol_schema_snapshot
 cargo test -p aspen-client-api ci_receipt_schema_and_status_labels_are_documented --features ci
