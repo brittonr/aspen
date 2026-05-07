@@ -470,6 +470,72 @@
           # Keep [patch.crates-io] for cargo-hyperlight.
           ${pkgs.gnused}/bin/sed -i '/^\[patch\."https/,$d' $out/Cargo.toml
 
+          # Crane clippy/build derivations are sandboxed and cannot fetch the
+          # private pinned UCAN git dependency. Materialize the locked flake
+          # input inside the source tree and rewrite workspace deps to paths.
+          mkdir -p $out/.nix-inputs
+          cp -r ${ucan-src} $out/.nix-inputs/ucan
+          chmod -R u+w $out/.nix-inputs/ucan
+          ${pkgs.python3}/bin/python3 ${pkgs.writeText "rewrite-ucan-for-crane.py" ''
+            import pathlib
+            import re
+            import sys
+
+            root = pathlib.Path(sys.argv[1])
+            cargo_toml = root / "Cargo.toml"
+            text = cargo_toml.read_text()
+            text = re.sub(
+                r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
+                'ucan = { path = ".nix-inputs/ucan" }',
+                text,
+            )
+            text = re.sub(
+                r'ucan-core = \{ git = "[^"]+", package = "ucan-core", rev = "[^"]+", default-features = false \}',
+                'ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }',
+                text,
+            )
+            cargo_toml.write_text(text)
+
+            # UCAN's own manifests inherit workspace lints from its repository
+            # root. Once copied as a path dependency under Aspen's CI source,
+            # Cargo resolves that inheritance against Aspen's workspace, which
+            # intentionally does not define workspace.lints. Strip only that
+            # inherited lint stanza from the copied UCAN input.
+            ucan_root_manifest = root / ".nix-inputs" / "ucan" / "Cargo.toml"
+            ucan_root_text = ucan_root_manifest.read_text()
+            ucan_root_text = re.sub(r'(?s)^\[workspace\].*?(?=\n\[package\])', "", ucan_root_text)
+            ucan_root_text = re.sub(r'(?ms)^\[dev-dependencies\]\n.*?(?=^\[|\Z)', "", ucan_root_text)
+            ucan_root_manifest.write_text(ucan_root_text)
+            for manifest in [
+                ucan_root_manifest,
+                root / ".nix-inputs" / "ucan" / "crates" / "ucan-core" / "Cargo.toml",
+            ]:
+                manifest_text = manifest.read_text()
+                manifest_text = re.sub(r'\n\[lints\]\nworkspace = true\n?', '\n', manifest_text)
+                manifest.write_text(manifest_text)
+
+            verified_logic_lib = root / ".nix-inputs" / "ucan" / "vendor" / "verified-logic" / "src" / "lib.rs"
+            verified_logic_text = verified_logic_lib.read_text()
+            verified_logic_allow = "#![allow(clippy::many_single_char_names, clippy::struct_excessive_bools)]\n"
+            if verified_logic_allow not in verified_logic_text:
+                verified_logic_lib.write_text(verified_logic_allow + verified_logic_text)
+
+            lockfile = root / "Cargo.lock"
+            lines = lockfile.read_text().splitlines()
+            out = []
+            current_name = None
+            for line in lines:
+                if line == "[[package]]":
+                    current_name = None
+                elif line.startswith('name = "'):
+                    current_name = line.split('"', 2)[1]
+
+                if current_name in {"ucan", "ucan-core", "verified-logic"} and line.startswith('source = "git+'):
+                    continue
+                out.append(line)
+            lockfile.write_text("\n".join(out) + "\n")
+          ''} $out
+
           # Strip 'layer' feature from aspen-core deps (aspen-layer is a stub in Nix).
           ${pkgs.gnused}/bin/sed -i 's|, features = \["layer"\]||g' \
             $out/Cargo.toml
@@ -882,6 +948,52 @@
                   text = text.replace(needle, repl, 1)
           lock.write_text(text)
           PY
+
+          # UCAN is a private pinned git dependency. CI/clippy derivations run in
+          # a sandbox without SSH/network access, so use the locked flake input
+          # as a local path dependency in the copied CI source.
+          mkdir -p $out/aspen/.nix-inputs
+          cp -r ${ucan-src} $out/aspen/.nix-inputs/ucan
+          chmod -R u+w $out/aspen/.nix-inputs/ucan
+          ${pkgs.python3}/bin/python3 ${pkgs.writeText "rewrite-ucan-for-ciSrc.py" ''
+            import pathlib
+            import re
+            import sys
+
+            root = pathlib.Path(sys.argv[1]) / "aspen"
+            cargo_toml = root / "Cargo.toml"
+            text = cargo_toml.read_text()
+            text = re.sub(
+                r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
+                'ucan = { path = ".nix-inputs/ucan" }',
+                text,
+            )
+            text = re.sub(
+                r'ucan-core = \{ git = "[^"]+", package = "ucan-core", rev = "[^"]+", default-features = false \}',
+                'ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }',
+                text,
+            )
+            cargo_toml.write_text(text)
+
+            ucan_root_manifest = root / ".nix-inputs" / "ucan" / "Cargo.toml"
+            ucan_root_text = ucan_root_manifest.read_text()
+            ucan_root_text = re.sub(r'(?s)^\[workspace\].*?(?=\n\[package\])', "", ucan_root_text)
+            ucan_root_text = re.sub(r'(?ms)^\[dev-dependencies\]\n.*?(?=^\[|\Z)', "", ucan_root_text)
+            ucan_root_manifest.write_text(ucan_root_text)
+            for manifest in [
+                ucan_root_manifest,
+                root / ".nix-inputs" / "ucan" / "crates" / "ucan-core" / "Cargo.toml",
+            ]:
+                manifest_text = manifest.read_text()
+                manifest_text = re.sub(r'\n\[lints\]\nworkspace = true\n?', '\n', manifest_text)
+                manifest.write_text(manifest_text)
+
+            verified_logic_lib = root / ".nix-inputs" / "ucan" / "vendor" / "verified-logic" / "src" / "lib.rs"
+            verified_logic_text = verified_logic_lib.read_text()
+            verified_logic_allow = "#![allow(clippy::many_single_char_names, clippy::struct_excessive_bools)]\n"
+            if verified_logic_allow not in verified_logic_text:
+                verified_logic_lib.write_text(verified_logic_allow + verified_logic_text)
+          ''} $out
 
           # Stub aspen-wasm-plugin (optional dep, only for plugins-rpc feature)
           # Path from root Cargo.toml: ../aspen-wasm-plugin/crates/aspen-wasm-plugin
@@ -1998,6 +2110,68 @@
           find $out/aspen/crates -name Cargo.toml -exec ${pkgs.gnused}/bin/sed -i \
             -e 's|patchbay = { git = "[^"]*"[^}]*}|patchbay = { path = "../../.nix-stubs/patchbay" }|' \
             {} \;
+
+          # Unit2nix's unit-graph generation runs in a sandbox and cannot fetch
+          # private pinned git dependencies. Materialize the locked UCAN flake
+          # input next to the copied Aspen source and rewrite the workspace deps
+          # to path deps so the build plan is reproducible/offline.
+          mkdir -p $out/aspen/.nix-inputs
+          cp -r ${ucan-src} $out/aspen/.nix-inputs/ucan
+          chmod -R u+w $out/aspen/.nix-inputs/ucan
+          ${pkgs.python3}/bin/python3 ${pkgs.writeText "rewrite-ucan-for-u2n.py" ''
+            import pathlib
+            import re
+            import sys
+
+            root = pathlib.Path(sys.argv[1]) / "aspen"
+            cargo_toml = root / "Cargo.toml"
+            text = cargo_toml.read_text()
+            text = re.sub(
+                r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
+                'ucan = { path = ".nix-inputs/ucan" }',
+                text,
+            )
+            text = re.sub(
+                r'ucan-core = \{ git = "[^"]+", package = "ucan-core", rev = "[^"]+", default-features = false \}',
+                'ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }',
+                text,
+            )
+            cargo_toml.write_text(text)
+
+            ucan_root_manifest = root / ".nix-inputs" / "ucan" / "Cargo.toml"
+            ucan_root_text = ucan_root_manifest.read_text()
+            ucan_root_text = re.sub(r'(?s)^\[workspace\].*?(?=\n\[package\])', "", ucan_root_text)
+            ucan_root_text = re.sub(r'(?ms)^\[dev-dependencies\]\n.*?(?=^\[|\Z)', "", ucan_root_text)
+            ucan_root_manifest.write_text(ucan_root_text)
+            for manifest in [
+                ucan_root_manifest,
+                root / ".nix-inputs" / "ucan" / "crates" / "ucan-core" / "Cargo.toml",
+            ]:
+                manifest_text = manifest.read_text()
+                manifest_text = re.sub(r'\n\[lints\]\nworkspace = true\n?', '\n', manifest_text)
+                manifest.write_text(manifest_text)
+
+            verified_logic_lib = root / ".nix-inputs" / "ucan" / "vendor" / "verified-logic" / "src" / "lib.rs"
+            verified_logic_text = verified_logic_lib.read_text()
+            verified_logic_allow = "#![allow(clippy::many_single_char_names, clippy::struct_excessive_bools)]\n"
+            if verified_logic_allow not in verified_logic_text:
+                verified_logic_lib.write_text(verified_logic_allow + verified_logic_text)
+
+            lockfile = root / "Cargo.lock"
+            lines = lockfile.read_text().splitlines()
+            out = []
+            current_name = None
+            for line in lines:
+                if line == "[[package]]":
+                    current_name = None
+                elif line.startswith('name = "'):
+                    current_name = line.split('"', 2)[1]
+
+                if current_name in {"ucan", "ucan-core", "verified-logic"} and line.startswith('source = "git+'):
+                    continue
+                out.append(line)
+            lockfile.write_text("\n".join(out) + "\n")
+          ''} $out
 
           # Create patchbay stub (referenced by aspen-dag, aspen-forge dev-deps)
           mkdir -p $out/aspen/.nix-stubs/patchbay/src
