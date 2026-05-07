@@ -265,6 +265,199 @@ pub struct RuntimeReceipt {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SponsoredPrincipalRole {
+    Sponsor,
+    Beneficiary,
+    Provider,
+    Workload,
+    Service,
+    Organization,
+    User,
+    Node,
+    Plugin,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredPrincipalRef {
+    pub principal_id: String,
+    pub role: SponsoredPrincipalRole,
+    pub proof_ref: Option<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredNodePrincipalRef {
+    pub node_id: String,
+    pub principal: SponsoredPrincipalRef,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredPluginPrincipalRef {
+    pub plugin_id: String,
+    pub principal: SponsoredPrincipalRef,
+    pub plugin_family: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredSettlementReference {
+    pub method_tag: String,
+    pub opaque_ref: RedactedValue,
+}
+
+impl SponsoredSettlementReference {
+    #[must_use]
+    pub fn contains_raw_secret(&self) -> bool {
+        self.opaque_ref.looks_secret()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredResourceLimits {
+    pub cpu_millis: u64,
+    pub memory_bytes: u64,
+    pub storage_bytes_ms: u64,
+    pub network_bytes: u64,
+    pub wall_time_ms: u64,
+    pub max_concurrent: u16,
+}
+
+impl SponsoredResourceLimits {
+    #[must_use]
+    pub fn fits_within(&self, available: &Self) -> bool {
+        self.cpu_millis <= available.cpu_millis
+            && self.memory_bytes <= available.memory_bytes
+            && self.storage_bytes_ms <= available.storage_bytes_ms
+            && self.network_bytes <= available.network_bytes
+            && self.wall_time_ms <= available.wall_time_ms
+            && self.max_concurrent <= available.max_concurrent
+    }
+
+    #[must_use]
+    pub fn checked_sub(&self, used: &Self) -> Option<Self> {
+        Some(Self {
+            cpu_millis: self.cpu_millis.checked_sub(used.cpu_millis)?,
+            memory_bytes: self.memory_bytes.checked_sub(used.memory_bytes)?,
+            storage_bytes_ms: self.storage_bytes_ms.checked_sub(used.storage_bytes_ms)?,
+            network_bytes: self.network_bytes.checked_sub(used.network_bytes)?,
+            wall_time_ms: self.wall_time_ms.checked_sub(used.wall_time_ms)?,
+            max_concurrent: self.max_concurrent.checked_sub(used.max_concurrent)?,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredGrantScope {
+    pub workload_principal_ids: Vec<String>,
+    pub service_principal_ids: Vec<String>,
+    pub provider_principal_ids: Vec<String>,
+    pub node_principal_ids: Vec<String>,
+    pub plugin_principal_ids: Vec<String>,
+    pub resource_classes: Vec<String>,
+    pub isolation_modes: Vec<RuntimeHostKind>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredRevocationRef {
+    pub revocation_id: String,
+    pub revoked: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredRuntimeGrant {
+    pub grant_id: String,
+    pub sponsor: SponsoredPrincipalRef,
+    pub beneficiary: SponsoredPrincipalRef,
+    pub provider_scope: Vec<SponsoredPrincipalRef>,
+    pub workload_scope: SponsoredGrantScope,
+    pub limits: SponsoredResourceLimits,
+    pub valid_from_ms: u64,
+    pub valid_until_ms: u64,
+    pub revocation: SponsoredRevocationRef,
+    pub settlement: SponsoredSettlementReference,
+    pub policy_tags: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredQuotaReservation {
+    pub reservation_id: String,
+    pub grant_id: String,
+    pub workload_id: String,
+    pub reserved: SponsoredResourceLimits,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredQuotaConsumption {
+    pub consumption_id: String,
+    pub reservation_id: String,
+    pub consumed: SponsoredResourceLimits,
+    pub released: SponsoredResourceLimits,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredQuotaLedger {
+    pub grant_id: String,
+    pub total: SponsoredResourceLimits,
+    pub reserved: SponsoredResourceLimits,
+    pub consumed: SponsoredResourceLimits,
+    pub active_concurrency: u16,
+}
+
+impl SponsoredQuotaLedger {
+    #[must_use]
+    pub fn remaining(&self) -> Option<SponsoredResourceLimits> {
+        let accounted = SponsoredResourceLimits {
+            cpu_millis: self.reserved.cpu_millis.checked_add(self.consumed.cpu_millis)?,
+            memory_bytes: self.reserved.memory_bytes.checked_add(self.consumed.memory_bytes)?,
+            storage_bytes_ms: self.reserved.storage_bytes_ms.checked_add(self.consumed.storage_bytes_ms)?,
+            network_bytes: self.reserved.network_bytes.checked_add(self.consumed.network_bytes)?,
+            wall_time_ms: self.reserved.wall_time_ms.checked_add(self.consumed.wall_time_ms)?,
+            max_concurrent: self.active_concurrency,
+        };
+        self.total.checked_sub(&accounted)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SponsoredReceiptOutcome {
+    Started,
+    Reserved,
+    Consumed,
+    Completed,
+    Failed,
+    RevocationDenied,
+    QuotaDenied,
+    PolicyDenied,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SponsoredUsageReceipt {
+    pub schema: String,
+    pub receipt_id: String,
+    pub execution_id: String,
+    pub workload_principal_id: String,
+    pub service_principal_id: Option<String>,
+    pub provider_principal_id: String,
+    pub sponsor_principal_id: String,
+    pub grant_id: String,
+    pub measured: SponsoredResourceLimits,
+    pub started_at_ms: u64,
+    pub completed_at_ms: Option<u64>,
+    pub outcome: SponsoredReceiptOutcome,
+    pub artifact_refs: Vec<String>,
+    pub isolation_summary: String,
+    pub settlement: SponsoredSettlementReference,
+    pub diagnostics: Vec<RuntimeDiagnostic>,
+}
+
+impl SponsoredUsageReceipt {
+    #[must_use]
+    pub fn contains_raw_secret(&self) -> bool {
+        self.settlement.contains_raw_secret() || self.diagnostics.iter().any(|d| d.value.looks_secret())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RuntimeDiagnostic {
     pub key: String,
     pub value: RedactedValue,
