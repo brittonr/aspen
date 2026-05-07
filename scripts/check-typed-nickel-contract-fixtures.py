@@ -25,6 +25,7 @@ TYPECHECK_FILES = [
     "schemas/snix-build-executor-policy.ncl",
     "schemas/trust-bootstrap-policy.ncl",
     "schemas/operator-diagnostics-evidence.ncl",
+    "schemas/sponsored-runtime-policy.ncl",
     "schemas/typed-nickel-contract-registry.ncl",
     "schemas/dogfood-run-receipt.ncl",
     "schemas/ci-run-receipt.ncl",
@@ -130,6 +131,63 @@ FIXTURES: dict[str, tuple[str, bool]] = {
 } | schema.DiagnosticEnvelope
 ''',
         True,
+    ),
+    "sponsored-policy-positive.ncl": (
+        '''let schema = import "@REPO@/schemas/sponsored-runtime-policy.ncl" in
+{
+  catalogs = [{ id = "small", resources = [{ class = "cpu", limit = 2, unit = "vcpu" }] }],
+  provider_offers = [{
+    id = "provider-small",
+    provider = { id = "provider/node-a", kind = "provider" },
+    catalog_ref = "small",
+    isolation_classes = ["oci"],
+    settlement_kinds = ["invoice"],
+    max_concurrent = 2,
+  }],
+  sponsor_policies = [{
+    id = "sponsor-team-a",
+    sponsor = { id = "org/team-a", kind = "sponsor" },
+    beneficiaries = [{ id = "user/alice", kind = "beneficiary" }],
+    settlement_refs = [{ kind = "invoice", reference = "invoice://team-a/1" }],
+    max_grant_seconds = 600,
+    revocation_ref = "raft://sponsorship/revocations/team-a",
+  }],
+  admission_profiles = [{
+    id = "admit-ci",
+    provider_offer_ref = "provider-small",
+    sponsor_policy_ref = "sponsor-team-a",
+    workload = { id = "workload/ci", kind = "workload" },
+    service = { id = "service/forge-ci", kind = "service" },
+    requested = [{ class = "cpu", limit = 1, unit = "vcpu" }],
+  }],
+} | schema.SponsorshipPolicyBundle
+''',
+        True,
+    ),
+    "sponsored-policy-negative-secret.ncl": (
+        '''let schema = import "@REPO@/schemas/sponsored-runtime-policy.ncl" in
+{
+  id = "bad-sponsor",
+  sponsor = { id = "org/team-a", kind = "sponsor" },
+  beneficiaries = [{ id = "user/alice", kind = "beneficiary" }],
+  settlement_refs = [{ kind = "invoice", reference = "token=cleartext" }],
+  max_grant_seconds = 600,
+  revocation_ref = "raft://sponsorship/revocations/team-a",
+} | schema.SponsorPolicy
+''',
+        False,
+    ),
+    "sponsored-policy-negative-provider-kind.ncl": (
+        '''let schema = import "@REPO@/schemas/sponsored-runtime-policy.ncl" in
+{
+  id = "bad-provider",
+  provider = { id = "user/alice", kind = "beneficiary" },
+  catalog_ref = "small",
+  isolation_classes = ["oci"],
+  settlement_kinds = ["invoice"],
+} | schema.ProviderOffer
+''',
+        False,
     ),
     "trust-negative-inline-secret.ncl": (
         '''let schema = import "@REPO@/schemas/trust-bootstrap-policy.ncl" in

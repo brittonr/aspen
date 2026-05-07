@@ -24,6 +24,7 @@ This registry records the source-of-truth decision for Aspen's typed Nickel cont
 | Snix build executor policy | `nickel-authored` | `schemas/snix-build-executor-policy.ncl` | Existing bounded sandbox/cache/fallback policy contract; build behavior remains Rust-owned. |
 | Trust/bootstrap policy | `nickel-authored` | `schemas/trust-bootstrap-policy.ncl` | Existing secret-free quorum/bootstrap policy contract with raw-secret rejection fixtures. |
 | Operator diagnostics evidence | `rust-derived` | `schemas/operator-diagnostics-evidence.ncl` | Existing common diagnostic-envelope boundary contract; promoted DTO-specific contracts remain Rust-derived follow-up. |
+| Sponsored runtime policy | `nickel-authored` | `schemas/sponsored-runtime-policy.ncl` | Provider offers, sponsor policies, resource class catalogs, and admission profiles; Rust owns admission behavior, quota ledgers, and usage receipts. |
 
 ## Crunch prior-art classification
 
@@ -64,6 +65,7 @@ python3 scripts/check-typed-nickel-contract-fixtures.py
 python3 scripts/check-typed-nickel-contract-registry.py
 python3 scripts/generate-typed-nickel-contracts.py --check
 nix run nixpkgs#nickel -- typecheck schemas/deploy-protocol.ncl
+nix run nixpkgs#nickel -- typecheck schemas/sponsored-runtime-policy.ncl
 cargo test -p aspen-ci test_deploy_protocol_schema_snapshot
 cargo nextest run -p aspen-ci test_deploy_protocol_schema_snapshot
 cargo test -p aspen-client-api ci_receipt_schema_and_status_labels_are_documented --features ci

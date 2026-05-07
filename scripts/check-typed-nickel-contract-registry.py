@@ -31,6 +31,7 @@ REQUIRED_FAMILIES = {
     "snix-build-executor-policy",
     "trust-bootstrap-policy",
     "operator-diagnostics-evidence",
+    "sponsored-runtime-policy",
 }
 
 REQUIRED_CRUNCH = {

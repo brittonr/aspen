@@ -258,6 +258,21 @@ let ContractRegistry = {
       notes = "Nickel validates quorum references and bounds in schemas/trust-bootstrap-policy.ncl but not cryptographic operations or secret material.",
     },
     {
+      id = "sponsored-runtime-policy",
+      source_kind = "nickel-authored",
+      owner = "Aspen runtime sponsorship maintainers",
+      source_path = "schemas/sponsored-runtime-policy.ncl",
+      artifact_path = "schemas/sponsored-runtime-policy.ncl",
+      generated = false,
+      validation_commands = [
+        "nix run nixpkgs#nickel -- typecheck schemas/sponsored-runtime-policy.ncl",
+        "python3 scripts/check-typed-nickel-contract-fixtures.py",
+      ],
+      freshness_gate = "Sponsorship policy fixtures must typecheck provider offers, sponsor policies, resource class catalogs, and admission profiles while rejecting raw secrets and mismatched principal roles before Rust runtime side effects.",
+      status = "existing",
+      notes = "Nickel owns human-authored sponsorship policy/config shape; Rust owns runtime authorization, metering, quota ledgers, usage receipts, and distributed state transitions.",
+    },
+    {
       id = "operator-diagnostics-evidence",
       source_kind = "rust-derived",
       owner = "Aspen operator evidence maintainers",
