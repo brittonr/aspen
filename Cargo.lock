@@ -1740,6 +1740,7 @@ dependencies = [
  "aspen-hooks-types",
  "aspen-jobs",
  "aspen-nostr-relay",
+ "aspen-runtime-core",
  "aspen-testing",
  "aspen-testing-core",
  "aspen-testing-patchbay",
