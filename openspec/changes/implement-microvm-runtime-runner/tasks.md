@@ -16,5 +16,5 @@
 ## Phase 4: Tests and docs
 
 - [x] Add positive and negative tests for artifact verification, capability binding, lifecycle transitions, and receipt redaction. ✅ 2m 37s (2026-05-07T02:53:07Z → 2026-05-07T02:55:44Z; evidence: `evidence/microvm-portable-model-admission.md`)
-- [ ] Update runtime architecture documentation or source-anchor tests if this change introduces new public terminology.
+- [x] Update runtime architecture documentation or source-anchor tests if this change introduces new public terminology. ✅ 49s (2026-05-07T02:56:29Z → 2026-05-07T02:57:18Z; evidence: `evidence/microvm-runtime-docs.md`)
 - [ ] Run focused tests, strict OpenSpec validation, and whitespace checks.
