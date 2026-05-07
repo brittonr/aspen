@@ -20,7 +20,8 @@ pub enum RuntimeHostKind {
     Wasm,
     /// Hyperlight-backed isolated native-ish execution boundary.
     Hyperlight,
-    /// OCI/container runner. Useful for packaging; not a strong boundary alone.
+    /// Dev/unsafe-only raw OCI/container runner marker. Production uses `OciImage` plus an isolated
+    /// lowering target.
     OciContainer,
     /// Firecracker, Cloud Hypervisor, Uhyve, QEMU microvm, or equivalent guest boundary.
     MicroVm { engine: MicroVmEngine },
@@ -81,6 +82,98 @@ pub enum RuntimeArtifact {
 pub enum UnikernelKind {
     HermitOs,
     Other(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", tag = "kind", content = "detail")]
+pub enum OciLoweringTarget {
+    MicroVm {
+        engine: MicroVmEngine,
+    },
+    Hyperlight,
+    Wasm,
+    Unikernel {
+        engine: MicroVmEngine,
+        unikernel_kind: UnikernelKind,
+    },
+}
+
+impl OciLoweringTarget {
+    #[must_use]
+    pub fn host_kind(&self) -> RuntimeHostKind {
+        match self {
+            Self::MicroVm { engine } | Self::Unikernel { engine, .. } => {
+                RuntimeHostKind::MicroVm { engine: engine.clone() }
+            }
+            Self::Hyperlight => RuntimeHostKind::Hyperlight,
+            Self::Wasm => RuntimeHostKind::Wasm,
+        }
+    }
+
+    #[must_use]
+    pub fn derived_artifact_matches(&self, artifact: &RuntimeArtifact) -> bool {
+        match (self, artifact) {
+            (Self::MicroVm { .. }, RuntimeArtifact::LinuxGuest { .. } | RuntimeArtifact::Unikernel { .. }) => true,
+            (Self::Hyperlight, RuntimeArtifact::HyperlightImage { .. }) => true,
+            (Self::Wasm, RuntimeArtifact::WasmModule { .. }) => true,
+            (
+                Self::Unikernel { unikernel_kind, .. },
+                RuntimeArtifact::Unikernel {
+                    unikernel_kind: artifact_kind,
+                    ..
+                },
+            ) => unikernel_kind == artifact_kind,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct OciLoweringPlan {
+    pub source_image_digest: String,
+    pub entrypoint: String,
+    pub args: Vec<String>,
+    pub target: OciLoweringTarget,
+    pub derived_artifacts: Vec<RuntimeArtifact>,
+    pub transformation_provenance: Vec<RedactedValue>,
+    pub declared_handles: Vec<String>,
+    pub unsupported_diagnostics: Vec<RuntimeDiagnostic>,
+}
+
+impl OciLoweringPlan {
+    #[must_use]
+    pub fn host_kind(&self) -> RuntimeHostKind {
+        self.target.host_kind()
+    }
+
+    #[must_use]
+    pub fn contains_raw_secret(&self) -> bool {
+        self.transformation_provenance.iter().any(RedactedValue::looks_secret)
+            || self.unsupported_diagnostics.iter().any(|diag| diag.value.looks_secret())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct OciLoweringReceipt {
+    pub receipt_id: String,
+    pub unit_id: String,
+    pub source_image_digest: String,
+    pub selected_target: OciLoweringTarget,
+    pub host_kind: RuntimeHostKind,
+    pub derived_artifact_identities: Vec<RedactedValue>,
+    pub runner_identity: RedactedValue,
+    pub granted_authority: Vec<RedactedValue>,
+    pub diagnostics: Vec<RuntimeDiagnostic>,
+}
+
+impl OciLoweringReceipt {
+    #[must_use]
+    pub fn contains_raw_secret(&self) -> bool {
+        self.derived_artifact_identities.iter().any(RedactedValue::looks_secret)
+            || self.runner_identity.looks_secret()
+            || self.granted_authority.iter().any(RedactedValue::looks_secret)
+            || self.diagnostics.iter().any(|diag| diag.value.looks_secret())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -1156,6 +1249,11 @@ pub enum AdmissionError {
     EmptyUnitId,
     NativeBuiltInRequiresBuiltInArtifact,
     OciRequiresDigest,
+    OciRequiresIsolatedLoweringTarget,
+    OciRejectsRawContainerInProduction,
+    OciRequiresDerivedArtifact,
+    OciRequiresDeclaredCapability,
+    OciLoweringReceiptContainsRawSecret,
     MicroVmRequiresGuestArtifact,
     ReceiptContainsRawSecret,
     EmptyServiceId,
@@ -1210,6 +1308,117 @@ pub enum AdmissionError {
     MicroVmRejectsAmbientAuthority,
     MicroVmInvalidLifecycleLease,
     MicroVmReceiptContainsRawSecret,
+}
+
+#[must_use]
+pub fn runtime_artifact_identities(artifact: &RuntimeArtifact) -> Vec<&str> {
+    match artifact {
+        RuntimeArtifact::BuiltIn { name, version } => vec![name.as_str(), version.as_str()],
+        RuntimeArtifact::NativeBinary { hash, .. } => vec![hash.as_str()],
+        RuntimeArtifact::WasmModule { module_hash, .. } => vec![module_hash.as_str()],
+        RuntimeArtifact::HyperlightImage { image_hash, .. } => vec![image_hash.as_str()],
+        RuntimeArtifact::OciImage { image_digest, .. } => vec![image_digest.as_str()],
+        RuntimeArtifact::LinuxGuest {
+            kernel_hash,
+            initrd_hash,
+            rootfs_hash,
+        } => {
+            let mut hashes = vec![kernel_hash.as_str(), rootfs_hash.as_str()];
+            if let Some(initrd_hash) = initrd_hash.as_deref() {
+                hashes.push(initrd_hash);
+            }
+            hashes
+        }
+        RuntimeArtifact::Unikernel { image_hash, .. } => vec![image_hash.as_str()],
+    }
+}
+
+#[must_use]
+pub fn runtime_artifact_has_verified_identity(artifact: &RuntimeArtifact) -> bool {
+    let identities = runtime_artifact_identities(artifact);
+    !identities.is_empty() && identities.iter().all(|identity| identity.starts_with("sha256:"))
+}
+
+pub fn admit_oci_lowering_plan(decl: &RuntimeUnitDeclaration, plan: &OciLoweringPlan) -> Result<(), AdmissionError> {
+    if decl.unit_id.trim().is_empty() {
+        return Err(AdmissionError::EmptyUnitId);
+    }
+    let RuntimeArtifact::OciImage {
+        image_digest,
+        entrypoint,
+        args,
+    } = &decl.artifact
+    else {
+        return Err(AdmissionError::OciRequiresDigest);
+    };
+    if !image_digest.starts_with("sha256:")
+        || image_digest != &plan.source_image_digest
+        || entrypoint != &plan.entrypoint
+        || args != &plan.args
+    {
+        return Err(AdmissionError::OciRequiresDigest);
+    }
+    if matches!(decl.host_kind, RuntimeHostKind::OciContainer) {
+        return Err(AdmissionError::OciRejectsRawContainerInProduction);
+    }
+    if decl.host_kind != plan.host_kind() {
+        return Err(AdmissionError::OciRequiresIsolatedLoweringTarget);
+    }
+    if plan.derived_artifacts.is_empty()
+        || !plan.derived_artifacts.iter().all(|artifact| {
+            plan.target.derived_artifact_matches(artifact) && runtime_artifact_has_verified_identity(artifact)
+        })
+    {
+        return Err(AdmissionError::OciRequiresDerivedArtifact);
+    }
+    for handle in &plan.declared_handles {
+        if handle.trim().is_empty() {
+            return Err(AdmissionError::OciRequiresDeclaredCapability);
+        }
+        if !decl.capabilities.iter().any(|binding| binding.handle_id == *handle) {
+            return Err(AdmissionError::OciRequiresDeclaredCapability);
+        }
+    }
+    if plan.contains_raw_secret() {
+        return Err(AdmissionError::OciLoweringReceiptContainsRawSecret);
+    }
+    Ok(())
+}
+
+pub fn oci_lowering_receipt(
+    receipt_id: impl Into<String>,
+    decl: &RuntimeUnitDeclaration,
+    plan: &OciLoweringPlan,
+    runner_identity: RedactedValue,
+    diagnostics: Vec<RuntimeDiagnostic>,
+) -> OciLoweringReceipt {
+    OciLoweringReceipt {
+        receipt_id: receipt_id.into(),
+        unit_id: decl.unit_id.clone(),
+        source_image_digest: plan.source_image_digest.clone(),
+        selected_target: plan.target.clone(),
+        host_kind: plan.host_kind(),
+        derived_artifact_identities: plan
+            .derived_artifacts
+            .iter()
+            .flat_map(runtime_artifact_identities)
+            .map(|identity| RedactedValue::Hash(identity.to_string()))
+            .collect(),
+        runner_identity,
+        granted_authority: plan
+            .declared_handles
+            .iter()
+            .map(|handle| RedactedValue::OpaqueHandle(handle.clone()))
+            .collect(),
+        diagnostics,
+    }
+}
+
+pub fn admit_oci_lowering_receipt(receipt: &OciLoweringReceipt) -> Result<(), AdmissionError> {
+    if receipt.contains_raw_secret() {
+        return Err(AdmissionError::OciLoweringReceiptContainsRawSecret);
+    }
+    Ok(())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -1841,9 +2050,15 @@ pub fn admit_unit(decl: &RuntimeUnitDeclaration) -> Result<(), AdmissionError> {
         }
         (RuntimeHostKind::Wasm, _) => return Err(AdmissionError::WasmRequiresWasmArtifact),
         (RuntimeHostKind::OciContainer, RuntimeArtifact::OciImage { image_digest, .. })
-            if image_digest.starts_with("sha256:") => {}
+            if image_digest.starts_with("sha256:") =>
+        {
+            return Err(AdmissionError::OciRejectsRawContainerInProduction);
+        }
         (RuntimeHostKind::OciContainer, RuntimeArtifact::OciImage { .. }) => {
             return Err(AdmissionError::OciRequiresDigest);
+        }
+        (_, RuntimeArtifact::OciImage { .. }) => {
+            return Err(AdmissionError::OciRequiresIsolatedLoweringTarget);
         }
         (RuntimeHostKind::MicroVm { .. }, RuntimeArtifact::LinuxGuest { .. } | RuntimeArtifact::Unikernel { .. }) => {}
         (RuntimeHostKind::MicroVm { .. }, _) => return Err(AdmissionError::MicroVmRequiresGuestArtifact),
@@ -3246,6 +3461,158 @@ mod tests {
         let mut service_mismatch = sponsored_admission_request();
         service_mismatch.service_principal_id = Some("service/ci".to_string());
         assert_eq!(admit_sponsored_request(&service_mismatch), Err(SponsoredAdmissionError::ScopeMismatch));
+    }
+
+    fn oci_image_decl(host_kind: RuntimeHostKind) -> RuntimeUnitDeclaration {
+        RuntimeUnitDeclaration {
+            unit_id: "svc/oci-app".to_string(),
+            unit_kind: RuntimeUnitKind::Service,
+            host_kind,
+            artifact: RuntimeArtifact::OciImage {
+                image_digest: "sha256:oci-image".to_string(),
+                entrypoint: "/nix/store/app/bin/app".to_string(),
+                args: vec!["serve".to_string()],
+            },
+            capabilities: vec![
+                RuntimeCapabilityBinding {
+                    handle_id: "runner:microvm".to_string(),
+                    ability: "runtime/launch".to_string(),
+                    resource: "aspen://runtime/runner/microvm".to_string(),
+                    proof_refs: vec!["ucan-proof:microvm".to_string()],
+                    caveats: vec![],
+                },
+                RuntimeCapabilityBinding {
+                    handle_id: "cap:network-egress".to_string(),
+                    ability: "net/connect".to_string(),
+                    resource: "aspen://net/egress/service".to_string(),
+                    proof_refs: vec!["ucan-proof:net".to_string()],
+                    caveats: vec![],
+                },
+            ],
+            resources: RuntimeResources {
+                memory_bytes: Some(256 * 1024 * 1024),
+                cpu_millis: Some(500),
+                wall_time_ms: Some(30_000),
+                wasm_fuel: None,
+                max_open_files: Some(32),
+            },
+            routes: vec![],
+        }
+    }
+
+    fn oci_to_microvm_plan() -> OciLoweringPlan {
+        OciLoweringPlan {
+            source_image_digest: "sha256:oci-image".to_string(),
+            entrypoint: "/nix/store/app/bin/app".to_string(),
+            args: vec!["serve".to_string()],
+            target: OciLoweringTarget::MicroVm {
+                engine: MicroVmEngine::Firecracker,
+            },
+            derived_artifacts: vec![RuntimeArtifact::LinuxGuest {
+                kernel_hash: "sha256:vmlinux".to_string(),
+                initrd_hash: Some("sha256:initrd".to_string()),
+                rootfs_hash: "sha256:rootfs-from-oci".to_string(),
+            }],
+            transformation_provenance: vec![RedactedValue::Hash("sha256:lowering-recipe".to_string())],
+            declared_handles: vec!["runner:microvm".to_string(), "cap:network-egress".to_string()],
+            unsupported_diagnostics: vec![],
+        }
+    }
+
+    #[test]
+    fn oci_images_lower_to_isolated_microvm_boundary() {
+        let decl = oci_image_decl(RuntimeHostKind::MicroVm {
+            engine: MicroVmEngine::Firecracker,
+        });
+        let plan = oci_to_microvm_plan();
+        admit_oci_lowering_plan(&decl, &plan).unwrap();
+        assert_eq!(plan.host_kind(), decl.host_kind);
+        assert!(matches!(plan.derived_artifacts[0], RuntimeArtifact::LinuxGuest { .. }));
+
+        let receipt = oci_lowering_receipt(
+            "receipt/oci-lowered",
+            &decl,
+            &plan,
+            RedactedValue::OpaqueHandle("runner:microvm/firecracker".to_string()),
+            vec![RuntimeDiagnostic {
+                key: "lowering".to_string(),
+                value: RedactedValue::Plain("oci rootfs materialized into microVM guest".to_string()),
+            }],
+        );
+        assert_eq!(receipt.source_image_digest, "sha256:oci-image");
+        assert_eq!(receipt.host_kind, decl.host_kind);
+        assert!(
+            receipt
+                .derived_artifact_identities
+                .contains(&RedactedValue::Hash("sha256:rootfs-from-oci".to_string()))
+        );
+        assert!(receipt.granted_authority.contains(&RedactedValue::OpaqueHandle("cap:network-egress".to_string())));
+        admit_oci_lowering_receipt(&receipt).unwrap();
+    }
+
+    #[test]
+    fn oci_admission_rejects_raw_containers_and_unscoped_lowering() {
+        let plan = oci_to_microvm_plan();
+        let raw_container = oci_image_decl(RuntimeHostKind::OciContainer);
+        assert_eq!(admit_unit(&raw_container), Err(AdmissionError::OciRejectsRawContainerInProduction));
+        assert_eq!(
+            admit_oci_lowering_plan(&raw_container, &plan),
+            Err(AdmissionError::OciRejectsRawContainerInProduction)
+        );
+
+        let wrong_target = oci_image_decl(RuntimeHostKind::Hyperlight);
+        assert_eq!(
+            admit_oci_lowering_plan(&wrong_target, &plan),
+            Err(AdmissionError::OciRequiresIsolatedLoweringTarget)
+        );
+
+        let mut mutable = oci_image_decl(RuntimeHostKind::MicroVm {
+            engine: MicroVmEngine::Firecracker,
+        });
+        mutable.artifact = RuntimeArtifact::OciImage {
+            image_digest: "registry.example/app:latest".to_string(),
+            entrypoint: "/nix/store/app/bin/app".to_string(),
+            args: vec!["serve".to_string()],
+        };
+        assert_eq!(admit_oci_lowering_plan(&mutable, &plan), Err(AdmissionError::OciRequiresDigest));
+
+        let mut missing_handle = plan.clone();
+        missing_handle.declared_handles.push("cap:missing".to_string());
+        let decl = oci_image_decl(RuntimeHostKind::MicroVm {
+            engine: MicroVmEngine::Firecracker,
+        });
+        assert_eq!(admit_oci_lowering_plan(&decl, &missing_handle), Err(AdmissionError::OciRequiresDeclaredCapability));
+
+        let mut bad_artifact = plan;
+        bad_artifact.derived_artifacts = vec![RuntimeArtifact::LinuxGuest {
+            kernel_hash: "sha1:vmlinux".to_string(),
+            initrd_hash: None,
+            rootfs_hash: "sha256:rootfs-from-oci".to_string(),
+        }];
+        assert_eq!(admit_oci_lowering_plan(&decl, &bad_artifact), Err(AdmissionError::OciRequiresDerivedArtifact));
+    }
+
+    #[test]
+    fn oci_lowering_receipts_reject_secret_bearing_material() {
+        let decl = oci_image_decl(RuntimeHostKind::MicroVm {
+            engine: MicroVmEngine::Firecracker,
+        });
+        let mut plan = oci_to_microvm_plan();
+        plan.unsupported_diagnostics.push(RuntimeDiagnostic {
+            key: "env".to_string(),
+            value: RedactedValue::Plain("token=raw".to_string()),
+        });
+        assert_eq!(admit_oci_lowering_plan(&decl, &plan), Err(AdmissionError::OciLoweringReceiptContainsRawSecret));
+
+        let safe_plan = oci_to_microvm_plan();
+        let receipt = oci_lowering_receipt(
+            "receipt/oci-secret",
+            &decl,
+            &safe_plan,
+            RedactedValue::Plain("connection_string=raw".to_string()),
+            vec![],
+        );
+        assert_eq!(admit_oci_lowering_receipt(&receipt), Err(AdmissionError::OciLoweringReceiptContainsRawSecret));
     }
 
     #[test]

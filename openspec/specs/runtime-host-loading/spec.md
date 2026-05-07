@@ -4,7 +4,7 @@
 
 This specification defines Aspen's runtime host-loading taxonomy and shared lifecycle, artifact-verification, capability-binding, UCAN-delegation, and verified-admission requirements for native built-ins, external native processes, WASM, Hyperlight, OCI/container, microVM, and unikernel runtime units.
 ## Requirements
-### Requirement: Runtime Host Taxonomy
+### Requirement: Runtime Host Taxonomy [r[runtime-host-loading.host-taxonomy]]
 Aspen MUST classify runtime units by an explicit host kind before resolving or starting their executable artifact.
 ID: r[runtime-host-loading.host-taxonomy]
 
@@ -82,7 +82,7 @@ ID: r[runtime-host-loading.native-built-in.dynamic-plugin-rejected]
 - THEN Aspen SHALL reject it unless a separate future OpenSpec explicitly accepts that unsafe ABI boundary
 - AND the rejection rationale SHALL prefer linked built-ins, external native processes, WASM, or Hyperlight depending on trust and isolation needs
 
-### Requirement: Content-Addressed Dynamic Artifact Loading
+### Requirement: Content-Addressed Dynamic Artifact Loading [r[runtime-host-loading.dynamic-artifacts]]
 Aspen MUST verify dynamic runtime artifacts by content identity before instantiating WASM modules, starting Hyperlight units, launching OCI/microVM guests, or launching external native processes.
 ID: r[runtime-host-loading.dynamic-artifacts]
 
