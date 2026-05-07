@@ -17,4 +17,4 @@
 
 - [x] Add positive and negative tests for artifact verification, capability binding, lifecycle transitions, and receipt redaction. ✅ 2m 05s (2026-05-07T02:41:31Z → 2026-05-07T02:43:36Z; evidence: `evidence/hyperlight-portable-model-admission.md`)
 - [x] Update runtime architecture documentation or source-anchor tests if this change introduces new public terminology. ✅ 4m 58s (2026-05-07T02:44:28Z → 2026-05-07T02:49:26Z; evidence: `evidence/hyperlight-runtime-docs.md`)
-- [ ] Run focused tests, strict OpenSpec validation, and whitespace checks.
+- [x] Run focused tests, strict OpenSpec validation, and whitespace checks. ✅ 20s (2026-05-07T02:49:51Z → 2026-05-07T02:50:11Z; evidence: `evidence/final-validation.md`)
