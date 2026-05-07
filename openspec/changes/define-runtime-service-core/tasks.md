@@ -9,8 +9,8 @@
 
 ## Phase 3: Native built-in service boundary
 
-- [ ] Define the linked native built-in service factory/manifest contract without introducing dynamic native plugin loading.
-- [ ] Add tests proving built-in service declarations use `NativeBuiltIn` host loading and redacted capability handles.
+- [x] Define the linked native built-in service factory/manifest contract without introducing dynamic native plugin loading. ✅ 59s (2026-05-07T00:21:29Z → 2026-05-07T00:22:28Z; evidence: `evidence/native-built-in-contract.md`)
+- [x] Add tests proving built-in service declarations use `NativeBuiltIn` host loading and redacted capability handles. ✅ 29s (2026-05-07T00:22:52Z → 2026-05-07T00:23:21Z; evidence: `evidence/native-built-in-redacted-handles.md`)
 
 ## Phase 4: Forge first service slice
 

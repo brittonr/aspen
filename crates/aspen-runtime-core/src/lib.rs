@@ -315,10 +315,29 @@ pub struct NativeServiceManifest {
     pub required_capabilities: Vec<RuntimeCapabilityBinding>,
 }
 
+impl NativeServiceManifest {
+    #[must_use]
+    pub fn capability_handle_refs(&self) -> Vec<RedactedValue> {
+        self.required_capabilities
+            .iter()
+            .map(|binding| RedactedValue::OpaqueHandle(binding.handle_id.clone()))
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NativeLoadingPolicy {
+    /// The service is linked into the Aspen binary and selected from a static registry.
+    LinkedBuiltInOnly,
+}
+
 /// Pure registry entry for linked first-party services.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct NativeBuiltInServiceFactory {
     pub service_name: String,
+    pub linked_symbol: String,
+    pub loading_policy: NativeLoadingPolicy,
     pub manifest: NativeServiceManifest,
 }
 
@@ -355,6 +374,20 @@ pub enum AdmissionError {
     InvalidRestartPolicy,
     InvalidUpgradePolicy,
     InvalidLifecycleTransition,
+    NativeFactoryNameMismatch,
+    NativeFactoryMissingLinkedSymbol,
+}
+
+pub fn admit_native_factory(factory: &NativeBuiltInServiceFactory) -> Result<(), AdmissionError> {
+    if factory.service_name != factory.manifest.name {
+        return Err(AdmissionError::NativeFactoryNameMismatch);
+    }
+    if factory.linked_symbol.trim().is_empty() {
+        return Err(AdmissionError::NativeFactoryMissingLinkedSymbol);
+    }
+    match factory.loading_policy {
+        NativeLoadingPolicy::LinkedBuiltInOnly => Ok(()),
+    }
 }
 
 pub fn admit_service_spec(spec: &RuntimeServiceSpec) -> Result<(), AdmissionError> {
@@ -518,13 +551,22 @@ mod tests {
     fn native_factory_wraps_forge_as_builtin() {
         let factory = NativeBuiltInServiceFactory {
             service_name: "forge".to_string(),
+            linked_symbol: "aspen_forge::runtime_service_factory".to_string(),
+            loading_policy: NativeLoadingPolicy::LinkedBuiltInOnly,
             manifest: forge_manifest(),
         };
         let decl = factory.as_declaration("service/forge");
+        admit_native_factory(&factory).unwrap();
+        assert_eq!(factory.loading_policy, NativeLoadingPolicy::LinkedBuiltInOnly);
+        assert!(factory.linked_symbol.contains("runtime_service_factory"));
         assert_eq!(decl.host_kind, RuntimeHostKind::NativeBuiltIn);
         assert!(matches!(decl.artifact, RuntimeArtifact::BuiltIn { ref name, .. } if name == "forge"));
         assert_eq!(decl.routes.len(), 1);
         admit_unit(&decl).unwrap();
+
+        let mut bad_factory = factory;
+        bad_factory.linked_symbol.clear();
+        assert_eq!(admit_native_factory(&bad_factory), Err(AdmissionError::NativeFactoryMissingLinkedSymbol));
     }
 
     #[test]
@@ -553,6 +595,27 @@ mod tests {
         let decoded: RuntimeUnitDeclaration = serde_json::from_str(&encoded).unwrap();
         assert_eq!(decoded, decl);
         admit_unit(&decoded).unwrap();
+    }
+
+    #[test]
+    fn built_in_declarations_use_native_host_and_redacted_capability_handles() {
+        let manifest = forge_manifest();
+        let handles = manifest.capability_handle_refs();
+        assert_eq!(handles, vec![RedactedValue::OpaqueHandle("kv:forge".to_string())]);
+        assert!(handles.iter().all(|handle| !handle.looks_secret()));
+        assert!(handles.iter().all(|handle| !matches!(handle, RedactedValue::Plain(_))));
+
+        let factory = NativeBuiltInServiceFactory {
+            service_name: "forge".to_string(),
+            linked_symbol: "aspen_forge::runtime_service_factory".to_string(),
+            loading_policy: NativeLoadingPolicy::LinkedBuiltInOnly,
+            manifest,
+        };
+        let decl = factory.as_declaration("forge");
+        assert_eq!(decl.host_kind, RuntimeHostKind::NativeBuiltIn);
+        assert!(matches!(decl.artifact, RuntimeArtifact::BuiltIn { .. }));
+        assert_eq!(decl.capabilities[0].handle_id, "kv:forge");
+        assert_eq!(decl.capabilities[0].proof_refs, vec!["ucan-proof:operator".to_string()]);
     }
 
     #[test]
