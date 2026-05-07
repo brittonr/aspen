@@ -13,6 +13,7 @@ aspen-blob = { path = "../aspen-blob" }
 aspen-jobs = { path = "../aspen-jobs" }
 aspen-dag = { path = "../aspen-dag" }
 aspen-cluster = { path = "../aspen-cluster", features = ["federation"] }
+aspen-runtime-core = { path = "../aspen-runtime-core" }
 
 # P2P networking
 iroh = { version = "0.98.0", features = ["address-lookup-mdns", "address-lookup-pkarr-dht"] }

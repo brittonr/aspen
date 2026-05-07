@@ -14,8 +14,8 @@
 
 ## Phase 4: Forge first service slice
 
-- [ ] Add a Forge runtime service wrapper that exposes manifest, route declarations, health, and lifecycle receipts while preserving current Forge internals.
-- [ ] Add focused tests or source-anchor tests for Forge startup wiring, route registration, and secret-safe receipts.
+- [x] Add a Forge runtime service wrapper that exposes manifest, route declarations, health, and lifecycle receipts while preserving current Forge internals. ✅ 2m 40s (2026-05-07T00:24:21Z → 2026-05-07T00:27:01Z; evidence: `evidence/forge-runtime-service-wrapper.md`)
+- [x] Add focused tests or source-anchor tests for Forge startup wiring, route registration, and secret-safe receipts. ✅ 1m 48s (2026-05-07T00:27:26Z → 2026-05-07T00:29:14Z; evidence: `evidence/forge-runtime-service-tests.md`)
 
 ## Phase 5: Documentation and validation
 

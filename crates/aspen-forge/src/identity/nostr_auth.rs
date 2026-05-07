@@ -224,7 +224,7 @@ mod tests {
 
     async fn test_auth_service() -> (NostrAuthService<dyn aspen_core::KeyValueStore>, nostr::Keys) {
         let kv: Arc<dyn aspen_core::KeyValueStore> = DeterministicKeyValueStore::new();
-        let cluster_key = SecretKey::generate(&mut ::rand::rng());
+        let cluster_key = SecretKey::generate();
         let store = Arc::new(NostrIdentityStore::new(kv, &cluster_key));
         let service = NostrAuthService::new(store, cluster_key);
         let nostr_keys = nostr::Keys::generate();
