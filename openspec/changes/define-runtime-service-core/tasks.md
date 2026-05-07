@@ -19,5 +19,5 @@
 
 ## Phase 5: Documentation and validation
 
-- [ ] Update `docs/runtime-applications.md` to distinguish implemented host-loading/model pieces from the active runtime-service-core implementation track.
-- [ ] Run focused runtime-core/Forge/docs tests, strict OpenSpec validation, and whitespace checks.
+- [x] Update `docs/runtime-applications.md` to distinguish implemented host-loading/model pieces from the active runtime-service-core implementation track. ✅ 49s (2026-05-07T00:30:08Z → 2026-05-07T00:30:57Z; evidence: `evidence/runtime-applications-doc-update.md`)
+- [x] Run focused runtime-core/Forge/docs tests, strict OpenSpec validation, and whitespace checks. ✅ 45s (2026-05-07T00:31:18Z → 2026-05-07T00:32:03Z; evidence: `evidence/final-validation.md`)

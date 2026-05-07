@@ -1,6 +1,20 @@
 # Aspen Runtime Applications
 
-Status: design note. This document captures the current target architecture for treating Aspen as a distributed infrastructure runtime. It is intentionally grounded in the current workspace rather than a greenfield rewrite.
+Status: design note with an active implementation slice. This document captures the target architecture for treating Aspen as a distributed infrastructure runtime and distinguishes the pieces now implemented under OpenSpec change `define-runtime-service-core` from future runtime-service shell work.
+
+Implemented in the current slice:
+
+- `crates/aspen-runtime-core` contains portable, serializable host-loading/model contracts for runtime host kinds, artifacts, service specs, service instances, lifecycle/health state, route declarations, placement hints, restart/upgrade/health policy, capability bindings, and redacted receipts.
+- `NativeBuiltIn` services are modeled as linked built-ins through `NativeBuiltInServiceFactory`, `NativeServiceManifest`, and `NativeLoadingPolicy::LinkedBuiltInOnly`; this is intentionally not dynamic native plugin loading.
+- `crates/aspen-forge/src/runtime_service.rs` exposes Forge as the first linked native runtime-service wrapper with manifest, route declarations, health receipts, and lifecycle receipts while preserving existing `ForgeNode` internals.
+
+Still active/future work:
+
+- durable runtime-service reconciler/storage;
+- node-local service host/supervision shell;
+- route registry integration beyond the current Forge wrapper metadata;
+- dynamic non-built-in application installation;
+- executioner generalization of jobs/CI.
 
 ## Thesis
 
@@ -361,23 +375,21 @@ aspen-forge-handler     -> route adapter for ForgeService during migration
 
 ## First implementation slice
 
-Do not start by rewriting CI or Forge. Start by defining the contract and wrapping one native service.
+The current `define-runtime-service-core` slice has implemented the contract/model and Forge wrapper portions of this plan. Treat the remaining bullets as migration track work, not as proof that the model crate is absent.
 
-1. Add `aspen-runtime-core` with pure types:
-   - `AppManifest`
-   - `ServiceSpec`
-   - `ServiceInstance`
-   - `ExecutionPlan`
-   - `ExecutionRun`
-   - `RuntimeArtifact`
-   - `RuntimeCapabilityBinding`
-   - `RuntimePlacement`
-   - `RuntimeResources`
-   - `RuntimeReceipt`
-2. Add a static built-in `ForgeService` manifest wrapper around existing `ForgeNode` wiring.
-3. Register Forge routes through a runtime route declaration while preserving the current `ForgeHandler` execution path.
-4. Emit initial receipts: service declared, routes registered, service started, gossip enabled, DAG sync started, plugin loaded.
-5. Only after Forge proves the service contract, rename/generalize CI into the executioner model.
+Completed in this slice:
+
+1. Added `aspen-runtime-core` with pure types for `RuntimeServiceSpec`, `RuntimeServiceInstance`, `RuntimeArtifact`, `RuntimeCapabilityBinding`, `RuntimePlacementHints`, `RuntimeResources`, `RuntimeReceipt`, host kinds, policies, lifecycle, and health.
+2. Added a static built-in Forge runtime-service manifest wrapper around existing Forge internals in `crates/aspen-forge/src/runtime_service.rs`.
+3. Declared Forge routes through runtime route declarations for Git, repo/RPC, and health route families.
+4. Added health/lifecycle receipt helpers that expose opaque capability handles and reject raw-secret diagnostics.
+
+Remaining follow-up work:
+
+1. Wire Forge route declarations into the active runtime route registry/reconciler when that shell exists.
+2. Emit startup receipts from actual node/service lifecycle events instead of pure wrapper helpers.
+3. Generalize CI/jobs into the executioner model after the service contract lands.
+4. Add dynamic/non-built-in app formats only after the linked-native path is exercised.
 
 ## Open questions
 
