@@ -4,7 +4,7 @@ This page records Aspen's current runtime-host evidence boundary for operator an
 
 ## Current proven boundary
 
-Aspen currently has two runtime-host rows with executable evidence:
+Aspen currently has three runtime-host rows with executable evidence:
 
 1. Guest-backed microVM CI execution evidence for the archived OpenSpec runtime-host matrix row:
 
@@ -15,10 +15,10 @@ target: checks.x86_64-linux.vm-snapshot-e2e-test
 proof level: aspen-spawned-execution
 ```
 
-2. Product-path WASM job execution evidence for the active OpenSpec promotion row:
+2. Product-path WASM job execution evidence for the archived OpenSpec promotion row:
 
 ```text
-OpenSpec change: openspec/changes/promote-wasm-runtime-host-e2e
+OpenSpec change: openspec/changes/archive/2026-05-08-promote-wasm-runtime-host-e2e
 matrix row: runtime-host-wasm-product-path
 target: cargo test -p aspen-jobs --test wasm_product_path_test --features plugins-wasm
 proof level: aspen-spawned-execution
@@ -28,7 +28,20 @@ The WASM proof submits a blob-backed `wasm_component` job through `JobManager`, 
 
 The guardrail marker `ASPEN_WASM_RUNTIME_HOST_PRODUCT_PATH_GUARD` separates negative coverage from execution evidence: runtime-core-only admission tests and plugin install/reload plumbing remain useful, but neither satisfies the WASM runtime-host row by itself.
 
-The proof is stronger than inventory registration. The gated check boots an Aspen node, creates a Cloud Hypervisor golden snapshot, restores guest VMs from that snapshot, registers a guest worker with the Aspen cluster, submits real `ci_vm` jobs through `aspen-cli`, and waits for job completion.
+3. Product-path Hyperlight job execution evidence for the archived OpenSpec promotion row:
+
+```text
+OpenSpec change: openspec/changes/archive/2026-05-08-promote-hyperlight-runtime-host-e2e
+matrix row: runtime-host-hyperlight-product-path
+target: cargo test -p aspen-jobs --test hyperlight_product_path_test --features plugins-vm -- --ignored --nocapture
+proof level: aspen-spawned-execution
+```
+
+The Hyperlight proof submits a blob-backed `vm_execute` job through `JobManager`, runs it through `WorkerPool` orchestration, executes a declared `aspen:runtime-host/hyperlight-v1` guest entrypoint, and checks the product-visible receipt marker `ASPEN_HYPERLIGHT_RUNTIME_HOST_EXECUTED`.
+
+The guardrail marker `ASPEN_HYPERLIGHT_RUNTIME_HOST_PRODUCT_PATH_GUARD` separates negative coverage from execution evidence: worker construction, payload serialization, package builds, ignored/manual examples, and direct worker-only calls remain useful, but none satisfies the Hyperlight runtime-host row by itself.
+
+The microVM proof is stronger than inventory registration. The gated check boots an Aspen node, creates a Cloud Hypervisor golden snapshot, restores guest VMs from that snapshot, registers a guest worker with the Aspen cluster, submits real `ci_vm` jobs through `aspen-cli`, and waits for job completion.
 
 ## Latest accepted evidence
 
@@ -74,6 +87,16 @@ A passing WASM check is only runtime-host evidence when the test and receipt inc
 - The successful job result contains `ASPEN_WASM_RUNTIME_HOST_EXECUTED`, `aspen:runtime-host/wasm-v1`, and `entrypoint: execute`.
 - The negative guardrail contains `ASPEN_WASM_RUNTIME_HOST_PRODUCT_PATH_GUARD` and proves invalid WASM reaches the product worker path before failure.
 
+### Hyperlight job runtime
+
+A passing Hyperlight check is only runtime-host evidence when the test and receipt include these markers:
+
+- The harness row `runtime-host-hyperlight-product-path` is `e2e-registered`, not `metadata-only`.
+- The target is `cargo test -p aspen-jobs --test hyperlight_product_path_test --features plugins-vm -- --ignored --nocapture`.
+- The successful job result contains `ASPEN_HYPERLIGHT_RUNTIME_HOST_EXECUTED`, `aspen:runtime-host/hyperlight-v1`, and `entrypoint: execute`.
+- The successful job records at least one `WorkerPool` execution attempt after submitting a blob-backed `vm_execute` payload.
+- The negative guardrail contains `ASPEN_HYPERLIGHT_RUNTIME_HOST_PRODUCT_PATH_GUARD` and proves invalid Hyperlight bytes reach the product worker path before failure.
+
 Do not treat any of the following as sufficient by themselves:
 
 - the OpenSpec archive existing;
@@ -82,7 +105,10 @@ Do not treat any of the following as sufficient by themselves:
 - an Aspen node starting successfully;
 - a package build of `aspen-node-vm-test` without the gated VM check;
 - runtime-core-only WASM admission checks;
-- plugin install/reload commands without a blob-backed job execution receipt.
+- plugin install/reload commands without a blob-backed job execution receipt;
+- Hyperlight worker construction or job-payload serialization without a `WorkerPool` attempt;
+- Hyperlight guest package builds without a blob-backed `vm_execute` job receipt;
+- ignored/manual Hyperlight examples or direct worker-only calls without product orchestration.
 
 ## How to reproduce
 
@@ -91,6 +117,15 @@ The WASM row is cheap and does not require nested KVM:
 ```bash
 cargo test -p aspen-jobs --test wasm_product_path_test --features plugins-wasm -- --nocapture
 ```
+
+The Hyperlight row is gated because it requires cargo-hyperlight plus a Hyperlight/KVM-capable host:
+
+```bash
+cargo test -p aspen-jobs --test hyperlight_product_path_test --features plugins-vm invalid_hyperlight -- --nocapture
+cargo test -p aspen-jobs --test hyperlight_product_path_test --features plugins-vm hyperlight_job_executes_declared_fixture_through_product_orchestration -- --ignored --nocapture
+```
+
+The positive Hyperlight test builds `examples/vm-jobs/echo-worker` with `cargo hyperlight build --release` when `ASPEN_HYPERLIGHT_GUEST_BINARY` is not set and the default fixture binary is missing.
 
 The microVM check requires nested KVM and is intentionally not part of cheap/default verification. Run the package gate first so packaging failures do not consume a full VM-test cycle:
 
@@ -123,7 +158,7 @@ The accepted `runtime-host-microvm-ci-vm` path currently covers:
 ## Boundaries and caveats
 
 - This is a gated, impure nested-KVM acceptance check. It is expected to be run deliberately, not as a default local smoke test.
-- The current proven host classes are Cloud Hypervisor microVM CI and product-path WASM jobs. Remaining metadata-only matrix rows for other host classes are visibility gaps until promoted to runnable checks with receipts.
+- The current proven host classes are Cloud Hypervisor microVM CI, product-path WASM jobs, and gated product-path Hyperlight jobs. Remaining metadata-only matrix rows for other host classes are visibility gaps until promoted to runnable checks with receipts.
 - The verified E2E path uses `microvm.postBootCommands` to emit readiness markers, configure guest networking, and launch the worker in the direct-boot image. Do not promote direct systemd target boot to a product guarantee without a separate design/spec and fresh E2E evidence.
 - The check uses `/tmp` VM state inside the NixOS test guest and removes it during cleanup. Preserve separate `.agent/evidence/...` logs when citing historical evidence.
 - Logs and incident notes must redact cluster tickets, `aspen://...` remotes, bearer values, private keys, connection strings, and private checkout/source URLs as `[REDACTED]`.
@@ -136,6 +171,6 @@ Before citing runtime-host readiness:
 - Run or cite the package gate and gated nested-KVM check command.
 - Confirm the log has the proof markers above, not just inventory registration or snapshot artifacts.
 - Record the derivation path and evidence log path.
-- State the host class precisely: `runtime-host-microvm-ci-vm` / Cloud Hypervisor microVM CI, or `runtime-host-wasm-product-path` / product-path WASM job runtime.
+- State the host class precisely: `runtime-host-microvm-ci-vm` / Cloud Hypervisor microVM CI, `runtime-host-wasm-product-path` / product-path WASM job runtime, or `runtime-host-hyperlight-product-path` / gated product-path Hyperlight job runtime.
 - State unsupported or metadata-only host classes separately.
 - Redact secrets before copying any log excerpts.

@@ -34,6 +34,12 @@ const MAX_BINARY_SIZE: usize = 50 * 1024 * 1024;
 /// Default timeout for Nix builds (10 minutes).
 const NIX_BUILD_TIMEOUT: Duration = Duration::from_secs(600);
 
+/// Product-visible marker recorded after a Hyperlight guest reaches its declared entrypoint.
+const HYPERLIGHT_RUNTIME_HOST_EXECUTED_MARKER: &str = "ASPEN_HYPERLIGHT_RUNTIME_HOST_EXECUTED";
+
+/// ABI identifier for blob-backed Hyperlight runtime-host jobs.
+const HYPERLIGHT_RUNTIME_HOST_ABI: &str = "aspen:runtime-host/hyperlight-v1";
+
 /// Worker that executes jobs in Hyperlight micro-VMs.
 pub struct HyperlightWorker {
     /// Blob store for retrieving VM binaries.
@@ -391,14 +397,21 @@ impl HyperlightWorker {
             reason: format!("Guest execution failed: {}", e),
         })?;
 
-        // Parse the result
-        let result: serde_json::Value = serde_json::from_slice(&output).unwrap_or_else(|_| {
+        // Parse the result and wrap it in a stable product-visible receipt.
+        let raw_output = String::from_utf8_lossy(&output).to_string();
+        let parsed_output: serde_json::Value = serde_json::from_slice(&output).unwrap_or_else(|_| {
             serde_json::json!({
-                "raw_output": String::from_utf8_lossy(&output)
+                "raw_output": raw_output
             })
         });
 
-        Ok(JobResult::success(result))
+        Ok(JobResult::success(serde_json::json!({
+            "abi": HYPERLIGHT_RUNTIME_HOST_ABI,
+            "entrypoint": "execute",
+            "marker": HYPERLIGHT_RUNTIME_HOST_EXECUTED_MARKER,
+            "output": parsed_output,
+            "raw_output": raw_output,
+        })))
     }
 
     /// Register host functions that guest code can call.

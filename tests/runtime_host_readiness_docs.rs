@@ -67,3 +67,33 @@ fn runtime_host_readiness_doc_tracks_wasm_product_path_contract() {
     assert!(test.contains("JobManager"));
     assert!(test.contains("WorkerPool"));
 }
+
+#[test]
+fn runtime_host_readiness_doc_tracks_hyperlight_product_path_contract() {
+    let Some(doc) = read_repo_file("docs/runtime-host-readiness.md") else {
+        return;
+    };
+    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-hyperlight-gap.ncl")
+        .expect("Hyperlight runtime-host harness row should exist when docs are present");
+    let test = std::fs::read_to_string("crates/aspen-jobs/tests/hyperlight_product_path_test.rs")
+        .expect("Hyperlight product-path test should exist when docs are present");
+
+    assert!(doc.contains("runtime-host-hyperlight-product-path"));
+    assert!(doc.contains("cargo test -p aspen-jobs --test hyperlight_product_path_test --features plugins-vm"));
+    assert!(doc.contains("ASPEN_HYPERLIGHT_RUNTIME_HOST_EXECUTED"));
+    assert!(doc.contains("ASPEN_HYPERLIGHT_RUNTIME_HOST_PRODUCT_PATH_GUARD"));
+    assert!(doc.contains("aspen:runtime-host/hyperlight-v1"));
+
+    assert!(manifest.contains("runtime-host-hyperlight-product-path"));
+    assert!(manifest.contains("aspen-spawned-execution"));
+    assert!(manifest.contains("e2e-registered"));
+    assert!(manifest.contains("hyperlight_product_path_test"));
+    assert!(manifest.contains("plugins-vm"));
+    assert!(manifest.contains("ignored-only"));
+
+    assert!(test.contains("ASPEN_HYPERLIGHT_RUNTIME_HOST_EXECUTED"));
+    assert!(test.contains("ASPEN_HYPERLIGHT_RUNTIME_HOST_PRODUCT_PATH_GUARD"));
+    assert!(test.contains("JobManager"));
+    assert!(test.contains("WorkerPool"));
+    assert!(test.contains("HyperlightWorker"));
+}
