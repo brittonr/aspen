@@ -459,14 +459,20 @@ impl Outputable for CiRunReceiptOutput {
     fn to_json(&self) -> serde_json::Value {
         json!({
             "was_found": self.was_found,
-            "receipt": self.receipt,
-            "error": self.error,
+            "receipt": self.receipt.as_ref().map(redacted_ci_receipt_for_operator_output),
+            "error": self.error.as_deref().map(redact_operator_receipt_value),
         })
     }
 
     fn to_human(&self) -> String {
-        let Some(receipt) = &self.receipt else {
-            return format!("CI receipt not found: {}", self.error.as_deref().unwrap_or("unknown error"));
+        let Some(receipt) = self.receipt.as_ref().map(redacted_ci_receipt_for_operator_output) else {
+            return format!(
+                "CI receipt not found: {}",
+                self.error
+                    .as_deref()
+                    .map(redact_operator_receipt_value)
+                    .unwrap_or_else(|| "unknown error".to_string())
+            );
         };
         let succeeded = receipt.stages.iter().filter(|stage| stage.status == CI_STATUS_SUCCESS).count();
         let total_jobs: usize = receipt.stages.iter().map(|stage| stage.jobs.len()).sum();
@@ -522,6 +528,110 @@ impl Outputable for CiRunReceiptOutput {
         }
         output
     }
+}
+
+const OPERATOR_REDACTED: &str = "[REDACTED]";
+
+fn redacted_ci_receipt_for_operator_output(receipt: &CiRunReceipt) -> CiRunReceipt {
+    let mut redacted = receipt.clone();
+    redacted.error = redacted.error.as_deref().map(redact_operator_receipt_value);
+    for stage in &mut redacted.stages {
+        stage.name = redact_operator_receipt_value(&stage.name);
+        for job in &mut stage.jobs {
+            job.name = redact_operator_receipt_value(&job.name);
+            job.error = job.error.as_deref().map(redact_operator_receipt_value);
+            for artifact in &mut job.artifacts {
+                artifact.name = redact_operator_receipt_value(&artifact.name);
+                artifact.blob_hash = redact_operator_receipt_value(&artifact.blob_hash);
+                artifact.content_type = redact_operator_receipt_value(&artifact.content_type);
+                artifact.created_at = redact_operator_receipt_value(&artifact.created_at);
+                artifact.metadata = artifact
+                    .metadata
+                    .iter()
+                    .map(|(key, value)| (key.clone(), redact_operator_receipt_metadata_value(key, value)))
+                    .collect();
+            }
+        }
+    }
+    redacted
+}
+
+fn redact_operator_receipt_metadata_value(key: &str, value: &str) -> String {
+    if operator_receipt_field_is_sensitive(key) || operator_receipt_value_has_secret_marker(value) {
+        return OPERATOR_REDACTED.to_string();
+    }
+    redact_operator_receipt_value(value)
+}
+
+fn redact_operator_receipt_value(value: &str) -> String {
+    if value.is_empty() || value == "-" {
+        return value.to_string();
+    }
+    if operator_receipt_value_has_secret_marker(value) {
+        if value.contains("aspen://") && !operator_receipt_value_has_inline_secret_assignment(value) {
+            return redact_aspen_remote_credentials(value);
+        }
+        return OPERATOR_REDACTED.to_string();
+    }
+    redact_aspen_remote_credentials(value)
+}
+
+fn operator_receipt_value_has_inline_secret_assignment(value: &str) -> bool {
+    let value = value.to_ascii_lowercase();
+    ["password=", "token=", "cookie=", "private_key="].iter().any(|marker| value.contains(marker))
+}
+
+fn operator_receipt_field_is_sensitive(field: &str) -> bool {
+    let field = field.to_ascii_lowercase();
+    [
+        "token",
+        "ticket",
+        "cookie",
+        "password",
+        "private_key",
+        "secret",
+        "connection_string",
+    ]
+    .iter()
+    .any(|marker| field.contains(marker))
+}
+
+fn operator_receipt_value_has_secret_marker(value: &str) -> bool {
+    let value = value.to_ascii_lowercase();
+    [
+        "synthetic-dogfood-ticket-marker",
+        "synthetic-ci-secret-marker",
+        "synthetic-secret-marker",
+        "-----begin private key-----",
+        "-----begin openssh private key-----",
+        "password=",
+        "token=",
+        "cookie=",
+    ]
+    .iter()
+    .any(|marker| value.contains(marker))
+}
+
+fn redact_aspen_remote_credentials(message: &str) -> String {
+    const ASPEN_SCHEME: &str = "aspen://";
+    const TICKET_PLACEHOLDER: &str = "<cluster-ticket>";
+
+    let mut redacted = String::with_capacity(message.len());
+    let mut remaining = message;
+    while let Some(index) = remaining.find(ASPEN_SCHEME) {
+        redacted.push_str(&remaining[..index]);
+        redacted.push_str(ASPEN_SCHEME);
+        let after_scheme = &remaining[index + ASPEN_SCHEME.len()..];
+        if let Some(slash_index) = after_scheme.find('/') {
+            redacted.push_str(TICKET_PLACEHOLDER);
+            remaining = &after_scheme[slash_index..];
+        } else {
+            redacted.push_str(TICKET_PLACEHOLDER);
+            remaining = "";
+        }
+    }
+    redacted.push_str(remaining);
+    redacted
 }
 
 impl CiCommand {
@@ -1174,6 +1284,70 @@ mod tests {
             "Artifact: aspen-node blob=b3:artifact-hash size=4096 content_type=application/x-nix-nar created_at=2026-05-05T20:10:00Z"
         ));
         assert!(output.contains("metadata=[nar_hash=sha256-nar, nix_store_path=/nix/store/abc123-aspen-node]"));
+    }
+
+    #[test]
+    fn ci_receipt_operator_outputs_redact_secret_markers() {
+        let metadata = BTreeMap::from([
+            ("nix_store_path".to_string(), "/nix/store/abc123-aspen-node".to_string()),
+            ("access_token".to_string(), "synthetic-ci-secret-marker-token".to_string()),
+        ]);
+        let marker = "synthetic-dogfood-ticket-marker-0123456789";
+        let receipt = CiRunReceipt {
+            schema: CI_RUN_RECEIPT_SCHEMA.to_string(),
+            run_id: "run-redaction-1".to_string(),
+            pipeline_name: "aspen-ci".to_string(),
+            repo_id: "repo-123".to_string(),
+            ref_name: "refs/heads/main".to_string(),
+            commit_hash: "abcdef123456".to_string(),
+            status: CI_STATUS_FAILED.to_string(),
+            created_at_ms: 1_700_000_000_000,
+            started_at_ms: Some(1_700_000_000_100),
+            completed_at_ms: Some(1_700_000_010_000),
+            error: Some(format!("checkout failed for aspen://{marker}/repo-123")),
+            stages: vec![aspen_client_api::CiRunReceiptStage {
+                name: "build".to_string(),
+                status: CI_STATUS_FAILED.to_string(),
+                started_at_ms: Some(1_700_000_000_100),
+                completed_at_ms: Some(1_700_000_010_000),
+                jobs: vec![aspen_client_api::CiRunReceiptJob {
+                    name: "nix-build".to_string(),
+                    job_id: Some("job-456".to_string()),
+                    status: CI_STATUS_FAILED.to_string(),
+                    started_at_ms: Some(1_700_000_000_200),
+                    completed_at_ms: Some(1_700_000_009_000),
+                    error: Some("token=synthetic-ci-secret-marker failed".to_string()),
+                    artifacts: vec![aspen_client_api::CiArtifactInfo {
+                        blob_hash: "b3:artifact-hash".to_string(),
+                        name: "aspen-node".to_string(),
+                        size_bytes: 4096,
+                        content_type: "application/x-nix-nar".to_string(),
+                        created_at: "2026-05-05T20:10:00Z".to_string(),
+                        metadata,
+                    }],
+                }],
+            }],
+        };
+
+        let output = CiRunReceiptOutput {
+            was_found: true,
+            receipt: Some(receipt),
+            error: None,
+        };
+        let human = output.to_human();
+        let json = output.to_json().to_string();
+
+        for rendered in [&human, &json] {
+            assert!(rendered.contains("run-redaction-1"));
+            assert!(rendered.contains("b3:artifact-hash"));
+            assert!(rendered.contains("nix_store_path"));
+            assert!(rendered.contains("/nix/store/abc123-aspen-node"));
+            assert!(rendered.contains("[REDACTED]"));
+            assert!(!rendered.contains(marker));
+            assert!(!rendered.contains("synthetic-ci-secret-marker"));
+            assert!(!rendered.contains("token=synthetic"));
+            assert!(rendered.contains("aspen://<cluster-ticket>/repo-123") || rendered.contains("[REDACTED]"));
+        }
     }
 
     #[test]

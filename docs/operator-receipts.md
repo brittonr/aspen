@@ -14,7 +14,7 @@ Aspen has two operator-facing receipt surfaces for self-hosting evidence:
 1. **Dogfood run receipts** from `nix run .#dogfood-local -- full`, which prove the local self-hosting loop reached Forge push, native CI build, deploy, verification, receipt publish, and cleanup.
 2. **Native CI run receipts** from `aspen-cli ci receipt <run-id>`, which summarize one CI pipeline run with schema-versioned stage/job/artifact metadata.
 
-Receipts are evidence summaries, not secret stores. Do not paste cluster tickets, bearer tokens, cookies, private keys, or connection strings into receipts or incident notes; redact them as `[REDACTED]`.
+Receipts are evidence summaries, not secret stores. Do not paste cluster tickets, bearer tokens, cookies, private keys, or connection strings into receipts or incident notes; redact them as `[REDACTED]`. Operator-visible receipt commands, including human and JSON output from dogfood receipt views and `aspen-cli ci receipt`, redact configured secret markers, `aspen://` ticket material, token/cookie/password/private-key fields, and unsafe connection strings while preserving non-secret run IDs, stage/job names, statuses, bounded failure categories, artifact hashes, and Nix store paths needed for diagnosis.
 
 ## Dogfood run receipts
 
@@ -241,5 +241,6 @@ Before citing a dogfood or CI receipt as evidence:
 - Confirm every required dogfood stage or CI stage/job has a success status.
 - Confirm duration/timestamp fields are present where expected.
 - Confirm artifact metadata is present for jobs expected to produce artifacts.
+- Confirm copied receipt output contains redaction placeholders rather than raw tokens, tickets, cookies, private keys, connection strings, or synthetic secret markers.
 - Prefer cluster-backed dogfood readback (`cluster-show`) when proving Aspen stored its own final success receipt.
 - Redact secrets from copied logs and incident notes.

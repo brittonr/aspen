@@ -473,7 +473,8 @@ fn cmd_receipts_show(config: &RunConfig, args: &ShowReceiptArgs) -> DogfoodResul
     let path = resolve_receipt_selector(config, &args.run_id_or_path);
     let receipt = load_receipt_file(&path)?;
     if args.json {
-        let bytes = receipt.canonical_json_bytes().map_err(|error| DogfoodError::Receipt {
+        let display_receipt = redacted_receipt_for_operator_output(&receipt);
+        let bytes = display_receipt.canonical_json_bytes().map_err(|error| DogfoodError::Receipt {
             operation: "serialize".to_string(),
             reason: error.to_string(),
         })?;
@@ -518,7 +519,8 @@ async fn cmd_receipts_cluster_show(config: &RunConfig, args: &ClusterShowReceipt
             reason: format!("cluster key {key}: {error}"),
         })?;
     if args.json {
-        let bytes = receipt.canonical_json_bytes().map_err(|error| DogfoodError::Receipt {
+        let display_receipt = redacted_receipt_for_operator_output(&receipt);
+        let bytes = display_receipt.canonical_json_bytes().map_err(|error| DogfoodError::Receipt {
             operation: "serialize".to_string(),
             reason: error.to_string(),
         })?;
@@ -748,21 +750,31 @@ fn render_receipt_summary(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> 
             elapsed_ms
         );
         for artifact in &stage.artifacts {
+            let store_id =
+                redact_operator_receipt_value("artifact.store_id", artifact.store_id.as_deref().unwrap_or("-"));
+            let blob_id = redact_operator_receipt_value("artifact.blob_id", artifact.blob_id.as_deref().unwrap_or("-"));
+            let digest = redact_operator_receipt_value("artifact.digest", artifact.digest.as_deref().unwrap_or("-"));
+            let relative_path = redact_operator_receipt_value(
+                "artifact.relative_path",
+                artifact.relative_path.as_deref().unwrap_or("-"),
+            );
             let _ = writeln!(
                 output,
                 "        artifact {} [{}] store_id={} blob_id={} digest={} size={} path={}",
-                artifact.name,
+                redact_operator_receipt_value("artifact.name", &artifact.name),
                 artifact.kind.as_str(),
-                artifact.store_id.as_deref().unwrap_or("-"),
-                artifact.blob_id.as_deref().unwrap_or("-"),
-                artifact.digest.as_deref().unwrap_or("-"),
+                store_id,
+                blob_id,
+                digest,
                 artifact.size_bytes.map(|size| size.to_string()).unwrap_or_else(|| "-".to_string()),
-                artifact.relative_path.as_deref().unwrap_or("-")
+                relative_path
             );
         }
         if let Some(failure) = &stage.failure {
-            let message = crate::error::redact_credential_fragments(&failure.message);
-            let _ = writeln!(output, "        failure {} [{}]: {}", failure.operation, failure.category, message);
+            let operation = redact_operator_receipt_value("failure.operation", &failure.operation);
+            let category = redact_operator_receipt_value("failure.category", &failure.category);
+            let message = redact_operator_receipt_value("failure.message", &failure.message);
+            let _ = writeln!(output, "        failure {operation} [{category}]: {message}");
         }
     }
     output
@@ -797,21 +809,22 @@ fn diagnose_receipt(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> String
     let _ = writeln!(output, "  failed_stage: {}", stage.stage.as_str());
     for artifact in &stage.artifacts {
         if artifact.kind == receipt::DogfoodArtifactKind::CiRun {
-            let _ = writeln!(output, "  ci_run_id: {}", artifact.store_id.as_deref().unwrap_or("-"));
+            let ci_run_id =
+                redact_operator_receipt_value("artifact.store_id", artifact.store_id.as_deref().unwrap_or("-"));
+            let _ = writeln!(output, "  ci_run_id: {ci_run_id}");
         } else {
-            let _ = writeln!(
-                output,
-                "  artifact: {} [{}] store_id={}",
-                artifact.name,
-                artifact.kind.as_str(),
-                artifact.store_id.as_deref().unwrap_or("-")
-            );
+            let name = redact_operator_receipt_value("artifact.name", &artifact.name);
+            let store_id =
+                redact_operator_receipt_value("artifact.store_id", artifact.store_id.as_deref().unwrap_or("-"));
+            let _ = writeln!(output, "  artifact: {} [{}] store_id={}", name, artifact.kind.as_str(), store_id);
         }
     }
     if let Some(failure) = &stage.failure {
-        let _ = writeln!(output, "  failure_category: {}", failure.category);
-        let _ = writeln!(output, "  failure_operation: {}", failure.operation);
-        let message = crate::error::redact_credential_fragments(&failure.message);
+        let category = redact_operator_receipt_value("failure.category", &failure.category);
+        let operation = redact_operator_receipt_value("failure.operation", &failure.operation);
+        let message = redact_operator_receipt_value("failure.message", &failure.message);
+        let _ = writeln!(output, "  failure_category: {category}");
+        let _ = writeln!(output, "  failure_operation: {operation}");
         let _ = writeln!(output, "  failure_message: {message}");
         let _ = writeln!(output, "  first_checks:");
         for check in dogfood_diagnosis_checks(stage.stage, &failure.category) {
@@ -827,6 +840,81 @@ fn diagnose_receipt(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> String
         );
     }
     output
+}
+
+const OPERATOR_REDACTED: &str = "[REDACTED]";
+
+fn redacted_receipt_for_operator_output(receipt: &receipt::DogfoodRunReceipt) -> receipt::DogfoodRunReceipt {
+    let mut redacted = receipt.clone();
+    for stage in &mut redacted.stages {
+        if let Some(failure) = &mut stage.failure {
+            failure.operation = redact_operator_receipt_value("failure.operation", &failure.operation);
+            failure.category = redact_operator_receipt_value("failure.category", &failure.category);
+            failure.message = redact_operator_receipt_value("failure.message", &failure.message);
+        }
+        for artifact in &mut stage.artifacts {
+            artifact.name = redact_operator_receipt_value("artifact.name", &artifact.name);
+            artifact.store_id =
+                artifact.store_id.as_deref().map(|value| redact_operator_receipt_value("artifact.store_id", value));
+            artifact.blob_id =
+                artifact.blob_id.as_deref().map(|value| redact_operator_receipt_value("artifact.blob_id", value));
+            artifact.digest =
+                artifact.digest.as_deref().map(|value| redact_operator_receipt_value("artifact.digest", value));
+            artifact.relative_path = artifact
+                .relative_path
+                .as_deref()
+                .map(|value| redact_operator_receipt_value("artifact.relative_path", value));
+        }
+    }
+    redacted
+}
+
+fn redact_operator_receipt_value(field: &str, value: &str) -> String {
+    if value == "-" || value.is_empty() {
+        return value.to_string();
+    }
+    if operator_receipt_field_is_sensitive(field) || operator_receipt_value_has_secret_marker(value) {
+        if value.contains("aspen://") && !operator_receipt_value_has_inline_secret_assignment(value) {
+            return crate::error::redact_credential_fragments(value);
+        }
+        return OPERATOR_REDACTED.to_string();
+    }
+    crate::error::redact_credential_fragments(value)
+}
+
+fn operator_receipt_value_has_inline_secret_assignment(value: &str) -> bool {
+    let value = value.to_ascii_lowercase();
+    ["password=", "token=", "cookie=", "private_key="].iter().any(|marker| value.contains(marker))
+}
+
+fn operator_receipt_field_is_sensitive(field: &str) -> bool {
+    let field = field.to_ascii_lowercase();
+    [
+        "token",
+        "ticket",
+        "cookie",
+        "password",
+        "private_key",
+        "secret",
+        "connection_string",
+    ]
+    .iter()
+    .any(|marker| field.contains(marker))
+}
+
+fn operator_receipt_value_has_secret_marker(value: &str) -> bool {
+    let value = value.to_ascii_lowercase();
+    [
+        "synthetic-dogfood-ticket-marker",
+        "synthetic-secret-marker",
+        "-----begin private key-----",
+        "-----begin openssh private key-----",
+        "password=",
+        "token=",
+        "cookie=",
+    ]
+    .iter()
+    .any(|marker| value.contains(marker))
 }
 
 fn dogfood_diagnosis_checks(stage: receipt::DogfoodStageKind, category: &str) -> &'static [&'static str] {
@@ -1631,6 +1719,66 @@ mod tests {
         assert!(!output.contains(marker));
         assert!(!output.contains("synthetic-dogfood-ticket-marker"));
         assert!(output.contains("aspen://<cluster-ticket>/repo-123"));
+    }
+
+    #[test]
+    fn operator_receipt_json_display_redacts_legacy_secret_fields() {
+        let marker = "synthetic-dogfood-ticket-marker-0123456789";
+        let mut receipt =
+            sample_receipt("dogfood-json-redaction", "2026-05-03T01:00:00Z", receipt::DogfoodStageStatus::Failed);
+        receipt.stages[0].failure = Some(receipt::DogfoodFailureSummary {
+            operation: "Push".to_string(),
+            category: "git_push".to_string(),
+            message: format!("fatal: remote aspen://{marker}/repo-123 rejected update"),
+        });
+        receipt.stages[0].artifacts.push(receipt::DogfoodArtifactReceipt {
+            name: "token=synthetic-secret-marker".to_string(),
+            kind: receipt::DogfoodArtifactKind::LogExcerpt,
+            store_id: Some(format!("aspen://{marker}/logs")),
+            blob_id: Some("blob-safe".to_string()),
+            digest: Some("sha256:safe".to_string()),
+            size_bytes: Some(12),
+            relative_path: Some("logs/password=synthetic-secret-marker.log".to_string()),
+        });
+
+        let display_receipt = redacted_receipt_for_operator_output(&receipt);
+        let output = String::from_utf8(display_receipt.canonical_json_bytes().unwrap()).unwrap();
+
+        assert!(output.contains("dogfood-json-redaction"));
+        assert!(output.contains("[REDACTED]"));
+        assert!(!output.contains(marker));
+        assert!(!output.contains("synthetic-secret-marker"));
+        assert!(!output.contains("password="));
+        assert!(output.contains("blob-safe"));
+    }
+
+    #[test]
+    fn receipt_summary_redacts_secret_artifact_fields_but_keeps_metadata() {
+        let marker = "synthetic-dogfood-ticket-marker-0123456789";
+        let mut receipt = sample_receipt(
+            "dogfood-artifact-redaction",
+            "2026-05-03T01:00:00Z",
+            receipt::DogfoodStageStatus::Succeeded,
+        );
+        receipt.stages[0].artifacts.push(receipt::DogfoodArtifactReceipt {
+            name: "node-log".to_string(),
+            kind: receipt::DogfoodArtifactKind::LogExcerpt,
+            store_id: Some(format!("aspen://{marker}/logs")),
+            blob_id: Some("blob-safe".to_string()),
+            digest: Some("sha256:safe".to_string()),
+            size_bytes: Some(12),
+            relative_path: Some("logs/token=synthetic-secret-marker.log".to_string()),
+        });
+
+        let output = render_receipt_summary(&receipt, Path::new("/tmp/dogfood-artifact-redaction.json"));
+
+        assert!(output.contains("node-log [log_excerpt]"));
+        assert!(output.contains("store_id=aspen://<cluster-ticket>/logs"));
+        assert!(output.contains("blob_id=blob-safe"));
+        assert!(output.contains("digest=sha256:safe"));
+        assert!(output.contains("path=[REDACTED]"));
+        assert!(!output.contains(marker));
+        assert!(!output.contains("synthetic-secret-marker"));
     }
 
     #[test]
