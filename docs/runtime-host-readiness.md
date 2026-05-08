@@ -165,6 +165,14 @@ Do not treat any of the following as sufficient by themselves:
 
 ## How to reproduce
 
+Run the static acceptance-bundle consistency check before making or refreshing a runtime-host readiness claim:
+
+```bash
+scripts/test-harness.sh runtime-host-acceptance-bundle
+```
+
+This check verifies docs, suite manifests, generated inventory, proof markers, and non-proof wording. It does not execute gated microVM, Hyperlight, or Hermit/Uhyve proofs.
+
 The WASM and OCI lowering rows are cheap and do not require nested KVM:
 
 ```bash

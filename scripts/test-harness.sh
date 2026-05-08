@@ -18,6 +18,7 @@ Usage:
   scripts/test-harness.sh run  [--suite ID] [--layer LAYER] [--owner OWNER] [--runtime-class CLASS] [--tag TAG]
   scripts/test-harness.sh report [--junit-xml PATH] [--output PATH]
   scripts/test-harness.sh coverage
+  scripts/test-harness.sh runtime-host-acceptance-bundle
 EOF
 }
 
@@ -217,6 +218,11 @@ case "$subcommand" in
     ;;
   coverage)
     run_inventory_tool coverage
+    ;;
+  runtime-host-acceptance-bundle)
+    cd "$repo_root"
+    ensure_inventory_is_current
+    "$repo_root/scripts/check-runtime-host-acceptance-bundle.py"
     ;;
   *)
     usage >&2
