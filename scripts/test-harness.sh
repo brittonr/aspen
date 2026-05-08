@@ -19,6 +19,7 @@ Usage:
   scripts/test-harness.sh report [--junit-xml PATH] [--output PATH]
   scripts/test-harness.sh coverage
   scripts/test-harness.sh runtime-host-acceptance-bundle
+  scripts/test-harness.sh quick-confidence [--dry-run] [--json] [--summary PATH]
 EOF
 }
 
@@ -223,6 +224,10 @@ case "$subcommand" in
     cd "$repo_root"
     ensure_inventory_is_current
     "$repo_root/scripts/check-runtime-host-acceptance-bundle.py"
+    ;;
+  quick-confidence)
+    cd "$repo_root"
+    "$repo_root/scripts/quick-confidence.py" "$@"
     ;;
   *)
     usage >&2

@@ -147,6 +147,7 @@ madsim for deterministic simulation, proptest/Bolero for property-based testing 
 - [KV Branching](docs/kv-branching.md)
 - [Observability](docs/observability.md)
 - [Operator Receipts](docs/operator-receipts.md)
+- [Quick Confidence Rail](docs/quick-confidence-rail.md)
 - [Runtime Applications](docs/runtime-applications.md)
 - [Runtime Host Readiness](docs/runtime-host-readiness.md)
 - [Plugin Development](docs/PLUGIN_DEVELOPMENT.md)
