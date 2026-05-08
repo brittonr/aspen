@@ -60,10 +60,11 @@ The guardrail marker `ASPEN_OCI_LOWERING_RUNTIME_HOST_PRODUCT_PATH_GUARD` separa
 OpenSpec change: openspec/changes/archive/2026-05-08-promote-hermit-uhyve-runtime-host-e2e
 matrix row: runtime-host-hermit-uhyve-product-path
 target: ASPEN_UHYVE=<uhyve> ASPEN_HERMIT_UHYVE_IMAGE=<x86_64-unknown-hermit image> cargo test -p aspen-jobs --test hermit_uhyve_product_path_test --features plugins-vm hermit_uhyve_executes_declared_fixture_through_product_orchestration -- --ignored --nocapture
+preferred fixture: nix build .#uhyve .#hermit-uhyve-marker plus checks.x86_64-linux.hermit-uhyve-marker-contract
 proof level: aspen-spawned-execution
 ```
 
-The Hermit/Uhyve proof submits a blob-backed `hermit_uhyve` job through `JobManager`, runs it through `WorkerPool` orchestration with `HermitUhyveWorker`, executes a real `x86_64-unknown-hermit` image using real Uhyve, and checks the product-visible receipt marker `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`.
+The Hermit/Uhyve proof submits a blob-backed `hermit_uhyve` job through `JobManager`, runs it through `WorkerPool` orchestration with `HermitUhyveWorker`, executes a real `x86_64-unknown-hermit` image using real Uhyve, and checks the product-visible receipt marker `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`. Prefer the source-built `.#hermit-uhyve-marker` fixture and `.#uhyve` package for reruns; the marker package build and metadata contract are reproducibility prerequisites only, not runtime-host proof by themselves. The fixture metadata pins `proof_boundary = fixture-build-is-not-runtime-host-proof`.
 
 The guardrail marker `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD` separates negative coverage from execution evidence: fake-Uhyve tests, direct Uhyve shell commands, package builds, successful exits without the expected marker, skipped/ignored tests not run on a capable host, and direct worker-only calls remain useful guardrails, but none satisfies the Hermit/Uhyve runtime-host row without the product-path job receipt.
 
@@ -140,7 +141,7 @@ A passing OCI lowering check is only runtime-host evidence when the test and rec
 A passing Hermit/Uhyve check is only runtime-host evidence when the test and receipt include these markers:
 
 - The harness row `runtime-host-hermit-uhyve-product-path` is `e2e-registered`, not `metadata-only`.
-- The target is `ASPEN_UHYVE=<uhyve> ASPEN_HERMIT_UHYVE_IMAGE=<x86_64-unknown-hermit image> cargo test -p aspen-jobs --test hermit_uhyve_product_path_test --features plugins-vm hermit_uhyve_executes_declared_fixture_through_product_orchestration -- --ignored --nocapture`.
+- The target is `ASPEN_UHYVE=<uhyve> ASPEN_HERMIT_UHYVE_IMAGE=<x86_64-unknown-hermit image> cargo test -p aspen-jobs --test hermit_uhyve_product_path_test --features plugins-vm hermit_uhyve_executes_declared_fixture_through_product_orchestration -- --ignored --nocapture`. Prefer `.#uhyve` and `.#hermit-uhyve-marker` outputs for those paths.
 - The successful job result contains `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`, `aspen:runtime-host/hermit-uhyve-v1`, and `engine: uhyve`.
 - The successful job records at least one `WorkerPool` execution attempt after submitting a blob-backed `hermit_uhyve` payload.
 - The negative guardrail contains `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD` and proves invalid payloads, non-zero exits, and successful Uhyve exits without the marker are not execution evidence.
@@ -160,7 +161,7 @@ Do not treat any of the following as sufficient by themselves:
 - OCI admission/model checks without a product-path target host execution receipt;
 - OCI lowering/build-only checks without submitting the derived isolated target artifact through Aspen orchestration;
 - raw container execution, dev/unsafe container paths, or mutable OCI tags alone;
-- fake-Uhyve tests, direct Uhyve shell commands, Hermit image package builds, skipped/ignored Hermit tests not run on a capable host, or successful Uhyve exits that do not emit `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`.
+- fake-Uhyve tests, direct Uhyve shell commands, Hermit image package builds such as `.#hermit-uhyve-marker`, metadata contract checks such as `hermit-uhyve-marker-contract`, skipped/ignored Hermit tests not run on a capable host, or successful Uhyve exits that do not emit `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`.
 
 ## How to reproduce
 
@@ -175,8 +176,10 @@ The Hermit/Uhyve row is gated because it requires real Uhyve, a valid Hermit ima
 
 ```bash
 uh=$(nix build .#uhyve --no-link --print-out-paths)
+marker=$(nix build .#hermit-uhyve-marker --no-link --print-out-paths)
+nix build .#checks.x86_64-linux.hermit-uhyve-marker-contract --no-link -L
 ASPEN_UHYVE="$uh/bin/uhyve" \
-ASPEN_HERMIT_UHYVE_IMAGE=<path-to-x86_64-unknown-hermit-marker-image> \
+ASPEN_HERMIT_UHYVE_IMAGE="$marker/bin/aspen-hermit-uhyve-marker" \
 cargo test -p aspen-jobs --test hermit_uhyve_product_path_test --features plugins-vm hermit_uhyve_executes_declared_fixture_through_product_orchestration -- --ignored --nocapture
 ```
 

@@ -154,6 +154,9 @@ fn runtime_host_readiness_doc_tracks_hermit_uhyve_product_path_contract() {
     assert!(doc.contains("aspen:runtime-host/hermit-uhyve-v1"));
     assert!(doc.contains("ASPEN_UHYVE"));
     assert!(doc.contains("ASPEN_HERMIT_UHYVE_IMAGE"));
+    assert!(doc.contains("hermit-uhyve-marker"));
+    assert!(doc.contains("hermit-uhyve-marker-contract"));
+    assert!(doc.contains("fixture-build-is-not-runtime-host-proof"));
 
     assert!(manifest.contains("runtime-host-hermit-uhyve-product-path"));
     assert!(manifest.contains("aspen-spawned-execution"));
@@ -162,6 +165,8 @@ fn runtime_host_readiness_doc_tracks_hermit_uhyve_product_path_contract() {
     assert!(manifest.contains("plugins-vm"));
     assert!(manifest.contains("ignored-only"));
     assert!(manifest.contains("real-uhyve-runner"));
+    assert!(manifest.contains("packages.x86_64-linux.hermit-uhyve-marker"));
+    assert!(manifest.contains("checks.x86_64-linux.hermit-uhyve-marker-contract"));
 
     assert!(test.contains("ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED"));
     assert!(test.contains("ASPEN_HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD"));

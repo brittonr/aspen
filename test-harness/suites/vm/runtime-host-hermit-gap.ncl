@@ -26,6 +26,7 @@
   isolation_assumptions = [
     "The fixture is a real x86_64-unknown-hermit image accepted by Uhyve and emitting ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED.",
     "The positive proof is ignored by default and must be run deliberately on a Uhyve/KVM-capable host with ASPEN_UHYVE and ASPEN_HERMIT_UHYVE_IMAGE set.",
+    "Prefer the packaged .#uhyve runner and .#hermit-uhyve-marker image when reproducing the gated proof; the marker package build is prerequisite evidence only.",
     "Worker construction, payload serialization, package builds, direct Uhyve shell commands, fake-Uhyve guardrails, ignored tests not run, and direct worker-only calls are guardrails only and do not satisfy this row.",
   ],
   runtime_host = {
@@ -34,7 +35,11 @@
     support_status = "e2e-registered",
   },
   timeout_class = "extended",
-  expected_artifacts = [],
+  expected_artifacts = [
+    { path = "packages.x86_64-linux.uhyve", kind = "nix-package" },
+    { path = "packages.x86_64-linux.hermit-uhyve-marker", kind = "nix-package" },
+    { path = "checks.x86_64-linux.hermit-uhyve-marker-contract", kind = "nix-check" },
+  ],
   convergence_assertions = [
     "ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED appears in the job result receipt",
     "ASPEN_HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD distinguishes negative guardrails from execution evidence",

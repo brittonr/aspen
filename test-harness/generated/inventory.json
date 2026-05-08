@@ -15,7 +15,7 @@
       "test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl",
       "test-harness/suites/vm/runtime-host-wasm-gap.ncl"
     ],
-    "inputs_sha256": "9568f964d6f7d933f480c655dc3c7cced6a5fae55c0446dcc43420a2530475b5"
+    "inputs_sha256": "aad04ac0dffdcfa0b987829f29c8d9848b46fa66bab385f66ff5908ae75ed296"
   },
   "suites": [
     {

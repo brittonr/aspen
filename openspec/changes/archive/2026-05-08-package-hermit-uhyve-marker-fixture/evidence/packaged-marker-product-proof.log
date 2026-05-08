@@ -1,0 +1,38 @@
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+   Compiling iroh-relay v0.98.0 (/home/brittonr/git/aspen/vendor/iroh-relay)
+warning: unused imports: `mk_uty_arrow`, `mk_uty_enum`, `mk_uty_record_row`, and `mk_uty_record`
+  --> vendor/nickel-lang-core-0.16.1/src/typecheck/mod.rs:66:5
+   |
+66 |     mk_uty_arrow, mk_uty_enum, mk_uty_record, mk_uty_record_row,
+   |     ^^^^^^^^^^^^  ^^^^^^^^^^^  ^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: value assigned to `suffix` is never read
+  --> vendor/nickel-lang-core-0.16.1/src/typecheck/reporting.rs:90:17
+   |
+90 |                 suffix += 1;
+   |                 ^^^^^^^^^^^
+   |
+   = help: maybe it is overwritten before being read?
+   = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: `nickel-lang-core` (lib) generated 2 warnings (run `cargo fix --lib -p nickel-lang-core` to apply 1 suggestion)
+   Compiling iroh v0.98.2 (/home/brittonr/git/aspen/vendor/iroh)
+   Compiling iroh-blobs v0.99.0 (/home/brittonr/git/aspen/vendor/iroh-blobs)
+   Compiling aspen-core-shell v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core-shell)
+   Compiling aspen-testing v0.1.0 (/home/brittonr/git/aspen/crates/aspen-testing)
+   Compiling aspen-blob v0.1.0 (/home/brittonr/git/aspen/crates/aspen-blob)
+   Compiling aspen-jobs v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.26s
+     Running tests/hermit_uhyve_product_path_test.rs (target/debug/deps/hermit_uhyve_product_path_test-e6d63e618aad88b6)
+
+running 1 test
+test hermit_uhyve_executes_declared_fixture_through_product_orchestration ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.15s

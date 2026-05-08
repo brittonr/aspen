@@ -2915,6 +2915,32 @@
                 echo "ciSrc has no unvendored git deps" > $out
               '';
 
+              hermit-uhyve-marker-contract =
+                pkgs.runCommand "hermit-uhyve-marker-contract" {
+                  nativeBuildInputs = [pkgs.jq];
+                } ''
+                  marker_pkg=${self.packages.${system}.hermit-uhyve-marker}
+                  image="$marker_pkg/bin/aspen-hermit-uhyve-marker"
+                  metadata="$marker_pkg/share/aspen/hermit-uhyve-marker/metadata.json"
+
+                  test -f "$image"
+                  test -r "$image"
+                  test -x "$image"
+                  test -f "$metadata"
+
+                  jq -e \
+                    '.schema == "aspen.hermit-uhyve-marker.v1"
+                     and .source == "hermit-os/uhyve"
+                     and .source_rev == "8ca08f93a2294ce8283f0f9226ae6b21aea3d20d"
+                     and .target_triple == "x86_64-unknown-hermit"
+                     and .expected_marker == "ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED"
+                     and .image_path == "bin/aspen-hermit-uhyve-marker"
+                     and .proof_boundary == "fixture-build-is-not-runtime-host-proof"' \
+                    "$metadata" > /dev/null
+
+                  cp "$metadata" "$out"
+                '';
+
               openspec-canonical-hygiene =
                 pkgs.runCommand "openspec-canonical-hygiene" {
                   nativeBuildInputs = [pkgs.python3];
@@ -5435,6 +5461,15 @@
               verus-root = verusRoot;
               # Z3 4.12.5 (required by Verus)
               z3 = z3_4_12_5;
+              hermit-uhyve-marker = pkgs.callPackage ./nix/packages/hermit-uhyve-marker.nix {
+                rustToolchain = pkgs.rust-bin.nightly."2026-04-19".default.override {
+                  extensions = [
+                    "rust-src"
+                    "llvm-tools"
+                  ];
+                  targets = ["x86_64-unknown-none"];
+                };
+              };
               uhyve = pkgs.callPackage ./nix/packages/uhyve.nix {};
             }
             // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") (
