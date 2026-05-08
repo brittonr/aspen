@@ -782,9 +782,11 @@
             ./rust-toolchain.toml
             ./flake.nix
             ./flake.lock
-            # Tests in workspace crates use include_str! against operator docs.
-            # Keep docs in the CI source snapshot so all-targets lint gates compile.
+            # Tests in workspace crates read operator docs, harness manifests, and VM test specs.
+            # Keep them in the CI source snapshot so all-targets lint gates compile.
             (filteredTree ./docs)
+            (filteredTree ./test-harness)
+            (filteredTree ./nix/tests)
             (filteredTree ./src)
             (filteredTree ./crates)
             (filteredTree ./openraft)
