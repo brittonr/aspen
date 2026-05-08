@@ -15,7 +15,7 @@
       "test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl",
       "test-harness/suites/vm/runtime-host-wasm-gap.ncl"
     ],
-    "inputs_sha256": "362f7646ba638579d24aa8c73484f7970d134cda6cc0603f42b3060210a7ccd5"
+    "inputs_sha256": "0363ed76c8beedb21df86e3ab08a84acb4503046f983d3eaeb87722c6e1ca2a0"
   },
   "suites": [
     {
@@ -367,33 +367,36 @@
       }
     },
     {
-      "id": "runtime-host-wasm-gap",
-      "display_name": "Runtime host WASM runner E2E gap",
-      "description": "Metadata-only row: Aspen has WASM admission/lifecycle model coverage and plugin plumbing, but no registered suite that boots Aspen and executes a WASM component through the real runtime path.",
-      "layer": "vm",
-      "owner": "runtime-host-loading",
-      "runtime_class": "metadata-only",
+      "id": "runtime-host-wasm-product-path",
+      "display_name": "Runtime host WASM product-path E2E",
+      "description": "Runs a declared WASM unit through Aspen job-manager and worker-pool orchestration, retrieves the unit from blob storage, executes its exported entrypoint, and checks product-visible receipt markers.",
+      "layer": "rust-integration",
+      "owner": "runtime-host",
+      "runtime_class": "real-network",
       "runtime_host": {
         "kind": "wasm",
-        "proof_level": "gap",
-        "support_status": "gap",
-        "gap_reason": "No suite currently starts Aspen with the real WASM runtime path, invokes a component through product RPC/host-call flow, and asserts product-visible output or receipt evidence."
+        "proof_level": "aspen-spawned-execution",
+        "support_status": "e2e-registered",
+        "gap_reason": null
       },
       "prerequisites": [],
       "tags": [
-        "gap",
-        "metadata-only",
+        "e2e",
+        "jobs",
+        "product-path",
         "runtime-host",
         "wasm"
       ],
       "manifest_path": "test-harness/suites/vm/runtime-host-wasm-gap.ncl",
       "target": {
-        "kind": "metadata-only",
-        "package": null,
-        "test": null,
+        "kind": "cargo-nextest",
+        "package": "aspen-jobs",
+        "test": "wasm_product_path_test",
         "profile": null,
-        "features": [],
-        "run_ignored": null,
+        "features": [
+          "plugins-wasm"
+        ],
+        "run_ignored": "default",
         "flake_attr": null,
         "check_attr": null,
         "nix_file": null,

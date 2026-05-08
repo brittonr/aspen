@@ -39,3 +39,31 @@ fn runtime_host_readiness_doc_tracks_microvm_e2e_contract() {
     assert!(test.contains("All stress test jobs completed"));
     assert!(test.contains("timeout_secs"));
 }
+
+#[test]
+fn runtime_host_readiness_doc_tracks_wasm_product_path_contract() {
+    let Some(doc) = read_repo_file("docs/runtime-host-readiness.md") else {
+        return;
+    };
+    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-wasm-gap.ncl")
+        .expect("wasm runtime-host harness row should exist when docs are present");
+    let test = std::fs::read_to_string("crates/aspen-jobs/tests/wasm_product_path_test.rs")
+        .expect("wasm product-path test should exist when docs are present");
+
+    assert!(doc.contains("runtime-host-wasm-product-path"));
+    assert!(doc.contains("cargo test -p aspen-jobs --test wasm_product_path_test --features plugins-wasm"));
+    assert!(doc.contains("ASPEN_WASM_RUNTIME_HOST_EXECUTED"));
+    assert!(doc.contains("ASPEN_WASM_RUNTIME_HOST_PRODUCT_PATH_GUARD"));
+    assert!(doc.contains("aspen:runtime-host/wasm-v1"));
+
+    assert!(manifest.contains("runtime-host-wasm-product-path"));
+    assert!(manifest.contains("aspen-spawned-execution"));
+    assert!(manifest.contains("e2e-registered"));
+    assert!(manifest.contains("wasm_product_path_test"));
+    assert!(manifest.contains("plugins-wasm"));
+
+    assert!(test.contains("ASPEN_WASM_RUNTIME_HOST_EXECUTED"));
+    assert!(test.contains("ASPEN_WASM_RUNTIME_HOST_PRODUCT_PATH_GUARD"));
+    assert!(test.contains("JobManager"));
+    assert!(test.contains("WorkerPool"));
+}
