@@ -22,6 +22,7 @@ The initial bounded command set is intentionally composed from existing local ch
 
 - `scripts/test-harness.sh check` — verifies generated test-harness inventory freshness and manifest validity.
 - `scripts/test-harness.sh runtime-host-acceptance-bundle` — checks runtime-host acceptance-bundle documentation, inventory, marker, and non-proof consistency without executing gated runtime hosts.
+- `scripts/test-harness.sh public-api-boundary` — checks that the reusable `aspen-testing` default public API does not accidentally pull VM, patchbay, madsim, runtime-app, forge, CI, jobs, or Raft adapters into the default dependency graph.
 - `cargo test --test operator_receipts_docs -- --nocapture` — keeps operator receipt safety documentation discoverable and consistent.
 - `cargo test --test runtime_host_readiness_docs -- --nocapture` — keeps runtime-host readiness documentation and guardrails discoverable and consistent.
 - `openspec validate --all --strict --json` — validates active and canonical OpenSpec state.

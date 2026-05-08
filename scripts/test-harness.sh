@@ -19,6 +19,7 @@ Usage:
   scripts/test-harness.sh report [--junit-xml PATH] [--output PATH]
   scripts/test-harness.sh coverage
   scripts/test-harness.sh runtime-host-acceptance-bundle
+  scripts/test-harness.sh public-api-boundary
   scripts/test-harness.sh quick-confidence [--dry-run] [--json] [--summary PATH]
 EOF
 }
@@ -224,6 +225,10 @@ case "$subcommand" in
     cd "$repo_root"
     ensure_inventory_is_current
     "$repo_root/scripts/check-runtime-host-acceptance-bundle.py"
+    ;;
+  public-api-boundary)
+    cd "$repo_root"
+    "$repo_root/scripts/check-aspen-testing-public-api-boundary.py"
     ;;
   quick-confidence)
     cd "$repo_root"

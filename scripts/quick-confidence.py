@@ -49,6 +49,11 @@ CHECKS: tuple[Check, ...] = (
         diagnostic="Inspect docs/runtime-host-readiness.md, test-harness/generated/inventory.json, and scripts/check-runtime-host-acceptance-bundle.py.",
     ),
     Check(
+        name="testing-public-api-boundary",
+        command=["scripts/test-harness.sh", "public-api-boundary"],
+        diagnostic="Inspect crates/aspen-testing/Cargo.toml and scripts/check-aspen-testing-public-api-boundary.py.",
+    ),
+    Check(
         name="operator-receipts-docs",
         command=["cargo", "test", "--test", "operator_receipts_docs", "--", "--nocapture"],
         diagnostic="Inspect docs/operator-receipts.md and tests/operator_receipts_docs.rs.",

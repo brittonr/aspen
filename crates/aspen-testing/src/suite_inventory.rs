@@ -72,6 +72,25 @@ pub struct SuiteInventoryMetadata {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InventoryCheckReport {
+    pub current: bool,
+    pub diagnostics: Vec<InventoryCheckDiagnostic>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InventoryCheckDiagnostic {
+    pub code: String,
+    pub severity: InventoryCheckSeverity,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum InventoryCheckSeverity {
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SuiteInventoryRecord {
     pub id: String,
     pub display_name: Option<String>,
@@ -320,11 +339,50 @@ pub fn write_inventory(inventory: &SuiteInventory, output_path: &Path) -> Result
 }
 
 pub fn ensure_inventory_is_current(inventory: &SuiteInventory, output_path: &Path) -> Result<()> {
-    let expected = render_inventory_json(inventory)?;
-    let actual = fs::read_to_string(output_path)
-        .with_context(|| format!("failed to read generated inventory {}", output_path.display()))?;
-    ensure!(actual == expected, "{GENERATED_STALE_MESSAGE}");
+    let report = check_inventory_current(inventory, output_path)?;
+    ensure!(report.current, "{}", render_inventory_check_diagnostics(&report));
     Ok(())
+}
+
+pub fn check_inventory_current(inventory: &SuiteInventory, output_path: &Path) -> Result<InventoryCheckReport> {
+    let expected = render_inventory_json(inventory)?;
+    let actual = match fs::read_to_string(output_path) {
+        Ok(actual) => actual,
+        Err(err) => {
+            return Ok(InventoryCheckReport {
+                current: false,
+                diagnostics: vec![InventoryCheckDiagnostic {
+                    code: "generated-inventory-read-error".to_string(),
+                    severity: InventoryCheckSeverity::Error,
+                    message: format!("failed to read generated inventory {}: {err}", output_path.display()),
+                }],
+            });
+        }
+    };
+    if actual == expected {
+        return Ok(InventoryCheckReport {
+            current: true,
+            diagnostics: Vec::new(),
+        });
+    }
+
+    Ok(InventoryCheckReport {
+        current: false,
+        diagnostics: vec![InventoryCheckDiagnostic {
+            code: "suite-inventory-stale".to_string(),
+            severity: InventoryCheckSeverity::Error,
+            message: GENERATED_STALE_MESSAGE.to_string(),
+        }],
+    })
+}
+
+pub fn render_inventory_check_diagnostics(report: &InventoryCheckReport) -> String {
+    let messages = report.diagnostics.iter().map(|diagnostic| diagnostic.message.as_str()).collect::<Vec<_>>();
+    if messages.is_empty() {
+        "suite inventory is current".to_string()
+    } else {
+        messages.join("; ")
+    }
 }
 
 fn discover_manifest_paths(manifest_root: &Path) -> Result<Vec<PathBuf>> {
@@ -1059,6 +1117,62 @@ mod tests {
         let err = load_inventory(&repo.paths()).expect_err("duplicate check attrs must fail");
         let message = err.to_string();
         assert!(message.contains("duplicate target.check_attr `shared-vm-check`"));
+    }
+
+    #[test]
+    fn structured_inventory_check_reports_current_and_stale_states() {
+        let repo = TestRepo::new();
+        repo.write_manifest(
+            "rust/job-integration.ncl",
+            r#"
+            {
+              id = "job-integration",
+              layer = "rust-integration",
+              owner = "jobs",
+              runtime_class = "real-network",
+              prerequisites = ["network-access"],
+              tags = ["jobs"],
+              target = {
+                kind = "cargo-nextest",
+                package = "aspen",
+                test = "job_integration_test",
+              },
+            }
+            "#,
+        );
+
+        let original_inventory = load_inventory(&repo.paths()).expect("original inventory should load");
+        write_inventory(&original_inventory, &repo.paths().output_path).expect("inventory should write");
+        let current_report = check_inventory_current(&original_inventory, &repo.paths().output_path)
+            .expect("current inventory check should succeed");
+        assert!(current_report.current);
+        assert!(current_report.diagnostics.is_empty());
+
+        repo.write_manifest(
+            "rust/job-integration.ncl",
+            r#"
+            {
+              id = "job-integration",
+              layer = "rust-integration",
+              owner = "jobs",
+              runtime_class = "real-network",
+              prerequisites = ["network-access"],
+              tags = ["jobs", "updated"],
+              target = {
+                kind = "cargo-nextest",
+                package = "aspen",
+                test = "job_integration_test",
+              },
+            }
+            "#,
+        );
+        let updated_inventory = load_inventory(&repo.paths()).expect("updated inventory should load");
+        let stale_report = check_inventory_current(&updated_inventory, &repo.paths().output_path)
+            .expect("stale inventory check should return diagnostics");
+        assert!(!stale_report.current);
+        assert_eq!(stale_report.diagnostics[0].code, "suite-inventory-stale");
+        assert_eq!(stale_report.diagnostics[0].severity, InventoryCheckSeverity::Error);
+        assert!(stale_report.diagnostics[0].message.contains(GENERATED_STALE_MESSAGE));
     }
 
     #[test]

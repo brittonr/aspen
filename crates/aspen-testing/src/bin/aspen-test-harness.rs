@@ -4,6 +4,7 @@ use anyhow::Context;
 use anyhow::Result;
 use aspen_testing::run_report;
 use aspen_testing::suite_inventory::InventoryPaths;
+use aspen_testing::suite_inventory::check_inventory_current;
 use aspen_testing::suite_inventory::ensure_inventory_is_current;
 use aspen_testing::suite_inventory::load_inventory;
 use aspen_testing::suite_inventory::write_inventory;
@@ -23,7 +24,11 @@ enum Command {
     /// Regenerate the committed suite inventory from Nickel manifests.
     Export,
     /// Fail if the committed suite inventory is stale or invalid.
-    Check,
+    Check {
+        /// Emit structured JSON diagnostics instead of human text.
+        #[arg(long)]
+        json: bool,
+    },
     /// Generate a JSON run report from nextest JUnit XML.
     Report {
         /// Path to nextest JUnit XML file.
@@ -48,10 +53,20 @@ fn main() -> Result<()> {
             println!("wrote {}", paths.output_path.display());
             Ok(())
         }
-        Command::Check => {
-            ensure_inventory_is_current(&inventory, &paths.output_path)?;
-            println!("suite inventory is current");
-            Ok(())
+        Command::Check { json } => {
+            let report = check_inventory_current(&inventory, &paths.output_path)?;
+            if json {
+                let payload = serde_json::to_string_pretty(&report).context("serializing inventory check report")?;
+                println!("{payload}");
+            } else {
+                ensure_inventory_is_current(&inventory, &paths.output_path)?;
+                println!("suite inventory is current");
+            }
+            if report.current {
+                Ok(())
+            } else {
+                anyhow::bail!("suite inventory check failed")
+            }
         }
         Command::Report { junit_xml, output } => {
             let report = run_report::parse_junit_xml(&junit_xml).map_err(|e| anyhow::anyhow!("{e}"))?;

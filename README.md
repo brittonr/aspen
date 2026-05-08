@@ -148,6 +148,7 @@ madsim for deterministic simulation, proptest/Bolero for property-based testing 
 - [Observability](docs/observability.md)
 - [Operator Receipts](docs/operator-receipts.md)
 - [Quick Confidence Rail](docs/quick-confidence-rail.md)
+- [Testing Harness Public API Boundary](docs/testing-harness-public-api.md)
 - [Runtime Applications](docs/runtime-applications.md)
 - [Runtime Host Readiness](docs/runtime-host-readiness.md)
 - [Plugin Development](docs/PLUGIN_DEVELOPMENT.md)
