@@ -562,70 +562,73 @@
   # these paths exist and tries to rebuild FODs (rust toolchain, crate
   # tarballs), which fails when VM DNS is unreliable.
   # closureInfo produces a /registration file with nix-store --dump-db format.
-  boot.postBootCommands = ''
-    mkdir -p /tmp/workspaces
+  boot.postBootCommands =
+    ''
+      mkdir -p /tmp/workspaces
 
-    # The direct Cloud Hypervisor path currently starts the worker from this
-    # post-boot hook because systemd target isolation is unreliable under the
-    # tmpfs-root snapshot boot. Configure the guest TAP network here as well;
-    # otherwise the worker can start before systemd-networkd runs and Iroh dials
-    # fail with ENETUNREACH even though the host bridge/TAP exists.
-    vm_ip=10.200.0.10
-    for arg in $(cat /proc/cmdline); do
-      case "$arg" in
-        ip=*)
-          ip_cfg=''${arg#ip=}
-          vm_ip=''${ip_cfg%%:*}
-          ;;
-      esac
-    done
+      # The direct Cloud Hypervisor path currently starts the worker from this
+      # post-boot hook because systemd target isolation is unreliable under the
+      # tmpfs-root snapshot boot. Configure the guest TAP network here as well;
+      # otherwise the worker can start before systemd-networkd runs and Iroh dials
+      # fail with ENETUNREACH even though the host bridge/TAP exists.
+      vm_ip=10.200.0.10
+      for arg in $(cat /proc/cmdline); do
+        case "$arg" in
+          ip=*)
+            ip_cfg=''${arg#ip=}
+            vm_ip=''${ip_cfg%%:*}
+            ;;
+        esac
+      done
 
-    # The direct boot path can reach postBootCommands before udev has named the
-    # virtio-net device. Load the driver and wait for the first non-loopback
-    # interface instead of assuming eth0 exists immediately.
-    ${pkgs.kmod}/bin/modprobe virtio_net >/dev/null 2>&1 || true
-    net_dev=
-    for _ in $(seq 1 100); do
-      for dev_path in /sys/class/net/*; do
-        dev=''${dev_path##*/}
-        if [ "$dev" != "lo" ] && [ -e "$dev_path" ]; then
-          net_dev=$dev
+      # The direct boot path can reach postBootCommands before udev has named the
+      # virtio-net device. Load the driver and wait for the first non-loopback
+      # interface instead of assuming eth0 exists immediately.
+      ${pkgs.kmod}/bin/modprobe virtio_net >/dev/null 2>&1 || true
+      net_dev=
+      for _ in $(seq 1 100); do
+        for dev_path in /sys/class/net/*; do
+          dev=''${dev_path##*/}
+          if [ "$dev" != "lo" ] && [ -e "$dev_path" ]; then
+            net_dev=$dev
+            break
+          fi
+        done
+        if [ -n "$net_dev" ]; then
           break
         fi
+        sleep 0.1
       done
-      if [ -n "$net_dev" ]; then
-        break
-      fi
-      sleep 0.1
-    done
 
-    if [ -n "$net_dev" ]; then
-      ${pkgs.iproute2}/bin/ip link set dev "$net_dev" up || true
-      ${pkgs.iproute2}/bin/ip addr replace "$vm_ip/24" dev "$net_dev" || true
-      ${pkgs.iproute2}/bin/ip route replace default via 10.200.0.1 dev "$net_dev" || true
-    fi
-    echo "ASPEN_CI_NET_CONFIG ip=$vm_ip dev=''${net_dev:-missing}" >/dev/ttyS0
-    ${pkgs.iproute2}/bin/ip addr show >/dev/ttyS0 2>&1 || true
-    ${pkgs.iproute2}/bin/ip route show >/dev/ttyS0 2>&1 || true
-  '' + lib.optionalString (ciBuildClosureInfo != null) ''
-    if [ -f ${ciBuildClosureInfo}/registration ]; then
-      ${pkgs.nix}/bin/nix-store --load-db < ${ciBuildClosureInfo}/registration
-    fi
-  '' + ''
-    (
-      export HOME=/root
-      export NIX_PATH=
-      export NIX_CONFIG='experimental-features = nix-command flakes'
-      export ASPEN_MODE=ci_worker
-      export ASPEN_CLUSTER_TICKET_FILE=/workspace/.aspen-cluster-ticket
-      export ASPEN_WORKER_JOB_TYPES=ci_vm
-      export ASPEN_CI_WORKSPACE_DIR=/tmp/workspaces
-      export RUST_LOG=info,aspen=debug,iroh=debug,iroh_net=debug
-      export ASPEN_IROH_ENABLE_MDNS=false
-      cd /workspace
-      exec ${aspenNodePackage}/bin/aspen-node --worker-only --disable-mdns
-    ) >/dev/ttyS0 2>&1 &
-    guest_hostname=$(cat /proc/sys/kernel/hostname 2>/dev/null || true)
-    echo "ASPEN_CI_SNAPSHOT_READY host=$guest_hostname ticket=$([ -f /workspace/.aspen-cluster-ticket ] && echo present || echo missing)" >/dev/ttyS0
-  '';
+      if [ -n "$net_dev" ]; then
+        ${pkgs.iproute2}/bin/ip link set dev "$net_dev" up || true
+        ${pkgs.iproute2}/bin/ip addr replace "$vm_ip/24" dev "$net_dev" || true
+        ${pkgs.iproute2}/bin/ip route replace default via 10.200.0.1 dev "$net_dev" || true
+      fi
+      echo "ASPEN_CI_NET_CONFIG ip=$vm_ip dev=''${net_dev:-missing}" >/dev/ttyS0
+      ${pkgs.iproute2}/bin/ip addr show >/dev/ttyS0 2>&1 || true
+      ${pkgs.iproute2}/bin/ip route show >/dev/ttyS0 2>&1 || true
+    ''
+    + lib.optionalString (ciBuildClosureInfo != null) ''
+      if [ -f ${ciBuildClosureInfo}/registration ]; then
+        ${pkgs.nix}/bin/nix-store --load-db < ${ciBuildClosureInfo}/registration
+      fi
+    ''
+    + ''
+      (
+        export HOME=/root
+        export NIX_PATH=
+        export NIX_CONFIG='experimental-features = nix-command flakes'
+        export ASPEN_MODE=ci_worker
+        export ASPEN_CLUSTER_TICKET_FILE=/workspace/.aspen-cluster-ticket
+        export ASPEN_WORKER_JOB_TYPES=ci_vm
+        export ASPEN_CI_WORKSPACE_DIR=/tmp/workspaces
+        export RUST_LOG=info,aspen=debug,iroh=debug,iroh_net=debug
+        export ASPEN_IROH_ENABLE_MDNS=false
+        cd /workspace
+        exec ${aspenNodePackage}/bin/aspen-node --worker-only --disable-mdns
+      ) >/dev/ttyS0 2>&1 &
+      guest_hostname=$(cat /proc/sys/kernel/hostname 2>/dev/null || true)
+      echo "ASPEN_CI_SNAPSHOT_READY host=$guest_hostname ticket=$([ -f /workspace/.aspen-cluster-ticket ] && echo present || echo missing)" >/dev/ttyS0
+    '';
 }

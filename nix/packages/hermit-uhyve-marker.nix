@@ -5,9 +5,7 @@
   rustToolchain,
   cacert,
   git,
-}:
-
-let
+}: let
   expectedMarker = "ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED";
   targetTriple = "x86_64-unknown-hermit";
   sourceRev = "8ca08f93a2294ce8283f0f9226ae6b21aea3d20d";
@@ -29,7 +27,7 @@ let
     version = "0.1.0-unstable-2026-05-08";
     src = uhyveSrc;
 
-    nativeBuildInputs = [ rustToolchain git ];
+    nativeBuildInputs = [rustToolchain git];
 
     SSL_CERT_FILE = "${cacert}/etc/ssl/certs/ca-bundle.crt";
     GIT_SSL_CAINFO = "${cacert}/etc/ssl/certs/ca-bundle.crt";
@@ -81,124 +79,124 @@ let
     '';
   };
 in
-stdenv.mkDerivation {
-  pname = "hermit-uhyve-marker";
-  version = "0.1.0-unstable-2026-05-08";
+  stdenv.mkDerivation {
+    pname = "hermit-uhyve-marker";
+    version = "0.1.0-unstable-2026-05-08";
 
-  src = uhyveSrc;
+    src = uhyveSrc;
 
-  nativeBuildInputs = [ rustToolchain git ];
+    nativeBuildInputs = [rustToolchain git];
 
-  # Cargo.lock plus the fixed-output vendor derivation pins registry/git inputs.
-  # This source-built fixture is prerequisite evidence only; it is not
-  # runtime-host execution proof by itself.
-  dontStrip = true;
-  dontPatchELF = true;
+    # Cargo.lock plus the fixed-output vendor derivation pins registry/git inputs.
+    # This source-built fixture is prerequisite evidence only; it is not
+    # runtime-host execution proof by itself.
+    dontStrip = true;
+    dontPatchELF = true;
 
-  postPatch = ''
-    substituteInPlace tests/test-kernels/Cargo.toml \
-      --replace-fail 'git = "https://github.com/hermit-os/hermit-rs.git"' 'path = "../../hermit-src/hermit"' \
-      --replace-fail 'tag = "hermit-0.13.2"' ""
-    cp -R ${hermitSrc} hermit-src
-    chmod -R u+w hermit-src
-    cat >> tests/test-kernels/Cargo.toml <<'TOML'
+    postPatch = ''
+      substituteInPlace tests/test-kernels/Cargo.toml \
+        --replace-fail 'git = "https://github.com/hermit-os/hermit-rs.git"' 'path = "../../hermit-src/hermit"' \
+        --replace-fail 'tag = "hermit-0.13.2"' ""
+      cp -R ${hermitSrc} hermit-src
+      chmod -R u+w hermit-src
+      cat >> tests/test-kernels/Cargo.toml <<'TOML'
 
-    [workspace]
-    TOML
-    mkdir -p tests/test-kernels/src/bin .cargo
-    cat > tests/test-kernels/src/bin/aspen_marker.rs <<'RS'
-    #[cfg(target_os = "hermit")]
-    use hermit as _;
+      [workspace]
+      TOML
+      mkdir -p tests/test-kernels/src/bin .cargo
+      cat > tests/test-kernels/src/bin/aspen_marker.rs <<'RS'
+      #[cfg(target_os = "hermit")]
+      use hermit as _;
 
-    fn main() {
-        println!("ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED");
-    }
-    RS
-    cat > .cargo/config.toml <<'TOML'
-    [source.crates-io]
-    replace-with = "vendored-sources"
+      fn main() {
+          println!("ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED");
+      }
+      RS
+      cat > .cargo/config.toml <<'TOML'
+      [source.crates-io]
+      replace-with = "vendored-sources"
 
-    [source."git+https://github.com/hermit-os/async-executor.git?branch=no_std"]
-    git = "https://github.com/hermit-os/async-executor.git"
-    branch = "no_std"
-    replace-with = "vendored-sources"
+      [source."git+https://github.com/hermit-os/async-executor.git?branch=no_std"]
+      git = "https://github.com/hermit-os/async-executor.git"
+      branch = "no_std"
+      replace-with = "vendored-sources"
 
-    [source."git+https://github.com/hermit-os/safe-mmio?branch=be"]
-    git = "https://github.com/hermit-os/safe-mmio"
-    branch = "be"
-    replace-with = "vendored-sources"
+      [source."git+https://github.com/hermit-os/safe-mmio?branch=be"]
+      git = "https://github.com/hermit-os/safe-mmio"
+      branch = "be"
+      replace-with = "vendored-sources"
 
-    [source.vendored-sources]
-    directory = "${cargoVendor}"
-    TOML
-    mkdir -p hermit-src/.cargo
-    cp .cargo/config.toml hermit-src/.cargo/config.toml
-  '';
+      [source.vendored-sources]
+      directory = "${cargoVendor}"
+      TOML
+      mkdir -p hermit-src/.cargo
+      cp .cargo/config.toml hermit-src/.cargo/config.toml
+    '';
 
-  buildPhase = ''
-    runHook preBuild
-    export HOME="$TMPDIR/home"
-    export CARGO_HOME="$TMPDIR/cargo-home"
-    mkdir -p "$HOME" "$CARGO_HOME" "$TMPDIR/bin"
-    cat > "$TMPDIR/bin/rustup" <<'SH'
-    #!${stdenv.shell}
-    if [ "$1" = "target" ] && [ "$2" = "add" ] && [ "$3" = "x86_64-unknown-none" ]; then
-      exit 0
-    fi
-    echo "unsupported rustup invocation: $*" >&2
-    exit 1
-    SH
-    chmod +x "$TMPDIR/bin/rustup"
-    export PATH="$TMPDIR/bin:$PATH"
-    export RUSTC_WRAPPER=
-    export CARGO_TARGET_X86_64_UNKNOWN_HERMIT_RUSTFLAGS="-C link-arg=--build-id=none -C metadata=aspenhermituhyvemarker"
-    export CARGO_INCREMENTAL=0
-    cargo build \
-      --offline \
-      --release \
-      -Zbuild-std=std,panic_abort \
-      --target ${targetTriple} \
-      --bin aspen_marker \
-      --manifest-path tests/test-kernels/Cargo.toml
-    runHook postBuild
-  '';
+    buildPhase = ''
+      runHook preBuild
+      export HOME="$TMPDIR/home"
+      export CARGO_HOME="$TMPDIR/cargo-home"
+      mkdir -p "$HOME" "$CARGO_HOME" "$TMPDIR/bin"
+      cat > "$TMPDIR/bin/rustup" <<'SH'
+      #!${stdenv.shell}
+      if [ "$1" = "target" ] && [ "$2" = "add" ] && [ "$3" = "x86_64-unknown-none" ]; then
+        exit 0
+      fi
+      echo "unsupported rustup invocation: $*" >&2
+      exit 1
+      SH
+      chmod +x "$TMPDIR/bin/rustup"
+      export PATH="$TMPDIR/bin:$PATH"
+      export RUSTC_WRAPPER=
+      export CARGO_TARGET_X86_64_UNKNOWN_HERMIT_RUSTFLAGS="-C link-arg=--build-id=none -C metadata=aspenhermituhyvemarker"
+      export CARGO_INCREMENTAL=0
+      cargo build \
+        --offline \
+        --release \
+        -Zbuild-std=std,panic_abort \
+        --target ${targetTriple} \
+        --bin aspen_marker \
+        --manifest-path tests/test-kernels/Cargo.toml
+      runHook postBuild
+    '';
 
-  installPhase = ''
-    runHook preInstall
+    installPhase = ''
+      runHook preInstall
 
-    image="tests/test-kernels/target/${targetTriple}/release/aspen_marker"
-    test -f "$image"
-    test -x "$image"
+      image="tests/test-kernels/target/${targetTriple}/release/aspen_marker"
+      test -f "$image"
+      test -x "$image"
 
-    mkdir -p "$out/bin" "$out/share/aspen/hermit-uhyve-marker"
-    cp "$image" "$out/bin/aspen-hermit-uhyve-marker"
-    chmod 0555 "$out/bin/aspen-hermit-uhyve-marker"
+      mkdir -p "$out/bin" "$out/share/aspen/hermit-uhyve-marker"
+      cp "$image" "$out/bin/aspen-hermit-uhyve-marker"
+      chmod 0555 "$out/bin/aspen-hermit-uhyve-marker"
 
-    cat > "$out/share/aspen/hermit-uhyve-marker/metadata.json" <<JSON
-    {
-      "schema": "aspen.hermit-uhyve-marker.v1",
-      "source": "hermit-os/uhyve",
-      "source_rev": "${sourceRev}",
-      "target_triple": "${targetTriple}",
-      "expected_marker": "${expectedMarker}",
-      "image_path": "bin/aspen-hermit-uhyve-marker",
-      "proof_boundary": "fixture-build-is-not-runtime-host-proof"
-    }
-    JSON
+      cat > "$out/share/aspen/hermit-uhyve-marker/metadata.json" <<JSON
+      {
+        "schema": "aspen.hermit-uhyve-marker.v1",
+        "source": "hermit-os/uhyve",
+        "source_rev": "${sourceRev}",
+        "target_triple": "${targetTriple}",
+        "expected_marker": "${expectedMarker}",
+        "image_path": "bin/aspen-hermit-uhyve-marker",
+        "proof_boundary": "fixture-build-is-not-runtime-host-proof"
+      }
+      JSON
 
-    runHook postInstall
-  '';
+      runHook postInstall
+    '';
 
-  passthru = {
-    inherit expectedMarker targetTriple;
-    imagePath = "/bin/aspen-hermit-uhyve-marker";
-    metadataPath = "/share/aspen/hermit-uhyve-marker/metadata.json";
-  };
+    passthru = {
+      inherit expectedMarker targetTriple;
+      imagePath = "/bin/aspen-hermit-uhyve-marker";
+      metadataPath = "/share/aspen/hermit-uhyve-marker/metadata.json";
+    };
 
-  meta = {
-    description = "Reproducible Hermit marker image for Aspen Uhyve runtime-host proof reruns";
-    homepage = "https://github.com/hermit-os/uhyve";
-    license = lib.licenses.mit;
-    platforms = [ "x86_64-linux" ];
-  };
-}
+    meta = {
+      description = "Reproducible Hermit marker image for Aspen Uhyve runtime-host proof reruns";
+      homepage = "https://github.com/hermit-os/uhyve";
+      license = lib.licenses.mit;
+      platforms = ["x86_64-linux"];
+    };
+  }
