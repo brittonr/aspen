@@ -5,8 +5,8 @@
 
 ## Phase 2: Baseline Measurement
 
-- [ ] [depends:inventory] Add or select a representative benchmark corpus covering real Nix store files, Aspen build artifacts, and synthetic small-delta mutations.
-- [ ] [depends:corpus] Capture FastCDC baseline evidence: CDC throughput, wall time, chunk-size distribution, chunk count, reuse/dedup ratio, and object/manifest impact.
+- [x] [depends:inventory] Add or select a representative benchmark corpus covering real Nix store files, Aspen build artifacts, and synthetic small-delta mutations. Evidence: `evidence/fastcdc-baseline.md` and `evidence/fastcdc-baseline-report.json`.
+- [x] [depends:corpus] Capture FastCDC baseline evidence: CDC throughput, wall time, chunk-size distribution, chunk count, reuse/dedup ratio, and object/manifest impact. Evidence: `evidence/fastcdc-baseline.md` and `evidence/fastcdc-baseline-report.json`.
 
 ## Phase 3: Candidate Evaluation
 

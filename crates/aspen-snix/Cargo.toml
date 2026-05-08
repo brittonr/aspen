@@ -68,6 +68,10 @@ madsim = { version = "0.2.34", features = ["macros"] }
 aspen-testing = { workspace = true }
 aspen-cache = { workspace = true, features = ["kv-index"] }
 
+[[bench]]
+name = "chunking_baseline"
+harness = false
+
 [features]
 default = []
 # Enable test fixtures re-export

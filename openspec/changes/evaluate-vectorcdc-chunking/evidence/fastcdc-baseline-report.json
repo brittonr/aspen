@@ -1,0 +1,385 @@
+{
+  "algorithm": "fastcdc-v2020",
+  "corpus": {
+    "bytes": 17087105,
+    "classes": [
+      {
+        "bytes": 2058081,
+        "class": "aspen-build-artifact",
+        "files": 17
+      },
+      {
+        "bytes": 10295044,
+        "class": "nix-store",
+        "files": 16
+      },
+      {
+        "bytes": 4733980,
+        "class": "synthetic-small-delta",
+        "files": 9
+      }
+    ],
+    "files": 42
+  },
+  "files": [
+    {
+      "bytes": 524288,
+      "chunks": 7,
+      "class": "synthetic-small-delta",
+      "elapsed_micros": 222,
+      "name": "synthetic/base",
+      "unique_chunks_in_file": 7
+    },
+    {
+      "bytes": 525312,
+      "chunks": 7,
+      "class": "synthetic-small-delta",
+      "elapsed_micros": 189,
+      "name": "synthetic/delta-0",
+      "unique_chunks_in_file": 7
+    },
+    {
+      "bytes": 525569,
+      "chunks": 7,
+      "class": "synthetic-small-delta",
+      "elapsed_micros": 185,
+      "name": "synthetic/delta-1",
+      "unique_chunks_in_file": 7
+    },
+    {
+      "bytes": 525826,
+      "chunks": 7,
+      "class": "synthetic-small-delta",
+      "elapsed_micros": 188,
+      "name": "synthetic/delta-2",
+      "unique_chunks_in_file": 7
+    },
+    {
+      "bytes": 526083,
+      "chunks": 7,
+      "class": "synthetic-small-delta",
+      "elapsed_micros": 181,
+      "name": "synthetic/delta-3",
+      "unique_chunks_in_file": 7
+    },
+    {
+      "bytes": 526340,
+      "chunks": 7,
+      "class": "synthetic-small-delta",
+      "elapsed_micros": 183,
+      "name": "synthetic/delta-4",
+      "unique_chunks_in_file": 7
+    },
+    {
+      "bytes": 526597,
+      "chunks": 7,
+      "class": "synthetic-small-delta",
+      "elapsed_micros": 195,
+      "name": "synthetic/delta-5",
+      "unique_chunks_in_file": 7
+    },
+    {
+      "bytes": 526854,
+      "chunks": 7,
+      "class": "synthetic-small-delta",
+      "elapsed_micros": 184,
+      "name": "synthetic/delta-6",
+      "unique_chunks_in_file": 7
+    },
+    {
+      "bytes": 527111,
+      "chunks": 7,
+      "class": "synthetic-small-delta",
+      "elapsed_micros": 183,
+      "name": "synthetic/delta-7",
+      "unique_chunks_in_file": 7
+    },
+    {
+      "bytes": 16032,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 6,
+      "name": "/run/current-system/sw/bin/,",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 643,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 0,
+      "name": "/run/current-system/sw/bin/..claude-wrapped.wrapbuddy",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 16024,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 6,
+      "name": "/run/current-system/sw/bin/DisplayLinkManager",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 2097152,
+      "chunks": 25,
+      "class": "nix-store",
+      "elapsed_micros": 745,
+      "name": "/run/current-system/sw/bin/ModemManager",
+      "unique_chunks_in_file": 25
+    },
+    {
+      "bytes": 2097152,
+      "chunks": 25,
+      "class": "nix-store",
+      "elapsed_micros": 748,
+      "name": "/run/current-system/sw/bin/NetworkManager",
+      "unique_chunks_in_file": 25
+    },
+    {
+      "bytes": 2097152,
+      "chunks": 33,
+      "class": "nix-store",
+      "elapsed_micros": 726,
+      "name": "/run/current-system/sw/bin/X",
+      "unique_chunks_in_file": 33
+    },
+    {
+      "bytes": 2097152,
+      "chunks": 29,
+      "class": "nix-store",
+      "elapsed_micros": 734,
+      "name": "/run/current-system/sw/bin/Xephyr",
+      "unique_chunks_in_file": 29
+    },
+    {
+      "bytes": 1842488,
+      "chunks": 25,
+      "class": "nix-store",
+      "elapsed_micros": 692,
+      "name": "/run/current-system/sw/bin/Xnest",
+      "unique_chunks_in_file": 25
+    },
+    {
+      "bytes": 652,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 1,
+      "name": "/nix/store/.links/0000036fpw0vyzd2hhj3l0a56gzy8j5ncd6awv7w606dqimjjp4k",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 476,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 1,
+      "name": "/nix/store/.links/00001p90z6wk667ra4qpygm5x2svyli5gmknjf9xx363qmwzx8gi",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 9937,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 4,
+      "name": "/nix/store/.links/0000288r5pnbm3xffsb71yfnij7yiqfzv3414xjcwdkjvvyc2lnl",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 1187,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 1,
+      "name": "/nix/store/.links/00002c6dkr4zglja0n56iplfzdjxmnq16v0msg043vg22k3g7wi1",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 14154,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 5,
+      "name": "/nix/store/.links/000030j1l4wlmwiaddaciwiwnvab06xj866m4givd0wnbn6s3637",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 50,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 0,
+      "name": "/nix/store/.links/000049dp9nl7ggalb0biqq5pd2vsxz5ykbnz7bfgv9nvssbksdh9",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 754,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 1,
+      "name": "/nix/store/.links/0000528nkgy6drbbaiwnw0vyv7m7n0bkds216bnzc63fmfgpf0zq",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 4039,
+      "chunks": 1,
+      "class": "nix-store",
+      "elapsed_micros": 5,
+      "name": "/nix/store/.links/000054vl6va7sw668iammkdg3403q9700is5jd2yhsdgq4md831h",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 14,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/debug/.fingerprint/acto-5b005b0497f9b20a/dep-lib-acto",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 48,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/debug/.fingerprint/acto-5b005b0497f9b20a/invoked.timestamp",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 16,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/debug/.fingerprint/acto-5b005b0497f9b20a/lib-acto",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 906,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 1,
+      "name": "/home/brittonr/git/aspen/target/debug/.fingerprint/acto-5b005b0497f9b20a/lib-acto.json",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 16,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/debug/.fingerprint/acto-5dfa31aad916427c/run-build-script-build-script-build",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 364,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 1,
+      "name": "/home/brittonr/git/aspen/target/debug/.fingerprint/acto-5dfa31aad916427c/run-build-script-build-script-build.json",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 16,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/debug/.fingerprint/acto-67602e774de4b78a/run-build-script-build-script-build",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 364,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/debug/.fingerprint/acto-67602e774de4b78a/run-build-script-build-script-build.json",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 16,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/release/.fingerprint/acto-1615afb9c23dede0/run-build-script-build-script-build",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 363,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/release/.fingerprint/acto-1615afb9c23dede0/run-build-script-build-script-build.json",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 14,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/release/.fingerprint/acto-1dd60880e0dd2e9f/dep-lib-acto",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 48,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/release/.fingerprint/acto-1dd60880e0dd2e9f/invoked.timestamp",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 16,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/release/.fingerprint/acto-1dd60880e0dd2e9f/lib-acto",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 909,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 1,
+      "name": "/home/brittonr/git/aspen/target/release/.fingerprint/acto-1dd60880e0dd2e9f/lib-acto.json",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 16,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/release/.fingerprint/acto-21d5bf5d9de501bf/build-script-build-script-build",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 555,
+      "chunks": 1,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 0,
+      "name": "/home/brittonr/git/aspen/target/release/.fingerprint/acto-21d5bf5d9de501bf/build-script-build-script-build.json",
+      "unique_chunks_in_file": 1
+    },
+    {
+      "bytes": 2054400,
+      "chunks": 23,
+      "class": "aspen-build-artifact",
+      "elapsed_micros": 935,
+      "name": "/home/brittonr/git/aspen/target/release/deps/chunking_baseline-5766e5daf83a48c8",
+      "unique_chunks_in_file": 23
+    }
+  ],
+  "limits": {
+    "max_bytes_per_file": 2097152,
+    "max_files_per_class": 16,
+    "max_scan_dir_entries": 256
+  },
+  "parameters": {
+    "avg_chunk_size": 65536,
+    "inline_threshold": 262144,
+    "max_chunk_size": 262144,
+    "min_chunk_size": 16384
+  },
+  "results": {
+    "chunk_size_max": 262144,
+    "chunk_size_min": 14,
+    "chunk_size_p50": 68901,
+    "chunk_size_p95": 137643,
+    "dedup_ratio": 0.168,
+    "duplicate_chunks": 42,
+    "throughput_mib_per_sec": 2544.0583358291947,
+    "total_chunks": 250,
+    "unique_chunks": 208,
+    "wall_micros": 6405
+  }
+}
