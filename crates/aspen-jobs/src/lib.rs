@@ -235,6 +235,16 @@ pub use types::QueueStats;
 pub use types::RetryPolicy;
 pub use types::Schedule;
 #[cfg(feature = "plugins-vm")]
+pub use vm_executor::HERMIT_UHYVE_JOB_TYPE;
+#[cfg(feature = "plugins-vm")]
+pub use vm_executor::HERMIT_UHYVE_RUNTIME_HOST_EXECUTED_MARKER;
+#[cfg(feature = "plugins-vm")]
+pub use vm_executor::HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD_MARKER;
+#[cfg(feature = "plugins-vm")]
+pub use vm_executor::HermitUhyveJobPayload;
+#[cfg(feature = "plugins-vm")]
+pub use vm_executor::HermitUhyveWorker;
+#[cfg(feature = "plugins-vm")]
 pub use vm_executor::HyperlightWorker;
 #[cfg(any(feature = "plugins-vm", feature = "plugins-wasm"))]
 pub use vm_executor::JobPayload as VmJobPayload;

@@ -78,6 +78,8 @@
 //!   integration.
 
 #[cfg(feature = "plugins-vm")]
+mod hermit_uhyve;
+#[cfg(feature = "plugins-vm")]
 mod hyperlight;
 #[cfg(any(feature = "plugins-vm", feature = "plugins-wasm"))]
 mod types;
@@ -86,6 +88,16 @@ mod wasm_component;
 #[cfg(feature = "plugins-wasm")]
 mod wasm_host;
 
+#[cfg(feature = "plugins-vm")]
+pub use hermit_uhyve::HERMIT_UHYVE_JOB_TYPE;
+#[cfg(feature = "plugins-vm")]
+pub use hermit_uhyve::HERMIT_UHYVE_RUNTIME_HOST_EXECUTED_MARKER;
+#[cfg(feature = "plugins-vm")]
+pub use hermit_uhyve::HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD_MARKER;
+#[cfg(feature = "plugins-vm")]
+pub use hermit_uhyve::HermitUhyveJobPayload;
+#[cfg(feature = "plugins-vm")]
+pub use hermit_uhyve::HermitUhyveWorker;
 #[cfg(feature = "plugins-vm")]
 pub use hyperlight::HyperlightWorker;
 #[cfg(any(feature = "plugins-vm", feature = "plugins-wasm"))]

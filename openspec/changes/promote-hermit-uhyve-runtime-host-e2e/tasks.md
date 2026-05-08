@@ -7,10 +7,10 @@
 
 ## Phase 2: Runner/product path
 
-- [ ] [serial] Add a gated Hermit/Uhyve job runner or worker seam that launches declared Hermit artifacts through Aspen orchestration, not direct shell-only validation.
-- [ ] [depends:runner] Add a structured Hermit/Uhyve job payload and secret-safe receipt wrapper with image hash, engine, runner identity, lifecycle state, exit status, bounded serial output, and proof marker.
-- [ ] [depends:runner] Add product-path negative tests proving malformed images/payloads reach Aspen worker orchestration before failing with `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD`.
-- [ ] [depends:runner] Add an ignored/gated real Uhyve proof test that executes a declared Hermit image through Aspen orchestration and emits `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`.
+- [x] [serial] Add a gated Hermit/Uhyve job runner or worker seam that launches declared Hermit artifacts through Aspen orchestration, not direct shell-only validation.
+- [x] [depends:runner] Add a structured Hermit/Uhyve job payload and secret-safe receipt wrapper with image hash, engine, runner identity, lifecycle state, exit status, bounded serial output, and proof marker.
+- [x] [depends:runner] Add product-path negative tests proving malformed images/payloads reach Aspen worker orchestration before failing with `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD`.
+- [x] [depends:runner] Add an ignored/gated real Uhyve proof test that executes a declared Hermit image through Aspen orchestration and emits `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`.
 
 ## Phase 3: Harness/docs promotion
 
