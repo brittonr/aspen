@@ -1,7 +1,7 @@
 ## Phase 1: Spec Baseline
 
 - [x] [serial] Create the OpenSpec baseline for VectorCDC-style CDC evaluation.
-- [ ] [serial] Inventory current Aspen Snix chunking entrypoints, constants, tests, and call sites to define the smallest chunker boundary.
+- [x] [serial] Inventory current Aspen Snix chunking entrypoints, constants, tests, and call sites to define the smallest chunker boundary. Evidence: `evidence/current-chunking-inventory.md`.
 
 ## Phase 2: Baseline Measurement
 
