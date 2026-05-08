@@ -710,6 +710,74 @@ pub enum RuntimeHealthState {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeServiceContractState {
+    Validated,
+    Admitted,
+    Scheduled,
+    Started,
+    Healthy,
+    Failed,
+    Stopped,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeExecutionBackendKind {
+    NativeBuiltIn,
+    Wasm,
+    Hyperlight,
+    MicroVm,
+    HermitUhyve,
+    ExternalProcess,
+    DeployAction,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RuntimeRouteState {
+    Declared,
+    Pending,
+    Active,
+    Withdrawn,
+    Failed,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeServiceContract {
+    pub service_id: String,
+    pub generation: u64,
+    pub host_loading_reference: String,
+    pub artifact_identities: Vec<String>,
+    pub backend_kind: RuntimeExecutionBackendKind,
+    pub capability_handles: Vec<String>,
+    pub resource_policy: RuntimeResources,
+    pub receipt_policy: RuntimeReceiptPolicy,
+    pub route_ids: Vec<String>,
+    pub state: RuntimeServiceContractState,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeServiceReceiptCorrelation {
+    pub service_id: String,
+    pub instance_id: Option<String>,
+    pub generation: u64,
+    pub backend_execution_id: Option<String>,
+    pub artifact_identities: Vec<String>,
+    pub route_ids: Vec<String>,
+    pub receipt_id: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RuntimeRouteObservation {
+    pub route_id: String,
+    pub service_id: String,
+    pub generation: u64,
+    pub state: RuntimeRouteState,
+    pub health_state: RuntimeHealthState,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RuntimeServiceInstance {
     pub ownership: RuntimeApplicationRef,
     pub instance_id: String,
@@ -1308,6 +1376,7 @@ pub enum AdmissionError {
     MicroVmRejectsAmbientAuthority,
     MicroVmInvalidLifecycleLease,
     MicroVmReceiptContainsRawSecret,
+    EmptyHostLoadingReference,
 }
 
 #[must_use]
@@ -2014,6 +2083,99 @@ pub fn admit_service_spec(spec: &RuntimeServiceSpec) -> Result<(), AdmissionErro
         return Err(AdmissionError::InvalidUpgradePolicy);
     }
     admit_unit(&spec.as_unit_declaration())
+}
+
+#[must_use]
+pub fn runtime_backend_kind(host_kind: &RuntimeHostKind, artifact: &RuntimeArtifact) -> RuntimeExecutionBackendKind {
+    match (host_kind, artifact) {
+        (RuntimeHostKind::NativeBuiltIn, _) => RuntimeExecutionBackendKind::NativeBuiltIn,
+        (RuntimeHostKind::Wasm, _) => RuntimeExecutionBackendKind::Wasm,
+        (RuntimeHostKind::Hyperlight, _) => RuntimeExecutionBackendKind::Hyperlight,
+        (
+            RuntimeHostKind::MicroVm {
+                engine: MicroVmEngine::Uhyve,
+            },
+            RuntimeArtifact::Unikernel { .. },
+        ) => RuntimeExecutionBackendKind::HermitUhyve,
+        (RuntimeHostKind::MicroVm { .. }, _) => RuntimeExecutionBackendKind::MicroVm,
+        (RuntimeHostKind::NativeProcess, _) => RuntimeExecutionBackendKind::ExternalProcess,
+        (RuntimeHostKind::OciContainer, _) => RuntimeExecutionBackendKind::DeployAction,
+    }
+}
+
+pub fn canonical_runtime_service_contract(
+    spec: &RuntimeServiceSpec,
+    host_loading_reference: impl Into<String>,
+) -> Result<RuntimeServiceContract, AdmissionError> {
+    admit_service_spec(spec)?;
+    let host_loading_reference = host_loading_reference.into();
+    if host_loading_reference.trim().is_empty() {
+        return Err(AdmissionError::EmptyHostLoadingReference);
+    }
+    Ok(RuntimeServiceContract {
+        service_id: spec.ownership.service_id.clone(),
+        generation: spec.ownership.generation,
+        host_loading_reference,
+        artifact_identities: runtime_artifact_identities(&spec.artifact).into_iter().map(str::to_string).collect(),
+        backend_kind: runtime_backend_kind(&spec.host_kind, &spec.artifact),
+        capability_handles: spec.capabilities.iter().map(|binding| binding.handle_id.clone()).collect(),
+        resource_policy: spec.resources.clone(),
+        receipt_policy: spec.receipt_policy.clone(),
+        route_ids: spec.routes.iter().map(|route| route.route_id.clone()).collect(),
+        state: RuntimeServiceContractState::Validated,
+    })
+}
+
+#[must_use]
+pub fn runtime_route_state_for_health(
+    lifecycle_status: RuntimeLifecycleStatus,
+    health_state: RuntimeHealthState,
+) -> RuntimeRouteState {
+    match (lifecycle_status, health_state) {
+        (RuntimeLifecycleStatus::Running, RuntimeHealthState::Healthy) => RuntimeRouteState::Active,
+        (RuntimeLifecycleStatus::Failed, _) => RuntimeRouteState::Failed,
+        (RuntimeLifecycleStatus::Stopping | RuntimeLifecycleStatus::Stopped, _) | (_, RuntimeHealthState::Stopped) => {
+            RuntimeRouteState::Withdrawn
+        }
+        (_, RuntimeHealthState::Unhealthy) => RuntimeRouteState::Withdrawn,
+        (RuntimeLifecycleStatus::Declared | RuntimeLifecycleStatus::Resolving, _) => RuntimeRouteState::Declared,
+        _ => RuntimeRouteState::Pending,
+    }
+}
+
+#[must_use]
+pub fn runtime_route_observations(
+    spec: &RuntimeServiceSpec,
+    instance: &RuntimeServiceInstance,
+) -> Vec<RuntimeRouteObservation> {
+    spec.routes
+        .iter()
+        .map(|route| RuntimeRouteObservation {
+            route_id: route.route_id.clone(),
+            service_id: spec.ownership.service_id.clone(),
+            generation: spec.ownership.generation,
+            state: runtime_route_state_for_health(instance.lifecycle_status.clone(), instance.health_state.clone()),
+            health_state: instance.health_state.clone(),
+        })
+        .collect()
+}
+
+#[must_use]
+pub fn runtime_receipt_correlation(
+    receipt_id: impl Into<String>,
+    spec: &RuntimeServiceSpec,
+    instance: Option<&RuntimeServiceInstance>,
+    backend_execution_id: Option<String>,
+) -> RuntimeServiceReceiptCorrelation {
+    RuntimeServiceReceiptCorrelation {
+        service_id: spec.ownership.service_id.clone(),
+        instance_id: instance.map(|i| i.instance_id.clone()),
+        generation: spec.ownership.generation,
+        backend_execution_id,
+        artifact_identities: runtime_artifact_identities(&spec.artifact).into_iter().map(str::to_string).collect(),
+        route_ids: spec.routes.iter().map(|route| route.route_id.clone()).collect(),
+        receipt_id: receipt_id.into(),
+    }
 }
 
 pub fn admit_lifecycle_transition(
@@ -2995,6 +3157,79 @@ mod tests {
             entrypoint: "run".to_string(),
         };
         assert_eq!(admit_service_spec(&bad_host_artifact), Err(AdmissionError::NativeBuiltInRequiresBuiltInArtifact));
+    }
+
+    #[test]
+    fn canonical_contract_records_backend_without_claiming_activation() {
+        let spec = forge_service_spec();
+        let contract = canonical_runtime_service_contract(&spec, "runtime-host/native-built-in/forge").unwrap();
+
+        assert_eq!(contract.service_id, "forge");
+        assert_eq!(contract.generation, 7);
+        assert_eq!(contract.host_loading_reference, "runtime-host/native-built-in/forge");
+        assert_eq!(contract.backend_kind, RuntimeExecutionBackendKind::NativeBuiltIn);
+        assert_eq!(contract.capability_handles, vec!["kv:forge".to_string()]);
+        assert_eq!(contract.route_ids, vec!["forge.git".to_string()]);
+        assert_eq!(contract.state, RuntimeServiceContractState::Validated);
+        assert!(contract.artifact_identities.contains(&"forge".to_string()));
+        assert!(contract.artifact_identities.contains(&"0.1.0".to_string()));
+
+        assert_eq!(canonical_runtime_service_contract(&spec, " "), Err(AdmissionError::EmptyHostLoadingReference));
+    }
+
+    #[test]
+    fn route_observations_wait_for_healthy_running_boundary() {
+        let spec = forge_service_spec();
+        let mut instance = RuntimeServiceInstance {
+            ownership: spec.ownership.clone(),
+            instance_id: "forge/0".to_string(),
+            assigned_node_id: Some("node-a".to_string()),
+            lifecycle_status: RuntimeLifecycleStatus::Starting,
+            health_state: RuntimeHealthState::Unknown,
+            lease_epoch: 1,
+            heartbeat_ms: Some(42_000),
+            active_routes: Vec::new(),
+            last_receipt_id: None,
+        };
+
+        let pending = runtime_route_observations(&spec, &instance);
+        assert_eq!(pending[0].state, RuntimeRouteState::Pending);
+
+        instance.lifecycle_status = RuntimeLifecycleStatus::Running;
+        instance.health_state = RuntimeHealthState::Healthy;
+        assert_eq!(runtime_route_observations(&spec, &instance)[0].state, RuntimeRouteState::Active);
+
+        instance.health_state = RuntimeHealthState::Unhealthy;
+        assert_eq!(runtime_route_observations(&spec, &instance)[0].state, RuntimeRouteState::Withdrawn);
+
+        instance.lifecycle_status = RuntimeLifecycleStatus::Failed;
+        assert_eq!(runtime_route_observations(&spec, &instance)[0].state, RuntimeRouteState::Failed);
+    }
+
+    #[test]
+    fn receipt_correlation_links_service_instance_backend_artifact_and_routes() {
+        let spec = forge_service_spec();
+        let instance = RuntimeServiceInstance {
+            ownership: spec.ownership.clone(),
+            instance_id: "forge/0".to_string(),
+            assigned_node_id: Some("node-a".to_string()),
+            lifecycle_status: RuntimeLifecycleStatus::Running,
+            health_state: RuntimeHealthState::Healthy,
+            lease_epoch: 1,
+            heartbeat_ms: Some(42_000),
+            active_routes: spec.routes.iter().map(|route| route.route_id.clone()).collect(),
+            last_receipt_id: Some("receipt-1".to_string()),
+        };
+
+        let correlation =
+            runtime_receipt_correlation("receipt-1", &spec, Some(&instance), Some("job/forge-start/7".to_string()));
+        assert_eq!(correlation.service_id, "forge");
+        assert_eq!(correlation.instance_id, Some("forge/0".to_string()));
+        assert_eq!(correlation.generation, 7);
+        assert_eq!(correlation.backend_execution_id, Some("job/forge-start/7".to_string()));
+        assert_eq!(correlation.route_ids, vec!["forge.git".to_string()]);
+        assert!(correlation.artifact_identities.contains(&"forge".to_string()));
+        assert!(correlation.artifact_identities.contains(&"0.1.0".to_string()));
     }
 
     #[test]

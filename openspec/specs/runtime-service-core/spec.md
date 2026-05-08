@@ -3,7 +3,6 @@
 ## Purpose
 
 This spec defines Aspen's portable runtime-service core model: application ownership references, service specs and instances, linked native built-in service declarations, route ownership, secret-safe receipts, and bounded policy/invariant behavior. It is intentionally a model/contract layer below future runtime-service reconciliation and app installation work.
-
 ## Requirements
 ### Requirement: Runtime Application Ownership References [r[runtime-service-core.application-ownership]]
 Aspen MUST define minimal application ownership references for grouping runtime services, routes, capability requests, and receipts without implementing full application installation in this change.
@@ -103,3 +102,27 @@ Aspen MUST use Forge as the first native built-in service migration target by wr
 - GIVEN the runtime starts or stops the Forge built-in service
 - WHEN Forge route registration, gossip enablement, DAG sync worker startup, or health transition occurs
 - THEN the runtime SHALL emit receipts that identify the event and service generation without exposing raw keys, cookies, tokens, tickets, or connection strings
+
+### Requirement: Canonical Runtime Service Contract [r[runtime-service-core.canonical-contract]]
+
+Aspen MUST define a canonical runtime-service contract that connects service declarations, runtime-host loading, job/plugin execution backends, deploy actions, route ownership, health, and receipts without conflating validation with activation.
+
+#### Scenario: Service contract links execution backend [r[runtime-service-core.canonical-contract.execution-backend]]
+
+- GIVEN a runtime service spec references a native built-in, WASM, Hyperlight, microVM, Hermit/Uhyve, external process, or deploy-backed execution target
+- WHEN the service contract is validated
+- THEN it SHALL record service identity, generation, host-loading reference, artifact identity, backend kind, capability bindings, resource policy, and receipt policy
+- AND validation SHALL NOT by itself claim the service is admitted, started, healthy, or route-active
+
+#### Scenario: Receipts correlate service, job, plugin, and deploy events [r[runtime-service-core.canonical-contract.receipt-correlation]]
+
+- GIVEN a service instance is started through a job worker, plugin runner, native built-in wrapper, or deploy executor
+- WHEN lifecycle or health receipts are emitted
+- THEN receipts SHALL carry stable correlation identifiers for service, instance, generation, backend execution, artifact identity, and route ownership without log scraping
+
+#### Scenario: Route activation waits for health boundary [r[runtime-service-core.canonical-contract.route-health-boundary]]
+
+- GIVEN a service declares one or more route families
+- WHEN execution starts but health is unknown or failed
+- THEN route activation SHALL remain pending or be withdrawn until policy-specific health criteria pass
+- AND operator receipts SHALL distinguish route-declared, route-pending, route-active, and route-withdrawn states
