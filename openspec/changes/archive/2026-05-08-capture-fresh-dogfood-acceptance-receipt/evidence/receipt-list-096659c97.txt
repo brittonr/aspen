@@ -1,0 +1,6 @@
+RUN ID                         CREATED AT            COMMAND  FINAL      STAGES  PATH
+dogfood-20260508T205611Z       2026-05-08T20:56:11Z  full     failed      3/4    /tmp/aspen-dogfood-receipts/dogfood-20260508T205611Z.json
+dogfood-20260508T210709Z       2026-05-08T21:07:09Z  full     failed      3/4    /tmp/aspen-dogfood-receipts/dogfood-20260508T210709Z.json
+dogfood-20260508T211236Z       2026-05-08T21:12:36Z  full     failed      3/4    /tmp/aspen-dogfood-receipts/dogfood-20260508T211236Z.json
+dogfood-20260508T212812Z       2026-05-08T21:28:12Z  full     failed      3/4    /tmp/aspen-dogfood-receipts/dogfood-20260508T212812Z.json
+dogfood-20260508T215019Z       2026-05-08T21:50:19Z  full     succeeded   7/7    /tmp/aspen-dogfood-receipts/dogfood-20260508T215019Z.json

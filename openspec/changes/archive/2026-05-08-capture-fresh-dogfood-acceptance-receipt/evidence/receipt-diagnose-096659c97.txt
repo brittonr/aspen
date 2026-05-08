@@ -1,0 +1,7 @@
+Dogfood receipt diagnosis: dogfood-20260508T215019Z
+  path: /tmp/aspen-dogfood-receipts/dogfood-20260508T215019Z.json
+  git_commit: 096659c9760903e4956d07fa6323f7ae4d085c6b
+  command: full
+  created_at: 2026-05-08T21:50:19Z
+  status: no failed stage found (7/7) stages succeeded
+  next: use `receipts show dogfood-20260508T215019Z` for archival details or rerun `full` for fresh acceptance evidence
