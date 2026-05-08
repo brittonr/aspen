@@ -97,3 +97,37 @@ fn runtime_host_readiness_doc_tracks_hyperlight_product_path_contract() {
     assert!(test.contains("WorkerPool"));
     assert!(test.contains("HyperlightWorker"));
 }
+
+#[test]
+fn runtime_host_readiness_doc_tracks_oci_lowering_product_path_contract() {
+    let Some(doc) = read_repo_file("docs/runtime-host-readiness.md") else {
+        return;
+    };
+    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl")
+        .expect("OCI lowering runtime-host harness row should exist when docs are present");
+    let test = std::fs::read_to_string("crates/aspen-jobs/tests/oci_lowering_product_path_test.rs")
+        .expect("OCI lowering product-path test should exist when docs are present");
+
+    assert!(doc.contains("runtime-host-oci-lowering-product-path"));
+    assert!(doc.contains("cargo test -p aspen-jobs --test oci_lowering_product_path_test --features plugins-wasm"));
+    assert!(doc.contains("ASPEN_OCI_LOWERING_RUNTIME_HOST_EXECUTED"));
+    assert!(doc.contains("ASPEN_OCI_LOWERING_RUNTIME_HOST_PRODUCT_PATH_GUARD"));
+    assert!(doc.contains("aspen:runtime-host/wasm-v1"));
+    assert!(doc.contains("ASPEN_WASM_RUNTIME_HOST_EXECUTED"));
+    assert!(doc.contains("sha256:"));
+
+    assert!(manifest.contains("runtime-host-oci-lowering-product-path"));
+    assert!(manifest.contains("aspen-spawned-execution"));
+    assert!(manifest.contains("e2e-registered"));
+    assert!(manifest.contains("oci_lowering_product_path_test"));
+    assert!(manifest.contains("plugins-wasm"));
+    assert!(manifest.contains("immutable-oci-source-identity"));
+    assert!(manifest.contains("derived-isolated-target-artifact"));
+
+    assert!(test.contains("ASPEN_OCI_LOWERING_RUNTIME_HOST_EXECUTED"));
+    assert!(test.contains("ASPEN_OCI_LOWERING_RUNTIME_HOST_PRODUCT_PATH_GUARD"));
+    assert!(test.contains("JobManager"));
+    assert!(test.contains("WorkerPool"));
+    assert!(test.contains("OciLoweringPlan"));
+    assert!(test.contains("WasmComponentWorker"));
+}

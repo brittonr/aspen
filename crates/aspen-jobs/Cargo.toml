@@ -82,6 +82,7 @@ glob = "0.3"
 
 [dev-dependencies]
 # Testing
+aspen-runtime-core = { path = "../aspen-runtime-core" }
 aspen-testing = { path = "../aspen-testing" }
 tokio-test = "0.4"
 proptest = "1.0"

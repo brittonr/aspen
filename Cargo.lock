@@ -2048,6 +2048,7 @@ dependencies = [
  "aspen-jobs-core",
  "aspen-kv-branch",
  "aspen-kv-types",
+ "aspen-runtime-core",
  "aspen-testing",
  "aspen-time",
  "aspen-traits",

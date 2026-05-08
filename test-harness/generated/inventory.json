@@ -15,7 +15,7 @@
       "test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl",
       "test-harness/suites/vm/runtime-host-wasm-gap.ncl"
     ],
-    "inputs_sha256": "3dddf0c457574f1425b4b6c308301be14d9103fbfccfc478d914141d064106fe"
+    "inputs_sha256": "675b02a2bd0255c793a46206a98ac6c73e5fa0ff801033645dfbcb07865eebc3"
   },
   "suites": [
     {
@@ -337,34 +337,37 @@
       }
     },
     {
-      "id": "runtime-host-oci-lowering-gap",
-      "display_name": "Runtime host OCI lowering execution E2E gap",
-      "description": "Metadata-only row: Aspen has OCI lowering admission/receipt model coverage, but no registered suite that ingests an immutable OCI artifact, lowers it into an isolated host, executes it, and reads a secret-safe receipt.",
-      "layer": "vm",
-      "owner": "runtime-host-loading",
-      "runtime_class": "metadata-only",
+      "id": "runtime-host-oci-lowering-product-path",
+      "display_name": "Runtime host OCI lowering product-path E2E",
+      "description": "Validates immutable OCI source identity, deterministic lowering into an isolated WASM target artifact, Aspen job-manager and worker-pool execution of that derived artifact, and a product-visible receipt linking source OCI digest to target host execution.",
+      "layer": "rust-integration",
+      "owner": "runtime-host",
+      "runtime_class": "real-network",
       "runtime_host": {
         "kind": "oci-lowering",
-        "proof_level": "gap",
-        "support_status": "gap",
-        "gap_reason": "No suite currently proves OCI artifact ingestion plus lowering into a supported isolated host with execution and secret-safe receipt evidence; raw container execution remains out of scope."
+        "proof_level": "aspen-spawned-execution",
+        "support_status": "e2e-registered",
+        "gap_reason": null
       },
       "prerequisites": [],
       "tags": [
-        "gap",
-        "metadata-only",
-        "oci",
+        "e2e",
+        "jobs",
         "oci-lowering",
-        "runtime-host"
+        "product-path",
+        "runtime-host",
+        "wasm"
       ],
       "manifest_path": "test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl",
       "target": {
-        "kind": "metadata-only",
-        "package": null,
-        "test": null,
+        "kind": "cargo-nextest",
+        "package": "aspen-jobs",
+        "test": "oci_lowering_product_path_test",
         "profile": null,
-        "features": [],
-        "run_ignored": null,
+        "features": [
+          "plugins-wasm"
+        ],
+        "run_ignored": "default",
         "flake_attr": null,
         "check_attr": null,
         "nix_file": null,
