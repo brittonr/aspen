@@ -17,14 +17,8 @@ use crate::types::DiffEntry;
 /// - `Removed`: key in `a` but not in `b`
 /// - `Changed`: key in both but with different `MutationType`
 pub fn diff(a: &Commit, b: &Commit) -> Vec<DiffEntry> {
-    debug_assert!(
-        a.mutations.windows(2).all(|w| w[0].0 <= w[1].0),
-        "a.mutations must be sorted by key"
-    );
-    debug_assert!(
-        b.mutations.windows(2).all(|w| w[0].0 <= w[1].0),
-        "b.mutations must be sorted by key"
-    );
+    debug_assert!(a.mutations.windows(2).all(|w| w[0].0 <= w[1].0), "a.mutations must be sorted by key");
+    debug_assert!(b.mutations.windows(2).all(|w| w[0].0 <= w[1].0), "b.mutations must be sorted by key");
     let max_entries = a.mutations.len().saturating_add(b.mutations.len());
     let mut result = Vec::with_capacity(max_entries);
     let mut i = 0usize;

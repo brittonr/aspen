@@ -90,10 +90,7 @@ fn scan_result_capacity(limit_results: Option<u32>) -> Result<usize, KeyValueSto
     match usize::try_from(requested_max_results) {
         Ok(max_results) => Ok(max_results),
         Err(_) => Err(KeyValueStoreError::Failed {
-            reason: format!(
-                "scan limit {} does not fit this platform's usize",
-                requested_max_results
-            ),
+            reason: format!("scan limit {} does not fit this platform's usize", requested_max_results),
         }),
     }
 }

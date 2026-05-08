@@ -470,8 +470,7 @@ mod tests {
         exec.tracker().record_read(200, "src/main.rs".into(), [0x11; 32]);
         exec.tracker().record_read(200, "src/lib.rs".into(), [0x22; 32]);
 
-        let result = exec
-            .try_cache_lookup(200, command, &args, &env, now.saturating_add(1_000));
+        let result = exec.try_cache_lookup(200, command, &args, &env, now.saturating_add(1_000));
         assert!(result.is_some());
         assert!(result.as_ref().map_or(false, |r| r.is_cache_hit));
 
@@ -514,8 +513,7 @@ mod tests {
         // Lookup with different input hash [0x22; 32]
         exec.tracker().start_session(200);
         exec.tracker().record_read(200, "src/main.rs".into(), [0x22; 32]);
-        let result = exec
-            .try_cache_lookup(200, command, &args, &env, now.saturating_add(1_000));
+        let result = exec.try_cache_lookup(200, command, &args, &env, now.saturating_add(1_000));
         assert!(result.is_none());
         assert!(!result.map_or(false, |r| r.is_cache_hit));
     }
@@ -550,9 +548,7 @@ mod tests {
         // Lookup and materialize
         exec.tracker().start_session(200);
         exec.tracker().record_read(200, "main.c".into(), [0x11; 32]);
-        let result = exec
-            .try_cache_lookup(200, command, &args, &env, now.saturating_add(1_000))
-            .unwrap();
+        let result = exec.try_cache_lookup(200, command, &args, &env, now.saturating_add(1_000)).unwrap();
 
         let files = exec.materialize_outputs(&result.outputs).unwrap();
         assert_eq!(files.len(), 2);
@@ -714,8 +710,7 @@ mod tests {
         // Lookup parent — should hit because child is still valid
         exec.tracker().start_session(200);
         exec.tracker().record_read(200, "parent.rs".into(), [0x22; 32]);
-        let result = exec
-            .try_cache_lookup(200, "cargo", &["build".into()], &sample_env(), now.saturating_add(1_000));
+        let result = exec.try_cache_lookup(200, "cargo", &["build".into()], &sample_env(), now.saturating_add(1_000));
         assert!(result.is_some(), "parent should hit when child is valid");
 
         // Delete child, then parent should miss
@@ -723,8 +718,7 @@ mod tests {
 
         exec.tracker().start_session(300);
         exec.tracker().record_read(300, "parent.rs".into(), [0x22; 32]);
-        let result = exec
-            .try_cache_lookup(300, "cargo", &["build".into()], &sample_env(), now.saturating_add(2_000));
+        let result = exec.try_cache_lookup(300, "cargo", &["build".into()], &sample_env(), now.saturating_add(2_000));
         assert!(result.is_none(), "parent should miss when child is invalid");
     }
 }

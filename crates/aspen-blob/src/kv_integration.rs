@@ -246,7 +246,9 @@ impl<KV: KeyValueStore, B: BlobRead + BlobWrite> BlobAwareKeyValueStore<KV, B> {
 }
 
 #[async_trait]
-impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvRead for BlobAwareKeyValueStore<KV, B> {
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvRead
+    for BlobAwareKeyValueStore<KV, B>
+{
     async fn read(&self, request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
         // Read from KV
         let result = self.kv.read(request.clone()).await?;
@@ -284,11 +286,12 @@ impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'stati
             Ok(result)
         }
     }
-
 }
 
 #[async_trait]
-impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvWrite for BlobAwareKeyValueStore<KV, B> {
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvWrite
+    for BlobAwareKeyValueStore<KV, B>
+{
     async fn write(&self, request: WriteRequest) -> Result<WriteResult, KeyValueStoreError> {
         // Process command, offloading large values to blobs
         let processed_command = match request.command {
@@ -307,11 +310,12 @@ impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'stati
             })
             .await
     }
-
 }
 
 #[async_trait]
-impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvDelete for BlobAwareKeyValueStore<KV, B> {
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvDelete
+    for BlobAwareKeyValueStore<KV, B>
+{
     async fn delete(&self, request: DeleteRequest) -> Result<DeleteResult, KeyValueStoreError> {
         // Unprotect blob before delete
         if let Some(old_value) = self.read_raw(&request.key).await
@@ -322,11 +326,12 @@ impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'stati
 
         self.kv.delete(request).await
     }
-
 }
 
 #[async_trait]
-impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvScan for BlobAwareKeyValueStore<KV, B> {
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KvScan
+    for BlobAwareKeyValueStore<KV, B>
+{
     /// Scan keys in the underlying KV store.
     ///
     /// **IMPORTANT**: This returns raw KV values, which may include blob references
@@ -337,7 +342,10 @@ impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'stati
     }
 }
 
-impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KeyValueStore for BlobAwareKeyValueStore<KV, B> {}
+impl<KV: KeyValueStore + Send + Sync + 'static, B: BlobRead + BlobWrite + 'static> KeyValueStore
+    for BlobAwareKeyValueStore<KV, B>
+{
+}
 
 #[cfg(test)]
 mod tests {
@@ -359,7 +367,10 @@ mod tests {
         async fn status(&self, hash: &iroh_blobs::Hash) -> Result<Option<crate::BlobStatus>, BlobStoreError> {
             self.0.status(hash).await
         }
-        async fn reader(&self, hash: &iroh_blobs::Hash) -> Result<Option<std::pin::Pin<Box<dyn crate::AsyncReadSeek>>>, BlobStoreError> {
+        async fn reader(
+            &self,
+            hash: &iroh_blobs::Hash,
+        ) -> Result<Option<std::pin::Pin<Box<dyn crate::AsyncReadSeek>>>, BlobStoreError> {
             self.0.reader(hash).await
         }
     }
@@ -475,7 +486,10 @@ mod tests {
         async fn status(&self, hash: &iroh_blobs::Hash) -> Result<Option<crate::BlobStatus>, BlobStoreError> {
             self.0.status(hash).await
         }
-        async fn reader(&self, hash: &iroh_blobs::Hash) -> Result<Option<std::pin::Pin<Box<dyn crate::AsyncReadSeek>>>, BlobStoreError> {
+        async fn reader(
+            &self,
+            hash: &iroh_blobs::Hash,
+        ) -> Result<Option<std::pin::Pin<Box<dyn crate::AsyncReadSeek>>>, BlobStoreError> {
             self.0.reader(hash).await
         }
     }

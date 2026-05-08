@@ -442,10 +442,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
             member_ids,
         };
 
-        let key = group_key(GroupKeyInput {
-            book_id,
-            group_id: &id,
-        });
+        let key = group_key(GroupKeyInput { book_id, group_id: &id });
         let value = serde_json::to_string(&group).map_err(|e| ContactsError::StorageError {
             reason: format!("serialize group: {e}"),
         })?;
@@ -594,9 +591,7 @@ impl<S: KeyValueStore + ?Sized + 'static> ContactStore<S> {
         }
 
         Err(ContactsError::StorageError {
-            reason: format!(
-                "scan all exceeded page bound of {MAX_SCAN_PAGE_COUNT} for prefix {prefix}"
-            ),
+            reason: format!("scan all exceeded page bound of {MAX_SCAN_PAGE_COUNT} for prefix {prefix}"),
         })
     }
 

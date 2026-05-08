@@ -65,11 +65,11 @@ use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
 use aspen_kv_types::validate_write_command;
 use aspen_traits::ClusterController;
+use aspen_traits::KeyValueStore;
 use aspen_traits::KvDelete;
 use aspen_traits::KvRead;
 use aspen_traits::KvScan;
 use aspen_traits::KvWrite;
-use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 use tokio::sync::Mutex;
 
@@ -800,7 +800,6 @@ impl KvWrite for DeterministicKeyValueStore {
             }
         }
     }
-
 }
 
 #[async_trait]
@@ -840,12 +839,11 @@ impl KvScan for DeterministicKeyValueStore {
         let inner = self.inner.lock().await;
 
         // Apply Tiger Style bounded limit
-        let max_results = match usize::try_from(
-            request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS),
-        ) {
-            Ok(max_results) => max_results,
-            Err(_) => usize::MAX,
-        };
+        let max_results =
+            match usize::try_from(request.limit_results.unwrap_or(DEFAULT_SCAN_LIMIT).min(MAX_SCAN_RESULTS)) {
+                Ok(max_results) => max_results,
+                Err(_) => usize::MAX,
+            };
 
         // Decode continuation token (format: base64(last_key))
         let start_after = request.continuation_token.as_ref().and_then(|token| {

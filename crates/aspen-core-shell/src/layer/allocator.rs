@@ -446,8 +446,9 @@ fn calculate_window_size(start: u64) -> u64 {
 mod tests {
     use std::collections::HashSet;
 
-    use super::*;
     use aspen_testing_core::DeterministicKeyValueStore;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_allocate_sequential() {

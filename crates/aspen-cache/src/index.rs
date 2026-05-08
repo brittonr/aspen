@@ -6,7 +6,6 @@
 #[cfg(feature = "kv-index")]
 use std::sync::Arc;
 
-
 #[cfg(feature = "kv-index")]
 use aspen_kv_types::ReadConsistency;
 #[cfg(feature = "kv-index")]
@@ -184,17 +183,23 @@ impl<KV: KeyValueStore + ?Sized> CacheLookup for KvCacheIndex<KV> {
                         "Cache hit"
                     );
 
-                    if let Err(e) = self.update_stats(|s| s.record_hit()).await { warn!(error = %e, "stats update failed"); }
+                    if let Err(e) = self.update_stats(|s| s.record_hit()).await {
+                        warn!(error = %e, "stats update failed");
+                    }
                     Ok(Some(entry))
                 } else {
                     debug!(store_hash = %store_hash, "Cache miss");
-                    if let Err(e) = self.update_stats(|s| s.record_miss()).await { warn!(error = %e, "stats update failed"); }
+                    if let Err(e) = self.update_stats(|s| s.record_miss()).await {
+                        warn!(error = %e, "stats update failed");
+                    }
                     Ok(None)
                 }
             }
             Err(aspen_kv_types::KeyValueStoreError::NotFound { .. }) => {
                 debug!(store_hash = %store_hash, "Cache miss");
-                if let Err(e) = self.update_stats(|s| s.record_miss()).await { warn!(error = %e, "stats update failed"); }
+                if let Err(e) = self.update_stats(|s| s.record_miss()).await {
+                    warn!(error = %e, "stats update failed");
+                }
                 Ok(None)
             }
             Err(e) => Err(CacheError::KvStore { message: e.to_string() }),
@@ -245,7 +250,9 @@ impl<KV: KeyValueStore + ?Sized> CachePublish for KvCacheIndex<KV> {
 
         self.kv.write(write_request).await.map_err(|e| CacheError::KvStore { message: e.to_string() })?;
 
-        if let Err(e) = self.update_stats(|s| s.record_entry_added(nar_size_bytes)).await { warn!(error = %e, "stats update failed"); }
+        if let Err(e) = self.update_stats(|s| s.record_entry_added(nar_size_bytes)).await {
+            warn!(error = %e, "stats update failed");
+        }
         Ok(())
     }
 }

@@ -60,9 +60,6 @@ pub use aspen_core::traits;
 pub mod transport;
 pub use aspen_core::types;
 pub mod utils;
-pub use aspen_core::vault;
-pub use aspen_core::verified;
-
 // Re-export all public types at crate root for convenience.
 
 // App registry types
@@ -70,6 +67,15 @@ pub use app_registry::AppManifest;
 pub use app_registry::AppRegistry;
 pub use app_registry::SharedAppRegistry;
 pub use app_registry::shared_registry;
+pub use aspen_core::vault;
+pub use aspen_core::verified;
+// Types
+pub use cluster::AddLearnerRequest;
+pub use cluster::ChangeMembershipRequest;
+pub use cluster::ClusterNode;
+pub use cluster::ClusterState;
+pub use cluster::InitRequest;
+pub use cluster::TrustConfig;
 // Re-export all constants at crate root for backward compatibility.
 pub use constants::api::*;
 pub use constants::ci::*;
@@ -216,13 +222,6 @@ pub use transport::PeerDiscoveredCallback;
 pub use transport::PeerDiscovery;
 pub use transport::StaleTopologyInfo;
 pub use transport::TopologyStaleCallback;
-// Types
-pub use cluster::AddLearnerRequest;
-pub use cluster::ChangeMembershipRequest;
-pub use cluster::ClusterNode;
-pub use cluster::ClusterState;
-pub use cluster::InitRequest;
-pub use cluster::TrustConfig;
 pub use types::ClusterMetrics;
 pub use types::NodeAddress;
 pub use types::NodeId;

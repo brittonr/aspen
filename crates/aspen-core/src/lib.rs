@@ -9,15 +9,13 @@
 //! - **Types**: `NodeId`, `NodeAddress`, `WriteCommand`, `ReadRequest`, etc.
 //! - **Storage**: alloc-safe storage record types such as `KvEntry`
 //! - **Constants**: Tiger Style resource limits
-//! - **Verified helpers**: Pure scan helpers and HLC helpers that remain
-//!   alloc-safe and portable
+//! - **Verified helpers**: Pure scan helpers and HLC helpers that remain alloc-safe and portable
 //!
 //! # Feature Flags
 //!
 //! - `sql`: Include alloc-safe SQL query types and traits
 
 #![cfg_attr(not(test), no_std)]
-
 // Phase 3 Tiger Style rollout: keep the current pilot families visible in pilot
 // crates while suppressing noisier families until Aspen has cleanup bandwidth.
 #![allow(unknown_lints)]

@@ -104,10 +104,7 @@ pub fn credential_authorized_for_prefix(caps: &[Capability], prefix: &str) -> bo
 /// Accounts for clock skew tolerance.
 #[inline]
 pub fn is_token_expired(input: TokenExpiryInput) -> bool {
-    input
-        .expires_at_secs
-        .saturating_add(input.clock_skew_tolerance_secs)
-        < input.now_secs
+    input.expires_at_secs.saturating_add(input.clock_skew_tolerance_secs) < input.now_secs
 }
 
 /// Check if a token needs refresh (within 20% of remaining lifetime).
@@ -143,12 +140,7 @@ mod tests {
             prefix: "data:sub:".into(),
         }];
 
-        assert!(is_credential_chain_valid(
-            &leaf_caps,
-            SINGLE_LEVEL_DEPTH,
-            &[parent_caps],
-            &[true],
-        ));
+        assert!(is_credential_chain_valid(&leaf_caps, SINGLE_LEVEL_DEPTH, &[parent_caps], &[true],));
     }
 
     #[test]
@@ -158,12 +150,7 @@ mod tests {
             prefix: "data:sub:".into(),
         }];
 
-        assert!(!is_credential_chain_valid(
-            &leaf_caps,
-            SINGLE_LEVEL_DEPTH,
-            &[parent_caps],
-            &[false],
-        ));
+        assert!(!is_credential_chain_valid(&leaf_caps, SINGLE_LEVEL_DEPTH, &[parent_caps], &[false],));
     }
 
     #[test]
@@ -171,22 +158,12 @@ mod tests {
         let parent_caps = vec![Capability::Read { prefix: "data:".into() }, Capability::Delegate];
         let leaf_caps = vec![Capability::Write { prefix: "data:".into() }];
 
-        assert!(!is_credential_chain_valid(
-            &leaf_caps,
-            SINGLE_LEVEL_DEPTH,
-            &[parent_caps],
-            &[true],
-        ));
+        assert!(!is_credential_chain_valid(&leaf_caps, SINGLE_LEVEL_DEPTH, &[parent_caps], &[true],));
     }
 
     #[test]
     fn test_invalid_chain_too_deep() {
-        assert!(!is_credential_chain_valid(
-            &[],
-            ONE_LEVEL_PAST_MAX_DEPTH,
-            &[],
-            &[],
-        ));
+        assert!(!is_credential_chain_valid(&[], ONE_LEVEL_PAST_MAX_DEPTH, &[], &[],));
     }
 
     #[test]

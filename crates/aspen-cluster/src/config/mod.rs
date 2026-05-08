@@ -771,8 +771,8 @@ fn merge_core_config(target: &mut NodeConfig, other: &NodeConfig) {
 /// Merge Iroh P2P networking configuration.
 fn merge_iroh_config(target: &mut IrohConfig, other: IrohConfig) {
     // fn merge_iroh_config<T: std::convert::From<u16>>(target: &mut IrohConfig, other: IrohConfig) {
-    // debug_assert!(other.bind_port <= <u16 as Into<T>>::into(u16::MAX), "iroh bind_port must fit in u16");
-    // debug_assert!(other.secret_key.is_none() || !other.bind_port.to_string().is_empty());
+    // debug_assert!(other.bind_port <= <u16 as Into<T>>::into(u16::MAX), "iroh bind_port must fit in
+    // u16"); debug_assert!(other.secret_key.is_none() || !other.bind_port.to_string().is_empty());
     if other.secret_key.is_some() {
         target.secret_key = other.secret_key;
     }

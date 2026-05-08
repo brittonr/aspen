@@ -88,7 +88,7 @@ pub use signing::CACHE_PUBLIC_KEY_KV;
 pub use signing::CACHE_SIGNING_KEY_KV;
 pub use signing::CacheSigningKey;
 pub use signing::CacheVerifyingKey;
+pub use signing::DEFAULT_CACHE_NAME;
 #[cfg(feature = "kv-index")]
 pub use signing::KvSigningKeyStore;
 pub use signing::SigningKeyStore;
-pub use signing::DEFAULT_CACHE_NAME;

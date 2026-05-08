@@ -1,11 +1,16 @@
-use aspen_traits::{KeyValueStoreError, KvRead, ReadRequest, ReadResult};
+use aspen_traits::KeyValueStoreError;
+use aspen_traits::KvRead;
+use aspen_traits::ReadRequest;
+use aspen_traits::ReadResult;
 
 struct ReadOnlyStore;
 
 #[async_trait::async_trait]
 impl KvRead for ReadOnlyStore {
     async fn read(&self, _request: ReadRequest) -> Result<ReadResult, KeyValueStoreError> {
-        Err(KeyValueStoreError::NotFound { key: "fixture".to_string() })
+        Err(KeyValueStoreError::NotFound {
+            key: "fixture".to_string(),
+        })
     }
 }
 

@@ -1,14 +1,18 @@
 //! Downstream consumer fixture proving canonical APIs work without `aspen` package.
 
 use aspen_kv_types::WriteCommand;
-use aspen_raft_kv_types::{RaftKvTypeConfig, RaftKvRequest, RaftKvResponse, BatchWriteOp};
-use aspen_redb_storage::raft_storage::RedbKvStorage;
-use aspen_redb_storage::verified::{compute_kv_versions, check_cas_condition};
-use aspen_raft_kv::KeyValueStore;
 use aspen_raft_kv::ClusterController;
+use aspen_raft_kv::KeyValueStore;
+use aspen_raft_kv::RaftKvMembershipConfig;
 use aspen_raft_kv::RaftKvNodeBuilder;
 use aspen_raft_kv::RaftKvStorageConfig;
-use aspen_raft_kv::RaftKvMembershipConfig;
+use aspen_raft_kv_types::BatchWriteOp;
+use aspen_raft_kv_types::RaftKvRequest;
+use aspen_raft_kv_types::RaftKvResponse;
+use aspen_raft_kv_types::RaftKvTypeConfig;
+use aspen_redb_storage::raft_storage::RedbKvStorage;
+use aspen_redb_storage::verified::check_cas_condition;
+use aspen_redb_storage::verified::compute_kv_versions;
 
 pub fn smoke_test_types() {
     let _req = RaftKvRequest::Set {

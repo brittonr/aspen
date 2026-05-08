@@ -26,10 +26,7 @@ pub fn serialize_vcard(contact: &Contact) -> String {
     push_custom_field_lines(&mut lines, &contact.custom_fields);
     lines.push(VCARD_END_LINE.to_string());
 
-    debug_assert!(
-        !contact.display_name.is_empty(),
-        "vCard serialization expects a non-empty display name"
-    );
+    debug_assert!(!contact.display_name.is_empty(), "vCard serialization expects a non-empty display name");
     debug_assert!(lines.len() >= MIN_VCARD_LINE_COUNT);
     debug_assert_eq!(lines.first().map(String::as_str), Some(VCARD_START_LINE));
     debug_assert_eq!(lines.last().map(String::as_str), Some(VCARD_END_LINE));

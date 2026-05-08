@@ -78,7 +78,10 @@ fn session_started_at() -> Instant {
 }
 
 /// Convert a u32 constant to usize (constants are bounded small values).
-#[expect(tigerstyle::platform_dependent_cast, reason = "called only with small constants from constants.rs")]
+#[expect(
+    tigerstyle::platform_dependent_cast,
+    reason = "called only with small constants from constants.rs"
+)]
 fn session_limit(value: u32) -> usize {
     value as usize
 }

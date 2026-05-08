@@ -34,11 +34,7 @@ pub trait BlobWrite: Send + Sync {
     /// Defaults to calling [`unprotect`](BlobWrite::unprotect), ignoring the
     /// reason. Concrete stores that emit lifecycle events should override this
     /// to propagate the reason to event consumers.
-    async fn unprotect_with_reason(
-        &self,
-        tag_name: &str,
-        _reason: UnprotectReason,
-    ) -> Result<(), BlobStoreError> {
+    async fn unprotect_with_reason(&self, tag_name: &str, _reason: UnprotectReason) -> Result<(), BlobStoreError> {
         self.unprotect(tag_name).await
     }
 }

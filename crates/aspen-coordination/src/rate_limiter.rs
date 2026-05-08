@@ -160,10 +160,7 @@ impl<S: KeyValueStore + ?Sized> DistributedRateLimiter<S> {
             };
 
             // Atomic update
-            match self
-                .try_acquire_n_cas_update(n, &current, &new_state, &mut retry_state)
-                .await
-            {
+            match self.try_acquire_n_cas_update(n, &current, &new_state, &mut retry_state).await {
                 TryAcquireResult::Success(remaining) => return Ok(remaining),
                 TryAcquireResult::Exhausted(err) => return Err(err),
                 TryAcquireResult::StorageError(err) => return Err(err),
@@ -439,7 +436,10 @@ mod tests {
     use aspen_kv_types::WriteRequest;
     use aspen_kv_types::WriteResult;
     use aspen_testing::DeterministicKeyValueStore;
-    use aspen_traits::{KvDelete, KvRead, KvScan, KvWrite};
+    use aspen_traits::KvDelete;
+    use aspen_traits::KvRead;
+    use aspen_traits::KvScan;
+    use aspen_traits::KvWrite;
     use async_trait::async_trait;
 
     use super::*;

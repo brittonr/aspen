@@ -24,13 +24,6 @@
 //! use aspen_core::constants::network::IROH_CONNECT_TIMEOUT_SECS;
 //! ```
 // Re-export all modules from aspen-constants.
-pub use aspen_constants::api;
-pub use aspen_constants::ci;
-pub use aspen_constants::coordination;
-pub use aspen_constants::directory;
-pub use aspen_constants::network;
-pub use aspen_constants::raft;
-
 // Re-export commonly used constants at module root for backwards compatibility.
 pub use api::DEFAULT_SCAN_LIMIT;
 #[cfg(feature = "sql")]
@@ -49,6 +42,12 @@ pub use api::MAX_SQL_RESULT_ROWS;
 #[cfg(feature = "sql")]
 pub use api::MAX_SQL_TIMEOUT_MS;
 pub use api::MAX_VALUE_SIZE;
+pub use aspen_constants::api;
+pub use aspen_constants::ci;
+pub use aspen_constants::coordination;
+pub use aspen_constants::directory;
+pub use aspen_constants::network;
+pub use aspen_constants::raft;
 pub use coordination::CAS_RETRY_INITIAL_BACKOFF_MS;
 pub use coordination::CAS_RETRY_MAX_BACKOFF_MS;
 pub use coordination::MAX_CAS_RETRIES;

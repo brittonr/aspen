@@ -13,7 +13,8 @@ use crate::verified::DiscoveryFilterMatchInput;
 
 #[inline]
 fn discovery_limit_usize(limit: u32) -> Result<usize> {
-    usize::try_from(limit).map_err(|_| anyhow::anyhow!("service discovery limit {} does not fit this platform usize", limit))
+    usize::try_from(limit)
+        .map_err(|_| anyhow::anyhow!("service discovery limit {} does not fit this platform usize", limit))
 }
 
 impl<S: KeyValueStore + ?Sized + 'static> ServiceRegistry<S> {

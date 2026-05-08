@@ -494,13 +494,27 @@ mod tests {
 
     #[test]
     fn test_validate_consistent_fencing_tokens_all_valid() {
-        let result = validate_consistent_fencing_tokens(FencingValidationInput { lock_token: 10, election_token: 20, rwlock_token: 30, min_lock_token: 5, min_election_token: 15, min_rwlock_token: 25 });
+        let result = validate_consistent_fencing_tokens(FencingValidationInput {
+            lock_token: 10,
+            election_token: 20,
+            rwlock_token: 30,
+            min_lock_token: 5,
+            min_election_token: 15,
+            min_rwlock_token: 25,
+        });
         assert_eq!(result, FencingValidation::Valid);
     }
 
     #[test]
     fn test_validate_consistent_fencing_tokens_stale_lock() {
-        let result = validate_consistent_fencing_tokens(FencingValidationInput { lock_token: 4, election_token: 20, rwlock_token: 30, min_lock_token: 5, min_election_token: 15, min_rwlock_token: 25 });
+        let result = validate_consistent_fencing_tokens(FencingValidationInput {
+            lock_token: 4,
+            election_token: 20,
+            rwlock_token: 30,
+            min_lock_token: 5,
+            min_election_token: 15,
+            min_rwlock_token: 25,
+        });
         assert!(matches!(result, FencingValidation::StaleToken {
             token: 4,
             min_expected: 5
@@ -509,7 +523,14 @@ mod tests {
 
     #[test]
     fn test_validate_consistent_fencing_tokens_stale_election() {
-        let result = validate_consistent_fencing_tokens(FencingValidationInput { lock_token: 10, election_token: 14, rwlock_token: 30, min_lock_token: 5, min_election_token: 15, min_rwlock_token: 25 });
+        let result = validate_consistent_fencing_tokens(FencingValidationInput {
+            lock_token: 10,
+            election_token: 14,
+            rwlock_token: 30,
+            min_lock_token: 5,
+            min_election_token: 15,
+            min_rwlock_token: 25,
+        });
         assert!(matches!(result, FencingValidation::StaleToken {
             token: 14,
             min_expected: 15

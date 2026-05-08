@@ -1,10 +1,10 @@
 //! Aspen-owned storage port traits for Redb-backed state.
 //!
 //! These traits abstract over the Redb storage layer so that:
-//! - Domain logic (TTL cleanup, lease cleanup, chain verification) can be
-//!   tested with in-memory implementations.
-//! - The OpenRaft adapter layer owns the openraft coupling without leaking
-//!   Redb types into domain consumers.
+//! - Domain logic (TTL cleanup, lease cleanup, chain verification) can be tested with in-memory
+//!   implementations.
+//! - The OpenRaft adapter layer owns the openraft coupling without leaking Redb types into domain
+//!   consumers.
 //! - The single-fsync invariant is documented at the trait level.
 //!
 //! ## Trait hierarchy
@@ -86,17 +86,14 @@ mod tests {
         }
 
         fn insert(&mut self, key: &str, value: &str, version: i64) {
-            self.entries.insert(
-                key.to_string(),
-                KvEntry {
-                    value: value.to_string(),
-                    version,
-                    create_revision: 1,
-                    mod_revision: version,
-                    expires_at_ms: None,
-                    lease_id: None,
-                },
-            );
+            self.entries.insert(key.to_string(), KvEntry {
+                value: value.to_string(),
+                version,
+                create_revision: 1,
+                mod_revision: version,
+                expires_at_ms: None,
+                lease_id: None,
+            });
         }
     }
 
@@ -277,17 +274,14 @@ mod tests {
         }
 
         fn insert_with_ttl(&mut self, key: &str, value: &str, version: i64, expires_at_ms: u64) {
-            self.entries.insert(
-                key.to_string(),
-                KvEntry {
-                    value: value.to_string(),
-                    version,
-                    create_revision: 1,
-                    mod_revision: version,
-                    expires_at_ms: Some(expires_at_ms),
-                    lease_id: None,
-                },
-            );
+            self.entries.insert(key.to_string(), KvEntry {
+                value: value.to_string(),
+                version,
+                create_revision: 1,
+                mod_revision: version,
+                expires_at_ms: Some(expires_at_ms),
+                lease_id: None,
+            });
         }
     }
 
@@ -311,14 +305,24 @@ mod tests {
             })
         }
 
-        fn scan(&self, prefix: &str, _after: Option<&str>, limit: Option<u32>) -> Result<Vec<KeyValueWithRevision>, SharedStorageError> {
+        fn scan(
+            &self,
+            prefix: &str,
+            _after: Option<&str>,
+            limit: Option<u32>,
+        ) -> Result<Vec<KeyValueWithRevision>, SharedStorageError> {
             let limit = limit.unwrap_or(100) as usize;
-            let results: Vec<_> = self.entries.iter()
+            let results: Vec<_> = self
+                .entries
+                .iter()
                 .filter(|(k, e)| k.starts_with(prefix) && !e.expires_at_ms.is_some_and(|t| self.now_ms > t))
                 .take(limit)
                 .map(|(k, e)| KeyValueWithRevision {
-                    key: k.clone(), value: e.value.clone(),
-                    version: e.version as u64, create_revision: e.create_revision as u64, mod_revision: e.mod_revision as u64,
+                    key: k.clone(),
+                    value: e.value.clone(),
+                    version: e.version as u64,
+                    create_revision: e.create_revision as u64,
+                    mod_revision: e.mod_revision as u64,
                 })
                 .collect();
             Ok(results)
@@ -332,8 +336,13 @@ mod tests {
             Ok(self.entries.values().filter(|e| e.expires_at_ms.is_some_and(|t| self.now_ms <= t)).count() as u64)
         }
 
-        fn get_expired_keys_with_metadata(&self, batch_limit: u32) -> Result<Vec<(String, Option<u64>)>, SharedStorageError> {
-            let results: Vec<_> = self.entries.iter()
+        fn get_expired_keys_with_metadata(
+            &self,
+            batch_limit: u32,
+        ) -> Result<Vec<(String, Option<u64>)>, SharedStorageError> {
+            let results: Vec<_> = self
+                .entries
+                .iter()
                 .filter(|(_, e)| e.expires_at_ms.is_some_and(|t| self.now_ms > t))
                 .take(batch_limit as usize)
                 .map(|(k, _)| (k.clone(), None))
@@ -475,28 +484,50 @@ mod tests {
 
     impl KvStateRead for FailingKvState {
         fn get(&self, _key: &str) -> Result<Option<KvEntry>, SharedStorageError> {
-            Err(SharedStorageError::Internal { reason: "simulated read failure".into() })
+            Err(SharedStorageError::Internal {
+                reason: "simulated read failure".into(),
+            })
         }
         fn get_with_revision(&self, _key: &str) -> Result<Option<KeyValueWithRevision>, SharedStorageError> {
-            Err(SharedStorageError::Internal { reason: "simulated read failure".into() })
+            Err(SharedStorageError::Internal {
+                reason: "simulated read failure".into(),
+            })
         }
-        fn scan(&self, _prefix: &str, _after: Option<&str>, _limit: Option<u32>) -> Result<Vec<KeyValueWithRevision>, SharedStorageError> {
-            Err(SharedStorageError::Internal { reason: "simulated scan failure".into() })
+        fn scan(
+            &self,
+            _prefix: &str,
+            _after: Option<&str>,
+            _limit: Option<u32>,
+        ) -> Result<Vec<KeyValueWithRevision>, SharedStorageError> {
+            Err(SharedStorageError::Internal {
+                reason: "simulated scan failure".into(),
+            })
         }
         fn count_expired_keys(&self) -> Result<u64, SharedStorageError> {
-            Err(SharedStorageError::Internal { reason: "simulated count failure".into() })
+            Err(SharedStorageError::Internal {
+                reason: "simulated count failure".into(),
+            })
         }
         fn count_keys_with_ttl(&self) -> Result<u64, SharedStorageError> {
-            Err(SharedStorageError::Internal { reason: "simulated count failure".into() })
+            Err(SharedStorageError::Internal {
+                reason: "simulated count failure".into(),
+            })
         }
-        fn get_expired_keys_with_metadata(&self, _batch_limit: u32) -> Result<Vec<(String, Option<u64>)>, SharedStorageError> {
-            Err(SharedStorageError::Internal { reason: "simulated metadata failure".into() })
+        fn get_expired_keys_with_metadata(
+            &self,
+            _batch_limit: u32,
+        ) -> Result<Vec<(String, Option<u64>)>, SharedStorageError> {
+            Err(SharedStorageError::Internal {
+                reason: "simulated metadata failure".into(),
+            })
         }
     }
 
     impl KvStateWrite for FailingKvState {
         fn delete_expired_keys(&self, _batch_limit: u32) -> Result<u32, SharedStorageError> {
-            Err(SharedStorageError::Internal { reason: "simulated write failure".into() })
+            Err(SharedStorageError::Internal {
+                reason: "simulated write failure".into(),
+            })
         }
     }
 
@@ -518,7 +549,9 @@ mod tests {
 
     impl ChainRead for FailingChainRead {
         fn chain_tip_for_verification(&self) -> Result<(u64, ChainHash), SharedStorageError> {
-            Err(SharedStorageError::LockPoisoned { context: "simulated lock failure".into() })
+            Err(SharedStorageError::LockPoisoned {
+                context: "simulated lock failure".into(),
+            })
         }
     }
 

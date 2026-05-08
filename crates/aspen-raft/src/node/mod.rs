@@ -427,11 +427,11 @@ mod warning_tests {
 
     use aspen_cluster_types::ClusterNode;
     use aspen_cluster_types::InitRequest;
+    use aspen_traits::ClusterController;
     use openraft::Config;
     use tracing_subscriber::fmt::MakeWriter;
 
     use super::*;
-    use aspen_traits::ClusterController;
     use crate::madsim_network::FailureInjector;
     use crate::madsim_network::MadsimNetworkFactory;
     use crate::madsim_network::MadsimRaftRouter;
@@ -461,10 +461,7 @@ mod warning_tests {
 
     impl io::Write for BufferWriter {
         fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-            self.bytes
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .extend_from_slice(buf);
+            self.bytes.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).extend_from_slice(buf);
             Ok(buf.len())
         }
 
@@ -538,21 +535,15 @@ mod warning_tests {
             .register_node(NodeId(TEST_NODE_ID_U64), register_addr, raft.clone())
             .expect("register warning test node with router");
 
-        let node = RaftNode::new(
-            NodeId(TEST_NODE_ID_U64),
-            Arc::new(raft),
-            StateMachineVariant::InMemory(state_machine),
-        );
+        let node =
+            RaftNode::new(NodeId(TEST_NODE_ID_U64), Arc::new(raft), StateMachineVariant::InMemory(state_machine));
 
         let mut cluster_node = ClusterNode::new(TEST_NODE_ID_U64, "warning-test-node", None);
         cluster_node.node_addr = Some(node_addr);
-        ClusterController::init(
-            &node,
-            InitRequest {
-                initial_members: vec![cluster_node],
-                trust: Default::default(),
-            },
-        )
+        ClusterController::init(&node, InitRequest {
+            initial_members: vec![cluster_node],
+            trust: Default::default(),
+        })
         .await
         .expect("initialize warning test cluster");
 
@@ -562,7 +553,8 @@ mod warning_tests {
 
     #[tokio::test]
     async fn test_current_leader_info_warns_and_returns_none_for_invalid_leader_address() {
-        let node = create_single_node_cluster(aspen_core::NodeAddress::from_parts("not-a-public-key", Vec::new())).await;
+        let node =
+            create_single_node_cluster(aspen_core::NodeAddress::from_parts("not-a-public-key", Vec::new())).await;
 
         let (leader_info, logs) = capture_warning_logs(|| node.current_leader_info());
 

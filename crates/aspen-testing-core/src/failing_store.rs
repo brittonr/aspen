@@ -36,11 +36,11 @@ use aspen_kv_types::ScanRequest;
 use aspen_kv_types::ScanResult;
 use aspen_kv_types::WriteRequest;
 use aspen_kv_types::WriteResult;
+use aspen_traits::KeyValueStore;
 use aspen_traits::KvDelete;
 use aspen_traits::KvRead;
 use aspen_traits::KvScan;
 use aspen_traits::KvWrite;
-use aspen_traits::KeyValueStore;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 

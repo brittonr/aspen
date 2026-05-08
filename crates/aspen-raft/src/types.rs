@@ -23,25 +23,24 @@
 //! existing imports keep working.
 
 // Re-export types from aspen-raft-types
+pub use aspen_raft_kv_types::BatchCondition;
+pub use aspen_raft_kv_types::BatchWriteOp;
+pub use aspen_raft_kv_types::RaftKvMemberInfo;
+pub use aspen_raft_kv_types::RaftKvRequest;
+pub use aspen_raft_kv_types::RaftKvResponse;
+pub use aspen_raft_kv_types::RaftKvStorageError;
+// Compatibility re-exports from aspen-raft-kv-types.
+// New consumers should depend on aspen-raft-kv-types directly.
+pub use aspen_raft_kv_types::RaftKvTypeConfig;
+pub use aspen_raft_kv_types::TxnCompareOp;
+pub use aspen_raft_kv_types::TxnCompareSpec;
+pub use aspen_raft_kv_types::TxnCompareTarget;
+pub use aspen_raft_kv_types::TxnOpSpec;
 pub use aspen_raft_types::AppRequest;
 pub use aspen_raft_types::AppResponse;
 pub use aspen_raft_types::AppTypeConfig;
 pub use aspen_raft_types::NodeId;
 pub use aspen_raft_types::RaftMemberInfo;
-
-// Compatibility re-exports from aspen-raft-kv-types.
-// New consumers should depend on aspen-raft-kv-types directly.
-pub use aspen_raft_kv_types::RaftKvTypeConfig;
-pub use aspen_raft_kv_types::RaftKvRequest;
-pub use aspen_raft_kv_types::RaftKvResponse;
-pub use aspen_raft_kv_types::RaftKvStorageError;
-pub use aspen_raft_kv_types::RaftKvMemberInfo;
-pub use aspen_raft_kv_types::BatchWriteOp;
-pub use aspen_raft_kv_types::BatchCondition;
-pub use aspen_raft_kv_types::TxnCompareSpec;
-pub use aspen_raft_kv_types::TxnCompareOp;
-pub use aspen_raft_kv_types::TxnCompareTarget;
-pub use aspen_raft_kv_types::TxnOpSpec;
 pub use aspen_raft_types::TrustInitializePayload;
 pub use aspen_raft_types::TrustReconfigurationPayload;
 

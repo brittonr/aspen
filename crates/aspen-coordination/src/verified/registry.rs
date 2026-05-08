@@ -462,23 +462,58 @@ mod tests {
     fn test_matches_filter_no_filters() {
         let tags: Vec<String> = vec![];
         let required: Vec<String> = vec![];
-        assert!(matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Healthy, tags: &tags, version: "1.0.0", healthy_only: false, required_tags: &required, version_prefix: None }));
+        assert!(matches_discovery_filter(DiscoveryFilterMatchInput {
+            health_status: HealthStatus::Healthy,
+            tags: &tags,
+            version: "1.0.0",
+            healthy_only: false,
+            required_tags: &required,
+            version_prefix: None
+        }));
     }
 
     #[test]
     fn test_matches_filter_healthy_only() {
         let tags: Vec<String> = vec![];
         let required: Vec<String> = vec![];
-        assert!(matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Healthy, tags: &tags, version: "1.0.0", healthy_only: true, required_tags: &required, version_prefix: None }));
-        assert!(!matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Unhealthy, tags: &tags, version: "1.0.0", healthy_only: true, required_tags: &required, version_prefix: None }));
-        assert!(!matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Unknown, tags: &tags, version: "1.0.0", healthy_only: true, required_tags: &required, version_prefix: None }));
+        assert!(matches_discovery_filter(DiscoveryFilterMatchInput {
+            health_status: HealthStatus::Healthy,
+            tags: &tags,
+            version: "1.0.0",
+            healthy_only: true,
+            required_tags: &required,
+            version_prefix: None
+        }));
+        assert!(!matches_discovery_filter(DiscoveryFilterMatchInput {
+            health_status: HealthStatus::Unhealthy,
+            tags: &tags,
+            version: "1.0.0",
+            healthy_only: true,
+            required_tags: &required,
+            version_prefix: None
+        }));
+        assert!(!matches_discovery_filter(DiscoveryFilterMatchInput {
+            health_status: HealthStatus::Unknown,
+            tags: &tags,
+            version: "1.0.0",
+            healthy_only: true,
+            required_tags: &required,
+            version_prefix: None
+        }));
     }
 
     #[test]
     fn test_matches_filter_tags() {
         let tags = vec!["region:us-east".to_string(), "env:prod".to_string()];
         let required = vec!["region:us-east".to_string()];
-        assert!(matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Healthy, tags: &tags, version: "1.0.0", healthy_only: false, required_tags: &required, version_prefix: None }));
+        assert!(matches_discovery_filter(DiscoveryFilterMatchInput {
+            health_status: HealthStatus::Healthy,
+            tags: &tags,
+            version: "1.0.0",
+            healthy_only: false,
+            required_tags: &required,
+            version_prefix: None
+        }));
 
         let missing = vec!["region:us-west".to_string()];
         assert!(!matches_discovery_filter(DiscoveryFilterMatchInput {
@@ -495,8 +530,22 @@ mod tests {
     fn test_matches_filter_version_prefix() {
         let tags: Vec<String> = vec![];
         let required: Vec<String> = vec![];
-        assert!(matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Healthy, tags: &tags, version: "1.0.0", healthy_only: false, required_tags: &required, version_prefix: Some("1.") }));
-        assert!(!matches_discovery_filter(DiscoveryFilterMatchInput { health_status: HealthStatus::Healthy, tags: &tags, version: "2.0.0", healthy_only: false, required_tags: &required, version_prefix: Some("1.") }));
+        assert!(matches_discovery_filter(DiscoveryFilterMatchInput {
+            health_status: HealthStatus::Healthy,
+            tags: &tags,
+            version: "1.0.0",
+            healthy_only: false,
+            required_tags: &required,
+            version_prefix: Some("1.")
+        }));
+        assert!(!matches_discovery_filter(DiscoveryFilterMatchInput {
+            health_status: HealthStatus::Healthy,
+            tags: &tags,
+            version: "2.0.0",
+            healthy_only: false,
+            required_tags: &required,
+            version_prefix: Some("1.")
+        }));
     }
 
     #[test]

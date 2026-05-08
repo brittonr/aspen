@@ -175,9 +175,7 @@ impl FuseSyncClient {
         let parsed = AspenClusterTicket::deserialize(ticket).context("failed to parse cluster ticket")?;
 
         // Get endpoint addresses with direct socket addresses
-        let addrs = parsed
-            .endpoint_addrs()
-            .context("cluster ticket contains invalid bootstrap endpoint id")?;
+        let addrs = parsed.endpoint_addrs().context("cluster ticket contains invalid bootstrap endpoint id")?;
         if addrs.is_empty() {
             anyhow::bail!("no bootstrap peers in ticket");
         }

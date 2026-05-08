@@ -37,7 +37,7 @@ async fn run_slow_network_test(events: &mut Vec<String>) -> anyhow::Result<()> {
     // 200ms latency = 400ms RTT, so timeouts must be significantly higher
     let config = Arc::new(
         Config {
-            is_tick_enabled: false,         // Disable automatic ticking for manual control
+            is_tick_enabled: false,        // Disable automatic ticking for manual control
             heartbeat_interval_ms: 1000,   // 1 second heartbeat (was ~100ms)
             election_timeout_min_ms: 3000, // 3 seconds min election timeout
             election_timeout_max_ms: 6000, // 6 seconds max election timeout

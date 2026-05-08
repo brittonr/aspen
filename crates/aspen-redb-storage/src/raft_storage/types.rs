@@ -1,11 +1,11 @@
 //! Storage types and table definitions for RedbKvStorage.
 
+use aspen_raft_kv_types::RaftKvTypeConfig;
 use redb::TableDefinition;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::SnapshotIntegrity;
-use aspen_raft_kv_types::RaftKvTypeConfig;
 
 /// Raft log entries: key = log index (u64), value = serialized Entry
 pub const RAFT_LOG_TABLE: TableDefinition<u64, &[u8]> = TableDefinition::new("raft_log");

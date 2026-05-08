@@ -1,8 +1,15 @@
-use aspen_auth_core::{Audience, Capability, CapabilityToken};
-use aspen_cluster_types::{NodeAddress, NodeTransportAddr};
-use aspen_hooks_ticket::AspenHookTicket;
-use aspen_ticket::{AspenClusterTicket, BootstrapPeer, ClusterEndpointId, ClusterTopicId};
 use core::net::SocketAddr;
+
+use aspen_auth_core::Audience;
+use aspen_auth_core::Capability;
+use aspen_auth_core::CapabilityToken;
+use aspen_cluster_types::NodeAddress;
+use aspen_cluster_types::NodeTransportAddr;
+use aspen_hooks_ticket::AspenHookTicket;
+use aspen_ticket::AspenClusterTicket;
+use aspen_ticket::BootstrapPeer;
+use aspen_ticket::ClusterEndpointId;
+use aspen_ticket::ClusterTopicId;
 
 pub fn build_portable_auth_token(issuer: iroh_base::PublicKey) -> CapabilityToken {
     CapabilityToken {
@@ -29,9 +36,7 @@ pub fn build_cluster_ticket() -> AspenClusterTicket {
 }
 
 pub fn build_hook_ticket() -> AspenHookTicket {
-    let addr = NodeAddress::from_parts(
-        "i7-hook-endpoint",
-        [NodeTransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], 7007)))],
-    );
+    let addr =
+        NodeAddress::from_parts("i7-hook-endpoint", [NodeTransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], 7007)))]);
     AspenHookTicket::new("i7-hooks", vec![addr]).with_event_type("write_committed")
 }

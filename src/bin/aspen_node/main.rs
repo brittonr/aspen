@@ -181,7 +181,9 @@ async fn async_main() -> Result<()> {
                             .membership()
                             .nodes()
                             .filter_map(|(node_id, node)| match node.endpoint_id().parse() {
-                                Ok(public_key) => Some(aspen_blob::replication::NodeInfo::new(u64::from(*node_id), public_key)),
+                                Ok(public_key) => {
+                                    Some(aspen_blob::replication::NodeInfo::new(u64::from(*node_id), public_key))
+                                }
                                 Err(error) => {
                                     warn!(
                                         node_id = %node_id,

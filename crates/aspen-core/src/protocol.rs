@@ -227,7 +227,7 @@ impl<S, M> TestCtx<S, M> {
 
     /// Drain all envelopes from the outbound queue.
     pub fn drain_envelopes(&mut self) -> Vec<Envelope<M>> {
-core::mem::take(&mut self.envelopes)
+        core::mem::take(&mut self.envelopes)
     }
 
     /// Get envelopes addressed to a specific node.
@@ -272,7 +272,7 @@ core::mem::take(&mut self.envelopes)
 
     /// Drain all alarms.
     pub fn drain_alarms(&mut self) -> Vec<Alarm> {
-core::mem::take(&mut self.alarms)
+        core::mem::take(&mut self.alarms)
     }
 }
 

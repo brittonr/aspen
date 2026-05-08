@@ -4,11 +4,12 @@
 mod tests {
     use std::sync::Arc;
 
+    use aspen_testing_core::DeterministicKeyValueStore;
+
     use crate::constants::directory::DEFAULT_LAYER_TYPE;
     use crate::layer::Tuple;
     use crate::layer::directory::DirectoryError;
     use crate::layer::directory::DirectoryLayer;
-    use aspen_testing_core::DeterministicKeyValueStore;
 
     #[tokio::test]
     async fn test_create_and_open() {
@@ -1027,7 +1028,8 @@ mod tests {
     async fn test_directory_data_isolation() {
         use crate::kv::ScanRequest;
         use crate::kv::WriteRequest;
-        use crate::traits::{KvScan, KvWrite};
+        use crate::traits::KvScan;
+        use crate::traits::KvWrite;
 
         let store = Arc::new(DeterministicKeyValueStore::new());
         let dir_layer = DirectoryLayer::new(store.clone());

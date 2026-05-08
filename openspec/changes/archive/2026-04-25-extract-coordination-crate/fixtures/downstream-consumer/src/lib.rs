@@ -1,4 +1,6 @@
-use aspen_coordination::{DistributedLock, LeaderElection, QueueManager};
+use aspen_coordination::DistributedLock;
+use aspen_coordination::LeaderElection;
+use aspen_coordination::QueueManager;
 use aspen_kv_types::ReadRequest;
 use aspen_traits::KeyValueStore;
 

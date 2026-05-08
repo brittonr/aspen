@@ -110,9 +110,6 @@ pub mod write_forwarder;
 
 // Compatibility re-exports from reusable Redb Raft KV crates.
 // New consumers should depend on these crates directly.
-pub use aspen_raft_kv as raft_kv;
-pub use aspen_raft_kv_types as raft_kv_types;
-
 // Re-export key types for convenience
 use std::sync::Arc;
 
@@ -122,6 +119,8 @@ use aspen_kv_types::KeyValueStoreError;
 use aspen_kv_types::KeyValueWithRevision;
 use aspen_kv_types::ScanRequest;
 use aspen_kv_types::ScanResult;
+pub use aspen_raft_kv as raft_kv;
+pub use aspen_raft_kv_types as raft_kv_types;
 use constants::MAX_BATCH_SIZE;
 use storage::InMemoryStateMachine;
 use storage_shared::SharedRedbStorage;

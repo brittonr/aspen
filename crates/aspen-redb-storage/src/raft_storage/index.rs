@@ -2,11 +2,11 @@
 
 use aspen_layer::IndexError;
 use aspen_layer::IndexQueryExecutor;
-use aspen_layer::IndexScanResult;
 use aspen_layer::IndexResult;
+use aspen_layer::IndexScanResult;
+use aspen_layer::MAX_INDEX_SCAN_RESULTS;
 use aspen_layer::Tuple;
 use aspen_layer::extract_primary_key_from_tuple;
-use aspen_layer::MAX_INDEX_SCAN_RESULTS;
 
 use super::RedbKvStorage;
 use super::SM_INDEX_TABLE;

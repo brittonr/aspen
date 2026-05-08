@@ -17,7 +17,8 @@ fn split_secret_or_fail(
     share_total: u8,
     rng: &mut StdRng,
 ) -> Result<Vec<shamir::Share>, TestCaseError> {
-    shamir::split_secret(secret, share_threshold, share_total, rng).map_err(|error| TestCaseError::fail(error.to_string()))
+    shamir::split_secret(secret, share_threshold, share_total, rng)
+        .map_err(|error| TestCaseError::fail(error.to_string()))
 }
 
 fn reconstruct_secret_or_fail(shares: &[shamir::Share]) -> Result<[u8; SECRET_SIZE], TestCaseError> {

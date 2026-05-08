@@ -34,11 +34,11 @@ use crate::kv::WriteCommand;
 use crate::kv::WriteRequest;
 use crate::kv::WriteResult;
 use crate::traits::ClusterController;
+use crate::traits::KeyValueStore;
 use crate::traits::KvDelete;
 use crate::traits::KvRead;
 use crate::traits::KvScan;
 use crate::traits::KvWrite;
-use crate::traits::KeyValueStore;
 use crate::types::ClusterMetrics;
 use crate::types::NodeState;
 use crate::types::SnapshotLogId;
@@ -104,7 +104,6 @@ impl KvRead for DeterministicKeyValueStore {
             None => Ok(ReadResult { kv: None }),
         }
     }
-
 }
 
 #[async_trait]
@@ -344,7 +343,6 @@ impl KvWrite for DeterministicKeyValueStore {
             conflict_actual_version: None,
         })
     }
-
 }
 
 #[async_trait]

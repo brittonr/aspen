@@ -17,25 +17,22 @@ mod snapshot;
 mod state_machine;
 mod types;
 
-pub use snapshot::RedbKvSnapshotBuilder;
-
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
 
 use aspen_layer::IndexRegistry;
+use aspen_raft_kv_types::RaftKvResponse;
+use aspen_raft_kv_types::RaftKvTypeConfig;
+pub use error::*;
 use openraft::alias::LogIdOf;
 use redb::Database;
+pub use snapshot::RedbKvSnapshotBuilder;
 use tokio::sync::broadcast;
-
-pub use error::*;
 pub use types::*;
 
 use crate::ChainTipState;
-
-use aspen_raft_kv_types::RaftKvResponse;
-use aspen_raft_kv_types::RaftKvTypeConfig;
 
 /// Single-fsync Redb storage for reusable Raft KV.
 #[derive(Clone)]
@@ -58,8 +55,6 @@ impl std::fmt::Debug for RedbKvStorage {
             .finish_non_exhaustive()
     }
 }
-
-
 
 impl RedbKvStorage {
     pub fn db(&self) -> &Arc<Database> {

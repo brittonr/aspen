@@ -477,7 +477,6 @@ impl LockModel {
             false
         }
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -859,7 +858,6 @@ impl RateLimiterModel {
             false
         }
     }
-
 }
 
 proptest! {

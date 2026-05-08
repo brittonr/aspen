@@ -79,11 +79,7 @@ async fn test_rate_limiter_fail_closed_on_storage_error() {
     let has_storage_unavailable = error_text.contains("StorageUnavailable");
     let has_injected_fault = error_text.contains("injected fault");
     let is_known_storage_issue = has_disk_error || has_storage_unavailable || has_injected_fault;
-    assert!(
-        is_known_storage_issue,
-        "Error should mention storage issue, got: {}",
-        error_text
-    );
+    assert!(is_known_storage_issue, "Error should mention storage issue, got: {}", error_text);
 }
 
 // ---------------------------------------------------------------------------

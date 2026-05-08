@@ -3,12 +3,11 @@
 use snafu::ResultExt;
 
 use super::BeginReadSnafu;
+use super::CHAIN_HASH_TABLE;
 use super::GetSnafu;
 use super::OpenTableSnafu;
 use super::RedbKvStorage;
 use super::SharedStorageError;
-use super::CHAIN_HASH_TABLE;
-
 use crate::ChainHash;
 
 impl RedbKvStorage {

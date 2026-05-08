@@ -263,10 +263,15 @@ mod tests {
         assert!(index.get(&key, 1200).unwrap().is_some());
 
         // Past TTL — re-insert since expired entry was deleted
-        index.put(&key, &make_entry(MakeEntryParams {
-            created_at_ms: 1000,
-            ttl_ms: 500,
-        })).unwrap();
+        index
+            .put(
+                &key,
+                &make_entry(MakeEntryParams {
+                    created_at_ms: 1000,
+                    ttl_ms: 500,
+                }),
+            )
+            .unwrap();
         assert!(index.get(&key, 1501).unwrap().is_none());
     }
 
@@ -306,14 +311,24 @@ mod tests {
 
         let key1 = CacheKey([0x01; 32]);
         let key2 = CacheKey([0x02; 32]);
-        index.put(&key1, &make_entry(MakeEntryParams {
-            created_at_ms: 1000,
-            ttl_ms: DEFAULT_TTL_MS,
-        })).unwrap();
-        index.put(&key2, &make_entry(MakeEntryParams {
-            created_at_ms: 2000,
-            ttl_ms: DEFAULT_TTL_MS,
-        })).unwrap();
+        index
+            .put(
+                &key1,
+                &make_entry(MakeEntryParams {
+                    created_at_ms: 1000,
+                    ttl_ms: DEFAULT_TTL_MS,
+                }),
+            )
+            .unwrap();
+        index
+            .put(
+                &key2,
+                &make_entry(MakeEntryParams {
+                    created_at_ms: 2000,
+                    ttl_ms: DEFAULT_TTL_MS,
+                }),
+            )
+            .unwrap();
 
         let results = index.scan_all(100).unwrap();
         assert_eq!(results.len(), 2);

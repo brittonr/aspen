@@ -1,4 +1,6 @@
-use aspen_ticket::{AspenClusterTicket, ClusterTopicId, SignedAspenClusterTicket};
+use aspen_ticket::AspenClusterTicket;
+use aspen_ticket::ClusterTopicId;
+use aspen_ticket::SignedAspenClusterTicket;
 
 fn main() {
     let secret_key = iroh_base::SecretKey::from([2u8; 32]);

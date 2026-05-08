@@ -27,13 +27,10 @@ struct TestWorkerSpec<'a> {
 
 /// Create a test worker info on the default node.
 fn create_test_worker(worker_id: impl Into<String>, load: f32) -> WorkerInfo {
-    create_test_worker_with_spec(
-        worker_id,
-        TestWorkerSpec {
-            node_id: DEFAULT_TEST_NODE_ID,
-            load,
-        },
-    )
+    create_test_worker_with_spec(worker_id, TestWorkerSpec {
+        node_id: DEFAULT_TEST_NODE_ID,
+        load,
+    })
 }
 
 /// Create a test worker info.
@@ -204,13 +201,10 @@ async fn test_worker_filtering() {
     w1.tags = vec!["gpu".to_string(), "ml".to_string()];
     w1.capabilities = vec!["training".to_string()];
 
-    let mut w2 = create_test_worker_with_spec(
-        "w2",
-        TestWorkerSpec {
-            node_id: "n2",
-            load: 0.3,
-        },
-    );
+    let mut w2 = create_test_worker_with_spec("w2", TestWorkerSpec {
+        node_id: "n2",
+        load: 0.3,
+    });
     w2.tags = vec!["cpu".to_string()];
     w2.capabilities = vec!["inference".to_string()];
 

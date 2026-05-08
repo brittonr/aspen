@@ -27,9 +27,9 @@
 //!
 //! ## Feature Flags
 //!
-//! - `async` (default): Enables async trait definitions via `async-trait`. Without
-//!   this feature, only the type re-exports are available — suitable for alloc-only
-//!   consumers that need the types but not the async runtime.
+//! - `async` (default): Enables async trait definitions via `async-trait`. Without this feature,
+//!   only the type re-exports are available — suitable for alloc-only consumers that need the types
+//!   but not the async runtime.
 
 #![cfg_attr(not(test), no_std)]
 
@@ -70,8 +70,9 @@ pub use async_traits::*;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use alloc::sync::Arc;
+
+    use super::*;
 
     fn assert_send<T: Send>() {}
     fn assert_sync<T: Sync>() {}

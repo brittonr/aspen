@@ -694,8 +694,11 @@ mod mock_kv {
     use aspen_core::DeleteResult;
     use aspen_core::KeyValueStore;
     use aspen_core::KeyValueStoreError;
-    use aspen_core::{KvDelete, KvRead, KvScan, KvWrite};
     use aspen_core::KeyValueWithRevision;
+    use aspen_core::KvDelete;
+    use aspen_core::KvRead;
+    use aspen_core::KvScan;
+    use aspen_core::KvWrite;
     use aspen_core::ReadRequest;
     use aspen_core::ReadResult;
     use aspen_core::ScanRequest;

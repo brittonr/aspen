@@ -28,7 +28,8 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use crate::storage_ports::{LeaseRead, LeaseWrite};
+use crate::storage_ports::LeaseRead;
+use crate::storage_ports::LeaseWrite;
 use crate::storage_shared::SharedRedbStorage;
 
 /// Configuration for the lease cleanup task.
@@ -299,7 +300,8 @@ mod tests {
 
     #[test]
     fn test_cleanup_iteration_uses_port_traits() {
-        use crate::storage_ports::{LeaseRead, LeaseWrite};
+        use crate::storage_ports::LeaseRead;
+        use crate::storage_ports::LeaseWrite;
         use crate::storage_shared::SharedStorageError;
 
         struct NoExpiredLeases;

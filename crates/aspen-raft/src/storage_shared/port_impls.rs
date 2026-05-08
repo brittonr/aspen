@@ -6,14 +6,17 @@
 //! chain verification) to depend on narrow port traits rather than the
 //! concrete Redb storage type.
 
-use crate::storage_ports::{ChainRead, KvStateRead, KvStateWrite, LeaseRead, LeaseWrite};
-use crate::verified::ChainHash;
+use aspen_kv_types::KeyValueWithRevision;
+use aspen_storage_types::KvEntry;
 
 use super::SharedRedbStorage;
 use super::SharedStorageError;
-
-use aspen_kv_types::KeyValueWithRevision;
-use aspen_storage_types::KvEntry;
+use crate::storage_ports::ChainRead;
+use crate::storage_ports::KvStateRead;
+use crate::storage_ports::KvStateWrite;
+use crate::storage_ports::LeaseRead;
+use crate::storage_ports::LeaseWrite;
+use crate::verified::ChainHash;
 
 impl KvStateRead for SharedRedbStorage {
     fn get(&self, key: &str) -> Result<Option<KvEntry>, SharedStorageError> {

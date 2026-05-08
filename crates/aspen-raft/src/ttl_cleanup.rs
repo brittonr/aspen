@@ -28,7 +28,8 @@ use tracing::debug;
 use tracing::info;
 use tracing::warn;
 
-use crate::storage_ports::{KvStateRead, KvStateWrite};
+use crate::storage_ports::KvStateRead;
+use crate::storage_ports::KvStateWrite;
 use crate::storage_shared::SharedRedbStorage;
 
 /// Configuration for the TTL cleanup task.
@@ -289,10 +290,12 @@ mod tests {
 
     #[test]
     fn test_cleanup_iteration_uses_port_traits() {
-        use crate::storage_ports::{KvStateRead, KvStateWrite};
-        use crate::storage_shared::SharedStorageError;
         use aspen_kv_types::KeyValueWithRevision;
         use aspen_storage_types::KvEntry;
+
+        use crate::storage_ports::KvStateRead;
+        use crate::storage_ports::KvStateWrite;
+        use crate::storage_shared::SharedStorageError;
 
         struct NoExpiredKeys;
 
@@ -303,7 +306,12 @@ mod tests {
             fn get_with_revision(&self, _key: &str) -> Result<Option<KeyValueWithRevision>, SharedStorageError> {
                 Ok(None)
             }
-            fn scan(&self, _prefix: &str, _after: Option<&str>, _limit: Option<u32>) -> Result<Vec<KeyValueWithRevision>, SharedStorageError> {
+            fn scan(
+                &self,
+                _prefix: &str,
+                _after: Option<&str>,
+                _limit: Option<u32>,
+            ) -> Result<Vec<KeyValueWithRevision>, SharedStorageError> {
                 Ok(Vec::new())
             }
             fn count_expired_keys(&self) -> Result<u64, SharedStorageError> {
@@ -312,7 +320,10 @@ mod tests {
             fn count_keys_with_ttl(&self) -> Result<u64, SharedStorageError> {
                 Ok(0)
             }
-            fn get_expired_keys_with_metadata(&self, _batch_limit: u32) -> Result<Vec<(String, Option<u64>)>, SharedStorageError> {
+            fn get_expired_keys_with_metadata(
+                &self,
+                _batch_limit: u32,
+            ) -> Result<Vec<(String, Option<u64>)>, SharedStorageError> {
                 Ok(Vec::new())
             }
         }

@@ -592,7 +592,10 @@ mod tests {
     use aspen_kv_types::WriteRequest;
     use aspen_kv_types::WriteResult;
     use aspen_testing::DeterministicKeyValueStore;
-    use aspen_traits::{KvDelete, KvRead, KvScan, KvWrite};
+    use aspen_traits::KvDelete;
+    use aspen_traits::KvRead;
+    use aspen_traits::KvScan;
+    use aspen_traits::KvWrite;
     use async_trait::async_trait;
 
     use super::*;

@@ -245,11 +245,16 @@ mod tests {
 
         // Live entry
         let key2 = CacheKey([0x02; 32]);
-        index.put(&key2, &make_entry(MakeEntryParams {
-            created_at_ms: now,
-            last_accessed_ms: now,
-            output_size_bytes: 100,
-        })).unwrap();
+        index
+            .put(
+                &key2,
+                &make_entry(MakeEntryParams {
+                    created_at_ms: now,
+                    last_accessed_ms: now,
+                    output_size_bytes: 100,
+                }),
+            )
+            .unwrap();
 
         let result = run_eviction(
             &index,
@@ -279,21 +284,36 @@ mod tests {
         let key_mid = CacheKey([0x02; 32]);
         let key_new = CacheKey([0x03; 32]);
 
-        index.put(&key_old, &make_entry(MakeEntryParams {
-            created_at_ms: now,
-            last_accessed_ms: 1000,
-            output_size_bytes: 1024,
-        })).unwrap(); // oldest access
-        index.put(&key_mid, &make_entry(MakeEntryParams {
-            created_at_ms: now,
-            last_accessed_ms: 5000,
-            output_size_bytes: 1024,
-        })).unwrap();
-        index.put(&key_new, &make_entry(MakeEntryParams {
-            created_at_ms: now,
-            last_accessed_ms: 9000,
-            output_size_bytes: 1024,
-        })).unwrap(); // newest access
+        index
+            .put(
+                &key_old,
+                &make_entry(MakeEntryParams {
+                    created_at_ms: now,
+                    last_accessed_ms: 1000,
+                    output_size_bytes: 1024,
+                }),
+            )
+            .unwrap(); // oldest access
+        index
+            .put(
+                &key_mid,
+                &make_entry(MakeEntryParams {
+                    created_at_ms: now,
+                    last_accessed_ms: 5000,
+                    output_size_bytes: 1024,
+                }),
+            )
+            .unwrap();
+        index
+            .put(
+                &key_new,
+                &make_entry(MakeEntryParams {
+                    created_at_ms: now,
+                    last_accessed_ms: 9000,
+                    output_size_bytes: 1024,
+                }),
+            )
+            .unwrap(); // newest access
 
         // Set max to allow only ~2 entries
         let max = (2u64).saturating_mul(1024u64.saturating_add(256u64)).saturating_add(1);
@@ -321,11 +341,16 @@ mod tests {
         let now = 100_000u64;
 
         let key = CacheKey([0x01; 32]);
-        index.put(&key, &make_entry(MakeEntryParams {
-            created_at_ms: now,
-            last_accessed_ms: now,
-            output_size_bytes: 100,
-        })).unwrap();
+        index
+            .put(
+                &key,
+                &make_entry(MakeEntryParams {
+                    created_at_ms: now,
+                    last_accessed_ms: now,
+                    output_size_bytes: 100,
+                }),
+            )
+            .unwrap();
 
         let result = run_eviction(
             &index,

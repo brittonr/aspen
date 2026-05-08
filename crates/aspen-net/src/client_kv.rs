@@ -114,7 +114,6 @@ impl KvWrite for ClientKvAdapter {
             }),
         }
     }
-
 }
 
 #[async_trait]

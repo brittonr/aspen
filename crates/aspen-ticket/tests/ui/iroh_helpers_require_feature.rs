@@ -1,4 +1,5 @@
-use aspen_ticket::{parse_ticket_to_addrs, AspenClusterTicket};
+use aspen_ticket::AspenClusterTicket;
+use aspen_ticket::parse_ticket_to_addrs;
 use iroh::EndpointAddr;
 use iroh_gossip::proto::TopicId;
 

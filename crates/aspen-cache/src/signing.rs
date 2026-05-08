@@ -19,11 +19,11 @@
 use std::sync::Arc;
 
 #[cfg(feature = "kv-index")]
-use aspen_traits::KeyValueStore;
-#[cfg(feature = "kv-index")]
 use aspen_kv_types::ReadRequest;
 #[cfg(feature = "kv-index")]
 use aspen_kv_types::WriteRequest;
+#[cfg(feature = "kv-index")]
+use aspen_traits::KeyValueStore;
 use data_encoding::BASE64;
 use ed25519_dalek::Signer;
 use nix_compat::narinfo;

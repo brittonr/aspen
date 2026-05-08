@@ -47,10 +47,7 @@ pub fn parse_vcard(input: &str) -> Result<Contact, ContactsError> {
         });
     }
 
-    debug_assert!(
-        !contact.display_name.is_empty() || !contact.uid.is_empty(),
-        "valid vCard must expose FN or UID"
-    );
+    debug_assert!(!contact.display_name.is_empty() || !contact.uid.is_empty(), "valid vCard must expose FN or UID");
     Ok(contact)
 }
 
@@ -130,9 +127,8 @@ fn apply_property(contact: &mut Contact, name: &str, params: &[(&str, &str)], va
 ///
 /// Splits on BEGIN:VCARD / END:VCARD boundaries.
 pub fn parse_vcards(input: &str) -> Result<Vec<Contact>, ContactsError> {
-    let mut contacts = Vec::with_capacity(
-        input.lines().filter(|line| line.trim().eq_ignore_ascii_case("BEGIN:VCARD")).count(),
-    );
+    let mut contacts =
+        Vec::with_capacity(input.lines().filter(|line| line.trim().eq_ignore_ascii_case("BEGIN:VCARD")).count());
     let mut current = String::new();
     let mut is_in_vcard = false;
 

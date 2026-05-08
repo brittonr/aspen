@@ -76,9 +76,7 @@ impl RedbKvStorage {
                     lease_id: None,
                 },
             ),
-            RaftKvRequest::Delete { key } => {
-                Self::apply_delete_in_txn(kv_table, index_table, index_registry, key)
-            }
+            RaftKvRequest::Delete { key } => Self::apply_delete_in_txn(kv_table, index_table, index_registry, key),
             RaftKvRequest::DeleteMulti { keys } => {
                 Self::apply_delete_multi_in_txn(kv_table, index_table, index_registry, keys)
             }
@@ -98,14 +96,9 @@ impl RedbKvStorage {
             RaftKvRequest::CompareAndDelete { key, expected } => {
                 Self::apply_compare_and_delete_in_txn(kv_table, index_table, index_registry, key, expected)
             }
-            RaftKvRequest::Batch { operations } => Self::apply_batch_in_txn(
-                kv_table,
-                index_table,
-                index_registry,
-                leases_table,
-                operations,
-                log_index,
-            ),
+            RaftKvRequest::Batch { operations } => {
+                Self::apply_batch_in_txn(kv_table, index_table, index_registry, leases_table, operations, log_index)
+            }
             RaftKvRequest::ConditionalBatch { conditions, operations } => Self::apply_conditional_batch_in_txn(
                 kv_table,
                 index_table,
@@ -146,9 +139,7 @@ impl RedbKvStorage {
             RaftKvRequest::LeaseRevoke { lease_id } => {
                 Self::apply_lease_revoke_in_txn(kv_table, index_table, index_registry, leases_table, *lease_id)
             }
-            RaftKvRequest::LeaseKeepalive { lease_id } => {
-                Self::apply_lease_keepalive_in_txn(leases_table, *lease_id)
-            }
+            RaftKvRequest::LeaseKeepalive { lease_id } => Self::apply_lease_keepalive_in_txn(leases_table, *lease_id),
             RaftKvRequest::Transaction {
                 compare,
                 success,
@@ -163,17 +154,15 @@ impl RedbKvStorage {
                 failure,
                 log_index,
             ),
-            RaftKvRequest::OptimisticTransaction { read_set, write_set } => {
-                Self::apply_optimistic_transaction_in_txn(
-                    kv_table,
-                    index_table,
-                    index_registry,
-                    leases_table,
-                    read_set,
-                    write_set,
-                    log_index,
-                )
-            }
+            RaftKvRequest::OptimisticTransaction { read_set, write_set } => Self::apply_optimistic_transaction_in_txn(
+                kv_table,
+                index_table,
+                index_registry,
+                leases_table,
+                read_set,
+                write_set,
+                log_index,
+            ),
         }
     }
 }

@@ -47,9 +47,9 @@ pub mod types;
 use std::sync::Arc;
 
 use aspen_traits::KeyValueStore;
+pub use registration::RegisterInstanceInput;
 pub use types::DiscoveryFilter;
 pub use types::HealthStatus;
-pub use registration::RegisterInstanceInput;
 pub use types::RegisterOptions;
 pub use types::ServiceInstance;
 pub use types::ServiceInstanceMetadata;

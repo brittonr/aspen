@@ -20,9 +20,12 @@
 
 extern crate alloc;
 
-use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::collections::BTreeMap;
+use alloc::collections::BTreeSet;
 use alloc::format;
 use alloc::string::String;
+#[cfg(feature = "iroh")]
+use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::fmt;
 use core::net::SocketAddr;
@@ -30,9 +33,6 @@ use core::net::SocketAddr;
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
-
-#[cfg(feature = "iroh")]
-use alloc::string::ToString;
 
 // ============================================================================
 // Error Types
@@ -134,10 +134,7 @@ pub struct NodeAddress {
 
 impl NodeAddress {
     /// Create a new address from explicit alloc-safe parts.
-    pub fn from_parts(
-        endpoint_id: impl Into<String>,
-        addrs: impl IntoIterator<Item = NodeTransportAddr>,
-    ) -> Self {
+    pub fn from_parts(endpoint_id: impl Into<String>, addrs: impl IntoIterator<Item = NodeTransportAddr>) -> Self {
         Self {
             endpoint_id: endpoint_id.into(),
             addrs: addrs.into_iter().collect(),
@@ -204,15 +201,14 @@ impl TryFrom<&NodeTransportAddr> for iroh_base::TransportAddr {
 
     fn try_from(addr: &NodeTransportAddr) -> Result<Self, Self::Error> {
         match addr {
-            NodeTransportAddr::Relay(url) => url.parse().map(iroh_base::TransportAddr::Relay).map_err(|_| {
-                NodeAddressConvertError::InvalidRelayUrl {
-                    relay_url: url.clone(),
-                }
-            }),
+            NodeTransportAddr::Relay(url) => url
+                .parse()
+                .map(iroh_base::TransportAddr::Relay)
+                .map_err(|_| NodeAddressConvertError::InvalidRelayUrl { relay_url: url.clone() }),
             NodeTransportAddr::Ip(addr) => Ok(iroh_base::TransportAddr::Ip(*addr)),
-            NodeTransportAddr::Custom(addr) => Ok(iroh_base::TransportAddr::Custom(
-                iroh_base::CustomAddr::from_parts(addr.id, &addr.data),
-            )),
+            NodeTransportAddr::Custom(addr) => {
+                Ok(iroh_base::TransportAddr::Custom(iroh_base::CustomAddr::from_parts(addr.id, &addr.data)))
+            }
         }
     }
 }
@@ -235,11 +231,7 @@ impl TryFrom<&NodeAddress> for iroh_base::EndpointAddr {
         let endpoint_id = addr.endpoint_id.parse().map_err(|_| NodeAddressConvertError::InvalidEndpointId {
             endpoint_id: addr.endpoint_id.clone(),
         })?;
-        let addrs = addr
-            .addrs
-            .iter()
-            .map(iroh_base::TransportAddr::try_from)
-            .collect::<Result<BTreeSet<_>, _>>()?;
+        let addrs = addr.addrs.iter().map(iroh_base::TransportAddr::try_from).collect::<Result<BTreeSet<_>, _>>()?;
         Ok(iroh_base::EndpointAddr { id: endpoint_id, addrs })
     }
 }
@@ -1064,10 +1056,8 @@ mod tests {
 
     #[test]
     fn node_address_clone() {
-        let node_addr = NodeAddress::from_parts(
-            "node-1",
-            [NodeTransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], 7777)))],
-        );
+        let node_addr =
+            NodeAddress::from_parts("node-1", [NodeTransportAddr::Ip(SocketAddr::from(([127, 0, 0, 1], 7777)))]);
         let cloned = node_addr.clone();
 
         assert_eq!(node_addr, cloned);
@@ -1127,10 +1117,8 @@ mod tests {
     #[test]
     fn node_address_try_into_iroh_rejects_invalid_relay_url() {
         let endpoint_addr = create_test_endpoint_addr();
-        let node_addr = NodeAddress::from_parts(
-            endpoint_addr.id.to_string(),
-            [NodeTransportAddr::Relay("not-a-url".to_string())],
-        );
+        let node_addr =
+            NodeAddress::from_parts(endpoint_addr.id.to_string(), [NodeTransportAddr::Relay("not-a-url".to_string())]);
 
         assert_eq!(
             node_addr.try_into_iroh(),

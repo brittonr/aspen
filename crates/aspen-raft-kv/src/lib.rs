@@ -381,8 +381,12 @@ fn validate_nonzero_timeout_ms(name: &'static str, actual_ms: u64) -> Result<(),
 
 #[cfg(test)]
 mod tests {
+    use aspen_traits::KvDelete;
+    use aspen_traits::KvRead;
+    use aspen_traits::KvScan;
+    use aspen_traits::KvWrite;
+
     use super::*;
-    use aspen_traits::{KvDelete, KvRead, KvScan, KvWrite};
 
     const LOCAL_NODE_ID: NodeId = 1;
     const REMOTE_NODE_ID: NodeId = 2;

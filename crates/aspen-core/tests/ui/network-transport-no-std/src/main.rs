@@ -9,4 +9,5 @@ fn main() {
     let _ = core::mem::size_of::<Option<NetworkTransportPlaceholder>>();
 }
 
-type NetworkTransportPlaceholder = fn() -> &'static dyn NetworkTransport<Address = (), Endpoint = (), Gossip = (), SecretKey = ()>;
+type NetworkTransportPlaceholder =
+    fn() -> &'static dyn NetworkTransport<Address = (), Endpoint = (), Gossip = (), SecretKey = ()>;

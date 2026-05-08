@@ -337,8 +337,18 @@ mod tests {
         let term = 1;
         let entry_bytes = b"test entry";
 
-        let hash1 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes });
-        let hash2 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes });
+        let hash1 = compute_entry_hash(EntryHashInput {
+            prev_hash: &prev_hash,
+            log_index,
+            term,
+            entry_bytes,
+        });
+        let hash2 = compute_entry_hash(EntryHashInput {
+            prev_hash: &prev_hash,
+            log_index,
+            term,
+            entry_bytes,
+        });
 
         assert_eq!(hash1, hash2);
     }
@@ -349,8 +359,18 @@ mod tests {
         let term = 1;
         let entry_bytes = b"test entry";
 
-        let hash1 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index: 1, term, entry_bytes });
-        let hash2 = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index: 2, term, entry_bytes });
+        let hash1 = compute_entry_hash(EntryHashInput {
+            prev_hash: &prev_hash,
+            log_index: 1,
+            term,
+            entry_bytes,
+        });
+        let hash2 = compute_entry_hash(EntryHashInput {
+            prev_hash: &prev_hash,
+            log_index: 2,
+            term,
+            entry_bytes,
+        });
 
         assert_ne!(hash1, hash2);
     }
@@ -362,8 +382,19 @@ mod tests {
         let term = 1;
         let entry_bytes = b"test entry";
 
-        let hash = compute_entry_hash(EntryHashInput { prev_hash: &prev_hash, log_index, term, entry_bytes });
-        assert!(verify_entry_hash(EntryHashVerificationInput { prev_hash: &prev_hash, log_index, term, entry_bytes, expected: &hash }));
+        let hash = compute_entry_hash(EntryHashInput {
+            prev_hash: &prev_hash,
+            log_index,
+            term,
+            entry_bytes,
+        });
+        assert!(verify_entry_hash(EntryHashVerificationInput {
+            prev_hash: &prev_hash,
+            log_index,
+            term,
+            entry_bytes,
+            expected: &hash
+        }));
     }
 
     #[test]
@@ -374,7 +405,13 @@ mod tests {
         let entry_bytes = b"test entry";
         let wrong_hash = [1u8; 32];
 
-        assert!(!verify_entry_hash(EntryHashVerificationInput { prev_hash: &prev_hash, log_index, term, entry_bytes, expected: &wrong_hash }));
+        assert!(!verify_entry_hash(EntryHashVerificationInput {
+            prev_hash: &prev_hash,
+            log_index,
+            term,
+            entry_bytes,
+            expected: &wrong_hash
+        }));
     }
 
     #[test]

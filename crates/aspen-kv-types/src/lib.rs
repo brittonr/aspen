@@ -25,6 +25,7 @@
 extern crate alloc;
 
 use alloc::string::String;
+
 use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
