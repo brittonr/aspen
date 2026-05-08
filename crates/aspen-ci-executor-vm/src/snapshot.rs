@@ -122,8 +122,25 @@ impl GoldenSnapshot {
         vm.pause().await?;
 
         let snapshot_result = async {
-            // Create snapshot via API
-            vm.snapshot(&snapshot.dir).await?;
+            // Create snapshot via API. Cloud Hypervisor writes the snapshot files before the
+            // HTTP response returns on some versions; bound the wait and accept the on-disk
+            // snapshot once both required files are present so the VM can be resumed.
+            match tokio::time::timeout(std::time::Duration::from_secs(30), vm.snapshot(&snapshot.dir)).await {
+                Ok(result) => result?,
+                Err(_) if snapshot.state_path.exists() && snapshot.memory_path.exists() => {
+                    warn!(
+                        vm_id = %vm.id,
+                        dir = %snapshot.dir.display(),
+                        "snapshot API response timed out after files were written; resuming VM"
+                    );
+                }
+                Err(_) => {
+                    return Err(CloudHypervisorError::SnapshotFailed {
+                        vm_id: vm.id.clone(),
+                        reason: "snapshot API timed out before required files appeared".to_string(),
+                    });
+                }
+            }
 
             // Write ticket file
             tokio::fs::write(&snapshot.ticket_path, current_ticket.trim()).await.map_err(|e| {

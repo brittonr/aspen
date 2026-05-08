@@ -1308,7 +1308,7 @@
                         # dummy lib.rs sources in buildDepsOnly. Hydrate path-patched iroh
                         # crates from Aspen's tracked vendor tree so downstream crates see
                         # the real public API during the dependency gate.
-                        for crate in iroh iroh-blobs iroh-metrics iroh-tickets iroh-relay; do
+                        for crate in iroh iroh-blobs iroh-metrics iroh-tickets iroh-relay swarm-discovery; do
                           if [ -d "$out/$crate" ] && grep -q 'pub fn main() {}' "$out/$crate/src/lib.rs" 2>/dev/null; then
                             rm -rf "$out/$crate"
                             cp -rL "${fullRawSrc}/vendor/$crate" "$out/$crate"
@@ -1320,12 +1320,6 @@
             import os
             root = Path(os.environ["out"])
             macro_block = "#[macro_use]\nextern crate netlink_packet_core;\n\n"
-            for path in root.glob("*/iroh-tickets-0.5.0/src/endpoint.rs"):
-                text = path.read_text()
-                text = text.replace("postcard::to_stdvec(&data).expect(\"postcard serialization failed\")", "Vec::new()")
-                text = text.replace("postcard::to_allocvec(&data).expect(\"postcard serialization failed\")", "Vec::new()")
-                text = text.replace("let res: TicketWireFormat = postcard::from_bytes(bytes)?;\n        let TicketWireFormat::Variant1(Variant1EndpointTicket { addr }) = res;\n        Ok(Self {\n            addr: EndpointAddr {\n                id: addr.id,\n                addrs: addr.info.addrs,\n            },\n        })", "Err(n0_error::e!(crate::ParseError::Verify { message: \"postcard deserialization unavailable in Nix dependency build\" }))")
-                path.write_text(text)
             for path in root.glob("*/genawaiter-0.99.1/Cargo.toml"):
                 text = path.read_text()
                 text = text.replace('default = ["proc_macro"]', 'default = []')
@@ -1354,9 +1348,9 @@
                 path.write_text(text)
             for path in root.glob("*/netlink-packet-route-0.*/src/**/*.rs"):
                 text = path.read_text()
-                if "buffer!(" not in text:
+                if "netlink_packet_core::buffer!(" not in text:
                     continue
-                text = text.replace("buffer!(", "netlink_packet_core::buffer!(")
+                text = text.replace("netlink_packet_core::buffer!(", "buffer!(")
                 path.write_text(text)
             for path in root.glob("*/netlink-packet-route-0.*/src/lib.rs"):
                 text = path.read_text()
@@ -5548,10 +5542,38 @@
                     # real snix source — needed by aspen-cache (nix-compat::narinfo).
                     ${pkgs.gnused}/bin/sed -i \
                       -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
+                      -e 's|ucan = { git = "ssh://git@github.com/brittonr/ucan.git"[^}]*}|ucan = { path = ".nix-inputs/ucan" }|' \
+                      -e 's|ucan-core = { git = "ssh://git@github.com/brittonr/ucan.git"[^}]*}|ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }|' \
+                      $out/aspen/Cargo.toml
+                    ${pkgs.gnused}/bin/sed -i \
+                      -e '/^netlink-packet-core = { path = "vendor\/netlink-packet-core-0\.8\.1" }$/d' \
+                      -e '/^postcard = { path = "vendor\/postcard" }$/d' \
+                      -e '/^nickel-lang-core = { path = "vendor\/nickel-lang-core-0\.16\.1" }$/d' \
                       $out/aspen/Cargo.toml
                     ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
-                    # Strip git source lines from Cargo.lock for stubbed deps only.
+                    mkdir -p $out/aspen/.nix-inputs
+                    cp -r ${ucan-src} $out/aspen/.nix-inputs/ucan
+                    chmod -R u+w $out/aspen/.nix-inputs/ucan
+                    ${pkgs.python3}/bin/python3 - <<'PY'
+                    import os
+                    from pathlib import Path
+                    root = Path(os.environ['out']) / 'aspen/.nix-inputs/ucan'
+                    drop_prefixes = ('workspace', 'workspace.', 'dev-dependencies', 'lints', 'profile.', 'package.metadata')
+                    for manifest in root.rglob('Cargo.toml'):
+                        text = manifest.read_text()
+                        kept = []
+                        dropping = False
+                        for line in text.splitlines():
+                            if line.startswith('[') and line.endswith(']'):
+                                section = line.strip('[]')
+                                dropping = section == 'workspace' or section.startswith(drop_prefixes)
+                            if not dropping:
+                                kept.append(line)
+                        manifest.write_text('\n'.join(kept).rstrip() + '\n')
+                    PY
+
+                    # Strip git source lines from Cargo.lock for stubbed or localized deps only.
                     # Keep snix.dev, tvlfyi (wu-manber), and subwayrat (aspen-tui) —
                     # these are vendored via overrideVendorGitCheckout in pureCargoVendorDir.
                     ${pkgs.gnused}/bin/sed -i '/^source = "git+/{
@@ -5560,6 +5582,40 @@
                       /subwayrat/b
                       d
                     }' $out/aspen/Cargo.lock
+                    ${pkgs.python3}/bin/python3 - <<'PY'
+                    import os
+                    from pathlib import Path
+                    lock = Path(os.environ['out']) / 'aspen/Cargo.lock'
+                    text = lock.read_text()
+                    package_sources = {
+                        ('netlink-packet-core', '0.8.1'): 'registry+https://github.com/rust-lang/crates.io-index',
+                        ('postcard', '1.1.3'): 'registry+https://github.com/rust-lang/crates.io-index',
+                        ('nickel-lang-core', '0.16.1'): 'registry+https://github.com/rust-lang/crates.io-index',
+                    }
+                    checksums = {
+                        ('netlink-packet-core', '0.8.1'): '3463cbb78394cb0141e2c926b93fc2197e473394b761986eca3b9da2c63ae0f4',
+                        ('postcard', '1.1.3'): '6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24',
+                        ('nickel-lang-core', '0.16.1'): '51647f09e6e385c140226867c62292f23c31241ee2b4986f3f71a40d48e88a60',
+                    }
+                    blocks = text.split('\n[[package]]\n')
+                    out_blocks = [blocks[0]]
+                    for block in blocks[1:]:
+                        lines = block.splitlines()
+                        name = version = None
+                        for line in lines:
+                            if line.startswith('name = '):
+                                name = line.split('"', 2)[1]
+                            elif line.startswith('version = '):
+                                version = line.split('"', 2)[1]
+                        key = (name, version)
+                        if key in package_sources:
+                            lines = [line for line in lines if not line.startswith('source = ') and not line.startswith('checksum = ')]
+                            insert_at = 2
+                            lines.insert(insert_at, f'source = "{package_sources[key]}"')
+                            lines.insert(insert_at + 1, f'checksum = "{checksums[key]}"')
+                        out_blocks.append('[[package]]\n' + '\n'.join(lines))
+                    lock.write_text('\n'.join(out_blocks))
+                    PY
 
                     # Stub patchbay (test-only git dep)
                     stub patchbay
@@ -5583,9 +5639,23 @@
                       # Explicit cargoLock ensures buildDepsOnly includes the lockfile
                       # even when src changes invalidate the dummy source derivation.
                       cargoLock = pureSrc + "/aspen/Cargo.lock";
+                      # crane/cargo-package can replace path-patched vendor crates
+                      # with dependency-only dummy sources during buildDepsOnly.
+                      # Rehydrate the crates whose public APIs are consumed by
+                      # registry dependencies (iroh-gossip, iroh-docs, iroh-blobs)
+                      # before Cargo compiles the dependency gate.
+                      postPatch = ''
+                        for crate in iroh iroh-blobs iroh-metrics iroh-tickets iroh-relay swarm-discovery; do
+                          if [ -d "vendor/$crate" ]; then
+                            rm -rf "vendor/$crate"
+                            cp -rL "${fullRawSrc}/vendor/$crate" "vendor/$crate"
+                            chmod -R u+w "vendor/$crate"
+                          fi
+                        done
+                      '';
                       cargoExtraArgs = "";
                     };
-                  pureCargoVendorDir = craneLib.vendorCargoDeps {
+                  pureCargoVendorDir = patchVendorForNetlinkRouteMacros (craneLib.vendorCargoDeps {
                     src = pureSrc + "/aspen";
                     overrideVendorGitCheckout = ps: drv: let
                       isSnixRepo =
@@ -5602,13 +5672,22 @@
                             && lib.hasPrefix "git+https://github.com/brittonr/subwayrat" (p.source or "")
                         )
                         ps;
+                      isUcanRepo =
+                        builtins.any (
+                          p:
+                            builtins.isString (p.source or null)
+                            && lib.hasPrefix "git+ssh://git@github.com/brittonr/ucan.git" (p.source or "")
+                        )
+                        ps;
                     in
                       if isSnixRepo
                       then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
                       else if isSubwayrat
                       then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = subwayratSrc;}))
+                      else if isUcanRepo
+                      then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = ucan-src;}))
                       else ensureGitCheckoutLock drv;
-                  };
+                  });
                   pureBin = {
                     name,
                     cargoExtraArgs,
@@ -5632,7 +5711,7 @@
                   # aspen-node for VM integration tests (no plugins, no wasm)
                   aspen-node-vm-test = pureBin {
                     name = "aspen-node-vm-test";
-                    cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,docs,blob,hooks,shell-worker,automerge,secrets";
+                    cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,ci-vm-executor,docs,blob,hooks,shell-worker,automerge,secrets";
                   };
 
                   # aspen-fuse with VirtioFS for VM integration tests

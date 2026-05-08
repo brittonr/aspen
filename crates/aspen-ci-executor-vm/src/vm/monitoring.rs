@@ -15,6 +15,17 @@ use crate::error::Result;
 use crate::error::{self};
 
 impl ManagedCiVm {
+    /// Wait until the guest reaches the deterministic pre-worker snapshot point.
+    ///
+    /// The CI worker NixOS image emits `ASPEN_CI_SNAPSHOT_READY` to the serial
+    /// console from a systemd dependency that runs before `aspen-ci-worker`.
+    /// Snapshotting before this marker races Cloud Hypervisor's `Running` state
+    /// against guest boot and can capture a pre-systemd image that never starts
+    /// the worker after restore.
+    pub async fn wait_for_snapshot_ready(&self, timeout: Duration) -> Result<()> {
+        self.wait_for_serial_marker("ASPEN_CI_SNAPSHOT_READY", timeout).await
+    }
+
     /// Check if the VM's cloud-hypervisor process is still alive.
     ///
     /// Used by the pool during maintenance to evict dead idle VMs.
@@ -168,5 +179,103 @@ impl ManagedCiVm {
             timeout_ms: timeout.as_millis() as u64,
         }
         .fail()
+    }
+
+    async fn wait_for_serial_marker(&self, marker: &str, timeout: Duration) -> Result<()> {
+        let deadline = tokio::time::Instant::now() + timeout;
+        let poll_interval = Duration::from_millis(500);
+        let serial_log = self.config.serial_log_path(&self.id);
+        let mut polls = 0u32;
+
+        info!(
+            vm_id = %self.id,
+            marker = marker,
+            serial_log = %serial_log.display(),
+            timeout_ms = timeout.as_millis(),
+            "waiting for guest serial readiness marker"
+        );
+
+        while tokio::time::Instant::now() < deadline {
+            polls += 1;
+
+            if !self.is_process_alive().await {
+                return Err(CloudHypervisorError::CreateVmFailed {
+                    reason: format!(
+                        "cloud-hypervisor exited while waiting for guest marker {marker}; serial tail: {}",
+                        Self::serial_tail(&serial_log).await
+                    ),
+                });
+            }
+
+            match tokio::fs::read_to_string(&serial_log).await {
+                Ok(contents) if contents.contains(marker) => {
+                    info!(vm_id = %self.id, marker = marker, polls = polls, "guest serial readiness marker observed");
+                    return Ok(());
+                }
+                Ok(contents) => {
+                    if contents.contains("worker registration failed")
+                        || contents.contains("worker-only mode requires a cluster ticket")
+                    {
+                        return Err(CloudHypervisorError::CreateVmFailed {
+                            reason: format!(
+                                "guest reported worker startup failure before marker {marker}; serial tail: {}",
+                                Self::tail_string(&contents)
+                            ),
+                        });
+                    }
+                    if polls.is_multiple_of(20) {
+                        info!(
+                            vm_id = %self.id,
+                            marker = marker,
+                            polls = polls,
+                            elapsed_s = polls / 2,
+                            "still waiting for guest serial readiness marker"
+                        );
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    if polls.is_multiple_of(20) {
+                        info!(
+                            vm_id = %self.id,
+                            marker = marker,
+                            polls = polls,
+                            elapsed_s = polls / 2,
+                            "serial log not created yet while waiting for readiness marker"
+                        );
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        vm_id = %self.id,
+                        marker = marker,
+                        error = %e,
+                        "failed to read serial log while waiting for readiness marker"
+                    );
+                }
+            }
+
+            tokio::time::sleep(poll_interval).await;
+        }
+
+        Err(CloudHypervisorError::GuestAgentTimeout {
+            vm_id: self.id.clone(),
+            timeout_ms: timeout.as_millis() as u64,
+        })
+    }
+
+    async fn serial_tail(path: &std::path::Path) -> String {
+        match tokio::fs::read_to_string(path).await {
+            Ok(contents) => Self::tail_string(&contents),
+            Err(e) => format!("<failed to read {}: {}>", path.display(), e),
+        }
+    }
+
+    fn tail_string(contents: &str) -> String {
+        const MAX_TAIL_BYTES: usize = 4096;
+        if contents.len() <= MAX_TAIL_BYTES {
+            contents.to_string()
+        } else {
+            contents[contents.len() - MAX_TAIL_BYTES..].to_string()
+        }
     }
 }

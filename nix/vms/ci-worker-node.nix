@@ -220,6 +220,12 @@
   # Minimal NixOS configuration for fast boot
   system.stateVersion = "24.11";
 
+  # The NixOS test builder can run under transient high-numbered UIDs that are
+  # absent from passwd. logrotate's build-time config check shells out to `id`
+  # and fails before the guest image is built; skip that host-side check for
+  # this ephemeral CI microVM image.
+  services.logrotate.checkConfig = false;
+
   # Enable nix for builds inside VM
   nix = {
     enable = true;
@@ -327,16 +333,36 @@
     };
   };
 
+  # Deterministic pre-worker readiness point for host-side golden snapshots.
+  # Cloud Hypervisor reports `Running` before NixOS/systemd has finished booting;
+  # the host waits for this serial marker before freezing the golden image.
+  systemd.services.aspen-ci-snapshot-ready = {
+    description = "Emit Aspen CI VM snapshot readiness marker";
+    after = ["local-fs.target" "nix-daemon.service" "network-online.target"];
+    requires = ["local-fs.target"];
+    wantedBy = ["multi-user.target"];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      StandardOutput = "tty";
+      StandardError = "tty";
+      TTYPath = "/dev/ttyS0";
+    };
+    script = ''
+      guest_hostname=$(cat /proc/sys/kernel/hostname 2>/dev/null || true)
+      echo "ASPEN_CI_SNAPSHOT_READY host=$guest_hostname ticket=$([ -f /workspace/.aspen-cluster-ticket ] && echo present || echo missing)"
+    '';
+  };
+
   # Aspen CI worker service - runs as ephemeral worker node
   # Connects to cluster via Iroh and processes CI jobs
   systemd.services.aspen-ci-worker = {
     description = "Aspen CI Worker (Ephemeral Node)";
     wantedBy = ["multi-user.target"];
-    # Depend on local filesystems, network, and nix-daemon being ready
-    # Network is required for Iroh cluster connection
-    # nix-daemon is required for nix build commands to work
-    after = ["local-fs.target" "nix-daemon.service" "network-online.target"];
-    requires = ["local-fs.target"];
+    # Depend on local filesystems, network, nix-daemon, and the host-visible
+    # snapshot readiness marker before starting the worker.
+    after = ["local-fs.target" "nix-daemon.service" "network-online.target" "aspen-ci-snapshot-ready.service"];
+    requires = ["local-fs.target" "aspen-ci-snapshot-ready.service"];
     wants = ["nix-daemon.service" "network-online.target"];
 
     serviceConfig = {
@@ -344,7 +370,7 @@
       # Run aspen-node in worker-only mode
       # The cluster ticket is read from /workspace/.aspen-cluster-ticket
       # which is written by CloudHypervisorWorker before VM boot
-      ExecStart = "${aspenNodePackage}/bin/aspen-node --worker-only";
+      ExecStart = "${aspenNodePackage}/bin/aspen-node --worker-only --disable-mdns";
       Restart = "always";
       RestartSec = "1s";
 
@@ -382,6 +408,9 @@
       ASPEN_CI_WORKSPACE_DIR = "/tmp/workspaces";
       # Debug logging for troubleshooting VM worker connections
       RUST_LOG = "info,aspen=debug,iroh=debug,iroh_net=debug";
+      # mDNS cannot bind reliably in the nested VM TAP namespace; the cluster
+      # ticket carries the bootstrap peer address for this E2E path.
+      ASPEN_IROH_ENABLE_MDNS = "false";
     };
 
     # Send output to both journal and console for visibility in serial log
@@ -494,7 +523,11 @@
 
   # Ensure minimal boot
   boot.loader.grub.enable = false;
-  boot.initrd.systemd.enable = true;
+  # Use the standard NixOS stage-1 script here. The microvm.nix runner
+  # only passes `init=${toplevel}/init`; forcing the systemd initrd in
+  # this direct Cloud Hypervisor path reaches switch-root but then leaves
+  # stage-2 unable to isolate its default target from the tmpfs root.
+  boot.initrd.systemd.enable = lib.mkForce false;
 
   # Required kernel modules for vsock (host-guest communication)
   # and virtiofs (Nix store sharing)
@@ -517,15 +550,82 @@
     # No password - jobs run as root via systemd
   };
 
-  # Register CI build closure in the VM's nix database at boot.
+  # Deterministic guest readiness point for host-side golden snapshots.
+  # This direct Cloud Hypervisor path reaches NixOS stage-2 before systemd can
+  # reliably isolate the generated unit graph from the tmpfs root. Start the
+  # worker from the stage-2 post-boot hook, then emit the host-visible marker so
+  # the snapshot captures a guest-backed worker process rather than a kernel-only
+  # boot. Systemd units are still declared above for normal/microvm-runner boots.
+  # Also register CI build closure in the VM's nix database at boot.
   # The host's /nix/store is shared via virtiofs (read-only), but the VM's
   # nix database is empty. Without registration, nix-daemon doesn't know
   # these paths exist and tries to rebuild FODs (rust toolchain, crate
   # tarballs), which fails when VM DNS is unreliable.
   # closureInfo produces a /registration file with nix-store --dump-db format.
-  boot.postBootCommands = lib.mkIf (ciBuildClosureInfo != null) ''
+  boot.postBootCommands = ''
+    mkdir -p /tmp/workspaces
+
+    # The direct Cloud Hypervisor path currently starts the worker from this
+    # post-boot hook because systemd target isolation is unreliable under the
+    # tmpfs-root snapshot boot. Configure the guest TAP network here as well;
+    # otherwise the worker can start before systemd-networkd runs and Iroh dials
+    # fail with ENETUNREACH even though the host bridge/TAP exists.
+    vm_ip=10.200.0.10
+    for arg in $(cat /proc/cmdline); do
+      case "$arg" in
+        ip=*)
+          ip_cfg=''${arg#ip=}
+          vm_ip=''${ip_cfg%%:*}
+          ;;
+      esac
+    done
+
+    # The direct boot path can reach postBootCommands before udev has named the
+    # virtio-net device. Load the driver and wait for the first non-loopback
+    # interface instead of assuming eth0 exists immediately.
+    ${pkgs.kmod}/bin/modprobe virtio_net >/dev/null 2>&1 || true
+    net_dev=
+    for _ in $(seq 1 100); do
+      for dev_path in /sys/class/net/*; do
+        dev=''${dev_path##*/}
+        if [ "$dev" != "lo" ] && [ -e "$dev_path" ]; then
+          net_dev=$dev
+          break
+        fi
+      done
+      if [ -n "$net_dev" ]; then
+        break
+      fi
+      sleep 0.1
+    done
+
+    if [ -n "$net_dev" ]; then
+      ${pkgs.iproute2}/bin/ip link set dev "$net_dev" up || true
+      ${pkgs.iproute2}/bin/ip addr replace "$vm_ip/24" dev "$net_dev" || true
+      ${pkgs.iproute2}/bin/ip route replace default via 10.200.0.1 dev "$net_dev" || true
+    fi
+    echo "ASPEN_CI_NET_CONFIG ip=$vm_ip dev=''${net_dev:-missing}" >/dev/ttyS0
+    ${pkgs.iproute2}/bin/ip addr show >/dev/ttyS0 2>&1 || true
+    ${pkgs.iproute2}/bin/ip route show >/dev/ttyS0 2>&1 || true
+  '' + lib.optionalString (ciBuildClosureInfo != null) ''
     if [ -f ${ciBuildClosureInfo}/registration ]; then
       ${pkgs.nix}/bin/nix-store --load-db < ${ciBuildClosureInfo}/registration
     fi
+  '' + ''
+    (
+      export HOME=/root
+      export NIX_PATH=
+      export NIX_CONFIG='experimental-features = nix-command flakes'
+      export ASPEN_MODE=ci_worker
+      export ASPEN_CLUSTER_TICKET_FILE=/workspace/.aspen-cluster-ticket
+      export ASPEN_WORKER_JOB_TYPES=ci_vm
+      export ASPEN_CI_WORKSPACE_DIR=/tmp/workspaces
+      export RUST_LOG=info,aspen=debug,iroh=debug,iroh_net=debug
+      export ASPEN_IROH_ENABLE_MDNS=false
+      cd /workspace
+      exec ${aspenNodePackage}/bin/aspen-node --worker-only --disable-mdns
+    ) >/dev/ttyS0 2>&1 &
+    guest_hostname=$(cat /proc/sys/kernel/hostname 2>/dev/null || true)
+    echo "ASPEN_CI_SNAPSHOT_READY host=$guest_hostname ticket=$([ -f /workspace/.aspen-cluster-ticket ] && echo present || echo missing)" >/dev/ttyS0
   '';
 }

@@ -28,6 +28,20 @@ use crate::args::Args;
 #[cfg(feature = "ci")]
 use crate::signals::shutdown_signal;
 
+/// Build the ephemeral worker endpoint configuration from parsed CLI/env config.
+///
+/// Worker-only mode bypasses full cluster config loading because it has no Raft
+/// identity, but network toggles such as `--disable-mdns` still need to apply to
+/// its ephemeral Iroh endpoint.
+#[cfg(feature = "ci")]
+fn build_worker_endpoint_config(args: &Args, config: &NodeConfig) -> aspen::cluster::IrohEndpointConfig {
+    aspen::cluster::IrohEndpointConfig::new()
+        .with_gossip(true)
+        .with_mdns(config.iroh.enable_mdns && !args.disable_mdns)
+        .with_dns_discovery(config.iroh.enable_dns_discovery || args.enable_dns_discovery)
+        .with_bind_port(args.bind_port.unwrap_or(config.iroh.bind_port))
+}
+
 #[cfg(feature = "ci")]
 pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> {
     use std::time::Duration;
@@ -85,9 +99,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     );
 
     // Create ephemeral Iroh endpoint (no persistent identity)
-    let endpoint_config = aspen::cluster::IrohEndpointConfig::new()
-        .with_gossip(true)
-        .with_bind_port(args.bind_port.unwrap_or(0));
+    let endpoint_config = build_worker_endpoint_config(&args, &config);
 
     let iroh_manager = aspen::cluster::IrohEndpointManager::new(endpoint_config)
         .await
@@ -1017,5 +1029,46 @@ async fn write_log_completion_marker_rpc(
                 );
             }
         }
+    }
+}
+
+#[cfg(all(test, feature = "ci"))]
+mod tests {
+    use aspen::cluster::config::NodeConfig;
+    use clap::Parser;
+
+    use super::*;
+    use crate::args::Args;
+
+    #[test]
+    fn worker_endpoint_config_honors_cli_mdns_disable() {
+        let args = Args::parse_from(["aspen-node", "--worker-only", "--disable-mdns"]);
+        let mut config = NodeConfig::default();
+        config.iroh.enable_mdns = true;
+
+        let endpoint_config = build_worker_endpoint_config(&args, &config);
+
+        assert!(!endpoint_config.enable_mdns);
+    }
+
+    #[test]
+    fn worker_endpoint_config_honors_env_mdns_disable() {
+        let args = Args::parse_from(["aspen-node", "--worker-only"]);
+        let mut config = NodeConfig::default();
+        config.iroh.enable_mdns = false;
+
+        let endpoint_config = build_worker_endpoint_config(&args, &config);
+
+        assert!(!endpoint_config.enable_mdns);
+    }
+
+    #[test]
+    fn worker_endpoint_config_preserves_bind_port() {
+        let args = Args::parse_from(["aspen-node", "--worker-only", "--bind-port", "12345"]);
+        let config = NodeConfig::default();
+
+        let endpoint_config = build_worker_endpoint_config(&args, &config);
+
+        assert_eq!(endpoint_config.bind_port, 12345);
     }
 }

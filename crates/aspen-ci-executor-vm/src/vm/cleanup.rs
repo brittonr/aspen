@@ -4,10 +4,12 @@ use std::sync::Arc;
 
 use aspen_core::CI_VM_NIX_STORE_TAG;
 use aspen_core::CI_VM_WORKSPACE_TAG;
+use tokio::process::Command;
 use tracing::debug;
 use tracing::warn;
 
 use super::ManagedCiVm;
+use crate::NetworkMode;
 
 impl ManagedCiVm {
     /// Kill all VM-related processes.
@@ -62,6 +64,31 @@ impl ManagedCiVm {
         }
     }
 
+    /// Remove the host TAP device owned by this VM.
+    pub(super) async fn cleanup_tap(&self) {
+        if !matches!(self.config.network_mode, NetworkMode::Tap | NetworkMode::TapWithHelper) {
+            return;
+        }
+
+        let tap_name = format!("{}-tap", self.id);
+        let output = Command::new(Self::ip_command_path()).args(["link", "delete", "dev", &tap_name]).output().await;
+
+        match output {
+            Ok(output) if output.status.success() => {
+                debug!(vm_id = %self.id, tap = %tap_name, "removed CI VM TAP device");
+            }
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if !stderr.contains("Cannot find device") {
+                    warn!(vm_id = %self.id, tap = %tap_name, "failed to remove CI VM TAP device: {stderr}");
+                }
+            }
+            Err(e) => {
+                warn!(vm_id = %self.id, tap = %tap_name, "failed to invoke ip for TAP cleanup: {e}");
+            }
+        }
+    }
+
     /// Full cleanup for a restored fork: processes, sockets, and fork directory.
     ///
     /// This should be called instead of (or in addition to) the standard cleanup
@@ -72,6 +99,7 @@ impl ManagedCiVm {
 
         self.kill_processes().await;
         self.cleanup_sockets().await;
+        self.cleanup_tap().await;
         self.cleanup_fork_dir().await;
     }
 }

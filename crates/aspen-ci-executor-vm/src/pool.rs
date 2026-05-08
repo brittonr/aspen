@@ -273,7 +273,21 @@ impl VmPool {
                 match self.create_and_start_vm().await {
                     Ok(vm) => {
                         *vm.pool_permit.write().await = Some(permit);
-                        info!(vm_id = %vm.id, "first VM booted, creating golden snapshot");
+                        info!(vm_id = %vm.id, "first VM booted, waiting for guest snapshot readiness");
+
+                        let readiness_timeout = Duration::from_millis(self.config.boot_timeout_ms);
+                        match vm.wait_for_snapshot_ready(readiness_timeout).await {
+                            Ok(()) => {
+                                info!(vm_id = %vm.id, "guest reached snapshot readiness point");
+                            }
+                            Err(e) => {
+                                warn!(error = %e, vm_id = %vm.id, "guest did not reach snapshot readiness; continuing without golden snapshot");
+                                self.idle_vms.lock().await.push_back(vm);
+                                continue;
+                            }
+                        }
+
+                        info!(vm_id = %vm.id, "creating golden snapshot after guest readiness");
 
                         match GoldenSnapshot::create(&vm, &self.config).await {
                             Ok(snapshot) => {

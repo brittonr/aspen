@@ -1,5 +1,6 @@
 //! VM provisioning: virtiofsd and Cloud Hypervisor process management.
 
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -20,6 +21,66 @@ use crate::error::Result;
 use crate::error::{self};
 
 impl ManagedCiVm {
+    pub(super) fn ip_command_path() -> PathBuf {
+        if let Some(path) = std::env::var_os("ASPEN_CI_IP_PATH") {
+            return PathBuf::from(path);
+        }
+
+        let system_ip = PathBuf::from("/run/current-system/sw/bin/ip");
+        if system_ip.exists() {
+            return system_ip;
+        }
+
+        PathBuf::from("ip")
+    }
+
+    async fn run_ip_command(&self, args: &[&str], context: &str) -> Result<std::process::Output> {
+        let ip_path = Self::ip_command_path();
+        let output = Command::new(&ip_path)
+            .args(args)
+            .output()
+            .await
+            .map_err(|source| CloudHypervisorError::StartCloudHypervisor { source })?;
+
+        if output.status.success() {
+            return Ok(output);
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(CloudHypervisorError::InvalidConfig {
+            message: format!("{context}: ip {} failed: {stderr}", args.join(" ")),
+        })
+    }
+
+    pub(super) async fn ensure_tap_attached_to_bridge(&self, tap_name: &str) -> Result<()> {
+        let show = Command::new(Self::ip_command_path())
+            .args(["link", "show", "dev", tap_name])
+            .output()
+            .await
+            .map_err(|source| CloudHypervisorError::StartCloudHypervisor { source })?;
+
+        if !show.status.success() {
+            self.run_ip_command(&["tuntap", "add", "dev", tap_name, "mode", "tap"], "create CI VM TAP device")
+                .await?;
+        }
+
+        self.run_ip_command(
+            &["link", "set", "dev", tap_name, "master", &self.config.bridge_name],
+            "attach CI VM TAP device to bridge",
+        )
+        .await?;
+        self.run_ip_command(&["link", "set", "dev", tap_name, "up"], "bring CI VM TAP device up").await?;
+
+        info!(
+            vm_id = %self.id,
+            tap = %tap_name,
+            bridge = %self.config.bridge_name,
+            "attached CI VM TAP device to bridge"
+        );
+
+        Ok(())
+    }
+
     /// Start virtiofsd for a directory share.
     ///
     /// The workspace share is handled by an in-process `AspenVirtioFsHandler`
@@ -289,10 +350,13 @@ impl ManagedCiVm {
         let mac = self.config.vm_mac(self.vm_index);
         match self.config.network_mode {
             NetworkMode::Tap => {
-                // Standard TAP mode: cloud-hypervisor creates the TAP device.
+                // Standard TAP mode: create and attach the TAP device before
+                // handing it to Cloud Hypervisor. Cloud Hypervisor uses the
+                // existing TAP by name and does not bridge it for us.
                 // Requires: host bridge (aspen-ci-br0) with NAT configured.
                 // Requires: CAP_NET_ADMIN capability or root privileges.
                 let tap_name = format!("{}-tap", self.id);
+                self.ensure_tap_attached_to_bridge(&tap_name).await?;
                 cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
                 debug!(
                     vm_id = %self.id,
@@ -311,6 +375,7 @@ impl ManagedCiVm {
                      Use NetworkMode::Tap or NetworkMode::None instead."
                 );
                 let tap_name = format!("{}-tap", self.id);
+                self.ensure_tap_attached_to_bridge(&tap_name).await?;
                 cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
             }
             NetworkMode::None => {
@@ -345,9 +410,10 @@ impl ManagedCiVm {
     /// Build kernel command line arguments.
     ///
     /// The NixOS boot process requires:
-    /// - `init=${toplevel}/init` - the NixOS stage-2 init script
-    /// - `root=fstab` - tells initrd to use fstab for root mount
-    ///
+    /// - `systemd.unit=multi-user.target` - NixOS does not provide a default.target symlink
+    /// - `SYSTEMD_UNIT_PATH=...:` - pass the generated NixOS unit tree as an init environment
+    ///   variable so stage-2 systemd can find the store-backed unit graph
+
     /// Without the correct init path, the VM will boot the kernel and initrd
     /// but fail to transition to the NixOS system (systemd won't start).
     ///
@@ -355,11 +421,14 @@ impl ManagedCiVm {
     /// (only when network mode is not None).
     /// The host bridge (aspen-ci-br0) has IP 10.200.0.1 and provides NAT.
     pub(super) fn build_kernel_cmdline(&self) -> String {
-        let init_path = self.config.toplevel_path.join("init");
-
         // Base kernel parameters (always needed)
-        let base_params =
-            format!("console=ttyS0 loglevel=4 systemd.log_level=info panic=1 root=fstab init={}", init_path.display());
+        let init_path = self.config.toplevel_path.join("init");
+        let systemd_unit_path = self.config.toplevel_path.join("etc/systemd/system");
+        let base_params = format!(
+            "console=ttyS0 loglevel=4 systemd.log_level=info systemd.unit=multi-user.target SYSTEMD_UNIT_PATH={}: panic=1 init={}",
+            systemd_unit_path.display(),
+            init_path.display()
+        );
 
         // Add network configuration if network is enabled
         match self.config.network_mode {

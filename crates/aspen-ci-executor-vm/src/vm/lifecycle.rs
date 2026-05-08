@@ -75,6 +75,7 @@ impl ManagedCiVm {
             // Clean up any partially-started processes
             self.kill_processes().await;
             self.cleanup_sockets().await;
+            self.cleanup_tap().await;
             return Err(e);
         }
 
@@ -408,6 +409,7 @@ impl ManagedCiVm {
 
         // Clean up socket files
         self.cleanup_sockets().await;
+        self.cleanup_tap().await;
 
         *self.state.write().await = VmState::Stopped;
         *self.current_job.write().await = None;

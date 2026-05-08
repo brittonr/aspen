@@ -30,8 +30,10 @@
   ciToplevel,
 }: let
   cookie = "snapshot-e2e-test";
-  snapshotDir = "/tmp/aspen-ci-vms/snapshots/golden";
-  stateDir = "/tmp/aspen-ci-vms";
+  # aspen-node derives the CloudHypervisorWorker state dir from --data-dir as
+  # <data-dir>/ci/vms.
+  stateDir = "/tmp/aspen-data/ci/vms";
+  snapshotDir = "${stateDir}/snapshots/golden";
 in
   pkgs.testers.nixosTest {
     name = "vm-snapshot-e2e";
@@ -108,40 +110,66 @@ in
               "systemd-run --unit=aspen-node "
               "--property=StandardOutput=file:/tmp/aspen-node.log "
               "--property=StandardError=file:/tmp/aspen-node-err.log "
-              "'--property=Environment=RUST_LOG=info' "
+              "'--property=Environment=RUST_LOG=info,aspen_ci_executor_vm=debug,aspen_ci=debug' "
               f"'--property=Environment=ASPEN_CI_KERNEL_PATH=${ciKernel}/bzImage' "
               f"'--property=Environment=ASPEN_CI_INITRD_PATH=${ciInitrd}/initrd' "
               f"'--property=Environment=ASPEN_CI_TOPLEVEL_PATH=${ciToplevel}' "
               "'--property=Environment=ASPEN_CI_VM_MEMORY_MIB=2048' "
               "'--property=Environment=ASPEN_CI_VM_VCPUS=2' "
               "'--property=Environment=ASPEN_CI_ENABLE_SNAPSHOTS=true' "
-              f"aspen-node --node-id 1 --cookie {cookie} "
-              f"--data-dir /tmp/aspen-data"
+              "'--property=Environment=ASPEN_CI_IP_PATH=${pkgs.iproute2}/bin/ip' "
+              "'--property=Environment=CLOUD_HYPERVISOR_PATH=${pkgs.cloud-hypervisor}/bin/cloud-hypervisor' "
+              "'--property=Environment=VIRTIOFSD_PATH=${pkgs.virtiofsd}/bin/virtiofsd' "
+              "aspen-node --node-id 1 --cookie ${cookie} "
+              "--data-dir /tmp/aspen-data "
+              "--enable-workers --enable-ci"
           )
           host.log("Started aspen-node")
 
-          # Wait for cluster to initialize
+          # Wait for the node to emit its bootstrap ticket, then initialize
+          # the single-node Raft cluster via the same ticketed client path
+          # used by other NixOS integration tests.
+          host.wait_for_file("/tmp/aspen-data/cluster-ticket.txt", timeout=30)
           host.wait_until_succeeds(
-              "aspen-cli --cookie ${cookie} cluster status 2>/dev/null | grep -q 'Leader'",
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) cluster health >/dev/null",
+              timeout=60
+          )
+          host.succeed(
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) cluster init >/dev/null 2>&1 || true"
+          )
+          time.sleep(2)
+          host.wait_until_succeeds(
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) cluster status 2>/dev/null | grep -q 'Leader'",
               timeout=60
           )
           host.log("Cluster is ready")
 
       with subtest("9.1: Verify golden snapshot creation"):
-          # Wait for the CloudHypervisorWorker to boot first VM and create snapshot
+          # Wait for the CloudHypervisorWorker to boot first VM and create snapshot.
+          # Emit bounded diagnostics first so gated failures identify whether the
+          # node registered the VM worker, booted the child VM, or died silently.
+          time.sleep(20)
+          _, diagnostic = host.execute(
+              "echo '--- aspen-node unit ---'; systemctl status --no-pager aspen-node || true; "
+              "echo '--- aspen-node stdout tail ---'; tail -200 /tmp/aspen-node.log || true; "
+              "echo '--- aspen-node stderr tail ---'; tail -200 /tmp/aspen-node-err.log || true; "
+              "echo '--- vm state tree ---'; find /tmp/aspen-data/ci/vms -maxdepth 4 -print 2>/dev/null || true; "
+              "echo '--- vm serial tails ---'; for log in /tmp/aspen-data/ci/vms/*-serial.log; do echo \"### $log\"; tail -200 \"$log\" 2>/dev/null || true; done"
+          )
+          host.log(str(diagnostic))
           host.wait_until_succeeds(
-              f"test -d ${snapshotDir} && test -f ${snapshotDir}/memory",
+              f"test -d ${snapshotDir} && test -f ${snapshotDir}/memory-ranges",
               timeout=180
           )
           host.log("Golden snapshot directory exists")
 
           # Check snapshot files
-          memory_size = host.succeed(f"stat -c %s ${snapshotDir}/memory").strip()
-          host.log(f"Golden snapshot memory: {memory_size} bytes")
+          memory_ranges_size = host.succeed(f"stat -c %s ${snapshotDir}/memory-ranges").strip()
+          host.log(f"Golden snapshot memory-ranges: {memory_ranges_size} bytes")
 
           # Verify sparse file (COW backing)
-          apparent = host.succeed(f"stat -c %s ${snapshotDir}/memory").strip()
-          blocks = host.succeed(f"stat -c %b ${snapshotDir}/memory").strip()
+          apparent = host.succeed(f"stat -c %s ${snapshotDir}/memory-ranges").strip()
+          blocks = host.succeed(f"stat -c %b ${snapshotDir}/memory-ranges").strip()
           disk_bytes = int(blocks) * 512
           apparent_bytes = int(apparent)
           is_sparse = disk_bytes < (apparent_bytes * 9 // 10)
@@ -150,23 +178,35 @@ in
               f"disk={disk_bytes // (1024*1024)}MB, sparse={is_sparse}"
           )
 
-          # Verify ticket file
-          host.succeed(f"test -f ${snapshotDir}/ticket.txt")
+          # Verify ticket file. The Cloud Hypervisor API writes memory/state
+          # before Aspen persists the snapshot ticket, so wait for the full
+          # Aspen-created snapshot contract rather than only CH artifacts.
+          host.wait_until_succeeds(f"test -f ${snapshotDir}/ticket.txt", timeout=60)
           ticket = host.succeed(f"cat ${snapshotDir}/ticket.txt").strip()
           assert len(ticket) > 10, f"Ticket should be non-trivial, got {len(ticket)} chars"
           host.log("Golden snapshot validated")
 
       with subtest("9.1: Submit CI job and verify completion"):
+          # The guest worker only registers after the restored/resumed VM has
+          # completed its NixOS boot and read the injected cluster ticket.
+          # Gate job submission on that visible guest-backed signal so failures
+          # distinguish snapshot artifact creation from actual CI worker readiness.
+          host.wait_until_succeeds(
+              "grep -q 'worker registered with cluster' /tmp/aspen-data/ci/vms/*-serial.log",
+              timeout=180
+          )
+          host.log("Snapshot VM worker registered with cluster")
+
           # Submit a simple CI job
           host.succeed(
-              "aspen-cli --cookie ${cookie} job submit ci_vm "
-              "'{\"command\": \"echo hello-from-snapshot-vm\", \"timeout_ms\": 60000}'"
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job submit ci_vm "
+              "'{\"command\": \"sh\", \"args\": [\"-c\", \"echo hello-from-snapshot-vm\"], \"timeout_secs\": 60}'"
           )
           host.log("CI job submitted")
 
           # Wait for job to complete
           host.wait_until_succeeds(
-              "aspen-cli --cookie ${cookie} job list 2>/dev/null | grep -q 'Completed\\|completed'",
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job list 2>/dev/null | grep -q 'Completed\\|completed'",
               timeout=120
           )
           host.log("CI job completed via snapshot-restored VM")
@@ -196,11 +236,11 @@ in
           # submit a second job and time it (should be faster than first)
           start_time = time.time()
           host.succeed(
-              "aspen-cli --cookie ${cookie} job submit ci_vm "
-              "'{\"command\": \"echo benchmark-job\", \"timeout_ms\": 60000}'"
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job submit ci_vm "
+              "'{\"command\": \"sh\", \"args\": [\"-c\", \"echo benchmark-job\"], \"timeout_secs\": 60}'"
           )
           host.wait_until_succeeds(
-              "aspen-cli --cookie ${cookie} job list 2>/dev/null | "
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job list 2>/dev/null | "
               "grep -c 'Completed\\|completed' | grep -q '^2$'",
               timeout=120
           )
@@ -218,15 +258,15 @@ in
           # Submit 8 jobs simultaneously to force 8 concurrent restores
           for i in range(8):
               host.succeed(
-                  f"aspen-cli --cookie ${cookie} job submit ci_vm "
-                  f"'{{\"command\": \"echo stress-job-{i} && sleep 5\", \"timeout_ms\": 120000}}' &"
+                  f"aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job submit ci_vm "
+                  f"'{{\"command\": \"sh\", \"args\": [\"-c\", \"echo stress-job-{i} && sleep 5\"], \"timeout_secs\": 120}}' &"
               )
           host.log("Submitted 8 concurrent CI jobs")
 
           # Wait for all 8 to complete (or at least start)
           # The pool has max_vms=8, so all should get VMs
           host.wait_until_succeeds(
-              "aspen-cli --cookie ${cookie} job list 2>/dev/null | "
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job list 2>/dev/null | "
               "grep -c 'Running\\|Completed\\|running\\|completed' | "
               "awk '{if ($1 >= 8) exit 0; else exit 1}'",
               timeout=180
@@ -247,7 +287,7 @@ in
 
           # Wait for all jobs to complete
           host.wait_until_succeeds(
-              "aspen-cli --cookie ${cookie} job list 2>/dev/null | "
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job list 2>/dev/null | "
               "grep -c 'Completed\\|completed' | awk '{if ($1 >= 10) exit 0; else exit 1}'",
               timeout=300
           )

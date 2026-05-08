@@ -65,6 +65,7 @@ impl ManagedCiVm {
             *self.state.write().await = VmState::Error;
             self.kill_processes().await;
             self.cleanup_sockets().await;
+            self.cleanup_tap().await;
             self.cleanup_fork_dir().await;
             return Err(e);
         }
@@ -176,6 +177,11 @@ impl ManagedCiVm {
         // while sharing the memory and state files via symlinks.
         let fork_snap_dir = self.prepare_fork_snapshot(snapshot).await?;
         let fork_source_url = format!("file://{}", fork_snap_dir.display());
+
+        if matches!(self.config.network_mode, crate::NetworkMode::Tap | crate::NetworkMode::TapWithHelper) {
+            let tap_name = format!("{}-tap", self.id);
+            self.ensure_tap_attached_to_bridge(&tap_name).await?;
+        }
 
         // Restore VM from snapshot via Cloud Hypervisor API.
         info!(vm_id = %self.id, source = %fork_source_url, "calling vm.restore");
