@@ -1,10 +1,10 @@
 {
-  "algorithm": "fastcdc-v2020",
+  "algorithm": "experimental-hashless-cdc",
   "corpus": {
-    "bytes": 17087105,
+    "bytes": 17090841,
     "classes": [
       {
-        "bytes": 2058081,
+        "bytes": 2061817,
         "class": "aspen-build-artifact",
         "files": 17
       },
@@ -24,73 +24,73 @@
   "files": [
     {
       "bytes": 524288,
-      "chunks": 7,
+      "chunks": 6,
       "class": "synthetic-small-delta",
-      "elapsed_micros": 222,
+      "elapsed_micros": 483,
       "name": "synthetic/base",
-      "unique_chunks_in_file": 7
+      "unique_chunks_in_file": 6
     },
     {
       "bytes": 525312,
-      "chunks": 7,
+      "chunks": 8,
       "class": "synthetic-small-delta",
-      "elapsed_micros": 189,
+      "elapsed_micros": 496,
       "name": "synthetic/delta-0",
-      "unique_chunks_in_file": 7
+      "unique_chunks_in_file": 8
     },
     {
       "bytes": 525569,
-      "chunks": 7,
+      "chunks": 8,
       "class": "synthetic-small-delta",
-      "elapsed_micros": 185,
+      "elapsed_micros": 482,
       "name": "synthetic/delta-1",
-      "unique_chunks_in_file": 7
+      "unique_chunks_in_file": 8
     },
     {
       "bytes": 525826,
-      "chunks": 7,
+      "chunks": 4,
       "class": "synthetic-small-delta",
-      "elapsed_micros": 188,
+      "elapsed_micros": 605,
       "name": "synthetic/delta-2",
-      "unique_chunks_in_file": 7
+      "unique_chunks_in_file": 4
     },
     {
       "bytes": 526083,
-      "chunks": 7,
+      "chunks": 9,
       "class": "synthetic-small-delta",
-      "elapsed_micros": 181,
+      "elapsed_micros": 964,
       "name": "synthetic/delta-3",
-      "unique_chunks_in_file": 7
+      "unique_chunks_in_file": 9
     },
     {
       "bytes": 526340,
-      "chunks": 7,
+      "chunks": 10,
       "class": "synthetic-small-delta",
-      "elapsed_micros": 183,
+      "elapsed_micros": 780,
       "name": "synthetic/delta-4",
-      "unique_chunks_in_file": 7
+      "unique_chunks_in_file": 10
     },
     {
       "bytes": 526597,
       "chunks": 7,
       "class": "synthetic-small-delta",
-      "elapsed_micros": 195,
+      "elapsed_micros": 513,
       "name": "synthetic/delta-5",
       "unique_chunks_in_file": 7
     },
     {
       "bytes": 526854,
-      "chunks": 7,
+      "chunks": 8,
       "class": "synthetic-small-delta",
-      "elapsed_micros": 184,
+      "elapsed_micros": 494,
       "name": "synthetic/delta-6",
-      "unique_chunks_in_file": 7
+      "unique_chunks_in_file": 8
     },
     {
       "bytes": 527111,
       "chunks": 7,
       "class": "synthetic-small-delta",
-      "elapsed_micros": 183,
+      "elapsed_micros": 486,
       "name": "synthetic/delta-7",
       "unique_chunks_in_file": 7
     },
@@ -98,7 +98,7 @@
       "bytes": 16032,
       "chunks": 1,
       "class": "nix-store",
-      "elapsed_micros": 6,
+      "elapsed_micros": 16,
       "name": "/run/current-system/sw/bin/,",
       "unique_chunks_in_file": 1
     },
@@ -106,7 +106,7 @@
       "bytes": 643,
       "chunks": 1,
       "class": "nix-store",
-      "elapsed_micros": 0,
+      "elapsed_micros": 1,
       "name": "/run/current-system/sw/bin/..claude-wrapped.wrapbuddy",
       "unique_chunks_in_file": 1
     },
@@ -114,49 +114,49 @@
       "bytes": 16024,
       "chunks": 1,
       "class": "nix-store",
-      "elapsed_micros": 6,
+      "elapsed_micros": 16,
       "name": "/run/current-system/sw/bin/DisplayLinkManager",
       "unique_chunks_in_file": 1
     },
     {
       "bytes": 2097152,
-      "chunks": 25,
+      "chunks": 19,
       "class": "nix-store",
-      "elapsed_micros": 745,
+      "elapsed_micros": 2027,
       "name": "/run/current-system/sw/bin/ModemManager",
-      "unique_chunks_in_file": 25
+      "unique_chunks_in_file": 19
+    },
+    {
+      "bytes": 2097152,
+      "chunks": 20,
+      "class": "nix-store",
+      "elapsed_micros": 1944,
+      "name": "/run/current-system/sw/bin/NetworkManager",
+      "unique_chunks_in_file": 20
     },
     {
       "bytes": 2097152,
       "chunks": 25,
       "class": "nix-store",
-      "elapsed_micros": 748,
-      "name": "/run/current-system/sw/bin/NetworkManager",
+      "elapsed_micros": 2032,
+      "name": "/run/current-system/sw/bin/X",
       "unique_chunks_in_file": 25
     },
     {
       "bytes": 2097152,
-      "chunks": 33,
+      "chunks": 27,
       "class": "nix-store",
-      "elapsed_micros": 726,
-      "name": "/run/current-system/sw/bin/X",
-      "unique_chunks_in_file": 33
-    },
-    {
-      "bytes": 2097152,
-      "chunks": 29,
-      "class": "nix-store",
-      "elapsed_micros": 734,
+      "elapsed_micros": 2027,
       "name": "/run/current-system/sw/bin/Xephyr",
-      "unique_chunks_in_file": 29
+      "unique_chunks_in_file": 27
     },
     {
       "bytes": 1842488,
-      "chunks": 25,
+      "chunks": 22,
       "class": "nix-store",
-      "elapsed_micros": 692,
+      "elapsed_micros": 1802,
       "name": "/run/current-system/sw/bin/Xnest",
-      "unique_chunks_in_file": 25
+      "unique_chunks_in_file": 22
     },
     {
       "bytes": 652,
@@ -170,7 +170,7 @@
       "bytes": 476,
       "chunks": 1,
       "class": "nix-store",
-      "elapsed_micros": 1,
+      "elapsed_micros": 0,
       "name": "/nix/store/.links/00001p90z6wk667ra4qpygm5x2svyli5gmknjf9xx363qmwzx8gi",
       "unique_chunks_in_file": 1
     },
@@ -178,7 +178,7 @@
       "bytes": 9937,
       "chunks": 1,
       "class": "nix-store",
-      "elapsed_micros": 4,
+      "elapsed_micros": 10,
       "name": "/nix/store/.links/0000288r5pnbm3xffsb71yfnij7yiqfzv3414xjcwdkjvvyc2lnl",
       "unique_chunks_in_file": 1
     },
@@ -186,7 +186,7 @@
       "bytes": 1187,
       "chunks": 1,
       "class": "nix-store",
-      "elapsed_micros": 1,
+      "elapsed_micros": 2,
       "name": "/nix/store/.links/00002c6dkr4zglja0n56iplfzdjxmnq16v0msg043vg22k3g7wi1",
       "unique_chunks_in_file": 1
     },
@@ -194,7 +194,7 @@
       "bytes": 14154,
       "chunks": 1,
       "class": "nix-store",
-      "elapsed_micros": 5,
+      "elapsed_micros": 15,
       "name": "/nix/store/.links/000030j1l4wlmwiaddaciwiwnvab06xj866m4givd0wnbn6s3637",
       "unique_chunks_in_file": 1
     },
@@ -218,7 +218,7 @@
       "bytes": 4039,
       "chunks": 1,
       "class": "nix-store",
-      "elapsed_micros": 5,
+      "elapsed_micros": 6,
       "name": "/nix/store/.links/000054vl6va7sw668iammkdg3403q9700is5jd2yhsdgq4md831h",
       "unique_chunks_in_file": 1
     },
@@ -266,7 +266,7 @@
       "bytes": 364,
       "chunks": 1,
       "class": "aspen-build-artifact",
-      "elapsed_micros": 1,
+      "elapsed_micros": 0,
       "name": "/home/brittonr/git/aspen/target/debug/.fingerprint/acto-5dfa31aad916427c/run-build-script-build-script-build.json",
       "unique_chunks_in_file": 1
     },
@@ -346,16 +346,16 @@
       "bytes": 555,
       "chunks": 1,
       "class": "aspen-build-artifact",
-      "elapsed_micros": 0,
+      "elapsed_micros": 1,
       "name": "/home/brittonr/git/aspen/target/release/.fingerprint/acto-21d5bf5d9de501bf/build-script-build-script-build.json",
       "unique_chunks_in_file": 1
     },
     {
-      "bytes": 2054400,
+      "bytes": 2058136,
       "chunks": 23,
       "class": "aspen-build-artifact",
-      "elapsed_micros": 935,
-      "name": "/home/brittonr/git/aspen/target/release/deps/chunking_baseline-5766e5daf83a48c8",
+      "elapsed_micros": 2030,
+      "name": "/home/brittonr/git/aspen/target/release/deps/chunking_baseline-a2b8baa12653f888",
       "unique_chunks_in_file": 23
     }
   ],
@@ -373,13 +373,13 @@
   "results": {
     "chunk_size_max": 262144,
     "chunk_size_min": 14,
-    "chunk_size_p50": 68901,
-    "chunk_size_p95": 137643,
-    "dedup_ratio": 0.168,
-    "duplicate_chunks": 42,
-    "throughput_mib_per_sec": 2544.0583358291947,
-    "total_chunks": 250,
-    "unique_chunks": 208,
-    "wall_micros": 6405
+    "chunk_size_p50": 53797,
+    "chunk_size_p95": 200271,
+    "dedup_ratio": 0.02608695652173913,
+    "duplicate_chunks": 6,
+    "throughput_mib_per_sec": 941.3640941676725,
+    "total_chunks": 230,
+    "unique_chunks": 224,
+    "wall_micros": 17314
   }
 }

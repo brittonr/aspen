@@ -76,6 +76,8 @@ harness = false
 default = []
 # Enable test fixtures re-export
 fixtures = []
+# Enable the experimental hashless CDC candidate used only by benchmark/evaluation rails.
+experimental-vectorcdc = []
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(madsim)"] }

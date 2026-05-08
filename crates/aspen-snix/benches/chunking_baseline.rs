@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use aspen_snix::chunking;
+use aspen_snix::chunking::ChunkerAlgorithm;
 use serde_json::json;
 
 const MAX_FILES_PER_CLASS: usize = 16;
@@ -188,7 +189,23 @@ fn percentile(sorted: &[u32], numerator: usize, denominator: usize) -> u32 {
     sorted[idx]
 }
 
+fn parse_algorithm() -> ChunkerAlgorithm {
+    match std::env::var("ASPEN_SNIX_CHUNKER") {
+        Ok(value) if value == ChunkerAlgorithm::ExperimentalHashlessCdc.as_str() || value == "experimental" => {
+            ChunkerAlgorithm::ExperimentalHashlessCdc
+        }
+        Ok(value) if value == ChunkerAlgorithm::FastCdc.as_str() || value == "fastcdc" => ChunkerAlgorithm::FastCdc,
+        Ok(value) => panic!(
+            "unsupported ASPEN_SNIX_CHUNKER '{value}'; expected '{}' or '{}'",
+            ChunkerAlgorithm::FastCdc.as_str(),
+            ChunkerAlgorithm::ExperimentalHashlessCdc.as_str()
+        ),
+        Err(_) => ChunkerAlgorithm::FastCdc,
+    }
+}
+
 fn main() {
+    let algorithm = parse_algorithm();
     let corpus = collect_corpus();
     let started = Instant::now();
 
@@ -201,7 +218,8 @@ fn main() {
 
     for file in &corpus {
         let file_started = Instant::now();
-        let chunks = chunking::chunk_blob(&file.data);
+        let chunks = chunking::chunk_blob_with_algorithm(&file.data, algorithm)
+            .unwrap_or_else(|error| panic!("chunker '{}' failed for '{}': {error}", algorithm.as_str(), file.name));
         let file_elapsed = file_started.elapsed();
         let class_entry = class_counts.entry(file.class).or_default();
         class_entry.0 += 1;
@@ -242,7 +260,7 @@ fn main() {
         .collect::<Vec<_>>();
 
     let report = json!({
-        "algorithm": "fastcdc-v2020",
+        "algorithm": algorithm.as_str(),
         "parameters": {
             "min_chunk_size": chunking::MIN_CHUNK_SIZE,
             "avg_chunk_size": chunking::AVG_CHUNK_SIZE,
