@@ -131,3 +131,42 @@ fn runtime_host_readiness_doc_tracks_oci_lowering_product_path_contract() {
     assert!(test.contains("OciLoweringPlan"));
     assert!(test.contains("WasmComponentWorker"));
 }
+
+#[test]
+fn runtime_host_readiness_doc_tracks_hermit_uhyve_product_path_contract() {
+    let Some(doc) = read_repo_file("docs/runtime-host-readiness.md") else {
+        return;
+    };
+    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-hermit-gap.ncl")
+        .expect("Hermit/Uhyve runtime-host harness row should exist when docs are present");
+    let test = format!(
+        "{}\n{}",
+        std::fs::read_to_string("crates/aspen-jobs/tests/hermit_uhyve_product_path_test.rs")
+            .expect("Hermit/Uhyve product-path test should exist when docs are present"),
+        std::fs::read_to_string("crates/aspen-jobs/src/vm_executor/hermit_uhyve.rs")
+            .expect("Hermit/Uhyve worker should exist when docs are present")
+    );
+
+    assert!(doc.contains("runtime-host-hermit-uhyve-product-path"));
+    assert!(doc.contains("cargo test -p aspen-jobs --test hermit_uhyve_product_path_test --features plugins-vm"));
+    assert!(doc.contains("ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED"));
+    assert!(doc.contains("ASPEN_HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD"));
+    assert!(doc.contains("aspen:runtime-host/hermit-uhyve-v1"));
+    assert!(doc.contains("ASPEN_UHYVE"));
+    assert!(doc.contains("ASPEN_HERMIT_UHYVE_IMAGE"));
+
+    assert!(manifest.contains("runtime-host-hermit-uhyve-product-path"));
+    assert!(manifest.contains("aspen-spawned-execution"));
+    assert!(manifest.contains("e2e-registered"));
+    assert!(manifest.contains("hermit_uhyve_product_path_test"));
+    assert!(manifest.contains("plugins-vm"));
+    assert!(manifest.contains("ignored-only"));
+    assert!(manifest.contains("real-uhyve-runner"));
+
+    assert!(test.contains("ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED"));
+    assert!(test.contains("ASPEN_HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD"));
+    assert!(test.contains("JobManager"));
+    assert!(test.contains("WorkerPool"));
+    assert!(test.contains("HermitUhyveWorker"));
+    assert!(test.contains("proof marker missing"));
+}

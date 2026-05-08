@@ -14,6 +14,6 @@
 
 ## Phase 3: Harness/docs promotion
 
-- [ ] [depends:proof] Replace `runtime-host-hermit-gap` with a runnable gated Hermit/Uhyve product-path row only after the real proof test passes.
-- [ ] [depends:proof] Update runtime-host readiness docs and doc guardrails with Hermit/Uhyve proof commands, markers, and non-evidence examples.
-- [ ] [depends:proof] Run focused tests, harness export/check, strict OpenSpec validation, archive the completed change, commit, push, and verify clean state.
+- [x] [depends:proof] Replace `runtime-host-hermit-gap` with a runnable gated Hermit/Uhyve product-path row only after the real proof test passes.
+- [x] [depends:proof] Update runtime-host readiness docs and doc guardrails with Hermit/Uhyve proof commands, markers, and non-evidence examples.
+- [x] [depends:proof] Run focused tests, harness export/check, strict OpenSpec validation, archive the completed change, commit, push, and verify clean state.

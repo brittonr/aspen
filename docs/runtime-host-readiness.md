@@ -4,7 +4,7 @@ This page records Aspen's current runtime-host evidence boundary for operator an
 
 ## Current proven boundary
 
-Aspen currently has four runtime-host rows with executable evidence:
+Aspen currently has five runtime-host rows with executable evidence:
 
 1. Guest-backed microVM CI execution evidence for the archived OpenSpec runtime-host matrix row:
 
@@ -53,6 +53,19 @@ proof level: aspen-spawned-execution
 The OCI lowering proof admits an immutable `sha256:` OCI source identity, derives a declared `aspen:runtime-host/wasm-v1` target artifact, submits that derived artifact as a blob-backed WASM job through `JobManager`, runs it through `WorkerPool` orchestration, and checks the product-visible receipt marker `ASPEN_OCI_LOWERING_RUNTIME_HOST_EXECUTED`.
 
 The guardrail marker `ASPEN_OCI_LOWERING_RUNTIME_HOST_PRODUCT_PATH_GUARD` separates negative coverage from execution evidence: raw containers, mutable tags, admission/model checks, lowering/build-only checks, and helper-only paths remain useful guardrails, but none satisfies the OCI lowering runtime-host row without the product-path target execution receipt.
+
+5. Gated product-path Hermit/Uhyve job execution evidence for the archived OpenSpec promotion row:
+
+```text
+OpenSpec change: openspec/changes/archive/2026-05-08-promote-hermit-uhyve-runtime-host-e2e
+matrix row: runtime-host-hermit-uhyve-product-path
+target: ASPEN_UHYVE=<uhyve> ASPEN_HERMIT_UHYVE_IMAGE=<x86_64-unknown-hermit image> cargo test -p aspen-jobs --test hermit_uhyve_product_path_test --features plugins-vm hermit_uhyve_executes_declared_fixture_through_product_orchestration -- --ignored --nocapture
+proof level: aspen-spawned-execution
+```
+
+The Hermit/Uhyve proof submits a blob-backed `hermit_uhyve` job through `JobManager`, runs it through `WorkerPool` orchestration with `HermitUhyveWorker`, executes a real `x86_64-unknown-hermit` image using real Uhyve, and checks the product-visible receipt marker `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`.
+
+The guardrail marker `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD` separates negative coverage from execution evidence: fake-Uhyve tests, direct Uhyve shell commands, package builds, successful exits without the expected marker, skipped/ignored tests not run on a capable host, and direct worker-only calls remain useful guardrails, but none satisfies the Hermit/Uhyve runtime-host row without the product-path job receipt.
 
 The microVM proof is stronger than inventory registration. The gated check boots an Aspen node, creates a Cloud Hypervisor golden snapshot, restores guest VMs from that snapshot, registers a guest worker with the Aspen cluster, submits real `ci_vm` jobs through `aspen-cli`, and waits for job completion.
 
@@ -122,6 +135,16 @@ A passing OCI lowering check is only runtime-host evidence when the test and rec
 - The successful job records at least one `WorkerPool` execution attempt after submitting the blob-backed derived artifact.
 - The negative guardrail contains `ASPEN_OCI_LOWERING_RUNTIME_HOST_PRODUCT_PATH_GUARD` and proves raw containers, mutable tags, model-only lowering receipts, and invalid derived target artifacts are not execution evidence.
 
+### Hermit/Uhyve job runtime
+
+A passing Hermit/Uhyve check is only runtime-host evidence when the test and receipt include these markers:
+
+- The harness row `runtime-host-hermit-uhyve-product-path` is `e2e-registered`, not `metadata-only`.
+- The target is `ASPEN_UHYVE=<uhyve> ASPEN_HERMIT_UHYVE_IMAGE=<x86_64-unknown-hermit image> cargo test -p aspen-jobs --test hermit_uhyve_product_path_test --features plugins-vm hermit_uhyve_executes_declared_fixture_through_product_orchestration -- --ignored --nocapture`.
+- The successful job result contains `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`, `aspen:runtime-host/hermit-uhyve-v1`, and `engine: uhyve`.
+- The successful job records at least one `WorkerPool` execution attempt after submitting a blob-backed `hermit_uhyve` payload.
+- The negative guardrail contains `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD` and proves invalid payloads, non-zero exits, and successful Uhyve exits without the marker are not execution evidence.
+
 Do not treat any of the following as sufficient by themselves:
 
 - the OpenSpec archive existing;
@@ -136,7 +159,8 @@ Do not treat any of the following as sufficient by themselves:
 - ignored/manual Hyperlight examples or direct worker-only calls without product orchestration;
 - OCI admission/model checks without a product-path target host execution receipt;
 - OCI lowering/build-only checks without submitting the derived isolated target artifact through Aspen orchestration;
-- raw container execution, dev/unsafe container paths, or mutable OCI tags alone.
+- raw container execution, dev/unsafe container paths, or mutable OCI tags alone;
+- fake-Uhyve tests, direct Uhyve shell commands, Hermit image package builds, skipped/ignored Hermit tests not run on a capable host, or successful Uhyve exits that do not emit `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`.
 
 ## How to reproduce
 
@@ -145,6 +169,15 @@ The WASM and OCI lowering rows are cheap and do not require nested KVM:
 ```bash
 cargo test -p aspen-jobs --test wasm_product_path_test --features plugins-wasm -- --nocapture
 cargo test -p aspen-jobs --test oci_lowering_product_path_test --features plugins-wasm -- --nocapture
+```
+
+The Hermit/Uhyve row is gated because it requires real Uhyve, a valid Hermit image, and a Uhyve/KVM-capable host:
+
+```bash
+uh=$(nix build .#uhyve --no-link --print-out-paths)
+ASPEN_UHYVE="$uh/bin/uhyve" \
+ASPEN_HERMIT_UHYVE_IMAGE=<path-to-x86_64-unknown-hermit-marker-image> \
+cargo test -p aspen-jobs --test hermit_uhyve_product_path_test --features plugins-vm hermit_uhyve_executes_declared_fixture_through_product_orchestration -- --ignored --nocapture
 ```
 
 The Hyperlight row is gated because it requires cargo-hyperlight plus a Hyperlight/KVM-capable host:
@@ -187,7 +220,7 @@ The accepted `runtime-host-microvm-ci-vm` path currently covers:
 ## Boundaries and caveats
 
 - This is a gated, impure nested-KVM acceptance check. It is expected to be run deliberately, not as a default local smoke test.
-- The current proven host classes are Cloud Hypervisor microVM CI, product-path WASM jobs, and gated product-path Hyperlight jobs. Remaining metadata-only matrix rows for other host classes are visibility gaps until promoted to runnable checks with receipts.
+- The current proven host classes are Cloud Hypervisor microVM CI, product-path WASM jobs, gated product-path Hyperlight jobs, OCI-lowered WASM jobs, and gated product-path Hermit/Uhyve jobs. Remaining metadata-only matrix rows for other host classes are visibility gaps until promoted to runnable checks with receipts.
 - The verified E2E path uses `microvm.postBootCommands` to emit readiness markers, configure guest networking, and launch the worker in the direct-boot image. Do not promote direct systemd target boot to a product guarantee without a separate design/spec and fresh E2E evidence.
 - The check uses `/tmp` VM state inside the NixOS test guest and removes it during cleanup. Preserve separate `.agent/evidence/...` logs when citing historical evidence.
 - Logs and incident notes must redact cluster tickets, `aspen://...` remotes, bearer values, private keys, connection strings, and private checkout/source URLs as `[REDACTED]`.
@@ -200,6 +233,6 @@ Before citing runtime-host readiness:
 - Run or cite the package gate and gated nested-KVM check command.
 - Confirm the log has the proof markers above, not just inventory registration or snapshot artifacts.
 - Record the derivation path and evidence log path.
-- State the host class precisely: `runtime-host-microvm-ci-vm` / Cloud Hypervisor microVM CI, `runtime-host-wasm-product-path` / product-path WASM job runtime, or `runtime-host-hyperlight-product-path` / gated product-path Hyperlight job runtime.
+- State the host class precisely: `runtime-host-microvm-ci-vm` / Cloud Hypervisor microVM CI, `runtime-host-wasm-product-path` / product-path WASM job runtime, `runtime-host-hyperlight-product-path` / gated product-path Hyperlight job runtime, `runtime-host-oci-lowering-product-path` / OCI-lowered WASM job runtime, or `runtime-host-hermit-uhyve-product-path` / gated product-path Hermit/Uhyve job runtime.
 - State unsupported or metadata-only host classes separately.
 - Redact secrets before copying any log excerpts.

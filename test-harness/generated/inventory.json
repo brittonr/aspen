@@ -15,7 +15,7 @@
       "test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl",
       "test-harness/suites/vm/runtime-host-wasm-gap.ncl"
     ],
-    "inputs_sha256": "675b02a2bd0255c793a46206a98ac6c73e5fa0ff801033645dfbcb07865eebc3"
+    "inputs_sha256": "9568f964d6f7d933f480c655dc3c7cced6a5fae55c0446dcc43420a2530475b5"
   },
   "suites": [
     {
@@ -219,34 +219,42 @@
       }
     },
     {
-      "id": "runtime-host-hermit-gap",
-      "display_name": "Runtime host Hermit/unikernel E2E gap",
-      "description": "Metadata-only row: Aspen has Hermit/unikernel profile/admission/receipt model coverage, but no registered suite that spawns and observes a real Hermit/unikernel workload through Aspen.",
-      "layer": "vm",
-      "owner": "runtime-host-loading",
-      "runtime_class": "metadata-only",
+      "id": "runtime-host-hermit-uhyve-product-path",
+      "display_name": "Runtime host Hermit/Uhyve product-path E2E",
+      "description": "Runs a declared Hermit unikernel image through Aspen job-manager and worker-pool orchestration, retrieves the image from blob storage, executes it with real Uhyve, and checks product-visible receipt markers.",
+      "layer": "rust-integration",
+      "owner": "runtime-host",
+      "runtime_class": "real-network",
       "runtime_host": {
         "kind": "hermit",
-        "proof_level": "gap",
-        "support_status": "gap",
-        "gap_reason": "No suite currently launches a Hermit/unikernel workload through Aspen's runtime path and records bounded lifecycle/output/receipt evidence."
+        "proof_level": "aspen-spawned-execution",
+        "support_status": "e2e-registered",
+        "gap_reason": null
       },
-      "prerequisites": [],
+      "prerequisites": [
+        "nested-kvm",
+        "nix-command"
+      ],
       "tags": [
-        "gap",
+        "e2e",
+        "gated",
         "hermit",
-        "metadata-only",
+        "jobs",
+        "product-path",
         "runtime-host",
+        "uhyve",
         "unikernel"
       ],
       "manifest_path": "test-harness/suites/vm/runtime-host-hermit-gap.ncl",
       "target": {
-        "kind": "metadata-only",
-        "package": null,
-        "test": null,
+        "kind": "cargo-nextest",
+        "package": "aspen-jobs",
+        "test": "hermit_uhyve_product_path_test",
         "profile": null,
-        "features": [],
-        "run_ignored": null,
+        "features": [
+          "plugins-vm"
+        ],
+        "run_ignored": "ignored-only",
         "flake_attr": null,
         "check_attr": null,
         "nix_file": null,

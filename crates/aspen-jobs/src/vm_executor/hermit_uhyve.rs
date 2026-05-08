@@ -180,11 +180,11 @@ impl HermitUhyveWorker {
     }
 
     fn receipt(payload: &HermitUhyveJobPayload, run: UhyveRun) -> serde_json::Value {
-        let marker = payload
+        let observed_marker = payload
             .expected_marker
             .as_deref()
-            .filter(|expected| run.stdout.contains(*expected) || run.stderr.contains(*expected))
-            .unwrap_or(HERMIT_UHYVE_RUNTIME_HOST_EXECUTED_MARKER);
+            .filter(|expected| run.stdout.contains(*expected) || run.stderr.contains(*expected));
+        let marker = observed_marker.unwrap_or("missing");
         serde_json::json!({
             "abi": HERMIT_UHYVE_RUNTIME_HOST_ABI,
             "engine": HERMIT_UHYVE_ENGINE,
@@ -230,6 +230,14 @@ impl HermitUhyveWorker {
         let run = self.run_uhyve(temp.path().to_path_buf(), &payload).await?;
         let success = run.success;
         let receipt = Self::receipt(&payload, run);
+        if success
+            && payload.expected_marker.is_some()
+            && receipt["marker"].as_str() != payload.expected_marker.as_deref()
+        {
+            return Err(JobError::VmExecutionFailed {
+                reason: format!("Hermit/Uhyve proof marker missing from serial output: {receipt}"),
+            });
+        }
         if success {
             Ok(JobResult::success(receipt))
         } else {

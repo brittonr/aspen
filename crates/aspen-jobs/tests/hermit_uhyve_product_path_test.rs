@@ -54,6 +54,21 @@ fn write_fake_uhyve(dir: &Path, exit_success: bool) -> std::path::PathBuf {
     path
 }
 
+fn write_fake_uhyve_without_marker(dir: &Path) -> std::path::PathBuf {
+    let path = dir.join("fake-uhyve-no-marker");
+    std::fs::write(
+        &path,
+        "#!/usr/bin/env sh\nset -eu\ntest -f \"$1\"\nprintf 'Hermit booted without proof marker image=%s\\n' \"$1\"\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    path
+}
+
 async fn run_hermit_job(
     image_bytes: &[u8],
     payload_mutator: impl FnOnce(&mut HermitUhyveJobPayload),
@@ -75,7 +90,7 @@ async fn run_hermit_job(
         HERMIT_ARTIFACT_HASH,
     );
     payload.timeout_secs = Some(2);
-    payload.serial_log_limit_bytes = Some(1024);
+    payload.serial_log_limit_bytes = Some(16 * 1024);
     payload_mutator(&mut payload);
 
     let spec = JobSpec::new(HERMIT_UHYVE_JOB_TYPE)
@@ -169,6 +184,28 @@ async fn hermit_uhyve_nonzero_exit_is_product_path_failure_not_execution_proof()
     assert!(
         failure.contains("Uhyve exited unsuccessfully"),
         "{HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD_MARKER}: expected Uhyve exit failure, got {failure:?}"
+    );
+}
+
+#[tokio::test]
+async fn hermit_uhyve_success_without_marker_is_not_execution_proof() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake_uhyve = write_fake_uhyve_without_marker(dir.path());
+    let (status, _result, error, attempts) = run_hermit_job(FAKE_HERMIT_IMAGE, |_| {}, fake_uhyve).await;
+
+    assert!(matches!(status, JobStatus::Failed | JobStatus::DeadLetter));
+    assert!(
+        attempts > 0,
+        "{HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD_MARKER}: missing-marker job did not reach orchestration"
+    );
+    let failure = error.as_deref().unwrap_or_default();
+    assert!(
+        failure.contains("proof marker missing"),
+        "{HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD_MARKER}: expected missing marker failure, got {failure:?}"
+    );
+    assert!(
+        failure.contains("\"marker\":\"missing\""),
+        "{HERMIT_UHYVE_RUNTIME_HOST_PRODUCT_PATH_GUARD_MARKER}: receipt did not record missing marker: {failure:?}"
     );
 }
 
