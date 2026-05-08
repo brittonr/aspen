@@ -413,7 +413,7 @@ impl ManagedCiVm {
     /// - `systemd.unit=multi-user.target` - NixOS does not provide a default.target symlink
     /// - `SYSTEMD_UNIT_PATH=...:` - pass the generated NixOS unit tree as an init environment
     ///   variable so stage-2 systemd can find the store-backed unit graph
-
+    ///
     /// Without the correct init path, the VM will boot the kernel and initrd
     /// but fail to transition to the NixOS system (systemd won't start).
     ///
