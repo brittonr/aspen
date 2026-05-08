@@ -95,6 +95,16 @@ in
       import json
       import re
 
+      def dump_vm_diagnostics(label, tail_lines=80):
+          _, diagnostic = host.execute(
+              f"echo '--- {label}: aspen-node unit ---'; systemctl status --no-pager aspen-node || true; "
+              f"echo '--- {label}: aspen-node stdout tail ---'; tail -{tail_lines} /tmp/aspen-node.log || true; "
+              f"echo '--- {label}: aspen-node stderr tail ---'; tail -{tail_lines} /tmp/aspen-node-err.log || true; "
+              f"echo '--- {label}: vm state tree ---'; find /tmp/aspen-data/ci/vms -maxdepth 3 -print 2>/dev/null || true; "
+              f"echo '--- {label}: proof marker tails ---'; for log in /tmp/aspen-data/ci/vms/*-serial.log; do echo \"### $log\"; grep -E 'ASPEN_CI_NET_CONFIG|ASPEN_CI_SNAPSHOT_READY|worker registered with cluster|RPC request failed|Address Lookup failed|Network is unreachable' \"$log\" 2>/dev/null | tail -{tail_lines} || true; done"
+          )
+          host.log(str(diagnostic))
+
       host.start()
       host.wait_for_unit("multi-user.target")
 
@@ -110,7 +120,7 @@ in
               "systemd-run --unit=aspen-node "
               "--property=StandardOutput=file:/tmp/aspen-node.log "
               "--property=StandardError=file:/tmp/aspen-node-err.log "
-              "'--property=Environment=RUST_LOG=info,aspen_ci_executor_vm=debug,aspen_ci=debug' "
+              "'--property=Environment=RUST_LOG=info,aspen_ci_executor_vm=info,aspen_ci=info' "
               f"'--property=Environment=ASPEN_CI_KERNEL_PATH=${ciKernel}/bzImage' "
               f"'--property=Environment=ASPEN_CI_INITRD_PATH=${ciInitrd}/initrd' "
               f"'--property=Environment=ASPEN_CI_TOPLEVEL_PATH=${ciToplevel}' "
@@ -145,22 +155,17 @@ in
           host.log("Cluster is ready")
 
       with subtest("9.1: Verify golden snapshot creation"):
-          # Wait for the CloudHypervisorWorker to boot first VM and create snapshot.
-          # Emit bounded diagnostics first so gated failures identify whether the
-          # node registered the VM worker, booted the child VM, or died silently.
-          time.sleep(20)
-          _, diagnostic = host.execute(
-              "echo '--- aspen-node unit ---'; systemctl status --no-pager aspen-node || true; "
-              "echo '--- aspen-node stdout tail ---'; tail -200 /tmp/aspen-node.log || true; "
-              "echo '--- aspen-node stderr tail ---'; tail -200 /tmp/aspen-node-err.log || true; "
-              "echo '--- vm state tree ---'; find /tmp/aspen-data/ci/vms -maxdepth 4 -print 2>/dev/null || true; "
-              "echo '--- vm serial tails ---'; for log in /tmp/aspen-data/ci/vms/*-serial.log; do echo \"### $log\"; tail -200 \"$log\" 2>/dev/null || true; done"
-          )
-          host.log(str(diagnostic))
-          host.wait_until_succeeds(
-              f"test -d ${snapshotDir} && test -f ${snapshotDir}/memory-ranges",
-              timeout=180
-          )
+          # Wait for the CloudHypervisorWorker to boot first VM and create the
+          # golden snapshot. Dump diagnostics only on failure so successful
+          # receipts stay focused on proof markers.
+          try:
+              host.wait_until_succeeds(
+                  f"test -d ${snapshotDir} && test -f ${snapshotDir}/memory-ranges",
+                  timeout=180
+              )
+          except Exception:
+              dump_vm_diagnostics("snapshot-create-timeout")
+              raise
           host.log("Golden snapshot directory exists")
 
           # Check snapshot files
@@ -191,11 +196,19 @@ in
           # completed its NixOS boot and read the injected cluster ticket.
           # Gate job submission on that visible guest-backed signal so failures
           # distinguish snapshot artifact creation from actual CI worker readiness.
-          host.wait_until_succeeds(
-              "grep -q 'worker registered with cluster' /tmp/aspen-data/ci/vms/*-serial.log",
-              timeout=180
-          )
-          host.log("Snapshot VM worker registered with cluster")
+          try:
+              host.wait_until_succeeds(
+                  "grep -q 'worker registered with cluster' /tmp/aspen-data/ci/vms/*-serial.log",
+                  timeout=180
+              )
+          except Exception:
+              dump_vm_diagnostics("worker-registration-timeout")
+              raise
+          worker_proof = host.succeed(
+              "{ grep -h -m1 'ASPEN_CI_NET_CONFIG' /tmp/aspen-data/ci/vms/*-serial.log; "
+              "grep -h -m1 'worker registered with cluster' /tmp/aspen-data/ci/vms/*-serial.log; }"
+          ).strip()
+          host.log(f"Snapshot VM worker registered with cluster: {worker_proof}")
 
           # Submit a simple CI job
           host.succeed(
