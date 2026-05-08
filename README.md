@@ -148,6 +148,7 @@ madsim for deterministic simulation, proptest/Bolero for property-based testing 
 - [Observability](docs/observability.md)
 - [Operator Receipts](docs/operator-receipts.md)
 - [Runtime Applications](docs/runtime-applications.md)
+- [Runtime Host Readiness](docs/runtime-host-readiness.md)
 - [Plugin Development](docs/PLUGIN_DEVELOPMENT.md)
 - [SOPS Secrets](docs/sops.md)
 - [Tiger Style](docs/tigerstyle.md)
