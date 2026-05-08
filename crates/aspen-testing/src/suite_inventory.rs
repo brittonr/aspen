@@ -389,11 +389,29 @@ fn validate_manifest(manifest: &SuiteManifest, manifest_path: &Path, repo_root: 
         target_kind,
         SuiteTargetKind::CargoNextest | SuiteTargetKind::NixBuild | SuiteTargetKind::MetadataOnly
     ));
+    validate_gap_manifest_name(manifest, manifest_path)?;
     match target_kind {
         SuiteTargetKind::CargoNextest => validate_cargo_target(&manifest.target, manifest_path, repo_root),
         SuiteTargetKind::NixBuild => validate_nix_target(&manifest.target, manifest_path, repo_root),
         SuiteTargetKind::MetadataOnly => validate_metadata_target(manifest, manifest_path),
     }
+}
+
+fn validate_gap_manifest_name(manifest: &SuiteManifest, manifest_path: &Path) -> Result<()> {
+    let Some(file_name) = manifest_path.file_name().and_then(|name| name.to_str()) else {
+        return Ok(());
+    };
+    if !file_name.ends_with("-gap.ncl") {
+        return Ok(());
+    }
+    if let Some(runtime_host) = &manifest.runtime_host {
+        ensure!(
+            runtime_host.proof_level == "gap" && runtime_host.support_status == "gap",
+            "{} uses a -gap.ncl filename for promoted runtime-host evidence; rename the manifest after promotion",
+            manifest_path.display()
+        );
+    }
+    Ok(())
 }
 
 fn validate_suite_id(id: &str, manifest_path: &Path) -> Result<()> {
@@ -849,6 +867,36 @@ mod tests {
         assert_eq!(runtime_host.proof_level, RuntimeHostProofLevel::Gap);
         assert_eq!(runtime_host.support_status, RuntimeHostSupportStatus::Gap);
         assert!(runtime_host.gap_reason.as_deref().unwrap().contains("WASM runner E2E"));
+    }
+
+    #[test]
+    fn promoted_runtime_host_rows_cannot_use_gap_manifest_names() {
+        let repo = TestRepo::new();
+        repo.write_manifest(
+            "vm/runtime-host-wasm-gap.ncl",
+            r#"
+            {
+              id = "runtime-host-wasm-product-path",
+              layer = "rust-integration",
+              owner = "runtime-host-loading",
+              runtime_class = "real-network",
+              runtime_host = {
+                kind = "wasm",
+                proof_level = "aspen-spawned-execution",
+                support_status = "e2e-registered",
+              },
+              tags = ["runtime-host", "wasm", "e2e"],
+              target = {
+                kind = "cargo-nextest",
+                package = "aspen-jobs",
+                test = "wasm_product_path_test",
+              },
+            }
+            "#,
+        );
+
+        let err = load_inventory(&repo.paths()).expect_err("promoted runtime-host rows must not use gap filenames");
+        assert!(err.to_string().contains("uses a -gap.ncl filename for promoted runtime-host evidence"));
     }
 
     #[test]

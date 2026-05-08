@@ -9,13 +9,13 @@
       "test-harness/suites/rust/job-integration.ncl",
       "test-harness/suites/vm/multi-node-blob.ncl",
       "test-harness/suites/vm/multi-node-kv.ncl",
-      "test-harness/suites/vm/runtime-host-hermit-gap.ncl",
-      "test-harness/suites/vm/runtime-host-hyperlight-gap.ncl",
+      "test-harness/suites/vm/runtime-host-hermit-uhyve-product-path.ncl",
+      "test-harness/suites/vm/runtime-host-hyperlight-product-path.ncl",
       "test-harness/suites/vm/runtime-host-microvm-ci.ncl",
-      "test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl",
-      "test-harness/suites/vm/runtime-host-wasm-gap.ncl"
+      "test-harness/suites/vm/runtime-host-oci-lowering-product-path.ncl",
+      "test-harness/suites/vm/runtime-host-wasm-product-path.ncl"
     ],
-    "inputs_sha256": "aad04ac0dffdcfa0b987829f29c8d9848b46fa66bab385f66ff5908ae75ed296"
+    "inputs_sha256": "5207866f6a5b1c57d038e921466164fd2bbb4c141a51e8780de2fac1af3fc245"
   },
   "suites": [
     {
@@ -245,7 +245,7 @@
         "uhyve",
         "unikernel"
       ],
-      "manifest_path": "test-harness/suites/vm/runtime-host-hermit-gap.ncl",
+      "manifest_path": "test-harness/suites/vm/runtime-host-hermit-uhyve-product-path.ncl",
       "target": {
         "kind": "cargo-nextest",
         "package": "aspen-jobs",
@@ -286,7 +286,7 @@
         "product-path",
         "runtime-host"
       ],
-      "manifest_path": "test-harness/suites/vm/runtime-host-hyperlight-gap.ncl",
+      "manifest_path": "test-harness/suites/vm/runtime-host-hyperlight-product-path.ncl",
       "target": {
         "kind": "cargo-nextest",
         "package": "aspen-jobs",
@@ -366,7 +366,7 @@
         "runtime-host",
         "wasm"
       ],
-      "manifest_path": "test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl",
+      "manifest_path": "test-harness/suites/vm/runtime-host-oci-lowering-product-path.ncl",
       "target": {
         "kind": "cargo-nextest",
         "package": "aspen-jobs",
@@ -404,7 +404,7 @@
         "runtime-host",
         "wasm"
       ],
-      "manifest_path": "test-harness/suites/vm/runtime-host-wasm-gap.ncl",
+      "manifest_path": "test-harness/suites/vm/runtime-host-wasm-product-path.ncl",
       "target": {
         "kind": "cargo-nextest",
         "package": "aspen-jobs",

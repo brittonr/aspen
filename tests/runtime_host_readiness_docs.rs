@@ -45,7 +45,7 @@ fn runtime_host_readiness_doc_tracks_wasm_product_path_contract() {
     let Some(doc) = read_repo_file("docs/runtime-host-readiness.md") else {
         return;
     };
-    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-wasm-gap.ncl")
+    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-wasm-product-path.ncl")
         .expect("wasm runtime-host harness row should exist when docs are present");
     let test = std::fs::read_to_string("crates/aspen-jobs/tests/wasm_product_path_test.rs")
         .expect("wasm product-path test should exist when docs are present");
@@ -73,7 +73,7 @@ fn runtime_host_readiness_doc_tracks_hyperlight_product_path_contract() {
     let Some(doc) = read_repo_file("docs/runtime-host-readiness.md") else {
         return;
     };
-    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-hyperlight-gap.ncl")
+    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-hyperlight-product-path.ncl")
         .expect("Hyperlight runtime-host harness row should exist when docs are present");
     let test = std::fs::read_to_string("crates/aspen-jobs/tests/hyperlight_product_path_test.rs")
         .expect("Hyperlight product-path test should exist when docs are present");
@@ -103,7 +103,7 @@ fn runtime_host_readiness_doc_tracks_oci_lowering_product_path_contract() {
     let Some(doc) = read_repo_file("docs/runtime-host-readiness.md") else {
         return;
     };
-    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-oci-lowering-gap.ncl")
+    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-oci-lowering-product-path.ncl")
         .expect("OCI lowering runtime-host harness row should exist when docs are present");
     let test = std::fs::read_to_string("crates/aspen-jobs/tests/oci_lowering_product_path_test.rs")
         .expect("OCI lowering product-path test should exist when docs are present");
@@ -137,7 +137,7 @@ fn runtime_host_readiness_doc_tracks_hermit_uhyve_product_path_contract() {
     let Some(doc) = read_repo_file("docs/runtime-host-readiness.md") else {
         return;
     };
-    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-hermit-gap.ncl")
+    let manifest = std::fs::read_to_string("test-harness/suites/vm/runtime-host-hermit-uhyve-product-path.ncl")
         .expect("Hermit/Uhyve runtime-host harness row should exist when docs are present");
     let test = format!(
         "{}\n{}",
