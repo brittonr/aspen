@@ -14,7 +14,8 @@ Collected: 2026-05-08T16:22:26Z session.
 ## Real proof prerequisites checked
 
 - `rustc --print target-list | grep hermit` listed `x86_64-unknown-hermit`.
-- `command -v uhyve` returned no path in this environment.
+- `nix build .#uhyve --no-link --print-out-paths -L` now succeeds and provides a real Uhyve binary at a Nix store path.
+- `cargo test -p aspen-jobs --test hermit_uhyve_product_path_test --features plugins-vm hermit_uhyve_executes_declared_fixture_through_product_orchestration -- --ignored --nocapture` was run with the Nix-built Uhyve binary and a temporary Hermit marker binary, but the Aspen product-path job dead-lettered because Uhyve rejected the temporary binary as an invalid Hermit image.
 
 ## Hermit image build probe
 
@@ -48,4 +49,4 @@ Maybe the rustup component `llvm-tools` is missing? Install it through: `rustup 
 
 ## Consequence
 
-Do not promote `runtime-host-hermit-gap.ncl` yet. The remaining work is to provide a real Uhyve binary and a real Hermit image that prints `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`, then run the ignored proof test through Aspen `JobManager`/`WorkerPool` orchestration.
+Do not promote `runtime-host-hermit-gap.ncl` yet. The Uhyve binary is now packaged by `.#uhyve`, but the remaining work is to provide a real Hermit image that Uhyve accepts and that prints `ASPEN_HERMIT_UHYVE_RUNTIME_HOST_EXECUTED`, then rerun the ignored proof test through Aspen `JobManager`/`WorkerPool` orchestration.

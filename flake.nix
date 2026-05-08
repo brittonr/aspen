@@ -5435,6 +5435,7 @@
               verus-root = verusRoot;
               # Z3 4.12.5 (required by Verus)
               z3 = z3_4_12_5;
+              uhyve = pkgs.callPackage ./nix/packages/uhyve.nix {};
             }
             // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") (
               let
