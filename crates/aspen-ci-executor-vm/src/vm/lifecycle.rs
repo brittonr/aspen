@@ -45,6 +45,15 @@ fn inject_bridge_addr(ticket_str: &str, bridge_addr: SocketAddr, vm_id: &str) ->
     }
 }
 
+fn is_already_running_boot_error(error: &CloudHypervisorError) -> bool {
+    match error {
+        CloudHypervisorError::ApiError { status, body } => {
+            *status == 500 && body.contains("invalid VM state transition") && body.contains("Running to Running")
+        }
+        _ => false,
+    }
+}
+
 impl ManagedCiVm {
     /// Get the current VM state.
     pub async fn state(&self) -> VmState {
@@ -223,7 +232,16 @@ impl ManagedCiVm {
             info!(vm_id = %self.id, "VM already running (auto-booted)");
         } else {
             info!(vm_id = %self.id, state = %vm_info.state, "sending boot command via API");
-            self.api.boot().await?;
+            match self.api.boot().await {
+                Ok(()) => {}
+                Err(e) if is_already_running_boot_error(&e) => {
+                    info!(
+                        vm_id = %self.id,
+                        "VM became running before boot command completed"
+                    );
+                }
+                Err(e) => return Err(e),
+            }
         }
 
         // Wait for VM to be running
@@ -431,5 +449,40 @@ impl ManagedCiVm {
     /// Get the API client for direct VM control.
     pub fn api(&self) -> &crate::api_client::VmApiClient {
         &self.api
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn already_running_boot_error_matches_cloud_hypervisor_race() {
+        let error = CloudHypervisorError::ApiError {
+            status: 500,
+            body: r#"["Error from API","The VM could not boot","invalid VM state transition: Running to Running"]"#
+                .to_string(),
+        };
+
+        assert!(is_already_running_boot_error(&error));
+    }
+
+    #[test]
+    fn already_running_boot_error_rejects_other_api_errors() {
+        let stopped_error = CloudHypervisorError::ApiError {
+            status: 500,
+            body: "invalid VM state transition: Stopped to Running".to_string(),
+        };
+        let client_error = CloudHypervisorError::ApiError {
+            status: 400,
+            body: "invalid VM state transition: Running to Running".to_string(),
+        };
+        let socket_error = CloudHypervisorError::SocketTimeout {
+            path: PathBuf::from("/tmp/ch.sock"),
+            timeout_ms: 1,
+        };
+
+        assert!(!is_already_running_boot_error(&stopped_error));
+        assert!(!is_already_running_boot_error(&client_error));
+        assert!(!is_already_running_boot_error(&socket_error));
     }
 }
