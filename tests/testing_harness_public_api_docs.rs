@@ -17,7 +17,8 @@ fn public_api_boundary_docs_name_structured_diagnostics_and_guard() {
 #[test]
 fn public_api_boundary_check_reports_clean_default_graph() {
     let repo_root = env!("CARGO_MANIFEST_DIR");
-    let output = Command::new("scripts/test-harness.sh")
+    let output = Command::new("bash")
+        .arg("scripts/test-harness.sh")
         .arg("public-api-boundary")
         .current_dir(repo_root)
         .output()

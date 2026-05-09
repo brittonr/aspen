@@ -31,7 +31,8 @@ fn quick_confidence_dry_run_summary_is_structured_and_non_proof() {
         std::thread::current().name().unwrap_or("test")
     ));
 
-    let output = Command::new("scripts/test-harness.sh")
+    let output = Command::new("bash")
+        .arg("scripts/test-harness.sh")
         .arg("quick-confidence")
         .arg("--dry-run")
         .arg("--json")

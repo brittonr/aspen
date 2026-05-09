@@ -782,10 +782,13 @@
             ./rust-toolchain.toml
             ./flake.nix
             ./flake.lock
-            # Tests in workspace crates read operator docs, harness manifests, and VM test specs.
-            # Keep them in the CI source snapshot so all-targets lint gates compile.
+            # Tests in workspace crates read operator docs, harness manifests,
+            # harness scripts, and VM test specs. Keep them in the CI source
+            # snapshot so all-targets lint gates compile and dry-run contract
+            # tests execute the same helper paths as local operators.
             (filteredTree ./docs)
             (filteredTree ./test-harness)
+            (filteredTree ./scripts)
             (filteredTree ./nix/tests)
             (filteredTree ./src)
             (filteredTree ./crates)
@@ -3248,7 +3251,7 @@
                   cargoNextestExtraArgs = "-P ci-nix";
                   nativeBuildInputs =
                     ciCommonArgs.nativeBuildInputs
-                    ++ [pkgs.cargo-nextest];
+                    ++ [pkgs.cargo-nextest pkgs.python3];
                 }
               );
 
@@ -3260,7 +3263,7 @@
                   cargoNextestExtraArgs = "-P ci-nix";
                   nativeBuildInputs =
                     ciCommonArgs.nativeBuildInputs
-                    ++ [pkgs.cargo-nextest];
+                    ++ [pkgs.cargo-nextest pkgs.python3];
                 }
               );
               # CI build checks — verify binaries compile with CI features.
@@ -3464,7 +3467,7 @@
                   cargoNextestExtraArgs = "-P quick";
                   nativeBuildInputs =
                     fullCommonArgs.nativeBuildInputs
-                    ++ [pkgs.cargo-nextest];
+                    ++ [pkgs.cargo-nextest pkgs.python3];
                 }
               );
 
@@ -3473,7 +3476,7 @@
                 // {
                   nativeBuildInputs =
                     fullCommonArgs.nativeBuildInputs
-                    ++ [pkgs.cargo-nextest];
+                    ++ [pkgs.cargo-nextest pkgs.python3];
                 }
               );
 
