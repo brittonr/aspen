@@ -339,10 +339,20 @@ impl RaftNode {
 
     /// Ensure the cluster is initialized.
     pub(crate) fn ensure_initialized(&self) -> Result<(), ControlPlaneError> {
-        if !self.initialized.load(Ordering::Acquire) {
-            return Err(ControlPlaneError::NotInitialized);
+        if self.initialized.load(Ordering::Acquire) {
+            return Ok(());
         }
-        Ok(())
+
+        // Followers may join through Raft replication instead of a local init()
+        // call. Treat replicated membership as initialization for control-plane
+        // reads, matching the KV initialization path below.
+        let metrics = self.raft.metrics().borrow().clone();
+        if metrics.membership_config.membership().nodes().next().is_some() {
+            let _ = self.initialized.compare_exchange(false, true, Ordering::Release, Ordering::Relaxed);
+            return Ok(());
+        }
+
+        Err(ControlPlaneError::NotInitialized)
     }
 
     /// Ensure the cluster is initialized for KV operations.

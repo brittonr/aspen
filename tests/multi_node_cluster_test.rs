@@ -15,6 +15,7 @@
 //! This test requires network access and is ignored by default.
 
 use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Result;
 use aspen::api::AddLearnerRequest;
@@ -22,7 +23,6 @@ use aspen::api::ChangeMembershipRequest;
 use aspen::api::ClusterController;
 use aspen::api::ClusterNode;
 use aspen::api::InitRequest;
-use aspen::api::KeyValueStore;
 use aspen::api::KvRead;
 use aspen::api::KvScan;
 use aspen::api::KvWrite;
@@ -44,6 +44,10 @@ const CLUSTER_TIMEOUT: Duration = Duration::from_secs(60);
 const GOSSIP_DISCOVERY_WAIT: Duration = Duration::from_secs(5);
 /// Time to wait for leader election.
 const LEADER_ELECTION_WAIT: Duration = Duration::from_millis(1000);
+/// Maximum time to wait for failover election after the leader shuts down.
+const FAILOVER_ELECTION_TIMEOUT: Duration = Duration::from_secs(30);
+/// Poll interval for asynchronous cluster convergence checks.
+const CLUSTER_POLL_INTERVAL: Duration = Duration::from_millis(250);
 /// Test cookie for the cluster.
 const TEST_COOKIE: &str = "multi-node-test-cluster";
 /// Number of nodes in the test cluster.
@@ -73,6 +77,94 @@ async fn create_node(node_id: u64, temp_dir: &TempDir, secret_key: &str) -> Resu
 /// Generate a deterministic secret key for a node (same as kitty-cluster.sh).
 fn generate_secret_key(node_id: u64) -> String {
     format!("{:064x}", 1000 + node_id)
+}
+
+/// Wait until a node observes the expected voting membership.
+async fn wait_for_membership(node: &Node, expected_members: &[u64]) -> Result<()> {
+    let deadline = Instant::now() + CLUSTER_TIMEOUT;
+    let mut last_members = Vec::new();
+
+    while Instant::now() < deadline {
+        match node.raft_node().current_state().await {
+            Ok(state) => {
+                last_members = state.members.clone();
+                if state.members == expected_members {
+                    return Ok(());
+                }
+            }
+            Err(error) => {
+                info!(node_id = node.node_id().0, %error, "waiting for membership convergence");
+            }
+        }
+        sleep(CLUSTER_POLL_INTERVAL).await;
+    }
+
+    anyhow::bail!(
+        "node {} did not observe membership {:?}; last observed {:?}",
+        node.node_id().0,
+        expected_members,
+        last_members
+    )
+}
+
+/// Wait until a node can read a specific replicated value.
+async fn wait_for_replicated_value(node: &Node, key: &str, expected_value: &str) -> Result<()> {
+    let deadline = Instant::now() + CLUSTER_TIMEOUT;
+    let mut last_value = None;
+
+    while Instant::now() < deadline {
+        let read_request = ReadRequest::new(key.to_string());
+        match node.raft_node().read(read_request).await {
+            Ok(result) => {
+                last_value = result.kv.as_ref().map(|kv| kv.value.clone());
+                if last_value.as_deref() == Some(expected_value) {
+                    return Ok(());
+                }
+            }
+            Err(error) => {
+                info!(node_id = node.node_id().0, %error, "waiting for replicated value");
+            }
+        }
+        sleep(CLUSTER_POLL_INTERVAL).await;
+    }
+
+    anyhow::bail!(
+        "node {} did not observe replicated value for key {key}; last observed {:?}",
+        node.node_id().0,
+        last_value
+    )
+}
+
+/// Wait for a surviving voter to report a non-failed leader.
+async fn wait_for_new_leader(nodes: &[Option<Node>], failed_leader: u64) -> Result<u64> {
+    let deadline = Instant::now() + FAILOVER_ELECTION_TIMEOUT;
+    let mut last_seen = Vec::new();
+
+    while Instant::now() < deadline {
+        last_seen.clear();
+        for (idx, node) in nodes.iter().enumerate() {
+            let node_id = idx as u64 + 1;
+            let Some(node) = node.as_ref() else {
+                continue;
+            };
+            match node.raft_node().get_leader().await {
+                Ok(Some(leader)) => {
+                    info!(node_id = node_id, leader = leader, "observed leader during failover");
+                    if leader != failed_leader {
+                        return Ok(leader);
+                    }
+                    last_seen.push((node_id, Some(leader)));
+                }
+                Ok(None) => last_seen.push((node_id, None)),
+                Err(error) => {
+                    info!(node_id = node_id, %error, "waiting for failover leader");
+                }
+            }
+        }
+        sleep(CLUSTER_POLL_INTERVAL).await;
+    }
+
+    anyhow::bail!("no replacement leader elected after node {failed_leader} shutdown; last observations: {last_seen:?}")
 }
 
 /// Test a full multi-node cluster lifecycle.
@@ -349,6 +441,12 @@ async fn test_leader_failover() -> Result<()> {
     let request = ChangeMembershipRequest { members: vec![1, 2, 3] };
     node1.raft_node().change_membership(request).await?;
 
+    let expected_members = [1, 2, 3];
+    for id in 2..=3u64 {
+        let node = nodes[(id - 1) as usize].as_ref().unwrap();
+        wait_for_membership(node, &expected_members).await?;
+    }
+
     // Write some data before failover
     let write_request = WriteRequest {
         command: WriteCommand::Set {
@@ -358,28 +456,21 @@ async fn test_leader_failover() -> Result<()> {
     };
     node1.raft_node().write(write_request).await?;
 
+    for id in 2..=3u64 {
+        let node = nodes[(id - 1) as usize].as_ref().unwrap();
+        wait_for_replicated_value(node, "failover/test", "before_failover").await?;
+    }
+
     info!("Shutting down leader (node 1)...");
 
     // Shutdown node 1 (the leader)
     let node1 = nodes[0].take().unwrap();
     node1.shutdown().await?;
 
-    // Wait for new leader election
+    // Wait for new leader election. Poll instead of sleeping once: the election
+    // clock starts only after followers process the closed leader streams.
     info!("Waiting for new leader election...");
-    sleep(Duration::from_secs(5)).await;
-
-    // Find the new leader
-    let mut new_leader_id = None;
-    for id in 2..=3u64 {
-        let node = nodes[(id - 1) as usize].as_ref().unwrap();
-        if let Ok(Some(leader)) = node.raft_node().get_leader().await {
-            info!(node_id = id, leader = leader, "found leader");
-            new_leader_id = Some(leader);
-            break;
-        }
-    }
-
-    let new_leader_id = new_leader_id.expect("should have elected a new leader");
+    let new_leader_id = wait_for_new_leader(&nodes, 1).await?;
     assert_ne!(new_leader_id, 1, "new leader should not be node 1");
     info!("New leader elected: node {}", new_leader_id);
 
