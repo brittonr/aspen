@@ -9,6 +9,7 @@ use vstd::prelude::*;
 
 verus! {
 
+mod pipeline_spec;
 mod resource_spec;
 mod timeout_spec;
 
