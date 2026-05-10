@@ -5,4 +5,5 @@
 
 use vstd::prelude::*;
 
+mod integrity_spec;
 mod kv_spec;
