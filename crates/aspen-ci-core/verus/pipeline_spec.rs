@@ -188,4 +188,152 @@ pub proof fn edge_order_implies_dependency_position_before_stage(
 {
 }
 
+pub open spec fn all_edges_ordered_spec(
+    order: Seq<u32>,
+    dependencies: Seq<u32>,
+    dependents: Seq<u32>,
+) -> bool {
+    dependencies.len() == dependents.len()
+        && forall|edge: int| #![auto] 0 <= edge < dependencies.len()
+            ==> edge_order_spec(order, dependencies[edge], dependents[edge])
+}
+
+pub open spec fn order_contains_every_stage_spec(order: Seq<u32>, stage_count: u32) -> bool {
+    forall|stage: int| 0 <= stage < stage_count as int
+        ==> #[trigger] contains_u32_spec(order, stage as u32)
+}
+
+pub open spec fn edges_in_range_spec(
+    dependencies: Seq<u32>,
+    dependents: Seq<u32>,
+    stage_count: u32,
+) -> bool {
+    dependencies.len() == dependents.len()
+        && forall|edge: int| #![auto] 0 <= edge < dependencies.len()
+            ==> dependencies[edge] < stage_count && dependents[edge] < stage_count
+}
+
+pub open spec fn topological_order_spec(
+    order: Seq<u32>,
+    dependencies: Seq<u32>,
+    dependents: Seq<u32>,
+    stage_count: u32,
+) -> bool {
+    order.len() == stage_count as int
+        && order_contains_every_stage_spec(order, stage_count)
+        && edges_in_range_spec(dependencies, dependents, stage_count)
+        && all_edges_ordered_spec(order, dependencies, dependents)
+}
+
+pub fn edge_ordered_exec(order: &[u32], dependency: u32, dependent: u32) -> (result: bool)
+    ensures result == edge_order_spec(order@, dependency, dependent)
+{
+    let mut seen_dependency = false;
+    let mut found_ordered_edge = false;
+    let mut index: usize = 0;
+    while index < order.len()
+        invariant
+            0 <= index <= order.len(),
+            seen_dependency == exists|dep_pos: int| #![auto]
+                0 <= dep_pos < index && order@[dep_pos] == dependency,
+            found_ordered_edge == exists|dep_pos: int, stage_pos: int| #![auto]
+                0 <= dep_pos < stage_pos < index
+                && order@[dep_pos] == dependency
+                && order@[stage_pos] == dependent,
+        decreases order.len() - index
+    {
+        if order[index] == dependent && seen_dependency {
+            found_ordered_edge = true;
+        }
+        if order[index] == dependency {
+            seen_dependency = true;
+        }
+        index += 1;
+    }
+    assert(found_ordered_edge == edge_order_spec(order@, dependency, dependent));
+    found_ordered_edge
+}
+
+pub fn all_edges_ordered_exec(
+    order: &[u32],
+    dependencies: &[u32],
+    dependents: &[u32],
+) -> (result: bool)
+    requires dependencies@.len() == dependents@.len()
+    ensures result == all_edges_ordered_spec(order@, dependencies@, dependents@)
+{
+    let mut all_ordered = true;
+    let mut edge_index: usize = 0;
+    while edge_index < dependencies.len()
+        invariant
+            dependencies@.len() == dependents@.len(),
+            0 <= edge_index <= dependencies.len(),
+            all_ordered == forall|edge: int| #![auto] 0 <= edge < edge_index
+                ==> edge_order_spec(order@, dependencies@[edge], dependents@[edge]),
+        decreases dependencies.len() - edge_index
+    {
+        if !edge_ordered_exec(order, dependencies[edge_index], dependents[edge_index]) {
+            all_ordered = false;
+        }
+        edge_index += 1;
+    }
+    assert(all_ordered == all_edges_ordered_spec(order@, dependencies@, dependents@));
+    all_ordered
+}
+
+pub fn edges_in_range_exec(
+    dependencies: &[u32],
+    dependents: &[u32],
+    stage_count: u32,
+) -> (result: bool)
+    requires dependencies@.len() == dependents@.len()
+    ensures result == edges_in_range_spec(dependencies@, dependents@, stage_count)
+{
+    let mut in_range = true;
+    let mut edge_index: usize = 0;
+    while edge_index < dependencies.len()
+        invariant
+            dependencies@.len() == dependents@.len(),
+            0 <= edge_index <= dependencies.len(),
+            in_range == forall|edge: int| #![auto] 0 <= edge < edge_index
+                ==> dependencies@[edge] < stage_count && dependents@[edge] < stage_count,
+        decreases dependencies.len() - edge_index
+    {
+        if dependencies[edge_index] >= stage_count || dependents[edge_index] >= stage_count {
+            in_range = false;
+        }
+        edge_index += 1;
+    }
+    assert(in_range == edges_in_range_spec(dependencies@, dependents@, stage_count));
+    in_range
+}
+
+pub proof fn topological_order_contains_stage(
+    order: Seq<u32>,
+    dependencies: Seq<u32>,
+    dependents: Seq<u32>,
+    stage_count: u32,
+    stage: int,
+)
+    requires
+        topological_order_spec(order, dependencies, dependents, stage_count),
+        0 <= stage < stage_count as int,
+    ensures contains_u32_spec(order, stage as u32)
+{
+}
+
+pub proof fn topological_order_edges_are_ordered(
+    order: Seq<u32>,
+    dependencies: Seq<u32>,
+    dependents: Seq<u32>,
+    stage_count: u32,
+    edge: int,
+)
+    requires
+        topological_order_spec(order, dependencies, dependents, stage_count),
+        0 <= edge < dependencies.len(),
+    ensures edge_order_spec(order, dependencies[edge], dependents[edge])
+{
+}
+
 } // verus!
