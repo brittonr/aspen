@@ -110,10 +110,14 @@ verus! {
     // Re-export federation specifications
     pub use identity_spec::*;
     pub use trust_spec::*;
+
+    // Re-export rate limiter control-flow specifications
+    pub use rate_limiter_spec::*;
 }
 
 mod blob_announcement_spec;
 mod gossip_state_spec;
 mod identity_spec;
+mod rate_limiter_spec;
 mod signed_announcement_spec;
 mod trust_spec;
