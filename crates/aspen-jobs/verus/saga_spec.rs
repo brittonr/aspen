@@ -295,10 +295,10 @@ verus! {
     }
 
     /// Exponential backoff calculation
-    pub open spec fn retry_backoff_ms(attempts: u64) -> u64 {
-        // base * 2^attempts, capped
+    pub open spec fn retry_backoff_ms(attempts: u64) -> int {
+        // base * 2^attempts, capped in the multiplier model.
         let multiplier = if attempts < 10 { 1u64 << attempts } else { 1024u64 };
-        COMPENSATION_RETRY_BASE_MS * multiplier
+        COMPENSATION_RETRY_BASE_MS as int * multiplier as int
     }
 
     // ========================================================================
@@ -341,6 +341,7 @@ verus! {
         step_index: u64,
     ) -> bool {
         post.executed_count == pre.executed_count + 1 &&
+        saga_invariant(post) &&
         match post.state {
             SagaStateSpec::Executing { current_step } => {
                 current_step == step_index + 1
@@ -402,14 +403,14 @@ verus! {
     /// Proof: start_saga produces valid saga
     pub proof fn start_saga_valid(step_count: u64)
         requires start_saga_pre(step_count)
-        ensures {
+        ensures ({
             let saga = SagaSpec {
                 step_count: step_count,
                 state: SagaStateSpec::Executing { current_step: 0 },
                 executed_count: 0,
             };
             saga_invariant(saga)
-        }
+        })
     {
         // Pre ensures step_count > 0 and bounded
     }

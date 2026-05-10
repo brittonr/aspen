@@ -114,10 +114,14 @@ verus! {
 
     // Re-export recovery specifications
     pub use recovery_spec::*;
+
+    // Re-export retry delay helper specifications
+    pub use retry_delay_spec::*;
 }
 
 mod pressure_spec;
 mod priority_spec;
 mod recovery_spec;
+mod retry_delay_spec;
 mod saga_spec;
 mod timing_spec;
