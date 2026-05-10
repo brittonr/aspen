@@ -468,6 +468,15 @@ verus! {
     pub use queue_dequeue_spec::dequeue_pre;
     pub use queue_dequeue_spec::dequeue_single_effect;
 
+    pub use queue_delivery_helpers_spec::RequeuePrioritySpec;
+    pub use queue_delivery_helpers_spec::has_exceeded_max_delivery_attempts as delivery_attempts_exceeded;
+    pub use queue_delivery_helpers_spec::compute_requeue_delivery_attempts;
+    pub use queue_delivery_helpers_spec::compute_requeue_priority;
+    pub use queue_delivery_helpers_spec::increment_delivery_count;
+    pub use queue_delivery_helpers_spec::increment_delivery_count_for_dequeue;
+    pub use queue_delivery_helpers_spec::can_increment_delivery_count;
+    pub use queue_delivery_helpers_spec::decrement_delivery_count_for_release;
+
     pub use queue_ack_spec::ack_pre;
     pub use queue_ack_spec::ack_post;
 
@@ -589,6 +598,7 @@ mod sequence_state_spec;
 
 // Queue specifications
 mod queue_ack_spec;
+mod queue_delivery_helpers_spec;
 mod queue_dequeue_spec;
 mod queue_enqueue_spec;
 mod queue_state_spec;
