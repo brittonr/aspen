@@ -55,8 +55,7 @@ verus! {
         ==> !verify_tampered
     }
 
-    /// Proof: Hash modification detected via signature failure
-    #[verifier(external_body)]
+    /// Proof: A failed tampered verification satisfies hash protection.
     pub proof fn hash_tampering_detected(
         original: BlobAnnouncementSpec,
         tampered: BlobAnnouncementSpec,
@@ -66,8 +65,6 @@ verus! {
             original.blob_hash_low != tampered.blob_hash_low
         ensures blob_hash_protected(original, tampered, true, false)
     {
-        // Signature over different hash produces different signature
-        // Verification with original signature fails on tampered message
     }
 
     // ========================================================================
@@ -89,8 +86,7 @@ verus! {
         ==> !verify_tampered
     }
 
-    /// Proof: Size modification detected via signature failure
-    #[verifier(external_body)]
+    /// Proof: A failed tampered verification satisfies size protection.
     pub proof fn size_tampering_detected(
         original: BlobAnnouncementSpec,
         tampered: BlobAnnouncementSpec,
@@ -98,7 +94,6 @@ verus! {
         requires original.blob_size != tampered.blob_size
         ensures blob_size_protected(original, tampered, true, false)
     {
-        // Signature over different size produces different signature
     }
 
     /// Size bounds check for resource protection
@@ -184,7 +179,11 @@ verus! {
         signed: SignedBlobAnnouncementSpec,
         result_is_some: bool,
     ) -> bool {
-        result_is_some ==> tag_bounded(signed.announcement.tag_len)
+        result_is_some ==> (
+            tag_bounded(signed.announcement.tag_len) &&
+            version_compatible(signed.announcement.version) &&
+            signed.announcement.timestamp_micros > 0
+        )
     }
 
     // ========================================================================
@@ -235,8 +234,6 @@ verus! {
     }
 
     /// Proof: Valid signed blob announcements satisfy all invariants
-    #[verifier(external_body)]
-    #[verifier(external_body)]
     pub proof fn valid_blob_satisfies_invariants(
         signed: SignedBlobAnnouncementSpec,
         verification_succeeds: bool,
@@ -246,7 +243,6 @@ verus! {
             blob_verify_post(signed, verification_succeeds),
         ensures blob_announcement_invariant(signed, verification_succeeds)
     {
-        // Follows from construction and verification postconditions
     }
 
     // ========================================================================

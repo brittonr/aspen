@@ -100,7 +100,6 @@ verus! {
 
     /// Proof: Tampered announcements fail verification
     #[verifier(external_body)]
-    #[verifier(external_body)]
     pub proof fn tampering_detected()
         ensures forall |orig: PeerAnnouncementSpec, tampered: PeerAnnouncementSpec,
                         orig_hash: u128, tampered_hash: u128|
