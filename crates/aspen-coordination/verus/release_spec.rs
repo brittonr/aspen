@@ -96,7 +96,6 @@ verus! {
     // ========================================================================
 
     /// Release preserves max_fencing_token_issued
-    #[verifier(external_body)]
     pub proof fn release_preserves_max_token(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -105,11 +104,11 @@ verus! {
         requires release_pre(pre, holder_id, token)
         ensures release_post(pre).max_fencing_token_issued == pre.max_fencing_token_issued
     {
-        // By construction: max_fencing_token_issued is unchanged
+        let post = release_post(pre);
+        assert(post.max_fencing_token_issued == pre.max_fencing_token_issued);
     }
 
     /// Release maintains fencing token monotonicity
-    #[verifier(external_body)]
     pub proof fn release_maintains_fencing_monotonicity(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -119,7 +118,7 @@ verus! {
         ensures fencing_token_monotonic(pre, release_post(pre))
     {
         release_preserves_max_token(pre, holder_id, token);
-        // post.max_fencing_token_issued == pre.max_fencing_token_issued >= pre
+        assert(release_post(pre).max_fencing_token_issued == pre.max_fencing_token_issued);
     }
 
     // ========================================================================
@@ -127,7 +126,6 @@ verus! {
     // ========================================================================
 
     /// Release sets deadline_ms to 0
-    #[verifier(external_body)]
     pub proof fn release_clears_deadline(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -136,11 +134,11 @@ verus! {
         requires release_pre(pre, holder_id, token)
         ensures release_post(pre).entry.unwrap().deadline_ms == 0
     {
-        // By construction: deadline_ms = 0
+        let post = release_post(pre);
+        assert(post.entry.unwrap().deadline_ms == 0);
     }
 
     /// Release makes the lock expired
-    #[verifier(external_body)]
     pub proof fn release_makes_expired(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -152,13 +150,10 @@ verus! {
     {
         let post = release_post(pre);
         let entry = post.entry.unwrap();
-        // entry.deadline_ms == 0
-        // is_expired checks deadline_ms == 0 || current_time > deadline_ms
-        // Therefore: is_expired(entry, post.current_time_ms)
+        assert(entry.deadline_ms == 0);
     }
 
     /// Release makes the lock available
-    #[verifier(external_body)]
     pub proof fn release_makes_available(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -168,7 +163,9 @@ verus! {
         ensures is_lock_available(release_post(pre))
     {
         release_makes_expired(pre, holder_id, token);
-        // is_lock_available returns true if entry is expired
+        let post = release_post(pre);
+        assert(post.entry.is_some());
+        assert(is_expired(post.entry.unwrap(), post.current_time_ms));
     }
 
     // ========================================================================
@@ -176,7 +173,6 @@ verus! {
     // ========================================================================
 
     /// Release preserves the fencing token in the entry
-    #[verifier(external_body)]
     pub proof fn release_preserves_entry_token(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -187,7 +183,8 @@ verus! {
             release_post(pre).entry.unwrap().fencing_token ==
             pre.entry.unwrap().fencing_token
     {
-        // By construction: fencing_token is copied from old entry
+        let post = release_post(pre);
+        assert(post.entry.unwrap().fencing_token == pre.entry.unwrap().fencing_token);
     }
 
     // ========================================================================
@@ -195,7 +192,6 @@ verus! {
     // ========================================================================
 
     /// Release preserves entry_token_bounded
-    #[verifier(external_body)]
     pub proof fn release_preserves_entry_bounded(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -210,14 +206,14 @@ verus! {
         let post = release_post(pre);
         let old_entry = pre.entry.unwrap();
         let new_entry = post.entry.unwrap();
-        // new_entry.fencing_token == old_entry.fencing_token
-        // old_entry.fencing_token <= pre.max_fencing_token_issued (by entry_token_bounded)
-        // post.max_fencing_token_issued == pre.max_fencing_token_issued
-        // Therefore: new_entry.fencing_token <= post.max_fencing_token_issued
+        release_preserves_entry_token(pre, holder_id, token);
+        release_preserves_max_token(pre, holder_id, token);
+        assert(old_entry.fencing_token <= pre.max_fencing_token_issued);
+        assert(new_entry.fencing_token == old_entry.fencing_token);
+        assert(post.max_fencing_token_issued == pre.max_fencing_token_issued);
     }
 
     /// Release establishes TTL validity (trivially, since deadline_ms = 0)
-    #[verifier(external_body)]
     pub proof fn release_establishes_ttl_validity(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -228,13 +224,11 @@ verus! {
     {
         let post = release_post(pre);
         let entry = post.entry.unwrap();
-        // entry.deadline_ms == 0
-        // ttl_expiration_valid checks deadline_ms == 0 first
-        // Therefore: ttl_expiration_valid(entry)
+        assert(entry.deadline_ms == 0);
+        assert(ttl_expiration_valid(entry));
     }
 
     /// Release preserves mutual exclusion (lock is now released)
-    #[verifier(external_body)]
     pub proof fn release_preserves_mutual_exclusion(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -245,12 +239,11 @@ verus! {
     {
         let post = release_post(pre);
         let entry = post.entry.unwrap();
-        // entry.deadline_ms == 0, so is_expired(entry, ...) is true
-        // mutual_exclusion_holds allows expired entries
+        assert(entry.deadline_ms == 0);
+        assert(is_expired(entry, post.current_time_ms));
     }
 
     /// Release preserves the combined lock invariant
-    #[verifier(external_body)]
     pub proof fn release_preserves_lock_invariant(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -265,6 +258,10 @@ verus! {
         release_preserves_entry_bounded(pre, holder_id, token);
         release_establishes_ttl_validity(pre, holder_id, token);
         release_preserves_mutual_exclusion(pre, holder_id, token);
+        let post = release_post(pre);
+        assert(entry_token_bounded(post));
+        assert(state_ttl_valid(post));
+        assert(mutual_exclusion_holds(post));
     }
 
     // ========================================================================
@@ -272,7 +269,6 @@ verus! {
     // ========================================================================
 
     /// After release, the lock is no longer held by anyone
-    #[verifier(external_body)]
     pub proof fn release_clears_holder(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -283,7 +279,7 @@ verus! {
     {
         let post = release_post(pre);
         let entry = post.entry.unwrap();
-        // is_expired(entry, post.current_time_ms) because deadline_ms == 0
-        // is_held_by requires !is_expired, so returns false
+        assert(entry.deadline_ms == 0);
+        assert(is_expired(entry, post.current_time_ms));
     }
 }
