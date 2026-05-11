@@ -290,7 +290,6 @@ verus! {
     }
 
     /// Proof: Assign preserves load bounded
-    #[verifier(external_body)]
     pub proof fn assign_preserves_load_bound(
         pre: WorkerState,
         task_id: Seq<u8>,
@@ -323,7 +322,6 @@ verus! {
     }
 
     /// Proof: Assign preserves worker isolation
-    #[verifier(external_body)]
     pub proof fn assign_task_preserves_worker_isolation(
         pre: WorkerState,
         task_id: Seq<u8>,
@@ -341,7 +339,6 @@ verus! {
     }
 
     /// Proof: Assign preserves assignment consistency
-    #[verifier(external_body)]
     pub proof fn assign_task_preserves_assignment_consistency(
         pre: WorkerState,
         task_id: Seq<u8>,

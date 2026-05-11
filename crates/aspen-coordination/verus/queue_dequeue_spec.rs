@@ -125,7 +125,6 @@ verus! {
     }
 
     /// Proof: Dequeue moves item from pending to inflight
-    #[verifier(external_body)]
     pub proof fn dequeue_moves_to_inflight(
         pre: QueueState,
         item_idx: int,
@@ -152,7 +151,6 @@ verus! {
     }
 
     /// Proof: Dequeue preserves FIFO - first item dequeued first
-    #[verifier(external_body)]
     pub proof fn dequeue_respects_fifo(
         pre: QueueState,
         consumer_id: Seq<u8>,
@@ -172,7 +170,6 @@ verus! {
     }
 
     /// Proof: Dequeue preserves state exclusivity
-    #[verifier(external_body)]
     pub proof fn dequeue_preserves_exclusivity(
         pre: QueueState,
         item_idx: int,
@@ -314,7 +311,6 @@ verus! {
     }
 
     /// Proof: Visibility expiration returns item to pending
-    #[verifier(external_body)]
     pub proof fn visibility_expiration_returns_to_pending(
         pre: QueueState,
         item_id: u64,
@@ -338,7 +334,6 @@ verus! {
     ///
     /// When an item returns to pending after visibility timeout, it is
     /// inserted at the correct position to maintain ID-based ordering.
-    #[verifier(external_body)]
     pub proof fn visibility_expiration_preserves_fifo(
         pre: QueueState,
         item_id: u64,
@@ -427,7 +422,6 @@ verus! {
     }
 
     /// Proof: DLQ move respects threshold
-    #[verifier(external_body)]
     pub proof fn dlq_move_respects_threshold(
         pre: QueueState,
         item_idx: int,

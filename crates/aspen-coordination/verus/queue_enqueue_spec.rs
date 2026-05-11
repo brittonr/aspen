@@ -123,7 +123,6 @@ verus! {
     }
 
     /// Proof: Enqueue preserves FIFO ordering
-    #[verifier(external_body)]
     pub proof fn enqueue_preserves_fifo(
         pre: QueueState,
         payload: Seq<u8>,
@@ -179,7 +178,6 @@ verus! {
     }
 
     /// Proof: Enqueue preserves state exclusivity
-    #[verifier(external_body)]
     pub proof fn enqueue_preserves_exclusivity(
         pre: QueueState,
         payload: Seq<u8>,
@@ -247,7 +245,6 @@ verus! {
     }
 
     /// Proof: Batch enqueue returns sequential IDs
-    #[verifier(external_body)]
     pub proof fn batch_enqueue_sequential_ids(
         pre: QueueState,
         items: Seq<(Seq<u8>, Option<Seq<u8>>)>,
@@ -324,7 +321,6 @@ verus! {
     }
 
     /// Proof: Enqueue to group preserves group FIFO
-    #[verifier(external_body)]
     pub proof fn enqueue_preserves_group_fifo(
         pre: QueueState,
         payload: Seq<u8>,

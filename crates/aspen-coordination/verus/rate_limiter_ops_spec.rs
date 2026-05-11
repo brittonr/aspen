@@ -236,7 +236,6 @@ verus! {
     }
 
     /// Proof: Refill increases or maintains tokens
-    #[verifier(external_body)]
     pub proof fn refill_increases_tokens(
         pre: RateLimiterState,
         current_time_ms: u64,
@@ -251,7 +250,6 @@ verus! {
     }
 
     /// Proof: Refill preserves capacity bound
-    #[verifier(external_body)]
     pub proof fn refill_preserves_capacity_bound(
         pre: RateLimiterState,
         current_time_ms: u64,
@@ -265,7 +263,6 @@ verus! {
     }
 
     /// Proof: Refill advances last_refill_ms
-    #[verifier(external_body)]
     pub proof fn refill_advances_time(
         pre: RateLimiterState,
         current_time_ms: u64,
@@ -280,7 +277,6 @@ verus! {
     }
 
     /// Proof: Refill preserves invariant
-    #[verifier(external_body)]
     pub proof fn refill_preserves_invariant(
         pre: RateLimiterState,
         current_time_ms: u64,

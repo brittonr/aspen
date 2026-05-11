@@ -232,7 +232,6 @@ verus! {
     }
 
     /// Proof: Nack to DLQ respects threshold
-    #[verifier(external_body)]
     pub proof fn nack_dlq_respects_threshold(
         pre: QueueState,
         item_id: u64,
