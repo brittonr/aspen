@@ -48,6 +48,7 @@
 //! 3. **Bounded Arithmetic**: u32 in [0, 2^32-1], u64 in [0, 2^64-1]
 
 mod fork_detection_spec;
+mod gossip_message_spec;
 mod quorum_spec;
 mod ref_diff_spec;
 
