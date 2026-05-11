@@ -111,7 +111,6 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant(capacity: u32, max_holders: u32)
         ensures semaphore_invariant(initial_semaphore_state(capacity, max_holders))
     {
@@ -157,7 +156,6 @@ verus! {
     }
 
     /// Proof: Acquire preserves capacity bound
-    #[verifier(external_body)]
     pub proof fn acquire_preserves_capacity_bound(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -168,13 +166,19 @@ verus! {
         ensures
             capacity_bound(acquire_post(pre, permits))
     {
-        // available_permits(pre) >= permits
-        // available = capacity - used
-        // So: used + permits <= capacity
+        assert(acquire_pre(pre, permits));
+        assert(can_acquire(pre, permits));
+        assert(available_permits(pre) >= permits);
+        assert(pre.used_permits <= pre.capacity_permits);
+        assert(available_permits(pre) == pre.capacity_permits - pre.used_permits);
+        assert(pre.used_permits + permits <= pre.capacity_permits) by(nonlinear_arith)
+            requires
+                pre.used_permits <= pre.capacity_permits,
+                pre.capacity_permits - pre.used_permits >= permits;
+        assert(acquire_post(pre, permits).used_permits == pre.used_permits + permits);
     }
 
     /// Proof: Acquire preserves holder limit
-    #[verifier(external_body)]
     pub proof fn acquire_preserves_holder_limit(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -185,12 +189,16 @@ verus! {
         ensures
             holder_limit(acquire_post(pre, permits))
     {
-        // holder_count < max_holders (from acquire_pre)
-        // post.holder_count = pre.holder_count + 1 <= max_holders
+        assert(acquire_pre(pre, permits));
+        assert(can_acquire(pre, permits));
+        assert(pre.holder_count < pre.max_holders);
+        assert(pre.holder_count + 1 <= pre.max_holders) by(nonlinear_arith)
+            requires
+                pre.holder_count < pre.max_holders;
+        assert(acquire_post(pre, permits).holder_count == pre.holder_count + 1);
     }
 
     /// Proof: Acquire preserves invariant
-    #[verifier(external_body)]
     pub proof fn acquire_preserves_invariant(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -206,7 +214,6 @@ verus! {
     }
 
     /// Proof: Acquire decreases available permits
-    #[verifier(external_body)]
     pub proof fn acquire_decreases_available(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -217,9 +224,13 @@ verus! {
         ensures
             available_permits(acquire_post(pre, permits)) == available_permits(pre) - permits
     {
-        // post.used = pre.used + permits
-        // post.available = capacity - post.used = capacity - (used + permits)
-        //                = (capacity - used) - permits = pre.available - permits
+        acquire_preserves_capacity_bound(pre, permits);
+        assert(pre.used_permits <= pre.capacity_permits);
+        assert(available_permits(pre) == pre.capacity_permits - pre.used_permits);
+        assert(acquire_post(pre, permits).used_permits == pre.used_permits + permits);
+        assert(acquire_post(pre, permits).used_permits <= acquire_post(pre, permits).capacity_permits);
+        assert(available_permits(acquire_post(pre, permits)) == pre.capacity_permits - (pre.used_permits + permits));
+        assert(pre.capacity_permits - (pre.used_permits + permits) == (pre.capacity_permits - pre.used_permits) - permits) by(nonlinear_arith);
     }
 
     // ========================================================================
@@ -246,7 +257,6 @@ verus! {
     }
 
     /// Proof: Release preserves capacity bound
-    #[verifier(external_body)]
     pub proof fn release_preserves_capacity_bound(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -257,11 +267,11 @@ verus! {
         ensures
             capacity_bound(release_post(pre, permits))
     {
-        // post.used = pre.used - permits <= pre.used <= capacity
+        assert(release_post(pre, permits).used_permits == pre.used_permits - permits);
+        assert(pre.used_permits - permits <= pre.used_permits) by(nonlinear_arith);
     }
 
     /// Proof: Release preserves holder limit
-    #[verifier(external_body)]
     pub proof fn release_preserves_holder_limit(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -272,11 +282,11 @@ verus! {
         ensures
             holder_limit(release_post(pre, permits))
     {
-        // post.holder_count = pre.holder_count - 1 < pre.holder_count <= max
+        assert(release_post(pre, permits).holder_count == pre.holder_count - 1);
+        assert(pre.holder_count - 1 <= pre.holder_count) by(nonlinear_arith);
     }
 
     /// Proof: Release preserves invariant
-    #[verifier(external_body)]
     pub proof fn release_preserves_invariant(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -292,7 +302,6 @@ verus! {
     }
 
     /// Proof: Release increases available permits
-    #[verifier(external_body)]
     pub proof fn release_increases_available(
         pre: SemaphoreStateSpec,
         permits: u32,
@@ -303,9 +312,12 @@ verus! {
         ensures
             available_permits(release_post(pre, permits)) == available_permits(pre) + permits
     {
-        // post.used = pre.used - permits
-        // post.available = capacity - post.used = capacity - (used - permits)
-        //                = (capacity - used) + permits = pre.available + permits
+        release_preserves_capacity_bound(pre, permits);
+        assert(pre.used_permits <= pre.capacity_permits);
+        assert(available_permits(pre) == pre.capacity_permits - pre.used_permits);
+        assert(release_post(pre, permits).used_permits == pre.used_permits - permits);
+        assert(available_permits(release_post(pre, permits)) == pre.capacity_permits - (pre.used_permits - permits));
+        assert(pre.capacity_permits - (pre.used_permits - permits) == (pre.capacity_permits - pre.used_permits) + permits) by(nonlinear_arith);
     }
 
     // ========================================================================
@@ -331,7 +343,6 @@ verus! {
     }
 
     /// Proof: Cleanup preserves invariant
-    #[verifier(external_body)]
     pub proof fn cleanup_preserves_invariant(
         pre: SemaphoreStateSpec,
         expired_permits: u32,
@@ -344,8 +355,10 @@ verus! {
         ensures
             semaphore_invariant(cleanup_expired_effect(pre, expired_permits, expired_holders))
     {
-        // Removing permits and holders only decreases counts
-        // Invariants are upper bounds, so they're preserved
+        assert(cleanup_expired_effect(pre, expired_permits, expired_holders).used_permits == pre.used_permits - expired_permits);
+        assert(cleanup_expired_effect(pre, expired_permits, expired_holders).holder_count == pre.holder_count - expired_holders);
+        assert(pre.used_permits - expired_permits <= pre.used_permits) by(nonlinear_arith);
+        assert(pre.holder_count - expired_holders <= pre.holder_count) by(nonlinear_arith);
     }
 
     // ========================================================================
