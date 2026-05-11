@@ -329,7 +329,6 @@ verus! {
     }
 
     /// Proof: Extend visibility preserves item identity
-    #[verifier(external_body)]
     pub proof fn extend_preserves_identity(
         pre: QueueState,
         item_id: u64,
@@ -472,7 +471,6 @@ verus! {
     }
 
     /// Proof: Redrive moves from DLQ to pending
-    #[verifier(external_body)]
     pub proof fn redrive_moves_to_pending(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
