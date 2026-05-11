@@ -77,7 +77,12 @@
 
   nixConfig = {
     keepOutputs = true;
-    max-jobs = "auto";
+    # Aspen's flake check includes heavyweight NixOS VM tests. Serialize local
+    # jobs by default so bare `nix flake check -L` produces deterministic
+    # operator evidence on single-host developer machines. Operators with
+    # sufficient VM capacity can still override this explicitly with
+    # `--max-jobs auto` or a chosen value.
+    max-jobs = "1";
     builders = "";
     # ── Binary Caches ─────────────────────────────────────────────────
     # Cargo dependency artifacts (cargoArtifacts, nodeCargoArtifacts,
