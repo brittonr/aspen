@@ -5,6 +5,7 @@
 //! production Rust shell.
 
 mod auth_policy_spec;
+mod connection_message_spec;
 mod filter_spec;
 mod http_request_spec;
 mod iroh_frame_spec;
