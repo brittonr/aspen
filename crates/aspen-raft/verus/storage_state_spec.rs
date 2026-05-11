@@ -113,7 +113,6 @@ verus! {
     }
 
     /// Proof: Empty state satisfies all invariants
-    #[verifier(external_body)]
     pub proof fn empty_state_invariant(genesis: ChainHash)
         requires genesis.len() == 32
         ensures storage_invariant(StorageState {

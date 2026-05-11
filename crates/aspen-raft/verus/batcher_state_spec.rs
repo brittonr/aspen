@@ -193,7 +193,6 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant(config: BatchConfigSpec)
         requires
             config.max_entries > 0,
@@ -586,7 +585,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if timeout has elapsed and flush should occur.
-    #[verifier(external_body)]
     pub fn timeout_elapsed_exec(
         pending_count: u32,
         batch_start_ms: u64,
@@ -596,13 +594,17 @@ verus! {
         ensures result == (
             pending_count > 0 &&
             batch_start_ms > 0 &&
-            // Use int arithmetic for verification, matches saturating_sub semantics
-            (current_time_ms as int) - (batch_start_ms as int) >= (max_wait_ms as int)
+            current_time_ms >= batch_start_ms &&
+            current_time_ms - batch_start_ms >= max_wait_ms
         )
     {
         pending_count > 0 &&
         batch_start_ms > 0 &&
-        current_time_ms.saturating_sub(batch_start_ms) >= max_wait_ms
+        if current_time_ms >= batch_start_ms {
+            current_time_ms - batch_start_ms >= max_wait_ms
+        } else {
+            false
+        }
     }
 
     /// Check if a batch should be flushed.
