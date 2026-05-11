@@ -278,22 +278,21 @@ verus! {
     }
 
     /// Proof: Initial state satisfies all invariants
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant(current_time_ms: u64)
         ensures lock_invariant(initial_lock_state(current_time_ms))
     {
-        // Initial state trivially satisfies:
-        // - entry_token_bounded: no entry
-        // - state_ttl_valid: no entry
-        // - mutual_exclusion_holds: no entry
+        let state = initial_lock_state(current_time_ms);
+        assert(entry_token_bounded(state));
+        assert(state_ttl_valid(state));
+        assert(mutual_exclusion_holds(state));
     }
 
     /// Proof: Initial state is available
-    #[verifier(external_body)]
     pub proof fn initial_state_available(current_time_ms: u64)
         ensures is_lock_available(initial_lock_state(current_time_ms))
     {
-        // No entry means lock is available
+        let state = initial_lock_state(current_time_ms);
+        assert(state.entry.is_none());
     }
 
     // ========================================================================
