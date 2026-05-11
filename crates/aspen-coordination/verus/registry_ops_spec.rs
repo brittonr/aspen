@@ -337,7 +337,6 @@ verus! {
     }
 
     /// Proof: Heartbeat preserves fencing token
-    #[verifier(external_body)]
     pub proof fn heartbeat_preserves_token(
         pre: RegistryState,
         service_id: Seq<u8>,
@@ -353,7 +352,6 @@ verus! {
     }
 
     /// Proof: Heartbeat marks service healthy
-    #[verifier(external_body)]
     pub proof fn heartbeat_marks_healthy(
         pre: RegistryState,
         service_id: Seq<u8>,
@@ -393,7 +391,6 @@ verus! {
     }
 
     /// Proof: Mark unhealthy removes from live set
-    #[verifier(external_body)]
     pub proof fn mark_unhealthy_removes_from_live(
         pre: RegistryState,
         service_id: Seq<u8>,
@@ -426,7 +423,6 @@ verus! {
     }
 
     /// Proof: Cleanup removes expired services
-    #[verifier(external_body)]
     pub proof fn cleanup_removes_expired(
         pre: RegistryState,
         service_id: Seq<u8>,
