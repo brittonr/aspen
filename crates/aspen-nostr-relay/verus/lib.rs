@@ -11,6 +11,7 @@ mod http_request_spec;
 mod iroh_frame_spec;
 mod nip11_info_spec;
 mod rate_limit_spec;
+mod relay_connection_spec;
 mod storage_spec;
 mod subscription_spec;
 
