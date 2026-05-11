@@ -122,7 +122,6 @@ verus! {
     }
 
     /// Snapshot creation is pure/read-only
-    #[verifier(external_body)]
     pub proof fn create_is_readonly(
         pre: StorageState,
         snapshot_index: u64,
@@ -133,7 +132,6 @@ verus! {
     }
 
     /// Snapshot installation updates last_applied
-    #[verifier(external_body)]
     pub proof fn install_updates_last_applied(
         pre: StorageState,
         meta: SnapshotMeta,
@@ -156,7 +154,6 @@ verus! {
     }
 
     /// Snapshot installation clears old entries
-    #[verifier(external_body)]
     pub proof fn install_clears_old_entries(
         pre: StorageState,
         meta: SnapshotMeta,
@@ -180,7 +177,6 @@ verus! {
     }
 
     /// Snapshot installation preserves monotonicity of last_applied
-    #[verifier(external_body)]
     pub proof fn install_preserves_last_applied_monotonicity(
         pre: StorageState,
         meta: SnapshotMeta,
@@ -205,7 +201,6 @@ verus! {
     }
 
     /// Snapshot installation preserves monotonicity of last_purged
-    #[verifier(external_body)]
     pub proof fn install_preserves_purge_monotonicity(
         pre: StorageState,
         meta: SnapshotMeta,
