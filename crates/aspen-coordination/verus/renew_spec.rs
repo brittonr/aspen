@@ -93,7 +93,6 @@ verus! {
     ///
     /// This is the most important property of renewal - the token must not
     /// change, as external services use it for fencing.
-    #[verifier(external_body)]
     pub proof fn renew_preserves_fencing_token(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -109,11 +108,11 @@ verus! {
             renew_post(pre, new_ttl_ms, new_acquired_at_ms).entry.unwrap().fencing_token ==
             pre.entry.unwrap().fencing_token
     {
-        // By construction: fencing_token is copied from old entry
+        let post = renew_post(pre, new_ttl_ms, new_acquired_at_ms);
+        assert(post.entry.unwrap().fencing_token == pre.entry.unwrap().fencing_token);
     }
 
     /// Renew preserves max_fencing_token_issued
-    #[verifier(external_body)]
     pub proof fn renew_preserves_max_token(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -129,11 +128,11 @@ verus! {
             renew_post(pre, new_ttl_ms, new_acquired_at_ms).max_fencing_token_issued ==
             pre.max_fencing_token_issued
     {
-        // By construction: max_fencing_token_issued is unchanged
+        let post = renew_post(pre, new_ttl_ms, new_acquired_at_ms);
+        assert(post.max_fencing_token_issued == pre.max_fencing_token_issued);
     }
 
     /// Renew maintains fencing token monotonicity
-    #[verifier(external_body)]
     pub proof fn renew_maintains_fencing_monotonicity(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -148,7 +147,7 @@ verus! {
         ensures fencing_token_monotonic(pre, renew_post(pre, new_ttl_ms, new_acquired_at_ms))
     {
         renew_preserves_max_token(pre, holder_id, token, new_ttl_ms, new_acquired_at_ms);
-        // post.max == pre.max, so post.max >= pre.max
+        assert(renew_post(pre, new_ttl_ms, new_acquired_at_ms).max_fencing_token_issued == pre.max_fencing_token_issued);
     }
 
     // ========================================================================
@@ -156,7 +155,6 @@ verus! {
     // ========================================================================
 
     /// Renew preserves entry_token_bounded
-    #[verifier(external_body)]
     pub proof fn renew_preserves_entry_bounded(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -174,14 +172,13 @@ verus! {
     {
         renew_preserves_fencing_token(pre, holder_id, token, new_ttl_ms, new_acquired_at_ms);
         renew_preserves_max_token(pre, holder_id, token, new_ttl_ms, new_acquired_at_ms);
-        // new_entry.fencing_token == old_entry.fencing_token
-        // old_entry.fencing_token <= pre.max (by entry_token_bounded)
-        // post.max == pre.max
-        // Therefore: new_entry.fencing_token <= post.max
+        let post = renew_post(pre, new_ttl_ms, new_acquired_at_ms);
+        assert(pre.entry.unwrap().fencing_token <= pre.max_fencing_token_issued);
+        assert(post.entry.unwrap().fencing_token == pre.entry.unwrap().fencing_token);
+        assert(post.max_fencing_token_issued == pre.max_fencing_token_issued);
     }
 
     /// Renew preserves mutual exclusion
-    #[verifier(external_body)]
     pub proof fn renew_preserves_mutual_exclusion(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -197,17 +194,28 @@ verus! {
         ensures
             mutual_exclusion_holds(renew_post(pre, new_ttl_ms, new_acquired_at_ms))
     {
-        // entry.holder_id == pre.entry.unwrap().holder_id
-        // Since renew_pre requires !is_expired, and mutual_exclusion_holds(pre),
-        // pre.entry.unwrap().holder_id.len() > 0
-        // Therefore: renewed entry also has holder_id.len() > 0
+        let old_entry = pre.entry.unwrap();
+        let post = renew_post(pre, new_ttl_ms, new_acquired_at_ms);
+        let new_entry = post.entry.unwrap();
+        assert(!is_expired(old_entry, pre.current_time_ms));
+        assert(old_entry.holder_id.len() > 0);
+        assert(old_entry.fencing_token > 0);
+        assert(new_entry.holder_id == old_entry.holder_id);
+        assert(new_entry.fencing_token == old_entry.fencing_token);
+        if is_expired(new_entry, post.current_time_ms) {
+            assert(mutual_exclusion_holds(post));
+        } else {
+            assert(new_entry.holder_id.len() > 0);
+            assert(new_entry.fencing_token > 0);
+            assert(new_entry.deadline_ms > 0);
+            assert(mutual_exclusion_holds(post));
+        }
     }
 
     /// Renew preserves TTL validity
     ///
     /// After renewal, the new entry has correct TTL computation:
     /// deadline_ms == acquired_at_ms + ttl_ms
-    #[verifier(external_body)]
     pub proof fn renew_preserves_ttl_validity(
         pre: LockState,
         holder_id: Seq<u8>,
@@ -225,13 +233,10 @@ verus! {
     {
         let post = renew_post(pre, new_ttl_ms, new_acquired_at_ms);
         let new_entry = post.entry.unwrap();
-        // By construction:
-        // new_entry.deadline_ms = (new_acquired_at_ms + new_ttl_ms) as u64
-        // new_entry.acquired_at_ms = new_acquired_at_ms
-        // new_entry.ttl_ms = new_ttl_ms
-        //
-        // With overflow protection (new_acquired_at_ms + new_ttl_ms <= MAX):
-        // new_entry.deadline_ms == new_entry.acquired_at_ms + new_entry.ttl_ms
-        // Therefore ttl_expiration_valid(new_entry) holds
+        assert(add_u64(new_acquired_at_ms, new_ttl_ms) == new_acquired_at_ms as int + new_ttl_ms as int);
+        assert(add_u64(new_acquired_at_ms, new_ttl_ms) <= u64::MAX as int);
+        assert(new_entry.deadline_ms as int == add_u64(new_acquired_at_ms, new_ttl_ms));
+        assert(new_entry.deadline_ms as int == new_entry.acquired_at_ms as int + new_entry.ttl_ms as int);
+        assert(ttl_expiration_valid(new_entry));
     }
 }
