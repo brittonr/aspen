@@ -147,7 +147,6 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant(
         limiter_id: Seq<u8>,
         config: RateLimiterConfigSpec,
@@ -160,7 +159,9 @@ verus! {
             config.refill_interval_ms > 0,
         ensures rate_limiter_invariant(initial_rate_limiter_state(limiter_id, config, current_time_ms))
     {
-        // tokens = capacity, so capacity_bound holds
+        let initial = initial_rate_limiter_state(limiter_id, config, current_time_ms);
+        assert(initial.tokens == initial.capacity_tokens);
+        assert(capacity_bound(initial));
     }
 
     // ========================================================================
