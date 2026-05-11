@@ -4524,8 +4524,11 @@
                     echo "Run: cd ~/git/aspen-core && verus crates/aspen-core/verus/lib.rs"
                     ;;
                   cluster)
-                    echo "Cluster specs extracted to ~/git/aspen-cluster"
-                    echo "Run: cd ~/git/aspen-cluster && verus crates/aspen-cluster/verus/lib.rs"
+                    echo "=== Verifying Cluster specs ==="
+                    "${verusRoot}/rust_verify" \
+                      --crate-type=lib \
+                      "''${FLAKE_ROOT:-.}/crates/aspen-cluster/verus/lib.rs"
+                    echo "Cluster: all specs verified ✓"
                     ;;
                   raft)
                     echo "Raft specs extracted to ~/git/aspen-raft"
@@ -4594,8 +4597,29 @@
             verify-verus-cluster = {
               type = "app";
               program = "${pkgs.writeShellScript "verify-verus-cluster" ''
-                echo "Cluster verus specs extracted to ~/git/aspen-cluster"
-                echo "Run: cd ~/git/aspen-cluster && verus crates/aspen-cluster/verus/lib.rs"
+                set -e
+                export LD_LIBRARY_PATH="${verusRustToolchain}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                export VERUS_Z3_PATH="${verusRoot}/z3"
+                export VERUS_ROOT="${verusRoot}"
+
+                CMD="''${1:-all}"
+                case "$CMD" in
+                  all|quick|check|"")
+                    echo "=== Verifying Cluster specs ==="
+                    "${verusRoot}/rust_verify" \
+                      --crate-type=lib \
+                      "''${FLAKE_ROOT:-.}/crates/aspen-cluster/verus/lib.rs"
+                    echo "Cluster: all specs verified ✓"
+                    ;;
+                  help|--help|-h)
+                    echo "Usage: nix run .#verify-verus-cluster [all|quick|check]"
+                    ;;
+                  *)
+                    echo "Unknown command: $CMD"
+                    echo "Usage: nix run .#verify-verus-cluster [all|quick|check]"
+                    exit 1
+                    ;;
+                esac
               ''}";
             };
 
