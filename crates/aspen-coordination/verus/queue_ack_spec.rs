@@ -250,7 +250,6 @@ verus! {
     }
 
     /// Proof: Explicit nack to DLQ allowed regardless of count
-    #[verifier(external_body)]
     pub proof fn explicit_nack_dlq_always_allowed(
         pre: QueueState,
         item_id: u64,
