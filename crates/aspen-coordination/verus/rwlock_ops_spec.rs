@@ -194,7 +194,6 @@ verus! {
     // ========================================================================
 
     /// Acquire read preserves mutual exclusion
-    #[verifier(external_body)]
     pub proof fn acquire_read_preserves_mutual_exclusion(
         pre: RWLockStateSpec,
     )
@@ -205,22 +204,24 @@ verus! {
             mutual_exclusion_holds(acquire_read_post(pre))
     {
         let post = acquire_read_post(pre);
-        // post.mode = Read, post.reader_count > 0, post.writer = None
+        assert(post.mode == RWLockModeSpec::Read);
+        assert(post.reader_count == pre.reader_count + 1);
+        assert(post.reader_count > 0);
+        assert(post.writer.is_none());
     }
 
     /// Acquire read preserves fencing token
-    #[verifier(external_body)]
     pub proof fn acquire_read_preserves_token(
         pre: RWLockStateSpec,
     )
         requires acquire_read_pre(pre)
         ensures acquire_read_post(pre).fencing_token == pre.fencing_token
     {
-        // By construction
+        let post = acquire_read_post(pre);
+        assert(post.fencing_token == pre.fencing_token);
     }
 
     /// Acquire read preserves invariant
-    #[verifier(external_body)]
     pub proof fn acquire_read_preserves_invariant(
         pre: RWLockStateSpec,
     )
@@ -231,8 +232,11 @@ verus! {
             rwlock_invariant(acquire_read_post(pre))
     {
         acquire_read_preserves_mutual_exclusion(pre);
-        // writer_token_matches_global: no writer, trivially true
-        // readers_bounded: pre.reader_count < max, so post <= max
+        let post = acquire_read_post(pre);
+        assert(post.writer.is_none());
+        assert(post.reader_count == pre.reader_count + 1);
+        assert(pre.reader_count < pre.max_readers);
+        assert(post.reader_count <= post.max_readers);
     }
 
     // ========================================================================
@@ -240,7 +244,6 @@ verus! {
     // ========================================================================
 
     /// Acquire write establishes mutual exclusion
-    #[verifier(external_body)]
     pub proof fn acquire_write_establishes_mutual_exclusion(
         pre: RWLockStateSpec,
         holder_id: Seq<u8>,
@@ -253,11 +256,12 @@ verus! {
             mutual_exclusion_holds(acquire_write_post(pre, holder_id, deadline_ms))
     {
         let post = acquire_write_post(pre, holder_id, deadline_ms);
-        // post.mode = Write, post.reader_count = 0, post.writer = Some(...)
+        assert(post.mode == RWLockModeSpec::Write);
+        assert(post.reader_count == 0);
+        assert(post.writer.is_some());
     }
 
     /// Acquire write increases fencing token
-    #[verifier(external_body)]
     pub proof fn acquire_write_increases_token(
         pre: RWLockStateSpec,
         holder_id: Seq<u8>,
@@ -269,11 +273,12 @@ verus! {
         ensures
             acquire_write_post(pre, holder_id, deadline_ms).fencing_token > pre.fencing_token
     {
-        // post.fencing_token = pre.fencing_token + 1
+        let post = acquire_write_post(pre, holder_id, deadline_ms);
+        assert(post.fencing_token == pre.fencing_token + 1);
+        assert(post.fencing_token > pre.fencing_token);
     }
 
     /// Acquire write preserves invariant
-    #[verifier(external_body)]
     pub proof fn acquire_write_preserves_invariant(
         pre: RWLockStateSpec,
         holder_id: Seq<u8>,
@@ -288,8 +293,10 @@ verus! {
     {
         acquire_write_establishes_mutual_exclusion(pre, holder_id, deadline_ms);
         let post = acquire_write_post(pre, holder_id, deadline_ms);
-        // writer_token_matches_global: writer.fencing_token == post.fencing_token (both = pre + 1)
-        // readers_bounded: post.reader_count = 0 <= max
+        assert(post.writer.is_some());
+        assert(post.writer.unwrap().fencing_token == post.fencing_token);
+        assert(post.reader_count == 0);
+        assert(post.reader_count <= post.max_readers);
     }
 
     // ========================================================================
@@ -297,7 +304,6 @@ verus! {
     // ========================================================================
 
     /// Release read preserves mutual exclusion
-    #[verifier(external_body)]
     pub proof fn release_read_preserves_mutual_exclusion(
         pre: RWLockStateSpec,
     )
@@ -308,12 +314,16 @@ verus! {
             mutual_exclusion_holds(release_read_post(pre))
     {
         let post = release_read_post(pre);
-        // If new_count == 0: mode = Free, reader_count = 0, writer = None
-        // If new_count > 0: mode = Read, reader_count > 0, writer = None
+        assert(post.writer.is_none());
+        assert(post.reader_count == pre.reader_count - 1);
+        if post.reader_count == 0 {
+            assert(post.mode == RWLockModeSpec::Free);
+        } else {
+            assert(post.mode == RWLockModeSpec::Read);
+        }
     }
 
     /// Release read preserves invariant
-    #[verifier(external_body)]
     pub proof fn release_read_preserves_invariant(
         pre: RWLockStateSpec,
     )
@@ -324,7 +334,11 @@ verus! {
             rwlock_invariant(release_read_post(pre))
     {
         release_read_preserves_mutual_exclusion(pre);
-        // Token unchanged, no writer, readers decreased
+        let post = release_read_post(pre);
+        assert(post.writer.is_none());
+        assert(post.reader_count == pre.reader_count - 1);
+        assert(pre.reader_count <= pre.max_readers);
+        assert(post.reader_count <= post.max_readers);
     }
 
     // ========================================================================
@@ -332,7 +346,6 @@ verus! {
     // ========================================================================
 
     /// Release write establishes free state
-    #[verifier(external_body)]
     pub proof fn release_write_makes_free(
         pre: RWLockStateSpec,
     )
@@ -342,11 +355,11 @@ verus! {
         ensures
             is_free(release_write_post(pre))
     {
-        // By construction: mode = Free
+        let post = release_write_post(pre);
+        assert(post.mode == RWLockModeSpec::Free);
     }
 
     /// Release write preserves mutual exclusion
-    #[verifier(external_body)]
     pub proof fn release_write_preserves_mutual_exclusion(
         pre: RWLockStateSpec,
     )
@@ -358,11 +371,12 @@ verus! {
             mutual_exclusion_holds(release_write_post(pre))
     {
         let post = release_write_post(pre);
-        // mode = Free, reader_count = 0, writer = None
+        assert(post.mode == RWLockModeSpec::Free);
+        assert(post.reader_count == 0);
+        assert(post.writer.is_none());
     }
 
     /// Release write preserves invariant
-    #[verifier(external_body)]
     pub proof fn release_write_preserves_invariant(
         pre: RWLockStateSpec,
     )
@@ -374,7 +388,10 @@ verus! {
             rwlock_invariant(release_write_post(pre))
     {
         release_write_preserves_mutual_exclusion(pre);
-        // Token preserved (for history), no writer, readers = 0
+        let post = release_write_post(pre);
+        assert(post.writer.is_none());
+        assert(post.reader_count == 0);
+        assert(post.reader_count <= post.max_readers);
     }
 
     // ========================================================================
@@ -382,7 +399,6 @@ verus! {
     // ========================================================================
 
     /// Downgrade preserves mutual exclusion
-    #[verifier(external_body)]
     pub proof fn downgrade_preserves_mutual_exclusion(
         pre: RWLockStateSpec,
         deadline_ms: u64,
@@ -395,11 +411,12 @@ verus! {
             mutual_exclusion_holds(downgrade_post(pre, deadline_ms))
     {
         let post = downgrade_post(pre, deadline_ms);
-        // mode = Read, reader_count = 1 > 0, writer = None
+        assert(post.mode == RWLockModeSpec::Read);
+        assert(post.reader_count == 1);
+        assert(post.writer.is_none());
     }
 
     /// Downgrade preserves fencing token
-    #[verifier(external_body)]
     pub proof fn downgrade_preserves_token(
         pre: RWLockStateSpec,
         deadline_ms: u64,
@@ -407,11 +424,11 @@ verus! {
         requires pre.writer.is_some()
         ensures downgrade_post(pre, deadline_ms).fencing_token == pre.fencing_token
     {
-        // Token preserved during downgrade
+        let post = downgrade_post(pre, deadline_ms);
+        assert(post.fencing_token == pre.fencing_token);
     }
 
     /// Downgrade preserves invariant
-    #[verifier(external_body)]
     pub proof fn downgrade_preserves_invariant(
         pre: RWLockStateSpec,
         deadline_ms: u64,
@@ -425,8 +442,7 @@ verus! {
     {
         downgrade_preserves_mutual_exclusion(pre, deadline_ms);
         let post = downgrade_post(pre, deadline_ms);
-        // Token preserved, no writer (now reader), readers = 1
-        // readers_bounded: 1 <= max_readers (from downgrade_pre)
+        assert(post.writer.is_none());
         assert(post.reader_count == 1);
         assert(post.reader_count <= post.max_readers);
     }
@@ -458,7 +474,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if read lock can be acquired.
-    #[verifier(external_body)]
     pub fn can_acquire_read_lock(
         mode: super::rwlock_state_spec::RWLockModeSpec,
         has_writer: bool,
@@ -473,10 +488,10 @@ verus! {
             reader_count < max_readers
         )
     {
-        !matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
-        !has_writer &&
-        pending_writers == 0 &&
-        reader_count < max_readers
+        match mode {
+            super::rwlock_state_spec::RWLockModeSpec::Write => false,
+            _ => !has_writer && pending_writers == 0 && reader_count < max_readers,
+        }
     }
 
     /// Check if write lock can be acquired.
@@ -492,7 +507,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if write lock can be acquired.
-    #[verifier(external_body)]
     pub fn can_acquire_write_lock(
         mode: super::rwlock_state_spec::RWLockModeSpec,
         fencing_token: u64,
@@ -502,8 +516,10 @@ verus! {
             fencing_token < u64::MAX
         )
     {
-        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Free) &&
-        fencing_token < u64::MAX
+        match mode {
+            super::rwlock_state_spec::RWLockModeSpec::Free => fencing_token < u64::MAX,
+            _ => false,
+        }
     }
 
     /// Check if read lock can be released.
@@ -516,7 +532,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if read lock can be released.
-    #[verifier(external_body)]
     pub fn can_release_read_lock(
         mode: super::rwlock_state_spec::RWLockModeSpec,
         reader_count: u32,
@@ -526,8 +541,10 @@ verus! {
             reader_count > 0
         )
     {
-        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Read) &&
-        reader_count > 0
+        match mode {
+            super::rwlock_state_spec::RWLockModeSpec::Read => reader_count > 0,
+            _ => false,
+        }
     }
 
     /// Check if write lock can be released.
@@ -542,7 +559,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if write lock can be released.
-    #[verifier(external_body)]
     pub fn can_release_write_lock(
         mode: super::rwlock_state_spec::RWLockModeSpec,
         has_writer: bool,
@@ -555,9 +571,12 @@ verus! {
             writer_token == provided_token
         )
     {
-        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
-        has_writer &&
-        writer_token == provided_token
+        match mode {
+            super::rwlock_state_spec::RWLockModeSpec::Write => {
+                has_writer && writer_token == provided_token
+            }
+            _ => false,
+        }
     }
 
     /// Check if lock can be downgraded.
@@ -576,7 +595,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if lock can be downgraded.
-    #[verifier(external_body)]
     pub fn can_downgrade_lock(
         mode: super::rwlock_state_spec::RWLockModeSpec,
         has_writer: bool,
@@ -591,10 +609,12 @@ verus! {
             max_readers >= 1
         )
     {
-        matches!(mode, super::rwlock_state_spec::RWLockModeSpec::Write) &&
-        has_writer &&
-        writer_token == provided_token &&
-        max_readers >= 1
+        match mode {
+            super::rwlock_state_spec::RWLockModeSpec::Write => {
+                has_writer && writer_token == provided_token && max_readers >= 1
+            }
+            _ => false,
+        }
     }
 
     /// Compute reader count after read acquisition.
