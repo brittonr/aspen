@@ -5,5 +5,6 @@
 //! production Rust shell.
 
 mod http_request_spec;
+mod rate_limit_spec;
 
 fn main() {}
