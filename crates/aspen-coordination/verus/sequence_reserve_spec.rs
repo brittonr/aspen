@@ -159,7 +159,6 @@ verus! {
     ///
     /// This proof verifies that for any two distinct indices in the range,
     /// the values are distinct.
-    #[verifier(external_body)]
     pub proof fn range_values_unique(range: ReservedRange)
         requires range.start < range.end
         ensures
@@ -170,8 +169,15 @@ verus! {
                 i != j
                 ==> value_at(range, i) != value_at(range, j)
     {
-        // value_at returns i (identity function)
-        // If i != j, then value_at(i) = i != j = value_at(j)
+        assert forall |i: u64, j: u64|
+            range.start <= i < range.end &&
+            range.start <= j < range.end &&
+            i != j
+            implies value_at(range, i) != value_at(range, j)
+        by {
+            assert(value_at(range, i) == i);
+            assert(value_at(range, j) == j);
+        }
     }
 
     /// Get the value at a given index in the range
@@ -223,7 +229,6 @@ verus! {
     // ========================================================================
 
     /// Each reserve returns a range starting after the previous
-    #[verifier(external_body)]
     pub proof fn reserve_start_increases(
         pre: SequenceState,
         count: u64,
@@ -236,7 +241,9 @@ verus! {
             range.start > pre.current_value
         })
     {
-        // range.start = pre.current + 1 > pre.current
+        let range = reserve_range(pre, count);
+        assert(pre.current_value < u64::MAX);
+        assert(range.start == pre.current_value + 1);
     }
 
     // ========================================================================
@@ -267,7 +274,6 @@ verus! {
     // ========================================================================
 
     /// First reserve on initial state returns start_value
-    #[verifier(external_body)]
     pub proof fn first_reserve_returns_start(
         start_value: u64,
         count: u64,
@@ -282,7 +288,10 @@ verus! {
             range.start == start_value
         })
     {
-        // initial.current = start_value - 1
-        // range.start = current + 1 = start_value
+        let initial = initial_sequence_state(start_value);
+        let range = reserve_range(initial, count);
+        assert(initial.current_value == start_value - 1);
+        assert(range.start == initial.current_value + 1);
+        assert(range.start == start_value);
     }
 }
