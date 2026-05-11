@@ -51,7 +51,6 @@ verus! {
     }
 
     /// Proof: Ack removes item from inflight
-    #[verifier(external_body)]
     pub proof fn ack_removes_item(pre: QueueState, item_id: u64, receipt_handle: Seq<u8>)
         requires
             queue_invariant(pre),
@@ -70,7 +69,6 @@ verus! {
     }
 
     /// Proof: Ack preserves state exclusivity
-    #[verifier(external_body)]
     pub proof fn ack_preserves_exclusivity(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -81,7 +79,6 @@ verus! {
     }
 
     /// Proof: Ack is idempotent (second ack fails precondition)
-    #[verifier(external_body)]
     pub proof fn ack_not_repeatable(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
