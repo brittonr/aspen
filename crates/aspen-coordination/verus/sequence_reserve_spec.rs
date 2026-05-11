@@ -79,7 +79,6 @@ verus! {
     // ========================================================================
 
     /// The reserved range is non-empty
-    #[verifier(external_body)]
     pub proof fn reserve_range_nonempty(
         pre: SequenceState,
         count: u64,
@@ -93,16 +92,14 @@ verus! {
         })
     {
         let range = reserve_range(pre, count);
-        // range.start = (current + 1) as u64
-        // range.end = (current + count + 1) as u64
-        // Since count > 0 (from reserve_pre) and no overflow,
-        // current + count + 1 > current + 1
         assert(count > 0);
+        assert(pre.current_value + count < 0xFFFF_FFFF_FFFF_FFFFu64);
+        assert(range.start == pre.current_value + 1);
+        assert(range.end == pre.current_value + count + 1);
         assert(pre.current_value + 1 < pre.current_value + count + 1);
     }
 
     /// The reserved range has the correct size
-    #[verifier(external_body)]
     pub proof fn reserve_range_size_correct(
         pre: SequenceState,
         count: u64,
@@ -115,7 +112,11 @@ verus! {
             range.end - range.start == count
         })
     {
-        // end - start = (current + count + 1) - (current + 1) = count
+        let range = reserve_range(pre, count);
+        assert(count > 0);
+        assert(pre.current_value + count < 0xFFFF_FFFF_FFFF_FFFFu64);
+        assert(range.start == pre.current_value + 1);
+        assert(range.end == pre.current_value + count + 1);
     }
 
     // ========================================================================
@@ -126,7 +127,6 @@ verus! {
     ///
     /// This is the core uniqueness proof: if we reserve count1, then count2,
     /// the ranges [start1, end1) and [start2, end2) do not overlap.
-    #[verifier(external_body)]
     pub proof fn sequential_reserves_disjoint(
         initial: SequenceState,
         count1: u64,
@@ -145,11 +145,12 @@ verus! {
         let range1 = reserve_range(initial, count1);
         let mid = reserve_post(initial, count1);
         let range2 = reserve_range(mid, count2);
-
-        // range1.end = initial.current + count1 + 1
-        // mid.current = initial.current + count1
-        // range2.start = mid.current + 1 = initial.current + count1 + 1
-        // So range1.end == range2.start, meaning they are adjacent (disjoint)
+        assert(count1 > 0);
+        assert(initial.current_value + count1 + count2 < 0xFFFF_FFFF_FFFF_FFFFu64);
+        assert(mid.current_value == initial.current_value + count1);
+        assert(range1.end == initial.current_value + count1 + 1);
+        assert(range2.start == mid.current_value + 1);
+        assert(range1.end == range2.start);
     }
 
     /// Values within the same range are unique
@@ -194,7 +195,6 @@ verus! {
     // ========================================================================
 
     /// Reserve strictly increases current_value
-    #[verifier(external_body)]
     pub proof fn reserve_strictly_increases(
         pre: SequenceState,
         count: u64,
@@ -205,12 +205,12 @@ verus! {
         ensures
             sequence_strictly_increases(pre, reserve_post(pre, count))
     {
-        // post.current = pre.current + count
-        // count > 0, so post.current > pre.current
+        let post = reserve_post(pre, count);
+        assert(count > 0);
+        assert(post.current_value == pre.current_value + count);
     }
 
     /// Reserve maintains monotonicity
-    #[verifier(external_body)]
     pub proof fn reserve_maintains_monotonicity(
         pre: SequenceState,
         count: u64,
@@ -251,7 +251,6 @@ verus! {
     // ========================================================================
 
     /// Reserve preserves the sequence invariant
-    #[verifier(external_body)]
     pub proof fn reserve_preserves_invariant(
         pre: SequenceState,
         count: u64,
@@ -264,9 +263,15 @@ verus! {
             sequence_invariant(reserve_post(pre, count))
     {
         let post = reserve_post(pre, count);
-        // overflow_safe: post.current = pre.current + count <= MAX (by precondition)
-        // post.current >= post.start - 1: pre.current >= start - 1, and post.current > pre.current
-        // start_value unchanged: post.start == pre.start > 0
+        assert(count > 0);
+        assert(post.current_value == pre.current_value + count);
+        assert(post.start_value == pre.start_value);
+        assert(post.max_value == pre.max_value);
+        assert(pre.current_value <= pre.max_value - count);
+        assert(post.current_value <= post.max_value);
+        assert(pre.current_value >= pre.start_value - 1);
+        assert(post.current_value >= post.start_value - 1);
+        assert(post.start_value > 0);
     }
 
     // ========================================================================
