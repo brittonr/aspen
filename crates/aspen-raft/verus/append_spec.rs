@@ -83,7 +83,6 @@ verus! {
     }
 
     /// Proof: Appending increases last_applied
-    #[verifier(external_body)]
     pub proof fn append_increases_last_applied(
         pre: StorageState,
         entry: LogEntry,
@@ -102,7 +101,6 @@ verus! {
     }
 
     /// Proof: Append adds the entry to the log
-    #[verifier(external_body)]
     pub proof fn append_adds_entry(
         pre: StorageState,
         entry: LogEntry,

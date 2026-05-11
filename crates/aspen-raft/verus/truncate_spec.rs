@@ -87,7 +87,6 @@ verus! {
     }
 
     /// Truncation removes entries >= truncate_at
-    #[verifier(external_body)]
     pub proof fn truncate_removes_entries(
         pre: StorageState,
         truncate_at: u64,
@@ -100,7 +99,6 @@ verus! {
     }
 
     /// Truncation preserves entries < truncate_at
-    #[verifier(external_body)]
     pub proof fn truncate_preserves_entries(
         pre: StorageState,
         truncate_at: u64,
@@ -113,7 +111,6 @@ verus! {
     }
 
     /// Corollary: Truncation is idempotent
-    #[verifier(external_body)]
     pub proof fn truncate_idempotent(
         pre: StorageState,
         truncate_at: u64,
