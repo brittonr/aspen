@@ -11,7 +11,7 @@ use vstd::prelude::*;
 verus! {
 
 pub const DEFAULT_MAX_SUBSCRIPTIONS_PER_CONNECTION: u32 = 16;
-pub const BROADCAST_CHANNEL_CAPACITY: u32 = 1024;
+pub const BROADCAST_CHANNEL_CAPACITY: u32 = 4096;
 
 pub enum SubscribeAction {
     InsertNew,

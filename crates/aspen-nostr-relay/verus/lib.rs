@@ -4,6 +4,7 @@
 //! async networking, WebSocket handshakes, and JSON serialization in the
 //! production Rust shell.
 
+mod auth_policy_spec;
 mod filter_spec;
 mod http_request_spec;
 mod iroh_frame_spec;
