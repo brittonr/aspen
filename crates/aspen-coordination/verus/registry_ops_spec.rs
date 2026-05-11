@@ -93,7 +93,6 @@ verus! {
     }
 
     /// Proof: Register creates valid entry
-    #[verifier(external_body)]
     pub proof fn register_creates_valid_entry(
         pre: RegistryState,
         service_id: Seq<u8>,
@@ -107,6 +106,7 @@ verus! {
     )
         requires
             register_pre(pre, service_id, service_type, endpoint, ttl_ms),
+            current_time_ms <= u64::MAX - ttl_ms,
             weight > 0,
         ensures ({
             let post = register_post(pre, service_id, service_type, instance_id, endpoint, ttl_ms, weight, metadata, current_time_ms);
@@ -316,7 +316,6 @@ verus! {
     }
 
     /// Proof: Heartbeat extends deadline
-    #[verifier(external_body)]
     pub proof fn heartbeat_extends_deadline(
         pre: RegistryState,
         service_id: Seq<u8>,
@@ -324,6 +323,7 @@ verus! {
         current_time_ms: u64,
     )
         requires
+            registry_invariant(pre),
             heartbeat_pre(pre, service_id, fencing_token, current_time_ms),
             current_time_ms >= pre.services[service_id].last_heartbeat_ms,
         ensures ({
@@ -472,7 +472,6 @@ verus! {
     }
 
     /// Proof: Lookup returns consistent results
-    #[verifier(external_body)]
     pub proof fn lookup_is_consistent(
         state: RegistryState,
         service_type: Seq<u8>,
