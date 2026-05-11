@@ -238,7 +238,6 @@ verus! {
     }
 
     /// Proof: Deregister removes service
-    #[verifier(external_body)]
     pub proof fn deregister_removes_service(
         pre: RegistryState,
         service_id: Seq<u8>,
