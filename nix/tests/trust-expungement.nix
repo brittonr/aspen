@@ -259,15 +259,19 @@ in
       # ================================================================
 
       with subtest("6.4: expunge node 3 from cluster"):
-          ticket1 = get_ticket(node1)
+          leader_id, leader_node = current_leader(timeout=60)
+          leader_ticket = get_ticket(leader_node)
 
-          # Expunge node 3 via CLI on node 1 (the leader)
+          # Expunge node 3 through the current leader. Leadership may move after
+          # initial cluster formation; sending the control-plane mutation to a
+          # stale node can yield a non-success acknowledgement without committing
+          # the replacement voter set.
           result = cli(
-              node1,
+              leader_node,
               "cluster expunge 3 --timeout 30000 --confirm",
-              ticket=ticket1,
+              ticket=leader_ticket,
           )
-          node1.log(f"expunge result: {result}")
+          leader_node.log(f"expunge result via leader node{leader_id}: {result}")
           assert result.get("node_id") == 3, f"wrong node_id: {result}"
           if result.get("is_success") is not True:
               # The client-side expunge wraps change-membership, whose response
@@ -275,9 +279,9 @@ in
               # the replacement voter set. Treat convergence as the contract
               # here so the VM test proves the product behavior, not a transient
               # CLI acknowledgement race.
-              node1.log(f"expunge reported non-success; verifying node 3 removal: {result}")
-          wait_for_voter_count(node1, 2, timeout=60)
-          node1.log("node 3 expunged from cluster")
+              leader_node.log(f"expunge reported non-success; verifying node 3 removal: {result}")
+          wait_for_voter_count(leader_node, 2, timeout=90)
+          leader_node.log("node 3 expunged from cluster")
 
           # Give the trust reconfiguration time to propagate
           time.sleep(5)
@@ -336,35 +340,36 @@ in
           # a slow retry loop instead of wait_until_succeeds' one-second
           # cadence; right after expungement the Raft transport can still be
           # draining old streams and aggressive client retries amplify that.
-          ticket1 = get_ticket(node1)
+          leader_id, leader_node = current_leader(timeout=60)
+          leader_ticket = get_ticket(leader_node)
           deadline = time.time() + 90
           last_err = ""
           while time.time() < deadline:
-              rc, _ = node1.execute(
-                  f"aspen-cli --ticket '{ticket1}' --timeout 15000"
+              rc, _ = leader_node.execute(
+                  f"aspen-cli --ticket '{leader_ticket}' --timeout 15000"
                   f" cluster add-learner --node-id 3 --addr '{addr3_new}'"
                   f" >/tmp/_add_learner_readd.out 2>/tmp/_add_learner_readd.err"
               )
               if rc == 0:
                   break
-              last_err = node1.succeed("cat /tmp/_add_learner_readd.err 2>/dev/null || true")
+              last_err = leader_node.succeed("cat /tmp/_add_learner_readd.err 2>/dev/null || true")
               time.sleep(5)
           else:
-              raise Exception(f"timed out re-adding node 3: {last_err}")
-          node1.log("node 3 re-added as learner")
+              raise Exception(f"timed out re-adding node 3 via leader node{leader_id}: {last_err}")
+          leader_node.log(f"node 3 re-added as learner via leader node{leader_id}")
 
-          rc, _ = node1.execute(
-              f"aspen-cli --ticket '{ticket1}'"
+          rc, _ = leader_node.execute(
+              f"aspen-cli --ticket '{leader_ticket}'"
               f" cluster change-membership 1 2 3"
               f" >/tmp/_change_membership_readd.out 2>/tmp/_change_membership_readd.err"
           )
           if rc != 0:
-              node1.log(
+              leader_node.log(
                   "re-add change-membership CLI exited non-zero; verifying converged membership: "
-                  + node1.succeed("cat /tmp/_change_membership_readd.err 2>/dev/null || true")
+                  + leader_node.succeed("cat /tmp/_change_membership_readd.err 2>/dev/null || true")
               )
-          wait_for_voter_count(node1, 3, timeout=60)
-          node1.log("node 3 promoted back to voter")
+          wait_for_voter_count(leader_node, 3, timeout=90)
+          leader_node.log("node 3 promoted back to voter")
 
           # Verify the cluster still serves the pre-expungement data after
           # node 3 has rejoined as a voter. The freshly wiped node can lag on

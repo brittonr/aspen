@@ -13,4 +13,4 @@
 ## Phase 3: Flake Rail Recovery
 
 - [x] [depends:full-loop-pass] Run `git diff --check`, `scripts/test-harness.sh export`, and `scripts/test-harness.sh check` after implementation. ✅ all passed after implementation.
-- [~] [depends:hygiene] Run a fresh full `nix flake check -L` and capture the log path; do not promote full dogfood/self-hosting acceptance unless this passes. ⏱ started: 2026-05-11T13:47Z; log path in `target/flake-check/latest.logpath`.
+- [x] [depends:hygiene] Run a fresh full `nix flake check -L` and capture the log path; do not promote full dogfood/self-hosting acceptance unless this passes. ✅ passed with serialized local rail `nix flake check -L --max-jobs 1`; log `target/flake-check/full-serial-20260511T155741Z.log`; marker: `all checks passed!`. A parallel `--max-jobs auto` attempt exposed VM-test host contention in `multi-node-kv`, but the focused `multi-node-kv-test` passed separately and the serialized full rail passed.
