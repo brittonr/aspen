@@ -312,7 +312,6 @@ verus! {
     }
 
     /// Proof: Refill + acquire may succeed when acquire alone fails
-    #[verifier(external_body)]
     pub proof fn refill_enables_acquire(
         pre: RateLimiterState,
         amount: u64,
