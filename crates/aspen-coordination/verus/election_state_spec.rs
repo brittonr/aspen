@@ -231,15 +231,15 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant()
         ensures election_invariant(initial_election_state())
     {
-        // Follower state trivially satisfies all invariants
+        let state = initial_election_state();
+        assert(leader_state_wellformed(state));
+        assert(leader_token_bounded(state));
     }
 
     /// Proof: Initial state is follower
-    #[verifier(external_body)]
     pub proof fn initial_state_is_follower()
         ensures is_follower(initial_election_state())
     {
@@ -270,11 +270,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if currently the leader.
-    #[verifier(external_body)]
     pub fn is_leader_exec(state: LeadershipState) -> (result: bool)
         ensures result == (state == LeadershipState::Leader)
     {
-        matches!(state, LeadershipState::Leader)
+        match state {
+            LeadershipState::Leader => true,
+            _ => false,
+        }
     }
 
     /// Check if state indicates follower.
@@ -286,11 +288,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if currently a follower.
-    #[verifier(external_body)]
     pub fn is_follower_exec(state: LeadershipState) -> (result: bool)
         ensures result == (state == LeadershipState::Follower)
     {
-        matches!(state, LeadershipState::Follower)
+        match state {
+            LeadershipState::Follower => true,
+            _ => false,
+        }
     }
 
     /// Check if state indicates transitioning.
@@ -302,11 +306,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if transitioning between states.
-    #[verifier(external_body)]
     pub fn is_transitioning_exec(state: LeadershipState) -> (result: bool)
         ensures result == (state == LeadershipState::Transitioning)
     {
-        matches!(state, LeadershipState::Transitioning)
+        match state {
+            LeadershipState::Transitioning => true,
+            _ => false,
+        }
     }
 
     /// Compute next fencing token for new leadership term.
@@ -343,7 +349,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if transition is valid.
-    #[verifier(external_body)]
     pub fn is_valid_state_transition(from: LeadershipState, to: LeadershipState) -> (result: bool)
         ensures result == match (from, to) {
             (LeadershipState::Follower, LeadershipState::Transitioning) => true,
@@ -435,7 +440,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if we should start an election.
-    #[verifier(external_body)]
     pub fn should_start_election(
         state: LeadershipState,
         running: bool,
@@ -450,7 +454,7 @@ verus! {
         )
     {
         running &&
-        matches!(state, LeadershipState::Follower) &&
+        match state { LeadershipState::Follower => true, _ => false } &&
         current_time_ms.saturating_sub(last_heartbeat_ms) >= election_timeout_ms
     }
 
@@ -646,15 +650,12 @@ verus! {
     // ========================================================================
 
     /// Proof: Renewal time is always in the future (or present)
-    #[verifier(external_body)]
     pub proof fn renew_time_monotonic(now_ms: u64, renew_interval_ms: u64)
         ensures next_renew_time_spec(now_ms, renew_interval_ms) >= now_ms
     {
-        // Follows from saturating_add semantics
     }
 
     /// Proof: Backoff is always bounded by max_delay
-    #[verifier(external_body)]
     pub proof fn backoff_bounded(
         consecutive_failures: u32,
         base_delay_ms: u64,
@@ -662,6 +663,5 @@ verus! {
     )
         ensures renewal_backoff_spec(consecutive_failures, base_delay_ms, max_delay_ms) <= max_delay_ms
     {
-        // Follows from min capping logic
     }
 }
