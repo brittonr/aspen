@@ -239,18 +239,23 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant(max_readers: u32)
         ensures rwlock_invariant(initial_rwlock_state(max_readers))
     {
         // Free mode with no readers/writers trivially satisfies all invariants
+        let state = initial_rwlock_state(max_readers);
+        assert(state.mode == RWLockModeSpec::Free);
+        assert(state.reader_count == 0);
+        assert(state.writer.is_none());
+        assert(state.reader_count <= state.max_readers);
     }
 
     /// Proof: Initial state is free
-    #[verifier(external_body)]
     pub proof fn initial_state_is_free(max_readers: u32)
         ensures is_free(initial_rwlock_state(max_readers))
     {
+        let state = initial_rwlock_state(max_readers);
+        assert(state.mode == RWLockModeSpec::Free);
     }
 
     // ========================================================================
@@ -278,11 +283,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if the lock is free.
-    #[verifier(external_body)]
     pub fn is_lock_free(mode: RWLockMode) -> (result: bool)
         ensures result == (mode == RWLockMode::Free)
     {
-        matches!(mode, RWLockMode::Free)
+        match mode {
+            RWLockMode::Free => true,
+            _ => false,
+        }
     }
 
     /// Check if lock is in read mode.
@@ -294,11 +301,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if the lock is in read mode.
-    #[verifier(external_body)]
     pub fn is_lock_read_mode(mode: RWLockMode) -> (result: bool)
         ensures result == (mode == RWLockMode::Read)
     {
-        matches!(mode, RWLockMode::Read)
+        match mode {
+            RWLockMode::Read => true,
+            _ => false,
+        }
     }
 
     /// Check if lock is in write mode.
@@ -310,11 +319,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if the lock is in write mode.
-    #[verifier(external_body)]
     pub fn is_lock_write_mode(mode: RWLockMode) -> (result: bool)
         ensures result == (mode == RWLockMode::Write)
     {
-        matches!(mode, RWLockMode::Write)
+        match mode {
+            RWLockMode::Write => true,
+            _ => false,
+        }
     }
 
     /// Check if a read lock can be acquired.
@@ -334,7 +345,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if read lock can be acquired.
-    #[verifier(external_body)]
     pub fn can_acquire_read(
         mode: RWLockMode,
         reader_count: u32,
@@ -346,8 +356,11 @@ verus! {
             (mode == RWLockMode::Read && pending_writers == 0 && reader_count < max_readers)
         )
     {
-        matches!(mode, RWLockMode::Free) ||
-        (matches!(mode, RWLockMode::Read) && pending_writers == 0 && reader_count < max_readers)
+        match mode {
+            RWLockMode::Free => true,
+            RWLockMode::Read => pending_writers == 0 && reader_count < max_readers,
+            RWLockMode::Write => false,
+        }
     }
 
     /// Check if a write lock can be acquired.
@@ -361,11 +374,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if write lock can be acquired.
-    #[verifier(external_body)]
     pub fn can_acquire_write(mode: RWLockMode) -> (result: bool)
         ensures result == (mode == RWLockMode::Free)
     {
-        matches!(mode, RWLockMode::Free)
+        match mode {
+            RWLockMode::Free => true,
+            _ => false,
+        }
     }
 
     /// Compute next fencing token for write acquisition.
