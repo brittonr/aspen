@@ -274,11 +274,12 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant()
         ensures counter_invariant(initial_counter_state())
     {
-        // Counter with value 0 is trivially valid
+        let state = initial_counter_state();
+        assert(state.value == 0);
+        assert(counter_wellformed(state));
     }
 
     // ========================================================================
@@ -545,23 +546,26 @@ verus! {
     ///
     /// If current != 0, then the expected value correctly identifies
     /// the existing value for atomic compare-and-swap.
-    #[verifier(external_body)]
     pub proof fn cas_expected_idempotent(current: u64)
         requires current != 0
         ensures
             cas_expected_unsigned(current) == Some(current),
             cas_expected_unsigned(current).unwrap() == current
     {
-        // SMT solver verifies this directly
+        assert(cas_expected_unsigned(current) == Some(current));
+        assert(cas_expected_unsigned(current).unwrap() == current);
     }
 
     /// Proof: Retry delay is bounded
     ///
     /// No matter the jitter value, result never exceeds base_delay_ms.
-    #[verifier(external_body)]
     pub proof fn retry_delay_bounded(base_delay_ms: u64, jitter_value: u64)
         ensures retry_delay_spec(base_delay_ms, jitter_value) <= base_delay_ms
     {
-        // Follows from min semantics
+        if jitter_value <= base_delay_ms {
+            assert(retry_delay_spec(base_delay_ms, jitter_value) == jitter_value);
+        } else {
+            assert(retry_delay_spec(base_delay_ms, jitter_value) == base_delay_ms);
+        }
     }
 }
