@@ -541,7 +541,6 @@ verus! {
     }
 
     /// Proof: Expired tasks are returned to pending
-    #[verifier(external_body)]
     pub proof fn expire_returns_tasks_to_pending(
         pre: WorkerState,
         worker_id: Seq<u8>,
@@ -581,7 +580,6 @@ verus! {
     }
 
     /// Proof: Expire marks worker inactive
-    #[verifier(external_body)]
     pub proof fn expire_marks_inactive(
         pre: WorkerState,
         worker_id: Seq<u8>,
@@ -598,7 +596,6 @@ verus! {
     }
 
     /// Proof: Expire frees capacity
-    #[verifier(external_body)]
     pub proof fn expire_frees_capacity(
         pre: WorkerState,
         worker_id: Seq<u8>,
