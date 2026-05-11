@@ -435,7 +435,6 @@ verus! {
     /// Proves:
     /// - sleep_ms >= current_backoff_ms (jitter is additive)
     /// - next_backoff_ms <= max(max_backoff_ms, current_backoff_ms * 2) (bounded)
-    #[verifier(external_body)]
     pub fn compute_backoff_with_jitter(
         current_backoff_ms: u64,
         max_backoff_ms: u64,
@@ -445,14 +444,24 @@ verus! {
             result.sleep_ms >= current_backoff_ms,
             result.next_backoff_ms <= u64::MAX
     {
-        // Jitter is bounded to half the current backoff + 1
-        let max_jitter = current_backoff_ms.saturating_div(2).saturating_add(1);
+        // Jitter is bounded to half the current backoff + 1. The division keeps
+        // the addition non-overflowing, so this matches the prior saturating
+        // expression while staying explicit for Verus.
+        let max_jitter = current_backoff_ms / 2 + 1;
         let jitter = jitter_seed % max_jitter;
 
-        let sleep_ms = current_backoff_ms.saturating_add(jitter);
+        let sleep_ms = if current_backoff_ms > u64::MAX - jitter {
+            u64::MAX
+        } else {
+            current_backoff_ms + jitter
+        };
 
-        // Double for next iteration, capped at max
-        let doubled = current_backoff_ms.saturating_mul(2);
+        // Double for next iteration, saturating before applying the configured cap.
+        let doubled = if current_backoff_ms > u64::MAX / 2 {
+            u64::MAX
+        } else {
+            current_backoff_ms * 2
+        };
         let next_backoff_ms = if doubled < max_backoff_ms {
             doubled
         } else {
