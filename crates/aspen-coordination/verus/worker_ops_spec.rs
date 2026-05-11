@@ -308,7 +308,6 @@ verus! {
     }
 
     /// Proof: Assign removes from pending
-    #[verifier(external_body)]
     pub proof fn assign_removes_from_pending(
         pre: WorkerState,
         task_id: Seq<u8>,
