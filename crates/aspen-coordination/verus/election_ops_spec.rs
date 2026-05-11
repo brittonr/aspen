@@ -125,7 +125,6 @@ verus! {
     // ========================================================================
 
     /// Start election produces valid transition
-    #[verifier(external_body)]
     pub proof fn start_election_valid_transition(
         pre: ElectionState,
     )
@@ -136,7 +135,6 @@ verus! {
     }
 
     /// Start election preserves max token
-    #[verifier(external_body)]
     pub proof fn start_election_preserves_max_token(
         pre: ElectionState,
     )
@@ -151,7 +149,6 @@ verus! {
     // ========================================================================
 
     /// Win election produces valid transition
-    #[verifier(external_body)]
     pub proof fn win_election_valid_transition(
         pre: ElectionState,
         new_token: u64,
@@ -163,7 +160,6 @@ verus! {
     }
 
     /// Win election strictly increases token
-    #[verifier(external_body)]
     pub proof fn win_election_increases_token(
         pre: ElectionState,
         new_token: u64,
@@ -177,7 +173,6 @@ verus! {
     }
 
     /// Win election preserves invariant
-    #[verifier(external_body)]
     pub proof fn win_election_preserves_invariant(
         pre: ElectionState,
         new_token: u64,
@@ -198,7 +193,6 @@ verus! {
     // ========================================================================
 
     /// Lose election produces valid transition
-    #[verifier(external_body)]
     pub proof fn lose_election_valid_transition(
         pre: ElectionState,
     )
@@ -209,7 +203,6 @@ verus! {
     }
 
     /// Lose election preserves invariant
-    #[verifier(external_body)]
     pub proof fn lose_election_preserves_invariant(
         pre: ElectionState,
     )
@@ -227,7 +220,6 @@ verus! {
     // ========================================================================
 
     /// Stepdown produces valid transition
-    #[verifier(external_body)]
     pub proof fn stepdown_valid_transition(
         pre: ElectionState,
     )
@@ -238,7 +230,6 @@ verus! {
     }
 
     /// Stepdown preserves max token
-    #[verifier(external_body)]
     pub proof fn stepdown_preserves_max_token(
         pre: ElectionState,
     )
@@ -249,7 +240,6 @@ verus! {
     }
 
     /// Stepdown preserves invariant
-    #[verifier(external_body)]
     pub proof fn stepdown_preserves_invariant(
         pre: ElectionState,
     )
@@ -263,7 +253,6 @@ verus! {
     }
 
     /// Stepdown results in follower state
-    #[verifier(external_body)]
     pub proof fn stepdown_becomes_follower(
         pre: ElectionState,
     )
@@ -278,7 +267,6 @@ verus! {
     // ========================================================================
 
     /// Lose leadership produces valid transition
-    #[verifier(external_body)]
     pub proof fn lose_leadership_valid_transition(
         pre: ElectionState,
     )
@@ -289,7 +277,6 @@ verus! {
     }
 
     /// Lose leadership preserves invariant
-    #[verifier(external_body)]
     pub proof fn lose_leadership_preserves_invariant(
         pre: ElectionState,
     )
@@ -307,7 +294,6 @@ verus! {
     // ========================================================================
 
     /// All operations maintain token monotonicity
-    #[verifier(external_body)]
     pub proof fn all_operations_maintain_monotonicity(
         pre: ElectionState,
         new_token: u64,
@@ -352,7 +338,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if election can be started.
-    #[verifier(external_body)]
     pub fn can_start_election(
         state: super::election_state_spec::LeadershipState,
         running: bool,
@@ -362,7 +347,7 @@ verus! {
             state == super::election_state_spec::LeadershipState::Follower
         )
     {
-        running && matches!(state, super::election_state_spec::LeadershipState::Follower)
+        running && match state { super::election_state_spec::LeadershipState::Follower => true, _ => false }
     }
 
     /// Check if election can be won with given token.
@@ -381,7 +366,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if election can be won.
-    #[verifier(external_body)]
     pub fn can_win_election(
         state: super::election_state_spec::LeadershipState,
         max_fencing_token: u64,
@@ -393,7 +377,7 @@ verus! {
             new_token > max_fencing_token
         )
     {
-        matches!(state, super::election_state_spec::LeadershipState::Transitioning) &&
+        (match state { super::election_state_spec::LeadershipState::Transitioning => true, _ => false }) &&
         max_fencing_token < u64::MAX &&
         new_token > max_fencing_token
     }
@@ -407,13 +391,12 @@ verus! {
     /// # Returns
     ///
     /// `true` if currently transitioning (can lose).
-    #[verifier(external_body)]
     pub fn can_lose_election(
         state: super::election_state_spec::LeadershipState,
     ) -> (result: bool)
         ensures result == (state == super::election_state_spec::LeadershipState::Transitioning)
     {
-        matches!(state, super::election_state_spec::LeadershipState::Transitioning)
+        match state { super::election_state_spec::LeadershipState::Transitioning => true, _ => false }
     }
 
     /// Check if stepdown is possible.
@@ -425,13 +408,12 @@ verus! {
     /// # Returns
     ///
     /// `true` if currently leader (can step down).
-    #[verifier(external_body)]
     pub fn can_stepdown(
         state: super::election_state_spec::LeadershipState,
     ) -> (result: bool)
         ensures result == (state == super::election_state_spec::LeadershipState::Leader)
     {
-        matches!(state, super::election_state_spec::LeadershipState::Leader)
+        match state { super::election_state_spec::LeadershipState::Leader => true, _ => false }
     }
 
     /// Check if leadership can be lost.
@@ -443,13 +425,12 @@ verus! {
     /// # Returns
     ///
     /// `true` if currently leader (can lose leadership).
-    #[verifier(external_body)]
     pub fn can_lose_leadership(
         state: super::election_state_spec::LeadershipState,
     ) -> (result: bool)
         ensures result == (state == super::election_state_spec::LeadershipState::Leader)
     {
-        matches!(state, super::election_state_spec::LeadershipState::Leader)
+        match state { super::election_state_spec::LeadershipState::Leader => true, _ => false }
     }
 
     /// Get next state after starting election.
@@ -457,7 +438,6 @@ verus! {
     /// # Returns
     ///
     /// Transitioning state.
-    #[verifier(external_body)]
     pub fn get_state_after_start_election() -> (result: super::election_state_spec::LeadershipState)
         ensures result == super::election_state_spec::LeadershipState::Transitioning
     {
@@ -469,7 +449,6 @@ verus! {
     /// # Returns
     ///
     /// Leader state.
-    #[verifier(external_body)]
     pub fn get_state_after_win_election() -> (result: super::election_state_spec::LeadershipState)
         ensures result == super::election_state_spec::LeadershipState::Leader
     {
@@ -481,7 +460,6 @@ verus! {
     /// # Returns
     ///
     /// Follower state.
-    #[verifier(external_body)]
     pub fn get_state_after_lose_election() -> (result: super::election_state_spec::LeadershipState)
         ensures result == super::election_state_spec::LeadershipState::Follower
     {
@@ -493,7 +471,6 @@ verus! {
     /// # Returns
     ///
     /// Follower state.
-    #[verifier(external_body)]
     pub fn get_state_after_stepdown() -> (result: super::election_state_spec::LeadershipState)
         ensures result == super::election_state_spec::LeadershipState::Follower
     {
@@ -505,7 +482,6 @@ verus! {
     /// # Returns
     ///
     /// Follower state.
-    #[verifier(external_body)]
     pub fn get_state_after_lose_leadership() -> (result: super::election_state_spec::LeadershipState)
         ensures result == super::election_state_spec::LeadershipState::Follower
     {
