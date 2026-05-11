@@ -289,7 +289,6 @@ verus! {
     }
 
     /// Proof: Non-duplicate enqueue creates new item
-    #[verifier(external_body)]
     pub proof fn non_duplicate_creates_new(
         pre: QueueState,
         payload: Seq<u8>,
