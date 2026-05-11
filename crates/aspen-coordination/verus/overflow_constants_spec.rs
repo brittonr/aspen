@@ -147,42 +147,34 @@ verus! {
     // ========================================================================
 
     /// Proof: can_add_u64 implies no overflow
-    #[verifier(external_body)]
     pub proof fn can_add_u64_sound(a: u64, b: u64)
         requires can_add_u64(a, b)
         ensures (a as int) + (b as int) <= U64_MAX() as int
     {
-        // a <= U64_MAX - b
-        // a + b <= U64_MAX
+        assert(a <= U64_MAX() - b);
     }
 
     /// Proof: can_increment_u64 implies no overflow
-    #[verifier(external_body)]
     pub proof fn can_increment_u64_sound(a: u64)
         requires can_increment_u64(a)
         ensures (a as int) + 1 <= U64_MAX() as int
     {
-        // a < U64_MAX
-        // a + 1 <= U64_MAX
+        assert(a < U64_MAX());
     }
 
     /// Proof: can_add_u32 implies no overflow
-    #[verifier(external_body)]
     pub proof fn can_add_u32_sound(a: u32, b: u32)
         requires can_add_u32(a, b)
         ensures (a as int) + (b as int) <= U32_MAX() as int
     {
-        // a <= U32_MAX - b
-        // a + b <= U32_MAX
+        assert(a <= U32_MAX() - b);
     }
 
     /// Proof: can_increment_u32 implies no overflow
-    #[verifier(external_body)]
     pub proof fn can_increment_u32_sound(a: u32)
         requires can_increment_u32(a)
         ensures (a as int) + 1 <= U32_MAX() as int
     {
-        // a < U32_MAX
-        // a + 1 <= U32_MAX
+        assert(a < U32_MAX());
     }
 }
