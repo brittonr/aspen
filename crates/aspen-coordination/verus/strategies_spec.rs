@@ -79,7 +79,6 @@ verus! {
     }
 
     /// Proof: Computed load score is always bounded
-    #[verifier(external_body)]
     pub proof fn load_score_always_bounded(
         load_scaled: u64,
         queue_depth: u32,
@@ -91,7 +90,7 @@ verus! {
             compute_load_score_scaled(load_scaled, queue_depth, max_concurrent, load_weight_scaled, queue_weight_scaled)
         )
     {
-        // Final result is explicitly clamped to <= 1000
+        let score = compute_load_score_scaled(load_scaled, queue_depth, max_concurrent, load_weight_scaled, queue_weight_scaled);
     }
 
     // ========================================================================
@@ -119,11 +118,9 @@ verus! {
     }
 
     /// Proof: Round-robin selection is always valid
-    #[verifier(external_body)]
     pub proof fn round_robin_selection_valid(eligible_count: u32, counter: u32)
         ensures round_robin_valid(eligible_count, counter)
     {
-        // counter % eligible_count < eligible_count by definition of modulo
     }
 
     /// STRAT-2c: Round-robin cycles through all workers
@@ -212,11 +209,9 @@ verus! {
     }
 
     /// Proof: Stealing eventually stops
-    #[verifier(external_body)]
     pub proof fn stealing_terminates(batch_limit: u32)
         ensures batch_limit > 0 ==> !stealing_respects_batch_limit(batch_limit, batch_limit)
     {
-        // accumulated >= batch_limit fails the check
     }
 
     // ========================================================================
@@ -331,11 +326,10 @@ verus! {
     }
 
     /// Proof: Affinity score is always bounded
-    #[verifier(external_body)]
     pub proof fn affinity_always_bounded(is_same_node: bool, has_tag_match: bool)
         ensures affinity_score_bounded(compute_affinity_score(is_same_node, has_tag_match))
     {
-        // Maximum: 50 + 30 + 20 = 100
+        let score = compute_affinity_score(is_same_node, has_tag_match);
     }
 
     // ========================================================================
@@ -381,11 +375,9 @@ verus! {
     }
 
     /// STRAT-8b: Empty requirements always match
-    #[verifier(external_body)]
     pub proof fn empty_requirements_match(worker_tags: Set<Seq<char>>)
         ensures tags_match(worker_tags, Set::empty())
     {
-        // Empty set is subset of any set
     }
 
     // ========================================================================
@@ -458,11 +450,15 @@ verus! {
     }
 
     /// Proof: Well-formed groups have valid load scores
-    #[verifier(external_body)]
     pub proof fn group_loads_bounded(group: WorkerGroup)
         requires worker_group_invariant(group)
         ensures forall|i: int| #![auto] 0 <= i < group.workers.len() ==>
             load_score_bounded(group.workers[i].load_scaled)
     {
+        assert forall|i: int| #![auto] 0 <= i < group.workers.len() implies
+            load_score_bounded(group.workers[i].load_scaled)
+        by {
+            assert(group.workers[i].load_scaled <= 1000);
+        }
     }
 }
