@@ -477,6 +477,24 @@ verus! {
     pub use queue_delivery_helpers_spec::can_increment_delivery_count;
     pub use queue_delivery_helpers_spec::decrement_delivery_count_for_release;
 
+    pub use queue_visibility_expiration_spec::compute_effective_visibility_timeout;
+    pub use queue_visibility_expiration_spec::compute_visibility_deadline;
+    pub use queue_visibility_expiration_spec::calculate_visibility_deadline;
+    pub use queue_visibility_expiration_spec::calculate_extended_deadline;
+    pub use queue_visibility_expiration_spec::compute_extended_deadline;
+    pub use queue_visibility_expiration_spec::time_until_visibility_expires;
+    pub use queue_visibility_expiration_spec::is_visibility_expired as visibility_is_expired;
+    pub use queue_visibility_expiration_spec::is_visibility_expired_exec;
+    pub use queue_visibility_expiration_spec::is_visibility_timeout_expired;
+    pub use queue_visibility_expiration_spec::is_queue_item_expired as queue_item_is_expired;
+    pub use queue_visibility_expiration_spec::is_item_expired;
+    pub use queue_visibility_expiration_spec::is_dedup_entry_expired;
+    pub use queue_visibility_expiration_spec::is_dedup_expired;
+    pub use queue_visibility_expiration_spec::compute_item_expiration as compute_queue_item_expiration;
+    pub use queue_visibility_expiration_spec::can_compute_ttl as can_compute_queue_ttl;
+    pub use queue_visibility_expiration_spec::can_extend_visibility;
+    pub use queue_visibility_expiration_spec::is_extend_visibility_valid;
+
     pub use queue_ack_spec::ack_pre;
     pub use queue_ack_spec::ack_post;
 
@@ -602,6 +620,7 @@ mod queue_delivery_helpers_spec;
 mod queue_dequeue_spec;
 mod queue_enqueue_spec;
 mod queue_state_spec;
+mod queue_visibility_expiration_spec;
 
 // Registry specifications
 mod registry_ops_spec;
