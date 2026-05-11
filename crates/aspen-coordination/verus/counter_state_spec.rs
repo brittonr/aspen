@@ -365,16 +365,19 @@ verus! {
     /// # Returns
     ///
     /// Result with new value and saturation flag.
-    #[verifier(external_body)]
     pub fn apply_signed_add(current: i64, amount: i64) -> (result: SignedCounterOpResult)
         ensures
             result.new_value == saturating_add_i64(current, amount),
             (amount >= 0) ==> (result.new_value >= current || result.saturated),
             (amount <= 0) ==> (result.new_value <= current || result.saturated)
     {
-        let new_value = current.saturating_add(amount);
-        let saturated = new_value != current.wrapping_add(amount);
-        SignedCounterOpResult { new_value, saturated }
+        if amount > 0 && current > i64::MAX - amount {
+            SignedCounterOpResult { new_value: i64::MAX, saturated: true }
+        } else if amount < 0 && current < i64::MIN - amount {
+            SignedCounterOpResult { new_value: i64::MIN, saturated: true }
+        } else {
+            SignedCounterOpResult { new_value: current + amount, saturated: false }
+        }
     }
 
     /// Apply a signed subtraction with saturation.
@@ -389,16 +392,19 @@ verus! {
     /// # Returns
     ///
     /// Result with new value and saturation flag.
-    #[verifier(external_body)]
     pub fn apply_signed_sub(current: i64, amount: i64) -> (result: SignedCounterOpResult)
         ensures
             result.new_value == saturating_sub_i64(current, amount),
             (amount >= 0) ==> (result.new_value <= current || result.saturated),
             (amount <= 0) ==> (result.new_value >= current || result.saturated)
     {
-        let new_value = current.saturating_sub(amount);
-        let saturated = new_value != current.wrapping_sub(amount);
-        SignedCounterOpResult { new_value, saturated }
+        if amount < 0 && current > i64::MAX + amount {
+            SignedCounterOpResult { new_value: i64::MAX, saturated: true }
+        } else if amount > 0 && current < i64::MIN + amount {
+            SignedCounterOpResult { new_value: i64::MIN, saturated: true }
+        } else {
+            SignedCounterOpResult { new_value: current - amount, saturated: false }
+        }
     }
 
     /// Compute approximate total for a buffered counter.
