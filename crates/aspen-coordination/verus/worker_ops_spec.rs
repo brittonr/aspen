@@ -65,7 +65,6 @@ verus! {
     }
 
     /// Proof: Register creates valid worker entry
-    #[verifier(external_body)]
     pub proof fn register_creates_valid_entry(
         pre: WorkerState,
         worker_id: Seq<u8>,
@@ -173,7 +172,6 @@ verus! {
     }
 
     /// Proof: Heartbeat reactivates worker
-    #[verifier(external_body)]
     pub proof fn heartbeat_activates_worker(
         pre: WorkerState,
         worker_id: Seq<u8>,
