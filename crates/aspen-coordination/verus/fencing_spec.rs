@@ -56,7 +56,6 @@ verus! {
     }
 
     /// Proof: Token validity and staleness are mutually exclusive
-    #[verifier(external_body)]
     pub proof fn token_valid_xor_stale(token: u64, min_expected: u64)
         ensures
             token_is_valid(token, min_expected) <==> !token_is_stale(token, min_expected)
@@ -112,12 +111,13 @@ verus! {
     }
 
     /// Proof: Quorum threshold is always a majority
-    #[verifier(external_body)]
     pub proof fn quorum_majority_proof(total_nodes: u32)
         ensures quorum_is_majority(total_nodes)
     {
-        // quorum = (n/2) + 1
-        // n/2 + 1 > n/2 (trivially true for all n)
+        if total_nodes > 0 {
+            assert(quorum_threshold(total_nodes) == total_nodes / 2 + 1);
+            assert(total_nodes / 2 + 1 > total_nodes / 2) by(nonlinear_arith);
+        }
     }
 
     /// FENCE-2c: Quorum is bounded by total nodes
@@ -126,14 +126,19 @@ verus! {
     }
 
     /// Proof: Quorum never exceeds total nodes
-    #[verifier(external_body)]
     pub proof fn quorum_bounded_proof(total_nodes: u32)
         ensures quorum_bounded(total_nodes)
     {
-        // For n >= 1: (n/2) + 1 <= n
-        // n/2 <= n - 1
-        // n <= 2n - 2 (true for n >= 2)
-        // For n = 1: quorum = 1 = n
+        if total_nodes == 0 {
+        } else if total_nodes == 1 {
+            assert(quorum_threshold(total_nodes) == 1);
+        } else {
+            assert(total_nodes >= 2);
+            assert(total_nodes / 2 + 1 <= total_nodes) by(nonlinear_arith)
+                requires
+                    total_nodes >= 2;
+            assert(quorum_threshold(total_nodes) == total_nodes / 2 + 1);
+        }
     }
 
     /// FENCE-2d: Quorum satisfaction check
@@ -188,12 +193,10 @@ verus! {
     }
 
     /// Property: Step-down implies split-brain detection
-    #[verifier(external_body)]
     pub proof fn stepdown_implies_splitbrain(observed_token: u64, my_token: u64)
         requires should_step_down(observed_token, my_token)
         ensures indicates_split_brain(observed_token, my_token)
     {
-        // observed > my implies observed >= my
     }
 
     // ========================================================================
@@ -408,7 +411,6 @@ verus! {
     }
 
     /// Proof: Safe state implies we can make progress
-    #[verifier(external_body)]
     pub proof fn safe_state_progress(state: FencingState)
         requires is_safe_state(state)
         ensures has_quorum(state.total_nodes, state.healthy_nodes)
