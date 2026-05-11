@@ -117,7 +117,6 @@ verus! {
     }
 
     /// Proof: Register increases fencing token
-    #[verifier(external_body)]
     pub proof fn register_increases_token(
         pre: RegistryState,
         service_id: Seq<u8>,
