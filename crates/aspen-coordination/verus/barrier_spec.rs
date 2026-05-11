@@ -157,14 +157,20 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant(required_count: u32)
         requires required_count > 0
         ensures barrier_invariant(initial_barrier_state(required_count))
     {
         let state = initial_barrier_state(required_count);
-        // If required <= 1: phase is Ready and participant_count (1) >= required
-        // If required > 1: phase is Waiting and participant_count (1) < required
+        if required_count <= 1 {
+            assert(state.phase == BarrierPhaseSpec::Ready);
+            assert(state.participant_count >= state.required_participant_count);
+        } else {
+            assert(state.phase == BarrierPhaseSpec::Waiting);
+            assert(state.participant_count < state.required_participant_count);
+        }
+        assert(state.participant_count <= state.required_participant_count);
+        assert(state.required_participant_count > 0);
     }
 
     // ========================================================================
@@ -202,7 +208,6 @@ verus! {
     }
 
     /// Proof: Enter preserves invariant
-    #[verifier(external_body)]
     pub proof fn enter_preserves_invariant(
         pre: BarrierStateSpec,
     )
@@ -222,7 +227,12 @@ verus! {
         // participant_bounded: new_count <= required_count
         // enter_pre requires pre.participant_count < required_count
         // So new_count = pre.participant_count + 1 <= required_count
-        assert(new_count <= pre.required_participant_count);
+        assert(pre.participant_count < 0xFFFF_FFFFu32);
+        assert(new_count == pre.participant_count + 1);
+        assert(new_count <= pre.required_participant_count) by(nonlinear_arith)
+            requires
+                new_count == pre.participant_count + 1,
+                pre.participant_count < pre.required_participant_count;
         assert(post.participant_count <= post.required_participant_count);
 
         // required_count > 0: unchanged from pre
@@ -231,7 +241,6 @@ verus! {
     }
 
     /// Proof: Enter may transition to Ready
-    #[verifier(external_body)]
     pub proof fn enter_may_become_ready(
         pre: BarrierStateSpec,
     )
@@ -246,6 +255,7 @@ verus! {
         let new_count = (pre.participant_count + 1) as u32;
         // new_count >= required => new_phase is Ready
         assert(new_count >= pre.required_participant_count);
+        assert(post.phase == BarrierPhaseSpec::Ready);
     }
 
     // ========================================================================
@@ -280,7 +290,6 @@ verus! {
     }
 
     /// Proof: Leave preserves invariant
-    #[verifier(external_body)]
     pub proof fn leave_preserves_invariant(
         pre: BarrierStateSpec,
     )
@@ -291,8 +300,21 @@ verus! {
             barrier_invariant(leave_post(pre))
     {
         let post = leave_post(pre);
-        // phase is Leaving, which is consistent with any count
-        // required_count unchanged
+        assert(post.phase == BarrierPhaseSpec::Leaving);
+        assert(pre.participant_count <= pre.required_participant_count);
+        assert(pre.participant_count > 0);
+        assert(post.participant_count == pre.participant_count - 1);
+        assert(post.participant_count <= pre.participant_count) by(nonlinear_arith)
+            requires
+                post.participant_count == pre.participant_count - 1,
+                pre.participant_count > 0;
+        assert(post.participant_count <= post.required_participant_count) by(nonlinear_arith)
+            requires
+                post.participant_count <= pre.participant_count,
+                pre.participant_count <= pre.required_participant_count,
+                post.required_participant_count == pre.required_participant_count;
+        assert(post.required_participant_count == pre.required_participant_count);
+        assert(post.required_participant_count > 0);
     }
 
     /// When all leave, barrier is complete
@@ -301,7 +323,6 @@ verus! {
     }
 
     /// Proof: Last leaver makes barrier complete
-    #[verifier(external_body)]
     pub proof fn last_leave_completes(
         pre: BarrierStateSpec,
     )
@@ -312,6 +333,9 @@ verus! {
             is_complete(leave_post(pre))
     {
         // new_count = 0, phase = Leaving
+        let post = leave_post(pre);
+        assert(post.participant_count == 0);
+        assert(post.phase == BarrierPhaseSpec::Leaving);
     }
 
     // ========================================================================
@@ -346,7 +370,6 @@ verus! {
     }
 
     /// Proof: Enter produces valid transition (when in Waiting phase)
-    #[verifier(external_body)]
     pub proof fn enter_valid_transition_from_waiting(
         pre: BarrierStateSpec,
     )
@@ -359,10 +382,15 @@ verus! {
     {
         let post = enter_post(pre);
         // From Waiting, can stay Waiting or go to Ready
+        assert(pre.phase == BarrierPhaseSpec::Waiting);
+        match post.phase {
+            BarrierPhaseSpec::Waiting => {},
+            BarrierPhaseSpec::Ready => {},
+            BarrierPhaseSpec::Leaving => { assert(false); },
+        }
     }
 
     /// Proof: Enter from Ready stays Ready (with explicit precondition)
-    #[verifier(external_body)]
     pub proof fn enter_stays_ready(
         pre: BarrierStateSpec,
     )
@@ -384,7 +412,6 @@ verus! {
     }
 
     /// Proof: Leave produces valid transition
-    #[verifier(external_body)]
     pub proof fn leave_valid_transition(
         pre: BarrierStateSpec,
     )
@@ -482,11 +509,13 @@ verus! {
     /// # Returns
     ///
     /// `true` if the barrier should start the leave phase.
-    #[verifier(external_body)]
     pub fn should_start_leave_phase(phase: BarrierPhase, leave_count: u32, required_count: u32) -> (result: bool)
         ensures result == (phase == BarrierPhase::Ready && leave_count >= required_count)
     {
-        matches!(phase, BarrierPhase::Ready) && leave_count >= required_count
+        match phase {
+            BarrierPhase::Ready => leave_count >= required_count,
+            _ => false,
+        }
     }
 
     /// Validate a phase transition for a participant.
@@ -503,7 +532,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if the transition is valid.
-    #[verifier(external_body)]
     pub fn is_valid_phase_transition(old_phase: BarrierPhase, new_phase: BarrierPhase) -> (result: bool)
         ensures result ==> (
             (old_phase == BarrierPhase::Waiting && new_phase == BarrierPhase::Waiting) ||
