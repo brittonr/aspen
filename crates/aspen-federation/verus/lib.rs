@@ -51,5 +51,6 @@ mod fork_detection_spec;
 mod gossip_message_spec;
 mod quorum_spec;
 mod ref_diff_spec;
+mod sync_wire_spec;
 
 fn main() {}
