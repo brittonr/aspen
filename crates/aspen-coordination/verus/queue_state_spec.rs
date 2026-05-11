@@ -310,7 +310,6 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant(
         name: Seq<u8>,
         max_delivery_attempts: u32,
@@ -319,7 +318,13 @@ verus! {
         ensures queue_invariant(initial_queue_state(name, max_delivery_attempts, default_visibility_timeout_ms))
     {
         let state = initial_queue_state(name, max_delivery_attempts, default_visibility_timeout_ms);
-        // All invariants trivially hold for empty collections
+        assert(fifo_ordering(state));
+        assert(ids_bounded_by_next(state));
+        assert(state_exclusivity(state));
+        assert(pending_ids_consistent(state));
+        assert(visibility_timeout_valid(state));
+        assert(dlq_threshold_respected(state));
+        assert(dedup_consistency(state));
     }
 
     // ========================================================================

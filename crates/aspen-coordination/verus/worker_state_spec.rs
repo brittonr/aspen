@@ -204,11 +204,16 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant()
         ensures worker_invariant(initial_worker_state())
     {
-        // Empty maps trivially satisfy all forall properties
+        let state = initial_worker_state();
+        assert(task_uniqueness(state));
+        assert(worker_isolation(state));
+        assert(assignment_consistency(state));
+        assert(lease_validity(state));
+        assert(load_bounded(state));
+        assert(load_consistent(state));
     }
 
     // ========================================================================

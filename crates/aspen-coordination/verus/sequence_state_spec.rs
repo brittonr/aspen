@@ -206,15 +206,13 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant(start_value: u64)
         requires start_value > 0
         ensures sequence_invariant(initial_sequence_state(start_value))
     {
-        // current_value = start_value - 1
-        // overflow_safe: start_value - 1 <= MAX
-        // current >= start - 1: trivially true
-        // start > 0: required
+        let state = initial_sequence_state(start_value);
+        assert(state.current_value == start_value - 1);
+        assert(overflow_safe(state));
     }
 
     // ========================================================================

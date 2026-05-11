@@ -184,11 +184,27 @@ verus! {
     }
 
     /// Proof: Initial state satisfies invariant
-    #[verifier(external_body)]
     pub proof fn initial_state_invariant()
         ensures registry_invariant(initial_registry_state())
     {
-        // Empty maps trivially satisfy all forall properties
+        let state = initial_registry_state();
+        assert forall |id: Seq<u8>| state.services.contains_key(id) implies
+            registration_valid(state.services[id]) by {}
+        assert(all_registrations_valid(state));
+        assert forall |id: Seq<u8>| state.services.contains_key(id) implies
+            state.services[id].fencing_token <= state.max_fencing_token by {}
+        assert(entry_token_bounded(state));
+        assert forall |svc_type: Seq<u8>, svc_id: Seq<u8>|
+            state.type_index.contains_key(svc_type) &&
+            state.type_index[svc_type].contains(svc_id) implies
+            state.services.contains_key(svc_id) &&
+            state.services[svc_id].service_type =~= svc_type by {}
+        assert forall |svc_id: Seq<u8>| state.services.contains_key(svc_id) implies {
+            let entry = state.services[svc_id];
+            state.type_index.contains_key(entry.service_type) &&
+            state.type_index[entry.service_type].contains(svc_id)
+        } by {}
+        assert(index_consistent(state));
     }
 
     // ========================================================================
