@@ -572,7 +572,6 @@ verus! {
     /// # Returns
     ///
     /// `true` if enough time has passed for renewal.
-    #[verifier(external_body)]
     pub fn is_renewal_time(
         now_ms: u64,
         last_renewed_ms: u64,
@@ -580,7 +579,11 @@ verus! {
     ) -> (result: bool)
         ensures result == is_renewal_time_spec(now_ms, last_renewed_ms, renew_interval_ms)
     {
-        now_ms.saturating_sub(last_renewed_ms) >= renew_interval_ms
+        if now_ms >= last_renewed_ms {
+            now_ms - last_renewed_ms >= renew_interval_ms
+        } else {
+            false
+        }
     }
 
     /// Determine if leadership should be maintained based on current state.
