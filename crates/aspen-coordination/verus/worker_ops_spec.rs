@@ -418,7 +418,6 @@ verus! {
     }
 
     /// Proof: Complete decreases worker load
-    #[verifier(external_body)]
     pub proof fn complete_decreases_load(
         pre: WorkerState,
         task_id: Seq<u8>,
@@ -436,7 +435,6 @@ verus! {
     }
 
     /// Proof: Complete removes task
-    #[verifier(external_body)]
     pub proof fn complete_removes_task(
         pre: WorkerState,
         task_id: Seq<u8>,
