@@ -92,20 +92,18 @@ verus! {
     // ========================================================================
 
     /// The new token (as int) is strictly greater than the old max
-    #[verifier(external_body)]
     pub proof fn acquire_new_token_greater(
         pre: LockState,
     )
         requires pre.max_fencing_token_issued < 0xFFFF_FFFF_FFFF_FFFFu64
         ensures new_token_int(pre) > pre.max_fencing_token_issued as int
     {
-        // add1(x) = x + 1 > x when x < MAX
+        assert(new_token_int(pre) == pre.max_fencing_token_issued as int + 1);
     }
 
     /// Acquire preserves fencing token monotonicity
     ///
     /// The post state's max token >= pre state's max token
-    #[verifier(external_body)]
     pub proof fn acquire_preserves_fencing_monotonicity(
         pre: LockState,
         requester_id: Seq<u8>,
@@ -119,7 +117,11 @@ verus! {
             acquire_post(pre, requester_id, ttl_ms, acquired_at_ms).max_fencing_token_issued
             >= pre.max_fencing_token_issued
     {
-        // post.max = (pre.max + 1) as u64 >= pre.max when pre.max < MAX
+        acquire_new_token_greater(pre);
+        let post = acquire_post(pre, requester_id, ttl_ms, acquired_at_ms);
+        assert(new_token_int(pre) <= u64::MAX as int);
+        assert(post.max_fencing_token_issued as int == new_token_int(pre));
+        assert(post.max_fencing_token_issued as int > pre.max_fencing_token_issued as int);
     }
 
     // ========================================================================
@@ -127,7 +129,6 @@ verus! {
     // ========================================================================
 
     /// The new entry has the correct deadline relationship
-    #[verifier(external_body)]
     pub proof fn acquire_deadline_computed_correctly(
         pre: LockState,
         requester_id: Seq<u8>,
@@ -144,8 +145,11 @@ verus! {
             entry.deadline_ms as int == entry.acquired_at_ms + entry.ttl_ms
         })
     {
-        // By construction: deadline = (acquired_at + ttl) as u64
-        // When acquired_at + ttl <= MAX, the cast preserves equality
+        let post = acquire_post(pre, requester_id, ttl_ms, acquired_at_ms);
+        let entry = post.entry.unwrap();
+        assert(add_u64(acquired_at_ms, ttl_ms) == acquired_at_ms as int + ttl_ms as int);
+        assert(add_u64(acquired_at_ms, ttl_ms) <= u64::MAX as int);
+        assert(entry.deadline_ms as int == add_u64(acquired_at_ms, ttl_ms));
     }
 
     // ========================================================================
@@ -153,7 +157,6 @@ verus! {
     // ========================================================================
 
     /// The new entry's token equals the new max_fencing_token_issued
-    #[verifier(external_body)]
     pub proof fn acquire_entry_token_equals_max(
         pre: LockState,
         requester_id: Seq<u8>,
@@ -169,7 +172,9 @@ verus! {
             entry.fencing_token == post.max_fencing_token_issued
         })
     {
-        // Both are (pre.max + 1) as u64
+        let post = acquire_post(pre, requester_id, ttl_ms, acquired_at_ms);
+        let entry = post.entry.unwrap();
+        assert(entry.fencing_token == post.max_fencing_token_issued);
     }
 
     // ========================================================================
@@ -177,7 +182,6 @@ verus! {
     // ========================================================================
 
     /// Acquire preserves entry_token_bounded
-    #[verifier(external_body)]
     pub proof fn acquire_preserves_entry_bounded(
         pre: LockState,
         requester_id: Seq<u8>,
@@ -193,14 +197,14 @@ verus! {
             entry_token_bounded(acquire_post(pre, requester_id, ttl_ms, acquired_at_ms))
     {
         acquire_entry_token_equals_max(pre, requester_id, ttl_ms, acquired_at_ms);
-        // entry.token == post.max, so entry.token <= post.max
+        let post = acquire_post(pre, requester_id, ttl_ms, acquired_at_ms);
+        assert(post.entry.unwrap().fencing_token == post.max_fencing_token_issued);
     }
 
     /// Acquire preserves lock invariant (combined proof)
     ///
     /// This proof combines all sub-proofs to show that acquire preserves the full
     /// lock_invariant predicate: entry_token_bounded, state_ttl_valid, and mutual_exclusion_holds.
-    #[verifier(external_body)]
     pub proof fn acquire_preserves_lock_invariant(
         pre: LockState,
         requester_id: Seq<u8>,
@@ -224,6 +228,8 @@ verus! {
 
         // 2. state_ttl_valid: deadline = acquired_at + ttl by construction
         // With overflow protection, the cast preserves equality
+        acquire_deadline_computed_correctly(pre, requester_id, ttl_ms, acquired_at_ms);
+        assert(ttl_expiration_valid(post.entry.unwrap()));
         assert(state_ttl_valid(post));
 
         // 3. mutual_exclusion_holds: new entry has non-empty holder_id (requester_id.len() > 0),
@@ -231,7 +237,15 @@ verus! {
         // positive deadline (acquired_at + ttl >= 0 with ttl potentially 0 but then deadline = acquired_at > 0
         // or deadline = acquired_at + ttl > 0 if acquired_at > 0 or ttl > 0)
         // The entry is not expired (fresh acquisition), so it must have valid holder info.
-        assert(mutual_exclusion_holds(post));
+        let entry = post.entry.unwrap();
+        assert(entry.holder_id.len() > 0);
+        assert(entry.fencing_token > 0);
+        if is_expired(entry, post.current_time_ms) {
+            assert(mutual_exclusion_holds(post));
+        } else {
+            assert(entry.deadline_ms > 0);
+            assert(mutual_exclusion_holds(post));
+        }
     }
 
     // ========================================================================
