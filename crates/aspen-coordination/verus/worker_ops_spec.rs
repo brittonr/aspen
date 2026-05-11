@@ -153,7 +153,6 @@ verus! {
     }
 
     /// Proof: Heartbeat extends lease
-    #[verifier(external_body)]
     pub proof fn heartbeat_extends_lease(
         pre: WorkerState,
         worker_id: Seq<u8>,
@@ -163,6 +162,7 @@ verus! {
         requires
             heartbeat_pre(pre, worker_id),
             lease_duration_ms > 0,
+            current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - lease_duration_ms,
         ensures ({
             let post = heartbeat_post(pre, worker_id, lease_duration_ms, current_time_ms);
             post.workers[worker_id].lease_deadline_ms == current_time_ms + lease_duration_ms
@@ -269,7 +269,6 @@ verus! {
     }
 
     /// Proof: Assign increases worker load
-    #[verifier(external_body)]
     pub proof fn assign_increases_load(
         pre: WorkerState,
         task_id: Seq<u8>,
@@ -556,7 +555,6 @@ verus! {
     }
 
     /// Proof: Expired tasks have cleared worker assignment
-    #[verifier(external_body)]
     pub proof fn expire_clears_task_assignment(
         pre: WorkerState,
         worker_id: Seq<u8>,
