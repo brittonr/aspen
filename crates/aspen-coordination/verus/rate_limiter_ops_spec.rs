@@ -55,7 +55,6 @@ verus! {
     }
 
     /// Proof: Acquire decreases tokens
-    #[verifier(external_body)]
     pub proof fn acquire_decreases_tokens(
         pre: RateLimiterState,
         amount: u64,
@@ -71,7 +70,6 @@ verus! {
     }
 
     /// Proof: Acquire preserves capacity bound
-    #[verifier(external_body)]
     pub proof fn acquire_preserves_capacity_bound(
         pre: RateLimiterState,
         amount: u64,
@@ -85,7 +83,6 @@ verus! {
     }
 
     /// Proof: Acquire preserves refill monotonicity
-    #[verifier(external_body)]
     pub proof fn acquire_preserves_refill(
         pre: RateLimiterState,
         amount: u64,
@@ -100,7 +97,6 @@ verus! {
     }
 
     /// Proof: Acquire preserves invariant
-    #[verifier(external_body)]
     pub proof fn acquire_preserves_invariant(
         pre: RateLimiterState,
         amount: u64,
@@ -139,7 +135,6 @@ verus! {
     }
 
     /// Proof: Try acquire succeeds iff sufficient tokens
-    #[verifier(external_body)]
     pub proof fn try_acquire_success_condition(
         pre: RateLimiterState,
         amount: u64,
@@ -353,7 +348,6 @@ verus! {
     }
 
     /// Proof: Full bucket can handle capacity-sized burst
-    #[verifier(external_body)]
     pub proof fn full_bucket_handles_capacity_burst(
         state: RateLimiterState,
     )
@@ -366,7 +360,6 @@ verus! {
     }
 
     /// Proof: Empty bucket can only handle zero burst
-    #[verifier(external_body)]
     pub proof fn empty_bucket_handles_no_burst(
         state: RateLimiterState,
     )
@@ -401,7 +394,6 @@ verus! {
     ///
     /// The maximum long-term throughput is limited by the refill rate,
     /// regardless of initial token count or burst capacity.
-    #[verifier(external_body)]
     pub proof fn max_throughput_bounded_by_refill_rate(
         state: RateLimiterState,
         duration_ms: u64,
