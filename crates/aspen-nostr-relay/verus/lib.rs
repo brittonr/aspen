@@ -10,6 +10,7 @@ mod connection_message_spec;
 mod filter_spec;
 mod http_request_spec;
 mod iroh_frame_spec;
+mod keys_spec;
 mod nip11_info_spec;
 mod rate_limit_spec;
 mod relay_connection_spec;
