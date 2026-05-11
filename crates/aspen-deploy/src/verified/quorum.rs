@@ -18,9 +18,8 @@
 /// - 7 voters → quorum 4
 #[inline]
 pub fn quorum_size(voter_count: u32) -> u32 {
-    // ceil((voter_count + 1) / 2) via integer arithmetic
-    // Equivalent: (voter_count / 2) + 1
-    voter_count.saturating_add(1).saturating_add(1) / 2
+    // ceil((voter_count + 1) / 2) via non-overflowing integer arithmetic.
+    (voter_count / 2) + 1
 }
 
 /// Check if it's safe to upgrade one more node.
@@ -73,6 +72,7 @@ mod tests {
         assert_eq!(quorum_size(5), 3);
         assert_eq!(quorum_size(6), 4);
         assert_eq!(quorum_size(7), 4);
+        assert_eq!(quorum_size(u32::MAX), 2_147_483_648);
     }
 
     #[test]

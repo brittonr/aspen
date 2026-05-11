@@ -24,8 +24,8 @@ verus! {
 
     /// Quorum size: minimum voters needed for majority.
     ///
-    /// Defined as `(voter_count + 2) / 2` using integer division,
-    /// which equals `ceil((voter_count + 1) / 2)`.
+    /// Defined as `(voter_count / 2) + 1` using integer division,
+    /// which equals `ceil((voter_count + 1) / 2)` without overflow.
     ///
     /// Values:
     /// - quorum_size(0) = 1
@@ -35,7 +35,7 @@ verus! {
     /// - quorum_size(5) = 3
     /// - quorum_size(7) = 4
     pub open spec fn quorum_size_spec(voter_count: u32) -> u32 {
-        ((voter_count + 2) / 2) as u32
+        ((voter_count / 2) + 1) as u32
     }
 
     /// QUORUM-1: Quorum is strictly greater than half for non-zero clusters.
@@ -99,8 +99,8 @@ verus! {
 
     /// Compute the quorum size (minimum voters for majority).
     ///
-    /// Uses saturating arithmetic to prevent overflow.
-    /// Returns `(voter_count + 2) / 2`.
+    /// Uses division-before-addition to prevent overflow.
+    /// Returns `(voter_count / 2) + 1`.
     pub fn quorum_size(voter_count: u32) -> (result: u32)
         ensures
             result == quorum_size_spec(voter_count),
@@ -108,7 +108,7 @@ verus! {
             voter_count >= 1 ==> result > voter_count / 2,
             voter_count >= 1 ==> result <= voter_count
     {
-        voter_count.saturating_add(1).saturating_add(1) / 2
+        (voter_count / 2) + 1
     }
 
     /// Check if it's safe to upgrade one more node.

@@ -27,18 +27,18 @@ verus! {
     }
 
     /// Proof: can_add_u32 implies no overflow
-    #[verifier(external_body)]
     pub proof fn can_add_u32_sound(a: u32, b: u32)
         requires can_add_u32(a, b)
         ensures (a as int) + (b as int) <= U32_MAX() as int
     {
+        assert((a as int) + (b as int) <= U32_MAX() as int);
     }
 
     /// Proof: can_increment_u32 implies no overflow
-    #[verifier(external_body)]
     pub proof fn can_increment_u32_sound(a: u32)
         requires can_increment_u32(a)
         ensures (a as int) + 1 <= U32_MAX() as int
     {
+        assert((a as int) + 1 <= U32_MAX() as int);
     }
 }
