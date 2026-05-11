@@ -88,19 +88,18 @@ verus! {
         is_update: bool,
         success: bool,
     ) -> bool {
-        success ==> (
+        // Trusted remains bounded whether the operation inserts, updates, or
+        // fails at capacity after removing a block entry.
+        trusted_bounded(post.trusted_count) &&
+        (success ==> (
             // Trusted count increases by at most 1
             post.trusted_count <= pre.trusted_count + 1 &&
-            // Trusted still bounded
-            trusted_bounded(post.trusted_count) &&
             // Blocked count decreases by at most 1 (if was blocked)
             post.blocked_count <= pre.blocked_count
-        )
+        ))
     }
 
     /// Proof: add_trusted maintains capacity bound
-    #[verifier(external_body)]
-    #[verifier(external_body)]
     pub proof fn add_trusted_maintains_bound(
         pre: TrustManagerState,
         post: TrustManagerState,
@@ -113,7 +112,6 @@ verus! {
             add_trusted_post(pre, post, is_update, success),
         ensures trusted_bounded(post.trusted_count)
     {
-        // Either update (count same) or insert with capacity (count + 1 <= max)
     }
 
     // ========================================================================
@@ -137,19 +135,18 @@ verus! {
         is_update: bool,
         success: bool,
     ) -> bool {
-        success ==> (
+        // Blocked remains bounded whether the operation inserts, updates, or
+        // fails at capacity after removing a trusted entry.
+        blocked_bounded(post.blocked_count) &&
+        (success ==> (
             // Blocked count increases by at most 1
             post.blocked_count <= pre.blocked_count + 1 &&
-            // Blocked still bounded
-            blocked_bounded(post.blocked_count) &&
             // Trusted count decreases by at most 1 (if was trusted)
             post.trusted_count <= pre.trusted_count
-        )
+        ))
     }
 
     /// Proof: block maintains capacity bound
-    #[verifier(external_body)]
-    #[verifier(external_body)]
     pub proof fn block_maintains_bound(
         pre: TrustManagerState,
         post: TrustManagerState,
@@ -162,7 +159,6 @@ verus! {
             block_post(pre, post, is_update, success),
         ensures blocked_bounded(post.blocked_count)
     {
-        // Either update (count same) or insert with capacity
     }
 
     // ========================================================================
@@ -186,14 +182,13 @@ verus! {
         is_update: bool,
         success: bool,
     ) -> bool {
-        success ==> (
-            post.pending_count <= pre.pending_count + 1 &&
-            pending_bounded(post.pending_count)
-        )
+        // Pending cleanup can reduce the count before either success or
+        // capacity rejection, but the queue remains bounded in all outcomes.
+        pending_bounded(post.pending_count) &&
+        (success ==> post.pending_count <= pre.pending_count + 1)
     }
 
     /// Proof: add_request maintains capacity bound
-    #[verifier(external_body)]
     pub proof fn add_request_maintains_bound(
         pre: TrustManagerState,
         post: TrustManagerState,
@@ -206,7 +201,6 @@ verus! {
             add_request_post(pre, post, is_update, success),
         ensures pending_bounded(post.pending_count)
     {
-        // Capacity check enforces bound
     }
 
     // ========================================================================
