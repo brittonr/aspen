@@ -169,9 +169,13 @@ fn sanitize_control_error(e: &aspen_core::ControlPlaneError) -> String {
         ControlPlaneError::NotInitialized => "cluster not initialized".to_string(),
         ControlPlaneError::InvalidRequest { reason } => format!("invalid request: {}", reason),
         ControlPlaneError::Failed { reason } => {
-            // Check if reason contains leader info to provide hints
+            // Check if reason contains leader info to provide hints. Trust
+            // reconfiguration errors are part of the cluster-management
+            // contract and must remain diagnosable by VM proof rails.
             if reason.contains("not leader") || reason.contains("ForwardToLeader") {
                 "not leader".to_string()
+            } else if reason.contains("trust reconfiguration") {
+                reason.clone()
             } else {
                 "operation failed".to_string()
             }
@@ -573,11 +577,17 @@ mod tests {
         let handler = ClusterHandler;
 
         // This request is not handled by ClusterHandler
-        let request = ClientRpcRequest::Ping;
+        let request = ClientRpcRequest::GetMetrics;
 
         let result = handler.handle(request, &ctx).await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not handled"));
+        let response = result.expect("unhandled requests should return an error response");
+        match response {
+            ClientRpcResponse::Error(error) => {
+                assert_eq!(error.code, "INVALID_REQUEST");
+                assert!(error.message.contains("not handled"));
+            }
+            other => panic!("expected Error response, got {other:?}"),
+        }
     }
 
     #[test]

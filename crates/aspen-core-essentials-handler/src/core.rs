@@ -1466,8 +1466,9 @@ mod tests {
 
         match result.unwrap() {
             ClientRpcResponse::NetworkMetrics(response) => {
-                assert!(response.error.is_none());
-                // Stub returns zeros — validates the wire path works
+                // Test context has no network metrics provider wired; the handler
+                // still returns a well-formed zeroed response with an explanatory error.
+                assert_eq!(response.error.as_deref(), Some("connection pool not wired into context"));
                 assert_eq!(response.total_connections, 0);
             }
             other => panic!("expected NetworkMetrics, got {:?}", other),
@@ -1649,8 +1650,14 @@ mod tests {
         };
 
         let result = handler.handle(request, &ctx).await;
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not handled"));
+        let response = result.expect("unhandled requests should return an error response");
+        match response {
+            ClientRpcResponse::Error(error) => {
+                assert_eq!(error.code, "INVALID_REQUEST");
+                assert!(error.message.contains("not handled"));
+            }
+            other => panic!("expected Error response, got {other:?}"),
+        }
     }
 
     // =========================================================================

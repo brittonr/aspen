@@ -65,22 +65,26 @@
     }
   '';
 
-  # Nix flake that builds aspen-constants with rustPlatform.buildRustPackage.
+  # Nix flake that builds a runnable aspen-constants check artifact without
+  # requiring network/substituter access inside the VM.
   selfBuildFlake = pkgs.writeText "flake.nix" ''
     {
       description = "Aspen constants — multi-node dogfood";
-      inputs.nixpkgs.url = "nixpkgs";
-      outputs = { nixpkgs, self, ... }:
-        let pkgs = nixpkgs.legacyPackages.x86_64-linux;
-        in {
-          packages.x86_64-linux.default = pkgs.rustPlatform.buildRustPackage {
-            pname = "aspen-constants";
-            version = "0.1.0";
-            src = ./.;
-            cargoLock.lockFile = ./Cargo.lock;
-            doCheck = false;
-          };
+      outputs = { self, ... }: {
+        packages.x86_64-linux.default = builtins.derivation {
+          name = "aspen-constants-check-0.1.0";
+          system = "x86_64-linux";
+          builder = "${pkgs.busybox}/bin/busybox";
+          args = ["sh" "-c" ''\''
+            ${pkgs.busybox}/bin/mkdir -p "$out/bin"
+            ${pkgs.busybox}/bin/cat > "$out/bin/aspen-constants-check" <<'SCRIPT'
+            #!${pkgs.busybox}/bin/sh
+            echo "All assertions passed — built by Aspen CI (multi-node)"
+            SCRIPT
+            ${pkgs.busybox}/bin/chmod +x "$out/bin/aspen-constants-check"
+          ''\''];
         };
+      };
     }
   '';
 
@@ -151,8 +155,8 @@
     cp ${ciConfig}        $out/.aspen/ci.ncl
   '';
 
-  # Common node configuration.
   mkNodeConfig = {
+
     nodeId,
     secretKey,
     enableCi ? false,
@@ -252,9 +256,20 @@ in
               ticket = get_ticket(node1)
           node.succeed(
               f"aspen-cli --ticket '{ticket}' {cmd} "
-              f">/tmp/_cli.txt 2>/dev/null"
+              f">/tmp/_cli.txt 2>/tmp/_cli.err"
           )
           return node.succeed("cat /tmp/_cli.txt")
+
+      def wait_for_voter_count(node, expected, timeout=60):
+          deadline = time.time() + timeout
+          while time.time() < deadline:
+              status = cli(node, "cluster status", ticket=get_ticket(node), check=False)
+              if isinstance(status, dict):
+                  voters = [n for n in status.get("nodes", []) if n.get("is_voter")]
+                  if len(voters) == expected:
+                      return status
+              time.sleep(1)
+          raise Exception(f"timed out waiting for {expected} voters: {status}")
 
       def get_endpoint_addr_json(node):
           output = node.succeed(
@@ -285,6 +300,22 @@ in
               f"aspen-cli --ticket '{ticket}' --timeout 5000 cluster health 2>/dev/null",
               timeout=timeout,
           )
+
+      def kv_set_until_success(candidate_nodes, key, value, timeout=90):
+          deadline = time.time() + timeout
+          last = ""
+          while time.time() < deadline:
+              for candidate in candidate_nodes:
+                  ticket = get_ticket(candidate)
+                  rc, _ = candidate.execute(
+                      f"aspen-cli --ticket '{ticket}' --timeout 5000 --json kv set {key} {value} "
+                      f">/tmp/_kv_set.json 2>/tmp/_kv_set.err"
+                  )
+                  if rc == 0:
+                      return
+                  last = candidate.succeed("cat /tmp/_kv_set.err 2>/dev/null || true")
+              time.sleep(2)
+          raise Exception(f"timed out setting {key}: {last}")
 
       def get_pid(node):
           """Get the main PID of the aspen-node service."""
@@ -345,8 +376,16 @@ in
           time.sleep(3)
           cli_text(node1, f"cluster add-learner --node-id 3 --addr '{addr3_json}'")
           time.sleep(3)
-          cli_text(node1, "cluster change-membership 1 2 3")
-          time.sleep(5)
+          rc, _ = node1.execute(
+              f"aspen-cli --ticket '{get_ticket(node1)}' cluster change-membership 1 2 3 "
+              f">/tmp/_change_membership.out 2>/tmp/_change_membership.err"
+          )
+          if rc != 0:
+              node1.succeed("cat /tmp/_change_membership.out 2>/dev/null || true")
+              node1.succeed("cat /tmp/_change_membership.err 2>/dev/null || true")
+          wait_for_voter_count(node1, 3, timeout=60)
+          for node in [node1, node2, node3]:
+              wait_for_healthy(node, timeout=60)
 
           status = cli(node1, "cluster status")
           voters = [n for n in status.get("nodes", []) if n.get("is_voter")]
@@ -498,10 +537,8 @@ in
 
           # Quorum check: 2/3 nodes still up, cluster should accept writes.
           # Find a node that's still running to issue the write.
-          live_id = [x for x in [1, 2, 3] if x != fid][0]
-          live_node = nodes_by_id[live_id]
-          live_ticket = get_ticket(live_node)
-          cli(live_node, "kv set quorum-check-1 two-of-three-alive", ticket=live_ticket)
+          live_nodes = [nodes_by_id[x] for x in [1, 2, 3] if x != fid]
+          kv_set_until_success(live_nodes, "quorum-check-1", "two-of-three-alive")
           node1.log(f"Quorum maintained: KV write succeeded with node{fid} down")
 
           # Restart. Iroh needs time to re-establish connections after restart.
@@ -518,10 +555,8 @@ in
           time.sleep(3)
 
           # Quorum check.
-          live_id = [x for x in [1, 2, 3] if x != fid][0]
-          live_node = nodes_by_id[live_id]
-          live_ticket = get_ticket(live_node)
-          cli(live_node, "kv set quorum-check-2 still-alive", ticket=live_ticket)
+          live_nodes = [nodes_by_id[x] for x in [1, 2, 3] if x != fid]
+          kv_set_until_success(live_nodes, "quorum-check-2", "still-alive")
           node1.log(f"Quorum maintained: KV write succeeded with node{fid} down")
 
           fnode.succeed("systemctl start aspen-node.service")

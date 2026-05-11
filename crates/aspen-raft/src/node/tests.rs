@@ -27,6 +27,10 @@ use aspen_kv_types::WriteRequest;
 use aspen_traits::ClusterController;
 use aspen_traits::CoordinationBackend;
 use aspen_traits::KeyValueStore;
+use aspen_traits::KvDelete;
+use aspen_traits::KvRead;
+use aspen_traits::KvScan;
+use aspen_traits::KvWrite;
 #[cfg(feature = "trust")]
 use aspen_trust::chain;
 #[cfg(feature = "trust")]
@@ -1670,7 +1674,7 @@ async fn test_kv_operations_require_init() {
         key: "test".to_string(),
         consistency: ReadConsistency::Linearizable,
     };
-    let result = KeyValueStore::read(&node, read_request).await;
+    let result = <RaftNode as KvRead>::read(&node, read_request).await;
     assert!(result.is_err());
 
     // Write should fail when not initialized
@@ -1680,7 +1684,7 @@ async fn test_kv_operations_require_init() {
             value: "value".to_string(),
         },
     };
-    let result = KeyValueStore::write(&node, write_request).await;
+    let result = <RaftNode as KvWrite>::write(&node, write_request).await;
     assert!(result.is_err());
 }
 
@@ -1917,7 +1921,7 @@ async fn test_scan_requires_initialization() {
         limit_results: None,
         continuation_token: None,
     };
-    let result = KeyValueStore::scan(&node, request).await;
+    let result = <RaftNode as KvScan>::scan(&node, request).await;
     assert!(result.is_err());
     match result {
         Err(KeyValueStoreError::Failed { reason }) => {
@@ -1936,7 +1940,7 @@ async fn test_delete_requires_initialization() {
     let request = DeleteRequest {
         key: "test".to_string(),
     };
-    let result = KeyValueStore::delete(&node, request).await;
+    let result = <RaftNode as KvDelete>::delete(&node, request).await;
     assert!(result.is_err());
     match result {
         Err(KeyValueStoreError::Failed { reason }) => {
@@ -1990,7 +1994,7 @@ async fn test_write_validates_key_size() {
             value: "value".to_string(),
         },
     };
-    let result = KeyValueStore::write(&node, write_request).await;
+    let result = <RaftNode as KvWrite>::write(&node, write_request).await;
 
     // Should fail validation before reaching Raft
     assert!(result.is_err());
@@ -2017,7 +2021,7 @@ async fn test_write_validates_value_size() {
             value: oversized_value,
         },
     };
-    let result = KeyValueStore::write(&node, write_request).await;
+    let result = <RaftNode as KvWrite>::write(&node, write_request).await;
 
     // Should fail validation before reaching Raft
     assert!(result.is_err());
@@ -2048,7 +2052,7 @@ async fn test_read_linearizable_uses_read_index() {
         key: "test".to_string(),
         consistency: ReadConsistency::Linearizable,
     };
-    let result = KeyValueStore::read(&node, request).await;
+    let result = <RaftNode as KvRead>::read(&node, request).await;
 
     // Should fail due to not being leader (ReadIndex requires leader)
     // The error indicates the read went through the correct path
@@ -2074,7 +2078,7 @@ async fn test_read_lease_uses_lease_read() {
         key: "test".to_string(),
         consistency: ReadConsistency::Lease,
     };
-    let result = KeyValueStore::read(&node, request).await;
+    let result = <RaftNode as KvRead>::read(&node, request).await;
 
     // Should fail due to not being leader (LeaseRead requires leader)
     assert!(result.is_err());
@@ -2103,7 +2107,7 @@ async fn test_read_stale_skips_linearizer() {
         key: "test".to_string(),
         consistency: ReadConsistency::Stale,
     };
-    let result = KeyValueStore::read(&node, request).await;
+    let result = <RaftNode as KvRead>::read(&node, request).await;
 
     // Stale reads go directly to state machine, no leader needed
     // Should fail with NotFound (key doesn't exist) rather than NotLeader
@@ -2214,7 +2218,7 @@ async fn test_scan_uses_read_index() {
         limit_results: None,
         continuation_token: None,
     };
-    let result = KeyValueStore::scan(&node, request).await;
+    let result = <RaftNode as KvScan>::scan(&node, request).await;
 
     // Scan always uses ReadIndex for linearizability
     // Should fail due to not being leader

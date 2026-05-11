@@ -89,7 +89,7 @@ fn make_token(secret_key: &iroh::SecretKey, capability: Capability, lifetime_sec
 /// Valid wildcard token: sync succeeds, document content transfers.
 #[tokio::test]
 async fn valid_wildcard_token_syncs_document() {
-    let secret_key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+    let secret_key = iroh::SecretKey::generate();
     let doc_id = DocumentId::from_string("test-doc").unwrap();
 
     // Server has a document with content
@@ -126,7 +126,7 @@ async fn valid_wildcard_token_syncs_document() {
 /// No token when auth is required: sync rejected.
 #[tokio::test]
 async fn no_token_rejected() {
-    let secret_key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+    let secret_key = iroh::SecretKey::generate();
     let doc_id = DocumentId::from_string("test-doc").unwrap();
 
     let server_store = make_store(&doc_id, Some("secret data")).await;
@@ -150,8 +150,8 @@ async fn no_token_rejected() {
 /// Token signed by wrong key: sync rejected.
 #[tokio::test]
 async fn wrong_key_rejected() {
-    let server_key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
-    let attacker_key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+    let server_key = iroh::SecretKey::generate();
+    let attacker_key = iroh::SecretKey::generate();
     let doc_id = DocumentId::from_string("test-doc").unwrap();
 
     let server_store = make_store(&doc_id, Some("secret data")).await;
@@ -181,7 +181,7 @@ async fn wrong_key_rejected() {
 /// Token scoped to wrong document prefix: sync rejected.
 #[tokio::test]
 async fn wrong_document_scope_rejected() {
-    let secret_key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+    let secret_key = iroh::SecretKey::generate();
     let doc_id = DocumentId::from_string("test-doc").unwrap();
 
     let server_store = make_store(&doc_id, Some("secret data")).await;
@@ -211,7 +211,7 @@ async fn wrong_document_scope_rejected() {
 /// Token scoped to specific document: sync succeeds for that document.
 #[tokio::test]
 async fn document_scoped_token_works() {
-    let secret_key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+    let secret_key = iroh::SecretKey::generate();
     let doc_id = DocumentId::from_string("my-doc").unwrap();
 
     let server_store = make_store(&doc_id, Some("scoped content")).await;
@@ -268,7 +268,7 @@ async fn no_auth_mode_allows_all() {
 /// Read-only token rejected (sync requires Write).
 #[tokio::test]
 async fn read_only_token_rejected() {
-    let secret_key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+    let secret_key = iroh::SecretKey::generate();
     let doc_id = DocumentId::from_string("test-doc").unwrap();
 
     let server_store = make_store(&doc_id, Some("data")).await;

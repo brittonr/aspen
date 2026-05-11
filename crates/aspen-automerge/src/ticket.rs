@@ -81,13 +81,13 @@ mod tests {
     use super::*;
 
     fn make_test_addr() -> EndpointAddr {
-        let key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+        let key = iroh::SecretKey::generate();
         EndpointAddr::new(key.public())
     }
 
     fn make_test_token() -> CapabilityToken {
         use std::time::Duration;
-        let key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+        let key = iroh::SecretKey::generate();
         aspen_auth::TokenBuilder::new(key)
             .with_capability(aspen_auth::Capability::Full {
                 prefix: "automerge:".into(),
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn oversized_token_rejected_at_construction() {
         use std::time::Duration;
-        let key = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+        let key = iroh::SecretKey::generate();
         // Build a token with 32 capabilities, each with a very long prefix,
         // to push the encoded size over MAX_TOKEN_SIZE (8KB).
         let mut builder = aspen_auth::TokenBuilder::new(key).with_lifetime(Duration::from_secs(3600));

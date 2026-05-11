@@ -168,7 +168,6 @@ verus! {
     /// When a new service is registered, all existing services remain unchanged.
     /// This is important for service discovery reliability: registering a new
     /// service should not affect lookups for existing services.
-    #[verifier(external_body)]
     pub proof fn register_preserves_other_entries(
         pre: RegistryState,
         service_id: Seq<u8>,

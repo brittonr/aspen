@@ -1,7 +1,7 @@
 # latest-state-observation Specification
 
 ## Purpose
-TBD - created by archiving change evaluate-n0-watcher-latest-state. Update Purpose after archive.
+Constrain evaluation of latest-state watcher primitives to seams where skipped intermediate updates are correct. This spec prevents blanket dependency adoption and requires dependency-boundary evidence before a watcher implementation is kept in Aspen.
 ## Requirements
 ### Requirement: Latest-State Watcher Evaluation
 Aspen MUST evaluate `n0-watcher` only through a targeted local prototype or explicit no-adoption comparison before accepting it as a dependency.

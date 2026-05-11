@@ -7,6 +7,8 @@ pub use aspen_raft_types::AppTypeConfig;
 
 #[cfg(test)]
 mod tests {
+    use aspen_raft_types::NodeId;
+
     use super::*;
 
     #[test]

@@ -2,6 +2,8 @@
 
 use std::collections::BTreeMap;
 use std::sync::atomic::Ordering;
+#[cfg(feature = "trust")]
+use std::time::Duration;
 
 use aspen_cluster_types::AddLearnerRequest;
 use aspen_cluster_types::ChangeMembershipRequest;
@@ -26,6 +28,11 @@ use crate::types::RaftMemberInfo;
 fn duration_ms_u64(duration: std::time::Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
+
+#[cfg(feature = "trust")]
+const INIT_LEADERSHIP_WAIT: Duration = Duration::from_secs(5);
+#[cfg(feature = "trust")]
+const INIT_LEADERSHIP_POLL: Duration = Duration::from_millis(25);
 
 #[async_trait]
 impl ClusterController for RaftNode {
@@ -76,11 +83,20 @@ impl ClusterController for RaftNode {
         self.initialized_ref().store(true, Ordering::Release);
         info!("initialized flag set to true");
 
-        // Initialize trust (Shamir secret sharing) if enabled
         #[cfg(feature = "trust")]
         if request.trust.enabled {
-            self.initialize_trust(&request).await.map_err(|e| ControlPlaneError::Failed {
-                reason: format!("trust initialization failed: {e}"),
+            let started = std::time::Instant::now();
+            while self.raft().metrics().borrow().current_leader != Some(self.node_id()) {
+                if started.elapsed() >= INIT_LEADERSHIP_WAIT {
+                    return Err(ControlPlaneError::Failed {
+                        reason: "trust initialization timed out waiting for the initialized node to become leader"
+                            .into(),
+                    });
+                }
+                tokio::time::sleep(INIT_LEADERSHIP_POLL).await;
+            }
+            self.initialize_trust(&request).await.map_err(|reason| ControlPlaneError::Failed {
+                reason: format!("trust initialization failed: {reason}"),
             })?;
         }
 
@@ -141,13 +157,8 @@ impl ClusterController for RaftNode {
         }
 
         let members: std::collections::BTreeSet<NodeId> = request.members.iter().map(|&id| id.into()).collect();
-        #[cfg(feature = "trust")]
-        let old_members: std::collections::BTreeSet<u64> = {
-            let metrics = self.raft().metrics().borrow().clone();
-            metrics.membership_config.membership().voter_ids().map(|id| id.0).collect()
-        };
 
-        let membership_response =
+        let _membership_response =
             tokio::time::timeout(MEMBERSHIP_OPERATION_TIMEOUT, self.raft().change_membership(members, false))
                 .await
                 .map_err(|_| ControlPlaneError::Timeout {
@@ -156,20 +167,6 @@ impl ClusterController for RaftNode {
                 .map_err(|err| ControlPlaneError::Failed {
                     reason: err.to_string(),
                 })?;
-
-        #[cfg(feature = "trust")]
-        self.rotate_trust_after_membership_change(
-            old_members,
-            request.members.iter().copied().collect(),
-            membership_response.log_id.index(),
-        )
-        .await
-        .map_err(|reason| ControlPlaneError::Failed {
-            reason: format!("trust reconfiguration failed after membership change: {reason}"),
-        })?;
-
-        #[cfg(not(feature = "trust"))]
-        let _ = membership_response;
 
         Ok(self.build_cluster_state())
     }

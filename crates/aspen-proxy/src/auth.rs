@@ -171,7 +171,7 @@ mod tests {
     }
 
     fn test_endpoint_id() -> EndpointId {
-        let secret = iroh::SecretKey::generate(&mut rand::rngs::ThreadRng::default());
+        let secret = iroh::SecretKey::generate();
         secret.public()
     }
 

@@ -1,7 +1,7 @@
 # typed-nickel-contracts Specification
 
 ## Purpose
-TBD - created by archiving change type-nickel-contract-boundaries. Update Purpose after archive.
+Define Aspen's ownership rules for typed Nickel contracts across operator configuration, generated Rust DTO schemas, and receipt/evidence validation. This spec keeps Nickel-authored contracts, Rust-derived contracts, generated artifacts, and freshness gates aligned before runtime policy or CI/deploy evidence consumes them.
 ## Requirements
 ### Requirement: Typed Nickel Contract Registry [r[typed-nickel-contracts.registry]]
 

@@ -376,8 +376,7 @@ mod tests {
 
     /// Helper to generate a valid public key for tests
     fn test_public_key() -> iroh::PublicKey {
-        let mut rng = rand::rng();
-        iroh::SecretKey::generate(&mut rng).public()
+        iroh::SecretKey::generate().public()
     }
 
     #[test]

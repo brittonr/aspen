@@ -530,6 +530,9 @@ mod tests {
     mod trust_tests {
         use std::sync::Arc;
 
+        use aspen_traits::KvRead;
+        use aspen_traits::KvWrite;
+
         use super::*;
 
         fn make_encryption() -> Arc<aspen_trust::encryption::SecretsEncryption> {

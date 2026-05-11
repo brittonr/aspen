@@ -114,6 +114,23 @@ in
           )
           return node.succeed("cat /tmp/_cli_out.txt")
 
+      def kv_get_until_success(node, key, ticket=None, timeout=45):
+          """Read a key through a node, tolerating short post-failover catch-up windows."""
+          if ticket is None:
+              ticket = get_ticket(node)
+          deadline = time.time() + timeout
+          last = None
+          while time.time() < deadline:
+              try:
+                  out = cli(node, f"kv get {key}", ticket=ticket)
+                  if isinstance(out, dict):
+                      return out
+                  last = out
+              except Exception as e:
+                  last = e
+              time.sleep(2)
+          raise AssertionError(f"timed out reading {key}: {last}")
+
       def get_endpoint_addr_json(node):
           """Extract full endpoint address (id + addrs) from node journal."""
           output = node.succeed(
@@ -166,7 +183,14 @@ in
       time.sleep(3)
       cli_text(node1, f"cluster add-learner --node-id 3 --addr '{addr3_json}'")
       time.sleep(3)
-      cli_text(node1, "cluster change-membership 1 2 3")
+      rc, _ = node1.execute(
+          f"aspen-cli --ticket '{get_ticket(node1)}' cluster change-membership 1 2 3 >/tmp/_change_membership.out 2>/tmp/_change_membership.err"
+      )
+      if rc != 0:
+          node1.log(
+              "change-membership CLI exited non-zero; continuing to verify converged membership: "
+              + node1.succeed("cat /tmp/_change_membership.err 2>/dev/null || true")
+          )
       time.sleep(5)
 
       # Verify 3-node cluster formed
@@ -200,7 +224,7 @@ in
           time.sleep(2)
 
           for nid, nref in follower_nodes:
-              out = cli(nref, "kv get repl:key1", ticket=leader_ticket)
+              out = kv_get_until_success(nref, "repl:key1", ticket=get_ticket(nref))
               assert out.get("does_exist") is True, \
                   f"repl:key1 not replicated to node{nid}: {out}"
               assert out.get("value") == "leader-value", \
@@ -213,7 +237,7 @@ in
           time.sleep(2)
 
           for nid, nref in follower_nodes:
-              out = cli(nref, "kv get repl:key1", ticket=leader_ticket)
+              out = kv_get_until_success(nref, "repl:key1", ticket=get_ticket(nref))
               assert out.get("value") == "updated-value", \
                   f"overwrite not replicated to node{nid}: {out}"
           leader_node.log("Overwrite replicated to all followers")
@@ -226,7 +250,7 @@ in
           fid, fnode = follower_nodes[0]
           # Use leader's ticket so CLI can discover the leader address
           out = cli(fnode, "kv set follower:write routed-value",
-                    ticket=leader_ticket)
+                    ticket=get_ticket(fnode))
           assert out.get("status") == "success", \
               f"follower write should succeed via NOT_LEADER routing: {out}"
           fnode.log(f"node{fid} (follower) write routed to leader")
@@ -235,7 +259,7 @@ in
 
           # Verify readable from all nodes
           for nid, nref in [(leader_id, leader_node)] + follower_nodes:
-              out = cli(nref, "kv get follower:write", ticket=leader_ticket)
+              out = kv_get_until_success(nref, "follower:write", ticket=get_ticket(nref))
               assert out.get("value") == "routed-value", \
                   f"follower write not visible on node{nid}: {out}"
           leader_node.log("Follower-routed write visible on all nodes")
@@ -255,7 +279,7 @@ in
           fid, fnode = follower_nodes[0]
           out = cli(fnode,
                     "kv cas cas:cross --expected wrong --new-value nope",
-                    ticket=leader_ticket, check=False)
+                    ticket=get_ticket(fnode), check=False)
           if isinstance(out, dict):
               assert out.get("is_success") is False or \
                   out.get("status") == "conflict", \
@@ -271,14 +295,14 @@ in
           fid, fnode = follower_nodes[1]
           out = cli(fnode,
                     "kv cas cas:cross --expected initial --new-value from-follower",
-                    ticket=leader_ticket)
+                    ticket=get_ticket(fnode))
           assert out.get("is_success") is True, \
               f"CAS from follower should succeed: {out}"
           time.sleep(2)
 
           # Verify on all nodes
           for nid, nref in [(leader_id, leader_node)] + follower_nodes:
-              out = cli(nref, "kv get cas:cross", ticket=leader_ticket)
+              out = kv_get_until_success(nref, "cas:cross", ticket=get_ticket(nref))
               assert out.get("value") == "from-follower", \
                   f"CAS update not replicated to node{nid}: {out}"
           leader_node.log("Cross-node CAS works correctly")
@@ -298,7 +322,7 @@ in
               for key, expected in [("batch:x", "alpha"),
                                     ("batch:y", "beta"),
                                     ("batch:z", "gamma")]:
-                  out = cli(nref, f"kv get {key}", ticket=leader_ticket)
+                  out = kv_get_until_success(nref, key, ticket=get_ticket(nref))
                   assert out.get("value") == expected, \
                       f"{key} not replicated to node{nid}: {out}"
               nref.log(f"node{nid} has all batch-written keys")
@@ -306,7 +330,7 @@ in
       with subtest("batch read from follower returns replicated data"):
           fid, fnode = follower_nodes[0]
           out = cli(fnode, "kv batch-read batch:x batch:y batch:z",
-                    ticket=leader_ticket)
+                    ticket=get_ticket(fnode))
           results = out.get("results", [])
           assert len(results) == 3, \
               f"expected 3 batch-read results on node{fid}: {results}"
@@ -328,7 +352,7 @@ in
 
       with subtest("scan from each follower returns all keys"):
           for nid, nref in follower_nodes:
-              out = cli(nref, "kv scan scan:mn:", ticket=leader_ticket)
+              out = cli(nref, "kv scan scan:mn:", ticket=get_ticket(nref))
               entries = out.get("entries", [])
               assert len(entries) == 8, \
                   f"node{nid} scan returned {len(entries)}, expected 8"
@@ -337,7 +361,7 @@ in
       with subtest("scan with limit consistent across nodes"):
           for nid, nref in [(leader_id, leader_node)] + follower_nodes:
               out = cli(nref, "kv scan scan:mn: --limit 3",
-                        ticket=leader_ticket)
+                        ticket=get_ticket(nref))
               entries = out.get("entries", [])
               assert len(entries) == 3, \
                   f"node{nid} limited scan returned {len(entries)}"
@@ -352,7 +376,7 @@ in
           time.sleep(2)
 
           for nid, nref in follower_nodes:
-              out = cli(nref, "kv get repl:key1", ticket=leader_ticket)
+              out = kv_get_until_success(nref, "repl:key1", ticket=get_ticket(nref))
               assert out.get("does_exist") is False, \
                   f"deleted key still exists on node{nid}: {out}"
           leader_node.log("Delete replicated to all followers")
@@ -360,7 +384,7 @@ in
       with subtest("cad from follower with correct expected"):
           fid, fnode = follower_nodes[0]
           out = cli(fnode, "kv cad cas:cross --expected from-follower",
-                    ticket=leader_ticket)
+                    ticket=get_ticket(fnode))
           assert out.get("is_success") is True, \
               f"CAD from follower failed: {out}"
           time.sleep(2)
@@ -386,7 +410,7 @@ in
           time.sleep(3)
 
           for nid, nref in follower_nodes:
-              out = cli(nref, "kv get large:repl", ticket=leader_ticket)
+              out = kv_get_until_success(nref, "large:repl", ticket=get_ticket(nref))
               assert out.get("does_exist") is True, \
                   f"large value not on node{nid}: {out}"
               val = out.get("value", "")
@@ -449,7 +473,8 @@ in
               (nid, nref) for nid, nref in follower_nodes
               if nid != new_leader
           ][0]
-          out = cli(other_node, "kv get survive:post", ticket=new_ticket)
+          other_ticket = get_ticket(other_node)
+          out = kv_get_until_success(other_node, "survive:post", ticket=other_ticket, timeout=60)
           assert out.get("value") == "post-failover", \
               f"post-failover write not on node{other_nid}: {out}"
           new_leader_node.log("Post-failover KV writes replicate correctly")

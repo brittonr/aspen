@@ -1,7 +1,7 @@
 # foundational-types-extraction Specification
 
 ## Purpose
-TBD - created by archiving change review-foundational-types-public-api. Update Purpose after archive.
+Define the reusable foundational type family and the evidence required to keep those crates portable. This spec records which public APIs are extraction-ready in workspace, which compatibility shells remain internal, and which runtime dependencies must stay out of default portable graphs.
 ## Requirements
 ### Requirement: Public API classification is explicit
 The foundational extraction review MUST classify every reviewed crate as reusable API, compatibility shell, or internal-only helper before readiness labels change.

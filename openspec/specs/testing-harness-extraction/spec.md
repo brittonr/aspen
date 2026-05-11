@@ -1,7 +1,7 @@
 # testing-harness-extraction Specification
 
 ## Purpose
-TBD - created by archiving change review-testing-harness-public-api. Update Purpose after archive.
+Define the reusable testing harness API boundary for suite inventory, diagnostics, and lightweight assertions. This spec keeps VM, patchbay, madsim, real-network, and runtime-host adapters explicit so downstream consumers can use default harness helpers without pulling heavyweight execution dependencies.
 ## Requirements
 ### Requirement: Testing core default is reusable
 The testing harness review MUST define the reusable default API surface for `aspen-testing-core` without requiring runtime app, network namespace, VM, patchbay, or madsim adapters.

@@ -1,7 +1,7 @@
 # auth-ticket-extraction Specification
 
 ## Purpose
-TBD - created by archiving change review-auth-ticket-public-api. Update Purpose after archive.
+Define the in-workspace reusable boundary for Aspen's auth, capability, cluster ticket, and hook ticket crates. This spec keeps portable token/ticket APIs separate from runtime verifier and storage shells and records the evidence required before readiness labels can be raised.
 ## Requirements
 ### Requirement: Portable auth ticket API is owned
 The auth ticket review MUST define canonical portable APIs for token, capability, cluster-ticket, and hook-ticket consumers before workspace readiness labels change.

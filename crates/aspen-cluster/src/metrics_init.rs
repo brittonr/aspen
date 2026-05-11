@@ -34,7 +34,7 @@ use tracing::warn;
 /// `metrics::*!()` calls). A second call will log a warning and return `None`.
 ///
 /// The returned [`PrometheusHandle`] is cheaply cloneable and can be stored in
-/// [`ClientProtocolContext`] for the `GetMetrics` handler to call `render()`.
+/// the client protocol context for the `GetMetrics` handler to call `render()`.
 pub fn install_prometheus_recorder() -> Option<Arc<PrometheusHandle>> {
     match PrometheusBuilder::new().install_recorder() {
         Ok(handle) => {

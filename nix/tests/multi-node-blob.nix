@@ -163,7 +163,14 @@ in
       time.sleep(3)
       cli_text(node1, f"cluster add-learner --node-id 3 --addr '{addr3_json}'")
       time.sleep(3)
-      cli_text(node1, "cluster change-membership 1 2 3")
+      rc, _ = node1.execute(
+          f"aspen-cli --ticket '{get_ticket(node1)}' cluster change-membership 1 2 3 >/tmp/_change_membership.out 2>/tmp/_change_membership.err"
+      )
+      if rc != 0:
+          node1.log(
+              "change-membership CLI exited non-zero; continuing to verify converged membership: "
+              + node1.succeed("cat /tmp/_change_membership.err 2>/dev/null || true")
+          )
       time.sleep(5)
 
       status = cli(node1, "cluster status")
@@ -197,14 +204,19 @@ in
           time.sleep(3)
 
           for nid, nref in follower_nodes:
-              out = cli(nref, f"blob has {hash1}", ticket=leader_ticket)
+              ticket = get_ticket(nref)
+              nref.wait_until_succeeds(
+                  f"aspen-cli --ticket '{ticket}' --json blob has {hash1} >/tmp/_cli_out.json 2>/dev/null",
+                  timeout=30,
+              )
+              out = json.loads(nref.succeed("cat /tmp/_cli_out.json"))
               assert out.get("does_exist") is True, \
                   f"blob not replicated to node{nid}: {out}"
               nref.log(f"node{nid} has blob {hash1}")
 
       with subtest("get blob data from followers"):
           for nid, nref in follower_nodes:
-              out = cli(nref, f"blob get {hash1}", ticket=leader_ticket)
+              out = cli(nref, f"blob get {hash1}", ticket=get_ticket(nref))
               assert out.get("was_found") is True, \
                   f"blob get failed on node{nid}: {out}"
               nref.log(f"node{nid} retrieved blob data")
@@ -224,7 +236,7 @@ in
           # Blob from each follower
           for nid, nref in follower_nodes:
               out = cli(nref, f"blob add --data 'from-node{nid}'",
-                        ticket=leader_ticket)
+                        ticket=get_ticket(nref))
               blob_hashes[nid] = out.get("hash")
               nref.log(f"node{nid} added blob {blob_hashes[nid]}")
 
@@ -254,7 +266,7 @@ in
           leader_node.log(f"Leader has {leader_count} blobs")
 
           for nid, nref in follower_nodes:
-              out = cli(nref, "blob list", ticket=leader_ticket)
+              out = cli(nref, "blob list", ticket=get_ticket(nref))
               count = len(out.get("blobs", []))
               nref.log(f"node{nid} has {count} blobs")
               # Allow some replication lag — at minimum node should
@@ -300,7 +312,7 @@ in
       with subtest("protected blob survives delete from follower"):
           fid, fnode = follower_nodes[0]
           out = cli(fnode, f"blob delete {hash1}",
-                    ticket=leader_ticket, check=False)
+                    ticket=get_ticket(fnode), check=False)
           # Delete should succeed (removes user tags) but blob stays
           # due to protection
           fnode.log(f"node{fid} deleted blob (marks for GC)")

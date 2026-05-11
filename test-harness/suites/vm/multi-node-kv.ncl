@@ -13,8 +13,8 @@
     check_attr = "multi-node-kv-test",
     nix_file = "nix/tests/multi-node-kv.nix",
     package_presets = {
-      aspenNodePackage = "full-aspen-node",
-      aspenCliPackage = "full-aspen-cli",
+      aspenNodePackage = "ci-aspen-node",
+      aspenCliPackage = "ci-aspen-cli",
     },
     register_flake_check = true,
   },

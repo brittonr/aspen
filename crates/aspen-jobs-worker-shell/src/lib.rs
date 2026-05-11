@@ -678,7 +678,7 @@ mod tests {
 
         let blob = OutputRef::Blob {
             hash: "abc123".into(),
-            size: 1024,
+            size_bytes: 1024,
         };
         let json = serde_json::to_string(&blob).unwrap();
         assert!(json.contains("abc123"));

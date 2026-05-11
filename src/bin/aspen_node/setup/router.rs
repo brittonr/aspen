@@ -176,6 +176,7 @@ pub fn setup_router(
             // Wire Forge resource resolver for KV-backed resource listing and state queries.
             // ForgeResourceResolver requires Sized K, so we use the concrete RaftNode type
             // from node_mode rather than the Arc<dyn KeyValueStore>.
+            #[cfg(feature = "forge")]
             let resolver: Option<Arc<dyn aspen_cluster::federation::FederationResourceResolver>> = match &node_mode {
                 NodeMode::Single(handle) => {
                     let raft_node = handle.storage.raft_node.clone();
@@ -189,6 +190,8 @@ pub fn setup_router(
                     }
                 }
             };
+            #[cfg(not(feature = "forge"))]
+            let resolver: Option<Arc<dyn aspen_cluster::federation::FederationResourceResolver>> = None;
 
             let context = aspen_cluster::federation::sync::FederationProtocolContext {
                 cluster_identity,

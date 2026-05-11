@@ -293,7 +293,7 @@ pub async fn ensure_nix_cache_signing_key(
 /// 1. `cluster_key` config field (hex-encoded 32 bytes)
 /// 2. `cluster_key_path` file (hex-encoded 32 bytes)
 /// 3. Generated and stored in `data_dir/federation/cluster_key`
-#[cfg(feature = "forge")]
+#[cfg(feature = "federation")]
 pub fn load_federation_identity(config: &NodeConfig) -> Result<aspen_cluster::federation::ClusterIdentity> {
     use anyhow::Context;
     use aspen_cluster::federation::ClusterIdentity;
@@ -354,7 +354,7 @@ pub fn load_federation_identity(config: &NodeConfig) -> Result<aspen_cluster::fe
 }
 
 /// Parse trusted cluster public keys from config strings.
-#[cfg(feature = "forge")]
+#[cfg(feature = "federation")]
 pub fn parse_trusted_cluster_keys(keys: &[String]) -> Result<Vec<iroh::PublicKey>> {
     use anyhow::Context;
 

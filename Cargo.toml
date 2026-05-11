@@ -928,6 +928,12 @@ required-features = ["node-runtime"]
 # - genawaiter-proc-macro uses proc-macro-error2 instead of proc-macro-error.
 # - netlink-packet-core, nickel-lang-core, and datafusion-common use pastey
 #   instead of paste.
+# - portmapper disables its default metrics feature because 0.16.0 expects
+#   iroh-metrics re-exports removed from the pinned iroh-metrics API.
+# - iroh-gossip keeps its upstream default feature set, but its published
+#   manifest disables iroh's default transport surface while net code imports
+#   iroh endpoint/protocol types; the local patch enables the required iroh
+#   transport features explicitly.
 [patch.crates-io]
 madsim = { path = "vendor/madsim-0.2.34" }
 genawaiter-proc-macro = { path = "vendor/genawaiter-proc-macro-0.99.1" }
@@ -942,11 +948,13 @@ datafusion-functions-table = { path = "vendor/datafusion-functions-table-45.0.0"
 datafusion-functions-window = { path = "vendor/datafusion-functions-window-45.0.0" }
 datafusion-physical-expr = { path = "vendor/datafusion-physical-expr-45.0.0" }
 iroh = { path = "vendor/iroh" }
+iroh-gossip = { path = "vendor/iroh-gossip-0.98.0" }
 cargo-hyperlight = { path = "vendor/cargo-hyperlight" }
 iroh-blobs = { path = "vendor/iroh-blobs" }
 iroh-metrics = { path = "vendor/iroh-metrics" }
 iroh-tickets = { path = "vendor/iroh-tickets" }
 iroh-relay = { path = "vendor/iroh-relay" }
+portmapper = { path = "vendor/portmapper-0.16.0" }
 nostr = { path = "vendor/nostr" }
 postcard = { path = "vendor/postcard" }
 swarm-discovery = { path = "vendor/swarm-discovery" }
