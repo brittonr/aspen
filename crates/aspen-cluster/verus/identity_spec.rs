@@ -81,7 +81,6 @@ verus! {
     }
 
     /// Proof: After construction, name is always bounded
-    #[verifier(external_body)]
     pub proof fn name_always_bounded(
         input_name_len: u64,
         stored_name_len: u64,
@@ -89,7 +88,6 @@ verus! {
         requires identity_construction_name_post(input_name_len, stored_name_len)
         ensures name_bounded(stored_name_len)
     {
-        // Either truncated to limit, or was already within limit
     }
 
     // ========================================================================
@@ -114,7 +112,6 @@ verus! {
     }
 
     /// Proof: After with_description, description is always bounded
-    #[verifier(external_body)]
     pub proof fn description_always_bounded(
         input_description_len: u64,
         stored_description_len: u64,
@@ -122,7 +119,6 @@ verus! {
         requires with_description_post(input_description_len, stored_description_len)
         ensures description_bounded(stored_description_len)
     {
-        // Either truncated to limit, or was already within limit
     }
 
     // ========================================================================
@@ -274,7 +270,6 @@ verus! {
     }
 
     /// Proof: Valid identities satisfy all invariants
-    #[verifier(external_body)]
     pub proof fn valid_identity_satisfies_invariants(identity: ClusterIdentitySpec)
         requires
             name_bounded(identity.name_len),
@@ -282,7 +277,6 @@ verus! {
             identity.created_at_ms > 0,
         ensures identity_invariant(identity)
     {
-        // All components are valid, invariant holds
     }
 
     // ========================================================================
@@ -300,11 +294,9 @@ verus! {
     }
 
     /// Proof: Invalid hex length causes failure
-    #[verifier(external_body)]
     pub proof fn invalid_hex_length_fails(hex_len: u64, result_is_ok: bool)
         requires !hex_key_length_valid(hex_len)
         ensures !from_hex_key_pre(hex_len)
     {
-        // If hex length != 64, precondition fails
     }
 }

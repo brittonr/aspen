@@ -240,12 +240,10 @@ verus! {
     }
 
     /// Proof: Blocked clusters always return Blocked level
-    #[verifier(external_body)]
     pub proof fn blocked_returns_blocked(query: ClusterTrustQuery)
         requires query.in_blocked
         ensures matches!(block_precedence(query), TrustLevelSpec::Blocked)
     {
-        // in_blocked is checked first
     }
 
     // ========================================================================
@@ -271,7 +269,6 @@ verus! {
     }
 
     /// Proof: Trust and block are mutually exclusive after operations
-    #[verifier(external_body)]
     pub proof fn trust_block_exclusivity(
         trusted_success: bool,
         is_trusted: bool,
@@ -280,7 +277,6 @@ verus! {
         requires add_trusted_removes_block(true, is_blocked, trusted_success)
         ensures trusted_success ==> !is_blocked
     {
-        // add_trusted removes from blocked set
     }
 
     // ========================================================================
@@ -304,11 +300,9 @@ verus! {
     }
 
     /// Proof: Initial state is valid
-    #[verifier(external_body)]
     pub proof fn initial_state_valid()
         ensures trust_manager_invariant(initial_trust_manager())
     {
-        // All counts are 0, which is <= all limits
     }
 
     // ========================================================================
@@ -364,18 +358,14 @@ verus! {
     }
 
     /// Proof: Blocked clusters cannot access anything
-    #[verifier(external_body)]
     pub proof fn blocked_no_access(is_public: bool)
         ensures !can_access_resource(TrustLevelSpec::Blocked, is_public)
     {
-        // Blocked always returns false
     }
 
     /// Proof: Trusted clusters can access everything
-    #[verifier(external_body)]
     pub proof fn trusted_full_access(is_public: bool)
         ensures can_access_resource(TrustLevelSpec::Trusted, is_public)
     {
-        // Trusted always returns true
     }
 }

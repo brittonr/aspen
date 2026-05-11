@@ -238,7 +238,6 @@ verus! {
     // ========================================================================
 
     /// Proof: Valid signatures prove message integrity
-    #[verifier(external_body)]
     pub proof fn signature_proves_integrity(
         signed: SignedPeerAnnouncementSpec,
         verification_succeeds: bool,
@@ -246,14 +245,9 @@ verus! {
         requires verification_succeeds
         ensures verify_post(signed, verification_succeeds)
     {
-        // If verification succeeds:
-        // 1. Public key matched the signing secret key
-        // 2. Message bytes are unchanged since signing
-        // 3. Ed25519 signature is cryptographically valid
     }
 
     /// Proof: Signing followed by verification succeeds
-    #[verifier(external_body)]
     pub proof fn sign_then_verify_succeeds(
         announcement: PeerAnnouncementSpec,
         secret_key_high: u128,
@@ -270,7 +264,6 @@ verus! {
             verify_post(signed, true)
         })
     {
-        // Follows from Ed25519 correctness (trusted axiom)
     }
 
     // ========================================================================

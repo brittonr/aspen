@@ -137,13 +137,14 @@ verus! {
     }
 
     /// Proof: Tag validation enforces bounds
-    #[verifier(external_body)]
     pub proof fn tag_validation_enforced(tag_len: u64, construction_succeeds: bool)
         requires construction_rejects_oversized_tag(tag_len, construction_succeeds)
         ensures construction_succeeds ==> tag_len <= 64
     {
-        // MAX_TAG_LEN = 64
-        // If construction succeeds, tag_len <= MAX_TAG_LEN
+        if construction_succeeds {
+            assert(!(tag_len > MAX_TAG_LEN));
+            assert(tag_len <= MAX_TAG_LEN);
+        }
     }
 
     // ========================================================================
