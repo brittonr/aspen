@@ -19,6 +19,49 @@ use super::chain_hash_spec::*;
 use super::storage_state_spec::*;
 
 verus! {
+    /// Appending the same prefix preserves sequence inequality.
+    pub proof fn same_prefix_append_preserves_neq(prefix: Seq<u8>, left: Seq<u8>, right: Seq<u8>)
+        requires left != right
+        ensures prefix + left != prefix + right
+    {
+        if prefix + left == prefix + right {
+            assert((prefix + left).len() == prefix.len() + left.len());
+            assert((prefix + right).len() == prefix.len() + right.len());
+            assert(left.len() == right.len());
+            assert(left =~= right) by {
+                assert forall |i: int| 0 <= i && i < left.len() implies left[i] == right[i] by {
+                    assert(0 <= prefix.len() + i);
+                    assert(prefix.len() + i < (prefix + left).len());
+                    assert((prefix + left)[prefix.len() + i] == left[i]);
+                    assert((prefix + right)[prefix.len() + i] == right[i]);
+                }
+            }
+            assert(false);
+        }
+    }
+
+    /// Appending the same suffix preserves sequence inequality.
+    pub proof fn same_suffix_append_preserves_neq(left: Seq<u8>, right: Seq<u8>, suffix: Seq<u8>)
+        requires left != right
+        ensures left + suffix != right + suffix
+    {
+        if left + suffix == right + suffix {
+            assert((left + suffix).len() == left.len() + suffix.len());
+            assert((right + suffix).len() == right.len() + suffix.len());
+            assert(left.len() == right.len());
+            assert(left =~= right) by {
+                assert forall |i: int| 0 <= i && i < left.len() implies left[i] == right[i] by {
+                    assert(0 <= i);
+                    assert(i < (left + suffix).len());
+                    assert(i < (right + suffix).len());
+                    assert((left + suffix)[i] == left[i]);
+                    assert((right + suffix)[i] == right[i]);
+                }
+            }
+            assert(false);
+        }
+    }
+
     // ========================================================================
     // INTEG-1: Tamper Detection
     // ========================================================================
@@ -43,7 +86,6 @@ verus! {
     ///
     /// INTEG-1: Given the same chain position, modifying entry data
     /// produces a different hash.
-    #[verifier(external_body)]
     pub proof fn data_modification_detected(
         prev_hash: ChainHash,
         index: u64,
@@ -59,9 +101,10 @@ verus! {
             compute_entry_hash_spec(prev_hash, index, term, data2)
     {
         // Different data => different input to blake3 => different hash
-        let input1 = prev_hash + u64_to_le_bytes(index) + u64_to_le_bytes(term) + data1;
-        let input2 = prev_hash + u64_to_le_bytes(index) + u64_to_le_bytes(term) + data2;
-        // input1 != input2 because data1 != data2
+        let prefix = prev_hash + u64_to_le_bytes(index) + u64_to_le_bytes(term);
+        let input1 = prefix + data1;
+        let input2 = prefix + data2;
+        same_prefix_append_preserves_neq(prefix, data1, data2);
         blake3_collision_resistance(input1, input2);
     }
 
@@ -178,10 +221,8 @@ verus! {
         // If chain2 is valid but missing entries, it's not contiguous
     }
 
-    /// Chain extension preserves validity. This is a structural chain-map
-    /// boundary that remains trusted until the quantified `chain_valid` update
-    /// is split into per-index lemmas.
-    #[verifier(external_body)]
+    /// Chain extension preserves validity by proving the inserted index directly
+    /// and reducing all other indices to the pre-extension chain predicate.
     pub proof fn extend_preserves_validity(
         pre_chain: Map<u64, ChainHash>,
         log: Map<u64, (u64, Seq<u8>)>,
@@ -202,7 +243,41 @@ verus! {
             chain_valid(post_chain, new_log, genesis)
         })
     {
-        // New entry correctly linked to predecessor
+        let new_prev = if new_index == 0 { genesis } else { pre_chain[sub1(new_index)] };
+        let new_hash = compute_entry_hash_spec(new_prev, new_index, new_term, new_data);
+        let post_chain = pre_chain.insert(new_index, new_hash);
+        let new_log = log.insert(new_index, (new_term, new_data));
+
+        assert forall |i: u64| entry_hash_valid(post_chain, new_log, genesis, i) by {
+            if i == new_index {
+                assert(new_log.contains_key(i));
+                assert(post_chain.contains_key(i));
+                assert(new_log[i] == (new_term, new_data));
+                if i == 0 {
+                    assert(post_chain[i] == compute_entry_hash_spec(genesis, i, new_term, new_data));
+                } else {
+                    assert(post_chain.contains_key(sub1(i)));
+                    assert(post_chain[i] == compute_entry_hash_spec(post_chain[sub1(i)], i, new_term, new_data));
+                }
+            } else {
+                if new_log.contains_key(i) {
+                    assert(log.contains_key(i));
+                    assert(entry_hash_valid(pre_chain, log, genesis, i));
+                    assert(pre_chain.contains_key(i));
+                    assert(post_chain.contains_key(i));
+                    assert(new_log[i] == log[i]);
+                    assert(post_chain[i] == pre_chain[i]);
+                    if i != 0 {
+                        assert(pre_chain.contains_key(sub1(i)));
+                        if sub1(i) == new_index {
+                            assert(!pre_chain.contains_key(new_index));
+                            assert(false);
+                        }
+                        assert(post_chain[sub1(i)] == pre_chain[sub1(i)]);
+                    }
+                }
+            }
+        }
     }
 
     // ========================================================================
@@ -220,7 +295,6 @@ verus! {
     /// INTEG-3: Snapshot binding - modifying either data or meta changes combined hash.
     /// Trusted wrapper over Blake3 collision resistance for concatenated
     /// snapshot data/meta hashes.
-    #[verifier(external_body)]
     pub proof fn snapshot_binding_data(
         data_hash1: ChainHash,
         data_hash2: ChainHash,
@@ -238,12 +312,12 @@ verus! {
         // Different data_hash => different combined hash
         let input1 = data_hash1 + meta_hash;
         let input2 = data_hash2 + meta_hash;
+        same_suffix_append_preserves_neq(data_hash1, data_hash2, meta_hash);
         blake3_collision_resistance(input1, input2);
     }
 
     /// Snapshot binding for metadata. Trusted wrapper over Blake3 collision
     /// resistance for concatenated snapshot data/meta hashes.
-    #[verifier(external_body)]
     pub proof fn snapshot_binding_meta(
         data_hash: ChainHash,
         meta_hash1: ChainHash,
@@ -258,7 +332,10 @@ verus! {
             compute_snapshot_hash(data_hash, meta_hash1) !=
             compute_snapshot_hash(data_hash, meta_hash2)
     {
-        // Different meta_hash => different combined hash
+        let input1 = data_hash + meta_hash1;
+        let input2 = data_hash + meta_hash2;
+        same_prefix_append_preserves_neq(data_hash, meta_hash1, meta_hash2);
+        blake3_collision_resistance(input1, input2);
     }
 
     // ========================================================================
@@ -334,10 +411,10 @@ verus! {
 
     /// Proof: Divergence propagates forward
     ///
-    /// If chains diverge at index i, all subsequent hashes also differ
-    /// (because hash at i+1 depends on hash at i). Trusted wrapper over the
-    /// previous-hash Blake3 collision assumption.
-    #[verifier(external_body)]
+    /// If chains diverge at index i, the next linked hashes also differ because
+    /// both valid chains compute the next entry from their diverged predecessor.
+    /// The only remaining trust is the previous-hash Blake3 collision assumption
+    /// called by `prev_hash_modification_detected`.
     pub proof fn divergence_propagates(
         chain1: Map<u64, ChainHash>,
         chain2: Map<u64, ChainHash>,
@@ -350,19 +427,40 @@ verus! {
             chain_valid(chain1, log, genesis),
             chain_valid(chain2, log, genesis),
             diverge_index < u64::MAX,
+            log.contains_key((diverge_index + 1) as u64),
             chain1.contains_key((diverge_index + 1) as u64),
             chain2.contains_key((diverge_index + 1) as u64),
+            chain1[diverge_index].len() == 32,
+            chain2[diverge_index].len() == 32,
         ensures
             chain1[(diverge_index + 1) as u64] != chain2[(diverge_index + 1) as u64]
     {
-        // hash[i+1] = f(hash[i], ...) and hash[i] differs
-        // so hash[i+1] must also differ
+        let next = (diverge_index + 1) as u64;
+        assert(next != 0);
+        assert(sub1(next) == diverge_index);
+        assert(chains_diverge_at(chain1, chain2, diverge_index));
+        assert(chain1[diverge_index] != chain2[diverge_index]);
+        assert(entry_hash_valid(chain1, log, genesis, next));
+        assert(entry_hash_valid(chain2, log, genesis, next));
+        assert(log.contains_key(next));
+        assert(chain1[next] == compute_entry_hash_spec(
+            chain1[diverge_index],
+            next,
+            log[next].0,
+            log[next].1,
+        ));
+        assert(chain2[next] == compute_entry_hash_spec(
+            chain2[diverge_index],
+            next,
+            log[next].0,
+            log[next].1,
+        ));
         prev_hash_modification_detected(
             chain1[diverge_index],
             chain2[diverge_index],
-            (diverge_index + 1) as u64,
-            log[(diverge_index + 1) as u64].0,
-            log[(diverge_index + 1) as u64].1
+            next,
+            log[next].0,
+            log[next].1,
         );
     }
 }
