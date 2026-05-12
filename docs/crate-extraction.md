@@ -73,6 +73,12 @@ scripts/check-crate-extraction-readiness.rs \
 
 The checker must fail on unowned exceptions, missing required exception fields, forbidden readiness states before human license/publication decision, direct app-bundle dependencies, transitive app-bundle dependencies, representative-consumer leaks, and compatibility re-export leaks.
 
+For repo-wide drift sweeps of the currently ready families, use the wrapper below. It creates a temporary OpenSpec-style evidence fixture for each selected family, so no placeholder evidence files need to be staged in the working tree:
+
+```bash
+scripts/check-crate-extraction-ready-families.py
+```
+
 ## First vertical target: Redb Raft KV
 
 | Layer | Canonical path | Manifest | Current source | Readiness | Next action |
