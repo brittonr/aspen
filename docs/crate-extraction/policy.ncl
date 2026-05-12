@@ -368,7 +368,7 @@ let Candidate = {
 
     aspen_raft_network = {
       class = "runtime adapter",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/aspen-raft-network.md",
       owner = "Aspen Raft network adapter maintainers",
       default_feature_sets = ["default"],

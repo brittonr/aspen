@@ -1,0 +1,5 @@
+# Forbidden dependency scan
+Forbidden crates: root aspen, aspen-raft, app handlers, cluster bootstrap, runtime shells, SQL/secrets/hooks/CI/forge
+$ grep default/no-default trees
+$ grep sharding tree for aspen-sharding
+├── aspen-sharding v0.1.0 (/home/brittonr/git/aspen/crates/aspen-sharding)

@@ -7,7 +7,7 @@
 - **Canonical crate/path**: `crates/aspen-raft-network`
 - **Intended audience**: Rust projects that want the reusable Redb Raft KV stack over Aspen's iroh/IRPC transport adapter.
 - **Public API owner**: Aspen Raft network adapter maintainers
-- **Readiness state**: `workspace-internal`
+- **Readiness state**: `extraction-ready-in-workspace`
 - **Dependency policy class**: explicit runtime adapter candidate
 
 ## Package and release metadata
@@ -96,12 +96,10 @@ No binaries. Runtime dependency is allowed because this crate is explicitly the 
 
 ## First-slice status
 
-Current status is `workspace-internal`. I9 evidence keeps this crate as the explicit adapter boundary: storage, reusable app types, and facade defaults compile without `aspen-raft-network`, iroh, IRPC, or transport dependencies (V1: `evidence/feature-matrix.md`; I9: `evidence/i9-storage-consensus-adapter-boundary.md`). Aspen runtime adapters remain iroh-only (V2: `evidence/runtime-networking-policy.md`).
+Current status is `extraction-ready-in-workspace`. The adapter default/minimal graphs compile without `aspen-sharding`, root Aspen, handler bundles, cluster bootstrap, or unrelated app/runtime shells; `aspen-sharding` is now tied to the explicit `sharding` feature. Adapter-owned `iroh`, `irpc`, `openraft`, `aspen-transport`, and `aspen-core` remain documented dependencies. Runtime compatibility evidence covers `aspen-raft`, `aspen-cluster`, and `aspen-rpc-handlers`.
 
-Remaining gaps blocking `extraction-ready-in-workspace`:
+Remaining Redb Raft KV family gap:
 
-- Transitive path through `aspen-transport` → `aspen-core` pulls app/runtime concerns
-- `aspen-sharding` dependency needs feature-gating or removal from default adapter
-- These paths require explicit policy ownership or feature gates in a follow-up change
+- `aspen-raft` remains the app compatibility shell by design and stays `workspace-internal`.
 
 Publishable/repo-split labels remain blocked until license/publication policy is decided.

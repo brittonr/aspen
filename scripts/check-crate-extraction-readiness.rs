@@ -44,6 +44,7 @@ const BOUNDARY_RAIL_PHRASES: &[&str] = &[
 const BLOB_CASTORE_CACHE_FAMILY: &str = "blob-castore-cache";
 const COORDINATION_FAMILY: &str = "coordination";
 const KV_BRANCH_COMMIT_DAG_FAMILY: &str = "kv-branch-commit-dag";
+const REDB_RAFT_KV_FAMILY: &str = "redb-raft-kv";
 const PROTOCOL_WIRE_FAMILY: &str = "protocol-wire";
 const TRANSPORT_RPC_FAMILY: &str = "transport-rpc";
 const CONFIG_PLUGIN_FAMILY: &str = "config-plugin";
@@ -56,6 +57,11 @@ const BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE: &[&str] = &[
 const KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE: &[&str] = &[
     "i5-downstream-branch-dag-metadata.json",
     "i5-downstream-branch-dag-forbidden-grep.txt",
+];
+const REDB_RAFT_KV_EVIDENCE: &[&str] = &[
+    "raft-network-compile.txt",
+    "raft-network-forbidden-scan.txt",
+    "runtime-compatibility.txt",
 ];
 const PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE: &[&str] = &[
     "i5-downstream-protocol-wire-metadata.json",
@@ -257,6 +263,7 @@ fn candidate_keys_for_family(family: &str) -> Option<&'static [&'static str]> {
     match family {
         BLOB_CASTORE_CACHE_FAMILY => Some(&["aspen_blob", "aspen_castore", "aspen_cache"]),
         KV_BRANCH_COMMIT_DAG_FAMILY => Some(&["aspen_commit_dag", "aspen_kv_branch"]),
+        REDB_RAFT_KV_FAMILY => Some(&["aspen_raft_network"]),
         PROTOCOL_WIRE_FAMILY => Some(&["aspen_client_api", "aspen_forge_protocol", "aspen_jobs_protocol"]),
         TRANSPORT_RPC_FAMILY => Some(&["aspen_transport", "aspen_rpc_core"]),
         CONFIG_PLUGIN_FAMILY => Some(&["aspen_nickel", "aspen_plugin_api"]),
@@ -446,6 +453,7 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
     let required_files = match args.candidate_family.as_str() {
         BLOB_CASTORE_CACHE_FAMILY => BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE,
         KV_BRANCH_COMMIT_DAG_FAMILY => KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE,
+        REDB_RAFT_KV_FAMILY => REDB_RAFT_KV_EVIDENCE,
         PROTOCOL_WIRE_FAMILY => PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE,
         TRANSPORT_RPC_FAMILY => TRANSPORT_RPC_DOWNSTREAM_EVIDENCE,
         CONFIG_PLUGIN_FAMILY => CONFIG_PLUGIN_EVIDENCE,

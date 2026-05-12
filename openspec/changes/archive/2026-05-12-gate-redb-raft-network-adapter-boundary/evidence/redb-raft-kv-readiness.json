@@ -1,0 +1,9 @@
+{
+  "candidate_family": "redb-raft-kv",
+  "passed": true,
+  "failures": [],
+  "warnings": [],
+  "checked_candidates": [
+    "aspen_raft_network"
+  ]
+}

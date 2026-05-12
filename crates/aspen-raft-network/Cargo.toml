@@ -13,7 +13,7 @@ categories = ["network-programming"]
 aspen-core = { workspace = true }
 aspen-raft-types = { workspace = true }
 aspen-transport = { workspace = true }
-aspen-sharding = { workspace = true }
+aspen-sharding = { workspace = true, optional = true }
 aspen-time = { workspace = true }
 
 # Networking
@@ -50,4 +50,4 @@ proptest = "1.0"
 [features]
 default = []
 testing = ["dep:madsim"]
-sharding = []
+sharding = ["dep:aspen-sharding"]
