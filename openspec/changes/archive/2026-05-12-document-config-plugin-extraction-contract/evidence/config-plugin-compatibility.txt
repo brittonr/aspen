@@ -1,0 +1,51 @@
+# Config/plugin compatibility evidence
+$ cargo test -p aspen-plugin-api -- --nocapture
+
+running 33 tests
+test manifest::tests::ignores_disabled_protocol_collision ... ok
+test manifest::tests::detects_enabled_protocol_collision ... ok
+test manifest::tests::protocol_manifest_roundtrips ... ok
+test manifest::tests::rejects_kv_key_outside_declared_prefix ... ok
+test manifest::tests::validates_declared_protocol_and_permissions ... ok
+test manifest::tests::rejects_undeclared_host_access ... ok
+test resolve::tests::test_api_version_ok ... ok
+test resolve::tests::test_api_version_too_new ... ok
+test resolve::tests::test_cycle_detection ... ok
+test resolve::tests::test_disabled_plugins_excluded ... ok
+test resolve::tests::test_diamond ... ok
+test resolve::tests::test_empty_manifest_list ... ok
+test resolve::tests::test_linear_chain ... ok
+test resolve::tests::test_missing_hard_dependency ... ok
+test resolve::tests::test_no_dependencies ... ok
+test resolve::tests::test_missing_optional_dependency ... ok
+test resolve::tests::test_non_semver_version_strings ... ok
+test resolve::tests::test_optional_dependency_version_mismatch ... ok
+test resolve::tests::test_reverse_dependents ... ok
+test resolve::tests::test_reverse_dependents_excludes_optional ... ok
+test resolve::tests::test_validate_install_missing_dep ... ok
+test resolve::tests::test_validate_install_ok ... ok
+test resolve::tests::test_validate_install_rejects_protocol_collision ... ok
+test resolve::tests::test_version_mismatch ... ok
+test resolve::tests::test_version_satisfied ... ok
+test tests::api_version_is_semver ... ok
+test tests::metrics_active_requests_manual ... ok
+test tests::metrics_avg_zero_requests ... ok
+test tests::metrics_max_duration_tracks_peak ... ok
+test tests::metrics_new_is_zeroed ... ok
+test tests::metrics_record_error ... ok
+test tests::metrics_record_success ... ok
+test tests::metrics_snapshot_serializes_to_json ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+$ cargo check -p aspen-cli --features plugins-rpc
+
+$ cargo check -p aspen-cluster --features nickel
+
+$ cargo check -p aspen-ci --features nickel

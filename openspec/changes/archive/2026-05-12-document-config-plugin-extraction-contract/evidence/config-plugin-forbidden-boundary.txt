@@ -1,0 +1,276 @@
+# Config/plugin forbidden-boundary evidence
+$ cargo tree -p aspen-plugin-api -e normal
+aspen-plugin-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-plugin-api)
+├── semver v1.0.28
+├── serde v1.0.228
+│   ├── serde_core v1.0.228
+│   └── serde_derive v1.0.228 (proc-macro)
+│       ├── proc-macro2 v1.0.106
+│       │   └── unicode-ident v1.0.24
+│       ├── quote v1.0.45
+│       │   └── proc-macro2 v1.0.106 (*)
+│       └── syn v2.0.117
+│           ├── proc-macro2 v1.0.106 (*)
+│           ├── quote v1.0.45 (*)
+│           └── unicode-ident v1.0.24
+└── serde_json v1.0.149
+    ├── itoa v1.0.18
+    ├── memchr v2.8.0
+    ├── serde_core v1.0.228
+    └── zmij v1.0.21
+
+$ cargo tree -p aspen-nickel -e normal
+aspen-nickel v0.1.0 (/home/brittonr/git/aspen/crates/aspen-nickel)
+├── aspen-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-core)
+│   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+│   │   ├── serde v1.0.228
+│   │   │   ├── serde_core v1.0.228
+│   │   │   └── serde_derive v1.0.228 (proc-macro)
+│   │   │       ├── proc-macro2 v1.0.106
+│   │   │       │   └── unicode-ident v1.0.24
+│   │   │       ├── quote v1.0.45
+│   │   │       │   └── proc-macro2 v1.0.106 (*)
+│   │   │       └── syn v2.0.117
+│   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │           ├── quote v1.0.45 (*)
+│   │   │           └── unicode-ident v1.0.24
+│   │   └── thiserror v2.0.18
+│   │       └── thiserror-impl v2.0.18 (proc-macro)
+│   │           ├── proc-macro2 v1.0.106 (*)
+│   │           ├── quote v1.0.45 (*)
+│   │           └── syn v2.0.117 (*)
+│   ├── aspen-codec v0.1.0 (/home/brittonr/git/aspen/crates/aspen-codec)
+│   │   ├── postcard v1.1.3 (/home/brittonr/git/aspen/vendor/postcard)
+│   │   │   ├── cobs v0.3.0
+│   │   │   │   └── thiserror v2.0.18 (*)
+│   │   │   └── serde v1.0.228 (*)
+│   │   └── serde v1.0.228 (*)
+│   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   ├── aspen-hlc v0.1.0 (/home/brittonr/git/aspen/crates/aspen-hlc)
+│   │   ├── blake3 v1.8.3
+│   │   │   ├── arrayref v0.3.9
+│   │   │   ├── arrayvec v0.7.6
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── constant_time_eq v0.4.2
+│   │   │   └── cpufeatures v0.2.17
+│   │   ├── serde v1.0.228 (*)
+│   │   └── uhlc v0.8.2 (/home/brittonr/git/aspen/vendor/uhlc)
+│   │       ├── serde v1.0.228 (*)
+│   │       └── spin v0.10.0
+│   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+│   │   ├── aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+│   │   ├── serde v1.0.228 (*)
+│   │   └── thiserror v2.0.18 (*)
+│   ├── aspen-storage-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-storage-types)
+│   │   ├── aspen-codec v0.1.0 (/home/brittonr/git/aspen/crates/aspen-codec) (*)
+│   │   └── serde v1.0.228 (*)
+│   ├── aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+│   │   ├── aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types) (*)
+│   │   ├── aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types) (*)
+│   │   └── async-trait v0.1.89 (proc-macro)
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   ├── async-trait v0.1.89 (proc-macro) (*)
+│   ├── base64 v0.22.1
+│   ├── hex v0.4.3
+│   ├── serde v1.0.228 (*)
+│   ├── snafu v0.8.9
+│   │   └── snafu-derive v0.8.9 (proc-macro)
+│   │       ├── heck v0.4.1
+│   │       ├── proc-macro2 v1.0.106 (*)
+│   │       ├── quote v1.0.45 (*)
+│   │       └── syn v2.0.117 (*)
+│   └── thiserror v2.0.18 (*)
+├── nickel-lang v2.0.0
+│   ├── codespan-reporting v0.13.1
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── termcolor v1.4.1
+│   │   └── unicode-width v0.2.2
+│   ├── indexmap v2.14.0
+│   │   ├── equivalent v1.0.2
+│   │   ├── hashbrown v0.17.0
+│   │   └── serde_core v1.0.228
+│   ├── malachite v0.6.1
+│   │   ├── malachite-base v0.6.1
+│   │   │   ├── hashbrown v0.15.5
+│   │   │   │   └── foldhash v0.1.5
+│   │   │   ├── itertools v0.14.0
+│   │   │   │   └── either v1.15.0
+│   │   │   ├── libm v0.2.16
+│   │   │   └── ryu v1.0.23
+│   │   ├── malachite-float v0.6.1
+│   │   │   ├── itertools v0.14.0 (*)
+│   │   │   ├── malachite-base v0.6.1 (*)
+│   │   │   ├── malachite-nz v0.6.1
+│   │   │   │   ├── itertools v0.14.0 (*)
+│   │   │   │   ├── libm v0.2.16
+│   │   │   │   ├── malachite-base v0.6.1 (*)
+│   │   │   │   ├── serde v1.0.228 (*)
+│   │   │   │   └── wide v0.7.33
+│   │   │   │       ├── bytemuck v1.25.0
+│   │   │   │       └── safe_arch v0.7.4
+│   │   │   │           └── bytemuck v1.25.0
+│   │   │   ├── malachite-q v0.6.1
+│   │   │   │   ├── itertools v0.14.0 (*)
+│   │   │   │   ├── malachite-base v0.6.1 (*)
+│   │   │   │   ├── malachite-nz v0.6.1 (*)
+│   │   │   │   └── serde v1.0.228 (*)
+│   │   │   └── serde v1.0.228 (*)
+│   │   ├── malachite-nz v0.6.1 (*)
+│   │   └── malachite-q v0.6.1 (*)
+│   ├── nickel-lang-core v0.16.1 (/home/brittonr/git/aspen/vendor/nickel-lang-core-0.16.1)
+│   │   ├── base64 v0.22.1
+│   │   ├── bumpalo v3.20.2
+│   │   ├── codespan v0.13.1
+│   │   │   ├── codespan-reporting v0.13.1 (*)
+│   │   │   └── serde v1.0.228 (*)
+│   │   ├── codespan-reporting v0.13.1 (*)
+│   │   ├── colorchoice v1.0.5
+│   │   ├── indexmap v2.14.0 (*)
+│   │   ├── indoc v2.0.7 (proc-macro)
+│   │   ├── json_scanner v0.1.0
+│   │   │   └── memchr v2.8.0
+│   │   ├── lalrpop-util v0.22.2
+│   │   │   ├── regex-automata v0.4.14
+│   │   │   │   ├── aho-corasick v1.1.4
+│   │   │   │   │   └── memchr v2.8.0
+│   │   │   │   ├── memchr v2.8.0
+│   │   │   │   └── regex-syntax v0.8.10
+│   │   │   └── rustversion v1.0.22 (proc-macro)
+│   │   ├── logos v0.15.1
+│   │   │   └── logos-derive v0.15.1 (proc-macro)
+│   │   │       └── logos-codegen v0.15.1
+│   │   │           ├── beef v0.5.2
+│   │   │           ├── fnv v1.0.7
+│   │   │           ├── lazy_static v1.5.0
+│   │   │           ├── proc-macro2 v1.0.106 (*)
+│   │   │           ├── quote v1.0.45 (*)
+│   │   │           ├── regex-syntax v0.8.10
+│   │   │           └── syn v2.0.117 (*)
+│   │   ├── malachite v0.6.1 (*)
+│   │   ├── malachite-q v0.6.1 (*)
+│   │   ├── md-5 v0.10.6
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   └── digest v0.10.7
+│   │   │       ├── block-buffer v0.10.4
+│   │   │       │   └── generic-array v0.14.7
+│   │   │       │       └── typenum v1.20.0
+│   │   │       └── crypto-common v0.1.7
+│   │   │           ├── generic-array v0.14.7 (*)
+│   │   │           └── typenum v1.20.0
+│   │   ├── nickel-lang-parser v0.1.1
+│   │   │   ├── bumpalo v3.20.2
+│   │   │   ├── codespan v0.13.1 (*)
+│   │   │   ├── codespan-reporting v0.13.1 (*)
+│   │   │   ├── indexmap v2.14.0 (*)
+│   │   │   ├── lalrpop-util v0.22.2 (*)
+│   │   │   ├── logos v0.15.1 (*)
+│   │   │   ├── malachite v0.6.1 (*)
+│   │   │   ├── nickel-lang-vector v0.1.0
+│   │   │   │   ├── imbl-sized-chunks v0.1.3
+│   │   │   │   │   └── bitmaps v3.2.1
+│   │   │   │   └── serde v1.0.228 (*)
+│   │   │   ├── ouroboros v0.18.5
+│   │   │   │   ├── aliasable v0.1.3
+│   │   │   │   ├── ouroboros_macro v0.18.5 (proc-macro)
+│   │   │   │   │   ├── heck v0.4.1
+│   │   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   ├── proc-macro2-diagnostics v0.10.1
+│   │   │   │   │   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   │   │   ├── syn v2.0.117 (*)
+│   │   │   │   │   │   └── yansi v1.0.1
+│   │   │   │   │   ├── quote v1.0.45 (*)
+│   │   │   │   │   └── syn v2.0.117 (*)
+│   │   │   │   └── static_assertions v1.1.0
+│   │   │   ├── pretty v0.12.5
+│   │   │   │   ├── arrayvec v0.5.2
+│   │   │   │   ├── typed-arena v2.0.2
+│   │   │   │   └── unicode-width v0.2.2
+│   │   │   ├── regex v1.12.3
+│   │   │   │   ├── aho-corasick v1.1.4 (*)
+│   │   │   │   ├── memchr v2.8.0
+│   │   │   │   ├── regex-automata v0.4.14 (*)
+│   │   │   │   └── regex-syntax v0.8.10
+│   │   │   ├── saphyr-parser v0.0.6
+│   │   │   │   ├── arraydeque v0.5.1
+│   │   │   │   └── hashlink v0.10.0
+│   │   │   │       └── hashbrown v0.15.5 (*)
+│   │   │   ├── serde v1.0.228 (*)
+│   │   │   ├── serde_json v1.0.149
+│   │   │   │   ├── itoa v1.0.18
+│   │   │   │   ├── memchr v2.8.0
+│   │   │   │   ├── serde_core v1.0.228
+│   │   │   │   └── zmij v1.0.21
+│   │   │   ├── simple-counter v0.1.0
+│   │   │   ├── toml_edit v0.23.10+spec-1.0.0
+│   │   │   │   ├── indexmap v2.14.0 (*)
+│   │   │   │   ├── toml_datetime v0.7.5+spec-1.1.0
+│   │   │   │   │   └── serde_core v1.0.228
+│   │   │   │   ├── toml_parser v1.1.2+spec-1.1.0
+│   │   │   │   │   └── winnow v1.0.2
+│   │   │   │   ├── toml_writer v1.1.1+spec-1.1.0
+│   │   │   │   └── winnow v0.7.15
+│   │   │   └── typed-arena v2.0.2
+│   │   ├── nickel-lang-vector v0.1.0 (*)
+│   │   ├── once_cell v1.21.4
+│   │   ├── ouroboros v0.18.5 (*)
+│   │   ├── pastey v0.2.2 (proc-macro)
+│   │   ├── pretty v0.12.5 (*)
+│   │   ├── regex v1.12.3 (*)
+│   │   ├── saphyr-parser v0.0.6 (*)
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── serde_json v1.0.149 (*)
+│   │   ├── serde_yaml v0.9.34+deprecated
+│   │   │   ├── indexmap v2.14.0 (*)
+│   │   │   ├── itoa v1.0.18
+│   │   │   ├── ryu v1.0.23
+│   │   │   ├── serde v1.0.228 (*)
+│   │   │   └── unsafe-libyaml v0.2.11
+│   │   ├── sha-1 v0.10.1
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── cpufeatures v0.2.17
+│   │   │   └── digest v0.10.7 (*)
+│   │   ├── sha2 v0.10.9
+│   │   │   ├── cfg-if v1.0.4
+│   │   │   ├── cpufeatures v0.2.17
+│   │   │   └── digest v0.10.7 (*)
+│   │   ├── simple-counter v0.1.0
+│   │   ├── smallvec v1.15.1
+│   │   ├── strip-ansi-escapes v0.2.1
+│   │   │   └── vte v0.14.1
+│   │   │       └── memchr v2.8.0
+│   │   ├── strsim v0.11.1
+│   │   ├── toml v0.9.12+spec-1.1.0
+│   │   │   ├── serde_core v1.0.228
+│   │   │   ├── serde_spanned v1.1.1
+│   │   │   │   └── serde_core v1.0.228
+│   │   │   ├── toml_datetime v0.7.5+spec-1.1.0 (*)
+│   │   │   ├── toml_parser v1.1.2+spec-1.1.0 (*)
+│   │   │   ├── toml_writer v1.1.1+spec-1.1.0
+│   │   │   └── winnow v0.7.15
+│   │   ├── toml_edit v0.23.10+spec-1.0.0 (*)
+│   │   ├── typed-arena v2.0.2
+│   │   └── unicode-segmentation v1.13.2
+│   ├── nickel-lang-vector v0.1.0 (*)
+│   ├── serde v1.0.228 (*)
+│   ├── serde_json v1.0.149 (*)
+│   ├── serde_yaml v0.9.34+deprecated (*)
+│   └── toml v0.9.12+spec-1.1.0 (*)
+├── serde v1.0.228 (*)
+├── serde_json v1.0.149 (*)
+├── snafu v0.8.9 (*)
+├── thiserror v2.0.18 (*)
+└── tracing v0.1.44
+    ├── pin-project-lite v0.2.17
+    ├── tracing-attributes v0.1.31 (proc-macro)
+    │   ├── proc-macro2 v1.0.106 (*)
+    │   ├── quote v1.0.45 (*)
+    │   └── syn v2.0.117 (*)
+    └── tracing-core v0.1.36
+        └── once_cell v1.21.4
+
+aspen-plugin-api: Cargo.toml direct dependencies inspected from crates/aspen-plugin-api/Cargo.toml
+aspen-nickel: Cargo.toml direct dependencies inspected from crates/aspen-nickel/Cargo.toml
+Boundary result: aspen-plugin-api has no Aspen workspace dependency; aspen-nickel retains only the documented workspace-internal aspen-core exception before promotion.

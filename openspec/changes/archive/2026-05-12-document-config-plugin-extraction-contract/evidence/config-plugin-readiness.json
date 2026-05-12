@@ -1,0 +1,10 @@
+{
+  "candidate_family": "config-plugin",
+  "passed": true,
+  "failures": [],
+  "warnings": [],
+  "checked_candidates": [
+    "aspen_nickel",
+    "aspen_plugin_api"
+  ]
+}

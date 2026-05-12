@@ -174,6 +174,7 @@ let Candidate = {
     "aspen-commit-dag",
     "aspen-kv-branch",
     "aspen-layer",
+    "aspen-plugin-api",
     "openraft",
     "redb",
     "serde",
@@ -787,6 +788,41 @@ let Candidate = {
           reason = "Explicit commit history integration feature.",
         },
       ],
+    },
+
+
+    aspen_nickel = {
+      class = "protocol/wire",
+      readiness_state = "workspace-internal",
+      manifest = "docs/crate-extraction/config-plugin.md",
+      owner = "Aspen config/plugin maintainers",
+      default_feature_sets = ["default"],
+      named_reusable_feature_sets = ["schema-only-future"],
+      representative_consumers = ["aspen-cluster", "aspen-ci", "typed-nickel-contract-fixtures"],
+      reexporters = [],
+      forbidden_unless_feature = ["aspen-core", "aspen", "aspen-cli", "aspen-tui", "aspen-rpc-handlers", "aspen-transport", "aspen-raft-network", "aspen-cluster"],
+      exceptions = [
+        {
+          candidate = "aspen-nickel",
+          feature_set = "default",
+          dependency_path = "aspen-nickel -> aspen-core",
+          owner = "Aspen config/plugin maintainers",
+          reason = "Temporary workspace-internal config type dependency; must be split or justified before readiness promotion.",
+        },
+      ],
+    },
+
+    aspen_plugin_api = {
+      class = "protocol/wire",
+      readiness_state = "workspace-internal",
+      manifest = "docs/crate-extraction/config-plugin.md",
+      owner = "Aspen config/plugin maintainers",
+      default_feature_sets = ["default"],
+      named_reusable_feature_sets = ["manifest-protocol"],
+      representative_consumers = ["aspen-cli", "aspen-forge-handler", "plugin host workers"],
+      reexporters = [],
+      forbidden_unless_feature = ["aspen", "aspen-cli", "aspen-tui", "aspen-rpc-handlers", "aspen-transport", "aspen-raft-network", "aspen-cluster", "iroh", "tokio", "hyperlight", "wasmtime"],
+      exceptions = [],
     },
 
     aspen_raft_compat = {

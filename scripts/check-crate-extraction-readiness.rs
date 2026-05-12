@@ -46,6 +46,7 @@ const COORDINATION_FAMILY: &str = "coordination";
 const KV_BRANCH_COMMIT_DAG_FAMILY: &str = "kv-branch-commit-dag";
 const PROTOCOL_WIRE_FAMILY: &str = "protocol-wire";
 const TRANSPORT_RPC_FAMILY: &str = "transport-rpc";
+const CONFIG_PLUGIN_FAMILY: &str = "config-plugin";
 const BLOB_CASTORE_CACHE_DOWNSTREAM_EVIDENCE: &[&str] = &[
     "i6-downstream-blob-metadata.json",
     "i6-downstream-cache-castore-metadata.json",
@@ -67,6 +68,11 @@ const TRANSPORT_RPC_DOWNSTREAM_EVIDENCE: &[&str] = &[
     "i7-downstream-rpc-metadata.json",
     "i7-downstream-rpc-forbidden-grep.txt",
     "v4-compatibility-summary.txt",
+];
+const CONFIG_PLUGIN_EVIDENCE: &[&str] = &[
+    "config-plugin-standalone-examples.txt",
+    "config-plugin-forbidden-boundary.txt",
+    "config-plugin-compatibility.txt",
 ];
 const FOUNDATIONAL_TYPES_FAMILY: &str = "foundational-types";
 const AUTH_TICKET_FAMILY: &str = "auth-ticket";
@@ -241,6 +247,8 @@ fn package_for_candidate(candidate_key: &str) -> Option<&'static str> {
         "aspen_cache" => Some("aspen-cache"),
         "aspen_commit_dag" => Some("aspen-commit-dag"),
         "aspen_kv_branch" => Some("aspen-kv-branch"),
+        "aspen_nickel" => Some("aspen-nickel"),
+        "aspen_plugin_api" => Some("aspen-plugin-api"),
         _ => None,
     }
 }
@@ -251,6 +259,7 @@ fn candidate_keys_for_family(family: &str) -> Option<&'static [&'static str]> {
         KV_BRANCH_COMMIT_DAG_FAMILY => Some(&["aspen_commit_dag", "aspen_kv_branch"]),
         PROTOCOL_WIRE_FAMILY => Some(&["aspen_client_api", "aspen_forge_protocol", "aspen_jobs_protocol"]),
         TRANSPORT_RPC_FAMILY => Some(&["aspen_transport", "aspen_rpc_core"]),
+        CONFIG_PLUGIN_FAMILY => Some(&["aspen_nickel", "aspen_plugin_api"]),
         COORDINATION_FAMILY => Some(&["aspen_coordination", "aspen_coordination_protocol"]),
         FOUNDATIONAL_TYPES_FAMILY => Some(&["foundational_types"]),
         AUTH_TICKET_FAMILY => Some(&["auth_ticket"]),
@@ -439,6 +448,7 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
         KV_BRANCH_COMMIT_DAG_FAMILY => KV_BRANCH_COMMIT_DAG_DOWNSTREAM_EVIDENCE,
         PROTOCOL_WIRE_FAMILY => PROTOCOL_WIRE_DOWNSTREAM_EVIDENCE,
         TRANSPORT_RPC_FAMILY => TRANSPORT_RPC_DOWNSTREAM_EVIDENCE,
+        CONFIG_PLUGIN_FAMILY => CONFIG_PLUGIN_EVIDENCE,
         FOUNDATIONAL_TYPES_FAMILY => FOUNDATIONAL_TYPES_EVIDENCE,
         AUTH_TICKET_FAMILY => AUTH_TICKET_EVIDENCE,
         JOBS_CI_CORE_FAMILY => JOBS_CI_CORE_EVIDENCE,
@@ -469,6 +479,7 @@ fn family_inventory_name(family: &str) -> Option<&'static str> {
         KV_BRANCH_COMMIT_DAG_FAMILY => Some("Commit DAG / branches"),
         PROTOCOL_WIRE_FAMILY => Some("Protocol/wire"),
         TRANSPORT_RPC_FAMILY => Some("Iroh transport/RPC"),
+        CONFIG_PLUGIN_FAMILY => Some("Config/plugin"),
         FOUNDATIONAL_TYPES_FAMILY => Some("Foundational types/helpers"),
         AUTH_TICKET_FAMILY => Some("Auth and tickets"),
         JOBS_CI_CORE_FAMILY => Some("Jobs and CI core"),
