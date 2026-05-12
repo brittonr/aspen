@@ -52,7 +52,6 @@ verus! {
     // ========================================================================
     //
     // These functions define the size measure for ElementSpec and TupleSpec.
-    // They are marked as trusted (external_body) because they define the
     // well-foundedness measure used by comparison functions. The functions
     // are structurally recursive on the algebraic data types and trivially
     // terminate.

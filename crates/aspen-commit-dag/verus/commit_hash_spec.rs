@@ -27,7 +27,6 @@ verus! {
     {}
 
     /// Axiom: blake3 is deterministic.
-    #[verifier::external_body]
     pub proof fn blake3_deterministic(a: Seq<u8>, b: Seq<u8>)
         requires a == b
         ensures blake3_spec(a) == blake3_spec(b)

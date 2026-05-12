@@ -53,7 +53,7 @@ verus! {
     ///
     /// We don't model the internal rounds of SHA-256. Instead, we axiomatize
     /// the properties we rely on (determinism, collision resistance).
-    pub open spec fn hmac_sha256(key: Seq<u8>, message: Seq<u8>) -> Seq<u8>;
+    pub uninterp spec fn hmac_sha256(key: Seq<u8>, message: Seq<u8>) -> Seq<u8>;
 
     /// Construct the MAC message from sorted entries.
     ///
@@ -116,7 +116,6 @@ verus! {
     ///
     /// Same key + same message always produces the same digest.
     /// This is a fundamental property of any hash-based MAC.
-    #[verifier(external_body)]
     pub proof fn axiom_hmac_deterministic(key: Seq<u8>, msg: Seq<u8>)
         ensures
             hmac_sha256(key, msg) == hmac_sha256(key, msg),
@@ -188,6 +187,7 @@ verus! {
                 i <= entry_count,
                 entry_count as int == path_lens@.len(),
                 entry_count as int == value_lens@.len(),
+            decreases entry_count - i,
         {
             // Saturating to avoid overflow — real MAC doesn't care about total length
             total = total.saturating_add(path_lens[i as usize] as u64);
@@ -204,7 +204,6 @@ verus! {
     /// MAC-1: Determinism.
     ///
     /// Computing the MAC twice with the same inputs produces the same result.
-    #[verifier(external_body)]
     pub proof fn mac_determinism(input: MacInput)
         ensures
             compute_mac(input) == compute_mac(input),

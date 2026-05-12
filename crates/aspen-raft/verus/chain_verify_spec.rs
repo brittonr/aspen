@@ -148,7 +148,6 @@ verus! {
     ///
     /// If an attacker tries to roll back to an earlier state,
     /// the chain hash will not match.
-    #[verifier(external_body)]
     pub proof fn rollback_detected(
         chain1: Map<u64, ChainHash>,
         chain2: Map<u64, ChainHash>,
