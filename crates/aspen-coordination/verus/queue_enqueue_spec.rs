@@ -81,7 +81,13 @@ verus! {
         current_time_ms: u64,
     ) -> QueueState {
         let new_id = pre.next_id;
-        let expires_at_ms = if ttl_ms > 0 { current_time_ms + ttl_ms } else { 0 };
+        let expires_at_ms = if ttl_ms == 0 {
+            0
+        } else if current_time_ms <= u64::MAX - ttl_ms {
+            (current_time_ms + ttl_ms) as u64
+        } else {
+            u64::MAX
+        };
 
         let new_item = QueueItemSpec {
             id: new_id,
@@ -101,7 +107,11 @@ verus! {
                 let entry = DedupEntrySpec {
                     dedup_id: id,
                     item_id: new_id,
-                    expires_at_ms: (current_time_ms + 300_000) as u64, // 5 min dedup TTL
+                    expires_at_ms: if current_time_ms <= u64::MAX - 300_000 {
+                        (current_time_ms + 300_000) as u64
+                    } else {
+                        u64::MAX
+                    }, // 5 min dedup TTL
                 };
                 pre.dedup_cache.insert(id, entry)
             }
@@ -114,7 +124,11 @@ verus! {
             pending_ids: pre.pending_ids.insert(new_id),
             inflight: pre.inflight,
             dlq: pre.dlq,
-            next_id: (pre.next_id + 1) as u64,
+            next_id: if pre.next_id < u64::MAX {
+                (pre.next_id + 1) as u64
+            } else {
+                u64::MAX
+            },
             max_delivery_attempts: pre.max_delivery_attempts,
             default_visibility_timeout_ms: pre.default_visibility_timeout_ms,
             dedup_cache: new_dedup_cache,
@@ -155,7 +169,6 @@ verus! {
     }
 
     /// Proof: Enqueue increases next_id
-    #[verifier(external_body)]
     pub proof fn enqueue_increases_next_id(
         pre: QueueState,
         payload: Seq<u8>,
@@ -171,10 +184,19 @@ verus! {
                 None => true,
             },
         ensures
-            enqueue_post(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms).next_id
-                == pre.next_id + 1
+            pre.next_id < u64::MAX ==>
+                enqueue_post(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms).next_id
+                    == pre.next_id + 1,
+            pre.next_id == u64::MAX ==>
+                enqueue_post(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms).next_id
+                    == u64::MAX,
     {
-        // Directly from enqueue_post definition
+        let post = enqueue_post(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms);
+        if pre.next_id < u64::MAX {
+            assert(post.next_id == pre.next_id + 1);
+        } else {
+            assert(post.next_id == u64::MAX);
+        }
     }
 
     /// Proof: Enqueue preserves state exclusivity
@@ -203,7 +225,6 @@ verus! {
     }
 
     /// Proof: Enqueue preserves invariant
-    #[verifier(external_body)]
     pub proof fn enqueue_preserves_invariant(
         pre: QueueState,
         payload: Seq<u8>,
@@ -214,6 +235,9 @@ verus! {
     )
         requires
             queue_invariant(pre),
+            pre.next_id < u64::MAX,
+            forall |id: u64| pre.inflight.contains_key(id) ==>
+                pre.inflight[id].visibility_deadline_ms > current_time_ms,
             enqueue_pre(pre, payload, dedup_id, current_time_ms),
             match dedup_id {
                 Some(id) => !is_duplicate(pre, id, current_time_ms),
@@ -222,9 +246,39 @@ verus! {
         ensures
             queue_invariant(enqueue_post(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms))
     {
+        let post = enqueue_post(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms);
         enqueue_preserves_fifo(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms);
         enqueue_preserves_exclusivity(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms);
-        // Other invariants preserved similarly
+        assert(ids_bounded_by_next(post));
+        let new_item = post.pending[pre.pending.len() as int];
+        assert(new_item.id == pre.next_id);
+        assert forall |i: int| 0 <= i < post.pending.len() implies
+            post.pending_ids.contains(post.pending[i].id) by {
+            if i < pre.pending.len() {
+                assert(pending_ids_consistent(pre));
+                assert(pre.pending_ids.contains(pre.pending[i].id));
+                assert(post.pending[i] == pre.pending[i]);
+            } else {
+                assert(i == pre.pending.len());
+                assert(post.pending[i].id == pre.next_id);
+            }
+        }
+        assert forall |id: u64| post.pending_ids.contains(id) implies
+            exists |i: int| 0 <= i < post.pending.len() && post.pending[i].id == id by {
+            if id == pre.next_id {
+                assert(0 <= pre.pending.len() < post.pending.len());
+                assert(post.pending[pre.pending.len() as int].id == id);
+            } else {
+                assert(pre.pending_ids.contains(id));
+                assert(pending_ids_consistent(pre));
+                let i = choose |i: int| 0 <= i < pre.pending.len() && pre.pending[i].id == id;
+                assert(post.pending[i] == pre.pending[i]);
+            }
+        }
+        assert(pending_ids_consistent(post));
+        assert(visibility_timeout_valid(post));
+        assert(dlq_threshold_respected(post));
+        assert(dedup_consistency(post));
     }
 
     // ========================================================================
@@ -270,19 +324,21 @@ verus! {
     // ========================================================================
 
     /// Proof: Duplicate enqueue returns existing ID
-    #[verifier(external_body)]
     pub proof fn duplicate_returns_same_id(
         state: QueueState,
         dedup_id: Seq<u8>,
         current_time_ms: u64,
     )
-        requires is_duplicate(state, dedup_id, current_time_ms)
+        requires
+            queue_invariant(state),
+            is_duplicate(state, dedup_id, current_time_ms),
         ensures ({
             let existing_id = get_duplicate_item_id(state, dedup_id);
             existing_id < state.next_id
         })
     {
-        // Dedup entry points to valid item (dedup_consistency)
+        assert(dedup_consistency(state));
+        assert(state.dedup_cache.contains_key(dedup_id));
     }
 
     /// Proof: Non-duplicate enqueue creates new item
