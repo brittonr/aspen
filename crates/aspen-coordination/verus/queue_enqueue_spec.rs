@@ -136,6 +136,68 @@ verus! {
         }
     }
 
+    /// Lemma: appending an item whose ID is greater than every existing
+    /// pending item preserves queue FIFO ordering.
+    pub proof fn lemma_pending_push_preserves_fifo(pre: QueueState, post: QueueState, new_item: QueueItemSpec)
+        requires
+            fifo_ordering(pre),
+            ids_bounded_by_next(pre),
+            new_item.id == pre.next_id,
+            post.pending == pre.pending.push(new_item),
+        ensures
+            fifo_ordering(post),
+    {
+        assert forall |i: int, j: int|
+            0 <= i < j < post.pending.len() implies post.pending[i].id < post.pending[j].id by {
+            if j < pre.pending.len() {
+                assert(post.pending[i] == pre.pending[i]);
+                assert(post.pending[j] == pre.pending[j]);
+                assert(fifo_ordering(pre));
+            } else {
+                assert(j == pre.pending.len());
+                assert(i < pre.pending.len());
+                assert(post.pending[i] == pre.pending[i]);
+                assert(post.pending[j] == new_item);
+                assert(ids_bounded_by_next(pre));
+            }
+        }
+    }
+
+    /// Lemma: appending an item for a message group preserves that group's FIFO
+    /// order when the item ID is greater than every existing pending item.
+    pub proof fn lemma_pending_push_preserves_group_fifo(
+        pre: QueueState,
+        post: QueueState,
+        new_item: QueueItemSpec,
+        group_id: Seq<u8>,
+    )
+        requires
+            group_fifo_maintained(pre, group_id),
+            ids_bounded_by_next(pre),
+            new_item.id == pre.next_id,
+            post.pending == pre.pending.push(new_item),
+        ensures
+            group_fifo_maintained(post, group_id),
+    {
+        assert forall |i: int, j: int|
+            0 <= i < j < post.pending.len()
+            && post.pending[i].message_group_id == Some(group_id)
+            && post.pending[j].message_group_id == Some(group_id)
+            implies post.pending[i].id < post.pending[j].id by {
+            if j < pre.pending.len() {
+                assert(post.pending[i] == pre.pending[i]);
+                assert(post.pending[j] == pre.pending[j]);
+                assert(group_fifo_maintained(pre, group_id));
+            } else {
+                assert(j == pre.pending.len());
+                assert(i < pre.pending.len());
+                assert(post.pending[i] == pre.pending[i]);
+                assert(post.pending[j] == new_item);
+                assert(ids_bounded_by_next(pre));
+            }
+        }
+    }
+
     /// Proof: Enqueue preserves FIFO ordering
     pub proof fn enqueue_preserves_fifo(
         pre: QueueState,
@@ -156,16 +218,9 @@ verus! {
             fifo_ordering(enqueue_post(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms))
     {
         let post = enqueue_post(pre, payload, ttl_ms, message_group_id, dedup_id, current_time_ms);
-
-        // New item has ID = pre.next_id
-        // All existing items have ID < pre.next_id (by ids_bounded_by_next from queue_invariant)
-        // So new item at end maintains FIFO order
-        //
-        // For any i, j where 0 <= i < j < post.pending.len():
-        // - If both i, j < pre.pending.len(): order preserved from pre (fifo_ordering(pre))
-        // - If i < pre.pending.len() and j == post.pending.len() - 1:
-        //   post.pending[i].id < pre.next_id == post.pending[j].id (from ids_bounded_by_next)
-        assert(fifo_ordering(post));
+        let new_item = post.pending[pre.pending.len() as int];
+        assert(new_item.id == pre.next_id);
+        lemma_pending_push_preserves_fifo(pre, post, new_item);
     }
 
     /// Proof: Enqueue increases next_id
@@ -391,7 +446,10 @@ verus! {
             group_fifo_maintained(post, group_id)
         })
     {
-        // New item at end with highest ID maintains group order
+        let post = enqueue_post(pre, payload, 0, Some(group_id), None, current_time_ms);
+        let new_item = post.pending[pre.pending.len() as int];
+        assert(new_item.id == pre.next_id);
+        lemma_pending_push_preserves_group_fifo(pre, post, new_item, group_id);
     }
 
     // ========================================================================
