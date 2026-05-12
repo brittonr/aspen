@@ -86,3 +86,29 @@ ID: transport-rpc-extraction.inventory-and-policy.checker-verifies-staged-split
 - **WHEN** `scripts/check-crate-extraction-readiness.rs --candidate-family transport-rpc` runs
 - **THEN** it SHALL verify manifest fields, dependency exceptions, feature sets, representative consumers, downstream fixtures, and readiness labels
 - **AND** it SHALL fail on unowned runtime dependencies, missing owners, invalid readiness states, or missing compatibility evidence
+
+### Requirement: Transport/RPC reusable defaults are evidence-backed
+The `transport-rpc` family MUST prove that `aspen-transport` and `aspen-rpc-core` default feature graphs are reusable without Aspen node runtime, handler bundles, root app shells, cluster bootstrap, trust, sharding, or Raft compatibility crates unless those are behind named adapter/runtime features.
+
+ID: transport-rpc-extraction.default-boundary-evidence
+
+#### Scenario: Downstream fixtures compile
+ID: transport-rpc-extraction.default-boundary-evidence.downstream-fixtures-compile
+
+- **GIVEN** downstream fixtures that depend on `aspen-transport` and `aspen-rpc-core` default features
+- **WHEN** `cargo metadata`, forbidden dependency scans, and `cargo check` run for both fixtures
+- **THEN** the evidence SHALL show the fixtures compile and do not depend on forbidden runtime crates
+
+#### Scenario: Runtime compatibility remains explicit
+ID: transport-rpc-extraction.default-boundary-evidence.runtime-compatibility-remains-explicit
+
+- **GIVEN** Aspen runtime consumers of transport/RPC APIs
+- **WHEN** representative consumer `cargo check` commands run with explicit feature bundles
+- **THEN** compatibility evidence SHALL show the existing runtime paths still compile without broadening reusable defaults
+
+#### Scenario: Readiness checker gates promotion
+ID: transport-rpc-extraction.default-boundary-evidence.readiness-checker-gates-promotion
+
+- **GIVEN** transport/RPC manifest, policy, inventory, and evidence artifacts
+- **WHEN** `scripts/check-crate-extraction-readiness.rs --candidate-family transport-rpc` runs
+- **THEN** it SHALL fail if required evidence is missing or default graphs leak forbidden dependencies, and pass before readiness is raised
