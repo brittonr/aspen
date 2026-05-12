@@ -95,7 +95,6 @@ verus! {
     }
 
     /// TTL-1: Expired keys are not returned by get
-    #[verifier(external_body)]
     pub proof fn expired_not_returned(
         state: StorageState,
         key: Seq<u8>,
@@ -110,7 +109,6 @@ verus! {
     }
 
     /// Live keys are returned
-    #[verifier(external_body)]
     pub proof fn live_keys_returned(
         state: StorageState,
         key: Seq<u8>,
@@ -163,7 +161,6 @@ verus! {
     }
 
     /// TTL-2: Cleanup removes only expired keys
-    #[verifier(external_body)]
     pub proof fn cleanup_removes_only_expired(
         pre: StorageState,
         current_time_ms: u64,
@@ -180,7 +177,6 @@ verus! {
     }
 
     /// Cleanup removes all expired keys
-    #[verifier(external_body)]
     pub proof fn cleanup_removes_all_expired(
         pre: StorageState,
         current_time_ms: u64,
@@ -260,7 +256,6 @@ verus! {
     }
 
     /// Set with TTL creates entry with correct expiration
-    #[verifier(external_body)]
     pub proof fn set_with_ttl_correct_expiration(
         pre: StorageState,
         key: Seq<u8>,
@@ -281,7 +276,6 @@ verus! {
     }
 
     /// New key is live immediately after set
-    #[verifier(external_body)]
     pub proof fn set_with_ttl_initially_live(
         pre: StorageState,
         key: Seq<u8>,
@@ -310,7 +304,6 @@ verus! {
     ///
     /// If expires_at <= time2_ms, the key is expired at time2.
     /// If expires_at > time2_ms (or no TTL), the key is still live.
-    #[verifier(external_body)]
     pub proof fn time_progression_may_expire(
         state: StorageState,
         time1_ms: u64,
@@ -337,7 +330,6 @@ verus! {
     }
 
     /// Once expired, always expired
-    #[verifier(external_body)]
     pub proof fn expired_stays_expired(
         entry: KvEntry,
         time1_ms: u64,
@@ -372,7 +364,6 @@ verus! {
     }
 
     /// Scan excludes expired keys
-    #[verifier(external_body)]
     pub proof fn scan_excludes_expired(
         state: StorageState,
         prefix: Seq<u8>,
