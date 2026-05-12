@@ -527,7 +527,17 @@ verus! {
         } else {
             // Cap exponent at 10 to prevent overflow
             let exponent = if consecutive_failures > 10 { 10u32 } else { consecutive_failures };
-            let multiplier = (1u64 << exponent as u64);
+            let multiplier = if exponent == 0 { 1u64 }
+                else if exponent == 1 { 2u64 }
+                else if exponent == 2 { 4u64 }
+                else if exponent == 3 { 8u64 }
+                else if exponent == 4 { 16u64 }
+                else if exponent == 5 { 32u64 }
+                else if exponent == 6 { 64u64 }
+                else if exponent == 7 { 128u64 }
+                else if exponent == 8 { 256u64 }
+                else if exponent == 9 { 512u64 }
+                else { 1024u64 };
             let delay = if base_delay_ms > u64::MAX / multiplier {
                 u64::MAX
             } else {
@@ -626,26 +636,39 @@ verus! {
     /// - Result <= max_delay_ms (bounded)
     /// - consecutive_failures == 0 implies result == 0
     /// - Uses saturating arithmetic
-    #[verifier(external_body)]
     pub fn compute_renewal_backoff(
         consecutive_failures: u32,
         base_delay_ms: u64,
         max_delay_ms: u64,
     ) -> (result: u64)
         ensures
+            result == renewal_backoff_spec(consecutive_failures, base_delay_ms, max_delay_ms),
             result <= max_delay_ms,
             consecutive_failures == 0 ==> result == 0
     {
         if consecutive_failures == 0 {
-            return 0;
+            0
+        } else {
+            // Cap exponent at 10 to prevent overflow
+            let exponent = if consecutive_failures > 10 { 10u32 } else { consecutive_failures };
+            let multiplier = if exponent == 0 { 1u64 }
+                else if exponent == 1 { 2u64 }
+                else if exponent == 2 { 4u64 }
+                else if exponent == 3 { 8u64 }
+                else if exponent == 4 { 16u64 }
+                else if exponent == 5 { 32u64 }
+                else if exponent == 6 { 64u64 }
+                else if exponent == 7 { 128u64 }
+                else if exponent == 8 { 256u64 }
+                else if exponent == 9 { 512u64 }
+                else { 1024u64 };
+            let delay = if base_delay_ms > u64::MAX / multiplier {
+                u64::MAX
+            } else {
+                (base_delay_ms * multiplier) as u64
+            };
+            if delay > max_delay_ms { max_delay_ms } else { delay }
         }
-
-        // Cap exponent at 10 to prevent overflow
-        let exponent = if consecutive_failures > 10 { 10u32 } else { consecutive_failures };
-        let multiplier = 1u64 << exponent as u64;
-        let delay = base_delay_ms.saturating_mul(multiplier);
-
-        if delay > max_delay_ms { max_delay_ms } else { delay }
     }
 
     // ========================================================================
