@@ -427,12 +427,13 @@ pub const fn is_valid_chain_range(first_index: u64, last_index: u64) -> bool {
 ///
 /// # Returns
 ///
-/// Number of entries in range (0 if invalid range).
+/// Number of entries in range (0 if invalid range), saturating at `u64::MAX`.
 #[inline]
 #[allow(dead_code)]
 pub fn compute_chain_length(first_index: u64, last_index: u64) -> u64 {
     if first_index <= last_index {
-        last_index.saturating_sub(first_index).saturating_add(1)
+        let span = last_index - first_index;
+        if span == u64::MAX { u64::MAX } else { span + 1 }
     } else {
         0
     }
@@ -546,6 +547,19 @@ mod tests {
         let tip = ChainTipState::default();
         assert_eq!(tip.hash, GENESIS_HASH);
         assert_eq!(tip.index, 0);
+    }
+
+    #[test]
+    fn test_compute_chain_length_boundaries() {
+        assert_eq!(compute_chain_length(10, 9), 0);
+        assert_eq!(compute_chain_length(10, 10), 1);
+        assert_eq!(compute_chain_length(10, 12), 3);
+        assert_eq!(compute_chain_length(0, u64::MAX), u64::MAX);
+    }
+
+    #[test]
+    fn test_compute_chain_length_near_max_without_saturation() {
+        assert_eq!(compute_chain_length(u64::MAX - 2, u64::MAX), 3);
     }
 
     #[test]

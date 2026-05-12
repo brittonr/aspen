@@ -247,17 +247,22 @@ verus! {
     ///
     /// # Returns
     ///
-    /// Number of entries in range (0 if invalid range).
-    #[verifier(external_body)]
+    /// Number of entries in range (0 if invalid range), saturating at `u64::MAX`.
     pub fn compute_chain_length(first_index: u64, last_index: u64) -> (result: u64)
         ensures
-            // Use int arithmetic in ensures to avoid overflow at u64::MAX
-            first_index <= last_index ==> result as int == (last_index as int) - (first_index as int) + 1,
+            first_index <= last_index && (last_index as int) - (first_index as int) < u64::MAX as int ==>
+                result as int == (last_index as int) - (first_index as int) + 1,
+            first_index <= last_index && (last_index as int) - (first_index as int) == u64::MAX as int ==>
+                result == u64::MAX,
             first_index > last_index ==> result == 0
     {
         if first_index <= last_index {
-            // saturating_add handles the u64::MAX edge case
-            (last_index - first_index).saturating_add(1)
+            let span = last_index - first_index;
+            if span == u64::MAX {
+                u64::MAX
+            } else {
+                span + 1
+            }
         } else {
             0
         }
