@@ -13,6 +13,40 @@ use vstd::prelude::*;
 use crate::queue_state_spec::*;
 
 verus! {
+    /// Helper: the insertion-position search always returns a valid sequence
+    /// index boundary.
+    pub proof fn find_insert_position_bounds(pending: Seq<QueueItemSpec>, item_id: u64)
+        ensures
+            0 <= find_insert_position(pending, item_id),
+            find_insert_position(pending, item_id) <= pending.len(),
+        decreases pending.len()
+    {
+        if pending.len() == 0 {
+        } else if item_id < pending.first().id {
+        } else {
+            find_insert_position_bounds(pending.skip(1), item_id);
+        }
+    }
+
+    /// Helper: insertion at a valid position places the inserted item at that
+    /// exact position, giving existential count proofs a concrete witness.
+    pub proof fn insert_at_position_places_item(
+        pending: Seq<QueueItemSpec>,
+        pos: int,
+        item: QueueItemSpec,
+    )
+        requires
+            0 <= pos <= pending.len(),
+        ensures
+            insert_at_position(pending, pos, item).len() == pending.len() + 1,
+            insert_at_position(pending, pos, item)[pos] == item,
+    {
+        let inserted = insert_at_position(pending, pos, item);
+        assert(pending.take(pos).len() == pos);
+        assert(inserted == pending.take(pos).push(item).add(pending.skip(pos)));
+        assert(inserted[pos] == item);
+    }
+
     // ========================================================================
     // Dequeue Operation
     // ========================================================================
@@ -96,8 +130,16 @@ verus! {
             item_id: item.id,
             consumer_id: consumer_id,
             receipt_handle: receipt_handle,
-            visibility_deadline_ms: (pre.current_time_ms + visibility_timeout_ms) as u64,
-            delivery_count: (item.delivery_count + 1) as u32,
+            visibility_deadline_ms: if pre.current_time_ms <= u64::MAX - visibility_timeout_ms {
+                (pre.current_time_ms + visibility_timeout_ms) as u64
+            } else {
+                u64::MAX
+            },
+            delivery_count: if item.delivery_count < u32::MAX {
+                (item.delivery_count + 1) as u32
+            } else {
+                u32::MAX
+            },
             // Preserve message_group_id to enable FIFO-per-group verification
             message_group_id: item.message_group_id,
         };
@@ -192,7 +234,6 @@ verus! {
     }
 
     /// Proof: Dequeue sets valid visibility deadline
-    #[verifier(external_body)]
     pub proof fn dequeue_sets_valid_deadline(
         pre: QueueState,
         item_idx: int,
@@ -207,14 +248,21 @@ verus! {
         ensures ({
             let post = dequeue_single_effect(pre, item_idx, consumer_id, visibility_timeout_ms, receipt_handle);
             let item_id = pre.pending[item_idx].id;
-            post.inflight[item_id].visibility_deadline_ms == pre.current_time_ms + visibility_timeout_ms
+            pre.current_time_ms <= u64::MAX - visibility_timeout_ms ==>
+                post.inflight[item_id].visibility_deadline_ms == pre.current_time_ms + visibility_timeout_ms
+        }) && ({
+            let post = dequeue_single_effect(pre, item_idx, consumer_id, visibility_timeout_ms, receipt_handle);
+            let item_id = pre.pending[item_idx].id;
+            pre.current_time_ms > u64::MAX - visibility_timeout_ms ==>
+                post.inflight[item_id].visibility_deadline_ms == u64::MAX
         })
     {
-        // Directly from dequeue_single_effect
+        if pre.current_time_ms <= u64::MAX - visibility_timeout_ms {
+        } else {
+        }
     }
 
     /// Proof: Dequeue increments delivery count
-    #[verifier(external_body)]
     pub proof fn dequeue_increments_delivery_count(
         pre: QueueState,
         item_idx: int,
@@ -228,10 +276,18 @@ verus! {
         ensures ({
             let post = dequeue_single_effect(pre, item_idx, consumer_id, visibility_timeout_ms, receipt_handle);
             let item = pre.pending[item_idx];
-            post.inflight[item.id].delivery_count == item.delivery_count + 1
+            item.delivery_count < u32::MAX ==>
+                post.inflight[item.id].delivery_count == item.delivery_count + 1
+        }) && ({
+            let post = dequeue_single_effect(pre, item_idx, consumer_id, visibility_timeout_ms, receipt_handle);
+            let item = pre.pending[item_idx];
+            item.delivery_count == u32::MAX ==>
+                post.inflight[item.id].delivery_count == u32::MAX
         })
     {
-        // Directly from dequeue_single_effect
+        if pre.pending[item_idx].delivery_count < u32::MAX {
+        } else {
+        }
     }
 
     // ========================================================================
@@ -356,7 +412,6 @@ verus! {
     }
 
     /// Proof: Visibility expiration preserves delivery count
-    #[verifier(external_body)]
     pub proof fn visibility_expiration_preserves_delivery_count(
         pre: QueueState,
         item_id: u64,
@@ -373,7 +428,22 @@ verus! {
                 post.pending[i].delivery_count == old_count
         })
     {
-        // Delivery count preserved when returning to pending
+        let insert_pos = find_insert_position(pre.pending, item_id);
+        let inflight = pre.inflight[item_id];
+        let queue_item = QueueItemSpec {
+            id: item_id,
+            payload: Seq::empty(),
+            state: QueueItemStateSpec::Pending,
+            enqueued_at_ms: 0,
+            expires_at_ms: 0,
+            delivery_count: inflight.delivery_count,
+            visibility_deadline_ms: 0,
+            message_group_id: None,
+            deduplication_id: None,
+        };
+        find_insert_position_bounds(pre.pending, item_id);
+        insert_at_position_places_item(pre.pending, insert_pos, queue_item);
+        assert(visibility_expired_effect(pre, item_id).pending[insert_pos] == queue_item);
     }
 
     // ========================================================================
