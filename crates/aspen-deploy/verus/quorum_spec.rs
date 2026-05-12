@@ -150,32 +150,27 @@ verus! {
     // ========================================================================
 
     /// Proof: QUORUM-1 — quorum is always a strict majority for n >= 1.
-    #[verifier(external_body)]
     pub proof fn quorum_majority_proof(voter_count: u32)
         ensures quorum_is_majority(voter_count)
     {
-        // For n >= 1: quorum = (n + 2) / 2
-        // n/2 < (n + 2) / 2 because adding 2 to numerator strictly increases
-        // the quotient (or keeps it equal with remainder carrying over).
-        // Specifically: (n+2)/2 = n/2 + 1 (for even n) or n/2 + 1 (for odd n).
+        // For n >= 1: quorum = (n / 2) + 1.
+        // This is always strictly greater than n/2 by construction, while
+        // using division-before-addition to avoid overflow.
     }
 
     /// Proof: QUORUM-2 — quorum never exceeds total voters for n >= 1.
-    #[verifier(external_body)]
     pub proof fn quorum_bounded_proof(voter_count: u32)
         ensures quorum_is_bounded(voter_count)
     {
-        // For n >= 1: (n + 2) / 2 <= n
-        // Equivalent: n + 2 <= 2n (for integer division rounding)
-        // Equivalent: 2 <= n (true for n >= 2)
-        // For n = 1: (1 + 2) / 2 = 1 = n ✓
+        // For n >= 1: (n / 2) + 1 <= n.
+        // For n = 1: 0 + 1 = 1 = n.
+        // For n >= 2: n/2 + 1 <= n.
     }
 
     /// Proof: Only one partition can have quorum.
     ///
     /// If one partition has quorum_size(n) voters, the other partition
     /// has at most n - quorum_size(n) < quorum_size(n) voters.
-    #[verifier(external_body)]
     pub proof fn only_one_partition_quorum(
         voter_count: u32,
         partition_a: u32,
@@ -188,17 +183,15 @@ verus! {
             !(partition_a >= quorum_size_spec(voter_count) &&
               partition_b >= quorum_size_spec(voter_count))
     {
-        // partition_a >= quorum implies partition_a >= (n+2)/2
-        // partition_b = n - partition_a <= n - (n+2)/2
-        // For even n: n - n/2 - 1 = n/2 - 1 < (n+2)/2
-        // For odd n: n - (n+1)/2 = (n-1)/2 < (n+2)/2
+        // partition_a >= quorum implies partition_a >= n/2 + 1.
+        // Therefore the remaining partition has fewer than n/2 + 1 voters,
+        // so it cannot also reach quorum.
     }
 
     /// Proof: QUORUM-4 — max_concurrent leaves quorum intact for odd clusters.
     ///
     /// For odd voter counts >= 3, the remaining voters after removing
     /// max_concurrent_upgrades(n) voters still form a quorum.
-    #[verifier(external_body)]
     pub proof fn max_concurrent_preserves_quorum(voter_count: u32)
         requires
             voter_count >= 3,
@@ -207,15 +200,12 @@ verus! {
             voter_count - max_concurrent_spec(voter_count) >= quorum_size_spec(voter_count)
     {
         // For odd n >= 3:
-        // max_concurrent = (n - 1) / 2
-        // remaining = n - (n-1)/2 = (2n - n + 1) / 2 = (n + 1) / 2
-        // quorum = (n + 2) / 2 = (n + 1) / 2 (for odd n, since (n+2) is odd+2=odd)
-        // Actually: odd n means n+2 is also odd, so (n+2)/2 = (n+1)/2
-        // remaining = (n+1)/2 >= (n+1)/2 = quorum ✓
+        // max_concurrent = (n - 1) / 2.
+        // remaining = n - (n-1)/2 = (n+1)/2.
+        // quorum = n/2 + 1 = (n+1)/2 for odd n.
     }
 
     /// Proof: QUORUM-5 — max_concurrent is always at least 1.
-    #[verifier(external_body)]
     pub proof fn max_concurrent_always_positive(voter_count: u32)
         ensures max_concurrent_spec(voter_count) >= 1u32
     {
@@ -227,7 +217,6 @@ verus! {
     /// Proof: Upgrade safety is monotone in healthy_voters.
     ///
     /// If upgrading is safe with h healthy voters, it's safe with h+1.
-    #[verifier(external_body)]
     pub proof fn upgrade_safety_monotone(
         healthy_voters: u32,
         currently_upgrading: u32,
@@ -250,7 +239,6 @@ verus! {
     /// Proof: Upgrade safety is anti-monotone in currently_upgrading.
     ///
     /// If upgrading is NOT safe with u upgrading nodes, it's NOT safe with u+1.
-    #[verifier(external_body)]
     pub proof fn upgrade_unsafety_monotone(
         healthy_voters: u32,
         currently_upgrading: u32,

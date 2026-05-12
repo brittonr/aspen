@@ -159,7 +159,6 @@ verus! {
     ///
     /// If partition A has quorum, partition B (complement) cannot have quorum.
     /// This is because quorum > n/2, so both partitions cannot exceed n/2.
-    #[verifier(external_body)]
     pub proof fn only_one_partition_can_have_quorum(total_nodes: u32, partition_a: u32, partition_b: u32)
         requires
             partition_a + partition_b == total_nodes,

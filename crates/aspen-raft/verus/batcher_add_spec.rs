@@ -110,7 +110,6 @@ verus! {
     // ========================================================================
 
     /// Proof: Add increases pending count by 1
-    #[verifier(external_body)]
     pub proof fn add_increases_count(
         pre: BatcherState,
         key: Seq<u8>,
@@ -144,7 +143,6 @@ verus! {
     }
 
     /// Proof: Add advances sequence number
-    #[verifier(external_body)]
     pub proof fn add_advances_sequence(
         pre: BatcherState,
         key: Seq<u8>,
@@ -161,7 +159,6 @@ verus! {
     }
 
     /// Proof: Add sets batch_start on first write
-    #[verifier(external_body)]
     pub proof fn add_sets_batch_start(
         pre: BatcherState,
         key: Seq<u8>,
@@ -180,7 +177,6 @@ verus! {
     }
 
     /// Proof: Add preserves batch_start for subsequent writes
-    #[verifier(external_body)]
     pub proof fn add_preserves_batch_start(
         pre: BatcherState,
         key: Seq<u8>,
@@ -199,7 +195,6 @@ verus! {
     }
 
     /// Proof: Add preserves ordering
-    #[verifier(external_body)]
     pub proof fn add_preserves_ordering(
         pre: BatcherState,
         key: Seq<u8>,
@@ -234,7 +229,6 @@ verus! {
     }
 
     /// Proof: Add preserves invariant when space available
-    #[verifier(external_body)]
     pub proof fn add_preserves_invariant_with_space(
         pre: BatcherState,
         key: Seq<u8>,
@@ -298,7 +292,6 @@ verus! {
     ///
     /// Safety: add_delete_post always pushes one element to pending,
     /// so post.pending.len() >= 1 and last_idx >= 0.
-    #[verifier(external_body)]
     pub proof fn delete_add_has_empty_value(
         pre: BatcherState,
         key: Seq<u8>,
@@ -388,7 +381,6 @@ verus! {
     }
 
     /// Proof: Adding when empty never needs flush first
-    #[verifier(external_body)]
     pub proof fn empty_add_never_flush_first(
         state: BatcherState,
         op_bytes: u64,
@@ -412,14 +404,12 @@ verus! {
     }
 
     /// Set operations are batchable
-    #[verifier(external_body)]
     pub proof fn set_is_batchable()
         ensures is_batchable_op(true, false)
     {
     }
 
     /// Delete operations are batchable
-    #[verifier(external_body)]
     pub proof fn delete_is_batchable()
         ensures is_batchable_op(false, true)
     {

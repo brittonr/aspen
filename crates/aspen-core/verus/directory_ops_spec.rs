@@ -183,7 +183,6 @@ verus! {
 
     /// Proof: Remove preserves namespace isolation
     /// Trusted proof: Removal preserves isolation
-    #[verifier(external_body)]
     pub proof fn remove_preserves_isolation(pre: DirectoryState, path: Seq<Seq<u8>>)
         requires
             remove_pre(pre, path),
@@ -213,7 +212,6 @@ verus! {
     /// Proof: Remove preserves hierarchy consistency
     ///
     /// Trusted proof: Removing leaf directory maintains parent relationships.
-    #[verifier(external_body)]
     pub proof fn remove_preserves_hierarchy(pre: DirectoryState, path: Seq<Seq<u8>>)
         requires
             remove_pre(pre, path),
@@ -224,7 +222,6 @@ verus! {
     }
 
     /// Proof: Remove preserves full invariant
-    #[verifier(external_body)]
     pub proof fn remove_preserves_invariant(pre: DirectoryState, path: Seq<Seq<u8>>)
         requires
             remove_pre(pre, path),
