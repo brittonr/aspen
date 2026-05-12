@@ -1,7 +1,22 @@
 # verus-proof-trust Specification
 
 ## Purpose
-TBD - created by archiving change close-raft-batcher-apply-verus-proofs. Update Purpose after archive.
+
+This specification separates machine-checked Verus proof obligations from intentional trusted boundaries. Aspen MUST drain direct structural proof gaps where feasible, while retaining only narrowly named assumptions for cryptographic collision resistance, opaque byte encodings, and production tuple encoder semantics that Verus does not model directly.
+
+## Current residual trusted-boundary inventory
+
+As of 2026-05-12, the source-derived residual `external_body` inventory is 11 markers:
+
+| File | Count | Boundary class | Residual assumption |
+|------|------:|----------------|---------------------|
+| `crates/aspen-commit-dag/verus/commit_hash_spec.rs` | 1 | BLAKE3 cryptographic boundary | `blake3_collision_resistance` for different encoded commit/hash inputs. |
+| `crates/aspen-core/verus/tuple_spec.rs` | 6 | Tuple encoding/order boundary | Production FoundationDB-style tuple encoder order preservation, roundtrip, prefix, NUL escaping, integer order encoding, and byte-array order encoding. |
+| `crates/aspen-raft/verus/chain_verify_spec.rs` | 2 | BLAKE3 + u64 encoding boundary | `blake3_collision_resistance` and `u64_to_le_bytes_injective`; all local chain/tamper wrappers around these assumptions are verified. |
+| `crates/aspen-secrets/verus/mac_spec.rs` | 2 | HMAC cryptographic boundary | HMAC-SHA256 key separation and collision resistance; local MAC sensitivity wrappers are verified. |
+
+This inventory is not a claim that Verus proves BLAKE3, HMAC-SHA256, or the production tuple encoder. It records the remaining trusted assumptions and the files whose wrapper proofs reduce to those assumptions.
+
 ## Requirements
 ### Requirement: Raft Non-Crypto Verus Proof Gap Closure
 
