@@ -76,7 +76,7 @@ The checker must fail on unowned exceptions, missing required exception fields, 
 For repo-wide drift sweeps of the currently ready families, use the wrapper below. It creates a temporary OpenSpec-style evidence fixture for each selected family, so no placeholder evidence files need to be staged in the working tree:
 
 ```bash
-scripts/check-crate-extraction-ready-families.py
+scripts/check-crate-extraction-ready-families.rs
 ```
 
 ## First vertical target: Redb Raft KV
