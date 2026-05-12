@@ -71,4 +71,3 @@ Generated after local proof minimization. Residual `external_body` attributes ar
 - line 233: `mac_value_sensitivity` — `crypto-security-assumption`; local evidence/comment: MAC-3: Value sensitivity.  Changing any value in the entries changes the MAC. We prove this for the single-entry case; the general case follows from HMAC collision resistance.
 - line 256: `mac_path_sensitivity` — `crypto-security-assumption`; local evidence/comment: MAC-4: Path sensitivity.  Changing any path in the entries changes the MAC.
 - line 297: `mac_output_length` — `crypto-security-assumption`; local evidence/comment: Helper: MAC output is always 32 bytes.
-
