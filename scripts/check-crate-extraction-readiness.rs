@@ -42,6 +42,7 @@ const BOUNDARY_RAIL_PHRASES: &[&str] = &[
     "dependency-boundary",
 ];
 const BLOB_CASTORE_CACHE_FAMILY: &str = "blob-castore-cache";
+const COORDINATION_FAMILY: &str = "coordination";
 const KV_BRANCH_COMMIT_DAG_FAMILY: &str = "kv-branch-commit-dag";
 const PROTOCOL_WIRE_FAMILY: &str = "protocol-wire";
 const TRANSPORT_RPC_FAMILY: &str = "transport-rpc";
@@ -244,13 +245,9 @@ fn candidate_keys_for_family(family: &str) -> Option<&'static [&'static str]> {
     match family {
         BLOB_CASTORE_CACHE_FAMILY => Some(&["aspen_blob", "aspen_castore", "aspen_cache"]),
         KV_BRANCH_COMMIT_DAG_FAMILY => Some(&["aspen_commit_dag", "aspen_kv_branch"]),
-        PROTOCOL_WIRE_FAMILY => Some(&[
-            "aspen_client_api",
-            "aspen_coordination_protocol",
-            "aspen_forge_protocol",
-            "aspen_jobs_protocol",
-        ]),
+        PROTOCOL_WIRE_FAMILY => Some(&["aspen_client_api", "aspen_forge_protocol", "aspen_jobs_protocol"]),
         TRANSPORT_RPC_FAMILY => Some(&["aspen_transport", "aspen_rpc_core"]),
+        COORDINATION_FAMILY => Some(&["aspen_coordination", "aspen_coordination_protocol"]),
         FOUNDATIONAL_TYPES_FAMILY => Some(&["foundational_types"]),
         AUTH_TICKET_FAMILY => Some(&["auth_ticket"]),
         JOBS_CI_CORE_FAMILY => Some(&["jobs_ci_core"]),
@@ -464,6 +461,7 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
 fn family_inventory_name(family: &str) -> Option<&'static str> {
     match family {
         BLOB_CASTORE_CACHE_FAMILY => Some("Blob/castore/cache"),
+        COORDINATION_FAMILY => Some("Coordination"),
         KV_BRANCH_COMMIT_DAG_FAMILY => Some("Commit DAG / branches"),
         PROTOCOL_WIRE_FAMILY => Some("Protocol/wire"),
         TRANSPORT_RPC_FAMILY => Some("Iroh transport/RPC"),
