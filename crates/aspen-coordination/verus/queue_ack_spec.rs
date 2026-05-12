@@ -15,6 +15,40 @@ use crate::queue_dequeue_spec::{find_insert_position, insert_at_position};
 use crate::queue_state_spec::*;
 
 verus! {
+    /// Helper: the insertion-position search always returns a valid sequence
+    /// index boundary.
+    pub proof fn find_insert_position_bounds(pending: Seq<QueueItemSpec>, item_id: u64)
+        ensures
+            0 <= find_insert_position(pending, item_id),
+            find_insert_position(pending, item_id) <= pending.len(),
+        decreases pending.len()
+    {
+        if pending.len() == 0 {
+        } else if item_id < pending.first().id {
+        } else {
+            find_insert_position_bounds(pending.skip(1), item_id);
+        }
+    }
+
+    /// Helper: insertion at a valid position places the inserted item at that
+    /// exact position, giving existential count/reset proofs a concrete witness.
+    pub proof fn insert_at_position_places_item(
+        pending: Seq<QueueItemSpec>,
+        pos: int,
+        item: QueueItemSpec,
+    )
+        requires
+            0 <= pos <= pending.len(),
+        ensures
+            insert_at_position(pending, pos, item).len() == pending.len() + 1,
+            insert_at_position(pending, pos, item)[pos] == item,
+    {
+        let inserted = insert_at_position(pending, pos, item);
+        assert(pending.take(pos).len() == pos);
+        assert(inserted == pending.take(pos).push(item).add(pending.skip(pos)));
+        assert(inserted[pos] == item);
+    }
+
     // ========================================================================
     // Acknowledgment (Ack) Operation
     // ========================================================================
@@ -196,7 +230,6 @@ verus! {
     }
 
     /// Proof: Nack to pending preserves delivery count
-    #[verifier(external_body)]
     pub proof fn nack_return_preserves_count(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -210,7 +243,22 @@ verus! {
                 post.pending[i].delivery_count == old_count
         })
     {
-        // Delivery count preserved in returned item
+        let insert_pos = find_insert_position(pre.pending, item_id);
+        let inflight = pre.inflight[item_id];
+        let queue_item = QueueItemSpec {
+            id: item_id,
+            payload: Seq::empty(),
+            state: QueueItemStateSpec::Pending,
+            enqueued_at_ms: 0,
+            expires_at_ms: 0,
+            delivery_count: inflight.delivery_count,
+            visibility_deadline_ms: 0,
+            message_group_id: inflight.message_group_id,
+            deduplication_id: None,
+        };
+        find_insert_position_bounds(pre.pending, item_id);
+        insert_at_position_places_item(pre.pending, insert_pos, queue_item);
+        assert(nack_return_post(pre, item_id).pending[insert_pos] == queue_item);
     }
 
     /// Proof: Nack to pending preserves FIFO ordering
@@ -288,14 +336,19 @@ verus! {
     ///
     /// Assumes:
     /// - pre.inflight.contains_key(item_id)
-    /// - // Prevent overflow in deadline computation pre.current_time_ms <= u64::MAX - additional_timeout_ms
+    /// - Deadline computation saturates at `u64::MAX`, matching the executable
+    ///   helper.
     pub open spec fn extend_visibility_post(
         pre: QueueState,
         item_id: u64,
         additional_timeout_ms: u64,
     ) -> QueueState {
         let old_inflight = pre.inflight[item_id];
-        let new_deadline = (pre.current_time_ms + additional_timeout_ms) as u64;
+        let new_deadline = if pre.current_time_ms <= u64::MAX - additional_timeout_ms {
+            (pre.current_time_ms + additional_timeout_ms) as u64
+        } else {
+            u64::MAX
+        };
 
         let new_inflight = InflightItemSpec {
             visibility_deadline_ms: new_deadline,
@@ -309,7 +362,6 @@ verus! {
     }
 
     /// Proof: Extend visibility increases deadline
-    #[verifier(external_body)]
     pub proof fn extend_increases_deadline(
         pre: QueueState,
         item_id: u64,
@@ -324,7 +376,12 @@ verus! {
             post.inflight[item_id].visibility_deadline_ms > pre.current_time_ms
         })
     {
-        // new_deadline = current_time + additional > current_time
+        if pre.current_time_ms <= u64::MAX - additional_timeout_ms {
+            assert(pre.current_time_ms + additional_timeout_ms > pre.current_time_ms) by(nonlinear_arith)
+                requires additional_timeout_ms > 0;
+        } else {
+            assert(pre.current_time_ms < u64::MAX);
+        }
     }
 
     /// Proof: Extend visibility preserves item identity
@@ -399,7 +456,6 @@ verus! {
     }
 
     /// Proof: Release unchanged decrements delivery count
-    #[verifier(external_body)]
     pub proof fn release_unchanged_decrements_count(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -413,7 +469,22 @@ verus! {
                 post.pending[i].delivery_count == old_count - 1
         })
     {
-        // Delivery count decremented by 1
+        let insert_pos = find_insert_position(pre.pending, item_id);
+        let inflight = pre.inflight[item_id];
+        let queue_item = QueueItemSpec {
+            id: item_id,
+            payload: Seq::empty(),
+            state: QueueItemStateSpec::Pending,
+            enqueued_at_ms: 0,
+            expires_at_ms: 0,
+            delivery_count: (inflight.delivery_count - 1) as u32,
+            visibility_deadline_ms: 0,
+            message_group_id: inflight.message_group_id,
+            deduplication_id: None,
+        };
+        find_insert_position_bounds(pre.pending, item_id);
+        insert_at_position_places_item(pre.pending, insert_pos, queue_item);
+        assert(release_unchanged_post(pre, item_id).pending[insert_pos] == queue_item);
     }
 
     // ========================================================================
@@ -486,7 +557,6 @@ verus! {
     }
 
     /// Proof: Redrive resets delivery count
-    #[verifier(external_body)]
     pub proof fn redrive_resets_count(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
@@ -498,7 +568,22 @@ verus! {
                 post.pending[i].delivery_count == 0
         })
     {
-        // Delivery count reset to 0
+        let insert_pos = find_insert_position(pre.pending, item_id);
+        let dlq_item = pre.dlq[item_id];
+        let queue_item = QueueItemSpec {
+            id: item_id,
+            payload: Seq::empty(),
+            state: QueueItemStateSpec::Pending,
+            enqueued_at_ms: pre.current_time_ms,
+            expires_at_ms: 0,
+            delivery_count: 0,
+            visibility_deadline_ms: 0,
+            message_group_id: dlq_item.message_group_id,
+            deduplication_id: None,
+        };
+        find_insert_position_bounds(pre.pending, item_id);
+        insert_at_position_places_item(pre.pending, insert_pos, queue_item);
+        assert(redrive_post(pre, item_id).pending[insert_pos] == queue_item);
     }
 
     /// Proof: Redrive preserves invariant
