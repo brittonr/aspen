@@ -107,31 +107,41 @@ verus! {
         }
     }
 
-    /// Compare two elements for ordering
-    ///
-    /// Trusted structural boundary: lexicographic ordering on elements.
-    /// The definition is mathematical, but its mutual recursion with
-    /// `tuple_less_than` needs a stronger size-decrease lemma before Verus can
-    /// accept it without a trusted body.
-    #[verifier(external_body)]
-    pub open spec fn element_less_than(a: ElementSpec, b: ElementSpec) -> bool {
-        let type_a = element_type_order(a);
-        let type_b = element_type_order(b);
-        if type_a < type_b {
-            true
-        } else if type_a > type_b {
+    /// Compare two elements for ordering using an explicit fuel budget.
+    pub open spec fn element_less_than_with_fuel(
+        a: ElementSpec,
+        b: ElementSpec,
+        fuel: nat,
+    ) -> bool
+        decreases fuel
+    {
+        if fuel == 0 {
             false
         } else {
-            // Same type category, compare values
-            match (a, b) {
-                (ElementSpec::Null, ElementSpec::Null) => false, // equal
-                (ElementSpec::Int(na), ElementSpec::Int(nb)) => na < nb,
-                (ElementSpec::Bytes(ba), ElementSpec::Bytes(bb)) => seq_less_than(ba, bb),
-                (ElementSpec::String(sa), ElementSpec::String(sb)) => seq_less_than(sa, sb),
-                (ElementSpec::Tuple(ta), ElementSpec::Tuple(tb)) => tuple_less_than(ta, tb),
-                _ => false, // Same type category, so should match
+            let type_a = element_type_order(a);
+            let type_b = element_type_order(b);
+            if type_a < type_b {
+                true
+            } else if type_a > type_b {
+                false
+            } else {
+                match (a, b) {
+                    (ElementSpec::Null, ElementSpec::Null) => false,
+                    (ElementSpec::Int(na), ElementSpec::Int(nb)) => na < nb,
+                    (ElementSpec::Bytes(ba), ElementSpec::Bytes(bb)) => seq_less_than(ba, bb),
+                    (ElementSpec::String(sa), ElementSpec::String(sb)) => seq_less_than(sa, sb),
+                    (ElementSpec::Tuple(ta), ElementSpec::Tuple(tb)) => {
+                        tuple_less_than_with_fuel(ta, tb, (fuel - 1) as nat)
+                    },
+                    (_, _) => false,
+                }
             }
         }
+    }
+
+    /// Compare two elements for ordering.
+    pub open spec fn element_less_than(a: ElementSpec, b: ElementSpec) -> bool {
+        element_less_than_with_fuel(a, b, element_size(a) + element_size(b) + 1)
     }
 
     /// Lexicographic comparison of byte sequences
@@ -153,35 +163,69 @@ verus! {
         }
     }
 
-    /// Compare two tuples lexicographically by elements
-    ///
-    /// Trusted structural boundary: lexicographic ordering on tuples.
-    /// Recursive tail calls are on smaller element sequences, but calls through
-    /// `element_less_than` need a shared size-decrease lemma before this can be
-    /// discharged locally.
-    #[verifier(external_body)]
-    pub open spec fn tuple_less_than(a: TupleSpec, b: TupleSpec) -> bool {
-        if a.elements.len() == 0 && b.elements.len() == 0 {
-            false // equal
+    pub proof fn seq_less_than_irreflexive(bytes: Seq<u8>)
+        ensures !seq_less_than(bytes, bytes)
+        decreases bytes.len()
+    {
+        if bytes.len() == 0 {
+        } else {
+            seq_less_than_irreflexive(bytes.skip(1));
+        }
+    }
+
+    pub proof fn seq_less_than_antisymmetric(a: Seq<u8>, b: Seq<u8>)
+        requires seq_less_than(a, b)
+        ensures !seq_less_than(b, a)
+        decreases a.len() + b.len()
+    {
+        if a.len() == 0 {
+            if b.len() == 0 {
+            }
+        } else if b.len() == 0 {
+        } else if a.first() < b.first() {
+        } else if a.first() > b.first() {
+        } else {
+            seq_less_than_antisymmetric(a.skip(1), b.skip(1));
+        }
+    }
+
+    /// Compare two tuples lexicographically by elements using an explicit fuel
+    /// budget shared with nested element comparison.
+    pub open spec fn tuple_less_than_with_fuel(
+        a: TupleSpec,
+        b: TupleSpec,
+        fuel: nat,
+    ) -> bool
+        decreases fuel
+    {
+        if fuel == 0 {
+            false
+        } else if a.elements.len() == 0 && b.elements.len() == 0 {
+            false
         } else if a.elements.len() == 0 {
-            true // shorter < longer with same prefix
+            true
         } else if b.elements.len() == 0 {
-            false // longer > shorter with same prefix
+            false
         } else {
             let ea = a.elements.first();
             let eb = b.elements.first();
-            if element_less_than(ea, eb) {
+            if element_less_than_with_fuel(ea, eb, (fuel - 1) as nat) {
                 true
-            } else if element_less_than(eb, ea) {
+            } else if element_less_than_with_fuel(eb, ea, (fuel - 1) as nat) {
                 false
             } else {
-                // First elements equal, compare rest
-                tuple_less_than(
+                tuple_less_than_with_fuel(
                     TupleSpec { elements: a.elements.skip(1) },
-                    TupleSpec { elements: b.elements.skip(1) }
+                    TupleSpec { elements: b.elements.skip(1) },
+                    (fuel - 1) as nat,
                 )
             }
         }
+    }
+
+    /// Compare two tuples lexicographically by elements.
+    pub open spec fn tuple_less_than(a: TupleSpec, b: TupleSpec) -> bool {
+        tuple_less_than_with_fuel(a, b, tuple_size(a) + tuple_size(b) + 1)
     }
 
     /// Check if two tuples are equal
@@ -385,6 +429,101 @@ verus! {
     }
 
     // ========================================================================
+    // Lexicographic Ordering Lemmas
+    // ========================================================================
+
+    pub proof fn element_less_than_with_fuel_irreflexive(e: ElementSpec, fuel: nat)
+        ensures !element_less_than_with_fuel(e, e, fuel)
+        decreases fuel
+    {
+        if fuel == 0 {
+        } else {
+            match e {
+                ElementSpec::Bytes(bytes) => {
+                    seq_less_than_irreflexive(bytes);
+                },
+                ElementSpec::String(bytes) => {
+                    seq_less_than_irreflexive(bytes);
+                },
+                ElementSpec::Tuple(t) => {
+                    tuple_less_than_with_fuel_irreflexive(t, (fuel - 1) as nat);
+                },
+                _ => {},
+            }
+        }
+    }
+
+    pub proof fn tuple_less_than_with_fuel_irreflexive(t: TupleSpec, fuel: nat)
+        ensures !tuple_less_than_with_fuel(t, t, fuel)
+        decreases fuel
+    {
+        if fuel == 0 {
+        } else if t.elements.len() == 0 {
+        } else {
+            let first = t.elements.first();
+            element_less_than_with_fuel_irreflexive(first, (fuel - 1) as nat);
+            tuple_less_than_with_fuel_irreflexive(
+                TupleSpec { elements: t.elements.skip(1) },
+                (fuel - 1) as nat,
+            );
+        }
+    }
+
+    pub proof fn element_less_than_with_fuel_antisymmetric(
+        a: ElementSpec,
+        b: ElementSpec,
+        fuel: nat,
+    )
+        requires element_less_than_with_fuel(a, b, fuel)
+        ensures !element_less_than_with_fuel(b, a, fuel)
+        decreases fuel
+    {
+        if fuel == 0 {
+        } else {
+            match (a, b) {
+                (ElementSpec::Bytes(ba), ElementSpec::Bytes(bb)) => {
+                    seq_less_than_antisymmetric(ba, bb);
+                },
+                (ElementSpec::String(sa), ElementSpec::String(sb)) => {
+                    seq_less_than_antisymmetric(sa, sb);
+                },
+                (ElementSpec::Tuple(ta), ElementSpec::Tuple(tb)) => {
+                    tuple_less_than_with_fuel_antisymmetric(ta, tb, (fuel - 1) as nat);
+                },
+                (_, _) => {},
+            }
+        }
+    }
+
+    pub proof fn tuple_less_than_with_fuel_antisymmetric(
+        a: TupleSpec,
+        b: TupleSpec,
+        fuel: nat,
+    )
+        requires tuple_less_than_with_fuel(a, b, fuel)
+        ensures !tuple_less_than_with_fuel(b, a, fuel)
+        decreases fuel
+    {
+        if fuel == 0 {
+        } else if a.elements.len() == 0 {
+        } else if b.elements.len() == 0 {
+        } else {
+            let ea = a.elements.first();
+            let eb = b.elements.first();
+            if element_less_than_with_fuel(ea, eb, (fuel - 1) as nat) {
+                element_less_than_with_fuel_antisymmetric(ea, eb, (fuel - 1) as nat);
+            } else if element_less_than_with_fuel(eb, ea, (fuel - 1) as nat) {
+            } else {
+                tuple_less_than_with_fuel_antisymmetric(
+                    TupleSpec { elements: a.elements.skip(1) },
+                    TupleSpec { elements: b.elements.skip(1) },
+                    (fuel - 1) as nat,
+                );
+            }
+        }
+    }
+
+    // ========================================================================
     // Lexicographic Ordering Axioms
     // ========================================================================
     //
@@ -432,34 +571,22 @@ verus! {
     /// Axiom: Tuple comparison is anti-symmetric
     ///
     /// If tuple a < tuple b, then it is NOT the case that tuple b < tuple a.
-    /// This follows from the anti-symmetry of lexicographic ordering.
-    #[verifier(external_body)]
+    /// This follows from the fuel-bounded lexicographic comparison lemma.
     pub proof fn axiom_tuple_comparison_antisymmetric(a: TupleSpec, b: TupleSpec)
         requires tuple_less_than(a, b)
         ensures !tuple_less_than(b, a)
     {
-        // Trusted axiom: lexicographic anti-symmetry
-        // Proof sketch: If a < b, at the first differing position i,
-        // a[i] < b[i]. For b < a, we'd need b[j] < a[j] at some first
-        // differing position j. But j = i (same first difference point),
-        // so we'd need b[i] < a[i], contradicting a[i] < b[i] by element
-        // comparison anti-symmetry.
+        tuple_less_than_with_fuel_antisymmetric(a, b, tuple_size(a) + tuple_size(b) + 1);
     }
 
     /// Axiom: Tuple comparison is irreflexive
     ///
     /// A tuple is never less than itself: NOT (a < a) for any tuple a.
-    /// This follows from the irreflexivity of lexicographic ordering.
-    #[verifier(external_body)]
+    /// This follows from the fuel-bounded lexicographic comparison lemma.
     pub proof fn axiom_tuple_comparison_irreflexive(a: TupleSpec)
         ensures !tuple_less_than(a, a)
     {
-        // Trusted axiom: lexicographic irreflexivity
-        // Proof sketch: By induction on |a|.
-        // Base: tuple_less_than(empty, empty) = false by definition.
-        // Inductive: For a < a, either a[0] < a[0] (false by element
-        //            irreflexivity) or a[0] == a[0] and tail(a) < tail(a)
-        //            (false by inductive hypothesis).
+        tuple_less_than_with_fuel_irreflexive(a, tuple_size(a) + tuple_size(a) + 1);
     }
 
     // ========================================================================
