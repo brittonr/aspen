@@ -230,14 +230,54 @@ verus! {
         axiom_hmac_key_separation(k1, k2, build_mac_message(entries));
     }
 
+    /// Helper: appending the same suffix preserves sequence inequality.
+    pub proof fn same_suffix_concat_preserves_neq(prefix1: Seq<u8>, prefix2: Seq<u8>, suffix: Seq<u8>)
+        requires
+            prefix1 != prefix2,
+        ensures
+            prefix1 + suffix != prefix2 + suffix,
+    {
+        if (prefix1 + suffix) == (prefix2 + suffix) {
+            assert((prefix1 + suffix).subrange(0, prefix1.len() as int) == prefix1);
+            assert((prefix2 + suffix).subrange(0, prefix2.len() as int) == prefix2);
+            if prefix1.len() != prefix2.len() {
+                assert((prefix1 + suffix).len() == prefix1.len() + suffix.len());
+                assert((prefix2 + suffix).len() == prefix2.len() + suffix.len());
+                assert(false);
+            } else {
+                assert((prefix1 + suffix).subrange(0, prefix1.len() as int)
+                    == (prefix2 + suffix).subrange(0, prefix2.len() as int));
+                assert(prefix1 == prefix2);
+                assert(false);
+            }
+        }
+    }
+
+    /// Helper: prepending the same prefix preserves sequence inequality.
+    pub proof fn same_prefix_concat_preserves_neq(prefix: Seq<u8>, suffix1: Seq<u8>, suffix2: Seq<u8>)
+        requires
+            suffix1 != suffix2,
+        ensures
+            prefix + suffix1 != prefix + suffix2,
+    {
+        if (prefix + suffix1) == (prefix + suffix2) {
+            assert((prefix + suffix1).len() == prefix.len() + suffix1.len());
+            assert((prefix + suffix2).len() == prefix.len() + suffix2.len());
+            assert(suffix1.len() == suffix2.len());
+            assert((prefix + suffix1).subrange(prefix.len() as int, (prefix + suffix1).len() as int) == suffix1);
+            assert((prefix + suffix2).subrange(prefix.len() as int, (prefix + suffix2).len() as int) == suffix2);
+            assert((prefix + suffix1).subrange(prefix.len() as int, (prefix + suffix1).len() as int)
+                == (prefix + suffix2).subrange(prefix.len() as int, (prefix + suffix2).len() as int));
+            assert(suffix1 == suffix2);
+            assert(false);
+        }
+    }
+
     /// MAC-3: Value sensitivity.
     ///
-    /// Changing any value in the entries changes the MAC.
-    /// We prove this for the single-entry case; the general case follows
-    /// from HMAC collision resistance. This remains a trusted wrapper because
-    /// Verus needs sequence-concatenation injectivity to prove the constructed
-    /// single-entry messages differ before applying the named HMAC axiom.
-    #[verifier(external_body)]
+    /// Changing any value in the entries changes the MAC for the single-entry
+    /// case by proving that the constructed HMAC messages differ, then applying
+    /// the explicit HMAC collision-resistance boundary.
     pub proof fn mac_value_sensitivity(
         path: Seq<u8>,
         v1: Seq<u8>,
@@ -254,16 +294,31 @@ verus! {
                 != compute_mac(MacInput { entries: e2, data_key: key })
         }),
     {
-        // Follows from: different values → different messages → axiom_hmac_collision_resistance
+        let e1 = Seq::empty().push(MacEntry { path: path, value: v1 });
+        let e2 = Seq::empty().push(MacEntry { path: path, value: v2 });
+        assert(e1.len() == 1);
+        assert(e2.len() == 1);
+        assert(e1[0].path == path);
+        assert(e1[0].value == v1);
+        assert(e2[0].path == path);
+        assert(e2[0].value == v2);
+        assert(e1.skip(1).len() == 0);
+        assert(e2.skip(1).len() == 0);
+        assert(build_mac_message(e1.skip(1)) == Seq::<u8>::empty());
+        assert(build_mac_message(e2.skip(1)) == Seq::<u8>::empty());
+        assert(build_mac_message(e1) == path + v1 + Seq::<u8>::empty());
+        assert(build_mac_message(e2) == path + v2 + Seq::<u8>::empty());
+        same_prefix_concat_preserves_neq(path, v1, v2);
+        same_suffix_concat_preserves_neq(path + v1, path + v2, Seq::<u8>::empty());
+        assert(build_mac_message(e1) != build_mac_message(e2));
+        axiom_hmac_collision_resistance(key, build_mac_message(e1), build_mac_message(e2));
     }
 
     /// MAC-4: Path sensitivity.
     ///
-    /// Changing any path in the entries changes the MAC. This remains a trusted
-    /// wrapper because Verus needs sequence-concatenation injectivity to prove
-    /// the constructed single-entry messages differ before applying the named
-    /// HMAC axiom.
-    #[verifier(external_body)]
+    /// Changing any path in the entries changes the MAC for the single-entry
+    /// case by proving that the constructed HMAC messages differ, then applying
+    /// the explicit HMAC collision-resistance boundary.
     pub proof fn mac_path_sensitivity(
         p1: Seq<u8>,
         p2: Seq<u8>,
@@ -280,7 +335,24 @@ verus! {
                 != compute_mac(MacInput { entries: e2, data_key: key })
         }),
     {
-        // Follows from: different paths → different messages → axiom_hmac_collision_resistance
+        let e1 = Seq::empty().push(MacEntry { path: p1, value: value });
+        let e2 = Seq::empty().push(MacEntry { path: p2, value: value });
+        assert(e1.len() == 1);
+        assert(e2.len() == 1);
+        assert(e1[0].path == p1);
+        assert(e1[0].value == value);
+        assert(e2[0].path == p2);
+        assert(e2[0].value == value);
+        assert(e1.skip(1).len() == 0);
+        assert(e2.skip(1).len() == 0);
+        assert(build_mac_message(e1.skip(1)) == Seq::<u8>::empty());
+        assert(build_mac_message(e2.skip(1)) == Seq::<u8>::empty());
+        assert(build_mac_message(e1) == p1 + value + Seq::<u8>::empty());
+        assert(build_mac_message(e2) == p2 + value + Seq::<u8>::empty());
+        same_suffix_concat_preserves_neq(p1, p2, value);
+        same_suffix_concat_preserves_neq(p1 + value, p2 + value, Seq::<u8>::empty());
+        assert(build_mac_message(e1) != build_mac_message(e2));
+        axiom_hmac_collision_resistance(key, build_mac_message(e1), build_mac_message(e2));
     }
 
     /// MAC-5: Sort stability.
