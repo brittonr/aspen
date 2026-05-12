@@ -45,24 +45,26 @@ verus! {
         )
     }
 
-    /// Blake3 is modeled as uninterpreted with collision resistance
-    ///
-    /// We don't prove properties of blake3 itself - we assume:
-    /// 1. Output is always 32 bytes
-    /// 2. The function is deterministic
-    pub uninterp spec fn blake3_spec(input: Seq<u8>) -> ChainHash;
+    /// Blake3 is modeled as an uninterpreted fixed-width digest.
+    pub uninterp spec fn blake3_byte(input: Seq<u8>, index: int) -> u8;
 
-    /// Convert u64 to little-endian bytes
-    pub uninterp spec fn u64_to_le_bytes(n: u64) -> Seq<u8>;
+    pub open spec fn blake3_spec(input: Seq<u8>) -> ChainHash {
+        Seq::new(32, |index: int| blake3_byte(input, index))
+    }
 
-    /// Axiom: u64_to_le_bytes produces exactly 8 bytes
-    #[verifier::external_body]
+    /// Convert u64 to little-endian bytes.
+    pub uninterp spec fn u64_to_le_byte(n: u64, index: int) -> u8;
+
+    pub open spec fn u64_to_le_bytes(n: u64) -> Seq<u8> {
+        Seq::new(8, |index: int| u64_to_le_byte(n, index))
+    }
+
+    /// u64 byte encoding shape follows from the fixed-width LE model.
     pub proof fn u64_to_le_bytes_length(n: u64)
         ensures u64_to_le_bytes(n).len() == 8
     {}
 
-    /// Axiom: blake3 produces 32-byte output
-    #[verifier::external_body]
+    /// Blake3 output shape follows from the fixed-width digest model.
     pub proof fn blake3_output_length(input: Seq<u8>)
         ensures blake3_spec(input).len() == 32
     {}

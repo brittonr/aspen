@@ -74,9 +74,9 @@ pub const GENESIS_HASH: ChainHash = [0u8; 32];
 ///
 /// # Verus Verification
 ///
-/// This function is marked with `#[verifier::external_body]` when the `verus`
-/// feature is enabled. The `ensures` clause links this exec function to its
-/// spec counterpart `compute_entry_hash_spec`:
+/// This function is treated as a trusted cryptographic shell when connecting
+/// runtime Blake3 to the standalone Verus model. The `ensures` clause links this exec function to
+/// its spec counterpart `compute_entry_hash_spec`:
 ///
 /// ```text
 /// ensures result@ == compute_entry_hash_spec(prev_hash@, log_index, term, entry_bytes@)
@@ -86,8 +86,7 @@ pub const GENESIS_HASH: ChainHash = [0u8; 32];
 /// The spec proves INVARIANT 2 (Chain Continuity) - each hash correctly depends on
 /// its predecessor's hash.
 //
-// When verus is enabled, this would have:
-// #[cfg_attr(feature = "verus", verifier::external_body)]
+// In the standalone Verus model this shell would carry a trusted-body bridge.
 // ensures result@ == compute_entry_hash_spec(prev_hash@, log_index, term, entry_bytes@)
 pub fn compute_entry_hash(prev_hash: &ChainHash, log_index: u64, term: u64, entry_bytes: &[u8]) -> ChainHash {
     // PROOF: Chain Continuity (INVARIANT 2)

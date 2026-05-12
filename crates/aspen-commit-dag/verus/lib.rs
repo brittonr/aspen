@@ -17,8 +17,7 @@
 //! # Trusted Axioms
 //!
 //! - BLAKE3 is collision resistant (modeled as uninterpreted)
-//! - BLAKE3 is deterministic: same input → same output
-//! - BLAKE3 output is always 32 bytes
+//! - BLAKE3 digest bytes are opaque; fixed 32-byte width is modeled structurally
 
 mod commit_hash_spec;
 mod diff_spec;

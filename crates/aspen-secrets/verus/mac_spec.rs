@@ -49,11 +49,15 @@ verus! {
     // Spec Functions — Mathematical Definitions
     // ========================================================================
 
-    /// Model HMAC-SHA256 as an opaque deterministic function.
+    /// Model HMAC-SHA256 as an opaque deterministic 32-byte function.
     ///
-    /// We don't model the internal rounds of SHA-256. Instead, we axiomatize
-    /// the properties we rely on (determinism, collision resistance).
-    pub uninterp spec fn hmac_sha256(key: Seq<u8>, message: Seq<u8>) -> Seq<u8>;
+    /// We don't model the internal rounds of SHA-256. Instead, each output byte
+    /// is opaque while the digest width is part of the structural model.
+    pub uninterp spec fn hmac_sha256_byte(key: Seq<u8>, message: Seq<u8>, index: int) -> u8;
+
+    pub open spec fn hmac_sha256(key: Seq<u8>, message: Seq<u8>) -> Seq<u8> {
+        Seq::new(32, |index: int| hmac_sha256_byte(key, message, index))
+    }
 
     /// Construct the MAC message from sorted entries.
     ///
@@ -121,10 +125,7 @@ verus! {
             hmac_sha256(key, msg) == hmac_sha256(key, msg),
     {}
 
-    /// AXIOM: HMAC-SHA256 output is always 32 bytes. This is a cryptographic
-    /// library boundary backed by the production `hmac`/SHA-256 implementation;
-    /// Verus models `hmac_sha256` as uninterpreted.
-    #[verifier(external_body)]
+    /// HMAC-SHA256 output shape follows from the fixed-width digest model.
     pub proof fn axiom_hmac_output_length(key: Seq<u8>, msg: Seq<u8>)
         ensures
             hmac_sha256(key, msg).len() == 32,

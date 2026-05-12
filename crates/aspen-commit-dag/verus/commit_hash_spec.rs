@@ -14,14 +14,21 @@ verus! {
     // Axioms (shared with aspen-raft chain_hash_spec)
     // ========================================================================
 
-    /// BLAKE3 modeled as uninterpreted function with known properties.
-    pub uninterp spec fn blake3_spec(input: Seq<u8>) -> Seq<u8>;
+    /// BLAKE3 modeled as an uninterpreted 32-byte digest.
+    pub uninterp spec fn blake3_byte(input: Seq<u8>, index: int) -> u8;
+
+    pub open spec fn blake3_spec(input: Seq<u8>) -> Seq<u8> {
+        Seq::new(32, |index: int| blake3_byte(input, index))
+    }
 
     /// Convert u64 to 8-byte little-endian representation.
-    pub uninterp spec fn u64_to_le_bytes(n: u64) -> Seq<u8>;
+    pub uninterp spec fn u64_to_le_byte(n: u64, index: int) -> u8;
 
-    /// Axiom: blake3 output is always 32 bytes.
-    #[verifier::external_body]
+    pub open spec fn u64_to_le_bytes(n: u64) -> Seq<u8> {
+        Seq::new(8, |index: int| u64_to_le_byte(n, index))
+    }
+
+    /// BLAKE3 output shape follows from the fixed-width digest model.
     pub proof fn blake3_output_length(input: Seq<u8>)
         ensures blake3_spec(input).len() == 32
     {}
@@ -32,8 +39,7 @@ verus! {
         ensures blake3_spec(a) == blake3_spec(b)
     {}
 
-    /// Axiom: u64_to_le_bytes produces exactly 8 bytes.
-    #[verifier::external_body]
+    /// u64 byte encoding shape follows from the fixed-width LE model.
     pub proof fn u64_to_le_bytes_length(n: u64)
         ensures u64_to_le_bytes(n).len() == 8
     {}
@@ -90,10 +96,13 @@ verus! {
     }
 
     /// u32 to LE bytes (spec-level).
-    pub uninterp spec fn u32_to_le_bytes_spec(n: u32) -> Seq<u8>;
+    pub uninterp spec fn u32_to_le_byte(n: u32, index: int) -> u8;
 
-    /// Axiom: u32_to_le_bytes produces 4 bytes.
-    #[verifier::external_body]
+    pub open spec fn u32_to_le_bytes_spec(n: u32) -> Seq<u8> {
+        Seq::new(4, |index: int| u32_to_le_byte(n, index))
+    }
+
+    /// u32 byte encoding shape follows from the fixed-width LE model.
     pub proof fn u32_to_le_bytes_length(n: u32)
         ensures u32_to_le_bytes_spec(n).len() == 4
     {}
@@ -125,7 +134,6 @@ verus! {
     // ========================================================================
 
     /// Proof: Same inputs to compute_mutations_hash_spec produce the same hash.
-    #[verifier::external_body]
     pub proof fn mutations_hash_deterministic(
         m1: Seq<(Seq<u8>, bool, Seq<u8>)>,
         m2: Seq<(Seq<u8>, bool, Seq<u8>)>,
@@ -133,11 +141,10 @@ verus! {
         requires m1 == m2
         ensures compute_mutations_hash_spec(m1) == compute_mutations_hash_spec(m2)
     {
-        // Follows from blake3_deterministic + encode_mutations being a pure function
+        assert(compute_mutations_hash_spec(m1) == compute_mutations_hash_spec(m2));
     }
 
     /// Proof: Same inputs to compute_commit_id_spec produce the same CommitId.
-    #[verifier::external_body]
     pub proof fn commit_id_deterministic(
         parent1: Seq<u8>, parent2: Seq<u8>,
         branch1: Seq<u8>, branch2: Seq<u8>,
@@ -154,7 +161,8 @@ verus! {
         ensures compute_commit_id_spec(parent1, branch1, mhash1, rev1, ts1)
              == compute_commit_id_spec(parent2, branch2, mhash2, rev2, ts2)
     {
-        // Follows from blake3_deterministic + same input construction
+        assert(compute_commit_id_spec(parent1, branch1, mhash1, rev1, ts1)
+             == compute_commit_id_spec(parent2, branch2, mhash2, rev2, ts2));
     }
 
     // ========================================================================
@@ -239,7 +247,6 @@ verus! {
     /// Verified compute_mutations_hash.
     ///
     /// The ensures clause links the exec function to its spec counterpart.
-    #[verifier::external_body]
     pub fn compute_mutations_hash(sorted_mutations: &Vec<(Vec<u8>, bool, Vec<u8>)>) -> (result: Vec<u8>)
         ensures result@.len() == 32
     {
@@ -253,7 +260,6 @@ verus! {
     /// Verified compute_commit_id.
     ///
     /// The ensures clause links the exec function to its spec counterpart.
-    #[verifier::external_body]
     pub fn compute_commit_id(
         parent_hash: &Vec<u8>,
         branch_id: &Vec<u8>,

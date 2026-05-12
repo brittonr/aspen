@@ -193,8 +193,17 @@ verus! {
     // Invariant 1: Order Preservation
     // ========================================================================
 
-    /// Abstract pack function (produces byte sequence)
-    pub uninterp spec fn pack(t: TupleSpec) -> Seq<u8>;
+    /// Abstract pack function (produces byte sequence). Empty tuple encoding is
+    /// structural; non-empty encoding remains an opaque runtime encoder model.
+    pub uninterp spec fn pack_nonempty(t: TupleSpec) -> Seq<u8>;
+
+    pub open spec fn pack(t: TupleSpec) -> Seq<u8> {
+        if t.elements.len() == 0 {
+            Seq::empty()
+        } else {
+            pack_nonempty(t)
+        }
+    }
 
     /// TUPLE-1: Order Preservation
     ///
@@ -361,10 +370,7 @@ verus! {
     // Proofs
     // ========================================================================
 
-    /// Trusted encoding axiom: the production encoder maps the empty tuple to
-    /// empty bytes. Because `pack` is uninterpreted here, the Verus spec retains
-    /// this as the minimal empty-encoding boundary.
-    #[verifier(external_body)]
+    /// Empty tuple encoding follows from the structural `pack` model.
     pub proof fn empty_tuple_pack()
         ensures pack(empty_tuple()).len() == 0
     {
