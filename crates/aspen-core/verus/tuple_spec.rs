@@ -334,12 +334,12 @@ verus! {
 
     /// Trusted encoding axiom: order preservation holds for the production
     /// FoundationDB-style tuple encoder (`crates/aspen-layer/src/tuple/`).
-    /// Verus models `pack`
-    /// as uninterpreted, so this is an explicit encoding trust boundary backed
-    /// by tuple roundtrip/order runtime coverage rather than a local proof of
-    /// the encoder implementation. Runtime evidence: `cargo test -p
-    /// aspen-layer` exercises `test_trusted_tuple_boundary_runtime_evidence`
-    /// plus the tuple order/roundtrip proptests.
+    /// Verus models `pack` as uninterpreted, so this is an explicit encoding
+    /// trust boundary backed by tuple runtime coverage rather than a local proof
+    /// of the encoder implementation. Runtime evidence: `cargo test -p
+    /// aspen-layer` exercises `test_trusted_tuple_boundary_runtime_evidence`,
+    /// `prop_tuple_ordering`, `prop_int_ordering`, `prop_string_ordering`,
+    /// and `prop_bytes_ordering`.
     #[verifier(external_body)]
     pub proof fn order_preservation_holds(a: TupleSpec, b: TupleSpec)
         ensures tuple_order_preservation(a, b)

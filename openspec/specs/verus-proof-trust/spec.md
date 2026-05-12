@@ -11,7 +11,7 @@ As of 2026-05-12, the source-derived residual `external_body` inventory is 11 ma
 | File | Count | Boundary class | Residual assumption |
 |------|------:|----------------|---------------------|
 | `crates/aspen-commit-dag/verus/commit_hash_spec.rs` | 1 | BLAKE3 cryptographic boundary | `blake3_collision_resistance` for different encoded commit/hash inputs; backed by `trusted_blake3_commit_boundary_runtime_evidence`. |
-| `crates/aspen-core/verus/tuple_spec.rs` | 6 | Tuple encoding/order boundary | Production FoundationDB-style tuple encoder order preservation, roundtrip, prefix, NUL escaping, integer order encoding, and byte-array order encoding. |
+| `crates/aspen-core/verus/tuple_spec.rs` | 6 | Tuple encoding/order boundary | Production FoundationDB-style tuple encoder order preservation, roundtrip, prefix, NUL escaping, integer order encoding, and byte-array order encoding; backed by `test_trusted_tuple_boundary_runtime_evidence` plus tuple proptests. |
 | `crates/aspen-raft/verus/chain_verify_spec.rs` | 2 | BLAKE3 + u64 encoding boundary | `blake3_collision_resistance` and `u64_to_le_bytes_injective`; all local chain/tamper wrappers around these assumptions are verified and backed by `test_trusted_blake3_chain_boundary_runtime_evidence`. |
 | `crates/aspen-secrets/verus/mac_spec.rs` | 2 | HMAC cryptographic boundary | HMAC-SHA256 key separation and collision resistance; local MAC sensitivity wrappers are verified and backed by `test_trusted_hmac_boundary_runtime_evidence`. |
 
@@ -55,7 +55,7 @@ Aspen MUST classify residual `external_body` markers that depend on cryptographi
 - GIVEN `tuple_spec.rs` models order preservation, roundtrip behavior, prefix behavior, null escaping, and tuple comparison laws
 - WHEN tuple proof boundaries are classified
 - THEN pure structural facts MUST be proved where feasible
-- AND remaining tuple encoding/order axioms MUST be named as encoding assumptions with runtime test coverage anchored by `cargo test -p aspen-layer`, including `test_trusted_tuple_boundary_runtime_evidence`, `prop_roundtrip`, `prop_string_ordering`, `prop_bytes_ordering`, `prop_int_ordering`, `prop_prefix_stability`, and `prop_range_captures_prefix` (or an explicit follow-up task if any anchor is missing).
+- AND remaining tuple encoding/order axioms MUST be named as encoding assumptions with runtime test coverage anchored by `cargo test -p aspen-layer`, including `test_trusted_tuple_boundary_runtime_evidence`, `prop_roundtrip`, `prop_tuple_ordering`, `prop_string_ordering`, `prop_bytes_ordering`, `prop_int_ordering`, `prop_int_boundaries`, `prop_special_strings`, `prop_prefix_stability`, and `prop_range_captures_prefix`.
 
 #### Scenario: Inventory distinguishes axioms from gaps
 
