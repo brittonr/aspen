@@ -7,7 +7,7 @@
 - **Canonical crate/path**: `crates/aspen-kv-branch`, `crates/aspen-commit-dag`
 - **Intended audience**: Rust projects that need copy-on-write KV overlays, speculative branch commits, branch fork/diff helpers, and chain-hashed commit history over `aspen-traits::KeyValueStore` without Aspen's Raft runtime, node app, handlers, or concrete transport.
 - **Public API owner**: Aspen branch/DAG maintainers
-- **Readiness state**: `workspace-internal`
+- **Readiness state**: `extraction-ready-in-workspace`
 - **Dependency policy class**: reusable branch/history service library family
 
 ## Package and release metadata
@@ -17,7 +17,7 @@
 - **License policy**: AGPL-3.0-or-later until human license strategy changes.
 - **Repository/homepage policy**: Monorepo path until publication policy is decided.
 - **Semver/compatibility policy**: Commit ID/hash behavior is compatibility-sensitive; golden tests must change only with explicit review.
-- **Publish readiness**: Blocked; do not mark publishable during this change.
+- **Publish readiness**: Technically extraction-ready in workspace; publishable/repo-split remains blocked until human license/publication policy is decided.
 
 ## Feature contract
 
@@ -117,17 +117,15 @@ No root app, CLI/TUI, web, dogfood, handler, concrete transport, trust, secrets,
 - positive downstream fixture for canonical branch overlay and commit DAG APIs
 - negative boundary metadata checks proving the downstream fixture has no root Aspen, `aspen-raft`, handlers, binaries, or concrete transport crates
 - compatibility checks for jobs, CI shell executor, deploy, FUSE, docs, and CLI feature paths
-- dependency-boundary checker with `--candidate-family kv-branch-commit-dag`, including mutation checks for forbidden dependency, missing owner, invalid readiness state, and missing downstream fixture evidence
+- dependency-boundary checker with `--candidate-family kv-branch-commit-dag`, including mutation checks for forbidden dependency, missing owner, invalid readiness state, missing downstream fixture evidence, and fresh docs-feature compatibility evidence
 
 ## First-slice status
 
-Current status is `workspace-internal`. The `complete-kv-branch-commit-dag-readiness`
-slice captured current ownership, graph, downstream fixture, and representative
-consumer evidence under
-`openspec/changes/complete-kv-branch-commit-dag-readiness/evidence/`.
-The leaf crates and the jobs, CI shell executor, deploy, and CLI feature paths
-compile against the current graph. `aspen-docs --features commit-dag-federation`
-remains a broader pre-existing compatibility blocker caused by mixed
-`iroh-blobs`/`iroh-docs` and RNG API skew, not by the branch/DAG leaf graph;
-retain `workspace-internal` until that docs feature path has fresh passing
-evidence.
+Current status is `extraction-ready-in-workspace`. The `complete-kv-branch-commit-dag-readiness`
+slice captured ownership, graph, downstream fixture, and representative
+consumer evidence. The `fix-kv-branch-commit-dag-docs-compatibility` slice
+then refreshed the remaining docs feature blocker: `cargo check -p aspen-docs
+--features commit-dag-federation` passes on the current workspace, so the old
+mixed `iroh-blobs`/`iroh-docs` and RNG API-skew note is stale. The family is
+technically ready inside the monorepo; publishable/repo-split status remains
+blocked on human license/publication policy.

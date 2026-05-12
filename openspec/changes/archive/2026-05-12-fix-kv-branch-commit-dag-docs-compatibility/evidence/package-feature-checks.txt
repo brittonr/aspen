@@ -1,0 +1,150 @@
+# Branch/DAG package and feature evidence
+$ cargo check -p aspen-commit-dag
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking once_cell v1.21.4
+    Checking arrayvec v0.7.6
+    Checking thiserror v2.0.18
+    Checking serde v1.0.228
+    Checking tokio v1.52.2
+    Checking snafu v0.8.9
+    Checking cobs v0.3.0
+    Checking tracing-core v0.1.36
+    Checking blake3 v1.8.3
+    Checking aspen-kv-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-types)
+    Checking aspen-cluster-types v0.1.0 (/home/brittonr/git/aspen/crates/aspen-cluster-types)
+    Checking postcard v1.1.3 (/home/brittonr/git/aspen/vendor/postcard)
+    Checking tracing v0.1.44
+warning: trait `MaxSize` is never used
+  --> vendor/postcard/src/max_size.rs:23:11
+   |
+23 | pub trait MaxSize {
+   |           ^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `max` is never used
+   --> vendor/postcard/src/max_size.rs:314:10
+    |
+314 | const fn max(lhs: usize, rhs: usize) -> usize {
+    |          ^^^
+
+warning: `postcard` (lib) generated 2 warnings
+    Checking aspen-traits v0.1.0 (/home/brittonr/git/aspen/crates/aspen-traits)
+    Checking aspen-commit-dag v0.1.0 (/home/brittonr/git/aspen/crates/aspen-commit-dag)
+warning: unknown lint: `platform_dependent_cast`
+  --> crates/aspen-commit-dag/src/gc.rs:34:13
+   |
+34 |     #[allow(platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
+   |             ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `unbounded_loop`
+   --> crates/aspen-commit-dag/src/gc.rs:104:21
+    |
+104 |             #[allow(unbounded_loop)] // background GC task runs for the lifetime of the node
+    |                     ^^^^^^^^^^^^^^
+
+warning: unknown lint: `platform_dependent_cast`
+  --> crates/aspen-commit-dag/src/persistence.rs:41:9
+   |
+41 | #[allow(platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unknown lint: `platform_dependent_cast`
+   --> crates/aspen-commit-dag/src/store.rs:113:13
+    |
+113 |     #[allow(platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
+    |             ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unknown lint: `ambiguous_params`
+  --> crates/aspen-commit-dag/src/verified/commit_hash.rs:65:9
+   |
+65 | #[allow(ambiguous_params)] // raft_revision and timestamp_ms are semantically distinct u64s with unit-suffixed names
+   |         ^^^^^^^^^^^^^^^^
+
+warning: `aspen-commit-dag` (lib) generated 5 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.39s
+$ cargo check -p aspen-kv-branch
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking smallvec v1.15.1
+    Checking parking_lot_core v0.9.12
+    Checking dashmap v6.1.0
+    Checking aspen-kv-branch v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-branch)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.65s
+$ cargo check -p aspen-kv-branch --no-default-features
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+    Checking aspen-kv-branch v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-branch)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.35s
+$ cargo check -p aspen-kv-branch --features commit-dag
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: resolver for the non root package will be ignored, specify resolver at the workspace root:
+package:   /home/brittonr/git/aspen/vendor/iroh-h3-axum/Cargo.toml
+workspace: /home/brittonr/git/aspen/Cargo.toml
+warning: trait `MaxSize` is never used
+  --> vendor/postcard/src/max_size.rs:23:11
+   |
+23 | pub trait MaxSize {
+   |           ^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `max` is never used
+   --> vendor/postcard/src/max_size.rs:314:10
+    |
+314 | const fn max(lhs: usize, rhs: usize) -> usize {
+    |          ^^^
+
+warning: `postcard` (lib) generated 2 warnings
+warning: unknown lint: `platform_dependent_cast`
+  --> crates/aspen-commit-dag/src/gc.rs:34:13
+   |
+34 |     #[allow(platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
+   |             ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `unbounded_loop`
+   --> crates/aspen-commit-dag/src/gc.rs:104:21
+    |
+104 |             #[allow(unbounded_loop)] // background GC task runs for the lifetime of the node
+    |                     ^^^^^^^^^^^^^^
+
+warning: unknown lint: `platform_dependent_cast`
+  --> crates/aspen-commit-dag/src/persistence.rs:41:9
+   |
+41 | #[allow(platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
+   |         ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unknown lint: `platform_dependent_cast`
+   --> crates/aspen-commit-dag/src/store.rs:113:13
+    |
+113 |     #[allow(platform_dependent_cast)] // u32->usize safe on all supported platforms (>= 32-bit)
+    |             ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unknown lint: `ambiguous_params`
+  --> crates/aspen-commit-dag/src/verified/commit_hash.rs:65:9
+   |
+65 | #[allow(ambiguous_params)] // raft_revision and timestamp_ms are semantically distinct u64s with unit-suffixed names
+   |         ^^^^^^^^^^^^^^^^
+
+warning: `aspen-commit-dag` (lib) generated 5 warnings
+    Checking aspen-kv-branch v0.1.0 (/home/brittonr/git/aspen/crates/aspen-kv-branch)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.44s

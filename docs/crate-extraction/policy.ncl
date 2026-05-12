@@ -715,7 +715,7 @@ let Candidate = {
 
     aspen_commit_dag = {
       class = "service library",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/kv-branch-commit-dag.md",
       owner = "Aspen branch/DAG maintainers",
       default_feature_sets = ["default"],
@@ -750,7 +750,7 @@ let Candidate = {
 
     aspen_kv_branch = {
       class = "service library",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/kv-branch-commit-dag.md",
       owner = "Aspen branch/DAG maintainers",
       default_feature_sets = ["default", "no-default-features"],

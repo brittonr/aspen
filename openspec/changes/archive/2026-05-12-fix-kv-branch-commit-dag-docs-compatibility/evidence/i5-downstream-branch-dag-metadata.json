@@ -1,0 +1,19 @@
+{
+  "candidate_family": "kv-branch-commit-dag",
+  "crate_candidates": [
+    "aspen-commit-dag",
+    "aspen-kv-branch"
+  ],
+  "representative_consumers": [
+    "aspen-docs --features commit-dag-federation",
+    "aspen-kv-branch --features commit-dag",
+    "aspen-cli --features commit-dag"
+  ],
+  "docs_feature_result": "passed; prior blocker is stale on current workspace",
+  "classification": "stale compatibility blocker; no feature wiring, dependency version skew, RNG API mismatch, or branch/DAG API regression reproduced",
+  "evidence": [
+    "evidence/docs-feature-reproduce.txt",
+    "evidence/package-feature-checks.txt",
+    "evidence/i5-downstream-branch-dag-forbidden-grep.txt"
+  ]
+}
