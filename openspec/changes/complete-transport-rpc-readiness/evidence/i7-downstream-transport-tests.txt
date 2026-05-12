@@ -1,0 +1,368 @@
+    Updating crates.io index
+     Locking 59 packages to latest Rust 1.97.0-nightly compatible versions
+    Updating block-buffer v0.11.0 -> v0.12.0
+      Adding chacha20 v0.10.0
+      Adding cmov v0.5.3
+      Adding combine v4.6.7
+      Adding core-foundation v0.9.4
+      Adding core-foundation v0.10.1
+      Adding ctutils v0.4.2
+    Updating curve25519-dalek v5.0.0-pre.1 -> v5.0.0-pre.6
+      Adding data-encoding-macro v0.1.20
+      Adding data-encoding-macro-internal v0.1.18
+ Downgrading der v0.8.0 -> v0.8.0-rc.10 (available: v0.8.0)
+    Updating digest v0.11.0-rc.10 -> v0.11.3
+    Updating dlopen2 v0.5.0 -> v0.8.2
+    Updating ed25519-dalek v3.0.0-pre.1 -> v3.0.0-pre.6 (available: v3.0.0-pre.7)
+      Adding either v1.15.0
+      Adding hickory-net v0.26.0-beta.4 (available: v0.26.1)
+    Updating hickory-proto v0.25.2 -> v0.26.0-beta.4 (available: v0.26.1)
+    Updating hickory-resolver v0.25.2 -> v0.26.0-beta.4 (available: v0.26.1)
+    Updating igd-next v0.16.2 -> v0.17.0
+    Updating iroh v0.97.0 -> v0.98.2
+    Updating iroh-base v0.97.0 -> v0.98.0
+      Adding iroh-dns v0.98.0
+    Updating iroh-relay v0.97.0 -> v0.98.0
+      Adding jni v0.22.4
+      Adding jni-macros v0.22.4
+      Adding jni-sys v0.4.1
+      Adding jni-sys-macros v0.4.1
+      Adding ndk-context v0.1.1
+    Updating netdev v0.40.1 -> v0.42.0
+      Adding netlink-packet-route v0.30.0
+    Updating netwatch v0.15.0 -> v0.16.0
+    Updating noq v0.17.0 -> v0.18.0
+    Updating noq-proto v0.16.0 -> v0.17.0
+    Updating noq-udp v0.9.0 -> v0.10.0
+      Adding openssl-probe v0.2.1
+ Downgrading pkcs8 v0.11.0-rc.11 -> v0.11.0-rc.10 (available: v0.11.0)
+    Updating portmapper v0.15.0 -> v0.16.0
+      Adding prefix-trie v0.8.4
+    Updating rand v0.9.4 -> v0.10.1
+    Updating rand_core v0.9.5 -> v0.10.1
+    Updating reqwest v0.12.28 -> v0.13.3
+      Adding rustls-native-certs v0.8.3
+      Adding rustls-platform-verifier v0.7.0
+      Adding rustls-platform-verifier-android v0.1.1
+      Adding same-file v1.0.6
+      Adding schannel v0.1.29
+      Adding security-framework v3.7.0
+      Adding security-framework-sys v2.17.0
+    Updating sha2 v0.11.0-rc.2 -> v0.11.0-rc.5 (available: v0.11.0)
+      Adding simd_cesu8 v1.1.1
+ Downgrading spki v0.8.0 -> v0.8.0-rc.4 (available: v0.8.0)
+    Updating swarm-discovery v0.5.0 -> v0.6.0-alpha.2 (available: v0.6.0)
+      Adding system-configuration v0.7.0
+      Adding system-configuration-sys v0.6.0
+    Updating tokio-websockets v0.12.3 -> v0.13.2
+      Adding walkdir v2.5.0
+    Updating wasm-streams v0.4.2 -> v0.5.0
+      Adding webpki-root-certs v1.0.7
+      Adding winapi-util v0.1.11
+ Downloading crates ...
+  Downloaded prefix-trie v0.8.4
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling libc v0.2.186
+   Compiling serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling pin-project-lite v0.2.17
+   Compiling cfg-if v1.0.4
+   Compiling futures-core v0.3.32
+   Compiling bytes v1.11.1
+   Compiling log v0.4.29
+   Compiling futures-sink v0.3.32
+   Compiling portable-atomic v1.13.1
+   Compiling futures-io v0.3.32
+   Compiling slab v0.4.12
+   Compiling stable_deref_trait v1.2.1
+   Compiling futures-task v0.3.32
+   Compiling memchr v2.8.0
+   Compiling critical-section v1.2.0
+   Compiling typenum v1.20.0
+   Compiling smallvec v1.15.1
+   Compiling fnv v1.0.7
+   Compiling itoa v1.0.18
+   Compiling find-msvc-tools v0.1.9
+   Compiling rand_core v0.10.1
+   Compiling cfg_aliases v0.2.1
+   Compiling futures-channel v0.3.32
+   Compiling shlex v1.3.0
+   Compiling equivalent v1.0.2
+   Compiling subtle v2.6.1
+   Compiling semver v1.0.28
+   Compiling rustversion v1.0.22
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling icu_normalizer_data v2.2.0
+   Compiling utf8_iter v1.0.4
+   Compiling getrandom v0.4.2
+   Compiling icu_properties_data v2.2.0
+   Compiling version_check v0.9.5
+   Compiling cc v1.2.61
+   Compiling thiserror v2.0.18
+   Compiling hashbrown v0.17.0
+   Compiling percent-encoding v2.3.2
+   Compiling cpufeatures v0.3.0
+   Compiling scopeguard v1.2.0
+   Compiling rustc_version v0.4.1
+   Compiling chacha20 v0.10.0
+   Compiling ident_case v1.0.1
+   Compiling lock_api v0.4.14
+   Compiling strsim v0.11.1
+   Compiling untrusted v0.9.0
+   Compiling cpufeatures v0.2.17
+   Compiling form_urlencoded v1.2.2
+   Compiling unicode-segmentation v1.13.2
+   Compiling const-oid v0.10.2
+   Compiling rustls v0.23.39
+   Compiling atomic-waker v1.1.2
+   Compiling generic-array v0.14.7
+   Compiling unicode-xid v0.2.6
+   Compiling base64ct v1.8.3
+   Compiling bitflags v2.11.1
+   Compiling httparse v1.10.1
+   Compiling fastrand v2.4.1
+   Compiling powerfmt v0.2.0
+   Compiling paste v1.0.15
+   Compiling autocfg v1.5.0
+   Compiling anyhow v1.0.102
+   Compiling http v1.4.0
+   Compiling parking v2.2.1
+   Compiling deranged v0.5.8
+   Compiling num-conv v0.2.1
+   Compiling pem-rfc7468 v1.0.0
+   Compiling indexmap v2.14.0
+   Compiling parking_lot_core v0.9.12
+   Compiling tinyvec_macros v0.1.1
+   Compiling base64 v0.22.1
+   Compiling data-encoding v2.11.0
+   Compiling convert_case v0.10.0
+   Compiling tower-service v0.3.3
+   Compiling time-core v0.1.8
+   Compiling syn v2.0.117
+   Compiling try-lock v0.2.5
+   Compiling num-traits v0.2.19
+   Compiling want v0.3.1
+   Compiling vergen-lib v9.1.0
+   Compiling tinyvec v1.11.0
+   Compiling futures-lite v2.6.1
+   Compiling hybrid-array v0.4.11
+   Compiling curve25519-dalek v5.0.0-pre.6
+   Compiling spin v0.9.8
+   Compiling n0-future v0.3.2
+   Compiling winnow v1.0.2
+   Compiling httpdate v1.0.3
+   Compiling spin v0.10.0
+   Compiling diatomic-waker v0.2.3
+   Compiling crossbeam-utils v0.8.21
+   Compiling heck v0.5.0
+   Compiling cordyceps v0.3.4
+   Compiling vergen-lib v0.1.6
+   Compiling vergen v9.1.0
+   Compiling heapless v0.7.17
+   Compiling http-body v1.0.1
+   Compiling netlink-packet-core v0.8.1
+   Compiling noq-udp v0.10.0
+   Compiling sync_wrapper v1.0.2
+   Compiling block-buffer v0.12.0
+   Compiling crypto-common v0.2.1
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling opaque-debug v0.3.1
+   Compiling byteorder v1.5.0
+   Compiling ring v0.17.14
+   Compiling either v1.15.0
+   Compiling signature v3.0.0-rc.10
+   Compiling socket2 v0.6.3
+   Compiling mio v1.2.0
+   Compiling getrandom v0.2.17
+   Compiling crypto-common v0.1.7
+   Compiling inout v0.1.4
+   Compiling universal-hash v0.5.1
+   Compiling futures-buffered v0.2.13
+   Compiling hash32 v0.2.1
+   Compiling rand v0.10.1
+   Compiling cipher v0.4.4
+   Compiling polyval v0.6.2
+   Compiling vergen-gitcl v1.0.8
+   Compiling tower-layer v0.3.3
+   Compiling num_threads v0.1.7
+   Compiling parking_lot v0.12.5
+   Compiling time v0.3.47
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling ghash v0.5.1
+   Compiling aead v0.5.2
+   Compiling http-body-util v0.1.3
+   Compiling openssl-probe v0.2.1
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.2.0
+   Compiling uuid v1.23.1
+   Compiling netlink-packet-route v0.29.0
+   Compiling blake3 v1.8.5
+   Compiling acto v0.8.0
+   Compiling noq v0.18.0
+   Compiling digest v0.11.3
+   Compiling netwatch v0.16.0
+   Compiling lru-slab v0.1.2
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling sha2 v0.11.0-rc.5
+   Compiling crossbeam-channel v0.5.15
+   Compiling hashbrown v0.16.1
+   Compiling aes-gcm v0.10.3
+   Compiling crossbeam-epoch v0.9.18
+   Compiling iri-string v0.7.12
+   Compiling ryu v1.0.23
+   Compiling sha1_smol v1.0.1
+   Compiling getrandom v0.3.4
+   Compiling xml-rs v0.8.28
+   Compiling identity-hash v0.1.0
+   Compiling sorted-index-buffer v0.2.1
+   Compiling tagptr v0.2.0
+   Compiling mac-addr v0.3.0
+   Compiling rustc-hash v2.1.2
+   Compiling netlink-packet-route v0.30.0
+   Compiling simple-dns v0.9.3
+   Compiling resolv-conf v0.7.6
+   Compiling litrs v1.0.0
+   Compiling crc-catalog v2.5.0
+   Compiling toml_edit v0.25.11+spec-1.1.0
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling arrayvec v0.7.6
+   Compiling simdutf8 v0.1.5
+   Compiling smol_str v0.1.24
+   Compiling crc v3.4.0
+   Compiling lru v0.16.4
+   Compiling seize v0.5.1
+   Compiling flume v0.11.1
+   Compiling serde_bytes v0.11.19
+   Compiling xmltree v0.10.3
+   Compiling iroh v0.98.2
+   Compiling cmov v0.5.3
+   Compiling document-features v0.2.12
+   Compiling dyn-clone v1.0.20
+   Compiling papaya v0.2.4
+   Compiling aspen-constants v0.1.0 (/home/brittonr/git/aspen/crates/aspen-constants)
+   Compiling ctutils v0.4.2
+   Compiling proc-macro-crate v3.5.0
+   Compiling synstructure v0.13.2
+   Compiling darling_core v0.20.11
+   Compiling serde_derive v1.0.228
+   Compiling tokio-macros v2.7.0
+   Compiling futures-macro v0.3.32
+   Compiling zeroize_derive v1.4.3
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling displaydoc v0.2.5
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v2.0.18
+   Compiling derive_more-impl v2.1.1
+   Compiling spez v0.1.2
+   Compiling n0-error-macros v0.1.3
+   Compiling pin-project-internal v1.1.11
+   Compiling curve25519-dalek-derive v0.1.1
+   Compiling postcard-derive v0.2.2
+   Compiling data-encoding-macro-internal v0.1.18
+   Compiling async-trait v0.1.89
+   Compiling zeroize v1.8.2
+   Compiling enum-assoc v1.3.0
+   Compiling strum_macros v0.28.0
+   Compiling tokio v1.52.1
+   Compiling rustls-pki-types v1.14.1
+   Compiling der v0.8.0-rc.10
+   Compiling futures-util v0.3.32
+   Compiling n0-error v0.1.3
+   Compiling rustls-native-certs v0.8.3
+   Compiling pin-project v1.1.11
+   Compiling data-encoding-macro v0.1.20
+   Compiling num_enum_derive v0.7.6
+   Compiling iroh-metrics-derive v0.4.1
+   Compiling webpki-roots v1.0.7
+   Compiling zerofrom v0.1.7
+   Compiling yoke v0.8.2
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling cobs v0.3.0
+   Compiling darling_macro v0.20.11
+   Compiling spki v0.8.0-rc.4
+   Compiling num_enum v0.7.6
+   Compiling pkcs8 v0.11.0-rc.10
+   Compiling strum v0.28.0
+   Compiling darling v0.20.11
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling derive_builder_core v0.20.2
+   Compiling icu_collections v2.2.0
+   Compiling icu_locale_core v2.2.0
+   Compiling rustls-webpki v0.103.13
+   Compiling derive_more v2.1.1
+   Compiling derive_builder_macro v0.20.2
+   Compiling derive_builder v0.20.2
+   Compiling icu_provider v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling ipnet v2.12.0
+   Compiling ed25519 v3.0.0-rc.4
+   Compiling serde_bencode v0.2.4
+   Compiling iroh-relay v0.98.0
+   Compiling prefix-trie v0.8.4
+   Compiling once_cell v1.21.4
+   Compiling moka v0.12.15
+   Compiling futures-executor v0.3.32
+   Compiling postcard v1.1.3
+   Compiling tracing-core v0.1.36
+   Compiling futures v0.3.32
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling tracing v0.1.44
+   Compiling ed25519-dalek v3.0.0-pre.6
+   Compiling url v2.5.8
+   Compiling iroh-metrics v0.38.3
+   Compiling mainline v6.0.1
+   Compiling hickory-proto v0.26.0-beta.4
+   Compiling attohttpc v0.30.1
+   Compiling iroh-base v0.98.0
+   Compiling tokio-util v0.7.18
+   Compiling netlink-sys v0.8.8
+   Compiling tower v0.5.3
+   Compiling backon v1.6.0
+   Compiling netlink-proto v0.12.0
+   Compiling netdev v0.42.0
+   Compiling tower-http v0.6.8
+   Compiling h2 v0.4.13
+   Compiling tokio-stream v0.1.18
+   Compiling n0-watcher v0.6.1
+   Compiling iroh-dns v0.98.0
+   Compiling swarm-discovery v0.6.0-alpha.2
+   Compiling tokio-rustls v0.26.4
+   Compiling rustls-platform-verifier v0.7.0
+   Compiling noq-proto v0.17.0
+   Compiling tokio-websockets v0.13.2
+   Compiling hyper v1.9.0
+   Compiling hickory-net v0.26.0-beta.4
+   Compiling hyper-util v0.1.20
+   Compiling hickory-resolver v0.26.0-beta.4
+   Compiling hyper-rustls v0.27.9
+   Compiling igd-next v0.17.0
+   Compiling reqwest v0.13.3
+   Compiling portmapper v0.16.0
+   Compiling aspen-transport v0.1.0 (/home/brittonr/git/aspen/crates/aspen-transport)
+   Compiling downstream-transport v0.1.0 (/home/brittonr/git/aspen/openspec/changes/complete-transport-rpc-readiness/fixtures/downstream-transport)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.07s
+     Running unittests src/lib.rs (/tmp/aspen-transport-rpc-evidence/debug/deps/downstream_transport-4c51cc0d8bd4aba5)
+
+running 3 tests
+test tests::connection_manager_reports_configured_bounds ... ok
+test tests::protocol_ids_are_non_empty ... ok
+test tests::stream_manager_rejects_after_bound ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests downstream_transport
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

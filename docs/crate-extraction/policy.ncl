@@ -518,7 +518,7 @@ let Candidate = {
 
     aspen_transport = {
       class = "runtime adapter",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/transport-rpc.md",
       owner = "Aspen transport/RPC maintainers",
       default_feature_sets = ["default"],
@@ -546,7 +546,7 @@ let Candidate = {
 
     aspen_rpc_core = {
       class = "service library",
-      readiness_state = "workspace-internal",
+      readiness_state = "extraction-ready-in-workspace",
       manifest = "docs/crate-extraction/transport-rpc.md",
       owner = "Aspen transport/RPC maintainers",
       default_feature_sets = ["default"],

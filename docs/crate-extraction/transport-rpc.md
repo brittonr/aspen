@@ -7,7 +7,7 @@
 - Canonical class: runtime adapter plus service library
 - Owner: Aspen transport/RPC maintainers
 - Audience: downstream Rust services that want Aspen's Iroh protocol helper and RPC dispatch pattern without the Aspen node runtime.
-- Readiness: `workspace-internal`
+- Readiness: `extraction-ready-in-workspace`
 
 ## Package and release metadata
 
@@ -66,8 +66,8 @@
 - `aspen-cluster`: node bootstrap router compatibility.
 - `aspen-client`: watch/log-subscriber protocol compatibility.
 - `aspen-rpc-handlers`: full runtime context and handler registry compatibility.
-- `openspec/changes/split-transport-rpc-core/fixtures/downstream-transport`: positive downstream transport fixture.
-- `openspec/changes/split-transport-rpc-core/fixtures/downstream-rpc-core`: positive downstream RPC fixture.
+- `openspec/changes/complete-transport-rpc-readiness/fixtures/downstream-transport`: positive downstream transport fixture.
+- `openspec/changes/complete-transport-rpc-readiness/fixtures/downstream-rpc-core`: positive downstream RPC fixture.
 
 ## Dependency exceptions
 
@@ -86,6 +86,6 @@
 
 ## Blocked reasons and next action
 
-- Readiness remains `workspace-internal` until final evidence proves all default graphs and runtime compatibility rails.
-- Publication/repository split remains blocked on human license/publication policy even after technical rails pass.
-- Next action: keep narrowing runtime-context fields into smaller adapter crates after this staged split lands.
+- Technical readiness is `extraction-ready-in-workspace`: downstream fixtures, default graph checks, forbidden-boundary scans, compatibility consumers, and the transport-rpc readiness checker pass with evidence under `openspec/changes/complete-transport-rpc-readiness/evidence/`.
+- Publication/repository split remains blocked on human license/publication policy after technical rails pass.
+- Next action: keep narrowing runtime-context fields into smaller adapter crates while preserving the published verification rails.

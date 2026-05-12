@@ -1,0 +1,7 @@
+Forbidden dependency scan for i7-downstream-rpc-metadata.json
+packages=133
+status=PASS
+documented non-default/test-only allowances:
+- tokio (dev-dependency test runtime only)
+leaks:
+- none

@@ -1,0 +1,6 @@
+Forbidden dependency scan for i7-downstream-transport-metadata.json
+packages=397
+status=FAIL
+leaks:
+- parking_lot
+- postcard

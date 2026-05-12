@@ -1,0 +1,266 @@
+    Updating crates.io index
+    Updating git repository `ssh://git@github.com/brittonr/ucan.git`
+     Locking 49 packages to latest Rust 1.97.0-nightly compatible versions
+      Adding bitflags v2.11.1
+    Updating block-buffer v0.11.0 -> v0.12.0
+      Adding bumpalo v3.20.2
+      Adding chacha20 v0.10.0
+    Updating curve25519-dalek v5.0.0-pre.1 -> v5.0.0-pre.6
+      Adding data-encoding-macro v0.1.20
+      Adding data-encoding-macro-internal v0.1.18
+    Updating digest v0.11.0-rc.10 -> v0.11.3
+    Updating ed25519-dalek v3.0.0-pre.1 -> v3.0.0-pre.6 (available: v3.0.0-pre.7)
+      Adding equivalent v1.0.2
+      Adding foldhash v0.1.5
+      Adding getrandom v0.4.2
+      Adding hashbrown v0.15.5
+      Adding hashbrown v0.17.1
+      Adding heck v0.5.0
+      Adding id-arena v2.3.0
+      Adding indexmap v2.14.0
+    Updating iroh-base v0.97.0 -> v0.98.0
+      Adding itoa v1.0.18
+      Adding js-sys v0.3.98
+      Adding leb128fmt v0.1.0
+      Adding log v0.4.29
+      Adding memchr v2.8.0
+      Adding once_cell v1.21.4
+      Adding prettyplease v0.2.37
+      Adding r-efi v6.0.0
+      Adding rand v0.10.1
+    Updating rand_core v0.9.5 -> v0.10.1
+      Adding rustversion v1.0.22
+      Adding serde_json v1.0.149
+    Updating sha2 v0.11.0-rc.2 -> v0.11.0-rc.5 (available: v0.11.0)
+      Adding ucan-core v0.1.0 (ssh://git@github.com/brittonr/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e)
+      Adding wasip2 v1.0.3+wasi-0.2.9
+      Adding wasip3 v0.4.0+wasi-0.3.0-rc-2026-01-06
+      Adding wasm-bindgen v0.2.121
+      Adding wasm-bindgen-macro v0.2.121
+      Adding wasm-bindgen-macro-support v0.2.121
+      Adding wasm-bindgen-shared v0.2.121
+      Adding wasm-encoder v0.244.0
+      Adding wasm-metadata v0.244.0
+      Adding wasmparser v0.244.0
+      Adding wit-bindgen v0.51.0
+      Adding wit-bindgen v0.57.1
+      Adding wit-bindgen-core v0.51.0
+      Adding wit-bindgen-rust v0.51.0
+      Adding wit-bindgen-rust-macro v0.51.0
+      Adding wit-component v0.244.0
+      Adding wit-parser v0.244.0
+      Adding zmij v1.0.21
+   Compiling smallvec v1.15.1
+   Compiling libc v0.2.186
+   Compiling signature v3.0.0-rc.10
+   Compiling percent-encoding v2.3.2
+   Compiling constant_time_eq v0.4.2
+   Compiling ucan-core v0.1.0 (ssh://git@github.com/brittonr/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e)
+   Compiling blake3 v1.8.5
+   Compiling base64 v0.22.1
+   Compiling derive_more-impl v2.1.1
+   Compiling aspen-jobs-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-jobs-protocol)
+   Compiling aspen-coordination-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-coordination-protocol)
+   Compiling aspen-forge-protocol v0.1.0 (/home/brittonr/git/aspen/crates/aspen-forge-protocol)
+   Compiling tokio v1.52.1
+   Compiling postcard v1.1.3
+   Compiling ed25519 v3.0.0-rc.4
+   Compiling form_urlencoded v1.2.2
+   Compiling ed25519-dalek v3.0.0-pre.6
+   Compiling icu_normalizer v2.2.0
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+   Compiling getrandom v0.4.2
+   Compiling rand v0.10.1
+   Compiling derive_more v2.1.1
+   Compiling iroh-base v0.98.0
+   Compiling aspen-auth-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-auth-core)
+   Compiling aspen-client-api v0.1.0 (/home/brittonr/git/aspen/crates/aspen-client-api)
+warning: unknown lint: `acronym_style`
+   --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/coordination.rs:201:9
+    |
+201 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unknown_lints)]` on by default
+
+warning: unknown lint: `acronym_style`
+   --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/coordination.rs:212:9
+    |
+212 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/coordination.rs:222:9
+    |
+222 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/coordination.rs:233:9
+    |
+233 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/coordination.rs:243:9
+    |
+243 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/coordination.rs:249:9
+    |
+249 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/coordination.rs:259:9
+    |
+259 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/coordination.rs:270:9
+    |
+270 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/coordination.rs:334:9
+    |
+334 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+   --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/coordination.rs:340:9
+    |
+340 |         acronym_style,
+    |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:1494:9
+     |
+1494 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:1510:9
+     |
+1510 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:1524:9
+     |
+1524 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:1540:9
+     |
+1540 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:1554:9
+     |
+1554 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:1566:9
+     |
+1566 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:1580:9
+     |
+1580 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:1596:9
+     |
+1596 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:4322:9
+     |
+4322 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:4329:9
+     |
+4329 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:4336:9
+     |
+4336 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:4343:9
+     |
+4343 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:4350:9
+     |
+4350 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:4357:9
+     |
+4357 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:4364:9
+     |
+4364 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:4371:9
+     |
+4371 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:4411:9
+     |
+4411 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+warning: unknown lint: `acronym_style`
+    --> /home/brittonr/git/aspen/crates/aspen-client-api/src/messages/mod.rs:4418:9
+     |
+4418 |         acronym_style,
+     |         ^^^^^^^^^^^^^
+
+   Compiling aspen-rpc-core v0.1.0 (/home/brittonr/git/aspen/crates/aspen-rpc-core)
+   Compiling downstream-rpc-core v0.1.0 (/home/brittonr/git/aspen/openspec/changes/complete-transport-rpc-readiness/fixtures/downstream-rpc-core)
+warning: `aspen-client-api` (lib) generated 28 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.03s
+     Running unittests src/lib.rs (/tmp/aspen-transport-rpc-evidence/debug/deps/downstream_rpc_core-b9060a5112363b9d)
+
+running 2 tests
+test tests::dispatches_ping_handler ... ok
+test tests::rejects_unregistered_request ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests downstream_rpc_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
