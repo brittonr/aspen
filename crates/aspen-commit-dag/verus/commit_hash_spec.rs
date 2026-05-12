@@ -44,12 +44,38 @@ verus! {
         ensures u64_to_le_bytes(n).len() == 8
     {}
 
-    /// Axiom: u64_to_le_bytes is injective (different values → different bytes).
+    /// Trusted BLAKE3 collision-resistance boundary.
+    ///
+    /// Verus models BLAKE3 bytes as uninterpreted, so different-input ⇒
+    /// different-output is the explicit cryptographic assumption. Local wrapper
+    /// proofs should reduce their input construction structurally before calling
+    /// this boundary.
     #[verifier::external_body]
-    pub proof fn u64_to_le_bytes_injective(a: u64, b: u64)
-        requires a != b
-        ensures u64_to_le_bytes(a) != u64_to_le_bytes(b)
+    pub proof fn blake3_collision_resistance(input1: Seq<u8>, input2: Seq<u8>)
+        requires input1 != input2
+        ensures blake3_spec(input1) != blake3_spec(input2)
     {}
+
+    /// Appending the same suffix preserves sequence inequality.
+    pub proof fn same_suffix_append_preserves_neq(left: Seq<u8>, right: Seq<u8>, suffix: Seq<u8>)
+        requires left != right
+        ensures left + suffix != right + suffix
+    {
+        if left + suffix == right + suffix {
+            assert((left + suffix).len() == left.len() + suffix.len());
+            assert((right + suffix).len() == right.len() + suffix.len());
+            assert(left.len() == right.len());
+            assert(left =~= right) by {
+                assert forall |i: int| 0 <= i && i < left.len() implies left[i] == right[i] by {
+                    assert(i < (left + suffix).len());
+                    assert(i < (right + suffix).len());
+                    assert((left + suffix)[i] == left[i]);
+                    assert((right + suffix)[i] == right[i]);
+                }
+            }
+            assert(false);
+        }
+    }
 
     // ========================================================================
     // Spec Functions
@@ -177,7 +203,6 @@ verus! {
     /// Trusted axiom: blake3 is collision-resistant (different inputs → different outputs
     /// with overwhelming probability). We model this as: if the concatenated input differs,
     /// the output differs.
-    #[verifier::external_body]
     pub proof fn parent_modification_detected(
         parent_a: Seq<u8>, parent_b: Seq<u8>,
         branch_id: Seq<u8>,
@@ -193,8 +218,21 @@ verus! {
             compute_commit_id_spec(parent_a, branch_id, mutations_hash, raft_revision, timestamp_ms)
             != compute_commit_id_spec(parent_b, branch_id, mutations_hash, raft_revision, timestamp_ms)
     {
-        // The concatenated inputs differ in the first 32 bytes (parent_hash).
-        // By collision resistance of blake3, the outputs differ.
+        let rev_bytes = u64_to_le_bytes(raft_revision);
+        let ts_bytes = u64_to_le_bytes(timestamp_ms);
+        let parent_branch_a = parent_a + branch_id;
+        let parent_branch_b = parent_b + branch_id;
+        same_suffix_append_preserves_neq(parent_a, parent_b, branch_id);
+        let with_mutations_a = parent_branch_a + mutations_hash;
+        let with_mutations_b = parent_branch_b + mutations_hash;
+        same_suffix_append_preserves_neq(parent_branch_a, parent_branch_b, mutations_hash);
+        let with_revision_a = with_mutations_a + rev_bytes;
+        let with_revision_b = with_mutations_b + rev_bytes;
+        same_suffix_append_preserves_neq(with_mutations_a, with_mutations_b, rev_bytes);
+        let input_a = with_revision_a + ts_bytes;
+        let input_b = with_revision_b + ts_bytes;
+        same_suffix_append_preserves_neq(with_revision_a, with_revision_b, ts_bytes);
+        blake3_collision_resistance(input_a, input_b);
     }
 
     // ========================================================================
@@ -205,7 +243,6 @@ verus! {
     ///
     /// Reuses the same pattern as data_modification_detected in
     /// aspen-raft/verus/chain_verify_spec.rs.
-    #[verifier::external_body]
     pub proof fn mutation_modification_detected(
         m1: Seq<(Seq<u8>, bool, Seq<u8>)>,
         m2: Seq<(Seq<u8>, bool, Seq<u8>)>,
@@ -215,8 +252,7 @@ verus! {
         ensures
             compute_mutations_hash_spec(m1) != compute_mutations_hash_spec(m2)
     {
-        // Different encoded mutations → different blake3 input → different hash
-        // (by collision resistance)
+        blake3_collision_resistance(encode_mutations(m1), encode_mutations(m2));
     }
 
     // ========================================================================
