@@ -108,9 +108,22 @@ verus! {
         blake3_collision_resistance(input1, input2);
     }
 
-    /// Term modification detection. Trusted wrapper over Blake3 collision
-    /// resistance plus the `u64_to_le_bytes` injective encoding boundary.
+    /// Trusted u64 little-endian encoding injectivity boundary.
+    ///
+    /// The byte-level LE model is opaque (`u64_to_le_byte` is uninterpreted), so
+    /// injectivity is kept as the named encoding trust boundary while wrappers
+    /// around constructed hash inputs are proved structurally.
     #[verifier(external_body)]
+    pub proof fn u64_to_le_bytes_injective(left: u64, right: u64)
+        requires
+            left != right,
+        ensures
+            u64_to_le_bytes(left) != u64_to_le_bytes(right),
+    {
+    }
+
+    /// Term modification detection. Proved structurally from the explicit u64
+    /// encoding injectivity boundary plus Blake3 collision resistance.
     pub proof fn term_modification_detected(
         prev_hash: ChainHash,
         index: u64,
@@ -125,12 +138,17 @@ verus! {
             compute_entry_hash_spec(prev_hash, index, term1, data) !=
             compute_entry_hash_spec(prev_hash, index, term2, data)
     {
-        // Different term => different input => different hash
+        let prefix = prev_hash + u64_to_le_bytes(index);
+        let left = u64_to_le_bytes(term1);
+        let right = u64_to_le_bytes(term2);
+        u64_to_le_bytes_injective(term1, term2);
+        same_prefix_append_preserves_neq(prefix, left, right);
+        same_suffix_append_preserves_neq(prefix + left, prefix + right, data);
+        blake3_collision_resistance(prefix + left + data, prefix + right + data);
     }
 
-    /// Index modification detection. Trusted wrapper over Blake3 collision
-    /// resistance plus the `u64_to_le_bytes` injective encoding boundary.
-    #[verifier(external_body)]
+    /// Index modification detection. Proved structurally from the explicit u64
+    /// encoding injectivity boundary plus Blake3 collision resistance.
     pub proof fn index_modification_detected(
         prev_hash: ChainHash,
         index1: u64,
@@ -145,12 +163,19 @@ verus! {
             compute_entry_hash_spec(prev_hash, index1, term, data) !=
             compute_entry_hash_spec(prev_hash, index2, term, data)
     {
-        // Different index => different input => different hash
+        let left = u64_to_le_bytes(index1);
+        let right = u64_to_le_bytes(index2);
+        let term_bytes = u64_to_le_bytes(term);
+        u64_to_le_bytes_injective(index1, index2);
+        same_prefix_append_preserves_neq(prev_hash, left, right);
+        same_suffix_append_preserves_neq(prev_hash + left, prev_hash + right, term_bytes);
+        same_suffix_append_preserves_neq(prev_hash + left + term_bytes, prev_hash + right + term_bytes, data);
+        blake3_collision_resistance(prev_hash + left + term_bytes + data, prev_hash + right + term_bytes + data);
     }
 
-    /// Previous hash modification detection (chain linking). Trusted wrapper
-    /// over Blake3 collision resistance for entry-hash input construction.
-    #[verifier(external_body)]
+    /// Previous hash modification detection (chain linking). Proved
+    /// structurally from Blake3 collision resistance for the constructed entry
+    /// hash inputs.
     pub proof fn prev_hash_modification_detected(
         prev_hash1: ChainHash,
         prev_hash2: ChainHash,
@@ -166,7 +191,12 @@ verus! {
             compute_entry_hash_spec(prev_hash1, index, term, data) !=
             compute_entry_hash_spec(prev_hash2, index, term, data)
     {
-        // Different prev_hash => different input => different hash
+        let index_bytes = u64_to_le_bytes(index);
+        let term_bytes = u64_to_le_bytes(term);
+        same_suffix_append_preserves_neq(prev_hash1, prev_hash2, index_bytes);
+        same_suffix_append_preserves_neq(prev_hash1 + index_bytes, prev_hash2 + index_bytes, term_bytes);
+        same_suffix_append_preserves_neq(prev_hash1 + index_bytes + term_bytes, prev_hash2 + index_bytes + term_bytes, data);
+        blake3_collision_resistance(prev_hash1 + index_bytes + term_bytes + data, prev_hash2 + index_bytes + term_bytes + data);
     }
 
     // ========================================================================
