@@ -57,14 +57,16 @@ verus! {
     // terminate.
 
     /// Size of a tuple (sum of element sizes + 1)
-    #[verifier(external_body)]
-    pub open spec fn tuple_size(t: TupleSpec) -> nat {
+    pub open spec fn tuple_size(t: TupleSpec) -> nat
+        decreases t,
+    {
         1 + elements_size(t.elements)
     }
 
     /// Size of a sequence of elements
-    #[verifier(external_body)]
-    pub open spec fn elements_size(elems: Seq<ElementSpec>) -> nat {
+    pub open spec fn elements_size(elems: Seq<ElementSpec>) -> nat
+        decreases elems,
+    {
         if elems.len() == 0 {
             0
         } else {
@@ -73,8 +75,9 @@ verus! {
     }
 
     /// Size of an element (1 for primitives, recursive for tuples)
-    #[verifier(external_body)]
-    pub open spec fn element_size(e: ElementSpec) -> nat {
+    pub open spec fn element_size(e: ElementSpec) -> nat
+        decreases e,
+    {
         match e {
             ElementSpec::Null => 1,
             ElementSpec::Int(_) => 1,
@@ -106,8 +109,10 @@ verus! {
 
     /// Compare two elements for ordering
     ///
-    /// Trusted spec: Lexicographic ordering on elements. Terminates because
-    /// nested tuples have strictly smaller size than their containing element.
+    /// Trusted structural boundary: lexicographic ordering on elements.
+    /// The definition is mathematical, but its mutual recursion with
+    /// `tuple_less_than` needs a stronger size-decrease lemma before Verus can
+    /// accept it without a trusted body.
     #[verifier(external_body)]
     pub open spec fn element_less_than(a: ElementSpec, b: ElementSpec) -> bool {
         let type_a = element_type_order(a);
@@ -150,8 +155,10 @@ verus! {
 
     /// Compare two tuples lexicographically by elements
     ///
-    /// Trusted spec: Lexicographic ordering on tuples. Terminates because
-    /// recursive calls are on strictly smaller element sequences.
+    /// Trusted structural boundary: lexicographic ordering on tuples.
+    /// Recursive tail calls are on smaller element sequences, but calls through
+    /// `element_less_than` need a shared size-decrease lemma before this can be
+    /// discharged locally.
     #[verifier(external_body)]
     pub open spec fn tuple_less_than(a: TupleSpec, b: TupleSpec) -> bool {
         if a.elements.len() == 0 && b.elements.len() == 0 {
@@ -196,8 +203,11 @@ verus! {
         tuple_less_than(a, b) ==> seq_less_than(pack(a), pack(b))
     }
 
-    /// Proof sketch: Order preservation holds
-    /// (This is an axiom we trust based on the encoding design)
+    /// Trusted encoding axiom: order preservation holds for the production
+    /// FoundationDB-style tuple encoder (`src/tuple.rs`). Verus models `pack`
+    /// as uninterpreted, so this is an explicit encoding trust boundary backed
+    /// by tuple roundtrip/order runtime coverage rather than a local proof of
+    /// the encoder implementation.
     #[verifier(external_body)]
     pub proof fn order_preservation_holds(a: TupleSpec, b: TupleSpec)
         ensures tuple_order_preservation(a, b)
@@ -222,7 +232,10 @@ verus! {
         unpack(pack(t)) == Some(t)
     }
 
-    /// Proof sketch: Roundtrip holds for all tuples
+    /// Trusted encoding axiom: production tuple pack/unpack roundtrips all
+    /// represented elements. The Verus model keeps `pack`/`unpack`
+    /// uninterpreted, so this marker names the external encoder/decoder
+    /// correctness boundary.
     #[verifier(external_body)]
     pub proof fn roundtrip_holds(t: TupleSpec)
         ensures tuple_roundtrip(t)
@@ -255,7 +268,9 @@ verus! {
         (p == tuple_prefix(t, n)) ==> is_byte_prefix(pack(p), pack(t))
     }
 
-    /// Proof sketch: Prefix property holds
+    /// Trusted encoding axiom: encoded tuple prefixes are byte prefixes of the
+    /// full encoded tuple under the production tuple encoder. This depends on
+    /// the uninterpreted `pack` boundary, not on local structural reasoning.
     #[verifier(external_body)]
     pub proof fn prefix_property_holds(t: TupleSpec, n: int)
         requires 0 <= n <= t.elements.len()
@@ -294,7 +309,9 @@ verus! {
         exists |i: int| 0 <= i < bytes.len() && bytes[i] == 0u8
     }
 
-    /// Proof: Roundtrip preserves bytes with nulls
+    /// Trusted encoding axiom: production byte/string tuple encoding escapes
+    /// embedded NUL bytes and decodes them back. This marker is intentionally
+    /// tied to the runtime tuple encoder's NUL-escaping behavior.
     #[verifier(external_body)]
     pub proof fn null_bytes_roundtrip(bytes: Seq<u8>)
         ensures ({
@@ -344,7 +361,9 @@ verus! {
     // Proofs
     // ========================================================================
 
-    /// Proof: Empty tuple packs to minimal bytes
+    /// Trusted encoding axiom: the production encoder maps the empty tuple to
+    /// empty bytes. Because `pack` is uninterpreted here, the Verus spec retains
+    /// this as the minimal empty-encoding boundary.
     #[verifier(external_body)]
     pub proof fn empty_tuple_pack()
         ensures pack(empty_tuple()).len() == 0
@@ -443,7 +462,6 @@ verus! {
     // Keep old names for API compatibility, delegating to axiom_ prefixed versions
 
     /// Proof: Tuple comparison is transitive (alias for axiom_tuple_comparison_transitive)
-    #[verifier(external_body)]
     pub proof fn tuple_comparison_transitive(
         a: TupleSpec,
         b: TupleSpec,
@@ -454,31 +472,31 @@ verus! {
             tuple_less_than(b, c),
         ensures tuple_less_than(a, c)
     {
-        // Delegates to axiom_tuple_comparison_transitive
+        axiom_tuple_comparison_transitive(a, b, c);
     }
 
     /// Proof: Tuple comparison is anti-symmetric (alias for axiom_tuple_comparison_antisymmetric)
-    #[verifier(external_body)]
     pub proof fn tuple_comparison_antisymmetric(a: TupleSpec, b: TupleSpec)
         requires tuple_less_than(a, b)
         ensures !tuple_less_than(b, a)
     {
-        // Delegates to axiom_tuple_comparison_antisymmetric
+        axiom_tuple_comparison_antisymmetric(a, b);
     }
 
     /// Proof: Tuple comparison is irreflexive (alias for axiom_tuple_comparison_irreflexive)
-    #[verifier(external_body)]
     pub proof fn tuple_comparison_irreflexive(a: TupleSpec)
         ensures !tuple_less_than(a, a)
     {
-        // Delegates to axiom_tuple_comparison_irreflexive
+        axiom_tuple_comparison_irreflexive(a);
     }
 
     // ========================================================================
     // Integer Encoding Properties
     // ========================================================================
 
-    /// Integer encoding preserves ordering
+    /// Trusted encoding axiom: integer byte encoding preserves numeric order in
+    /// the production tuple encoder. This depends on the uninterpreted `pack`
+    /// function and is intentionally retained as an encoder boundary.
     #[verifier(external_body)]
     pub proof fn int_encoding_preserves_order(a: i64, b: i64)
         requires a < b
@@ -495,7 +513,9 @@ verus! {
         // This ensures lexicographic order matches numeric order
     }
 
-    /// Bytes encoding preserves ordering
+    /// Trusted encoding axiom: byte-array escaping and terminators preserve
+    /// lexicographic order in the production tuple encoder. This depends on the
+    /// uninterpreted `pack` function and is intentionally retained.
     #[verifier(external_body)]
     pub proof fn bytes_encoding_preserves_order(a: Seq<u8>, b: Seq<u8>)
         requires seq_less_than(a, b)

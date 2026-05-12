@@ -121,7 +121,9 @@ verus! {
             hmac_sha256(key, msg) == hmac_sha256(key, msg),
     {}
 
-    /// AXIOM: HMAC-SHA256 output is always 32 bytes.
+    /// AXIOM: HMAC-SHA256 output is always 32 bytes. This is a cryptographic
+    /// library boundary backed by the production `hmac`/SHA-256 implementation;
+    /// Verus models `hmac_sha256` as uninterpreted.
     #[verifier(external_body)]
     pub proof fn axiom_hmac_output_length(key: Seq<u8>, msg: Seq<u8>)
         ensures
@@ -131,7 +133,8 @@ verus! {
     /// AXIOM: HMAC-SHA256 key separation.
     ///
     /// Different keys produce different MACs for the same message
-    /// (with overwhelming probability, modeled as unconditional).
+    /// (with overwhelming probability, modeled as unconditional). This remains
+    /// an explicit cryptographic trust boundary.
     #[verifier(external_body)]
     pub proof fn axiom_hmac_key_separation(k1: Seq<u8>, k2: Seq<u8>, msg: Seq<u8>)
         requires
@@ -145,7 +148,8 @@ verus! {
     /// AXIOM: HMAC-SHA256 collision resistance.
     ///
     /// Different messages produce different MACs for the same key
-    /// (with overwhelming probability, modeled as unconditional).
+    /// (with overwhelming probability, modeled as unconditional). This remains
+    /// an explicit cryptographic trust boundary.
     #[verifier(external_body)]
     pub proof fn axiom_hmac_collision_resistance(key: Seq<u8>, m1: Seq<u8>, m2: Seq<u8>)
         requires
@@ -211,8 +215,8 @@ verus! {
 
     /// MAC-2: Key sensitivity.
     ///
-    /// Different data keys produce different MACs for the same entries.
-    #[verifier(external_body)]
+    /// Different data keys produce different MACs for the same entries. This
+    /// wrapper is proved by delegating to the named HMAC key-separation axiom.
     pub proof fn mac_key_sensitivity(entries: Seq<MacEntry>, k1: Seq<u8>, k2: Seq<u8>)
         requires
             k1 != k2,
@@ -222,14 +226,16 @@ verus! {
             compute_mac(MacInput { entries: entries, data_key: k1 })
                 != compute_mac(MacInput { entries: entries, data_key: k2 }),
     {
-        // Follows from axiom_hmac_key_separation
+        axiom_hmac_key_separation(k1, k2, build_mac_message(entries));
     }
 
     /// MAC-3: Value sensitivity.
     ///
     /// Changing any value in the entries changes the MAC.
     /// We prove this for the single-entry case; the general case follows
-    /// from HMAC collision resistance.
+    /// from HMAC collision resistance. This remains a trusted wrapper because
+    /// Verus needs sequence-concatenation injectivity to prove the constructed
+    /// single-entry messages differ before applying the named HMAC axiom.
     #[verifier(external_body)]
     pub proof fn mac_value_sensitivity(
         path: Seq<u8>,
@@ -252,7 +258,10 @@ verus! {
 
     /// MAC-4: Path sensitivity.
     ///
-    /// Changing any path in the entries changes the MAC.
+    /// Changing any path in the entries changes the MAC. This remains a trusted
+    /// wrapper because Verus needs sequence-concatenation injectivity to prove
+    /// the constructed single-entry messages differ before applying the named
+    /// HMAC axiom.
     #[verifier(external_body)]
     pub proof fn mac_path_sensitivity(
         p1: Seq<u8>,
@@ -293,14 +302,14 @@ verus! {
             build_mac_message(Seq::<MacEntry>::empty()).len() == 0,
     {}
 
-    /// Helper: MAC output is always 32 bytes.
-    #[verifier(external_body)]
+    /// Helper: MAC output is always 32 bytes. This wrapper is proved by
+    /// delegating to the named HMAC output-length axiom.
     pub proof fn mac_output_length(input: MacInput)
         requires
             valid_data_key(input.data_key),
         ensures
             compute_mac(input).len() == 32,
     {
-        // Follows from axiom_hmac_output_length
+        axiom_hmac_output_length(input.data_key, build_mac_message(input.entries));
     }
 }

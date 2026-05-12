@@ -23,10 +23,12 @@ verus! {
     // INTEG-1: Tamper Detection
     // ========================================================================
 
-    /// Collision resistance assumption for Blake3
+    /// Trusted Blake3 collision-resistance assumption.
     ///
     /// If two different inputs produce the same hash, we have found a collision.
     /// In practice, this is computationally infeasible for a good hash function.
+    /// Verus models `blake3_spec` as uninterpreted, so this is the named
+    /// cryptographic trust boundary backed by the production `blake3` crate.
     #[verifier::external_body]
     pub proof fn blake3_collision_resistance(input1: Seq<u8>, input2: Seq<u8>)
         requires input1 != input2
@@ -35,7 +37,9 @@ verus! {
         // Assumed property of Blake3
     }
 
-    /// Tamper detection: If data is modified, hash will differ
+    /// Tamper detection: If data is modified, hash will differ.
+    /// Trusted wrapper over `blake3_collision_resistance`; the remaining
+    /// assumption is Blake3 collision resistance for the constructed byte input.
     ///
     /// INTEG-1: Given the same chain position, modifying entry data
     /// produces a different hash.
@@ -61,7 +65,8 @@ verus! {
         blake3_collision_resistance(input1, input2);
     }
 
-    /// Term modification detection
+    /// Term modification detection. Trusted wrapper over Blake3 collision
+    /// resistance plus the `u64_to_le_bytes` injective encoding boundary.
     #[verifier(external_body)]
     pub proof fn term_modification_detected(
         prev_hash: ChainHash,
@@ -80,7 +85,8 @@ verus! {
         // Different term => different input => different hash
     }
 
-    /// Index modification detection
+    /// Index modification detection. Trusted wrapper over Blake3 collision
+    /// resistance plus the `u64_to_le_bytes` injective encoding boundary.
     #[verifier(external_body)]
     pub proof fn index_modification_detected(
         prev_hash: ChainHash,
@@ -99,7 +105,8 @@ verus! {
         // Different index => different input => different hash
     }
 
-    /// Previous hash modification detection (chain linking)
+    /// Previous hash modification detection (chain linking). Trusted wrapper
+    /// over Blake3 collision resistance for entry-hash input construction.
     #[verifier(external_body)]
     pub proof fn prev_hash_modification_detected(
         prev_hash1: ChainHash,
@@ -171,7 +178,9 @@ verus! {
         // If chain2 is valid but missing entries, it's not contiguous
     }
 
-    /// Chain extension preserves validity
+    /// Chain extension preserves validity. This is a structural chain-map
+    /// boundary that remains trusted until the quantified `chain_valid` update
+    /// is split into per-index lemmas.
     #[verifier(external_body)]
     pub proof fn extend_preserves_validity(
         pre_chain: Map<u64, ChainHash>,
@@ -208,7 +217,9 @@ verus! {
         blake3_spec(data_hash + meta_hash)
     }
 
-    /// INTEG-3: Snapshot binding - modifying either data or meta changes combined hash
+    /// INTEG-3: Snapshot binding - modifying either data or meta changes combined hash.
+    /// Trusted wrapper over Blake3 collision resistance for concatenated
+    /// snapshot data/meta hashes.
     #[verifier(external_body)]
     pub proof fn snapshot_binding_data(
         data_hash1: ChainHash,
@@ -230,7 +241,8 @@ verus! {
         blake3_collision_resistance(input1, input2);
     }
 
-    /// Snapshot binding for metadata
+    /// Snapshot binding for metadata. Trusted wrapper over Blake3 collision
+    /// resistance for concatenated snapshot data/meta hashes.
     #[verifier(external_body)]
     pub proof fn snapshot_binding_meta(
         data_hash: ChainHash,
@@ -277,7 +289,6 @@ verus! {
     }
 
     /// Proof: Verified range is subset of valid chain
-    #[verifier(external_body)]
     pub proof fn verified_range_implies_valid(
         chain: Map<u64, ChainHash>,
         log: Map<u64, (u64, Seq<u8>)>,
@@ -324,7 +335,8 @@ verus! {
     /// Proof: Divergence propagates forward
     ///
     /// If chains diverge at index i, all subsequent hashes also differ
-    /// (because hash at i+1 depends on hash at i).
+    /// (because hash at i+1 depends on hash at i). Trusted wrapper over the
+    /// previous-hash Blake3 collision assumption.
     #[verifier(external_body)]
     pub proof fn divergence_propagates(
         chain1: Map<u64, ChainHash>,
