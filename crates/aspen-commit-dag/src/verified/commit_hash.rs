@@ -259,6 +259,68 @@ mod tests {
     }
 
     #[test]
+    fn trusted_blake3_commit_boundary_runtime_evidence() {
+        let parent = Some([GOLDEN_PARENT_BYTE; crate::verified::hash::CHAIN_HASH_BYTES]);
+        let base_mutations = [("k".to_string(), MutationType::Set("v".to_string()))];
+        let base_mutations_hash = compute_mutations_hash(&base_mutations);
+        let base_id = compute_commit_id(
+            &parent,
+            &base_mutations_hash,
+            GOLDEN_BRANCH_ID,
+            GOLDEN_RAFT_REVISION,
+            GOLDEN_TIMESTAMP_MS,
+        );
+
+        let changed_parent = Some([0x22; crate::verified::hash::CHAIN_HASH_BYTES]);
+        let changed_mutations_hash = compute_mutations_hash(&[("k".to_string(), MutationType::Set("v2".to_string()))]);
+
+        assert_ne!(
+            base_id,
+            compute_commit_id(
+                &changed_parent,
+                &base_mutations_hash,
+                GOLDEN_BRANCH_ID,
+                GOLDEN_RAFT_REVISION,
+                GOLDEN_TIMESTAMP_MS
+            )
+        );
+        assert_ne!(
+            base_id,
+            compute_commit_id(
+                &parent,
+                &changed_mutations_hash,
+                GOLDEN_BRANCH_ID,
+                GOLDEN_RAFT_REVISION,
+                GOLDEN_TIMESTAMP_MS
+            )
+        );
+        assert_ne!(
+            base_id,
+            compute_commit_id(&parent, &base_mutations_hash, "branch-2", GOLDEN_RAFT_REVISION, GOLDEN_TIMESTAMP_MS)
+        );
+        assert_ne!(
+            base_id,
+            compute_commit_id(
+                &parent,
+                &base_mutations_hash,
+                GOLDEN_BRANCH_ID,
+                GOLDEN_RAFT_REVISION + 1,
+                GOLDEN_TIMESTAMP_MS
+            )
+        );
+        assert_ne!(
+            base_id,
+            compute_commit_id(
+                &parent,
+                &base_mutations_hash,
+                GOLDEN_BRANCH_ID,
+                GOLDEN_RAFT_REVISION,
+                GOLDEN_TIMESTAMP_MS + 1
+            )
+        );
+    }
+
+    #[test]
     fn first_commit_uses_genesis() {
         let mutations_hash = [0xAA; 32];
         let with_none = compute_commit_id(&None, &mutations_hash, "b", 1, 1000);

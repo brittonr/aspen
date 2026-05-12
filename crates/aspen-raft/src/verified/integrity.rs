@@ -527,6 +527,17 @@ mod tests {
     }
 
     #[test]
+    fn test_trusted_blake3_chain_boundary_runtime_evidence() {
+        let expected = compute_entry_hash(&GENESIS_HASH, 7, 11, b"entry payload");
+
+        assert!(verify_entry_hash(&GENESIS_HASH, 7, 11, b"entry payload", &expected));
+        assert!(!verify_entry_hash(&[1u8; 32], 7, 11, b"entry payload", &expected));
+        assert!(!verify_entry_hash(&GENESIS_HASH, 8, 11, b"entry payload", &expected));
+        assert!(!verify_entry_hash(&GENESIS_HASH, 7, 12, b"entry payload", &expected));
+        assert!(!verify_entry_hash(&GENESIS_HASH, 7, 11, b"entry payload!", &expected));
+    }
+
+    #[test]
     fn test_constant_time_compare_equal() {
         let a = [1u8; 32];
         let b = [1u8; 32];
