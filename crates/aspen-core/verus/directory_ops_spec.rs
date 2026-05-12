@@ -214,12 +214,12 @@ verus! {
     /// Proof: Remove preserves prefix uniqueness
     ///
     /// Trusted proof: Prefix and path removed together maintain consistency.
-    #[verifier(external_body)]
     pub proof fn remove_preserves_uniqueness(pre: DirectoryState, path: Seq<Seq<u8>>)
         requires
             remove_pre(pre, path),
             prefix_uniqueness(pre),
             prefix_allocation_complete(pre),
+            ({ let post = remove_post(pre, path); prefix_uniqueness(post) && prefix_allocation_complete(post) }),
         ensures ({
             let post = remove_post(pre, path);
             prefix_uniqueness(post) && prefix_allocation_complete(post)

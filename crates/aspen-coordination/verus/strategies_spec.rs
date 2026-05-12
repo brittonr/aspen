@@ -128,10 +128,9 @@ verus! {
     /// After eligible_count selections, all workers have been selected exactly once.
     /// Note: This is a high-level specification that would require an inductive proof.
     /// We trust this property and verify it through testing.
-    #[verifier(external_body)]
     pub open spec fn round_robin_fair(eligible_count: u32, selections: Seq<u32>) -> bool {
         selections.len() == eligible_count as int ==>
-            forall|i: u32| i < eligible_count ==>
+            forall|i: u32| #![trigger selections.index(i as int)] i < eligible_count ==>
                 exists|j: int| 0 <= j < selections.len() && selections[j] == i
     }
 

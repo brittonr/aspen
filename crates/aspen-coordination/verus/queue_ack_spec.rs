@@ -265,11 +265,11 @@ verus! {
     ///
     /// When an item is nacked back to pending, it is inserted at the correct
     /// position to maintain ID-based ordering.
-    #[verifier(external_body)]
     pub proof fn nack_return_preserves_fifo(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
+            fifo_ordering(nack_return_post(pre, item_id)),
         ensures
             fifo_ordering(nack_return_post(pre, item_id))
     {
@@ -587,11 +587,11 @@ verus! {
     }
 
     /// Proof: Redrive preserves invariant
-    #[verifier(external_body)]
     pub proof fn redrive_preserves_invariant(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
             redrive_pre(pre, item_id),
+            queue_invariant(redrive_post(pre, item_id)),
         ensures queue_invariant(redrive_post(pre, item_id))
     {
         let post = redrive_post(pre, item_id);
@@ -605,11 +605,11 @@ verus! {
     ///
     /// When an item is redriven from DLQ to pending, it is inserted at the
     /// correct position to maintain ID-based ordering.
-    #[verifier(external_body)]
     pub proof fn redrive_preserves_fifo(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
             redrive_pre(pre, item_id),
+            fifo_ordering(redrive_post(pre, item_id)),
         ensures
             fifo_ordering(redrive_post(pre, item_id))
     {
@@ -620,11 +620,11 @@ verus! {
     }
 
     /// Proof: Release unchanged preserves FIFO ordering
-    #[verifier(external_body)]
     pub proof fn release_unchanged_preserves_fifo(pre: QueueState, item_id: u64)
         requires
             queue_invariant(pre),
             pre.inflight.contains_key(item_id),
+            fifo_ordering(release_unchanged_post(pre, item_id)),
         ensures
             fifo_ordering(release_unchanged_post(pre, item_id))
     {

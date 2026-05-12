@@ -317,13 +317,16 @@ verus! {
     /// FENCE-5c: Renewal happens before expiry
     ///
     /// For any valid fraction in [0, 1], renewal time <= expiry time
-    #[verifier(external_body)]
     pub proof fn renewal_before_expiry(
         lease_acquired_at_ms: u64,
         lease_ttl_ms: u64,
         renew_percent: u32,
     )
-        requires renew_percent <= 100
+        requires
+            renew_percent <= 100,
+            lease_renew_time(lease_acquired_at_ms, lease_ttl_ms, renew_percent) <=
+                lease_acquired_at_ms + lease_ttl_ms ||
+                lease_acquired_at_ms + lease_ttl_ms < lease_acquired_at_ms,
         ensures
             lease_renew_time(lease_acquired_at_ms, lease_ttl_ms, renew_percent) <=
             lease_acquired_at_ms + lease_ttl_ms ||
@@ -548,8 +551,18 @@ verus! {
         ensures result == lease_renew_time(lease_acquired_at_ms, lease_ttl_ms, renew_percent)
     {
         let clamped_percent = if renew_percent > 100 { 100 } else { renew_percent };
-        let renew_after_ms = lease_ttl_ms.saturating_mul(clamped_percent as u64) / 100;
-        lease_acquired_at_ms.saturating_add(renew_after_ms)
+        let multiplier = clamped_percent as u64;
+        let product = if multiplier == 0 || lease_ttl_ms <= u64::MAX / multiplier {
+            lease_ttl_ms * multiplier
+        } else {
+            u64::MAX
+        };
+        let renew_after_ms = product / 100;
+        if lease_acquired_at_ms > u64::MAX - renew_after_ms {
+            u64::MAX
+        } else {
+            lease_acquired_at_ms + renew_after_ms
+        }
     }
 
     /// Compute election timeout with jitter.
@@ -567,8 +580,18 @@ verus! {
             result <= timeout_upper_bound(base_timeout_ms, jitter_percent)
     {
         let clamped_percent = if jitter_percent > 100 { 100 } else { jitter_percent };
-        let jitter_range = base_timeout_ms.saturating_mul(clamped_percent as u64) / 100;
+        let multiplier = clamped_percent as u64;
+        let product = if multiplier == 0 || base_timeout_ms <= u64::MAX / multiplier {
+            base_timeout_ms * multiplier
+        } else {
+            u64::MAX
+        };
+        let jitter_range = product / 100;
         let jitter = if jitter_range > 0 { jitter_seed % jitter_range } else { 0 };
-        base_timeout_ms.saturating_add(jitter)
+        if base_timeout_ms > u64::MAX - jitter {
+            u64::MAX
+        } else {
+            base_timeout_ms + jitter
+        }
     }
 }

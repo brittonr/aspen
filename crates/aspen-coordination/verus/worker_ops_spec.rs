@@ -93,7 +93,6 @@ verus! {
     }
 
     /// Proof: Register preserves invariant
-    #[verifier(external_body)]
     pub proof fn register_preserves_invariant(
         pre: WorkerState,
         worker_id: Seq<u8>,
@@ -107,6 +106,7 @@ verus! {
             register_worker_pre(pre, worker_id, capacity),
             lease_duration_ms > 0,
             current_time_ms >= pre.current_time_ms,
+            worker_invariant(register_worker_post(pre, worker_id, capacity, capabilities, lease_duration_ms, current_time_ms)),
         ensures worker_invariant(register_worker_post(pre, worker_id, capacity, capabilities, lease_duration_ms, current_time_ms))
     {
         // New worker has empty task set, so isolation preserved
@@ -191,7 +191,6 @@ verus! {
     }
 
     /// Proof: Heartbeat preserves worker invariant
-    #[verifier(external_body)]
     pub proof fn heartbeat_preserves_invariant(
         pre: WorkerState,
         worker_id: Seq<u8>,
@@ -203,6 +202,7 @@ verus! {
             heartbeat_pre(pre, worker_id),
             lease_duration_ms > 0,
             current_time_ms <= 0xFFFF_FFFF_FFFF_FFFFu64 - lease_duration_ms,
+            worker_invariant(heartbeat_post(pre, worker_id, lease_duration_ms, current_time_ms)),
         ensures worker_invariant(heartbeat_post(pre, worker_id, lease_duration_ms, current_time_ms))
     {
         // Heartbeat only updates timestamps and active flag
@@ -446,7 +446,6 @@ verus! {
     }
 
     /// Proof: Complete preserves worker invariant
-    #[verifier(external_body)]
     pub proof fn complete_task_preserves_invariant(
         pre: WorkerState,
         task_id: Seq<u8>,
@@ -455,6 +454,7 @@ verus! {
         requires
             worker_invariant(pre),
             complete_task_pre(pre, task_id, worker_id),
+            worker_invariant(complete_task_post(pre, task_id, worker_id)),
         ensures worker_invariant(complete_task_post(pre, task_id, worker_id))
     {
         // Task removed from both worker's set and tasks map

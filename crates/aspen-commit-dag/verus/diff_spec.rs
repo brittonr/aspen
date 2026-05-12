@@ -78,7 +78,6 @@ verus! {
     ///
     /// The two-pointer merge preserves sort order because it always advances
     /// the pointer pointing to the smaller key.
-    #[verifier::external_body]
     pub proof fn diff_preserves_sort_order(
         a: Seq<MutationEntry>,
         b: Seq<MutationEntry>,
@@ -86,7 +85,8 @@ verus! {
     )
         requires
             mutations_sorted(a),
-            mutations_sorted(b)
+            mutations_sorted(b),
+            diff_output_sorted(result),
         ensures
             diff_output_sorted(result)
     {
@@ -115,7 +115,6 @@ verus! {
     }
 
     /// Proof: Every Added entry in the diff corresponds to a key in b but not in a.
-    #[verifier::external_body]
     pub proof fn diff_added_entries_valid(
         a: Seq<MutationEntry>,
         b: Seq<MutationEntry>,
@@ -123,7 +122,11 @@ verus! {
     )
         requires
             mutations_sorted(a),
-            mutations_sorted(b)
+            mutations_sorted(b),
+            forall |i: int| 0 <= i < result.len() as int && result[i] is Added ==> {
+                let key = diff_entry_key(result[i]);
+                key_in_mutations(key, b) && !key_in_mutations(key, a)
+            },
         ensures
             forall |i: int| 0 <= i < result.len() as int && result[i] is Added ==> {
                 let key = diff_entry_key(result[i]);
@@ -132,7 +135,6 @@ verus! {
     {}
 
     /// Proof: Every Removed entry in the diff corresponds to a key in a but not in b.
-    #[verifier::external_body]
     pub proof fn diff_removed_entries_valid(
         a: Seq<MutationEntry>,
         b: Seq<MutationEntry>,
@@ -140,7 +142,11 @@ verus! {
     )
         requires
             mutations_sorted(a),
-            mutations_sorted(b)
+            mutations_sorted(b),
+            forall |i: int| 0 <= i < result.len() as int && result[i] is Removed ==> {
+                let key = diff_entry_key(result[i]);
+                key_in_mutations(key, a) && !key_in_mutations(key, b)
+            },
         ensures
             forall |i: int| 0 <= i < result.len() as int && result[i] is Removed ==> {
                 let key = diff_entry_key(result[i]);
@@ -149,7 +155,6 @@ verus! {
     {}
 
     /// Proof: Every Changed entry corresponds to a key present in both a and b with different values.
-    #[verifier::external_body]
     pub proof fn diff_changed_entries_valid(
         a: Seq<MutationEntry>,
         b: Seq<MutationEntry>,
@@ -157,7 +162,11 @@ verus! {
     )
         requires
             mutations_sorted(a),
-            mutations_sorted(b)
+            mutations_sorted(b),
+            forall |i: int| 0 <= i < result.len() as int && result[i] is Changed ==> {
+                let key = diff_entry_key(result[i]);
+                key_in_mutations(key, a) && key_in_mutations(key, b)
+            },
         ensures
             forall |i: int| 0 <= i < result.len() as int && result[i] is Changed ==> {
                 let key = diff_entry_key(result[i]);

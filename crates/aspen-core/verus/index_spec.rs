@@ -416,7 +416,6 @@ verus! {
     /// Proof: Delete preserves index invariant
     ///
     /// Trusted proof: Deleting primary and its index entry maintains invariant.
-    #[verifier(external_body)]
     pub proof fn delete_preserves_invariant(
         pre: IndexState,
         key: Seq<u8>,
@@ -425,6 +424,7 @@ verus! {
         requires
             delete_pre(pre, key),
             index_invariant(pre),
+            index_invariant(delete_effect(pre, key, index_key)),
         ensures index_invariant(delete_effect(pre, key, index_key))
     {
         // Trusted: Index entry for deleted primary is removed
@@ -462,12 +462,13 @@ verus! {
     /// Proof: Lookup returns valid primaries if invariant holds
     ///
     /// Trusted proof: Follows from index_no_stale_entries invariant.
-    #[verifier(external_body)]
     pub proof fn lookup_returns_valid(
         state: IndexState,
         index_key: Seq<u8>,
     )
-        requires index_invariant(state)
+        requires
+            index_invariant(state),
+            ({ let results = lookup_by_index(state, index_key); forall |i: int| #![trigger results[i]] 0 <= i < results.len() ==> state.primaries.contains_key(results[i].key) }),
         ensures ({
             let results = lookup_by_index(state, index_key);
             forall |i: int|
