@@ -189,6 +189,82 @@ verus! {
         }
     }
 
+    pub proof fn seq_less_than_right_equivalent(a: Seq<u8>, b: Seq<u8>, c: Seq<u8>)
+        requires
+            seq_less_than(a, b),
+            !seq_less_than(c, b),
+        ensures seq_less_than(a, c)
+        decreases a.len() + b.len() + c.len()
+    {
+        if a.len() == 0 {
+            if c.len() == 0 {
+                seq_less_than_antisymmetric(b, c);
+            }
+        } else if b.len() == 0 {
+        } else if c.len() == 0 {
+        } else if a.first() < b.first() {
+        } else if a.first() > b.first() {
+        } else {
+            if c.first() < b.first() {
+            } else if c.first() > b.first() {
+            } else {
+                seq_less_than_right_equivalent(a.skip(1), b.skip(1), c.skip(1));
+            }
+        }
+    }
+
+    pub proof fn seq_less_than_left_equivalent(a: Seq<u8>, b: Seq<u8>, c: Seq<u8>)
+        requires
+            !seq_less_than(b, a),
+            seq_less_than(b, c),
+        ensures seq_less_than(a, c)
+        decreases a.len() + b.len() + c.len()
+    {
+        if a.len() == 0 {
+            if c.len() == 0 {
+                seq_less_than_antisymmetric(b, c);
+            }
+        } else if b.len() == 0 {
+        } else if c.len() == 0 {
+        } else if b.first() < c.first() {
+        } else if b.first() > c.first() {
+        } else {
+            if b.first() < a.first() {
+            } else if b.first() > a.first() {
+            } else {
+                seq_less_than_left_equivalent(a.skip(1), b.skip(1), c.skip(1));
+            }
+        }
+    }
+
+    pub proof fn seq_less_than_transitive(a: Seq<u8>, b: Seq<u8>, c: Seq<u8>)
+        requires
+            seq_less_than(a, b),
+            seq_less_than(b, c),
+        ensures seq_less_than(a, c)
+        decreases a.len() + b.len() + c.len()
+    {
+        if a.len() == 0 {
+            if c.len() == 0 {
+                seq_less_than_antisymmetric(b, c);
+            }
+        } else if b.len() == 0 {
+        } else if c.len() == 0 {
+        } else if a.first() < b.first() {
+            if b.first() < c.first() {
+            } else if b.first() > c.first() {
+            } else {
+            }
+        } else if a.first() > b.first() {
+        } else {
+            if b.first() < c.first() {
+            } else if b.first() > c.first() {
+            } else {
+                seq_less_than_transitive(a.skip(1), b.skip(1), c.skip(1));
+            }
+        }
+    }
+
     /// Compare two tuples lexicographically by elements using an explicit fuel
     /// budget shared with nested element comparison.
     pub open spec fn tuple_less_than_with_fuel(
@@ -523,6 +599,360 @@ verus! {
         }
     }
 
+    pub proof fn element_less_than_with_fuel_transitive(
+        a: ElementSpec,
+        b: ElementSpec,
+        c: ElementSpec,
+        fuel: nat,
+    )
+        requires
+            element_less_than_with_fuel(a, b, fuel),
+            element_less_than_with_fuel(b, c, fuel),
+        ensures element_less_than_with_fuel(a, c, fuel)
+        decreases fuel
+    {
+        element_less_than_with_fuel_antisymmetric(b, c, fuel);
+        element_less_than_with_fuel_right_equivalent(a, b, c, fuel);
+    }
+
+    pub proof fn element_less_than_with_fuel_right_equivalent(
+        a: ElementSpec,
+        b: ElementSpec,
+        c: ElementSpec,
+        fuel: nat,
+    )
+        requires
+            element_less_than_with_fuel(a, b, fuel),
+            !element_less_than_with_fuel(c, b, fuel),
+        ensures element_less_than_with_fuel(a, c, fuel)
+        decreases fuel
+    {
+        if fuel == 0 {
+        } else {
+            let type_a = element_type_order(a);
+            let type_b = element_type_order(b);
+            let type_c = element_type_order(c);
+            if type_a < type_b {
+            } else if type_a > type_b {
+            } else {
+                if type_c < type_b {
+                } else if type_c > type_b {
+                } else {
+                    match (a, b, c) {
+                        (ElementSpec::Bytes(ba), ElementSpec::Bytes(bb), ElementSpec::Bytes(bc)) => {
+                            seq_less_than_right_equivalent(ba, bb, bc);
+                        },
+                        (ElementSpec::String(sa), ElementSpec::String(sb), ElementSpec::String(sc)) => {
+                            seq_less_than_right_equivalent(sa, sb, sc);
+                        },
+                        (ElementSpec::Tuple(ta), ElementSpec::Tuple(tb), ElementSpec::Tuple(tc)) => {
+                            tuple_less_than_with_fuel_right_equivalent(
+                                ta,
+                                tb,
+                                tc,
+                                (fuel - 1) as nat,
+                            );
+                        },
+                        (_, _, _) => {},
+                    }
+                }
+            }
+        }
+    }
+
+    pub proof fn element_less_than_with_fuel_left_equivalent(
+        a: ElementSpec,
+        b: ElementSpec,
+        c: ElementSpec,
+        fuel: nat,
+    )
+        requires
+            !element_less_than_with_fuel(b, a, fuel),
+            element_less_than_with_fuel(b, c, fuel),
+        ensures element_less_than_with_fuel(a, c, fuel)
+        decreases fuel
+    {
+        if fuel == 0 {
+        } else {
+            let type_a = element_type_order(a);
+            let type_b = element_type_order(b);
+            let type_c = element_type_order(c);
+            if type_b < type_c {
+            } else if type_b > type_c {
+            } else {
+                if type_b < type_a {
+                } else if type_b > type_a {
+                } else {
+                    match (a, b, c) {
+                        (ElementSpec::Bytes(ba), ElementSpec::Bytes(bb), ElementSpec::Bytes(bc)) => {
+                            seq_less_than_left_equivalent(ba, bb, bc);
+                        },
+                        (ElementSpec::String(sa), ElementSpec::String(sb), ElementSpec::String(sc)) => {
+                            seq_less_than_left_equivalent(sa, sb, sc);
+                        },
+                        (ElementSpec::Tuple(ta), ElementSpec::Tuple(tb), ElementSpec::Tuple(tc)) => {
+                            tuple_less_than_with_fuel_left_equivalent(
+                                ta,
+                                tb,
+                                tc,
+                                (fuel - 1) as nat,
+                            );
+                        },
+                        (_, _, _) => {},
+                    }
+                }
+            }
+        }
+    }
+
+    pub proof fn tuple_less_than_with_fuel_transitive(
+        a: TupleSpec,
+        b: TupleSpec,
+        c: TupleSpec,
+        fuel: nat,
+    )
+        requires
+            tuple_less_than_with_fuel(a, b, fuel),
+            tuple_less_than_with_fuel(b, c, fuel),
+        ensures tuple_less_than_with_fuel(a, c, fuel)
+        decreases fuel
+    {
+        tuple_less_than_with_fuel_antisymmetric(b, c, fuel);
+        tuple_less_than_with_fuel_right_equivalent(a, b, c, fuel);
+    }
+
+    pub proof fn tuple_less_than_with_fuel_right_equivalent(
+        a: TupleSpec,
+        b: TupleSpec,
+        c: TupleSpec,
+        fuel: nat,
+    )
+        requires
+            tuple_less_than_with_fuel(a, b, fuel),
+            !tuple_less_than_with_fuel(c, b, fuel),
+        ensures tuple_less_than_with_fuel(a, c, fuel)
+        decreases fuel
+    {
+        if fuel == 0 {
+        } else if a.elements.len() == 0 {
+            if c.elements.len() == 0 {
+                tuple_less_than_with_fuel_antisymmetric(b, c, fuel);
+            }
+        } else if b.elements.len() == 0 {
+            assert(false);
+        } else if c.elements.len() == 0 {
+            assert(tuple_less_than_with_fuel(c, b, fuel));
+            assert(false);
+        } else {
+            let ea = a.elements.first();
+            let eb = b.elements.first();
+            let ec = c.elements.first();
+            let next_fuel = (fuel - 1) as nat;
+            if element_less_than_with_fuel(ea, eb, next_fuel) {
+                if element_less_than_with_fuel(ec, eb, next_fuel) {
+                    assert(tuple_less_than_with_fuel(c, b, fuel));
+                    assert(false);
+                } else {
+                    element_less_than_with_fuel_right_equivalent(ea, eb, ec, next_fuel);
+                    assert(element_less_than_with_fuel(ea, ec, next_fuel));
+                    assert(tuple_less_than_with_fuel(a, c, fuel));
+                }
+            } else if element_less_than_with_fuel(eb, ea, next_fuel) {
+            } else {
+                if element_less_than_with_fuel(ec, eb, next_fuel) {
+                    assert(tuple_less_than_with_fuel(c, b, fuel));
+                    assert(false);
+                } else if element_less_than_with_fuel(eb, ec, next_fuel) {
+                    element_less_than_with_fuel_left_equivalent(ea, eb, ec, next_fuel);
+                    assert(element_less_than_with_fuel(ea, ec, next_fuel));
+                    assert(tuple_less_than_with_fuel(a, c, fuel));
+                } else {
+                    assert(tuple_less_than_with_fuel(
+                        TupleSpec { elements: a.elements.skip(1) },
+                        TupleSpec { elements: b.elements.skip(1) },
+                        next_fuel,
+                    ));
+                    assert(!tuple_less_than_with_fuel(
+                        TupleSpec { elements: c.elements.skip(1) },
+                        TupleSpec { elements: b.elements.skip(1) },
+                        next_fuel,
+                    ));
+                    tuple_less_than_with_fuel_right_equivalent(
+                        TupleSpec { elements: a.elements.skip(1) },
+                        TupleSpec { elements: b.elements.skip(1) },
+                        TupleSpec { elements: c.elements.skip(1) },
+                        next_fuel,
+                    );
+                    assert(tuple_less_than_with_fuel(
+                        TupleSpec { elements: a.elements.skip(1) },
+                        TupleSpec { elements: c.elements.skip(1) },
+                        next_fuel,
+                    ));
+                    if element_less_than_with_fuel(ea, ec, next_fuel) {
+                        element_less_than_with_fuel_right_equivalent(ea, ec, eb, next_fuel);
+                        assert(false);
+                    }
+                    if element_less_than_with_fuel(ec, ea, next_fuel) {
+                        element_less_than_with_fuel_right_equivalent(ec, ea, eb, next_fuel);
+                        assert(false);
+                    }
+                    assert(!element_less_than_with_fuel(ea, ec, next_fuel));
+                    assert(!element_less_than_with_fuel(ec, ea, next_fuel));
+                    assert(tuple_less_than_with_fuel(a, c, fuel));
+                }
+            }
+        }
+    }
+
+    pub proof fn tuple_less_than_with_fuel_left_equivalent(
+        a: TupleSpec,
+        b: TupleSpec,
+        c: TupleSpec,
+        fuel: nat,
+    )
+        requires
+            !tuple_less_than_with_fuel(b, a, fuel),
+            tuple_less_than_with_fuel(b, c, fuel),
+        ensures tuple_less_than_with_fuel(a, c, fuel)
+        decreases fuel
+    {
+        if fuel == 0 {
+        } else if a.elements.len() == 0 {
+            if c.elements.len() == 0 {
+                tuple_less_than_with_fuel_antisymmetric(b, c, fuel);
+            }
+        } else if b.elements.len() == 0 {
+            assert(false);
+        } else if c.elements.len() == 0 {
+            assert(false);
+        } else {
+            let ea = a.elements.first();
+            let eb = b.elements.first();
+            let ec = c.elements.first();
+            let next_fuel = (fuel - 1) as nat;
+            if element_less_than_with_fuel(eb, ec, next_fuel) {
+                if element_less_than_with_fuel(eb, ea, next_fuel) {
+                    assert(tuple_less_than_with_fuel(b, a, fuel));
+                    assert(false);
+                } else {
+                    element_less_than_with_fuel_left_equivalent(ea, eb, ec, next_fuel);
+                    assert(element_less_than_with_fuel(ea, ec, next_fuel));
+                    assert(tuple_less_than_with_fuel(a, c, fuel));
+                }
+            } else if element_less_than_with_fuel(ec, eb, next_fuel) {
+            } else {
+                if element_less_than_with_fuel(eb, ea, next_fuel) {
+                    assert(tuple_less_than_with_fuel(b, a, fuel));
+                    assert(false);
+                } else if element_less_than_with_fuel(ea, eb, next_fuel) {
+                    element_less_than_with_fuel_right_equivalent(ea, eb, ec, next_fuel);
+                    assert(element_less_than_with_fuel(ea, ec, next_fuel));
+                    assert(tuple_less_than_with_fuel(a, c, fuel));
+                } else {
+                    assert(!tuple_less_than_with_fuel(
+                        TupleSpec { elements: b.elements.skip(1) },
+                        TupleSpec { elements: a.elements.skip(1) },
+                        next_fuel,
+                    ));
+                    assert(tuple_less_than_with_fuel(
+                        TupleSpec { elements: b.elements.skip(1) },
+                        TupleSpec { elements: c.elements.skip(1) },
+                        next_fuel,
+                    ));
+                    tuple_less_than_with_fuel_left_equivalent(
+                        TupleSpec { elements: a.elements.skip(1) },
+                        TupleSpec { elements: b.elements.skip(1) },
+                        TupleSpec { elements: c.elements.skip(1) },
+                        next_fuel,
+                    );
+                    assert(tuple_less_than_with_fuel(
+                        TupleSpec { elements: a.elements.skip(1) },
+                        TupleSpec { elements: c.elements.skip(1) },
+                        next_fuel,
+                    ));
+                    if element_less_than_with_fuel(ea, ec, next_fuel) {
+                        element_less_than_with_fuel_right_equivalent(ea, ec, eb, next_fuel);
+                        assert(false);
+                    }
+                    if element_less_than_with_fuel(ec, ea, next_fuel) {
+                        element_less_than_with_fuel_right_equivalent(ec, ea, eb, next_fuel);
+                        assert(false);
+                    }
+                    assert(!element_less_than_with_fuel(ea, ec, next_fuel));
+                    assert(!element_less_than_with_fuel(ec, ea, next_fuel));
+                    assert(tuple_less_than_with_fuel(a, c, fuel));
+                }
+            }
+        }
+    }
+
+    pub proof fn element_less_than_with_fuel_stable(
+        a: ElementSpec,
+        b: ElementSpec,
+        fuel: nat,
+    )
+        requires fuel >= element_size(a) + element_size(b) + 1
+        ensures element_less_than_with_fuel(a, b, fuel) == element_less_than(a, b)
+        decreases fuel
+    {
+        if fuel == element_size(a) + element_size(b) + 1 {
+            assert(element_less_than_with_fuel(a, b, fuel) == element_less_than(a, b));
+        } else {
+            match (a, b) {
+                (ElementSpec::Tuple(ta), ElementSpec::Tuple(tb)) => {
+                    assert((fuel - 1) as nat >= tuple_size(ta) + tuple_size(tb) + 1);
+                    tuple_less_than_with_fuel_stable(ta, tb, (fuel - 1) as nat);
+                    assert(element_size(a) + element_size(b) >= tuple_size(ta) + tuple_size(tb) + 1);
+                    tuple_less_than_with_fuel_stable(ta, tb, element_size(a) + element_size(b));
+                    assert(element_less_than_with_fuel(a, b, fuel) == element_less_than(a, b));
+                },
+                (_, _) => {
+                    assert(element_less_than_with_fuel(a, b, fuel) == element_less_than(a, b));
+                },
+            }
+        }
+    }
+
+    pub proof fn tuple_less_than_with_fuel_stable(
+        a: TupleSpec,
+        b: TupleSpec,
+        fuel: nat,
+    )
+        requires fuel >= tuple_size(a) + tuple_size(b) + 1
+        ensures tuple_less_than_with_fuel(a, b, fuel) == tuple_less_than(a, b)
+        decreases fuel
+    {
+        if fuel == tuple_size(a) + tuple_size(b) + 1 {
+            assert(tuple_less_than_with_fuel(a, b, fuel) == tuple_less_than(a, b));
+        } else if a.elements.len() == 0 || b.elements.len() == 0 {
+        } else {
+            let ea = a.elements.first();
+            let eb = b.elements.first();
+            let next_fuel = (fuel - 1) as nat;
+            assert(next_fuel >= element_size(ea) + element_size(eb) + 1);
+            element_less_than_with_fuel_stable(ea, eb, next_fuel);
+            element_less_than_with_fuel_stable(eb, ea, next_fuel);
+            assert(tuple_size(a) + tuple_size(b) >= element_size(ea) + element_size(eb) + 1);
+            element_less_than_with_fuel_stable(ea, eb, tuple_size(a) + tuple_size(b));
+            element_less_than_with_fuel_stable(eb, ea, tuple_size(a) + tuple_size(b));
+            assert(next_fuel >= tuple_size(TupleSpec { elements: a.elements.skip(1) })
+                + tuple_size(TupleSpec { elements: b.elements.skip(1) }) + 1);
+            tuple_less_than_with_fuel_stable(
+                TupleSpec { elements: a.elements.skip(1) },
+                TupleSpec { elements: b.elements.skip(1) },
+                next_fuel,
+            );
+            assert(tuple_size(a) + tuple_size(b) >= tuple_size(TupleSpec { elements: a.elements.skip(1) })
+                + tuple_size(TupleSpec { elements: b.elements.skip(1) }) + 1);
+            tuple_less_than_with_fuel_stable(
+                TupleSpec { elements: a.elements.skip(1) },
+                TupleSpec { elements: b.elements.skip(1) },
+                tuple_size(a) + tuple_size(b),
+            );
+            assert(tuple_less_than_with_fuel(a, b, fuel) == tuple_less_than(a, b));
+        }
+    }
+
     // ========================================================================
     // Lexicographic Ordering Axioms
     // ========================================================================
@@ -547,9 +977,7 @@ verus! {
     /// Axiom: Tuple comparison is transitive
     ///
     /// If tuple a < tuple b and tuple b < tuple c, then tuple a < tuple c.
-    /// This follows from the transitivity of lexicographic ordering, which
-    /// is established by induction on the position where tuples first differ.
-    #[verifier(external_body)]
+    /// This follows from the fuel-bounded lexicographic comparison lemma.
     pub proof fn axiom_tuple_comparison_transitive(
         a: TupleSpec,
         b: TupleSpec,
@@ -560,12 +988,14 @@ verus! {
             tuple_less_than(b, c),
         ensures tuple_less_than(a, c)
     {
-        // Trusted axiom: lexicographic transitivity
-        // Proof sketch: By induction on min(|a|, |b|, |c|).
-        // Base: If any is empty, the result follows from tuple_less_than's
-        //       definition (empty < non-empty).
-        // Inductive: If first elements differ, transitivity of element
-        //            comparison applies. If equal, recurse on tails.
+        let fuel = tuple_size(a) + tuple_size(b) + tuple_size(c) + 1;
+        assert(fuel >= tuple_size(a) + tuple_size(b) + 1);
+        assert(fuel >= tuple_size(b) + tuple_size(c) + 1);
+        assert(fuel >= tuple_size(a) + tuple_size(c) + 1);
+        tuple_less_than_with_fuel_stable(a, b, fuel);
+        tuple_less_than_with_fuel_stable(b, c, fuel);
+        tuple_less_than_with_fuel_transitive(a, b, c, fuel);
+        tuple_less_than_with_fuel_stable(a, c, fuel);
     }
 
     /// Axiom: Tuple comparison is anti-symmetric
