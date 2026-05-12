@@ -1,0 +1,1 @@
+Testing harness compatibility evidence placeholder for the inventory drift checker smoke. The current change's durable evidence is the readiness checker receipt plus negative stale-inventory fixture.

@@ -1,0 +1,1 @@
+Testing harness forbidden-boundary evidence placeholder for the inventory drift checker smoke. The boundary itself was already proven by the archived testing-harness public API review; this change verifies that the current inventory row cannot drift from policy/manifests.

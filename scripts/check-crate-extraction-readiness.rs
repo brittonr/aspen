@@ -97,6 +97,15 @@ const TESTING_HARNESS_EVIDENCE: &[&str] = &[
     "testing-harness-forbidden-boundary.txt",
     "testing-harness-compatibility.txt",
 ];
+const INVENTORY_SECTION_HEADING: &str = "## Broader candidate inventory";
+const STALE_READY_NEXT_ACTION_PHRASES: &[&str] = &[
+    "owner needed",
+    "finish downstream",
+    "manifest not yet created",
+    "document standalone examples",
+    "verify downstream fixture",
+    "before raising readiness",
+];
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -172,6 +181,15 @@ struct Report {
     failures: Vec<String>,
     warnings: Vec<String>,
     checked_candidates: Vec<String>,
+}
+
+#[derive(Debug)]
+struct InventoryRow {
+    family: String,
+    owner: String,
+    manifest: String,
+    readiness: String,
+    next_action: String,
 }
 
 fn run_command_text(program: &str, args: &[&str]) -> Result<String> {
@@ -443,6 +461,129 @@ fn check_family_evidence(args: &Args, evidence_dir: &Path, failures: &mut Vec<St
     }
 }
 
+fn family_inventory_name(family: &str) -> Option<&'static str> {
+    match family {
+        BLOB_CASTORE_CACHE_FAMILY => Some("Blob/castore/cache"),
+        KV_BRANCH_COMMIT_DAG_FAMILY => Some("Commit DAG / branches"),
+        PROTOCOL_WIRE_FAMILY => Some("Protocol/wire"),
+        TRANSPORT_RPC_FAMILY => Some("Iroh transport/RPC"),
+        FOUNDATIONAL_TYPES_FAMILY => Some("Foundational types/helpers"),
+        AUTH_TICKET_FAMILY => Some("Auth and tickets"),
+        JOBS_CI_CORE_FAMILY => Some("Jobs and CI core"),
+        TRUST_CRYPTO_SECRETS_FAMILY => Some("Trust/crypto/secrets"),
+        TESTING_HARNESS_FAMILY => Some("Testing harness"),
+        _ => None,
+    }
+}
+
+fn split_markdown_table_row(line: &str) -> Option<Vec<String>> {
+    let trimmed = line.trim();
+    if !trimmed.starts_with('|') || !trimmed.ends_with('|') {
+        return None;
+    }
+    Some(trimmed.trim_matches('|').split('|').map(|cell| cell.trim().to_string()).collect())
+}
+
+fn parse_inventory_rows(inventory_text: &str) -> BTreeMap<String, InventoryRow> {
+    let mut rows = BTreeMap::new();
+    let mut in_inventory = false;
+    for line in inventory_text.lines() {
+        if line.trim() == INVENTORY_SECTION_HEADING {
+            in_inventory = true;
+            continue;
+        }
+        if in_inventory && line.starts_with("## ") {
+            break;
+        }
+        if !in_inventory {
+            continue;
+        }
+        let Some(cells) = split_markdown_table_row(line) else {
+            continue;
+        };
+        if cells.len() != 7 || cells[0] == "Family" || cells[0].starts_with("---") {
+            continue;
+        }
+        rows.insert(cells[0].clone(), InventoryRow {
+            family: cells[0].clone(),
+            owner: cells[3].clone(),
+            manifest: cells[4].clone(),
+            readiness: cells[5].clone(),
+            next_action: cells[6].clone(),
+        });
+    }
+    rows
+}
+
+fn all_selected_candidates_ready(policy: &Policy, candidate_keys: &[&str]) -> bool {
+    candidate_keys.iter().all(|candidate_key| {
+        policy
+            .candidates
+            .get(*candidate_key)
+            .is_some_and(|candidate| candidate.readiness_state == "extraction-ready-in-workspace")
+    })
+}
+
+fn check_inventory_consistency(
+    args: &Args,
+    policy: &Policy,
+    candidate_keys: &[&str],
+    failures: &mut Vec<String>,
+) -> Result<()> {
+    let Some(family_name) = family_inventory_name(&args.candidate_family) else {
+        return Ok(());
+    };
+    let inventory_text = fs::read_to_string(&args.inventory)
+        .with_context(|| format!("failed to read inventory {}", args.inventory.display()))?;
+    let rows = parse_inventory_rows(&inventory_text);
+    let Some(row) = rows.get(family_name) else {
+        failures.push(format!("{}: missing broader inventory row `{family_name}`", args.candidate_family));
+        return Ok(());
+    };
+
+    let selected_candidates: Vec<(&str, &Candidate)> = candidate_keys
+        .iter()
+        .filter_map(|candidate_key| policy.candidates.get(*candidate_key).map(|candidate| (*candidate_key, candidate)))
+        .collect();
+    let expected_manifests: BTreeSet<&str> =
+        selected_candidates.iter().map(|(_, candidate)| candidate.manifest.as_str()).collect();
+    for manifest in expected_manifests {
+        let manifest_link = manifest.strip_prefix("docs/").unwrap_or(manifest);
+        if !row.manifest.contains(manifest_link) && !row.manifest.contains(manifest) {
+            failures.push(format!(
+                "{}: inventory row `{}` omits manifest `{manifest_link}`",
+                args.candidate_family, row.family
+            ));
+        }
+    }
+    for (_, candidate) in &selected_candidates {
+        if candidate.owner != OWNER_NEEDED && !row.owner.contains(&candidate.owner) {
+            failures.push(format!(
+                "{}: inventory row `{}` omits owner `{}`",
+                args.candidate_family, row.family, candidate.owner
+            ));
+        }
+        if !row.readiness.contains(&candidate.readiness_state) {
+            failures.push(format!(
+                "{}: inventory row `{}` omits readiness `{}`",
+                args.candidate_family, row.family, candidate.readiness_state
+            ));
+        }
+    }
+    if all_selected_candidates_ready(policy, candidate_keys) {
+        let lower_action = row.next_action.to_lowercase();
+        for stale_phrase in STALE_READY_NEXT_ACTION_PHRASES {
+            if lower_action.contains(stale_phrase) {
+                failures.push(format!(
+                    "{}: ready inventory row `{}` contains stale next-action phrase `{stale_phrase}`",
+                    args.candidate_family, row.family
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn selected_family_requires_strict_owner(family: &str) -> bool {
     matches!(
         family,
@@ -536,6 +677,7 @@ fn build_report(args: &Args) -> Result<Report> {
         }
     }
 
+    check_inventory_consistency(args, &policy, family_keys, &mut failures)?;
     check_evidence_index(args, &mut failures);
     Ok(Report {
         candidate_family: args.candidate_family.clone(),
@@ -550,7 +692,8 @@ fn write_report(report: &Report, args: &Args) -> Result<()> {
     if let Some(parent) = args.output_json.parent() {
         fs::create_dir_all(parent).with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    let json = serde_json::to_string_pretty(report).context("failed to encode JSON report")?;
+    let mut json = serde_json::to_string_pretty(report).context("failed to encode JSON report")?;
+    json.push('\n');
     fs::write(&args.output_json, json).with_context(|| format!("failed to write {}", args.output_json.display()))?;
 
     let mut markdown = String::new();

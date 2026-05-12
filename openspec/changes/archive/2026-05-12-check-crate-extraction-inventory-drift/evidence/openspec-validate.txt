@@ -1,0 +1,2 @@
+$ openspec validate architecture-modularity --strict
+Specification 'architecture-modularity' is valid

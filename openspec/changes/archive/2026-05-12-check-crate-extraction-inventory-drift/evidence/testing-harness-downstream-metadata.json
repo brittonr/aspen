@@ -1,0 +1,3 @@
+{
+  "note": "Testing harness downstream metadata evidence is inherited from the completed readiness promotion; this change reuses the selected ready family to exercise the inventory drift checker and records the checker receipt in testing-harness-readiness.md/json."
+}
