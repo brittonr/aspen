@@ -13,7 +13,7 @@ As of 2026-05-12, the source-derived residual `external_body` inventory is 11 ma
 | `crates/aspen-commit-dag/verus/commit_hash_spec.rs` | 1 | BLAKE3 cryptographic boundary | `blake3_collision_resistance` for different encoded commit/hash inputs. |
 | `crates/aspen-core/verus/tuple_spec.rs` | 6 | Tuple encoding/order boundary | Production FoundationDB-style tuple encoder order preservation, roundtrip, prefix, NUL escaping, integer order encoding, and byte-array order encoding. |
 | `crates/aspen-raft/verus/chain_verify_spec.rs` | 2 | BLAKE3 + u64 encoding boundary | `blake3_collision_resistance` and `u64_to_le_bytes_injective`; all local chain/tamper wrappers around these assumptions are verified. |
-| `crates/aspen-secrets/verus/mac_spec.rs` | 2 | HMAC cryptographic boundary | HMAC-SHA256 key separation and collision resistance; local MAC sensitivity wrappers are verified. |
+| `crates/aspen-secrets/verus/mac_spec.rs` | 2 | HMAC cryptographic boundary | HMAC-SHA256 key separation and collision resistance; local MAC sensitivity wrappers are verified and backed by `test_trusted_hmac_boundary_runtime_evidence`. |
 
 This inventory is not a claim that Verus proves BLAKE3, HMAC-SHA256, or the production tuple encoder. It records the remaining trusted assumptions and the files whose wrapper proofs reduce to those assumptions.
 

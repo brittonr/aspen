@@ -153,6 +153,20 @@ mod tests {
     }
 
     #[test]
+    fn test_trusted_hmac_boundary_runtime_evidence() {
+        let key = [42u8; 32];
+        let different_key = [43u8; 32];
+        let values = vec![
+            ("a.key".to_string(), "value-a".to_string()),
+            ("b.key".to_string(), "value-b".to_string()),
+        ];
+
+        let mac = compute_sops_mac(&values, &key);
+        let different_key_mac = compute_sops_mac(&values, &different_key);
+        assert_ne!(mac, different_key_mac, "different HMAC keys must produce different MACs");
+    }
+
+    #[test]
     fn test_collect_value_paths_simple() {
         let toml_str = r#"
             key1 = "value1"
