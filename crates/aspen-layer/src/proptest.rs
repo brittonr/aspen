@@ -108,11 +108,28 @@ proptest! {
     /// Property: String encoding preserves ordering.
     ///
     /// For any two strings a < b (lexicographically), their packed
-    /// representations should maintain the same ordering.
+    /// representations should maintain the same ordering. Include embedded NUL
+    /// bytes so this directly backs the tuple-spec NUL escaping boundary.
     #[test]
-    fn prop_string_ordering(a in "[a-z]{0,10}", b in "[a-z]{0,10}") {
+    fn prop_string_ordering(a in "[a-z\\x00]{0,10}", b in "[a-z\\x00]{0,10}") {
         let tuple_a = Tuple::new().push(&a as &str);
         let tuple_b = Tuple::new().push(&b as &str);
+
+        let packed_a = tuple_a.pack();
+        let packed_b = tuple_b.pack();
+
+        match a.cmp(&b) {
+            std::cmp::Ordering::Less => prop_assert!(packed_a < packed_b, "ordering failed: {:?} < {:?} but packed {:?} >= {:?}", a, b, packed_a, packed_b),
+            std::cmp::Ordering::Greater => prop_assert!(packed_a > packed_b),
+            std::cmp::Ordering::Equal => prop_assert_eq!(packed_a, packed_b),
+        }
+    }
+
+    /// Property: Byte-array encoding preserves ordering, including embedded NUL bytes.
+    #[test]
+    fn prop_bytes_ordering(a in prop::collection::vec(any::<u8>(), 0..20), b in prop::collection::vec(any::<u8>(), 0..20)) {
+        let tuple_a = Tuple::new().push(a.clone());
+        let tuple_b = Tuple::new().push(b.clone());
 
         let packed_a = tuple_a.pack();
         let packed_b = tuple_b.pack();

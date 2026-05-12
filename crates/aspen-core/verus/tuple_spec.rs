@@ -333,10 +333,13 @@ verus! {
     }
 
     /// Trusted encoding axiom: order preservation holds for the production
-    /// FoundationDB-style tuple encoder (`src/tuple.rs`). Verus models `pack`
+    /// FoundationDB-style tuple encoder (`crates/aspen-layer/src/tuple/`).
+    /// Verus models `pack`
     /// as uninterpreted, so this is an explicit encoding trust boundary backed
     /// by tuple roundtrip/order runtime coverage rather than a local proof of
-    /// the encoder implementation.
+    /// the encoder implementation. Runtime evidence: `cargo test -p
+    /// aspen-layer` exercises `test_trusted_tuple_boundary_runtime_evidence`
+    /// plus the tuple order/roundtrip proptests.
     #[verifier(external_body)]
     pub proof fn order_preservation_holds(a: TupleSpec, b: TupleSpec)
         ensures tuple_order_preservation(a, b)
@@ -364,7 +367,9 @@ verus! {
     /// Trusted encoding axiom: production tuple pack/unpack roundtrips all
     /// represented elements. The Verus model keeps `pack`/`unpack`
     /// uninterpreted, so this marker names the external encoder/decoder
-    /// correctness boundary.
+    /// correctness boundary. Runtime evidence: `cargo test -p aspen-layer`
+    /// exercises `test_trusted_tuple_boundary_runtime_evidence` and
+    /// `prop_roundtrip`.
     #[verifier(external_body)]
     pub proof fn roundtrip_holds(t: TupleSpec)
         ensures tuple_roundtrip(t)
@@ -400,6 +405,9 @@ verus! {
     /// Trusted encoding axiom: encoded tuple prefixes are byte prefixes of the
     /// full encoded tuple under the production tuple encoder. This depends on
     /// the uninterpreted `pack` boundary, not on local structural reasoning.
+    /// Runtime evidence: `cargo test -p aspen-layer` exercises
+    /// `test_trusted_tuple_boundary_runtime_evidence`,
+    /// `prop_prefix_stability`, and `prop_range_captures_prefix`.
     #[verifier(external_body)]
     pub proof fn prefix_property_holds(t: TupleSpec, n: int)
         requires 0 <= n <= t.elements.len()
@@ -440,7 +448,10 @@ verus! {
 
     /// Trusted encoding axiom: production byte/string tuple encoding escapes
     /// embedded NUL bytes and decodes them back. This marker is intentionally
-    /// tied to the runtime tuple encoder's NUL-escaping behavior.
+    /// tied to the runtime tuple encoder's NUL-escaping behavior. Runtime
+    /// evidence: `cargo test -p aspen-layer` exercises
+    /// `test_trusted_tuple_boundary_runtime_evidence`, `prop_special_strings`,
+    /// `prop_string_ordering`, and `prop_bytes_ordering`.
     #[verifier(external_body)]
     pub proof fn null_bytes_roundtrip(bytes: Seq<u8>)
         ensures ({
@@ -1059,7 +1070,10 @@ verus! {
 
     /// Trusted encoding axiom: integer byte encoding preserves numeric order in
     /// the production tuple encoder. This depends on the uninterpreted `pack`
-    /// function and is intentionally retained as an encoder boundary.
+    /// function and is intentionally retained as an encoder boundary. Runtime
+    /// evidence: `cargo test -p aspen-layer` exercises
+    /// `test_trusted_tuple_boundary_runtime_evidence`, `prop_int_ordering`,
+    /// and `prop_int_boundaries`.
     #[verifier(external_body)]
     pub proof fn int_encoding_preserves_order(a: i64, b: i64)
         requires a < b
@@ -1078,7 +1092,10 @@ verus! {
 
     /// Trusted encoding axiom: byte-array escaping and terminators preserve
     /// lexicographic order in the production tuple encoder. This depends on the
-    /// uninterpreted `pack` function and is intentionally retained.
+    /// uninterpreted `pack` function and is intentionally retained. Runtime
+    /// evidence: `cargo test -p aspen-layer` exercises
+    /// `test_trusted_tuple_boundary_runtime_evidence` and
+    /// `prop_bytes_ordering`.
     #[verifier(external_body)]
     pub proof fn bytes_encoding_preserves_order(a: Seq<u8>, b: Seq<u8>)
         requires seq_less_than(a, b)

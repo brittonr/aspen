@@ -827,6 +827,63 @@ fn test_element_clone() {
 // =========================================================================
 
 #[test]
+fn test_trusted_tuple_boundary_runtime_evidence() {
+    // These examples are runtime evidence for the narrow tuple trusted boundary in
+    // crates/aspen-core/verus/tuple_spec.rs. They do not prove the encoder in
+    // Verus; they pin the production encoder behavior assumed by the residual
+    // external_body markers: roundtrip, order preservation, prefix ranges, NUL
+    // escaping, integer order encoding, and byte-array order encoding.
+    let tuples = [
+        Tuple::new(),
+        Tuple::new().push(()),
+        Tuple::new().push("a\0b"),
+        Tuple::new().push(vec![0_u8, 1, 0, 2]),
+        Tuple::new().push(i64::MIN),
+        Tuple::new().push(0_i64),
+        Tuple::new().push(i64::MAX),
+        Tuple::new().push("prefix").push(42_i64).push(vec![0_u8, 255]),
+        Tuple::new().push(Tuple::new().push(()).push("nested\0null")),
+    ];
+
+    for tuple in tuples {
+        let packed = tuple.pack();
+        let unpacked = Tuple::unpack(&packed).unwrap();
+        assert_eq!(tuple, unpacked, "trusted-boundary roundtrip evidence failed");
+    }
+
+    let ordered = [
+        Tuple::new().push(vec![0_u8]),
+        Tuple::new().push(vec![0_u8, 0]),
+        Tuple::new().push(vec![0_u8, 1]),
+        Tuple::new().push(vec![1_u8]),
+        Tuple::new().push(""),
+        Tuple::new().push("\0"),
+        Tuple::new().push("\0a"),
+        Tuple::new().push("a"),
+        Tuple::new().push(i64::MIN),
+        Tuple::new().push(-1_i64),
+        Tuple::new().push(0_i64),
+        Tuple::new().push(1_i64),
+        Tuple::new().push(i64::MAX),
+    ];
+
+    for window in ordered.windows(2) {
+        assert!(
+            window[0].pack() < window[1].pack(),
+            "trusted-boundary ordering evidence failed: {:?} !< {:?}",
+            window[0],
+            window[1]
+        );
+    }
+
+    let prefix = Tuple::new().push("user").push(7_i64);
+    let (start, end) = prefix.range();
+    let child = Tuple::new().push("user").push(7_i64).push("settings").pack();
+    assert_eq!(start, prefix.pack());
+    assert!(child >= start && child < end, "trusted-boundary prefix evidence failed");
+}
+
+#[test]
 fn test_integer_boundary_sizes() {
     // Test integers at size boundaries
     let boundaries: Vec<i64> = vec![

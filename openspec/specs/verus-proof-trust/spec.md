@@ -55,7 +55,7 @@ Aspen MUST classify residual `external_body` markers that depend on cryptographi
 - GIVEN `tuple_spec.rs` models order preservation, roundtrip behavior, prefix behavior, null escaping, and tuple comparison laws
 - WHEN tuple proof boundaries are classified
 - THEN pure structural facts MUST be proved where feasible
-- AND remaining tuple encoding/order axioms MUST be named as encoding assumptions with runtime test coverage or an explicit follow-up task.
+- AND remaining tuple encoding/order axioms MUST be named as encoding assumptions with runtime test coverage anchored by `cargo test -p aspen-layer`, including `test_trusted_tuple_boundary_runtime_evidence`, `prop_roundtrip`, `prop_string_ordering`, `prop_bytes_ordering`, `prop_int_ordering`, `prop_prefix_stability`, and `prop_range_captures_prefix` (or an explicit follow-up task if any anchor is missing).
 
 #### Scenario: Inventory distinguishes axioms from gaps
 
