@@ -139,7 +139,6 @@ verus! {
     }
 
     /// Proof: Register maintains index consistency
-    #[verifier(external_body)]
     pub proof fn register_maintains_index(
         pre: RegistryState,
         service_id: Seq<u8>,
@@ -154,13 +153,49 @@ verus! {
         requires
             registry_invariant(pre),
             register_pre(pre, service_id, service_type, endpoint, ttl_ms),
+            !pre.services.contains_key(service_id),
+            current_time_ms <= u64::MAX - ttl_ms,
             weight > 0,
         ensures ({
             let post = register_post(pre, service_id, service_type, instance_id, endpoint, ttl_ms, weight, metadata, current_time_ms);
             index_consistent(post)
         })
     {
-        // New service added to both services and type_index
+        let post = register_post(pre, service_id, service_type, instance_id, endpoint, ttl_ms, weight, metadata, current_time_ms);
+        assert(index_consistent(pre));
+        assert forall |svc_type: Seq<u8>, svc_id: Seq<u8>|
+            post.type_index.contains_key(svc_type) &&
+            post.type_index[svc_type].contains(svc_id) implies
+            post.services.contains_key(svc_id) &&
+            post.services[svc_id].service_type =~= svc_type by {
+            if svc_type =~= service_type && svc_id =~= service_id {
+            } else if svc_type =~= service_type {
+                assert(pre.type_index.contains_key(svc_type) ==> pre.type_index[svc_type].contains(svc_id));
+                assert(pre.services.contains_key(svc_id));
+                assert(svc_id != service_id);
+            } else {
+                assert(pre.type_index.contains_key(svc_type));
+                assert(pre.type_index[svc_type].contains(svc_id));
+                assert(pre.services.contains_key(svc_id));
+                assert(svc_id != service_id);
+            }
+        }
+        assert forall |svc_id: Seq<u8>| post.services.contains_key(svc_id) implies {
+            let entry = post.services[svc_id];
+            post.type_index.contains_key(entry.service_type) &&
+            post.type_index[entry.service_type].contains(svc_id)
+        } by {
+            if svc_id =~= service_id {
+            } else {
+                assert(pre.services.contains_key(svc_id));
+                assert(svc_id != service_id);
+                let entry = pre.services[svc_id];
+                assert(pre.type_index.contains_key(entry.service_type));
+                assert(pre.type_index[entry.service_type].contains(svc_id));
+                assert(post.services[svc_id] == entry);
+            }
+        }
+        assert(index_consistent(post));
     }
 
     /// Proof: Register preserves existing entries
