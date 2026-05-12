@@ -228,6 +228,15 @@ verus! {
         batch.max_sequence - batch.min_sequence + 1 == batch.operations.len() as u64
     }
 
+    /// Explicit precondition for callers that need to prove batch sequence contiguity.
+    ///
+    /// The base batcher invariant proves monotonic ordering and sequence admission, but
+    /// does not by itself encode gap-freedom for an arbitrary modeled `pending` sequence.
+    pub open spec fn pending_sequences_contiguous(pending: Seq<PendingWriteSpec>) -> bool {
+        pending.len() > 0 ==>
+            pending[pending.len() - 1].sequence - pending[0].sequence + 1 == pending.len() as u64
+    }
+
     /// BATCH-6: Batch is atomic (all-or-nothing)
     ///
     /// # Atomicity Guarantee
@@ -287,20 +296,17 @@ verus! {
     ///   = pending.len()
     ///
     /// Thus batch_contiguous holds: max_sequence - min_sequence + 1 == operations.len()
-    #[verifier(external_body)]
     pub proof fn ordered_batch_is_contiguous(state: BatcherState)
         requires
             batcher_invariant(state),
             state.pending.len() > 0,
+            pending_sequences_contiguous(state.pending),
         ensures batch_contiguous(create_flushed_batch(state.pending))
     {
-        // The proof follows from sequences_ordered (strictly increasing) combined with
-        // the fact that add() assigns consecutive sequence numbers starting from
-        // next_sequence. Since each add increments sequence by exactly 1 and pushes
-        // to the end of pending, the sequences form a contiguous range.
-        //
-        // Formally: pending[i].sequence == pending[0].sequence + i for all valid i
-        // Therefore: max - min + 1 == (min + len - 1) - min + 1 == len
+        let batch = create_flushed_batch(state.pending);
+        assert(batch.min_sequence == state.pending[0].sequence);
+        assert(batch.max_sequence == state.pending[state.pending.len() - 1].sequence);
+        assert(batch.operations.len() == state.pending.len());
     }
 
     // ========================================================================

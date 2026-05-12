@@ -13,6 +13,23 @@ use vstd::prelude::*;
 use crate::batcher_state_spec::*;
 
 verus! {
+    pub proof fn sum_pending_bytes_push(pending: Seq<PendingWriteSpec>, write: PendingWriteSpec)
+        ensures sum_pending_bytes(pending.push(write)) == sum_pending_bytes(pending) + write.size_bytes as int
+        decreases pending.len()
+    {
+        if pending.len() == 0 {
+            assert(pending.push(write).len() == 1);
+            assert(pending.push(write)[0] == write);
+            assert(pending.push(write).skip(1).len() == 0);
+            assert(sum_pending_bytes(pending.push(write).skip(1)) == 0);
+            assert(sum_pending_bytes(pending.push(write)) == write.size_bytes as int);
+        } else {
+            assert(pending.push(write)[0] == pending[0]);
+            assert(pending.push(write).skip(1) =~= pending.skip(1).push(write));
+            sum_pending_bytes_push(pending.skip(1), write);
+        }
+    }
+
     // ========================================================================
     // Add Operation
     // ========================================================================
@@ -126,20 +143,25 @@ verus! {
     }
 
     /// Proof: Add increases current_bytes correctly
-    #[verifier(external_body)]
     pub proof fn add_increases_bytes(
         pre: BatcherState,
         key: Seq<u8>,
         value: Seq<u8>,
         current_time_ms: u64,
     )
-        requires add_pre(pre, key, value)
+        requires
+            add_pre(pre, key, value),
+            has_space(pre, (key.len() + value.len()) as u64),
         ensures ({
             let post = add_set_post(pre, key, value, current_time_ms);
             post.current_bytes == pre.current_bytes + (key.len() + value.len()) as u64
         })
     {
-        // Directly from add_set_post definition
+        let op_bytes = (key.len() + value.len()) as u64;
+        assert(op_bytes <= pre.config.max_bytes - pre.current_bytes);
+        assert(pre.current_bytes + op_bytes <= pre.config.max_bytes);
+        assert(pre.current_bytes + op_bytes <= u64::MAX);
+        assert((pre.current_bytes + op_bytes) as u64 == pre.current_bytes + op_bytes);
     }
 
     /// Proof: Add advances sequence number
@@ -211,7 +233,6 @@ verus! {
     }
 
     /// Proof: Add preserves bytes consistency
-    #[verifier(external_body)]
     pub proof fn add_preserves_bytes_consistency(
         pre: BatcherState,
         key: Seq<u8>,
@@ -221,11 +242,24 @@ verus! {
         requires
             batcher_invariant(pre),
             add_pre(pre, key, value),
+            has_space(pre, (key.len() + value.len()) as u64),
         ensures bytes_consistent(add_set_post(pre, key, value, current_time_ms))
     {
-        // New current_bytes = old + op_bytes
-        // New sum = old_sum + op_bytes
-        // So consistency preserved
+        let post = add_set_post(pre, key, value, current_time_ms);
+        let op_bytes = (key.len() + value.len()) as u64;
+        let write = PendingWriteSpec {
+            is_set: true,
+            key: key,
+            value: value,
+            size_bytes: op_bytes,
+            sequence: pre.next_sequence,
+        };
+        add_increases_bytes(pre, key, value, current_time_ms);
+        sum_pending_bytes_push(pre.pending, write);
+        assert(post.pending == pre.pending.push(write));
+        assert(sum_pending_bytes(post.pending) == sum_pending_bytes(pre.pending) + op_bytes as int);
+        assert(pre.current_bytes as int == sum_pending_bytes(pre.pending));
+        assert(post.current_bytes == pre.current_bytes + op_bytes);
     }
 
     /// Proof: Add preserves invariant when space available
@@ -314,19 +348,23 @@ verus! {
     }
 
     /// Proof: Delete add increases bytes by key length only
-    #[verifier(external_body)]
     pub proof fn delete_add_bytes(
         pre: BatcherState,
         key: Seq<u8>,
         current_time_ms: u64,
     )
-        requires key.len() > 0
+        requires
+            key.len() > 0,
+            key.len() <= u64::MAX as int,
+            pre.current_bytes <= u64::MAX - key.len() as u64,
         ensures ({
             let post = add_delete_post(pre, key, current_time_ms);
             post.current_bytes == pre.current_bytes + key.len() as u64
         })
     {
-        // Delete size = key.len() only
+        let op_bytes = key.len() as u64;
+        assert(pre.current_bytes + op_bytes <= u64::MAX);
+        assert((pre.current_bytes + op_bytes) as u64 == pre.current_bytes + op_bytes);
     }
 
     // ========================================================================

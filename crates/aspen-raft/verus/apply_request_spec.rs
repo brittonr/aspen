@@ -83,20 +83,21 @@ verus! {
     // ========================================================================
 
     /// APPLY-1: Version increments on update
-    #[verifier(external_body)]
     pub proof fn set_increments_version(
         pre: StorageState,
         key: Seq<u8>,
         value: Seq<u8>,
         log_index: u64,
     )
-        requires pre.kv.contains_key(key)
+        requires
+            pre.kv.contains_key(key),
+            pre.kv[key].version < u64::MAX,
         ensures ({
             let post = apply_set_post(pre, key, value, log_index);
             post.kv[key].version == pre.kv[key].version + 1
         })
     {
-        // By definition of apply_set_post
+        assert((pre.kv[key].version + 1) as u64 == pre.kv[key].version + 1);
     }
 
     /// New key starts at version 1
@@ -264,7 +265,6 @@ verus! {
     }
 
     /// Batch updates last_applied once
-    #[verifier(external_body)]
     pub proof fn batch_updates_last_applied(
         pre: StorageState,
         operations: Seq<(bool, Seq<u8>, Seq<u8>)>,
@@ -276,7 +276,13 @@ verus! {
         })
         decreases operations.len()
     {
-        // By induction on operations length
+        if operations.len() == 0 {
+            assert(apply_batch_post(pre, operations, log_index).last_applied == Some(log_index));
+        } else {
+            let (is_set, key, value) = operations[0];
+            let intermediate = apply_batch_op(pre, is_set, key, value, log_index);
+            batch_updates_last_applied(intermediate, operations.skip(1), log_index);
+        }
     }
 
     // ========================================================================
