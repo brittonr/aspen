@@ -1,7 +1,7 @@
 ## Phase 1: Baseline and cheap product paths
 
 - [x] [serial] Capture clean git status, recent commits, host KVM/TUN/CPU/user prerequisites, and relevant impure check names as baseline evidence for `r[test-harness-runtime.gated-runtime-confidence-sweep.clean-baseline]`. Evidence: `evidence/baseline.md`. ✅ 3m (started: 2026-05-12T22:49:02Z → completed: 2026-05-12T22:52:00Z)
-- [ ] [depends:baseline] Run cheap runtime-host product-path checks for WASM, OCI lowering, Hyperlight guardrail, and Hermit/uHyve guardrail, preserving command lines, exit statuses, and proof-boundary classification for `r[test-harness-runtime.gated-runtime-confidence-sweep.staged-order]`.
+- [x] [depends:baseline] Run cheap runtime-host product-path checks for WASM, OCI lowering, Hyperlight guardrail, and Hermit/uHyve guardrail, preserving command lines, exit statuses, and proof-boundary classification for `r[test-harness-runtime.gated-runtime-confidence-sweep.staged-order]`. Evidence: `evidence/cheap-runtime-host.md`. ✅ 4m (started: 2026-05-12T22:50:10Z → completed: 2026-05-12T22:54:00Z)
 
 ## Phase 2: VM and microVM product checks
 
