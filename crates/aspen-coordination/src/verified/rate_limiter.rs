@@ -207,8 +207,11 @@ pub fn calculate_intervals_elapsed(last_refill_ms: u64, now_ms: u64, interval_ms
 /// Tokens to add (capped at capacity to prevent overflow).
 #[inline]
 pub fn compute_tokens_to_add(intervals: u64, refill_amount: u64, capacity: u64) -> u64 {
-    let raw = intervals.saturating_mul(refill_amount);
-    let result = if raw > capacity { capacity } else { raw };
+    let result = if refill_amount != 0 && intervals > capacity / refill_amount {
+        capacity
+    } else {
+        intervals * refill_amount
+    };
     debug_assert!(result <= capacity, "result must not exceed capacity");
     result
 }
@@ -268,7 +271,11 @@ pub fn compute_rate_per_second(refill_amount: u64, refill_interval_ms: u64) -> u
     if refill_interval_ms == 0 {
         return 0;
     }
-    let numerator = refill_amount.saturating_mul(1000);
+    let numerator = if refill_amount > u64::MAX / 1000 {
+        u64::MAX
+    } else {
+        refill_amount * 1000
+    };
     numerator / refill_interval_ms
 }
 
@@ -332,8 +339,16 @@ pub fn compute_refill_intervals(current_time_ms: u64, last_refill_ms: u64, refil
 /// Compute new last_refill_ms after refill.
 #[inline]
 pub fn compute_new_last_refill(last_refill_ms: u64, intervals: u64, refill_interval_ms: u64) -> u64 {
-    let increment = intervals.saturating_mul(refill_interval_ms);
-    let new_last = last_refill_ms.saturating_add(increment);
+    let increment = if refill_interval_ms != 0 && intervals > u64::MAX / refill_interval_ms {
+        u64::MAX
+    } else {
+        intervals * refill_interval_ms
+    };
+    let new_last = if increment > u64::MAX - last_refill_ms {
+        u64::MAX
+    } else {
+        last_refill_ms + increment
+    };
     debug_assert!(new_last >= last_refill_ms, "new_last must be >= last_refill_ms");
     new_last
 }
@@ -596,12 +611,16 @@ mod unit_tests {
         assert_eq!(compute_tokens_to_add(0, 5, 100), 0);
         // Capped at capacity
         assert_eq!(compute_tokens_to_add(100, 5, 10), 10);
+        // Overflow would occur before the capacity cap without the division guard.
+        assert_eq!(compute_tokens_to_add(u64::MAX, 2, u64::MAX - 1), u64::MAX - 1);
     }
 
     #[test]
     fn test_calculate_new_last_refill() {
         assert_eq!(calculate_new_last_refill(1000, 3, 500), 2500);
         assert_eq!(calculate_new_last_refill(1000, 0, 500), 1000);
+        assert_eq!(calculate_new_last_refill(u64::MAX - 5, 2, 10), u64::MAX);
+        assert_eq!(calculate_new_last_refill(42, u64::MAX, 2), u64::MAX);
     }
 
     // ========================================================================
@@ -635,6 +654,8 @@ mod unit_tests {
         assert_eq!(compute_rate_per_second(10, 1000), 10); // 10 tokens/s
         assert_eq!(compute_rate_per_second(5, 500), 10); // 5 per 500ms = 10/s
         assert_eq!(compute_rate_per_second(10, 0), 0); // zero interval
+        assert_eq!(compute_rate_per_second(u64::MAX, 1), u64::MAX);
+        assert_eq!(compute_rate_per_second(u64::MAX, 2), u64::MAX / 2);
     }
 
     #[test]

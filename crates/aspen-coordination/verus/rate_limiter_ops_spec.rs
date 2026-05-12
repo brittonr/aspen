@@ -530,6 +530,20 @@ verus! {
         }
     }
 
+    /// Overflow-safe product capped at a caller-provided capacity.
+    ///
+    /// This mirrors the reusable `verified-logic` token-bucket primitive: model
+    /// the refill product in unbounded integer arithmetic, then cap before any
+    /// executable `u64` multiplication can overflow.
+    pub open spec fn capped_refill_product_spec(
+        intervals: u64,
+        refill_amount: u64,
+        capacity: u64,
+    ) -> u64 {
+        let product = (intervals as int) * (refill_amount as int);
+        if product > capacity as int { capacity } else { product as u64 }
+    }
+
     /// Compute tokens to add during refill.
     ///
     /// # Arguments
@@ -541,17 +555,29 @@ verus! {
     /// # Returns
     ///
     /// Tokens to add (capped at capacity to prevent overflow).
-    #[verifier(external_body)]
     pub fn compute_tokens_to_add(
         intervals: u64,
         refill_amount: u64,
         capacity: u64,
     ) -> (result: u64)
-        ensures result <= capacity
+        ensures
+            result == capped_refill_product_spec(intervals, refill_amount, capacity),
+            result <= capacity,
     {
-        // Use saturating multiplication, then cap at capacity
-        let raw = intervals.saturating_mul(refill_amount);
-        if raw > capacity { capacity } else { raw }
+        if refill_amount != 0 && intervals > capacity / refill_amount {
+            assert((capacity as int) / (refill_amount as int) < intervals as int);
+            assert((capacity as int) < (intervals as int) * (refill_amount as int)) by(nonlinear_arith)
+                requires
+                    refill_amount as int > 0,
+                    (capacity as int) / (refill_amount as int) < intervals as int;
+            capacity
+        } else {
+            assert(refill_amount == 0 || intervals <= capacity / refill_amount);
+            assert((intervals as int) * (refill_amount as int) <= (capacity as int)) by(nonlinear_arith)
+                requires
+                    refill_amount as int == 0 || intervals as int <= (capacity as int) / (refill_amount as int);
+            intervals * refill_amount
+        }
     }
 
     /// Compute tokens after refill.
@@ -576,6 +602,17 @@ verus! {
         if sum > capacity { capacity } else { sum }
     }
 
+    /// Saturating timestamp advance used after applying full refill intervals.
+    pub open spec fn saturating_refill_timestamp_spec(
+        last_refill_ms: u64,
+        intervals: u64,
+        refill_interval_ms: u64,
+    ) -> u64 {
+        let increment = (intervals as int) * (refill_interval_ms as int);
+        let advanced = last_refill_ms as int + increment;
+        if advanced > u64::MAX as int { u64::MAX } else { advanced as u64 }
+    }
+
     /// Compute new last_refill_ms after refill.
     ///
     /// # Arguments
@@ -587,16 +624,41 @@ verus! {
     /// # Returns
     ///
     /// New last refill time (saturating at u64::MAX).
-    #[verifier(external_body)]
     pub fn compute_new_last_refill(
         last_refill_ms: u64,
         intervals: u64,
         refill_interval_ms: u64,
     ) -> (result: u64)
-        ensures result >= last_refill_ms
+        ensures
+            result == saturating_refill_timestamp_spec(last_refill_ms, intervals, refill_interval_ms),
+            result >= last_refill_ms,
     {
-        let increment = intervals.saturating_mul(refill_interval_ms);
-        last_refill_ms.saturating_add(increment)
+        if refill_interval_ms != 0 && intervals > u64::MAX / refill_interval_ms {
+            assert((u64::MAX as int) / (refill_interval_ms as int) < intervals as int);
+            assert((u64::MAX as int) < (intervals as int) * (refill_interval_ms as int)) by(nonlinear_arith)
+                requires
+                    refill_interval_ms as int > 0,
+                    (u64::MAX as int) / (refill_interval_ms as int) < intervals as int;
+            u64::MAX
+        } else {
+            assert(refill_interval_ms == 0 || intervals <= u64::MAX / refill_interval_ms);
+            assert((intervals as int) * (refill_interval_ms as int) <= (u64::MAX as int)) by(nonlinear_arith)
+                requires
+                    refill_interval_ms as int == 0 || intervals as int <= (u64::MAX as int) / (refill_interval_ms as int);
+            let increment = intervals * refill_interval_ms;
+            if increment > u64::MAX - last_refill_ms {
+                assert(((u64::MAX - last_refill_ms) as int) < (increment as int));
+                assert((u64::MAX as int) < (last_refill_ms as int) + (increment as int)) by(nonlinear_arith)
+                    requires
+                        ((u64::MAX - last_refill_ms) as int) < (increment as int);
+                u64::MAX
+            } else {
+                assert(increment <= u64::MAX - last_refill_ms);
+                assert((last_refill_ms as int) + (increment as int) <= (u64::MAX as int)) by(nonlinear_arith)
+                    requires (increment as int) <= ((u64::MAX - last_refill_ms) as int);
+                last_refill_ms + increment
+            }
+        }
     }
 
     /// Check if burst can be handled.
@@ -625,17 +687,40 @@ verus! {
     /// # Returns
     ///
     /// Tokens per second.
-    #[verifier(external_body)]
+    /// Effective rate with a saturating `refill_amount * 1000` numerator.
+    pub open spec fn rate_per_second_saturating_product_spec(
+        refill_amount: u64,
+        refill_interval_ms: u64,
+    ) -> u64
+        recommends refill_interval_ms > 0
+    {
+        let numerator = (refill_amount as int) * 1000;
+        let saturated_numerator = if numerator > u64::MAX as int {
+            u64::MAX as int
+        } else {
+            numerator
+        };
+        (saturated_numerator / (refill_interval_ms as int)) as u64
+    }
+
     pub fn compute_rate_per_second(
         refill_amount: u64,
         refill_interval_ms: u64,
     ) -> (result: u64)
         requires refill_interval_ms > 0
-        ensures result == ((refill_amount as int * 1000) / refill_interval_ms as int) as u64 ||
-                result == u64::MAX  // overflow case
+        ensures result == rate_per_second_saturating_product_spec(refill_amount, refill_interval_ms)
     {
-        // Use saturating multiplication to prevent overflow
-        let numerator = refill_amount.saturating_mul(1000);
+        let numerator = if refill_amount > u64::MAX / 1000 {
+            assert((u64::MAX as int) / 1000 < refill_amount as int);
+            assert((u64::MAX as int) < (refill_amount as int) * 1000) by(nonlinear_arith)
+                requires (u64::MAX as int) / 1000 < refill_amount as int;
+            u64::MAX
+        } else {
+            assert(refill_amount <= u64::MAX / 1000);
+            assert((refill_amount as int) * 1000 <= (u64::MAX as int)) by(nonlinear_arith)
+                requires refill_amount as int <= (u64::MAX as int) / 1000;
+            refill_amount * 1000
+        };
         numerator / refill_interval_ms
     }
 }
