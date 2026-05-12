@@ -40,7 +40,7 @@ default = [
     "metrics",
 ]
 examples = ["net"]
-metrics = ["iroh-metrics/metrics"]
+metrics = ["iroh-metrics/metrics", "net"]
 net = [
     "dep:irpc",
     "dep:futures-lite",
@@ -167,7 +167,7 @@ version = "2.0"
 [dependencies.iroh]
 version = "0.98"
 optional = true
-features = ["metrics", "portmapper", "tls-ring", "address-lookup-mdns", "address-lookup-pkarr-dht"]
+features = ["metrics", "tls-ring", "address-lookup-mdns", "address-lookup-pkarr-dht"]
 default-features = false
 
 [dependencies.iroh-base]

@@ -268,6 +268,9 @@
 mod socket;
 pub mod tls;
 
+#[cfg(all(not(wasm_browser), feature = "portmapper"))]
+extern crate portmapper as iroh_portmapper;
+
 pub(crate) mod portmapper;
 pub(crate) mod runtime;
 pub(crate) mod util;

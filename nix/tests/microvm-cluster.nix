@@ -18,6 +18,7 @@
   microvm,
   aspen-node-vm-test,
   aspen-fuse-vm-test,
+  aspen-cli-vm-test,
 }: let
   cookie = "integration-test-cluster";
 in
@@ -41,16 +42,46 @@ in
       environment.systemPackages = [
         aspen-node-vm-test
         aspen-fuse-vm-test
+        aspen-cli-vm-test
+        pkgs.python3
       ];
 
       networking.firewall.enable = false;
     };
 
     testScript = ''
+      import json
+      import re
       import time
 
       host.start()
       host.wait_for_unit("multi-user.target")
+
+      def get_ticket(node_id):
+          return host.succeed(f"cat /tmp/aspen-{node_id}/cluster-ticket.txt").strip()
+
+      def cli_text(cmd, ticket=None):
+          if ticket is None:
+              ticket = get_ticket(1)
+          host.succeed(f"aspen-cli --ticket '{ticket}' {cmd} >/tmp/_aspen_cli.out 2>/tmp/_aspen_cli.err")
+          return host.succeed("cat /tmp/_aspen_cli.out")
+
+      def cli_json(cmd, ticket=None):
+          if ticket is None:
+              ticket = get_ticket(1)
+          host.succeed(f"aspen-cli --ticket '{ticket}' --json {cmd} >/tmp/_aspen_cli.json 2>/tmp/_aspen_cli.err")
+          return json.loads(host.succeed("cat /tmp/_aspen_cli.json"))
+
+      def endpoint_addr_json(unit):
+          output = host.succeed(
+              f"journalctl -u {unit} --no-pager 2>/dev/null | "
+              "grep 'cluster ticket generated with direct addresses' | head -1"
+          )
+          eid_match = re.search(r'endpoint_id=([0-9a-f]{64})', output)
+          assert eid_match, f"endpoint_id not found for {unit}: {output[:500]}"
+          addrs = [{"Ip": addr} for addr in re.findall(r'(\d+\.\d+\.\d+\.\d+:\d+)', output)]
+          assert addrs, f"no direct IPv4 addrs found for {unit}: {output[:500]}"
+          return json.dumps({"id": eid_match.group(1), "addrs": addrs})
 
       # ════════════════════════════════════════════════════════════
       # Phase 1: Bootstrap 3-node Raft cluster
@@ -61,86 +92,74 @@ in
       # Create data dirs
       host.succeed("mkdir -p /tmp/aspen-{1,2,3}")
 
-      # Start node 1 — auto-bootstraps as single-node cluster
-      host.succeed(
-          "systemd-run --unit=aspen-node-1 "
-          "bash -c 'export RUST_LOG=info PATH=/run/current-system/sw/bin; "
-          "exec aspen-node "
-          "--node-id 1 "
-          "--cookie ${cookie} "
-          "--data-dir /tmp/aspen-1 "
-          "--storage-backend inmemory "
-          "--relay-mode disabled "
-          "--disable-gossip "
-          "--disable-mdns "
-          "--bind-port 7001'"
-      )
-      host.log("Node 1 started")
+      # Start three independent Aspen nodes, then form the Raft cluster
+      # explicitly through the client control plane. This matches the current
+      # product path: services generate tickets at startup, but membership is
+      # initialized and changed by `aspen-cli cluster ...` commands.
+      for i, port in [(1, 7001), (2, 7002), (3, 7003)]:
+          host.succeed(
+              f"systemd-run --unit=aspen-node-{i} "
+              f"bash -c 'export RUST_LOG=info PATH=/run/current-system/sw/bin; "
+              f"exec aspen-node "
+              f"--node-id {i} "
+              f"--cookie ${cookie} "
+              f"--data-dir /tmp/aspen-{i} "
+              f"--storage-backend inmemory "
+              f"--relay-mode disabled "
+              f"--disable-gossip "
+              f"--disable-mdns "
+              f"--bind-port {port}'"
+          )
+          host.wait_until_succeeds(f"test -f /tmp/aspen-{i}/cluster-ticket.txt", timeout=120)
+          host.log(f"Node {i} started and wrote local ticket")
 
-      # Wait for node 1 to bootstrap and generate cluster ticket
-      host.wait_until_succeeds(
-          "journalctl -u aspen-node-1 --no-pager 2>/dev/null | grep -q 'cluster ticket generated'",
-          timeout=120,
-      )
-      host.log("Node 1 bootstrapped")
-
-      # Read ticket from file (node writes it to data-dir/cluster-ticket.txt)
-      host.wait_until_succeeds("test -f /tmp/aspen-1/cluster-ticket.txt", timeout=10)
-      ticket = host.succeed("cat /tmp/aspen-1/cluster-ticket.txt").strip()
-      host.log(f"Cluster ticket: {ticket[:50]}...")
-
-      # Start node 2 with ticket
-      host.succeed(
-          "systemd-run --unit=aspen-node-2 "
-          f"bash -c 'export RUST_LOG=info PATH=/run/current-system/sw/bin; "
-          f"exec aspen-node "
-          f"--node-id 2 "
-          f"--cookie ${cookie} "
-          f"--data-dir /tmp/aspen-2 "
-          f"--storage-backend inmemory "
-          f"--relay-mode disabled "
-          f"--disable-gossip "
-          f"--disable-mdns "
-          f"--bind-port 7002 "
-          f"--ticket {ticket}'"
-      )
-      host.log("Node 2 started")
-
-      # Start node 3 with ticket
-      host.succeed(
-          "systemd-run --unit=aspen-node-3 "
-          f"bash -c 'export RUST_LOG=info PATH=/run/current-system/sw/bin; "
-          f"exec aspen-node "
-          f"--node-id 3 "
-          f"--cookie ${cookie} "
-          f"--data-dir /tmp/aspen-3 "
-          f"--storage-backend inmemory "
-          f"--relay-mode disabled "
-          f"--disable-gossip "
-          f"--disable-mdns "
-          f"--bind-port 7003 "
-          f"--ticket {ticket}'"
-      )
-      host.log("Node 3 started")
-
-      # Wait for nodes 2 and 3 to fully join (they generate their own tickets)
-      host.wait_until_succeeds(
-          "journalctl -u aspen-node-2 --no-pager 2>/dev/null | grep -q 'cluster ticket generated'",
-          timeout=60,
-      )
-      host.log("Node 2 joined cluster")
-
-      host.wait_until_succeeds(
-          "journalctl -u aspen-node-3 --no-pager 2>/dev/null | grep -q 'cluster ticket generated'",
-          timeout=60,
-      )
-      host.log("Node 3 joined cluster")
-
-      # Verify all 3 nodes are running
+      # Verify all 3 nodes are running before control-plane formation.
       for i in [1, 2, 3]:
           status = host.succeed(f"systemctl is-active aspen-node-{i}.service || echo dead").strip()
           assert status == "active", f"Node {i} not active: {status}"
       host.log("All 3 nodes active")
+
+      ticket = get_ticket(1)
+      host.log("Cluster ticket: [REDACTED]")
+
+      with subtest("initialize single-node cluster"):
+          cli_text("cluster init", ticket=ticket)
+          host.wait_until_succeeds(
+              f"aspen-cli --ticket '{ticket}' --json cluster status > /tmp/cluster-status.json 2>/tmp/cluster-status.err && "
+              "python3 - <<'PY'\n"
+              "import json\n"
+              "status=json.load(open('/tmp/cluster-status.json'))\n"
+              "assert len(status.get('nodes', [])) == 1, status\n"
+              "PY",
+              timeout=60,
+          )
+
+      with subtest("add learners and promote three voters"):
+          addr2 = endpoint_addr_json("aspen-node-2")
+          addr3 = endpoint_addr_json("aspen-node-3")
+          cli_text(f"cluster add-learner --node-id 2 --addr '{addr2}'", ticket=ticket)
+          cli_text(f"cluster add-learner --node-id 3 --addr '{addr3}'", ticket=ticket)
+          cli_text("cluster change-membership 1 2 3", ticket=ticket)
+          host.wait_until_succeeds(
+              f"aspen-cli --ticket '{ticket}' --json cluster status > /tmp/cluster-status.json 2>/tmp/cluster-status.err && "
+              "python3 - <<'PY'\n"
+              "import json\n"
+              "status=json.load(open('/tmp/cluster-status.json'))\n"
+              "voters=[node for node in status.get('nodes', []) if node.get('is_voter') is True]\n"
+              "assert len(voters) == 3, status\n"
+              "PY",
+              timeout=120,
+          )
+          host.log("Promoted cluster to three voters")
+
+      with subtest("cross-node health"):
+          for i in [1, 2, 3]:
+              local_ticket = get_ticket(i)
+              host.wait_until_succeeds(
+                  f"aspen-cli --ticket '{local_ticket}' cluster health >/tmp/health-{i}.txt 2>&1",
+                  timeout=60,
+              )
+              host.log(f"Node {i} local health passed")
 
       # ════════════════════════════════════════════════════════════
       # Phase 2: Verify AspenFs can connect to the cluster

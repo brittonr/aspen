@@ -1342,7 +1342,7 @@
                         # dummy lib.rs sources in buildDepsOnly. Hydrate path-patched iroh
                         # crates from Aspen's tracked vendor tree so downstream crates see
                         # the real public API during the dependency gate.
-                        for crate in iroh iroh-blobs iroh-metrics iroh-tickets iroh-relay swarm-discovery; do
+                        for crate in iroh iroh-blobs iroh-gossip-0.98.0 iroh-metrics iroh-tickets iroh-relay swarm-discovery; do
                           if [ -d "$out/$crate" ] && grep -q 'pub fn main() {}' "$out/$crate/src/lib.rs" 2>/dev/null; then
                             rm -rf "$out/$crate"
                             cp -rL "${fullRawSrc}/vendor/$crate" "$out/$crate"
@@ -3653,10 +3653,9 @@
               # leader failover, cross-node operations, and node rejoin.
               # Build: nix build .#checks.x86_64-linux.multi-node-cluster-test
               multi-node-cluster-test = import ./nix/tests/multi-node-cluster.nix {
-                inherit pkgs kvPluginWasm forgePluginWasm;
-                aspenNodePackage = bins.ci-aspen-node-plugins;
-                aspenCliPackage = bins.ci-aspen-cli-e2e;
-                aspenCliPlugins = bins.ci-aspen-cli-plugins;
+                inherit pkgs;
+                aspenNodePackage = self.packages.${system}.aspen-node-vm-test;
+                aspenCliPackage = self.packages.${system}.aspen-cli-vm-test;
               };
 
               # Alert failover test: alert rule fires, leadership transfer,
@@ -4417,7 +4416,7 @@
               # Build: nix build .#checks.x86_64-linux.microvm-cluster-test
               microvm-cluster-test = import ./nix/tests/microvm-cluster.nix {
                 inherit pkgs microvm;
-                inherit (self.packages.${system}) aspen-node-vm-test aspen-fuse-vm-test;
+                inherit (self.packages.${system}) aspen-node-vm-test aspen-fuse-vm-test aspen-cli-vm-test;
               };
 
               # Full end-to-end: Raft cluster → VirtioFS → Cloud Hypervisor → nginx → HTTP
@@ -5835,7 +5834,7 @@
                       # registry dependencies (iroh-gossip, iroh-docs, iroh-blobs)
                       # before Cargo compiles the dependency gate.
                       postPatch = ''
-                        for crate in iroh iroh-blobs iroh-metrics iroh-tickets iroh-relay swarm-discovery; do
+                        for crate in iroh iroh-blobs iroh-gossip-0.98.0 iroh-metrics iroh-tickets iroh-relay swarm-discovery; do
                           if [ -d "vendor/$crate" ]; then
                             rm -rf "vendor/$crate"
                             cp -rL "${fullRawSrc}/vendor/$crate" "vendor/$crate"
@@ -5908,6 +5907,12 @@
                   aspen-fuse-vm-test = pureBin {
                     name = "aspen-fuse-vm-test";
                     cargoExtraArgs = "--package aspen-fuse --bin aspen-fuse --features virtiofs";
+                  };
+
+                  # aspen-cli for VM integration tests (cluster control-plane only)
+                  aspen-cli-vm-test = pureBin {
+                    name = "aspen-cli-vm-test";
+                    cargoExtraArgs = "-p aspen-cli --bin aspen-cli";
                   };
 
                   # VirtioFS server backed by a real Raft cluster (for integration tests)

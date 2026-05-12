@@ -6,7 +6,7 @@
 use std::net::SocketAddrV4;
 
 #[cfg(all(not(wasm_browser), feature = "portmapper"))]
-pub use ::portmapper::Metrics;
+pub use ::iroh_portmapper::Metrics;
 #[cfg(not(all(not(wasm_browser), feature = "portmapper")))]
 pub use stub::Metrics;
 use tokio::sync::watch;
@@ -38,7 +38,7 @@ pub(crate) fn create_client(
 ) -> Client {
     match config {
         #[cfg(all(not(wasm_browser), feature = "portmapper"))]
-        PortmapperConfig::Enabled {} => Client::Enabled(::portmapper::Client::with_metrics(
+        PortmapperConfig::Enabled {} => Client::Enabled(::iroh_portmapper::Client::with_metrics(
             Default::default(),
             metrics.portmapper.clone(),
         )),
@@ -58,7 +58,7 @@ pub(crate) fn create_client(
 pub(crate) enum Client {
     /// The real portmapper client (requires the `portmapper` feature).
     #[cfg(all(not(wasm_browser), feature = "portmapper"))]
-    Enabled(::portmapper::Client),
+    Enabled(::iroh_portmapper::Client),
     /// No-op: keeps the sender alive so the receiver never closes.
     Disabled {
         _tx: watch::Sender<Option<SocketAddrV4>>,

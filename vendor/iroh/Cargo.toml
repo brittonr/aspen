@@ -49,7 +49,6 @@ address-lookup-pkarr-dht = ["dep:mainline"]
 default = [
     "metrics",
     "fast-apple-datapath",
-    "portmapper",
     "tls-ring",
 ]
 fast-apple-datapath = ["noq/fast-apple-datapath"]
