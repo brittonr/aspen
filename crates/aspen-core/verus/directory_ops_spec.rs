@@ -49,9 +49,6 @@ verus! {
     }
 
     /// Proof: Create preserves namespace isolation
-    ///
-    /// Trusted proof: Fresh prefix cannot collide with existing prefixes.
-    #[verifier(external_body)]
     pub proof fn create_preserves_isolation(
         pre: DirectoryState,
         path: Seq<Seq<u8>>,
@@ -60,9 +57,31 @@ verus! {
         requires
             create_pre(pre, path, new_prefix),
             namespace_isolation(pre),
+            prefix_allocation_complete(pre),
         ensures namespace_isolation(create_post(pre, path, new_prefix))
     {
-        // Trusted: Fresh prefix cannot collide with existing directories
+        let post = create_post(pre, path, new_prefix);
+        assert forall |p1: Seq<Seq<u8>>, p2: Seq<Seq<u8>>|
+            post.directories.contains_key(p1) &&
+            post.directories.contains_key(p2) &&
+            !(p1 =~= p2) implies
+            post.directories[p1].prefix != post.directories[p2].prefix by {
+            if p1 =~= path {
+                assert(p2 != path);
+                assert(pre.directories.contains_key(p2));
+                assert(pre.allocated_prefixes.contains(pre.directories[p2].prefix));
+                assert(pre.directories[p2].prefix != new_prefix);
+            } else if p2 =~= path {
+                assert(p1 != path);
+                assert(pre.directories.contains_key(p1));
+                assert(pre.allocated_prefixes.contains(pre.directories[p1].prefix));
+                assert(pre.directories[p1].prefix != new_prefix);
+            } else {
+                assert(pre.directories.contains_key(p1));
+                assert(pre.directories.contains_key(p2));
+            }
+        }
+        assert(namespace_isolation(post));
     }
 
     /// Proof: Create preserves prefix uniqueness
