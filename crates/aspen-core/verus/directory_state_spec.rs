@@ -258,9 +258,6 @@ verus! {
     }
 
     /// Proof: Creating directory with fresh prefix preserves isolation
-    ///
-    /// Trusted proof: A fresh prefix cannot collide with existing directories.
-    #[verifier(external_body)]
     pub proof fn create_preserves_isolation(
         pre: DirectoryState,
         path: Seq<Seq<u8>>,
@@ -268,6 +265,7 @@ verus! {
     )
         requires
             namespace_isolation(pre),
+            prefix_allocation_complete(pre),
             !pre.allocated_prefixes.contains(new_prefix),
             !pre.directories.contains_key(path),
         ensures ({
@@ -284,6 +282,36 @@ verus! {
             namespace_isolation(post)
         })
     {
-        // Trusted: New prefix is fresh, so no collision with existing directories
+        let new_entry = DirectoryEntrySpec {
+            path: PathSpec { components: path },
+            prefix: new_prefix,
+            layer: None,
+        };
+        let post = DirectoryState {
+            directories: pre.directories.insert(path, new_entry),
+            allocated_prefixes: pre.allocated_prefixes.insert(new_prefix),
+            prefix_to_path: pre.prefix_to_path.insert(new_prefix, path),
+        };
+        assert forall |p1: Seq<Seq<u8>>, p2: Seq<Seq<u8>>|
+            post.directories.contains_key(p1) &&
+            post.directories.contains_key(p2) &&
+            !(p1 =~= p2) implies
+            post.directories[p1].prefix != post.directories[p2].prefix by {
+            if p1 =~= path {
+                assert(p2 != path);
+                assert(pre.directories.contains_key(p2));
+                assert(pre.allocated_prefixes.contains(pre.directories[p2].prefix));
+                assert(pre.directories[p2].prefix != new_prefix);
+            } else if p2 =~= path {
+                assert(p1 != path);
+                assert(pre.directories.contains_key(p1));
+                assert(pre.allocated_prefixes.contains(pre.directories[p1].prefix));
+                assert(pre.directories[p1].prefix != new_prefix);
+            } else {
+                assert(pre.directories.contains_key(p1));
+                assert(pre.directories.contains_key(p2));
+            }
+        }
+        assert(namespace_isolation(post));
     }
 }
