@@ -299,13 +299,23 @@ verus! {
     ///
     /// This specification uses integer approximation since Verus doesn't support
     /// floating point well. We model fraction as a percentage (0-100).
+    pub open spec fn saturating_mul_div_100(value: u64, percent: u32) -> u64 {
+        let multiplier = percent as u64;
+        let product = if multiplier == 0 || value <= 0xFFFF_FFFF_FFFF_FFFFu64 / multiplier {
+            (value * multiplier) as u64
+        } else {
+            0xFFFF_FFFF_FFFF_FFFFu64
+        };
+        product / 100
+    }
+
     pub open spec fn lease_renew_time(
         lease_acquired_at_ms: u64,
         lease_ttl_ms: u64,
         renew_percent: u32,  // 0-100 representing 0.0-1.0
     ) -> u64 {
         let clamped_percent = if renew_percent > 100 { 100u32 } else { renew_percent as u32 };
-        let renew_after_ms = ((lease_ttl_ms as int * clamped_percent as int) / 100) as u64;
+        let renew_after_ms = saturating_mul_div_100(lease_ttl_ms, clamped_percent);
         // Saturating add
         if lease_acquired_at_ms > 0xFFFF_FFFF_FFFF_FFFFu64 - renew_after_ms {
             0xFFFF_FFFF_FFFF_FFFFu64
@@ -351,7 +361,7 @@ verus! {
     /// Upper bound for jittered timeout
     pub open spec fn timeout_upper_bound(base_timeout_ms: u64, jitter_percent: u32) -> u64 {
         let clamped = if jitter_percent > 100 { 100u32 } else { jitter_percent as u32 };
-        let jitter_range = ((base_timeout_ms as int * clamped as int) / 100) as u64;
+        let jitter_range = saturating_mul_div_100(base_timeout_ms, clamped);
         // Saturating add
         if base_timeout_ms > 0xFFFF_FFFF_FFFF_FFFFu64 - jitter_range {
             0xFFFF_FFFF_FFFF_FFFFu64
@@ -542,7 +552,6 @@ verus! {
     ///
     /// Renewal time = acquired_at + (ttl * renew_percent / 100)
     /// renew_percent is clamped to [0, 100].
-    #[verifier(external_body)]
     pub fn compute_lease_renew_time(
         lease_acquired_at_ms: u64,
         lease_ttl_ms: u64,
@@ -552,7 +561,14 @@ verus! {
     {
         let clamped_percent = if renew_percent > 100 { 100 } else { renew_percent };
         let multiplier = clamped_percent as u64;
-        let product = if multiplier == 0 || lease_ttl_ms <= u64::MAX / multiplier {
+        let product = if multiplier == 0 {
+            0
+        } else if lease_ttl_ms <= u64::MAX / multiplier {
+            assert(lease_ttl_ms * multiplier <= u64::MAX) by(nonlinear_arith)
+                requires
+                    multiplier > 0,
+                    lease_ttl_ms <= u64::MAX / multiplier,
+            ;
             lease_ttl_ms * multiplier
         } else {
             u64::MAX
@@ -569,7 +585,6 @@ verus! {
     ///
     /// Returns base_timeout + jitter where jitter is (base * jitter_seed % jitter_range).
     /// jitter_percent controls the max jitter as a percentage of base.
-    #[verifier(external_body)]
     pub fn compute_election_timeout_with_jitter(
         base_timeout_ms: u64,
         jitter_percent: u32,
@@ -581,7 +596,14 @@ verus! {
     {
         let clamped_percent = if jitter_percent > 100 { 100 } else { jitter_percent };
         let multiplier = clamped_percent as u64;
-        let product = if multiplier == 0 || base_timeout_ms <= u64::MAX / multiplier {
+        let product = if multiplier == 0 {
+            0
+        } else if base_timeout_ms <= u64::MAX / multiplier {
+            assert(base_timeout_ms * multiplier <= u64::MAX) by(nonlinear_arith)
+                requires
+                    multiplier > 0,
+                    base_timeout_ms <= u64::MAX / multiplier,
+            ;
             base_timeout_ms * multiplier
         } else {
             u64::MAX
