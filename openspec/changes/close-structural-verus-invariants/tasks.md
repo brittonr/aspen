@@ -2,7 +2,7 @@
 
 - [ ] [serial] Record a fresh function-level inventory for coordination structural markers in queue ack, registry, strategies, worker, and fencing specs.
 - [ ] [serial] Close `queue_ack_spec.rs` FIFO and redrive invariant markers using insertion-position and FIFO-preservation helper lemmas.
-- [ ] [parallel] Close `registry_ops_spec.rs::deregister_maintains_index` with Map/Set remove helper lemmas or a narrower proven precondition.
+- [x] [parallel] Close `registry_ops_spec.rs::deregister_maintains_index` with Map/Set remove helper lemmas or a narrower proven precondition.
 - [ ] [parallel] Close `worker_ops_spec.rs` invariant preservation markers for register, heartbeat, and complete-task operations.
 - [ ] [parallel] Close `fencing_spec.rs` renewal and lease/jitter arithmetic helpers with branch-aligned saturating arithmetic.
 - [ ] [serial] Resolve or explicitly narrow `strategies_spec.rs::round_robin_fair` with a documented fairness model boundary.

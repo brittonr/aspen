@@ -8,6 +8,7 @@
 //! ```
 
 use vstd::prelude::*;
+use vstd::set_lib::lemma_set_empty_equivalency_len;
 
 // Import from registry_state_spec
 use crate::registry_state_spec::*;
@@ -289,7 +290,6 @@ verus! {
     }
 
     /// Proof: Deregister maintains index consistency
-    #[verifier(external_body)]
     pub proof fn deregister_maintains_index(
         pre: RegistryState,
         service_id: Seq<u8>,
@@ -297,9 +297,73 @@ verus! {
         requires
             registry_invariant(pre),
             deregister_pre(pre, service_id),
+            pre.type_index[pre.services[service_id].service_type].remove(service_id).finite(),
         ensures index_consistent(deregister_post(pre, service_id))
     {
-        // Service removed from both services and type_index
+        let removed_entry = pre.services[service_id];
+        let removed_type = removed_entry.service_type;
+        let old_type_set = pre.type_index[removed_type];
+        let new_type_set = old_type_set.remove(service_id);
+        let post = deregister_post(pre, service_id);
+
+        assert(index_consistent(pre));
+        assert(pre.type_index.contains_key(removed_type));
+        assert(old_type_set.contains(service_id));
+        assert(!post.services.contains_key(service_id));
+
+        assert forall |svc_type: Seq<u8>, svc_id: Seq<u8>|
+            post.type_index.contains_key(svc_type) &&
+            post.type_index[svc_type].contains(svc_id) implies
+            post.services.contains_key(svc_id) &&
+            post.services[svc_id].service_type =~= svc_type by {
+            if svc_type =~= removed_type {
+                assert(new_type_set.len() != 0);
+                assert(post.type_index[svc_type] == new_type_set);
+                assert(new_type_set.contains(svc_id));
+                assert(svc_id != service_id);
+                assert(old_type_set.contains(svc_id));
+                assert(pre.type_index.contains_key(svc_type));
+                assert(pre.type_index[svc_type].contains(svc_id));
+                assert(pre.services.contains_key(svc_id));
+                assert(post.services.contains_key(svc_id));
+                assert(post.services[svc_id] == pre.services[svc_id]);
+            } else {
+                assert(pre.type_index.contains_key(svc_type));
+                assert(post.type_index[svc_type] == pre.type_index[svc_type]);
+                assert(pre.type_index[svc_type].contains(svc_id));
+                assert(pre.services.contains_key(svc_id));
+                assert(pre.services[svc_id].service_type =~= svc_type);
+                assert(svc_id != service_id);
+                assert(post.services.contains_key(svc_id));
+                assert(post.services[svc_id] == pre.services[svc_id]);
+            }
+        }
+
+        assert forall |svc_id: Seq<u8>| post.services.contains_key(svc_id) implies {
+            let entry = post.services[svc_id];
+            post.type_index.contains_key(entry.service_type) &&
+            post.type_index[entry.service_type].contains(svc_id)
+        } by {
+            assert(svc_id != service_id);
+            assert(pre.services.contains_key(svc_id));
+            assert(post.services[svc_id] == pre.services[svc_id]);
+            let entry = pre.services[svc_id];
+            assert(pre.type_index.contains_key(entry.service_type));
+            assert(pre.type_index[entry.service_type].contains(svc_id));
+            if entry.service_type =~= removed_type {
+                assert(old_type_set.contains(svc_id));
+                assert(new_type_set.contains(svc_id));
+                lemma_set_empty_equivalency_len(new_type_set);
+                assert(new_type_set.len() != 0);
+                assert(post.type_index.contains_key(entry.service_type));
+                assert(post.type_index[entry.service_type] == new_type_set);
+            } else {
+                assert(post.type_index.contains_key(entry.service_type));
+                assert(post.type_index[entry.service_type] == pre.type_index[entry.service_type]);
+            }
+        }
+
+        assert(index_consistent(post));
     }
 
     // ========================================================================
