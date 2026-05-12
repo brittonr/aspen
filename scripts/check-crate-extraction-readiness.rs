@@ -204,7 +204,11 @@ fn run_command_text(program: &str, args: &[&str]) -> Result<String> {
 
 fn export_policy(policy_path: &Path) -> Result<Policy> {
     let path_text = policy_path.to_str().context("policy path is not valid UTF-8")?;
-    let json = run_command_text("nix", &["run", "nixpkgs#nickel", "--", "export", "--format", "json", path_text])?;
+    let json = if let Ok(nickel_bin) = std::env::var("ASPEN_NICKEL_BIN") {
+        run_command_text(&nickel_bin, &["export", "--format", "json", path_text])?
+    } else {
+        run_command_text("nix", &["run", "nixpkgs#nickel", "--", "export", "--format", "json", path_text])?
+    };
     serde_json::from_str(&json).context("failed to parse exported Nickel policy JSON")
 }
 

@@ -3025,6 +3025,30 @@
                   cp report.json $out
                 '';
 
+              crate-extraction-ready-family-sweep =
+                pkgs.runCommand "crate-extraction-ready-family-sweep" {
+                  nativeBuildInputs = [pkgs.git pkgs.clang pkgs.mold rustToolChain];
+                } ''
+                  export HOME="$PWD/home"
+                  export RUSTC_WRAPPER=
+                  export CARGO_INCREMENTAL=0
+                  export ASPEN_NICKEL_BIN=${pkgs.lib.getExe pkgs.nickel}
+                  mkdir -p "$HOME"
+                  cp -r ${ciSrc} source
+                  chmod -R u+w source
+                  cd source/aspen
+                  export CARGO_HOME="$PWD/.cargo-home"
+                  mkdir -p "$CARGO_HOME"
+                  cp "${ciCargoVendorDir}/config.toml" "$CARGO_HOME/config.toml"
+                  git init -q
+                  git config user.email aspen@example.invalid
+                  git config user.name Aspen
+                  git add .
+                  git commit -qm init
+                  cargo -q -Zscript scripts/check-crate-extraction-ready-families.rs | tee report.txt
+                  cp report.txt $out
+                '';
+
               forge-web-demo-prep =
                 pkgs.runCommand "forge-web-demo-prep" {
                   nativeBuildInputs = [pkgs.bash pkgs.coreutils pkgs.git pkgs.gnugrep pkgs.gawk pkgs.shellcheck rustToolChain];

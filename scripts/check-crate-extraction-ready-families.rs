@@ -163,8 +163,12 @@ fn run_family(root: &Path, family: &str, work_dir: &Path, args: &Args) -> Result
     let evidence_dir = write_fixture(&change_dir, family)?;
     let output_json = evidence_dir.join("readiness.json");
     let output_markdown = evidence_dir.join("readiness.md");
-    let output = Command::new(root.join("scripts/check-crate-extraction-readiness.rs"))
+    let output = Command::new("cargo")
         .current_dir(root)
+        .env("RUSTC_WRAPPER", "")
+        .env("CARGO_INCREMENTAL", "0")
+        .args(["-q", "-Zscript"])
+        .arg(root.join("scripts/check-crate-extraction-readiness.rs"))
         .arg("--policy")
         .arg(&args.policy)
         .arg("--inventory")
