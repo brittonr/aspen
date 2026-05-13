@@ -5,8 +5,8 @@
 
 ## Phase 2: VM and microVM product checks
 
-- [ ] [depends:cheap-product-paths] Run nearby VM/microVM checks beyond the already-restored cluster rails, including `microvm-virtiofs-net-test`, `microvm-net-mesh-test`, `microvm-raft-virtiofs-test`, and `vm-snapshot-virtiofs-test` where host prerequisites allow.
-- [ ] [depends:vm-microvm-checks] Record whether each VM/microVM check reached build closure, VM boot, service readiness, product assertions, cached success, or a classified blocker.
+- [x] [depends:cheap-product-paths] Run nearby VM/microVM checks beyond the already-restored cluster rails, including `microvm-virtiofs-net-test`, `microvm-net-mesh-test`, `microvm-raft-virtiofs-test`, and `vm-snapshot-virtiofs-test` where host prerequisites allow. Evidence: `evidence/vm-microvm-tier.md`. ✅ 183m (started: 2026-05-12T22:52:26Z → completed: 2026-05-13T01:55:00Z)
+- [x] [depends:vm-microvm-checks] Record whether each VM/microVM check reached build closure, VM boot, service readiness, product assertions, cached success, or a classified blocker. Evidence: `evidence/vm-microvm-tier.md`. ✅ 3m (completed: 2026-05-13T01:55:00Z)
 
 ## Phase 3: Gated runtime-host execution proofs
 

@@ -490,6 +490,16 @@
             cargo_toml = root / "Cargo.toml"
             text = cargo_toml.read_text()
             text = re.sub(
+                r'(?ms)^\[workspace\.dependencies\.ucan\]\n.*?(?=^\[)',
+                '[workspace.dependencies.ucan]\npath = ".nix-inputs/ucan"\n\n',
+                text,
+            )
+            text = re.sub(
+                r'(?ms)^\[workspace\.dependencies\.ucan-core\]\n.*?(?=^\[)',
+                '[workspace.dependencies.ucan-core]\ndefault-features = false\npath = ".nix-inputs/ucan/crates/ucan-core"\n\n',
+                text,
+            )
+            text = re.sub(
                 r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
                 'ucan = { path = ".nix-inputs/ucan" }',
                 text,
@@ -842,8 +852,34 @@
           OUT="$out" ${pkgs.python3}/bin/python3 <<'PY'
           from pathlib import Path
           import os
+          import re
 
-          lock = Path(os.environ["OUT"]) / "aspen" / "Cargo.lock"
+          root = Path(os.environ["OUT"]) / "aspen"
+          cargo_toml = root / "Cargo.toml"
+          manifest = cargo_toml.read_text()
+          manifest = re.sub(
+              r'(?ms)^\[workspace\.dependencies\.ucan\]\n.*?(?=^\[)',
+              '[workspace.dependencies.ucan]\npath = ".nix-inputs/ucan"\n\n',
+              manifest,
+          )
+          manifest = re.sub(
+              r'(?ms)^\[workspace\.dependencies\.ucan-core\]\n.*?(?=^\[)',
+              '[workspace.dependencies.ucan-core]\ndefault-features = false\npath = ".nix-inputs/ucan/crates/ucan-core"\n\n',
+              manifest,
+          )
+          manifest = re.sub(
+              r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
+              'ucan = { path = ".nix-inputs/ucan" }',
+              manifest,
+          )
+          manifest = re.sub(
+              r'ucan-core = \{ git = "[^"]+", package = "ucan-core", rev = "[^"]+", default-features = false \}',
+              'ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }',
+              manifest,
+          )
+          cargo_toml.write_text(manifest)
+
+          lock = root / "Cargo.lock"
           text = lock.read_text()
           for name, version, checksum in [
               ("netlink-packet-core", "0.8.1", "3463cbb78394cb0141e2c926b93fc2197e473394b761986eca3b9da2c63ae0f4"),
@@ -907,6 +943,46 @@
             $out/aspen/Cargo.toml
           ${pkgs.gnused}/bin/sed -i '/dep:mad-turmoil/s/, "dep:mad-turmoil"//g' $out/aspen/Cargo.toml
 
+          # UCAN is a private pinned git dependency. Materialize the locked
+          # flake input and rewrite the workspace dependency tables to local
+          # paths so sandboxed VM package builds never try to SSH-fetch it.
+          mkdir -p $out/aspen/.nix-inputs
+          cp -r ${ucan-src} $out/aspen/.nix-inputs/ucan
+          chmod -R u+w $out/aspen/.nix-inputs/ucan
+          OUT="$out" ${pkgs.python3}/bin/python3 <<'PY'
+          from pathlib import Path
+          import os
+          import re
+
+          root = Path(os.environ["OUT"]) / "aspen"
+          cargo_toml = root / "Cargo.toml"
+          text = cargo_toml.read_text()
+          text = re.sub(
+              r'(?ms)^\[workspace\.dependencies\.ucan\]\n.*?(?=^\[)',
+              '[workspace.dependencies.ucan]\npath = ".nix-inputs/ucan"\n\n',
+              text,
+          )
+          text = re.sub(
+              r'(?ms)^\[workspace\.dependencies\.ucan-core\]\n.*?(?=^\[)',
+              '[workspace.dependencies.ucan-core]\ndefault-features = false\npath = ".nix-inputs/ucan/crates/ucan-core"\n\n',
+              text,
+          )
+          cargo_toml.write_text(text)
+
+          ucan_root_manifest = root / ".nix-inputs" / "ucan" / "Cargo.toml"
+          ucan_root_text = ucan_root_manifest.read_text()
+          ucan_root_text = re.sub(r'(?s)^\[workspace\].*?(?=\n\[package\])', "", ucan_root_text)
+          ucan_root_text = re.sub(r'(?ms)^\[dev-dependencies\]\n.*?(?=^\[|\Z)', "", ucan_root_text)
+          ucan_root_manifest.write_text(ucan_root_text)
+          for manifest in [
+              ucan_root_manifest,
+              root / ".nix-inputs" / "ucan" / "crates" / "ucan-core" / "Cargo.toml",
+          ]:
+              manifest_text = manifest.read_text()
+              manifest_text = re.sub(r'\n\[lints\]\nworkspace = true\n?', '\n', manifest_text)
+              manifest.write_text(manifest_text)
+          PY
+
           # Strip git source lines from Cargo.lock for stubbed deps only.
           # Keep snix.dev, tvlfyi (wu-manber), and subwayrat (aspen-tui) —
           # these are vendored via overrideVendorGitCheckout / normal fetchGit.
@@ -955,8 +1031,34 @@
           OUT="$out" ${pkgs.python3}/bin/python3 <<'PY'
           from pathlib import Path
           import os
+          import re
 
-          lock = Path(os.environ["OUT"]) / "aspen" / "Cargo.lock"
+          root = Path(os.environ["OUT"]) / "aspen"
+          cargo_toml = root / "Cargo.toml"
+          manifest = cargo_toml.read_text()
+          manifest = re.sub(
+              r'(?ms)^\[workspace\.dependencies\.ucan\]\n.*?(?=^\[)',
+              '[workspace.dependencies.ucan]\npath = ".nix-inputs/ucan"\n\n',
+              manifest,
+          )
+          manifest = re.sub(
+              r'(?ms)^\[workspace\.dependencies\.ucan-core\]\n.*?(?=^\[)',
+              '[workspace.dependencies.ucan-core]\ndefault-features = false\npath = ".nix-inputs/ucan/crates/ucan-core"\n\n',
+              manifest,
+          )
+          manifest = re.sub(
+              r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
+              'ucan = { path = ".nix-inputs/ucan" }',
+              manifest,
+          )
+          manifest = re.sub(
+              r'ucan-core = \{ git = "[^"]+", package = "ucan-core", rev = "[^"]+", default-features = false \}',
+              'ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }',
+              manifest,
+          )
+          cargo_toml.write_text(manifest)
+
+          lock = root / "Cargo.lock"
           text = lock.read_text()
           for name, version, checksum in [
               ("netlink-packet-core", "0.8.1", "3463cbb78394cb0141e2c926b93fc2197e473394b761986eca3b9da2c63ae0f4"),
@@ -985,6 +1087,16 @@
             root = pathlib.Path(sys.argv[1]) / "aspen"
             cargo_toml = root / "Cargo.toml"
             text = cargo_toml.read_text()
+            text = re.sub(
+                r'(?ms)^\[workspace\.dependencies\.ucan\]\n.*?(?=^\[)',
+                '[workspace.dependencies.ucan]\npath = ".nix-inputs/ucan"\n\n',
+                text,
+            )
+            text = re.sub(
+                r'(?ms)^\[workspace\.dependencies\.ucan-core\]\n.*?(?=^\[)',
+                '[workspace.dependencies.ucan-core]\ndefault-features = false\npath = ".nix-inputs/ucan/crates/ucan-core"\n\n',
+                text,
+            )
             text = re.sub(
                 r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
                 'ucan = { path = ".nix-inputs/ucan" }',
@@ -1300,8 +1412,41 @@
             src = fullSrc;
             # Enter the aspen/ subdirectory after unpacking so Cargo finds
             # the workspace root. aspen-wasm-plugin at ../aspen-wasm-plugin/ resolves naturally.
-            postUnpack = ''sourceRoot="$sourceRoot/aspen"'';
-            cargoToml = ./Cargo.toml;
+            postUnpack = ''
+              sourceRoot="$sourceRoot/aspen"
+              ${pkgs.python3}/bin/python3 - "$sourceRoot/Cargo.toml" <<'PY'
+import pathlib
+import re
+import sys
+
+path = pathlib.Path(sys.argv[1])
+text = path.read_text()
+text = re.sub(
+    r'(?ms)^\[workspace\.dependencies\.ucan\]\n.*?(?=^\[)',
+    '[workspace.dependencies.ucan]\npath = ".nix-inputs/ucan"\n\n',
+    text,
+)
+text = re.sub(
+    r'(?ms)^\[workspace\.dependencies\.ucan-core\]\n.*?(?=^\[)',
+    '[workspace.dependencies.ucan-core]\ndefault-features = false\npath = ".nix-inputs/ucan/crates/ucan-core"\n\n',
+    text,
+)
+text = re.sub(
+    r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
+    'ucan = { path = ".nix-inputs/ucan" }',
+    text,
+)
+text = re.sub(
+    r'ucan-core = \{ git = "[^"]+", package = "ucan-core", rev = "[^"]+", default-features = false \}',
+    'ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }',
+    text,
+)
+path.write_text(text)
+PY
+            '';
+            # Use the rewritten full-source manifest so crane's dependency-only
+            # dummy source sees local replacements for private git deps.
+            cargoToml = fullSrc + "/aspen/Cargo.toml";
             # Explicit cargoLock ensures buildDepsOnly includes the lockfile
             # in its dummy source — without it cargo can't resolve git dep revisions.
             cargoLock = fullSrc + "/aspen/Cargo.lock";
@@ -1354,39 +1499,39 @@
             import os
             root = Path(os.environ["out"])
             macro_block = "#[macro_use]\nextern crate netlink_packet_core;\n\n"
-            for path in root.glob("*/genawaiter-0.99.1/Cargo.toml"):
+            for path in root.glob("**/genawaiter-0.99.1/Cargo.toml"):
                 text = path.read_text()
                 text = text.replace('default = ["proc_macro"]', 'default = []')
                 path.write_text(text)
-            for path in root.glob("*/postcard-1.1.3/Cargo.toml"):
+            for path in root.glob("**/postcard-1.1.3/Cargo.toml"):
                 text = path.read_text()
                 text = text.replace('default = ["heapless-cas"]', 'default = []')
                 path.write_text(text)
-            for path in root.glob("*/netlink-packet-core-0.*/Cargo.toml"):
+            for path in root.glob("**/netlink-packet-core-0.*/Cargo.toml"):
                 text = path.read_text()
                 text = text.replace("[dependencies.paste]\nversion = \"1\"", "[dependencies.pastey]\nversion = \"0.2.2\"")
                 path.write_text(text)
-            for path in root.glob("*/nickel-lang-core-0.16.1/Cargo.toml"):
+            for path in root.glob("**/nickel-lang-core-0.16.1/Cargo.toml"):
                 text = path.read_text()
                 text = text.replace("[dependencies.paste]\nversion = \"1.0\"", "[dependencies.pastey]\nversion = \"0.2.2\"")
                 path.write_text(text)
-            for path in root.glob("*/nickel-lang-core-0.16.1/src/**/*.rs"):
+            for path in root.glob("**/nickel-lang-core-0.16.1/src/**/*.rs"):
                 text = path.read_text()
                 text = text.replace("paste::paste!", "pastey::paste!")
                 path.write_text(text)
-            for path in root.glob("*/netlink-packet-core-0.*/src/**/*.rs"):
+            for path in root.glob("**/netlink-packet-core-0.*/src/**/*.rs"):
                 text = path.read_text()
                 text = text.replace("paste::paste", "pastey::paste")
                 text = text.replace("pub use paste::paste;", "pub use pastey::paste;")
                 text = text.replace("        fields!($name {", "        $crate::fields!($name {")
                 path.write_text(text)
-            for path in root.glob("*/netlink-packet-route-0.*/src/**/*.rs"):
+            for path in root.glob("**/netlink-packet-route-0.*/src/**/*.rs"):
                 text = path.read_text()
                 if "netlink_packet_core::buffer!(" not in text:
                     continue
                 text = text.replace("netlink_packet_core::buffer!(", "buffer!(")
                 path.write_text(text)
-            for path in root.glob("*/netlink-packet-route-0.*/src/lib.rs"):
+            for path in root.glob("**/netlink-packet-route-0.*/src/lib.rs"):
                 text = path.read_text()
                 if macro_block not in text:
                     continue
@@ -1522,6 +1667,33 @@
                       # iroh 0.97 upgrade: force drv hash change to clear stale failure cache
                       cp -rL --no-preserve=mode ${baseVendorDir} $out
                       ${pkgs.gnused}/bin/sed -i "s|${baseVendorDir}|$out|g" $out/config.toml
+                      OUT="$out" ${pkgs.python3}/bin/python3 - <<'PY'
+from pathlib import Path
+import os
+root = Path(os.environ["OUT"])
+for path in root.glob("**/postcard-1.1.3/Cargo.toml"):
+    text = path.read_text()
+    text = text.replace('default = ["heapless-cas"]', 'default = []')
+    path.write_text(text)
+for path in root.glob("**/nickel-lang-core-0.16.1/Cargo.toml"):
+    text = path.read_text()
+    text = text.replace("[dependencies.paste]\nversion = \"1.0\"", "[dependencies.pastey]\nversion = \"0.2.2\"")
+    path.write_text(text)
+for path in root.glob("**/nickel-lang-core-0.16.1/src/**/*.rs"):
+    text = path.read_text()
+    text = text.replace("paste::paste!", "pastey::paste!")
+    path.write_text(text)
+for path in root.glob("**/netlink-packet-core-0.*/Cargo.toml"):
+    text = path.read_text()
+    text = text.replace("[dependencies.paste]\nversion = \"1\"", "[dependencies.pastey]\nversion = \"0.2.2\"")
+    path.write_text(text)
+for path in root.glob("**/netlink-packet-core-0.*/src/**/*.rs"):
+    text = path.read_text()
+    text = text.replace("paste::paste", "pastey::paste")
+    text = text.replace("pub use paste::paste;", "pub use pastey::paste;")
+    text = text.replace("        fields!($name {", "        $crate::fields!($name {")
+    path.write_text(text)
+PY
 
                       HLW_DIR=$(find $out -maxdepth 3 -type d -name "hyperlight-wasm-0.12.0" | head -1)
                       if [ -z "$HLW_DIR" ]; then
@@ -1583,7 +1755,7 @@
                 }
                 Ok(())
             }
-            BUILDRS
+BUILDRS
 
                       grep -q "HYPERLIGHT_WASM_RUNTIME" "$HLW_DIR/build.rs"
                       grep -q "$out" "$out/config.toml"
@@ -2162,6 +2334,16 @@
             root = pathlib.Path(sys.argv[1]) / "aspen"
             cargo_toml = root / "Cargo.toml"
             text = cargo_toml.read_text()
+            text = re.sub(
+                r'(?ms)^\[workspace\.dependencies\.ucan\]\n.*?(?=^\[)',
+                '[workspace.dependencies.ucan]\npath = ".nix-inputs/ucan"\n\n',
+                text,
+            )
+            text = re.sub(
+                r'(?ms)^\[workspace\.dependencies\.ucan-core\]\n.*?(?=^\[)',
+                '[workspace.dependencies.ucan-core]\ndefault-features = false\npath = ".nix-inputs/ucan/crates/ucan-core"\n\n',
+                text,
+            )
             text = re.sub(
                 r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
                 'ucan = { path = ".nix-inputs/ucan" }',
@@ -2777,9 +2959,18 @@
                         && lib.hasPrefix "git+https://git.snix.dev/snix/snix.git" (p.source or "")
                     )
                     ps;
+                  isUcanRepo =
+                    builtins.any (
+                      p:
+                        builtins.isString (p.source or null)
+                        && lib.hasPrefix "git+ssh://git@github.com/brittonr/ucan.git" (p.source or "")
+                    )
+                    ps;
                 in
                   if isSnixRepo
                   then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = snix-src;}))
+                  else if isUcanRepo
+                  then ensureGitCheckoutLock (drv.overrideAttrs (_old: {src = ucan-src;}))
                   else ensureGitCheckoutLock drv;
               });
               # Node with WASM plugin runtime + snix-build for native in-process builds.
@@ -4162,7 +4353,9 @@
               # Build: nix build .#checks.x86_64-linux.microvm-net-mesh-test --impure
               microvm-net-mesh-test = import ./nix/tests/microvm-net-mesh.nix {
                 inherit pkgs microvm;
-                aspenNodePackage = bins.full-aspen-node-plugins;
+                # Mesh/VirtioFS VM rails do not exercise plugin loading; avoid
+                # stale plugin fixture drift so failures classify product paths.
+                aspenNodePackage = bins.full-aspen-node;
                 aspenCliPackage = bins.full-aspen-cli;
                 aspenNetPackage = bins.full-aspen-net-daemon;
               };
@@ -4173,7 +4366,9 @@
               # Build: nix build .#checks.x86_64-linux.microvm-virtiofs-net-test --impure
               microvm-virtiofs-net-test = import ./nix/tests/microvm-virtiofs-net.nix {
                 inherit pkgs microvm;
-                aspenNodePackage = bins.full-aspen-node-plugins;
+                # Mesh/VirtioFS VM rails do not exercise plugin loading; avoid
+                # stale plugin fixture drift so failures classify product paths.
+                aspenNodePackage = bins.full-aspen-node;
                 aspenCliPackage = bins.full-aspen-cli;
                 aspenNetPackage = bins.full-aspen-net-daemon;
                 aspenClusterVirtiofsServer = self.packages.${system}.aspen-cluster-virtiofs-server;
@@ -5746,8 +5941,24 @@
                     chmod -R u+w $out/aspen/.nix-inputs/ucan
                     ${pkgs.python3}/bin/python3 - <<'PY'
                     import os
+                    import re
                     from pathlib import Path
-                    root = Path(os.environ['out']) / 'aspen/.nix-inputs/ucan'
+                    aspen_root = Path(os.environ['out']) / 'aspen'
+                    root_manifest = aspen_root / 'Cargo.toml'
+                    root_text = root_manifest.read_text()
+                    root_text = re.sub(
+                        r'(?ms)^\[workspace\.dependencies\.ucan\]\n.*?(?=^\[)',
+                        '[workspace.dependencies.ucan]\npath = ".nix-inputs/ucan"\n\n',
+                        root_text,
+                    )
+                    root_text = re.sub(
+                        r'(?ms)^\[workspace\.dependencies\.ucan-core\]\n.*?(?=^\[)',
+                        '[workspace.dependencies.ucan-core]\ndefault-features = false\npath = ".nix-inputs/ucan/crates/ucan-core"\n\n',
+                        root_text,
+                    )
+                    root_manifest.write_text(root_text)
+
+                    root = aspen_root / '.nix-inputs/ucan'
                     drop_prefixes = ('workspace', 'workspace.', 'dev-dependencies', 'lints', 'profile.', 'package.metadata')
                     for manifest in root.rglob('Cargo.toml'):
                         text = manifest.read_text()
