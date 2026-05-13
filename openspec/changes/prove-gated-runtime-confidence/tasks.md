@@ -13,7 +13,7 @@
 - [x] [depends:vm-microvm-classification] Run the VM runtime-host package gate: `nix build --impure .#packages.x86_64-linux.aspen-node-vm-test --no-link --print-out-paths -L`. Evidence: `evidence/vm-runtime-host-phase3.md`. ✅ 1m (completed: 2026-05-13T02:55:19Z)
 - [x] [depends:vm-package-gate] Run nested-KVM `vm-snapshot-e2e-test` with sandbox disabled and classify the highest reached boundary: cluster ready, Cloud Hypervisor boot, guest readiness marker, snapshot files, worker registration, job completion, or final runtime-host receipt. Evidence: `evidence/vm-runtime-host-phase3.md`. ✅ 46m (completed: 2026-05-13T02:55:19Z)
 - [x] [depends:vm-runtime-host-e2e] Run the Hermit/uHyve ignored product proof using the built `uhyve` runner and `hermit-uhyve-marker` fixture, or record the exact host/build blocker. Evidence: `evidence/hermit-uhyve-phase3.md`. ✅ 9m (started: 2026-05-13T03:07:54Z → completed: 2026-05-13T03:09:33Z)
-- [ ] [depends:hermit-uhyve-proof] Run the Hyperlight ignored product-path proof, or record the exact host/build blocker.
+- [x] [depends:hermit-uhyve-proof] Run the Hyperlight ignored product-path proof, or record the exact host/build blocker. Evidence: `evidence/hyperlight-phase3.md`. ✅ 1m (started: 2026-05-13T03:12:13Z → completed: 2026-05-13T03:12:34Z)
 
 ## Phase 4: Dogfood and full repository confidence
 
