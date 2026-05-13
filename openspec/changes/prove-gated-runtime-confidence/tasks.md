@@ -23,6 +23,6 @@
 ## Phase 5: Evidence and follow-up routing
 
 - [x] [serial] Redact or omit raw tickets, cookies, credentials, private keys, connection strings, and equivalent secret material from any committed evidence. Evidence: `evidence/redaction-audit.md`. ✅ 1m (started: 2026-05-13T05:37:54Z → completed: 2026-05-13T05:38:45Z)
-- [ ] [depends:all-proof-tiers] Write a compact committed evidence summary with command lines, exit statuses, proof markers, failure stages, and boundary classifications for `r[test-harness-runtime.gated-runtime-confidence-sweep.boundary-classification]` and `r[test-harness-runtime.gated-runtime-confidence-sweep.redacted-evidence]`.
+- [x] [depends:all-proof-tiers] Write a compact committed evidence summary with command lines, exit statuses, proof markers, failure stages, and boundary classifications for `r[test-harness-runtime.gated-runtime-confidence-sweep.boundary-classification]` and `r[test-harness-runtime.gated-runtime-confidence-sweep.redacted-evidence]`. Evidence: `evidence/summary.md`. ✅ 1m (started: 2026-05-13T05:39:07Z → completed: 2026-05-13T05:40:00Z)
 - [ ] [depends:evidence-summary] Create or update follow-up OpenSpecs for any real product behavior failures or multi-component repairs found during the sweep; document any narrow direct build/input drift fixes with focused verification.
 - [ ] [depends:follow-up-routing] Run `openspec validate prove-gated-runtime-confidence --strict --json`, `openspec validate --all --strict --json`, and `git diff --check` before completion.
