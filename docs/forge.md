@@ -99,8 +99,8 @@ Forge is a decentralized code collaboration system built on Aspen's distributed 
 ### Phase 6: Testing ✅
 
 - [x] Unit tests for each component
-- [ ] Integration tests for full workflows (TODO)
-- [ ] Property-based tests for COB resolution (TODO)
+- [x] Integration tests for full workflows (covered by `crates/aspen-forge/tests/forge_lifecycle_test.rs` and root Forge integration tests)
+- [x] Property-based tests for COB resolution (covered by `tests/forge_cob_proptest.rs`)
 
 ### Phase 7: Discussion COB ✅
 
