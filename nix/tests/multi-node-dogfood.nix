@@ -156,7 +156,6 @@
   '';
 
   mkNodeConfig = {
-
     nodeId,
     secretKey,
     enableCi ? false,

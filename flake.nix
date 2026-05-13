@@ -1413,36 +1413,36 @@
             # Enter the aspen/ subdirectory after unpacking so Cargo finds
             # the workspace root. aspen-wasm-plugin at ../aspen-wasm-plugin/ resolves naturally.
             postUnpack = ''
-              sourceRoot="$sourceRoot/aspen"
-              ${pkgs.python3}/bin/python3 - "$sourceRoot/Cargo.toml" <<'PY'
-import pathlib
-import re
-import sys
+                            sourceRoot="$sourceRoot/aspen"
+                            ${pkgs.python3}/bin/python3 - "$sourceRoot/Cargo.toml" <<'PY'
+              import pathlib
+              import re
+              import sys
 
-path = pathlib.Path(sys.argv[1])
-text = path.read_text()
-text = re.sub(
-    r'(?ms)^\[workspace\.dependencies\.ucan\]\n.*?(?=^\[)',
-    '[workspace.dependencies.ucan]\npath = ".nix-inputs/ucan"\n\n',
-    text,
-)
-text = re.sub(
-    r'(?ms)^\[workspace\.dependencies\.ucan-core\]\n.*?(?=^\[)',
-    '[workspace.dependencies.ucan-core]\ndefault-features = false\npath = ".nix-inputs/ucan/crates/ucan-core"\n\n',
-    text,
-)
-text = re.sub(
-    r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
-    'ucan = { path = ".nix-inputs/ucan" }',
-    text,
-)
-text = re.sub(
-    r'ucan-core = \{ git = "[^"]+", package = "ucan-core", rev = "[^"]+", default-features = false \}',
-    'ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }',
-    text,
-)
-path.write_text(text)
-PY
+              path = pathlib.Path(sys.argv[1])
+              text = path.read_text()
+              text = re.sub(
+                  r'(?ms)^\[workspace\.dependencies\.ucan\]\n.*?(?=^\[)',
+                  '[workspace.dependencies.ucan]\npath = ".nix-inputs/ucan"\n\n',
+                  text,
+              )
+              text = re.sub(
+                  r'(?ms)^\[workspace\.dependencies\.ucan-core\]\n.*?(?=^\[)',
+                  '[workspace.dependencies.ucan-core]\ndefault-features = false\npath = ".nix-inputs/ucan/crates/ucan-core"\n\n',
+                  text,
+              )
+              text = re.sub(
+                  r'ucan = \{ git = "[^"]+", rev = "[^"]+" \}',
+                  'ucan = { path = ".nix-inputs/ucan" }',
+                  text,
+              )
+              text = re.sub(
+                  r'ucan-core = \{ git = "[^"]+", package = "ucan-core", rev = "[^"]+", default-features = false \}',
+                  'ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }',
+                  text,
+              )
+              path.write_text(text)
+              PY
             '';
             # Use the rewritten full-source manifest so crane's dependency-only
             # dummy source sees local replacements for private git deps.
@@ -1664,102 +1664,102 @@ PY
         # to use a pre-built wasm_runtime binary instead of nested cargo build.
         patchVendorForHyperlight = baseVendorDir:
           pkgs.runCommand "patched-vendor-for-plugins" {} ''
-                      # iroh 0.97 upgrade: force drv hash change to clear stale failure cache
-                      cp -rL --no-preserve=mode ${baseVendorDir} $out
-                      ${pkgs.gnused}/bin/sed -i "s|${baseVendorDir}|$out|g" $out/config.toml
-                      OUT="$out" ${pkgs.python3}/bin/python3 - <<'PY'
-from pathlib import Path
-import os
-root = Path(os.environ["OUT"])
-for path in root.glob("**/postcard-1.1.3/Cargo.toml"):
-    text = path.read_text()
-    text = text.replace('default = ["heapless-cas"]', 'default = []')
-    path.write_text(text)
-for path in root.glob("**/nickel-lang-core-0.16.1/Cargo.toml"):
-    text = path.read_text()
-    text = text.replace("[dependencies.paste]\nversion = \"1.0\"", "[dependencies.pastey]\nversion = \"0.2.2\"")
-    path.write_text(text)
-for path in root.glob("**/nickel-lang-core-0.16.1/src/**/*.rs"):
-    text = path.read_text()
-    text = text.replace("paste::paste!", "pastey::paste!")
-    path.write_text(text)
-for path in root.glob("**/netlink-packet-core-0.*/Cargo.toml"):
-    text = path.read_text()
-    text = text.replace("[dependencies.paste]\nversion = \"1\"", "[dependencies.pastey]\nversion = \"0.2.2\"")
-    path.write_text(text)
-for path in root.glob("**/netlink-packet-core-0.*/src/**/*.rs"):
-    text = path.read_text()
-    text = text.replace("paste::paste", "pastey::paste")
-    text = text.replace("pub use paste::paste;", "pub use pastey::paste;")
-    text = text.replace("        fields!($name {", "        $crate::fields!($name {")
-    path.write_text(text)
-PY
+                                  # iroh 0.97 upgrade: force drv hash change to clear stale failure cache
+                                  cp -rL --no-preserve=mode ${baseVendorDir} $out
+                                  ${pkgs.gnused}/bin/sed -i "s|${baseVendorDir}|$out|g" $out/config.toml
+                                  OUT="$out" ${pkgs.python3}/bin/python3 - <<'PY'
+            from pathlib import Path
+            import os
+            root = Path(os.environ["OUT"])
+            for path in root.glob("**/postcard-1.1.3/Cargo.toml"):
+                text = path.read_text()
+                text = text.replace('default = ["heapless-cas"]', 'default = []')
+                path.write_text(text)
+            for path in root.glob("**/nickel-lang-core-0.16.1/Cargo.toml"):
+                text = path.read_text()
+                text = text.replace("[dependencies.paste]\nversion = \"1.0\"", "[dependencies.pastey]\nversion = \"0.2.2\"")
+                path.write_text(text)
+            for path in root.glob("**/nickel-lang-core-0.16.1/src/**/*.rs"):
+                text = path.read_text()
+                text = text.replace("paste::paste!", "pastey::paste!")
+                path.write_text(text)
+            for path in root.glob("**/netlink-packet-core-0.*/Cargo.toml"):
+                text = path.read_text()
+                text = text.replace("[dependencies.paste]\nversion = \"1\"", "[dependencies.pastey]\nversion = \"0.2.2\"")
+                path.write_text(text)
+            for path in root.glob("**/netlink-packet-core-0.*/src/**/*.rs"):
+                text = path.read_text()
+                text = text.replace("paste::paste", "pastey::paste")
+                text = text.replace("pub use paste::paste;", "pub use pastey::paste;")
+                text = text.replace("        fields!($name {", "        $crate::fields!($name {")
+                path.write_text(text)
+            PY
 
-                      HLW_DIR=$(find $out -maxdepth 3 -type d -name "hyperlight-wasm-0.12.0" | head -1)
-                      if [ -z "$HLW_DIR" ]; then
-                        echo "ERROR: hyperlight-wasm-0.12.0 not found in vendor dir"
-                        exit 1
-                      fi
+                                  HLW_DIR=$(find $out -maxdepth 3 -type d -name "hyperlight-wasm-0.12.0" | head -1)
+                                  if [ -z "$HLW_DIR" ]; then
+                                    echo "ERROR: hyperlight-wasm-0.12.0 not found in vendor dir"
+                                    exit 1
+                                  fi
 
-                      cat > "$HLW_DIR/build.rs" << 'BUILDRS'
-            use std::path::{Path, PathBuf};
-            use std::{env, fs};
-            use anyhow::Result;
-            use built::write_built_file;
+                                  cat > "$HLW_DIR/build.rs" << 'BUILDRS'
+                        use std::path::{Path, PathBuf};
+                        use std::{env, fs};
+                        use anyhow::Result;
+                        use built::write_built_file;
 
-            fn main() -> Result<()> {
-                let wasm_runtime_resource = PathBuf::from(
-                    env::var("HYPERLIGHT_WASM_RUNTIME")
-                        .expect("HYPERLIGHT_WASM_RUNTIME must be set for Nix builds")
-                );
-                println!("cargo:warning=Using pre-built wasm_runtime from {}", wasm_runtime_resource.display());
-                let out_dir = env::var_os("OUT_DIR").unwrap();
-                let dest_path = Path::new(&out_dir).join("wasm_runtime_resource.rs");
-                let contents = format!(
-                    "pub (super) static WASM_RUNTIME: [u8; include_bytes!({name:?}).len()] = *include_bytes!({name:?});",
-                    name = wasm_runtime_resource.as_os_str()
-                );
-                fs::write(dest_path, contents).unwrap();
-                let wasm_runtime_bytes = fs::read(&wasm_runtime_resource).unwrap();
-                let elf = goblin::elf::Elf::parse(&wasm_runtime_bytes).unwrap();
-                let section_name = ".note_hyperlight_metadata";
-                let wasmtime_version_number = if let Some(header) = elf.section_headers.iter().find(|hdr| {
-                    elf.shdr_strtab.get_at(hdr.sh_name).map_or(false, |name| name == section_name)
-                }) {
-                    let start = header.sh_offset as usize;
-                    let size = header.sh_size as usize;
-                    let metadata_bytes = &wasm_runtime_bytes[start..start + size];
-                    if let Some(null_pos) = metadata_bytes.iter().position(|&b| b == 0) {
-                        std::str::from_utf8(&metadata_bytes[..null_pos]).unwrap()
-                    } else {
-                        std::str::from_utf8(metadata_bytes).unwrap()
-                    }
-                } else {
-                    panic!(".note_hyperlight_metadata section not found in wasm_runtime binary");
-                };
-                write_built_file()?;
-                let built_path = Path::new(&out_dir).join("built.rs");
-                let mut file = std::fs::OpenOptions::new().create(false).append(true).open(built_path).unwrap();
-                use std::io::Write;
-                let metadata = fs::metadata(&wasm_runtime_resource).unwrap();
-                let created = metadata.modified().unwrap();
-                let created_datetime: chrono::DateTime<chrono::Local> = created.into();
-                writeln!(file, "static WASM_RUNTIME_CREATED: &str = \"{}\";", created_datetime).unwrap();
-                writeln!(file, "static WASM_RUNTIME_SIZE: &str = \"{}\";", metadata.len()).unwrap();
-                writeln!(file, "static WASM_RUNTIME_WASMTIME_VERSION: &str = \"{}\";", wasmtime_version_number).unwrap();
-                let hash = blake3::hash(&wasm_runtime_bytes);
-                writeln!(file, "static WASM_RUNTIME_BLAKE3_HASH: &str = \"{}\";", hash).unwrap();
-                println!("cargo:rerun-if-changed=build.rs");
-                cfg_aliases::cfg_aliases! {
-                    gdb: { all(feature = "gdb", debug_assertions) },
-                }
-                Ok(())
-            }
-BUILDRS
+                        fn main() -> Result<()> {
+                            let wasm_runtime_resource = PathBuf::from(
+                                env::var("HYPERLIGHT_WASM_RUNTIME")
+                                    .expect("HYPERLIGHT_WASM_RUNTIME must be set for Nix builds")
+                            );
+                            println!("cargo:warning=Using pre-built wasm_runtime from {}", wasm_runtime_resource.display());
+                            let out_dir = env::var_os("OUT_DIR").unwrap();
+                            let dest_path = Path::new(&out_dir).join("wasm_runtime_resource.rs");
+                            let contents = format!(
+                                "pub (super) static WASM_RUNTIME: [u8; include_bytes!({name:?}).len()] = *include_bytes!({name:?});",
+                                name = wasm_runtime_resource.as_os_str()
+                            );
+                            fs::write(dest_path, contents).unwrap();
+                            let wasm_runtime_bytes = fs::read(&wasm_runtime_resource).unwrap();
+                            let elf = goblin::elf::Elf::parse(&wasm_runtime_bytes).unwrap();
+                            let section_name = ".note_hyperlight_metadata";
+                            let wasmtime_version_number = if let Some(header) = elf.section_headers.iter().find(|hdr| {
+                                elf.shdr_strtab.get_at(hdr.sh_name).map_or(false, |name| name == section_name)
+                            }) {
+                                let start = header.sh_offset as usize;
+                                let size = header.sh_size as usize;
+                                let metadata_bytes = &wasm_runtime_bytes[start..start + size];
+                                if let Some(null_pos) = metadata_bytes.iter().position(|&b| b == 0) {
+                                    std::str::from_utf8(&metadata_bytes[..null_pos]).unwrap()
+                                } else {
+                                    std::str::from_utf8(metadata_bytes).unwrap()
+                                }
+                            } else {
+                                panic!(".note_hyperlight_metadata section not found in wasm_runtime binary");
+                            };
+                            write_built_file()?;
+                            let built_path = Path::new(&out_dir).join("built.rs");
+                            let mut file = std::fs::OpenOptions::new().create(false).append(true).open(built_path).unwrap();
+                            use std::io::Write;
+                            let metadata = fs::metadata(&wasm_runtime_resource).unwrap();
+                            let created = metadata.modified().unwrap();
+                            let created_datetime: chrono::DateTime<chrono::Local> = created.into();
+                            writeln!(file, "static WASM_RUNTIME_CREATED: &str = \"{}\";", created_datetime).unwrap();
+                            writeln!(file, "static WASM_RUNTIME_SIZE: &str = \"{}\";", metadata.len()).unwrap();
+                            writeln!(file, "static WASM_RUNTIME_WASMTIME_VERSION: &str = \"{}\";", wasmtime_version_number).unwrap();
+                            let hash = blake3::hash(&wasm_runtime_bytes);
+                            writeln!(file, "static WASM_RUNTIME_BLAKE3_HASH: &str = \"{}\";", hash).unwrap();
+                            println!("cargo:rerun-if-changed=build.rs");
+                            cfg_aliases::cfg_aliases! {
+                                gdb: { all(feature = "gdb", debug_assertions) },
+                            }
+                            Ok(())
+                        }
+            BUILDRS
 
-                      grep -q "HYPERLIGHT_WASM_RUNTIME" "$HLW_DIR/build.rs"
-                      grep -q "$out" "$out/config.toml"
-                      echo "Patch applied successfully"
+                                  grep -q "HYPERLIGHT_WASM_RUNTIME" "$HLW_DIR/build.rs"
+                                  grep -q "$out" "$out/config.toml"
+                                  echo "Patch applied successfully"
           '';
 
         # Stub builds: patched vendor for plugins-rpc feature
@@ -3635,9 +3635,9 @@ BUILDRS
                 name: _:
                   builtins.hasAttr name u2nTestWorkspace.workspaceMembers
                   &&
-                # Exclude stubs (git deps replaced with empty crates for IFD),
-                # crates that unconditionally import from stubs, and vendored
-                # openraft (tested upstream).
+                  # Exclude stubs (git deps replaced with empty crates for IFD),
+                  # crates that unconditionally import from stubs, and vendored
+                  # openraft (tested upstream).
                   !builtins.elem name [
                     "ucan"
                     "ucan-core"
