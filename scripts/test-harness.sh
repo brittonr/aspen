@@ -230,6 +230,10 @@ case "$subcommand" in
     cd "$repo_root"
     python3 "$repo_root/scripts/check-aspen-testing-public-api-boundary.py"
     ;;
+  verus-trusted-boundaries)
+    cd "$repo_root"
+    python3 "$repo_root/scripts/check-verus-trusted-boundaries.py"
+    ;;
   quick-confidence)
     cd "$repo_root"
     python3 "$repo_root/scripts/quick-confidence.py" "$@"

@@ -11,6 +11,7 @@ fn quick_confidence_docs_name_command_and_boundaries() {
     assert!(docs.contains("scripts/test-harness.sh check"));
     assert!(docs.contains("scripts/test-harness.sh runtime-host-acceptance-bundle"));
     assert!(docs.contains("scripts/test-harness.sh public-api-boundary"));
+    assert!(docs.contains("scripts/test-harness.sh verus-trusted-boundaries"));
     assert!(docs.contains("cargo test --test operator_receipts_docs -- --nocapture"));
     assert!(docs.contains("cargo test --test runtime_host_readiness_docs -- --nocapture"));
     assert!(docs.contains("openspec validate --all --strict --json"));
@@ -54,6 +55,7 @@ fn quick_confidence_dry_run_summary_is_structured_and_non_proof() {
     assert!(stdout.contains("planned"));
     assert!(stdout.contains("runtime-host-acceptance-bundle"));
     assert!(stdout.contains("testing-public-api-boundary"));
+    assert!(stdout.contains("verus-trusted-boundaries"));
     assert!(stdout.contains("non_proof_boundary"));
     assert!(stdout.contains("Hyperlight runtime-host execution proofs"));
 

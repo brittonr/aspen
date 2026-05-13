@@ -54,6 +54,11 @@ CHECKS: tuple[Check, ...] = (
         diagnostic="Inspect crates/aspen-testing/Cargo.toml and scripts/check-aspen-testing-public-api-boundary.py.",
     ),
     Check(
+        name="verus-trusted-boundaries",
+        command=["scripts/test-harness.sh", "verus-trusted-boundaries"],
+        diagnostic="Inspect docs/verus-trusted-boundaries.md and scripts/check-verus-trusted-boundaries.py.",
+    ),
+    Check(
         name="operator-receipts-docs",
         command=["cargo", "test", "--test", "operator_receipts_docs", "--", "--nocapture"],
         diagnostic="Inspect docs/operator-receipts.md and tests/operator_receipts_docs.rs.",
