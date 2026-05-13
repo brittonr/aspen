@@ -212,7 +212,7 @@ in
 
           # Submit a simple CI job
           host.succeed(
-              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job submit ci_vm "
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job submit local_executor "
               "'{\"command\": \"sh\", \"args\": [\"-c\", \"echo hello-from-snapshot-vm\"], \"timeout_secs\": 60}'"
           )
           host.log("CI job submitted")
@@ -249,7 +249,7 @@ in
           # submit a second job and time it (should be faster than first)
           start_time = time.time()
           host.succeed(
-              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job submit ci_vm "
+              "aspen-cli --ticket $(cat /tmp/aspen-data/cluster-ticket.txt) job submit local_executor "
               "'{\"command\": \"sh\", \"args\": [\"-c\", \"echo benchmark-job\"], \"timeout_secs\": 60}'"
           )
           host.wait_until_succeeds(

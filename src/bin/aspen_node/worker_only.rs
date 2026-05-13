@@ -28,6 +28,9 @@ use crate::args::Args;
 #[cfg(feature = "ci")]
 use crate::signals::shutdown_signal;
 
+#[cfg(feature = "ci")]
+const WORKER_ONLY_LOCAL_EXECUTOR_JOB_TYPE: &str = "local_executor";
+
 /// Build the ephemeral worker endpoint configuration from parsed CLI/env config.
 ///
 /// Worker-only mode bypasses full cluster config loading because it has no Raft
@@ -301,6 +304,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
         capabilities: vec![
             aspen_ci::CI_JOB_TYPE_NIX.to_string(),
             aspen_ci::CI_JOB_TYPE_VM.to_string(),
+            WORKER_ONLY_LOCAL_EXECUTOR_JOB_TYPE.to_string(),
             // shell_command intentionally excluded: shell jobs use host checkout
             // paths that VMs can't access. Local workers handle them.
         ],
@@ -358,7 +362,11 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
 
                     let poll_request = ClientRpcRequest::WorkerPollJobs {
                         worker_id: worker_id_clone.clone(),
-                        job_types: vec![aspen_ci::CI_JOB_TYPE_NIX.to_string(), aspen_ci::CI_JOB_TYPE_VM.to_string()],
+                        job_types: vec![
+                            aspen_ci::CI_JOB_TYPE_NIX.to_string(),
+                            aspen_ci::CI_JOB_TYPE_VM.to_string(),
+                            WORKER_ONLY_LOCAL_EXECUTOR_JOB_TYPE.to_string(),
+                        ],
                         max_jobs: 1,
                         // 1 hour visibility timeout: nix builds (clippy, nextest) can take
                         // 20-30+ minutes. With the default 5 minutes the queue reclaims

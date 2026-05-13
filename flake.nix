@@ -4666,7 +4666,9 @@ BUILDRS
                 import ./nix/tests/vm-snapshot-e2e.nix {
                   inherit pkgs microvm;
                   inherit (self.packages.${system}) aspen-node-vm-test;
-                  aspen-cli = bins.aspen-cli;
+                  # Use the pure VM-test CLI package; the unit2nix CLI build-plan path
+                  # can be blocked by host-global /tmp state under sandbox-disabled VM checks.
+                  aspen-cli = self.packages.${system}.aspen-cli-vm-test;
                   ciKernel = ciVmConfig.config.microvm.kernel;
                   ciInitrd = ciVmConfig.config.system.build.initialRamdisk;
                   ciToplevel = ciVmConfig.config.system.build.toplevel;
