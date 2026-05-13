@@ -171,12 +171,14 @@ pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> Dogfoo
             .await;
     }
 
-    // Push to the forge remote
-    info!("  git push aspen-dogfood main...");
+    // Push to the forge remote. Dogfood must exercise Aspen's Forge/CI boundary,
+    // not arbitrary developer workstation pre-push hooks; those hooks can run
+    // expensive repo-wide gates and obscure the product boundary being proven.
+    info!("  git push aspen-dogfood main (--no-verify)...");
     let push_output = timeout(
         Duration::from_secs(config.git_push_timeout_secs),
         tokio::process::Command::new("git")
-            .args(["push", "aspen-dogfood", "HEAD:refs/heads/main", "--force"])
+            .args(git_push_args())
             .current_dir(&config.project_dir)
             .env("PATH", augmented_path(&config.git_remote_aspen_bin))
             .env("ASPEN_RELAY_DISABLED", "1")
@@ -211,6 +213,16 @@ pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> Dogfoo
     Ok(())
 }
 
+pub(crate) fn git_push_args() -> [&'static str; 5] {
+    [
+        "push",
+        "--no-verify",
+        "aspen-dogfood",
+        "HEAD:refs/heads/main",
+        "--force",
+    ]
+}
+
 /// Connect an `AspenClient` from a ticket string.
 async fn connect(ticket: &str) -> DogfoodResult<AspenClient> {
     AspenClient::connect(ticket, Duration::from_secs(10), None).await.map_err(|e| {
@@ -229,5 +241,20 @@ pub(crate) fn augmented_path(git_remote_bin: &str) -> String {
         format!("{}:{base}", parent.display())
     } else {
         base
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dogfood_push_bypasses_local_git_hooks() {
+        let args = git_push_args();
+
+        assert_eq!(args[0], "push");
+        assert!(args.contains(&"--no-verify"));
+        assert!(args.contains(&"aspen-dogfood"));
+        assert!(args.contains(&"HEAD:refs/heads/main"));
     }
 }

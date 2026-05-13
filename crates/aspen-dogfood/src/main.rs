@@ -74,6 +74,8 @@ enum Command {
     FullLoop,
     /// Run the full pipeline: start → push → build → deploy → verify → publish receipt → stop.
     Full(FullArgs),
+    /// Run a cheaper local proof: start → push/CI-watch trigger → stop.
+    PushCheck,
     /// Inspect durable dogfood run receipts.
     Receipts {
         #[command(subcommand)]
@@ -201,6 +203,7 @@ async fn dispatch_command(config: &RunConfig, command: Command) -> DogfoodResult
         Command::Verify => cmd_verify(config).await,
         Command::FullLoop => cmd_full_loop(config).await,
         Command::Full(args) => cmd_full(config, &args).await,
+        Command::PushCheck => cmd_push_check(config).await,
         Command::Receipts { command } => cmd_receipts(config, command).await,
     }
 }
@@ -977,6 +980,20 @@ async fn cmd_full_loop(config: &RunConfig) -> DogfoodResult<()> {
     Ok(())
 }
 
+async fn cmd_push_check(config: &RunConfig) -> DogfoodResult<()> {
+    let mut recorder = DogfoodReceiptRecorder::new(config, "push-check")?;
+    if let Err(error) = recorder.run_stage(receipt::DogfoodStageKind::Start, || cmd_start(config)).await {
+        recorder.log_path();
+        return Err(error);
+    }
+    install_ctrl_c_shutdown(config);
+    let result = recorder.run_stage(receipt::DogfoodStageKind::Push, || cmd_push(config)).await;
+    let stop_result = recorder.run_stage(receipt::DogfoodStageKind::Stop, || cmd_stop(config)).await;
+    recorder.log_path();
+    result?;
+    stop_result
+}
+
 async fn cmd_full(config: &RunConfig, args: &FullArgs) -> DogfoodResult<()> {
     let mut recorder = DogfoodReceiptRecorder::new(config, "full")?;
     if let Err(error) = recorder.run_stage(receipt::DogfoodStageKind::Start, || cmd_start(config)).await {
@@ -1205,9 +1222,46 @@ impl DogfoodReceiptRecorder {
 
 fn dogfood_failure_summary(stage: receipt::DogfoodStageKind, error: &DogfoodError) -> receipt::DogfoodFailureSummary {
     receipt::DogfoodFailureSummary {
-        operation: format!("{stage:?}"),
-        category: dogfood_error_category(error).to_string(),
+        operation: dogfood_failure_operation(stage, error).to_string(),
+        category: dogfood_error_category_for_stage(stage, error).to_string(),
         message: crate::error::redact_credential_fragments(&error.to_string()),
+    }
+}
+
+fn dogfood_failure_operation(stage: receipt::DogfoodStageKind, error: &DogfoodError) -> &'static str {
+    if stage != receipt::DogfoodStageKind::Push {
+        return stage.as_str();
+    }
+
+    match error {
+        DogfoodError::ClientRpc { operation, .. } if operation.starts_with("Forge") => "push:forge_rpc",
+        DogfoodError::Forge { operation, .. } if operation.contains("create") => "push:forge_repo_create",
+        DogfoodError::Forge { operation, .. } if operation.contains("list") => "push:forge_repo_lookup",
+        DogfoodError::ProcessSpawn { binary, .. } if binary.contains("git remote") => "push:local_git_remote_config",
+        DogfoodError::ProcessSpawn { binary, .. } if binary.contains("git push") => "push:local_git_invocation",
+        DogfoodError::Timeout { operation, .. } if operation.contains("git push") => "push:push_completion",
+        DogfoodError::GitPush { .. } => "push:push_completion",
+        _ => "push:unknown_boundary",
+    }
+}
+
+fn dogfood_error_category_for_stage(stage: receipt::DogfoodStageKind, error: &DogfoodError) -> &'static str {
+    if stage == receipt::DogfoodStageKind::Push {
+        return dogfood_push_error_category(error);
+    }
+    dogfood_error_category(error)
+}
+
+fn dogfood_push_error_category(error: &DogfoodError) -> &'static str {
+    match error {
+        DogfoodError::ClientRpc { operation, .. } if operation.starts_with("Forge") => "forge_rpc",
+        DogfoodError::ClientRpc { operation, .. } if operation == "CiWatchRepo" => "ci_trigger_watch",
+        DogfoodError::Forge { .. } => "forge_repo",
+        DogfoodError::ProcessSpawn { binary, .. } if binary.contains("git remote") => "local_git_remote_config",
+        DogfoodError::ProcessSpawn { binary, .. } if binary.contains("git push") => "local_git_invocation",
+        DogfoodError::Timeout { operation, .. } if operation.contains("git push") => "push_timeout",
+        DogfoodError::GitPush { .. } => "git_push",
+        _ => dogfood_error_category(error),
     }
 }
 
@@ -1494,6 +1548,13 @@ mod tests {
     }
 
     #[test]
+    fn push_check_subcommand_is_available_for_focused_acceptance() {
+        let parsed = Cli::try_parse_from(["aspen-dogfood", "push-check"]).unwrap();
+
+        assert!(matches!(parsed.command, Command::PushCheck));
+    }
+
+    #[test]
     fn cluster_receipt_run_id_validator_matches_publish_and_cluster_show_domain() {
         assert!(validate_cluster_receipt_run_id("dogfood-20260503T180335Z", "publish").is_ok());
 
@@ -1579,6 +1640,33 @@ mod tests {
             timeout_secs: 600,
         };
         assert_eq!(dogfood_error_category(&error), "timeout");
+    }
+
+    #[test]
+    fn push_timeout_receipt_identifies_push_completion_boundary() {
+        let error = DogfoodError::Timeout {
+            operation: "git push aspen-dogfood".to_string(),
+            timeout_secs: 600,
+        };
+
+        let summary = dogfood_failure_summary(receipt::DogfoodStageKind::Push, &error);
+
+        assert_eq!(summary.operation, "push:push_completion");
+        assert_eq!(summary.category, "push_timeout");
+        assert!(summary.message.contains("timed out after 600s"));
+    }
+
+    #[test]
+    fn push_git_spawn_receipt_identifies_local_invocation_boundary() {
+        let error = DogfoodError::ProcessSpawn {
+            binary: "git push".to_string(),
+            source: std::io::Error::new(std::io::ErrorKind::NotFound, "missing git"),
+        };
+
+        let summary = dogfood_failure_summary(receipt::DogfoodStageKind::Push, &error);
+
+        assert_eq!(summary.operation, "push:local_git_invocation");
+        assert_eq!(summary.category, "local_git_invocation");
     }
 
     #[test]
