@@ -17,7 +17,7 @@
 
 ## Phase 4: Dogfood and full repository confidence
 
-- [ ] [depends:gated-runtime-proofs] Run `nix run .#dogfood-local -- full` and classify whether it reaches dogfood/self-hosting acceptance with a receipt.
+- [x] [depends:gated-runtime-proofs] Run `nix run .#dogfood-local -- full` and classify whether it reaches dogfood/self-hosting acceptance with a receipt. Evidence: `evidence/dogfood-full.md`. ✅ 43m (started: 2026-05-13T03:13:15Z → completed: 2026-05-13T03:56:25Z; blocked before acceptance: default `/tmp` capacity, then datapool rerun `git push` timeout at local hook/push boundary)
 - [ ] [depends:dogfood-full] Run `nix flake check -L --max-jobs 1` only after lower tiers pass or are classified as non-product blockers.
 
 ## Phase 5: Evidence and follow-up routing
