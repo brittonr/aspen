@@ -1,5 +1,7 @@
 //! Forge operations — create repo and push source via git-remote-aspen.
 
+use std::path::Path;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use aspen_client::AspenClient;
@@ -141,20 +143,21 @@ pub async fn watch_repo(ticket: &str, repo_id: &str) -> DogfoodResult<()> {
     result
 }
 
-/// Push workspace source to the Forge repo via `git push` with git-remote-aspen.
+/// Push a bounded current-source snapshot to the Forge repo via `git push` with git-remote-aspen.
 pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> DogfoodResult<()> {
     let remote_url = format!("aspen://{ticket}/{repo_id}");
+    let push_workspace = prepare_push_workspace(config).await?;
 
     // Configure the remote (idempotent)
     let _ = tokio::process::Command::new("git")
         .args(["remote", "remove", "aspen-dogfood"])
-        .current_dir(&config.project_dir)
+        .current_dir(&push_workspace)
         .output()
         .await;
 
     let add_output = tokio::process::Command::new("git")
         .args(["remote", "add", "aspen-dogfood", &remote_url])
-        .current_dir(&config.project_dir)
+        .current_dir(&push_workspace)
         .output()
         .await
         .map_err(|e| crate::error::DogfoodError::ProcessSpawn {
@@ -166,20 +169,20 @@ pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> Dogfoo
         // Remote may already exist, try set-url
         let _ = tokio::process::Command::new("git")
             .args(["remote", "set-url", "aspen-dogfood", &remote_url])
-            .current_dir(&config.project_dir)
+            .current_dir(&push_workspace)
             .output()
             .await;
     }
 
     // Push to the forge remote. Dogfood must exercise Aspen's Forge/CI boundary,
-    // not arbitrary developer workstation pre-push hooks; those hooks can run
-    // expensive repo-wide gates and obscure the product boundary being proven.
-    info!("  git push aspen-dogfood main (--no-verify)...");
+    // not arbitrary developer workstation pre-push hooks or full-history transfer;
+    // those can obscure the current-source product boundary being proven.
+    info!("  git push aspen-dogfood main from bounded source snapshot (--no-verify)...");
     let push_output = timeout(
         Duration::from_secs(config.git_push_timeout_secs),
         tokio::process::Command::new("git")
             .args(git_push_args())
-            .current_dir(&config.project_dir)
+            .current_dir(&push_workspace)
             .env("PATH", augmented_path(&config.git_remote_aspen_bin))
             .env("ASPEN_RELAY_DISABLED", "1")
             .env("ASPEN_DISCOVERY_DISABLED", "1")
@@ -199,18 +202,153 @@ pub async fn git_push(config: &RunConfig, ticket: &str, repo_id: &str) -> Dogfoo
     })?;
 
     if !push_output.status.success() {
-        let raw_stderr = String::from_utf8_lossy(&push_output.stderr);
-        let raw_stdout = String::from_utf8_lossy(&push_output.stdout);
-        let stderr = crate::error::redact_credential_fragments(&raw_stderr);
-        let stdout = crate::error::redact_credential_fragments(&raw_stdout);
         return GitPushSnafu {
             exit_code: push_output.status.code().unwrap_or(-1),
-            stderr: format!("stderr:\n{stderr}\nstdout:\n{stdout}"),
+            stderr: process_output_detail(&push_output),
         }
         .fail();
     }
 
     Ok(())
+}
+
+async fn prepare_push_workspace(config: &RunConfig) -> DogfoodResult<PathBuf> {
+    let snapshot_dir = push_snapshot_dir(config);
+    let archive_path = push_snapshot_archive_path(config);
+
+    reset_dir(&snapshot_dir).await?;
+    if let Some(parent) = archive_path.parent() {
+        tokio::fs::create_dir_all(parent).await.map_err(|source| crate::error::DogfoodError::ProcessSpawn {
+            binary: format!("mkdir -p {}", parent.display()),
+            source,
+        })?;
+    }
+
+    let source_commit = git_stdout(&config.project_dir, &["rev-parse", "HEAD"], "git rev-parse HEAD").await?;
+    run_process(
+        "git",
+        &[
+            "archive",
+            "HEAD",
+            "--format=tar",
+            "--output",
+            &archive_path.display().to_string(),
+        ],
+        &config.project_dir,
+        "git archive HEAD",
+    )
+    .await?;
+
+    tokio::fs::create_dir_all(&snapshot_dir)
+        .await
+        .map_err(|source| crate::error::DogfoodError::ProcessSpawn {
+            binary: format!("mkdir -p {}", snapshot_dir.display()),
+            source,
+        })?;
+    run_process(
+        "tar",
+        &[
+            "-xf",
+            &archive_path.display().to_string(),
+            "-C",
+            &snapshot_dir.display().to_string(),
+        ],
+        ".",
+        "tar extract dogfood source snapshot",
+    )
+    .await?;
+    let _ = tokio::fs::remove_file(&archive_path).await;
+
+    run_process("git", &["init", "-b", "main"], &snapshot_dir, "git init snapshot").await?;
+    run_process("git", &["config", "user.name", "Aspen Dogfood"], &snapshot_dir, "git config snapshot user.name")
+        .await?;
+    run_process(
+        "git",
+        &["config", "user.email", "dogfood@aspen.local"],
+        &snapshot_dir,
+        "git config snapshot user.email",
+    )
+    .await?;
+    run_process("git", &["add", "-f", "-A"], &snapshot_dir, "git add snapshot").await?;
+    run_process(
+        "git",
+        &[
+            "commit",
+            "-m",
+            "Dogfood source snapshot",
+            "-m",
+            &format!("Source-Commit: {source_commit}"),
+        ],
+        &snapshot_dir,
+        "git commit snapshot",
+    )
+    .await?;
+
+    info!("  prepared bounded source snapshot at {}", snapshot_dir.display());
+    Ok(snapshot_dir)
+}
+
+async fn reset_dir(path: &Path) -> DogfoodResult<()> {
+    match tokio::fs::remove_dir_all(path).await {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(source) => Err(crate::error::DogfoodError::ProcessSpawn {
+            binary: format!("rm -rf {}", path.display()),
+            source,
+        }),
+    }
+}
+
+async fn git_stdout(cwd: impl AsRef<Path>, args: &[&str], operation: &str) -> DogfoodResult<String> {
+    let output = run_process_output("git", args, cwd, operation).await?;
+    if !output.status.success() {
+        return GitPushSnafu {
+            exit_code: output.status.code().unwrap_or(-1),
+            stderr: process_output_detail(&output),
+        }
+        .fail();
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+async fn run_process(binary: &str, args: &[&str], cwd: impl AsRef<Path>, operation: &str) -> DogfoodResult<()> {
+    let output = run_process_output(binary, args, cwd, operation).await?;
+    if output.status.success() {
+        return Ok(());
+    }
+    GitPushSnafu {
+        exit_code: output.status.code().unwrap_or(-1),
+        stderr: process_output_detail(&output),
+    }
+    .fail()
+}
+
+async fn run_process_output(
+    binary: &str,
+    args: &[&str],
+    cwd: impl AsRef<Path>,
+    operation: &str,
+) -> DogfoodResult<std::process::Output> {
+    tokio::process::Command::new(binary).args(args).current_dir(cwd).output().await.map_err(|source| {
+        crate::error::DogfoodError::ProcessSpawn {
+            binary: operation.to_string(),
+            source,
+        }
+    })
+}
+
+fn process_output_detail(output: &std::process::Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    crate::error::redact_credential_fragments(&format!("stderr:\n{stderr}\nstdout:\n{stdout}"))
+}
+
+pub(crate) fn push_snapshot_dir(config: &RunConfig) -> PathBuf {
+    Path::new(&config.cluster_dir).join("source-snapshot")
+}
+
+pub(crate) fn push_snapshot_archive_path(config: &RunConfig) -> PathBuf {
+    Path::new(&config.cluster_dir).join("source-snapshot.tar")
 }
 
 pub(crate) fn git_push_args() -> [&'static str; 5] {
@@ -256,5 +394,62 @@ mod tests {
         assert!(args.contains(&"--no-verify"));
         assert!(args.contains(&"aspen-dogfood"));
         assert!(args.contains(&"HEAD:refs/heads/main"));
+    }
+
+    #[test]
+    fn dogfood_push_uses_cluster_local_source_snapshot() {
+        let config = test_config("/repo", "/tmp/aspen-dogfood-test");
+
+        assert_eq!(push_snapshot_dir(&config), Path::new("/tmp/aspen-dogfood-test/source-snapshot"));
+        assert_eq!(push_snapshot_archive_path(&config), Path::new("/tmp/aspen-dogfood-test/source-snapshot.tar"));
+    }
+
+    #[tokio::test]
+    async fn prepare_push_workspace_snapshots_committed_tree_without_history_or_untracked_files() {
+        let source = tempfile::tempdir().unwrap();
+        git(source.path(), &["init", "-b", "main"]);
+        git(source.path(), &["config", "user.name", "Test"]);
+        git(source.path(), &["config", "user.email", "test@example.invalid"]);
+        std::fs::write(source.path().join("tracked.txt"), "v1\n").unwrap();
+        git(source.path(), &["add", "tracked.txt"]);
+        git(source.path(), &["commit", "-m", "first"]);
+        std::fs::write(source.path().join("tracked.txt"), "v2\n").unwrap();
+        git(source.path(), &["commit", "-am", "second"]);
+        std::fs::write(source.path().join("untracked.txt"), "do not include\n").unwrap();
+
+        let cluster = tempfile::tempdir().unwrap();
+        let config = test_config(source.path().to_str().unwrap(), cluster.path().to_str().unwrap());
+
+        let snapshot = prepare_push_workspace(&config).await.unwrap();
+
+        assert_eq!(std::fs::read_to_string(snapshot.join("tracked.txt")).unwrap(), "v2\n");
+        assert!(!snapshot.join("untracked.txt").exists());
+        assert_eq!(git_stdout_sync(&snapshot, &["rev-list", "--count", "HEAD"]), "1");
+        assert_eq!(git_stdout_sync(&snapshot, &["status", "--short"]), "");
+    }
+
+    fn test_config(project_dir: &str, cluster_dir: &str) -> RunConfig {
+        RunConfig {
+            cluster_dir: cluster_dir.to_string(),
+            federation: false,
+            vm_ci: false,
+            aspen_node_bin: "aspen-node".to_string(),
+            git_remote_aspen_bin: "git-remote-aspen".to_string(),
+            project_dir: project_dir.to_string(),
+            nix_cache_gateway_bin: None,
+            ci_timeout_secs: 60,
+            git_push_timeout_secs: 60,
+        }
+    }
+
+    fn git(cwd: &Path, args: &[&str]) {
+        let output = std::process::Command::new("git").args(args).current_dir(cwd).output().unwrap();
+        assert!(output.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    fn git_stdout_sync(cwd: &Path, args: &[&str]) -> String {
+        let output = std::process::Command::new("git").args(args).current_dir(cwd).output().unwrap();
+        assert!(output.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&output.stderr));
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
     }
 }
