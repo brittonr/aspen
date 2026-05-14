@@ -79,6 +79,10 @@ pub enum DogfoodError {
         detail: String,
     },
 
+    /// VM-isolated CI cannot start on this host.
+    #[snafu(display("VM-CI readiness failed: {reason}"))]
+    VmCiReadiness { reason: String },
+
     /// Deployment did not succeed.
     #[snafu(display("deployment failed: {reason}"))]
     DeployFailed { reason: String },

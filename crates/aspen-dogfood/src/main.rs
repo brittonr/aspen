@@ -13,6 +13,7 @@ mod forge;
 mod node;
 mod receipt;
 mod state;
+mod vmci_readiness;
 
 use std::fmt::Write as _;
 use std::future::Future;
@@ -385,6 +386,10 @@ async fn cmd_build(config: &RunConfig) -> DogfoodResult<()> {
 
 async fn build_ci_pipeline(config: &RunConfig) -> DogfoodResult<String> {
     info!("🔨 Waiting for CI build...");
+
+    if config.vm_ci {
+        vmci_readiness::check_current_environment()?;
+    }
 
     let state = state::read_state(&config.state_file_path())?;
     let (ticket, repo_name) = build_wait_pipeline_parts(config, &state).await?;
@@ -1060,7 +1065,7 @@ async fn run_full_pipeline_with_receipts(
                 let run_id = build_ci_pipeline(config).await?;
                 Ok((run_id.clone(), vec![ci_run_artifact(run_id)]))
             },
-            ci_failure_artifacts,
+            |error| build_failure_artifacts(config, error),
         )
         .await?;
     recorder
@@ -1276,12 +1281,31 @@ fn ci_run_artifact(run_id: String) -> receipt::DogfoodArtifactReceipt {
     }
 }
 
+fn build_failure_artifacts(config: &RunConfig, error: &DogfoodError) -> Vec<receipt::DogfoodArtifactReceipt> {
+    match error {
+        DogfoodError::VmCiReadiness { .. } => vec![vmci_node_log_artifact(config)],
+        _ => ci_failure_artifacts(error),
+    }
+}
+
 fn ci_failure_artifacts(error: &DogfoodError) -> Vec<receipt::DogfoodArtifactReceipt> {
     match error {
         DogfoodError::CiPipeline { run_id, .. } if !run_id.is_empty() && run_id != "?" => {
             vec![ci_run_artifact(run_id.clone())]
         }
         _ => Vec::new(),
+    }
+}
+
+fn vmci_node_log_artifact(_config: &RunConfig) -> receipt::DogfoodArtifactReceipt {
+    receipt::DogfoodArtifactReceipt {
+        name: "vmci-node-log".to_string(),
+        kind: receipt::DogfoodArtifactKind::LogExcerpt,
+        store_id: None,
+        blob_id: None,
+        digest: None,
+        size_bytes: None,
+        relative_path: Some("node1.log".to_string()),
     }
 }
 
@@ -1308,6 +1332,7 @@ fn dogfood_error_category(error: &DogfoodError) -> &'static str {
         DogfoodError::Timeout { .. } => "timeout",
         DogfoodError::HealthCheck { .. } => "health_check",
         DogfoodError::CiPipeline { .. } => "ci_pipeline",
+        DogfoodError::VmCiReadiness { .. } => "vm_ci_readiness",
         DogfoodError::DeployFailed { .. } => "deploy_failed",
         DogfoodError::Forge { .. } => "forge",
         DogfoodError::Receipt { .. } => "receipt",
@@ -1639,6 +1664,34 @@ mod tests {
             timeout_secs: 600,
         };
         assert_eq!(dogfood_error_category(&error), "timeout");
+    }
+
+    #[test]
+    fn vmci_readiness_receipt_uses_bounded_category() {
+        let error = DogfoodError::VmCiReadiness {
+            reason: "tap networking requires CAP_NET_ADMIN".to_string(),
+        };
+
+        let summary = dogfood_failure_summary(receipt::DogfoodStageKind::Build, &error);
+
+        assert_eq!(summary.operation, "build");
+        assert_eq!(summary.category, "vm_ci_readiness");
+        assert!(summary.message.contains("CAP_NET_ADMIN"));
+    }
+
+    #[test]
+    fn vmci_readiness_failure_artifacts_include_local_node_log_handle() {
+        let config = test_config(false);
+        let error = DogfoodError::VmCiReadiness {
+            reason: "tap networking requires CAP_NET_ADMIN".to_string(),
+        };
+
+        let artifacts = build_failure_artifacts(&config, &error);
+
+        assert_eq!(artifacts.len(), 1);
+        assert_eq!(artifacts[0].name, "vmci-node-log");
+        assert_eq!(artifacts[0].kind, receipt::DogfoodArtifactKind::LogExcerpt);
+        assert_eq!(artifacts[0].relative_path.as_deref(), Some("node1.log"));
     }
 
     #[test]
