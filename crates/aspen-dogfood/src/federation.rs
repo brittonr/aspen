@@ -338,7 +338,7 @@ fn git_output_detail(output: &std::process::Output) -> String {
 }
 
 async fn connect(ticket: &str) -> DogfoodResult<AspenClient> {
-    AspenClient::connect(ticket, Duration::from_secs(30), None).await.map_err(|e| {
+    AspenClient::connect_direct(ticket, Duration::from_secs(30), None).await.map_err(|e| {
         crate::error::DogfoodError::ClientRpc {
             operation: "connect".to_string(),
             target: crate::cluster::ticket_preview(ticket),

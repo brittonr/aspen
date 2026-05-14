@@ -548,7 +548,7 @@ fn validate_cluster_receipt_run_id(run_id: &str, operation: &str) -> DogfoodResu
 }
 
 async fn connect_receipt_cluster(ticket: &str) -> DogfoodResult<AspenClient> {
-    AspenClient::connect(ticket, Duration::from_secs(30), None)
+    AspenClient::connect_direct(ticket, Duration::from_secs(30), None)
         .await
         .map_err(|source| DogfoodError::ClientRpc {
             operation: "connect receipt cluster".to_string(),

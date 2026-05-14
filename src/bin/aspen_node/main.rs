@@ -105,16 +105,17 @@ fn populate_endpoint_addr_from_bound_sockets(
 ) -> usize {
     let before = endpoint_addr.addrs.len();
     for sock in bound_sockets {
-        let fixed = match sock.ip() {
-            std::net::IpAddr::V4(ip) if ip.is_unspecified() => {
-                std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), sock.port())
-            }
-            std::net::IpAddr::V6(ip) if ip.is_unspecified() => {
-                std::net::SocketAddr::new(std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST), sock.port())
-            }
-            _ => sock,
-        };
-        endpoint_addr.addrs.insert(iroh::TransportAddr::Ip(fixed));
+        if !sock.ip().is_unspecified() {
+            endpoint_addr.addrs.insert(iroh::TransportAddr::Ip(sock));
+        }
+        endpoint_addr.addrs.insert(iroh::TransportAddr::Ip(std::net::SocketAddr::new(
+            std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+            sock.port(),
+        )));
+        endpoint_addr.addrs.insert(iroh::TransportAddr::Ip(std::net::SocketAddr::new(
+            std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST),
+            sock.port(),
+        )));
     }
     endpoint_addr.addrs.len().saturating_sub(before)
 }
@@ -442,12 +443,17 @@ mod tests {
             36144,
         )]);
 
-        assert_eq!(inserted, 1);
+        assert_eq!(inserted, 2);
         assert!(endpoint_addr.addrs.contains(&iroh::TransportAddr::Ip(interface_addr)));
         assert!(
             endpoint_addr
                 .addrs
                 .contains(&iroh::TransportAddr::Ip(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 36144)))
+        );
+        assert!(
+            endpoint_addr
+                .addrs
+                .contains(&iroh::TransportAddr::Ip(SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 36144)))
         );
     }
 
@@ -460,7 +466,12 @@ mod tests {
             36144,
         )]);
 
-        assert_eq!(inserted, 1);
+        assert_eq!(inserted, 2);
+        assert!(
+            endpoint_addr
+                .addrs
+                .contains(&iroh::TransportAddr::Ip(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 36144)))
+        );
         assert!(
             endpoint_addr
                 .addrs
