@@ -4678,9 +4678,11 @@
 
           # Base apps available on all systems
           apps = {
-            aspen-node = flake-utils.lib.mkApp {
+            aspen-node = (flake-utils.lib.mkApp {
               drv = aspenNode;
               exePath = "/bin/aspen-node";
+            }) // {
+              meta.description = "Run the Aspen node binary.";
             };
 
             # aspen-tui extracted to ~/git/aspen-tui
@@ -4689,6 +4691,7 @@
             # aspen-cli app stubbed out (extracted to separate repo)
             aspen-cli = {
               type = "app";
+              meta.description = "Print the Aspen CLI extraction notice.";
               program = "${pkgs.writeShellScript "aspen-cli-stub" ''
                 echo "aspen-cli has been extracted to ~/git/aspen-cli"
                 echo "Build it from that repository or use: nix run ~/git/aspen-cli"
@@ -4702,6 +4705,7 @@
             # NOTE: most specs extracted to sibling repos; federation verifies in-repo
             verify-verus = {
               type = "app";
+              meta.description = "Run or locate Aspen Verus verification commands.";
               program = "${pkgs.writeShellScript "verify-verus" ''
                 set -e
                 export LD_LIBRARY_PATH="${verusRustToolchain}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -4794,6 +4798,7 @@
             # Commands: all (default), quick
             verify-verus-coordination = {
               type = "app";
+              meta.description = "Print coordination Verus verification instructions.";
               program = "${pkgs.writeShellScript "verify-verus-coordination" ''
                 echo "Coordination verus specs extracted to ~/git/aspen-coordination"
                 echo "Run: cd ~/git/aspen-coordination && nix run .#verify-verus"
@@ -4805,6 +4810,7 @@
             # Commands: all (default), quick
             verify-verus-core = {
               type = "app";
+              meta.description = "Print core Verus verification instructions.";
               program = "${pkgs.writeShellScript "verify-verus-core" ''
                 echo "Core verus specs extracted to ~/git/aspen-core"
                 echo "Run: cd ~/git/aspen-core && verus crates/aspen-core/verus/lib.rs"
@@ -4816,6 +4822,7 @@
             # Commands: all (default), quick
             verify-verus-cluster = {
               type = "app";
+              meta.description = "Run Aspen cluster Verus verification.";
               program = "${pkgs.writeShellScript "verify-verus-cluster" ''
                 set -e
                 export LD_LIBRARY_PATH="${verusRustToolchain}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -4846,6 +4853,7 @@
             # Transport verus specs extracted to ~/git/aspen-transport
             verify-verus-transport = {
               type = "app";
+              meta.description = "Print transport Verus verification instructions.";
               program = "${pkgs.writeShellScript "verify-verus-transport" ''
                 echo "Transport verus specs extracted to ~/git/aspen-transport"
                 echo "Run: cd ~/git/aspen-transport && nix run .#verify-verus"
@@ -4857,6 +4865,7 @@
             # Usage: nix run .#verus-inline-check
             verus-inline-check = {
               type = "app";
+              meta.description = "Check production inline Verus ghost-code compilation.";
               program = "${pkgs.writeShellScript "verus-inline-check" ''
                 set -e
                 echo "=== Verus Inline Ghost Code Check ==="
@@ -4915,6 +4924,7 @@
               '';
             in {
               type = "app";
+              meta.description = "Launch a local multi-node Aspen development cluster.";
               program = "${pkgs.writeShellScript "aspen-cluster" ''
                 export PATH="${
                   pkgs.lib.makeBinPath [
@@ -4939,6 +4949,7 @@
             # Opens http://127.0.0.1:3000 with CI dashboard, cluster overview
             forge-web = {
               type = "app";
+              meta.description = "Launch a local Aspen Forge web UI demo cluster.";
               program = "${pkgs.writeShellScript "aspen-forge-web-dev" ''
                                 set -e
                                 DATA_DIR="$(mktemp -d /tmp/aspen-forge-web-XXXXXX)"
@@ -5071,6 +5082,7 @@
             # For multi-node cluster: nix run .#cluster
             default = {
               type = "app";
+              meta.description = "Run a single-node Aspen development cluster.";
               program = "${pkgs.writeShellScript "aspen-dev" ''
                 set -e
 
@@ -5101,6 +5113,7 @@
             # NOTE: Must be run from the project root directory
             fuzz = {
               type = "app";
+              meta.description = "Run the high-risk Aspen fuzzing campaign.";
               program = "${pkgs.writeShellScript "fuzz-all" ''
                 set -e
 
@@ -5149,6 +5162,7 @@
 
             fuzz-quick = {
               type = "app";
+              meta.description = "Run a quick Aspen fuzzing smoke test.";
               program = "${pkgs.writeShellScript "fuzz-quick" ''
                 set -e
 
@@ -5187,6 +5201,7 @@
 
             fuzz-intensive = {
               type = "app";
+              meta.description = "Run the intensive Aspen fuzzing campaign.";
               program = "${pkgs.writeShellScript "fuzz-intensive" ''
                 set -e
 
@@ -5232,6 +5247,7 @@
 
             fuzz-overnight = {
               type = "app";
+              meta.description = "Run the overnight Aspen fuzzing campaign.";
               program = "${pkgs.writeShellScript "fuzz-overnight" ''
                 set -e
 
@@ -5288,6 +5304,7 @@
 
             fuzz-corpus = {
               type = "app";
+              meta.description = "Generate Aspen fuzz corpus seeds.";
               program = "${pkgs.writeShellScript "fuzz-corpus" ''
                 set -e
 
@@ -5314,6 +5331,7 @@
             #   nix run .#bench -- kv_write       - Run all benchmarks matching "kv_write"
             bench = {
               type = "app";
+              meta.description = "Run Aspen benchmark suites.";
               program = "${pkgs.writeShellScript "bench" ''
                 set -e
                 SUITE="''${1:-}"
@@ -5349,6 +5367,7 @@
             # Usage: nix run .#bench-production [filter]
             bench-production = {
               type = "app";
+              meta.description = "Run production-latency Aspen benchmarks.";
               program = "${pkgs.writeShellScript "bench-production" ''
                 set -e
                 FILTER="''${1:-}"
@@ -5371,6 +5390,7 @@
             # Rust formatter with nightly rustfmt for unstable features
             rustfmt = {
               type = "app";
+              meta.description = "Format or check Aspen Rust sources with nightly rustfmt.";
               program = "${pkgs.writeShellScript "rustfmt" ''
                 set -e
                 MODE="''${1:-}"
@@ -5392,6 +5412,7 @@
             #   nix run .#coverage update - Update .coverage-baseline.toml
             coverage = {
               type = "app";
+              meta.description = "Generate Aspen code coverage reports.";
               program = "${pkgs.writeShellScript "coverage" ''
                 set -e
 
@@ -5468,6 +5489,7 @@
 
             fuzz-coverage = {
               type = "app";
+              meta.description = "Generate coverage reports for Aspen fuzz targets.";
               program = "${pkgs.writeShellScript "fuzz-coverage" ''
                 set -e
 
@@ -5536,6 +5558,7 @@
               '';
             in {
               type = "app";
+              meta.description = "Run the VM-isolated Aspen dogfood cluster.";
               program = "${pkgs.writeShellScript "dogfood-vm" ''
                 set -e
 
@@ -5596,6 +5619,7 @@
               dogfoodNode = bins.ci-aspen-node-snix-build;
             in {
               type = "app";
+              meta.description = "Run the local Aspen self-hosting dogfood pipeline.";
               program = "${pkgs.writeShellScript "dogfood-local" ''
                 set -e
 
@@ -5633,6 +5657,7 @@
               dogfoodNode = bins.ci-aspen-node-snix-build;
             in {
               type = "app";
+              meta.description = "Run the federated Aspen dogfood pipeline.";
               program = "${pkgs.writeShellScript "dogfood-federation" ''
                 set -e
 
@@ -5713,6 +5738,7 @@
               vmciNode = bins.aspen-node-vmci;
             in {
               type = "app";
+              meta.description = "Run local Aspen dogfood with VM-isolated CI jobs.";
               program = "${pkgs.writeShellScript "dogfood-local-vmci" ''
                 set -e
 
@@ -5761,6 +5787,7 @@
               '';
             in {
               type = "app";
+              meta.description = "Configure host networking for Aspen CI VMs.";
               program = "${pkgs.writeShellScript "setup-ci-network" ''
                 set -e
                 export PATH="${

@@ -200,6 +200,19 @@ The operator-receipt hardening slice is intentionally backed by both focused gua
 The latest full self-hosting acceptance run for the current pushed `main` is:
 
 ```text
+run_id: dogfood-20260514T191755Z
+local receipt: /home/brittonr/data/aspen-dogfood-full-receipts/dogfood-20260514T191755Z.json
+cluster key: dogfood/receipts/dogfood-20260514T191755Z.json
+commit: 3c5c30d018e661f36a400e46884c65982384ef5b
+result: format-check, clippy, build-cli, build-node, and nextest-quick passed; deploy completed; node 1 healthy; verification passed; publish_receipt and cleanup succeeded; 7/7 stages succeeded
+receipt diagnosis: no failed stage found (7/7) stages succeeded
+ci_run_artifact: cd9db5ed-042f-4801-9af4-a466aab2d5a4
+stage timings: start 7790 ms; push 21337 ms; build 25238 ms; deploy 2120 ms; verify 86 ms; publish_receipt 0 ms; stop 2189 ms
+```
+
+Earlier full self-hosting acceptance for a previous pushed `main`:
+
+```text
 run_id: dogfood-20260506T220958Z
 local receipt: /tmp/aspen-dogfood-receipts/dogfood-20260506T220958Z.json
 cluster key: dogfood/receipts/dogfood-20260506T220958Z.json

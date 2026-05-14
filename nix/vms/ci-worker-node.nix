@@ -340,6 +340,7 @@
     description = "Emit Aspen CI VM snapshot readiness marker";
     after = ["local-fs.target" "nix-daemon.service" "network-online.target"];
     requires = ["local-fs.target"];
+    wants = ["nix-daemon.service" "network-online.target"];
     wantedBy = ["multi-user.target"];
     serviceConfig = {
       Type = "oneshot";
