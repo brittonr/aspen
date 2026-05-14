@@ -239,10 +239,9 @@ pub async fn start_federation(manager: &mut NodeManager, config: &RunConfig) -> 
 
 /// Connect an `AspenClient` from a ticket string.
 async fn connect(ticket: &str) -> DogfoodResult<AspenClient> {
-    // 30s RPC timeout matches the CLI default. First QUIC connection to a
-    // relay-disabled node may take 5-10s while iroh attempts relay then
-    // falls back to direct addresses.
-    AspenClient::connect(ticket, Duration::from_secs(30), None).await.map_err(|e| {
+    // 30s RPC timeout matches the CLI default. Dogfood clients disable relays
+    // so the local proof depends only on the direct addresses in the ticket.
+    AspenClient::connect_direct(ticket, Duration::from_secs(30), None).await.map_err(|e| {
         crate::error::DogfoodError::ClientRpc {
             operation: "connect".to_string(),
             target: ticket_preview(ticket),

@@ -144,9 +144,8 @@ fn main() {
 }
 
 fn run_main() -> DogfoodResult<()> {
-    // Note: ASPEN_RELAY_DISABLED is set on spawned node processes only (in spawn_node),
-    // NOT globally. The client endpoint needs relay enabled for QUIC signaling even
-    // when connecting to local nodes.
+    // Dogfood clients use direct-only Iroh endpoints explicitly; spawned nodes
+    // also receive ASPEN_RELAY_DISABLED and --relay-mode disabled in spawn_node.
     tracing_subscriber::fmt().with_env_filter(build_env_filter()).with_writer(std::io::stderr).init();
     let cli = Cli::parse();
     let runtime = tokio::runtime::Builder::new_multi_thread()

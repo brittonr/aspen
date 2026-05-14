@@ -127,6 +127,24 @@ impl AspenClient {
     /// * `rpc_timeout` - RPC timeout duration
     /// * `token` - Optional auth token for authentication
     pub async fn connect(ticket_str: &str, rpc_timeout: Duration, token: Option<AuthToken>) -> Result<Self> {
+        Self::connect_with_relay_setting(ticket_str, rpc_timeout, token, false).await
+    }
+
+    /// Connect to an Aspen cluster using a ticket with relay services disabled.
+    ///
+    /// Use this for deterministic same-host/offline orchestration when tickets
+    /// carry direct socket addresses and external DNS/relay lookup should not be
+    /// part of the success path.
+    pub async fn connect_direct(ticket_str: &str, rpc_timeout: Duration, token: Option<AuthToken>) -> Result<Self> {
+        Self::connect_with_relay_setting(ticket_str, rpc_timeout, token, true).await
+    }
+
+    async fn connect_with_relay_setting(
+        ticket_str: &str,
+        rpc_timeout: Duration,
+        token: Option<AuthToken>,
+        relay_disabled: bool,
+    ) -> Result<Self> {
         // Parse the ticket
         let ticket = AspenClusterTicket::deserialize(ticket_str).context("failed to parse cluster ticket")?;
 
@@ -134,11 +152,12 @@ impl AspenClient {
             anyhow::bail!("ticket contains no bootstrap peers");
         }
 
-        let endpoint = Self::create_client_endpoint().await?;
+        let endpoint = Self::create_client_endpoint(relay_disabled).await?;
 
         debug!(
             endpoint_id = %endpoint.id(),
             bootstrap_peers = ticket.bootstrap.len(),
+            relay_disabled,
             "Aspen client connected"
         );
 
@@ -162,7 +181,7 @@ impl AspenClient {
             anyhow::bail!("ticket contains no bootstrap peers");
         }
 
-        let endpoint = Self::create_client_endpoint().await?;
+        let endpoint = Self::create_client_endpoint(false).await?;
 
         debug!(
             endpoint_id = %endpoint.id(),
@@ -181,13 +200,13 @@ impl AspenClient {
     /// Create an iroh Endpoint for the client.
     ///
     /// Respects `ASPEN_RELAY_DISABLED=1` for local/offline testing.
-    async fn create_client_endpoint() -> Result<Endpoint> {
+    async fn create_client_endpoint(relay_disabled: bool) -> Result<Endpoint> {
         let secret_key = iroh::SecretKey::generate();
         let mut builder = Endpoint::builder(iroh::endpoint::presets::N0)
             .secret_key(secret_key)
             .alpns(vec![CLIENT_ALPN.to_vec()]);
 
-        if std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1" {
+        if relay_disabled || std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1" {
             builder = builder.relay_mode(RelayMode::Disabled);
         }
 

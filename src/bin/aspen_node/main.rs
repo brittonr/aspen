@@ -99,6 +99,26 @@ fn main() -> Result<()> {
     runtime.block_on(async_main())
 }
 
+fn populate_endpoint_addr_from_bound_sockets(
+    endpoint_addr: &mut iroh::EndpointAddr,
+    bound_sockets: impl IntoIterator<Item = std::net::SocketAddr>,
+) -> usize {
+    let before = endpoint_addr.addrs.len();
+    for sock in bound_sockets {
+        let fixed = match sock.ip() {
+            std::net::IpAddr::V4(ip) if ip.is_unspecified() => {
+                std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), sock.port())
+            }
+            std::net::IpAddr::V6(ip) if ip.is_unspecified() => {
+                std::net::SocketAddr::new(std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST), sock.port())
+            }
+            _ => sock,
+        };
+        endpoint_addr.addrs.insert(iroh::TransportAddr::Ip(fixed));
+    }
+    endpoint_addr.addrs.len().saturating_sub(before)
+}
+
 async fn async_main() -> Result<()> {
     let (args, config) = initialize_and_load_config().await?;
 
@@ -324,22 +344,19 @@ async fn async_main() -> Result<()> {
     );
 
     // Get fresh endpoint address (may have discovered more addresses since startup).
-    // With relay disabled, iroh may not have discovered direct addresses yet,
-    // so fall back to bound_sockets() converted to loopback addresses.
+    // For same-host dogfood and relay-disabled runs, always add bound socket
+    // loopback forms as deterministic direct addresses. Interface addresses can
+    // be unroutable from local sandboxes even when iroh reports them first.
     let mut endpoint_addr = node_mode.iroh_manager().endpoint().addr();
-    let has_ip_addrs = endpoint_addr.addrs.iter().any(|a| matches!(a, iroh::TransportAddr::Ip(_)));
-    if !has_ip_addrs {
-        for sock in node_mode.iroh_manager().endpoint().bound_sockets() {
-            let fixed = if sock.ip().is_unspecified() {
-                std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), sock.port())
-            } else {
-                sock
-            };
-            endpoint_addr.addrs.insert(iroh::TransportAddr::Ip(fixed));
-        }
+    let inserted_bound_addrs = populate_endpoint_addr_from_bound_sockets(
+        &mut endpoint_addr,
+        node_mode.iroh_manager().endpoint().bound_sockets(),
+    );
+    if inserted_bound_addrs > 0 {
         info!(
             addrs = ?endpoint_addr.addrs,
-            "populated endpoint address from bound sockets (relay disabled)"
+            inserted_bound_addrs,
+            "populated endpoint address from bound sockets for local direct connectivity"
         );
     }
     info!(
@@ -396,4 +413,58 @@ async fn async_main() -> Result<()> {
     node_mode.shutdown().await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
+    use std::net::Ipv6Addr;
+    use std::net::SocketAddr;
+
+    use super::*;
+
+    fn endpoint_addr_with(addrs: impl IntoIterator<Item = SocketAddr>) -> iroh::EndpointAddr {
+        iroh::EndpointAddr {
+            id: iroh::SecretKey::from([7; 32]).public(),
+            addrs: addrs.into_iter().map(iroh::TransportAddr::Ip).collect::<BTreeSet<_>>(),
+        }
+    }
+
+    #[test]
+    fn populate_endpoint_addr_from_bound_sockets_adds_loopback_even_with_interface_addrs() {
+        let interface_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 252)), 36144);
+        let mut endpoint_addr = endpoint_addr_with([interface_addr]);
+
+        let inserted = populate_endpoint_addr_from_bound_sockets(&mut endpoint_addr, [SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            36144,
+        )]);
+
+        assert_eq!(inserted, 1);
+        assert!(endpoint_addr.addrs.contains(&iroh::TransportAddr::Ip(interface_addr)));
+        assert!(
+            endpoint_addr
+                .addrs
+                .contains(&iroh::TransportAddr::Ip(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 36144)))
+        );
+    }
+
+    #[test]
+    fn populate_endpoint_addr_from_bound_sockets_maps_ipv6_unspecified_to_loopback() {
+        let mut endpoint_addr = endpoint_addr_with([]);
+
+        let inserted = populate_endpoint_addr_from_bound_sockets(&mut endpoint_addr, [SocketAddr::new(
+            IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+            36144,
+        )]);
+
+        assert_eq!(inserted, 1);
+        assert!(
+            endpoint_addr
+                .addrs
+                .contains(&iroh::TransportAddr::Ip(SocketAddr::new(IpAddr::V6(Ipv6Addr::LOCALHOST), 36144)))
+        );
+    }
 }
