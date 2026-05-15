@@ -4,6 +4,8 @@
 //! cannot create VM networking fails with a receipt instead of hanging until the
 //! pipeline timeout.
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use crate::error::DogfoodError;
@@ -61,7 +63,7 @@ pub fn check_readiness(input: &VmCiReadinessInput) -> Result<(), String> {
     match input.network_mode.as_str() {
         "none" | "isolated" => {}
         "helper" | "tap-helper" => {
-            require_existing_path(&mut failures, "ASPEN_CI_TAP_HELPER_PATH", input.tap_helper_path.as_deref());
+            require_executable_path(&mut failures, "ASPEN_CI_TAP_HELPER_PATH", input.tap_helper_path.as_deref());
         }
         _ => {
             if !input.tun_available {
@@ -89,6 +91,32 @@ fn require_existing_path(failures: &mut Vec<String>, name: &str, value: Option<&
         Some(path) if !path.trim().is_empty() => failures.push(format!("{name} does not exist: {path}")),
         _ => failures.push(format!("{name} is not set")),
     }
+}
+
+fn require_executable_path(failures: &mut Vec<String>, name: &str, value: Option<&str>) {
+    match value {
+        Some(path) if !path.trim().is_empty() => {
+            let path_ref = Path::new(path);
+            if !path_ref.exists() {
+                failures.push(format!("{name} does not exist: {path}"));
+                return;
+            }
+            if !is_executable(path_ref) {
+                failures.push(format!("{name} is not executable: {path}"));
+            }
+        }
+        _ => failures.push(format!("{name} is not set")),
+    }
+}
+
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    std::fs::metadata(path).map(|metadata| metadata.permissions().mode() & 0o111 != 0).unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable(path: &Path) -> bool {
+    path.is_file()
 }
 
 fn current_process_has_net_admin() -> bool {
@@ -153,6 +181,31 @@ mod tests {
         input.has_net_admin = false;
 
         assert!(check_readiness(&input).is_ok());
+    }
+
+    #[test]
+    fn tap_helper_mode_requires_executable_helper() {
+        let dir = tempfile::tempdir().unwrap();
+        let helper = dir.path().join("helper");
+        std::fs::write(
+            &helper,
+            b"#!/bin/sh
+",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            let mut permissions = std::fs::metadata(&helper).unwrap().permissions();
+            permissions.set_mode(0o644);
+            std::fs::set_permissions(&helper, permissions).unwrap();
+        }
+
+        let mut input = ready_input();
+        input.network_mode = "tap-helper".to_string();
+        input.tap_helper_path = Some(helper.display().to_string());
+
+        let error = check_readiness(&input).unwrap_err();
+        assert!(error.contains("ASPEN_CI_TAP_HELPER_PATH is not executable"));
     }
 
     #[test]

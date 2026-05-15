@@ -10,7 +10,6 @@ use snafu::ResultExt;
 use tokio::process::Child;
 use tokio::process::Command;
 use tracing::debug;
-use tracing::error;
 use tracing::info;
 use tracing::warn;
 
@@ -52,29 +51,59 @@ impl ManagedCiVm {
         })
     }
 
-    pub(super) async fn ensure_tap_attached_to_bridge(&self, tap_name: &str) -> Result<()> {
-        let show = Command::new(Self::ip_command_path())
-            .args(["link", "show", "dev", tap_name])
+    pub(super) async fn run_tap_helper(&self, args: &[&str], context: &str) -> Result<std::process::Output> {
+        let helper_path =
+            self.config.tap_helper_path.as_deref().ok_or_else(|| CloudHypervisorError::InvalidConfig {
+                message: "NetworkMode::TapWithHelper requires tap_helper_path".to_string(),
+            })?;
+        let output = Command::new(helper_path)
+            .args(args)
             .output()
             .await
             .map_err(|source| CloudHypervisorError::StartCloudHypervisor { source })?;
 
-        if !show.status.success() {
-            self.run_ip_command(&["tuntap", "add", "dev", tap_name, "mode", "tap"], "create CI VM TAP device")
-                .await?;
+        if output.status.success() {
+            return Ok(output);
         }
 
-        self.run_ip_command(
-            &["link", "set", "dev", tap_name, "master", &self.config.bridge_name],
-            "attach CI VM TAP device to bridge",
-        )
-        .await?;
-        self.run_ip_command(&["link", "set", "dev", tap_name, "up"], "bring CI VM TAP device up").await?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(CloudHypervisorError::InvalidConfig {
+            message: format!("{context}: helper {} failed: {stderr}", args.join(" ")),
+        })
+    }
+
+    pub(super) async fn ensure_tap_attached_to_bridge(&self, tap_name: &str) -> Result<()> {
+        match self.config.network_mode {
+            NetworkMode::TapWithHelper => {
+                self.run_tap_helper(&["ensure", tap_name, &self.config.bridge_name], "prepare CI VM TAP device")
+                    .await?;
+            }
+            _ => {
+                let show = Command::new(Self::ip_command_path())
+                    .args(["link", "show", "dev", tap_name])
+                    .output()
+                    .await
+                    .map_err(|source| CloudHypervisorError::StartCloudHypervisor { source })?;
+
+                if !show.status.success() {
+                    self.run_ip_command(&["tuntap", "add", "dev", tap_name, "mode", "tap"], "create CI VM TAP device")
+                        .await?;
+                }
+
+                self.run_ip_command(
+                    &["link", "set", "dev", tap_name, "master", &self.config.bridge_name],
+                    "attach CI VM TAP device to bridge",
+                )
+                .await?;
+                self.run_ip_command(&["link", "set", "dev", tap_name, "up"], "bring CI VM TAP device up").await?;
+            }
+        }
 
         info!(
             vm_id = %self.id,
             tap = %tap_name,
             bridge = %self.config.bridge_name,
+            network_mode = ?self.config.network_mode,
             "attached CI VM TAP device to bridge"
         );
 
@@ -365,18 +394,17 @@ impl ManagedCiVm {
                 );
             }
             NetworkMode::TapWithHelper => {
-                // TapWithHelper is not yet implemented. Config validation rejects
-                // this mode, so this branch should be unreachable. If we get here
-                // (e.g., config was constructed without validate()), fall back to
-                // standard Tap mode with an error-level log.
-                error!(
-                    vm_id = %self.id,
-                    "TapWithHelper mode is not implemented — falling back to Tap mode. \
-                     Use NetworkMode::Tap or NetworkMode::None instead."
-                );
+                // Helper-backed TAP mode: the helper owns the privileged
+                // lifecycle operation and this process remains unprivileged.
                 let tap_name = format!("{}-tap", self.id);
                 self.ensure_tap_attached_to_bridge(&tap_name).await?;
                 cmd.arg("--net").arg(format!("tap={tap_name},mac={mac}"));
+                debug!(
+                    vm_id = %self.id,
+                    tap_name = %tap_name,
+                    helper = ?self.config.tap_helper_path,
+                    "using TAP helper network mode"
+                );
             }
             NetworkMode::None => {
                 // No network: VM runs in complete isolation.

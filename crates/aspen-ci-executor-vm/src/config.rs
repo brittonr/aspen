@@ -157,14 +157,13 @@ pub struct CloudHypervisorWorkerConfig {
 
     /// Path to TAP helper binary (for TapWithHelper mode).
     ///
-    /// This binary must have CAP_NET_ADMIN capability and will be invoked to
-    /// create TAP devices. It receives the TAP device name as an argument and
-    /// outputs the file descriptor number on stdout.
+    /// This binary must be executable by `aspen-node` and have enough privilege
+    /// (typically a root-owned copy with `cap_net_admin+ep`) to create, attach,
+    /// bring up, and delete allowlisted CI TAP devices.
     ///
-    /// Example helper: `aspen-tap-helper <tap-name> <bridge-name>`
-    /// Output: FD number (e.g., "3")
+    /// Example helper: `aspen-tap-helper ensure ci-n1-vm0-tap aspen-ci-br0`.
     ///
-    /// If None and TapWithHelper mode is selected, falls back to Tap mode.
+    /// If None and TapWithHelper mode is selected, validation fails.
     pub tap_helper_path: Option<PathBuf>,
 }
 
@@ -242,9 +241,12 @@ impl CloudHypervisorWorkerConfig {
             return Err(format!("toplevel_path does not exist: {:?}", self.toplevel_path));
         }
         if matches!(self.network_mode, crate::NetworkMode::TapWithHelper) {
-            return Err("NetworkMode::TapWithHelper is not yet implemented. \
-                 Use NetworkMode::Tap (requires CAP_NET_ADMIN) or NetworkMode::None (isolated)."
-                .to_string());
+            let Some(helper_path) = self.tap_helper_path.as_deref() else {
+                return Err("NetworkMode::TapWithHelper requires tap_helper_path".to_string());
+            };
+            if !helper_path.exists() {
+                return Err(format!("tap_helper_path does not exist: {helper_path:?}"));
+            }
         }
         Ok(())
     }
@@ -457,7 +459,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tap_with_helper_rejected_by_validation() {
+    fn test_tap_with_helper_requires_helper_path() {
         let config = CloudHypervisorWorkerConfig {
             network_mode: crate::NetworkMode::TapWithHelper,
             ..Default::default()
@@ -465,7 +467,18 @@ mod tests {
         let result = config.validate();
         assert!(result.is_err());
         let err_msg = result.unwrap_err();
-        assert!(err_msg.contains("TapWithHelper"), "error should mention TapWithHelper: {err_msg}");
+        assert!(err_msg.contains("tap_helper_path"), "error should mention helper path: {err_msg}");
+    }
+
+    #[test]
+    fn test_tap_with_helper_accepts_existing_helper_path() {
+        let helper = std::env::current_exe().expect("current test executable");
+        let config = CloudHypervisorWorkerConfig {
+            network_mode: crate::NetworkMode::TapWithHelper,
+            tap_helper_path: Some(helper),
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
     }
 
     #[test]

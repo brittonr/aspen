@@ -2839,6 +2839,16 @@
                   doCheck = false;
                 }
               );
+              # Narrow privileged helper for VM-CI TAP lifecycle operations.
+              aspen-tap-helper = craneLib.buildPackage (
+                ciCompileFromSourceArgs
+                // {
+                  pname = "aspen-tap-helper";
+                  version = "0.1.0";
+                  cargoExtraArgs = "-p aspen-ci-executor-vm --bin aspen-tap-helper";
+                  doCheck = false;
+                }
+              );
             }
             # CI-path builds with plugins (requires --impure for aspen-wasm-plugin).
             # Uses ciSrc with the stub replaced by real aspen-wasm-plugin source.
@@ -5757,6 +5767,7 @@
                     pkgs.virtiofsd
                     pkgs.iproute2
                     pkgs.python3
+                    bins.aspen-tap-helper
                   ]
                 }:$PATH"
 
@@ -5765,6 +5776,14 @@
                 export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
                 export CLOUD_HYPERVISOR_BIN="${pkgs.cloud-hypervisor}/bin/cloud-hypervisor"
                 export VIRTIOFSD_BIN="${pkgs.virtiofsd}/bin/virtiofsd"
+
+                default_tap_helper="/tmp/aspen-ci-tap-helper"
+                if [ -z "''${ASPEN_CI_NETWORK_MODE+x}" ] && [ -x "$default_tap_helper" ]; then
+                  export ASPEN_CI_NETWORK_MODE="tap-helper"
+                  export ASPEN_CI_TAP_HELPER_PATH="''${ASPEN_CI_TAP_HELPER_PATH:-$default_tap_helper}"
+                elif [ "''${ASPEN_CI_NETWORK_MODE:-}" = "tap-helper" ] || [ "''${ASPEN_CI_NETWORK_MODE:-}" = "helper" ]; then
+                  export ASPEN_CI_TAP_HELPER_PATH="''${ASPEN_CI_TAP_HELPER_PATH:-$default_tap_helper}"
+                fi
 
                 # CI worker VM image paths
                 export ASPEN_CI_KERNEL_PATH="${ciKernel}/bzImage"
@@ -5796,8 +5815,10 @@
                     pkgs.nftables
                     pkgs.iptables
                     pkgs.coreutils
+                    pkgs.libcap
                   ]
                 }:$PATH"
+                export ASPEN_CI_TAP_HELPER_SOURCE="${bins.aspen-tap-helper}/bin/aspen-tap-helper"
                 exec ${scriptsDir}/setup-ci-network.sh "$@"
               ''}";
             };
@@ -5825,6 +5846,7 @@
               crane-aspen-node = bins.aspen-node;
               crane-aspen-cli = bins.aspen-cli;
               crane-git-remote-aspen = bins.git-remote-aspen;
+              aspen-tap-helper = bins.aspen-tap-helper;
               aspen-cli-forge = bins.aspen-cli-forge;
               # aspen-ci-agent extracted to ~/git/aspen-ci
               netwatch = netwatch;

@@ -71,6 +71,19 @@ impl ManagedCiVm {
         }
 
         let tap_name = format!("{}-tap", self.id);
+        if matches!(self.config.network_mode, NetworkMode::TapWithHelper) {
+            match self
+                .run_tap_helper(&["delete", &tap_name, &self.config.bridge_name], "remove CI VM TAP device")
+                .await
+            {
+                Ok(_) => debug!(vm_id = %self.id, tap = %tap_name, "removed CI VM TAP device via helper"),
+                Err(error) => {
+                    warn!(vm_id = %self.id, tap = %tap_name, "failed to remove CI VM TAP device via helper: {error}")
+                }
+            }
+            return;
+        }
+
         let output = Command::new(Self::ip_command_path()).args(["link", "delete", "dev", &tap_name]).output().await;
 
         match output {

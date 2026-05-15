@@ -11,7 +11,8 @@
 #   # Or manually:
 #   sudo ./scripts/setup-ci-network.sh
 #
-# The network configuration persists until reboot. Run this once before
+# The network configuration persists until reboot. The helper copy under
+# /tmp is also recreated by this script after reboot. Run this once before
 # using nix run .#dogfood-local-vmci to avoid interactive sudo prompts.
 
 set -eu
@@ -21,6 +22,8 @@ BRIDGE_NAME="aspen-ci-br0"
 BRIDGE_IP="10.200.0.1/24"
 NODE_COUNT="${ASPEN_NODE_COUNT:-1}"
 TAP_USER="${SUDO_USER:-$USER}"
+TAP_HELPER_SOURCE="${ASPEN_CI_TAP_HELPER_SOURCE:-}"
+TAP_HELPER_PATH="${ASPEN_CI_TAP_HELPER_PATH:-/tmp/aspen-ci-tap-helper}"
 
 # Colors
 RED='\033[0;31m'
@@ -37,6 +40,22 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 printf "${BLUE}Setting up CI VM network...${NC}\n\n"
+
+# Install the narrow TAP helper used by unprivileged aspen-node. The Nix store
+# binary is immutable, so copy it to a mutable root-owned path before applying
+# file capabilities.
+if [ -n "$TAP_HELPER_SOURCE" ]; then
+    printf "  Installing TAP helper..."
+    install -m 0755 -o root -g root "$TAP_HELPER_SOURCE" "$TAP_HELPER_PATH"
+    if command -v setcap >/dev/null 2>&1; then
+        setcap cap_net_admin+ep "$TAP_HELPER_PATH"
+        printf " ${GREEN}done${NC} (%s)\n" "$TAP_HELPER_PATH"
+    else
+        printf " ${YELLOW}installed without capabilities${NC} (setcap not found)\n"
+    fi
+else
+    printf "  TAP helper source not provided; skipping helper install\n"
+fi
 
 # Create bridge if needed
 if ip link show "$BRIDGE_NAME" >/dev/null 2>&1; then

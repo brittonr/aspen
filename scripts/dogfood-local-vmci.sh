@@ -208,13 +208,22 @@ do_stop() {
 do_start() {
   check_prerequisites
 
+  local network_mode="${ASPEN_CI_NETWORK_MODE:-tap}"
+  local tap_helper_path="${ASPEN_CI_TAP_HELPER_PATH:-/tmp/aspen-ci-tap-helper}"
+  if [ -z "${ASPEN_CI_NETWORK_MODE+x}" ] && [ -x "$tap_helper_path" ]; then
+    network_mode="tap-helper"
+  fi
+
   log "Starting ${NODE_COUNT}-node cluster with VM CI..."
   echo ""
   echo -e "  ${BOLD}VM Configuration:${NC}"
   echo "    Memory:  ${VM_MEMORY_MIB} MiB"
   echo "    vCPUs:   ${VM_VCPUS}"
   echo "    Kernel:  $(basename "${ASPEN_CI_KERNEL_PATH}")"
-  echo "    Network: TAP (aspen-ci-br0)"
+  echo "    Network: ${network_mode} (aspen-ci-br0)"
+  if [ "$network_mode" = "tap-helper" ]; then
+    echo "    TAP helper: ${tap_helper_path}"
+  fi
   echo ""
 
   # Kill any existing cluster
@@ -238,7 +247,8 @@ do_start() {
     ASPEN_CI_TOPLEVEL_PATH="${ASPEN_CI_TOPLEVEL_PATH}" \
     ASPEN_CI_VM_MEMORY_MIB="${VM_MEMORY_MIB}" \
     ASPEN_CI_VM_VCPUS="${VM_VCPUS}" \
-    ASPEN_CI_NETWORK_MODE="tap" \
+    ASPEN_CI_NETWORK_MODE="${network_mode}" \
+    ASPEN_CI_TAP_HELPER_PATH="${tap_helper_path}" \
     CLOUD_HYPERVISOR_PATH="${CLOUD_HYPERVISOR_BIN:-$(command -v cloud-hypervisor)}" \
     VIRTIOFSD_PATH="${VIRTIOFSD_BIN:-$(command -v virtiofsd)}" \
     ASPEN_DOCS_ENABLED=true \
