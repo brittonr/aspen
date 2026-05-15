@@ -32,8 +32,9 @@ VM-CI dogfood readiness MUST distinguish direct TAP privilege requirements from 
 
 #### Scenario: Dogfood defaults to installed helper
 
-- GIVEN `setup-ci-network` has installed an executable TAP helper at the default helper path
+- GIVEN `setup-ci-network` has installed an executable TAP helper at `/usr/local/libexec/aspen-ci-tap-helper`
 - AND the operator did not explicitly set `ASPEN_CI_NETWORK_MODE`
 - WHEN `dogfood-local-vmci` starts
-- THEN it selects `tap-helper` mode and exports the default helper path
+- THEN it selects `tap-helper` mode and exports `/usr/local/libexec/aspen-ci-tap-helper` as the helper path
+- AND the default avoids `nosuid` temporary mounts where file capabilities can be ignored
 - AND the `aspen-node` process does not need ambient `CAP_NET_ADMIN` for TAP lifecycle operations.

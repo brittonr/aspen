@@ -36,13 +36,13 @@
 
 ### Dogfood defaults
 
-**Choice:** `dogfood-local-vmci` sets `ASPEN_CI_NETWORK_MODE=tap-helper` and `ASPEN_CI_TAP_HELPER_PATH=/tmp/aspen-ci-tap-helper` when that helper exists and is executable, unless the operator explicitly set network mode/helper env vars.
+**Choice:** `dogfood-local-vmci` sets `ASPEN_CI_NETWORK_MODE=tap-helper` and `ASPEN_CI_TAP_HELPER_PATH=/usr/local/libexec/aspen-ci-tap-helper` when that helper exists and is executable, unless the operator explicitly set network mode/helper env vars.
 
 **Rationale:** The setup app remains the privileged boundary, while the dogfood app remains unprivileged and deterministic.
 
 ## Risks / Trade-offs
 
-- **File capabilities on copied helper** → `setup-ci-network` installs the helper to `/tmp/aspen-ci-tap-helper` and best-effort applies `setcap`; readiness still fails fast if unavailable.
+- **File capabilities on copied helper** → `setup-ci-network` installs the helper to `/usr/local/libexec/aspen-ci-tap-helper` and best-effort applies `setcap`; readiness still fails fast if unavailable. The default avoids `/tmp` because `nosuid` mounts can silently make file capabilities ineffective even when `getcap` reports `cap_net_admin=ep`.
 - **Stale TAP cleanup** → helper delete is allowlisted and idempotent.
 - **Helper path spoofing** → readiness requires an existing helper path; the helper itself enforces command/device/bridge policy.
 

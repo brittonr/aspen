@@ -14,5 +14,5 @@
 
 - [x] [serial] Run focused unit/config/helper/readiness tests.
 - [x] [serial] Run OpenSpec strict validation and whitespace checks.
-- [ ] [serial] Rerun live VM-CI dogfood acceptance or record the highest verified host boundary.
-- [ ] [serial] Sync/archive the OpenSpec when all implementation and verification tasks are complete.
+- [x] [serial] Rerun live VM-CI dogfood acceptance or record the highest verified host boundary.
+- [x] [serial] Sync/archive the OpenSpec when all implementation and verification tasks are complete.

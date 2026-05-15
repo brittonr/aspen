@@ -255,29 +255,42 @@ Native CI run receipts MUST include operator-safe artifact metadata for jobs tha
 
 ### Requirement: VM-CI Dogfood Worker Readiness [r[dogfood-evidence.vmci-worker-readiness]]
 
-Aspen MUST fail VM-CI dogfood acceptance deterministically when VM-only CI jobs cannot be scheduled because the local host cannot start VM-capable workers.
+VM-CI dogfood readiness MUST distinguish direct TAP privilege requirements from helper-backed TAP lifecycle requirements, and MUST emit bounded receipt evidence when either boundary is unavailable.
 
-#### Scenario: VM-CI fails fast with zero possible VM capacity [r[dogfood-evidence.vmci-worker-readiness.zero-capacity]]
+#### Scenario: Direct TAP mode requires runtime network administration
 
-- GIVEN dogfood is running in VM-CI mode
-- AND the local shell workers exclude VM-only job types such as `ci_nix_build` or `ci_vm`
-- AND VM image, KVM, or VM networking preflight reports zero possible VM capacity
-- WHEN the dogfood run reaches the CI build wait phase
-- THEN the run SHALL fail with a VM worker readiness failure before triggering or waiting on the pipeline
-- AND the run SHALL NOT be reported as full dogfood acceptance
+- GIVEN VM-CI dogfood is configured with `ASPEN_CI_NETWORK_MODE=tap`
+- AND the current process lacks `CAP_NET_ADMIN`
+- WHEN the dogfood run performs VM-CI readiness checks
+- THEN readiness fails before waiting on the CI pipeline
+- AND the receipt failure category is `vm_ci_readiness`
+- AND the diagnostic says direct TAP mode requires `CAP_NET_ADMIN` or `tap-helper` mode.
 
-#### Scenario: TAP or TUN denial is diagnosable [r[dogfood-evidence.vmci-worker-readiness.tap-tun-denied]]
+#### Scenario: TAP helper mode requires an executable helper
 
-- GIVEN VM pool initialization would fail because TAP/TUN device creation is denied by the host
-- WHEN dogfood records the failure
-- THEN the receipt or diagnosis SHALL include a redacted host-capability category and bounded message identifying TAP/TUN readiness
-- AND it SHALL include local evidence handles without exposing tickets, cookies, private keys, or connection strings
+- GIVEN VM-CI dogfood is configured with `ASPEN_CI_NETWORK_MODE=tap-helper`
+- AND `ASPEN_CI_TAP_HELPER_PATH` is missing or not executable
+- WHEN the dogfood run performs VM-CI readiness checks
+- THEN readiness fails before waiting on the CI pipeline
+- AND the receipt failure category is `vm_ci_readiness`
+- AND the diagnostic names the missing helper path requirement.
 
-#### Scenario: Successful VM-CI readiness is preserved [r[dogfood-evidence.vmci-worker-readiness.ready]]
+#### Scenario: Helper-backed TAP lifecycle stays allowlisted
 
-- GIVEN dogfood is running in VM-CI mode on a host with VM image paths, KVM access, and permitted VM networking
-- WHEN the pipeline contains VM-only CI jobs
-- THEN the readiness gate SHALL allow the normal CI wait and receipt flow to continue
+- GIVEN VM-CI runtime is configured with `NetworkMode::TapWithHelper`
+- WHEN a VM TAP device is prepared or cleaned up
+- THEN the runtime invokes the configured helper instead of direct `ip` TAP mutation
+- AND the helper only accepts `ci-n*-vm*-tap` device names and bridge `aspen-ci-br0`
+- AND invalid device names, invalid bridges, or unknown actions are rejected before invoking `ip`.
+
+#### Scenario: Dogfood defaults to installed helper
+
+- GIVEN `setup-ci-network` has installed an executable TAP helper at `/usr/local/libexec/aspen-ci-tap-helper`
+- AND the operator did not explicitly set `ASPEN_CI_NETWORK_MODE`
+- WHEN `dogfood-local-vmci` starts
+- THEN it selects `tap-helper` mode and exports `/usr/local/libexec/aspen-ci-tap-helper` as the helper path
+- AND the default avoids `nosuid` temporary mounts where file capabilities can be ignored
+- AND the `aspen-node` process does not need ambient `CAP_NET_ADMIN` for TAP lifecycle operations.
 
 ### Requirement: Current head dogfood receipt is durable
 A current-head dogfood acceptance run MUST produce a durable schema-versioned receipt tied to the exact git commit and run id.

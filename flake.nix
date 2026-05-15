@@ -5777,7 +5777,7 @@
                 export CLOUD_HYPERVISOR_BIN="${pkgs.cloud-hypervisor}/bin/cloud-hypervisor"
                 export VIRTIOFSD_BIN="${pkgs.virtiofsd}/bin/virtiofsd"
 
-                default_tap_helper="/tmp/aspen-ci-tap-helper"
+                default_tap_helper="/usr/local/libexec/aspen-ci-tap-helper"
                 if [ -z "''${ASPEN_CI_NETWORK_MODE+x}" ] && [ -x "$default_tap_helper" ]; then
                   export ASPEN_CI_NETWORK_MODE="tap-helper"
                   export ASPEN_CI_TAP_HELPER_PATH="''${ASPEN_CI_TAP_HELPER_PATH:-$default_tap_helper}"
@@ -5816,6 +5816,7 @@
                     pkgs.iptables
                     pkgs.coreutils
                     pkgs.libcap
+                    pkgs.util-linux
                   ]
                 }:$PATH"
                 export ASPEN_CI_TAP_HELPER_SOURCE="${bins.aspen-tap-helper}/bin/aspen-tap-helper"

@@ -209,7 +209,7 @@ do_start() {
   check_prerequisites
 
   local network_mode="${ASPEN_CI_NETWORK_MODE:-tap}"
-  local tap_helper_path="${ASPEN_CI_TAP_HELPER_PATH:-/tmp/aspen-ci-tap-helper}"
+  local tap_helper_path="${ASPEN_CI_TAP_HELPER_PATH:-/usr/local/libexec/aspen-ci-tap-helper}"
   if [ -z "${ASPEN_CI_NETWORK_MODE+x}" ] && [ -x "$tap_helper_path" ]; then
     network_mode="tap-helper"
   fi
