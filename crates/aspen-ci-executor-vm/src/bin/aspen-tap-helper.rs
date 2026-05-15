@@ -138,11 +138,89 @@ fn run_ip(args: &[&str], context: &str) -> Result<(), String> {
 }
 
 fn run_ip_raw(args: &[&str]) -> Result<Output, String> {
+    prepare_ip_child_capabilities()?;
     let ip_path = ip_command_path();
     Command::new(&ip_path)
         .args(args)
         .output()
         .map_err(|source| format!("failed to invoke {}: {source}", ip_path.display()))
+}
+
+#[cfg(target_os = "linux")]
+fn prepare_ip_child_capabilities() -> Result<(), String> {
+    enable_ambient_cap_net_admin()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn prepare_ip_child_capabilities() -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn enable_ambient_cap_net_admin() -> Result<(), String> {
+    const LINUX_CAPABILITY_VERSION_3: u32 = 0x2008_0522;
+    const CAP_NET_ADMIN: u32 = 12;
+    const CAP_WORD: usize = (CAP_NET_ADMIN / 32) as usize;
+    const CAP_MASK: u32 = 1_u32 << (CAP_NET_ADMIN % 32);
+
+    #[repr(C)]
+    struct CapabilityHeader {
+        version: u32,
+        pid: i32,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy)]
+    struct CapabilityData {
+        effective: u32,
+        permitted: u32,
+        inheritable: u32,
+    }
+
+    let mut header = CapabilityHeader {
+        version: LINUX_CAPABILITY_VERSION_3,
+        pid: 0,
+    };
+    let mut data = [
+        CapabilityData {
+            effective: 0,
+            permitted: 0,
+            inheritable: 0,
+        },
+        CapabilityData {
+            effective: 0,
+            permitted: 0,
+            inheritable: 0,
+        },
+    ];
+
+    // SAFETY: capget/capset/prctl are called for the current process with valid
+    // pointers to kernel capability structures. Errors are checked immediately.
+    unsafe {
+        if libc::syscall(libc::SYS_capget, &mut header, data.as_mut_ptr()) != 0 {
+            return Err(format!("read helper capabilities: {}", std::io::Error::last_os_error()));
+        }
+
+        if data[CAP_WORD].permitted & CAP_MASK == 0 {
+            return Err("helper lacks permitted CAP_NET_ADMIN; install with cap_net_admin+ep".to_string());
+        }
+
+        if data[CAP_WORD].inheritable & CAP_MASK == 0 {
+            data[CAP_WORD].inheritable |= CAP_MASK;
+            if libc::syscall(libc::SYS_capset, &mut header, data.as_mut_ptr()) != 0 {
+                return Err(format!(
+                    "make CAP_NET_ADMIN inheritable for ip subprocess: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+        }
+
+        if libc::prctl(libc::PR_CAP_AMBIENT, libc::PR_CAP_AMBIENT_RAISE, CAP_NET_ADMIN as libc::c_ulong, 0, 0) != 0 {
+            return Err(format!("raise ambient CAP_NET_ADMIN for ip subprocess: {}", std::io::Error::last_os_error()));
+        }
+    }
+
+    Ok(())
 }
 
 fn ip_command_path() -> PathBuf {

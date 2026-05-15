@@ -57,6 +57,7 @@ flate2 = "1.0"
 tar = "0.4"
 
 [target.'cfg(unix)'.dependencies]
+libc = "0.2"
 nix = { version = "0.29", features = ["signal", "process"] }
 
 [features]

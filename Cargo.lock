@@ -1028,6 +1028,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "iroh-blobs 0.99.0",
+ "libc",
  "nix 0.29.0",
  "postcard",
  "proptest",
