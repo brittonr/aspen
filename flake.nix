@@ -4688,12 +4688,14 @@
 
           # Base apps available on all systems
           apps = {
-            aspen-node = (flake-utils.lib.mkApp {
-              drv = aspenNode;
-              exePath = "/bin/aspen-node";
-            }) // {
-              meta.description = "Run the Aspen node binary.";
-            };
+            aspen-node =
+              (flake-utils.lib.mkApp {
+                drv = aspenNode;
+                exePath = "/bin/aspen-node";
+              })
+              // {
+                meta.description = "Run the Aspen node binary.";
+              };
 
             # aspen-tui extracted to ~/git/aspen-tui
             # aspen-cli extracted to ~/git/aspen-cli
