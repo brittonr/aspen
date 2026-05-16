@@ -2,6 +2,7 @@
 //!
 //! Handles Iroh P2P connections and RPC communication with Aspen nodes.
 
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::time::Duration;
 
@@ -16,6 +17,7 @@ pub use aspen_ticket::BootstrapPeer;
 use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::RelayMode;
+use iroh::TransportAddr;
 use iroh::endpoint::VarInt;
 use serde::Deserialize;
 use serde::Serialize;
@@ -92,6 +94,27 @@ pub struct AspenClient {
     ticket: AspenClusterTicket,
     rpc_timeout: Duration,
     token: Option<AuthToken>,
+    prefer_loopback_direct: bool,
+}
+
+fn loopback_only_addr(addr: &EndpointAddr) -> Option<EndpointAddr> {
+    let loopback_addrs = addr
+        .addrs
+        .iter()
+        .filter_map(|transport_addr| match transport_addr {
+            TransportAddr::Ip(socket_addr) if socket_addr.ip().is_loopback() => Some(TransportAddr::Ip(*socket_addr)),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+
+    if loopback_addrs.is_empty() {
+        None
+    } else {
+        Some(EndpointAddr {
+            id: addr.id,
+            addrs: loopback_addrs,
+        })
+    }
 }
 
 fn remaining_timeout(deadline: Instant, timeout_context: &'static str) -> Result<Duration> {
@@ -166,6 +189,7 @@ impl AspenClient {
             ticket,
             rpc_timeout,
             token,
+            prefer_loopback_direct: relay_disabled || std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1",
         })
     }
 
@@ -194,6 +218,7 @@ impl AspenClient {
             ticket,
             rpc_timeout,
             token,
+            prefer_loopback_direct: std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1",
         })
     }
 
@@ -207,7 +232,7 @@ impl AspenClient {
             .alpns(vec![CLIENT_ALPN.to_vec()]);
 
         if relay_disabled || std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1" {
-            builder = builder.relay_mode(RelayMode::Disabled);
+            builder = builder.relay_mode(RelayMode::Disabled).clear_address_lookup();
         }
 
         builder.bind().await.context("failed to create Iroh endpoint")
@@ -217,6 +242,10 @@ impl AspenClient {
     ///
     /// Use this when running inside an existing Iroh node (e.g., worker-only mode)
     /// where you already have an endpoint and don't want to create a new one.
+    ///
+    /// Existing endpoints may be inside a VM or another network namespace. Do not
+    /// infer same-host loopback preference from process environment here: a
+    /// same-process worker can still need bridge/LAN addresses from the ticket.
     pub fn with_endpoint(
         endpoint: Endpoint,
         ticket: AspenClusterTicket,
@@ -228,6 +257,7 @@ impl AspenClient {
             ticket,
             rpc_timeout,
             token,
+            prefer_loopback_direct: false,
         }
     }
 
@@ -291,9 +321,16 @@ impl AspenClient {
 
     /// Internal method to send to a specific address.
     async fn send_to_addr(&self, addr: &EndpointAddr, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        let mut addr_to_connect = addr.clone();
+        if self.prefer_loopback_direct
+            && let Some(loopback_addr) = loopback_only_addr(addr)
+        {
+            addr_to_connect = loopback_addr;
+        }
+
         // Connect to the peer (connect timeout)
         let connection = timeout(self.rpc_timeout, async {
-            self.endpoint.connect(addr.clone(), CLIENT_ALPN).await.context("failed to connect to peer")
+            self.endpoint.connect(addr_to_connect, CLIENT_ALPN).await.context("failed to connect to peer")
         })
         .await
         .context("connection timeout")??;
@@ -368,6 +405,38 @@ impl AspenClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_loopback_only_addr_prefers_local_direct_addrs() {
+        let endpoint_id = iroh::SecretKey::from([1; 32]).public();
+        let addr = EndpointAddr {
+            id: endpoint_id,
+            addrs: [
+                TransportAddr::Ip("192.168.1.252:12345".parse().unwrap()),
+                TransportAddr::Ip("127.0.0.1:12345".parse().unwrap()),
+                TransportAddr::Ip("[::1]:12345".parse().unwrap()),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        let loopback = loopback_only_addr(&addr).expect("loopback addrs should be extracted");
+        assert_eq!(loopback.id, endpoint_id);
+        assert_eq!(loopback.addrs.len(), 2);
+        assert!(loopback.addrs.contains(&TransportAddr::Ip("127.0.0.1:12345".parse().unwrap())));
+        assert!(loopback.addrs.contains(&TransportAddr::Ip("[::1]:12345".parse().unwrap())));
+    }
+
+    #[test]
+    fn test_loopback_only_addr_returns_none_without_loopback() {
+        let endpoint_id = iroh::SecretKey::from([2; 32]).public();
+        let addr = EndpointAddr {
+            id: endpoint_id,
+            addrs: [TransportAddr::Ip("192.168.1.252:12345".parse().unwrap())].into_iter().collect(),
+        };
+
+        assert!(loopback_only_addr(&addr).is_none());
+    }
 
     #[tokio::test]
     async fn test_deadline_helper_reports_stream_open_timeout() {

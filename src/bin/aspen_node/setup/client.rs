@@ -997,6 +997,11 @@ async fn initialize_job_system(
                         _ => NetworkMode::Tap,
                     },
                     tap_helper_path: std::env::var("ASPEN_CI_TAP_HELPER_PATH").map(std::path::PathBuf::from).ok(),
+                    startup_delay_ms: std::env::var("ASPEN_CI_VM_POOL_START_DELAY_SECS")
+                        .ok()
+                        .and_then(|v| v.parse::<u64>().ok())
+                        .and_then(|secs| secs.checked_mul(1000))
+                        .unwrap_or(default_config.startup_delay_ms),
                     ..default_config
                 };
 
@@ -1022,6 +1027,7 @@ async fn initialize_job_system(
                                 max_vms = ch_config.max_vms,
                                 vm_memory_mib = ch_config.vm_memory_mib,
                                 vm_vcpus = ch_config.vm_vcpus,
+                                startup_delay_ms = ch_config.startup_delay_ms,
                                 host_iroh_port = ?ch_config.host_iroh_port,
                                 bridge_addr = ?ch_config.bridge_socket_addr(),
                                 network_mode = ?ch_config.network_mode,

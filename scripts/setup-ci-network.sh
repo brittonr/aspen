@@ -68,6 +68,10 @@ fi
 # Create bridge if needed
 if ip link show "$BRIDGE_NAME" >/dev/null 2>&1; then
     printf "  Bridge %s already exists\n" "$BRIDGE_NAME"
+    if ! ip -4 addr show dev "$BRIDGE_NAME" | grep -qF "$BRIDGE_IP"; then
+        ip addr add "$BRIDGE_IP" dev "$BRIDGE_NAME" 2>/dev/null || true
+    fi
+    ip link set "$BRIDGE_NAME" up
 else
     printf "  Creating bridge %s..." "$BRIDGE_NAME"
     ip link add "$BRIDGE_NAME" type bridge
@@ -81,24 +85,65 @@ printf "  Enabling IP forwarding..."
 sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
 printf " ${GREEN}done${NC}\n"
 
-# Set up NAT using nftables (modern) with iptables fallback
-printf "  Configuring NAT..."
+# Set up host ingress/forwarding and NAT using nftables (modern) with
+# iptables fallback. NixOS firewalls commonly allow ICMP from the bridge while
+# dropping UDP to host processes; VM workers need UDP/QUIC access to the local
+# Aspen node at 10.200.0.1:<iroh-port>, so accept bridge ingress explicitly.
+#
+# Important nftables detail: an `accept` verdict in a separate base chain does
+# not bypass later base chains on the same hook. NixOS installs its firewall in
+# `inet nixos-fw input` with a later drop policy, so the VM bridge accept rule
+# must also be inserted into that chain when present. Otherwise ping can work
+# while guest->host Iroh/QUIC UDP times out.
+printf "  Configuring VM firewall/NAT..."
 if command -v nft >/dev/null 2>&1; then
-    if nft list table ip aspen-ci-nat >/dev/null 2>&1; then
-        printf " already configured (nftables)\n"
-    else
+    add_nft_rule_once() {
+        family="$1"
+        table="$2"
+        chain="$3"
+        comment="$4"
+        shift 4
+
+        if ! nft list chain "$family" "$table" "$chain" >/dev/null 2>&1; then
+            return 0
+        fi
+        if nft list chain "$family" "$table" "$chain" | grep -q "comment \"$comment\""; then
+            return 0
+        fi
+        nft insert rule "$family" "$table" "$chain" "$@" counter accept comment "\"$comment\""
+    }
+
+    if ! nft list table inet aspen-ci-filter >/dev/null 2>&1; then
+        nft add table inet aspen-ci-filter
+        nft add chain inet aspen-ci-filter input '{ type filter hook input priority -150 ; policy accept ; }'
+        nft add chain inet aspen-ci-filter forward '{ type filter hook forward priority -150 ; policy accept ; }'
+    fi
+    add_nft_rule_once inet aspen-ci-filter input "aspen-ci bridge ingress" iifname "\"$BRIDGE_NAME\""
+    add_nft_rule_once inet aspen-ci-filter forward "aspen-ci bridge forward ingress" iifname "\"$BRIDGE_NAME\""
+    add_nft_rule_once inet aspen-ci-filter forward "aspen-ci bridge forward egress" oifname "\"$BRIDGE_NAME\""
+
+    # NixOS' nftables firewall uses this table/chain and can drop packets after
+    # the compatibility base chain above accepted them. Insert into the product
+    # firewall chain as an idempotent host-local setup rule when it exists.
+    add_nft_rule_once inet nixos-fw input "aspen-ci bridge ingress" iifname "\"$BRIDGE_NAME\""
+    add_nft_rule_once inet nixos-fw forward "aspen-ci bridge forward ingress" iifname "\"$BRIDGE_NAME\""
+    add_nft_rule_once inet nixos-fw forward "aspen-ci bridge forward egress" oifname "\"$BRIDGE_NAME\""
+
+    if ! nft list table ip aspen-ci-nat >/dev/null 2>&1; then
         nft add table ip aspen-ci-nat
         nft add chain ip aspen-ci-nat postrouting '{ type nat hook postrouting priority 100 ; }'
-        nft add rule ip aspen-ci-nat postrouting ip saddr 10.200.0.0/24 oifname != "$BRIDGE_NAME" masquerade
-        printf " ${GREEN}done${NC} (nftables)\n"
     fi
+    if ! nft list chain ip aspen-ci-nat postrouting | grep -q "10.200.0.0/24"; then
+        nft add rule ip aspen-ci-nat postrouting ip saddr 10.200.0.0/24 oifname != "\"$BRIDGE_NAME\"" masquerade
+    fi
+    printf " ${GREEN}done${NC} (nftables)\n"
 elif command -v iptables >/dev/null 2>&1; then
-    if iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null; then
-        printf " already configured (iptables)\n"
-    else
-        iptables -t nat -A POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE
-        printf " ${GREEN}done${NC} (iptables)\n"
-    fi
+    iptables -C INPUT -i "$BRIDGE_NAME" -j ACCEPT 2>/dev/null || iptables -I INPUT -i "$BRIDGE_NAME" -j ACCEPT
+    iptables -C FORWARD -i "$BRIDGE_NAME" -j ACCEPT 2>/dev/null || iptables -I FORWARD -i "$BRIDGE_NAME" -j ACCEPT
+    iptables -C FORWARD -o "$BRIDGE_NAME" -j ACCEPT 2>/dev/null || iptables -I FORWARD -o "$BRIDGE_NAME" -j ACCEPT
+    iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE 2>/dev/null \
+        || iptables -t nat -A POSTROUTING -s 10.200.0.0/24 ! -o "$BRIDGE_NAME" -j MASQUERADE
+    printf " ${GREEN}done${NC} (iptables)\n"
 else
     printf " ${YELLOW}skipped${NC} (no nftables or iptables)\n"
 fi
@@ -128,9 +173,13 @@ fi
 
 # Create marker file so dogfood script knows NAT is configured
 # (nft/iptables require root to check rules)
-NETWORK_SETUP_MARKER="/tmp/aspen-ci-network-configured"
+NETWORK_SETUP_MARKER="/tmp/aspen-ci-network-configured-v3"
 touch "$NETWORK_SETUP_MARKER"
-chmod 644 "$NETWORK_SETUP_MARKER"
+# Legacy markers for older wrappers that only checked NAT or pre-NixOS-firewall
+# bridge setup. Current VM-CI readiness requires v3 so stale v2 hosts rerun this
+# script and install the NixOS firewall-chain ingress rules above.
+touch /tmp/aspen-ci-network-configured-v2 /tmp/aspen-ci-network-configured
+chmod 644 "$NETWORK_SETUP_MARKER" /tmp/aspen-ci-network-configured-v2 /tmp/aspen-ci-network-configured
 
 printf "\n${GREEN}Network setup complete!${NC}\n"
 printf "\nYou can now run: ${BLUE}nix run .#dogfood-local-vmci${NC}\n"

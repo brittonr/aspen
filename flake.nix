@@ -5787,12 +5787,21 @@
                   export ASPEN_CI_TAP_HELPER_PATH="''${ASPEN_CI_TAP_HELPER_PATH:-$default_tap_helper}"
                 fi
 
+                # Defer VM pool prewarm until after aspen-dogfood's initial
+                # node health and cluster initialization path. The pool still
+                # warms automatically before CI's long pipeline wait expires.
+                export ASPEN_CI_VM_POOL_START_DELAY_SECS="''${ASPEN_CI_VM_POOL_START_DELAY_SECS:-180}"
+
                 # CI worker VM image paths
                 export ASPEN_CI_KERNEL_PATH="${ciKernel}/bzImage"
                 export ASPEN_CI_INITRD_PATH="${ciInitrd}/initrd"
                 export ASPEN_CI_TOPLEVEL_PATH="${ciToplevel}"
 
                 export PROJECT_DIR="$PWD"
+
+                if [ "$#" -eq 0 ]; then
+                  set -- full
+                fi
 
                 exec ${bins.aspen-dogfood}/bin/aspen-dogfood --vm-ci "$@"
               ''}";

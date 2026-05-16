@@ -139,24 +139,21 @@
     nameservers = ["127.0.0.1"];
   };
 
-  # Configure eth0 via systemd-networkd.
-  # The kernel ip= parameter configures IP at early boot, but systemd-networkd
-  # takes over after switch-root. We configure the same IP/gateway here to
-  # maintain the configuration, and add DNS which kernel ip= doesn't support.
-  #
-  # IP address (10.200.0.10 + vm_index) and gateway (10.200.0.1) are set by
-  # CloudHypervisorWorker in the kernel cmdline. We duplicate here for clarity
-  # and to ensure systemd-networkd doesn't reset the interface.
+  # Configure eth0 via systemd-networkd without hardcoding the per-VM address.
+  # CloudHypervisorWorker passes the actual address in the kernel `ip=`
+  # parameter (10.200.0.10 + vm_index). If this NixOS module also hardcodes an
+  # Address, every restored worker converges back to 10.200.0.10 after
+  # switch-root, causing duplicate guest addresses and direct-Iroh timeouts.
+  # Preserve the kernel/static configuration and only add DNS/route policy here;
+  # the post-boot direct path below also re-applies the parsed `ip=` value before
+  # starting the worker.
   systemd.network = {
     enable = true;
     networks."10-eth0" = {
       matchConfig.Name = "eth0";
-      # Static IP configuration for VM network access.
-      # The kernel ip= parameter sets IP at early boot, but systemd-networkd
-      # needs explicit address config to maintain it after switch-root.
-      address = ["10.200.0.10/24"];
       networkConfig = {
         DHCP = "no";
+        KeepConfiguration = "static";
         # DNS handled by local dnsmasq cache (127.0.0.1)
         DNS = ["127.0.0.1"];
       };
@@ -371,7 +368,7 @@
       # Run aspen-node in worker-only mode
       # The cluster ticket is read from /workspace/.aspen-cluster-ticket
       # which is written by CloudHypervisorWorker before VM boot
-      ExecStart = "${aspenNodePackage}/bin/aspen-node --worker-only --disable-mdns";
+      ExecStart = "${aspenNodePackage}/bin/aspen-node --worker-only --disable-mdns --relay-mode disabled";
       Restart = "always";
       RestartSec = "1s";
 
@@ -410,8 +407,11 @@
       # Debug logging for troubleshooting VM worker connections
       RUST_LOG = "info,aspen=debug,iroh=debug,iroh_net=debug";
       # mDNS cannot bind reliably in the nested VM TAP namespace; the cluster
-      # ticket carries the bootstrap peer address for this E2E path.
+      # ticket carries the bootstrap peer address for this E2E path. Relays are
+      # also disabled so VM-CI dogfood proves only scoped TAP/direct connectivity.
       ASPEN_IROH_ENABLE_MDNS = "false";
+      ASPEN_IROH_RELAY_MODE = "disabled";
+      ASPEN_RELAY_DISABLED = "1";
     };
 
     # Send output to both journal and console for visibility in serial log
@@ -626,8 +626,10 @@
         export ASPEN_CI_WORKSPACE_DIR=/tmp/workspaces
         export RUST_LOG=info,aspen=debug,iroh=debug,iroh_net=debug
         export ASPEN_IROH_ENABLE_MDNS=false
+        export ASPEN_IROH_RELAY_MODE=disabled
+        export ASPEN_RELAY_DISABLED=1
         cd /workspace
-        exec ${aspenNodePackage}/bin/aspen-node --worker-only --disable-mdns
+        exec ${aspenNodePackage}/bin/aspen-node --worker-only --disable-mdns --relay-mode disabled
       ) >/dev/ttyS0 2>&1 &
       guest_hostname=$(cat /proc/sys/kernel/hostname 2>/dev/null || true)
       echo "ASPEN_CI_SNAPSHOT_READY host=$guest_hostname ticket=$([ -f /workspace/.aspen-cluster-ticket ] && echo present || echo missing)" >/dev/ttyS0

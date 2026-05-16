@@ -13,6 +13,8 @@ use crate::error::DogfoodResult;
 
 const CAP_NET_ADMIN_BIT: u32 = 12;
 const DEFAULT_NETWORK_MODE: &str = "tap";
+const VM_CI_BRIDGE_NAME: &str = "aspen-ci-br0";
+const VM_CI_NETWORK_SETUP_MARKER: &str = "/tmp/aspen-ci-network-configured-v3";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VmCiReadinessInput {
@@ -24,6 +26,8 @@ pub struct VmCiReadinessInput {
     pub kvm_available: bool,
     pub kvm_writable: bool,
     pub tun_available: bool,
+    pub bridge_available: bool,
+    pub host_network_configured: bool,
     pub has_net_admin: bool,
 }
 
@@ -38,6 +42,8 @@ impl VmCiReadinessInput {
             kvm_available: Path::new("/dev/kvm").exists(),
             kvm_writable: std::fs::OpenOptions::new().read(true).write(true).open("/dev/kvm").is_ok(),
             tun_available: Path::new("/dev/net/tun").exists(),
+            bridge_available: Path::new("/sys/class/net").join(VM_CI_BRIDGE_NAME).exists(),
+            host_network_configured: Path::new(VM_CI_NETWORK_SETUP_MARKER).exists(),
             has_net_admin: current_process_has_net_admin(),
         }
     }
@@ -64,6 +70,7 @@ pub fn check_readiness(input: &VmCiReadinessInput) -> Result<(), String> {
         "none" | "isolated" => {}
         "helper" | "tap-helper" => {
             require_executable_path(&mut failures, "ASPEN_CI_TAP_HELPER_PATH", input.tap_helper_path.as_deref());
+            require_host_vm_network(&mut failures, input);
         }
         _ => {
             if !input.tun_available {
@@ -75,6 +82,7 @@ pub fn check_readiness(input: &VmCiReadinessInput) -> Result<(), String> {
                         .to_string(),
                 );
             }
+            require_host_vm_network(&mut failures, input);
         }
     }
 
@@ -90,6 +98,17 @@ fn require_existing_path(failures: &mut Vec<String>, name: &str, value: Option<&
         Some(path) if !path.trim().is_empty() && Path::new(path).exists() => {}
         Some(path) if !path.trim().is_empty() => failures.push(format!("{name} does not exist: {path}")),
         _ => failures.push(format!("{name} is not set")),
+    }
+}
+
+fn require_host_vm_network(failures: &mut Vec<String>, input: &VmCiReadinessInput) {
+    if !input.bridge_available {
+        failures.push(format!("VM-CI bridge {VM_CI_BRIDGE_NAME} is missing; run sudo nix run .#setup-ci-network"));
+    }
+    if !input.host_network_configured {
+        failures.push(format!(
+            "VM-CI host network/firewall marker {VM_CI_NETWORK_SETUP_MARKER} is missing; run sudo nix run .#setup-ci-network"
+        ));
     }
 }
 
@@ -152,6 +171,8 @@ mod tests {
             kvm_available: true,
             kvm_writable: true,
             tun_available: true,
+            bridge_available: true,
+            host_network_configured: true,
             has_net_admin: true,
         }
     }
@@ -178,6 +199,45 @@ mod tests {
         let mut input = ready_input();
         input.network_mode = "tap-helper".to_string();
         input.tap_helper_path = Some(helper);
+        input.has_net_admin = false;
+
+        assert!(check_readiness(&input).is_ok());
+    }
+
+    #[test]
+    fn tap_helper_mode_requires_host_vm_network_setup_marker() {
+        let helper = std::env::current_exe().unwrap().display().to_string();
+        let mut input = ready_input();
+        input.network_mode = "tap-helper".to_string();
+        input.tap_helper_path = Some(helper);
+        input.host_network_configured = false;
+
+        let error = check_readiness(&input).unwrap_err();
+
+        assert!(error.contains("VM-CI host network/firewall marker"));
+        assert!(error.contains("/tmp/aspen-ci-network-configured-v3"));
+        assert!(error.contains("setup-ci-network"));
+    }
+
+    #[test]
+    fn tap_helper_mode_requires_bridge() {
+        let helper = std::env::current_exe().unwrap().display().to_string();
+        let mut input = ready_input();
+        input.network_mode = "tap-helper".to_string();
+        input.tap_helper_path = Some(helper);
+        input.bridge_available = false;
+
+        let error = check_readiness(&input).unwrap_err();
+
+        assert!(error.contains("VM-CI bridge aspen-ci-br0 is missing"));
+    }
+
+    #[test]
+    fn isolated_mode_skips_host_vm_network_setup() {
+        let mut input = ready_input();
+        input.network_mode = "isolated".to_string();
+        input.bridge_available = false;
+        input.host_network_configured = false;
         input.has_net_admin = false;
 
         assert!(check_readiness(&input).is_ok());

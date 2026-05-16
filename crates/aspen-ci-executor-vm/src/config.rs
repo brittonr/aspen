@@ -165,6 +165,13 @@ pub struct CloudHypervisorWorkerConfig {
     ///
     /// If None and TapWithHelper mode is selected, validation fails.
     pub tap_helper_path: Option<PathBuf>,
+
+    /// Delay before automatic VM pool warmup starts.
+    ///
+    /// This keeps fallible golden-snapshot/workspace provisioning from racing
+    /// initial Aspen node health in dogfood and other local bootstrap flows.
+    /// Default: 0 (start immediately).
+    pub startup_delay_ms: u64,
 }
 
 impl Default for CloudHypervisorWorkerConfig {
@@ -205,6 +212,9 @@ impl Default for CloudHypervisorWorkerConfig {
             network_mode: NetworkMode::default(),
             // No TAP helper by default
             tap_helper_path: None,
+            // Start VM warmup immediately by default; dogfood wrappers may
+            // defer warmup until after the base node health/cluster-init path.
+            startup_delay_ms: 0,
         }
     }
 }

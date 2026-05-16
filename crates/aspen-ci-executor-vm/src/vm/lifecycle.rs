@@ -20,9 +20,9 @@ use crate::error::{self};
 
 /// Inject a bridge socket address into a cluster ticket string.
 ///
-/// Parses the ticket, adds the bridge address so VMs can reach the host's
-/// Iroh endpoint, and re-serializes. Falls back to the original ticket
-/// on parse errors.
+/// Parses the ticket, adds the bridge address so host-side clients can reach
+/// the node through the CI bridge, and re-serializes. Falls back to the original
+/// ticket on parse errors.
 fn inject_bridge_addr(ticket_str: &str, bridge_addr: SocketAddr, vm_id: &str) -> String {
     match aspen_ticket::AspenClusterTicket::deserialize(ticket_str) {
         Ok(mut ticket) => {
@@ -39,6 +39,40 @@ fn inject_bridge_addr(ticket_str: &str, bridge_addr: SocketAddr, vm_id: &str) ->
                 vm_id = %vm_id,
                 error = %e,
                 "failed to parse ticket for bridge injection, using original"
+            );
+            ticket_str.to_string()
+        }
+    }
+}
+
+/// Rewrite a cluster ticket for execution inside a VM-CI guest.
+///
+/// Host-generated tickets can contain loopback, LAN, VPN, and other host-side
+/// direct addresses. In a Cloud Hypervisor guest with relays disabled, those
+/// addresses are either wrong (`127.0.0.1` points at the guest) or can waste the
+/// worker's connection budget on unroutable paths. The guest-scoped ticket keeps
+/// each bootstrap peer's endpoint id but replaces its direct addresses with the
+/// single host bridge socket address (`10.200.0.1:<host_iroh_port>` by default).
+fn scope_ticket_to_bridge_addr(ticket_str: &str, bridge_addr: SocketAddr, vm_id: &str) -> String {
+    match aspen_ticket::AspenClusterTicket::deserialize(ticket_str) {
+        Ok(mut ticket) => {
+            for peer in &mut ticket.bootstrap {
+                peer.direct_addrs.clear();
+                peer.direct_addrs.push(bridge_addr);
+            }
+            info!(
+                vm_id = %vm_id,
+                bridge_addr = %bridge_addr,
+                bootstrap_peers = ticket.bootstrap.len(),
+                "scoped VM guest cluster ticket to bridge address"
+            );
+            ticket.serialize()
+        }
+        Err(e) => {
+            warn!(
+                vm_id = %vm_id,
+                error = %e,
+                "failed to parse ticket for VM guest scoping, using original"
             );
             ticket_str.to_string()
         }
@@ -162,10 +196,12 @@ impl ManagedCiVm {
         if let Some(ticket_str) = self.config.get_cluster_ticket() {
             let ticket_path = self.config.cluster_ticket_path(&self.id);
 
-            // If bridge socket address is configured, inject it into the ticket
-            // so VMs can reach the host's Iroh endpoint via the bridge IP.
+            // If bridge socket address is configured, rewrite the guest ticket
+            // to the VM-routable host bridge address only. Loopback/LAN/VPN
+            // addresses from the host ticket are not valid direct targets from
+            // inside the isolated CI VM network.
             let final_ticket = if let Some(bridge_addr) = self.config.bridge_socket_addr() {
-                inject_bridge_addr(&ticket_str, bridge_addr, &self.id)
+                scope_ticket_to_bridge_addr(&ticket_str, bridge_addr, &self.id)
             } else {
                 ticket_str
             };
@@ -454,6 +490,55 @@ impl ManagedCiVm {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_ticket_with_direct_addrs(addrs: &[SocketAddr]) -> String {
+        let mut ticket = aspen_ticket::AspenClusterTicket::new(
+            aspen_ticket::ClusterTopicId::from_bytes([7u8; 32]),
+            "vmci-test".to_string(),
+        );
+        let mut peer = aspen_ticket::BootstrapPeer::new(aspen_ticket::ClusterEndpointId::new("test-endpoint"));
+        peer.direct_addrs.extend(addrs.iter().copied());
+        ticket.add_bootstrap_peer(peer).expect("add bootstrap peer");
+        ticket.serialize()
+    }
+
+    #[test]
+    fn guest_ticket_scope_replaces_host_addrs_with_bridge_addr() {
+        let loopback: SocketAddr = "127.0.0.1:45521".parse().unwrap();
+        let ipv6_loopback: SocketAddr = "[::1]:45521".parse().unwrap();
+        let lan: SocketAddr = "192.168.1.252:45521".parse().unwrap();
+        let tailscale: SocketAddr = "100.110.43.11:45521".parse().unwrap();
+        let docker: SocketAddr = "172.30.0.1:45521".parse().unwrap();
+        let bridge: SocketAddr = "10.200.0.1:45521".parse().unwrap();
+        let ticket = test_ticket_with_direct_addrs(&[loopback, ipv6_loopback, lan, tailscale, docker, bridge]);
+
+        let scoped = scope_ticket_to_bridge_addr(&ticket, bridge, "ci-n1-vm0");
+        let parsed = aspen_ticket::AspenClusterTicket::deserialize(&scoped).expect("parse scoped ticket");
+
+        assert_eq!(parsed.bootstrap.len(), 1);
+        assert_eq!(parsed.bootstrap[0].direct_addrs, vec![bridge]);
+        assert!(!parsed.bootstrap[0].direct_addrs.contains(&loopback));
+        assert!(!parsed.bootstrap[0].direct_addrs.contains(&ipv6_loopback));
+        assert!(!parsed.bootstrap[0].direct_addrs.contains(&lan));
+        assert!(!parsed.bootstrap[0].direct_addrs.contains(&tailscale));
+        assert!(!parsed.bootstrap[0].direct_addrs.contains(&docker));
+    }
+
+    #[test]
+    fn bridge_injection_preserves_existing_addrs_for_host_clients() {
+        let loopback: SocketAddr = "127.0.0.1:45521".parse().unwrap();
+        let lan: SocketAddr = "192.168.1.252:45521".parse().unwrap();
+        let bridge: SocketAddr = "10.200.0.1:45521".parse().unwrap();
+        let ticket = test_ticket_with_direct_addrs(&[loopback, lan]);
+
+        let injected = inject_bridge_addr(&ticket, bridge, "ci-n1-vm0");
+        let parsed = aspen_ticket::AspenClusterTicket::deserialize(&injected).expect("parse injected ticket");
+
+        assert!(parsed.bootstrap[0].direct_addrs.contains(&loopback));
+        assert!(parsed.bootstrap[0].direct_addrs.contains(&lan));
+        assert!(parsed.bootstrap[0].direct_addrs.contains(&bridge));
+        assert_eq!(parsed.bootstrap[0].direct_addrs.len(), 3);
+    }
 
     #[test]
     fn already_running_boot_error_matches_cloud_hypervisor_race() {

@@ -118,10 +118,20 @@ check_prerequisites() {
     ok "NAT configured (nftables rule verified)"
   elif iptables -t nat -C POSTROUTING -s 10.200.0.0/24 ! -o aspen-ci-br0 -j MASQUERADE &>/dev/null; then
     ok "NAT configured (iptables rule verified)"
+  elif [ -f /tmp/aspen-ci-network-configured-v3 ]; then
+    # Can't query rules without root — trust the v3 marker if present. The v3
+    # marker is set only after setup-ci-network installs NAT, bridge
+    # ingress/forwarding rules, and NixOS firewall-chain accept rules for
+    # guest→host Iroh UDP.
+    ok "VM-CI host network configured (marker present)"
+  elif [ -f /tmp/aspen-ci-network-configured-v2 ]; then
+    err "Stale VM-CI network marker found; bridge ingress may still be dropped by the host firewall"
+    echo "    Run: sudo nix run .#setup-ci-network"
+    ok=false
   elif [ -f /tmp/aspen-ci-network-configured ]; then
-    # Can't query rules without root — trust the marker if present.
-    # The marker is set by setup-ci-network.sh which runs as root.
-    ok "NAT configured (marker present, run 'sudo nix run .#setup-ci-network' if VMs lack internet)"
+    err "Legacy VM-CI network marker found but bridge ingress/firewall rules may be missing"
+    echo "    Run: sudo nix run .#setup-ci-network"
+    ok=false
   else
     err "NAT not configured — VMs cannot reach internet"
     echo "    Run: sudo nix run .#setup-ci-network"
@@ -224,6 +234,8 @@ do_start() {
   if [ "$network_mode" = "tap-helper" ]; then
     echo "    TAP helper: ${tap_helper_path}"
   fi
+  local pool_start_delay_secs="${ASPEN_CI_VM_POOL_START_DELAY_SECS:-180}"
+  echo "    Pool delay: ${pool_start_delay_secs}s"
   echo ""
 
   # Kill any existing cluster
@@ -249,6 +261,7 @@ do_start() {
     ASPEN_CI_VM_VCPUS="${VM_VCPUS}" \
     ASPEN_CI_NETWORK_MODE="${network_mode}" \
     ASPEN_CI_TAP_HELPER_PATH="${tap_helper_path}" \
+    ASPEN_CI_VM_POOL_START_DELAY_SECS="${pool_start_delay_secs}" \
     CLOUD_HYPERVISOR_PATH="${CLOUD_HYPERVISOR_BIN:-$(command -v cloud-hypervisor)}" \
     VIRTIOFSD_PATH="${VIRTIOFSD_BIN:-$(command -v virtiofsd)}" \
     ASPEN_DOCS_ENABLED=true \

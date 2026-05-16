@@ -43,6 +43,8 @@ fn build_worker_endpoint_config(args: &Args, config: &NodeConfig) -> aspen::clus
         .with_mdns(config.iroh.enable_mdns && !args.disable_mdns)
         .with_dns_discovery(config.iroh.enable_dns_discovery || args.enable_dns_discovery)
         .with_bind_port(args.bind_port.unwrap_or(config.iroh.bind_port))
+        .with_relay_mode(config.iroh.relay_mode.clone())
+        .with_relay_urls(config.iroh.relay_urls.clone())
 }
 
 #[cfg(feature = "ci")]
@@ -1078,5 +1080,18 @@ mod tests {
         let endpoint_config = build_worker_endpoint_config(&args, &config);
 
         assert_eq!(endpoint_config.bind_port, 12345);
+    }
+
+    #[test]
+    fn worker_endpoint_config_preserves_relay_policy_for_vm_guests() {
+        let args = Args::parse_from(["aspen-node", "--worker-only"]);
+        let mut config = NodeConfig::default();
+        config.iroh.relay_mode = aspen::cluster::config::RelayMode::Disabled;
+        config.iroh.relay_urls = vec!["https://relay.example.invalid".to_string()];
+
+        let endpoint_config = build_worker_endpoint_config(&args, &config);
+
+        assert_eq!(endpoint_config.relay_mode, aspen::cluster::config::RelayMode::Disabled);
+        assert_eq!(endpoint_config.relay_urls, vec!["https://relay.example.invalid"]);
     }
 }

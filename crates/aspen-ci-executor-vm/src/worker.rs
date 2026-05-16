@@ -102,15 +102,30 @@ impl CloudHypervisorWorker {
         Self::new(config)
     }
 
-    /// Start the pool maintenance background task.
+    /// Start the pool lifecycle background task.
     ///
-    /// This task periodically checks the pool and ensures there are enough
-    /// warm VMs available for quick job startup. Called automatically by `on_start()`.
-    async fn start_maintenance_task(&self) {
+    /// The lifecycle task optionally waits for a startup delay, initializes the
+    /// warm VM pool, then periodically maintains it. `on_start()` returns after
+    /// spawning this task so VM warmup/golden-snapshot provisioning cannot block
+    /// the host node's initial health path.
+    async fn start_pool_lifecycle_task(&self) {
         let pool = self.pool.clone();
         let interval = Duration::from_secs(POOL_MAINTENANCE_INTERVAL_SECS);
+        let startup_delay = Duration::from_millis(self.config.startup_delay_ms);
 
         let handle = tokio::spawn(async move {
+            if !startup_delay.is_zero() {
+                info!(delay_ms = startup_delay.as_millis(), "deferring VM pool warmup until after node bootstrap");
+                tokio::time::sleep(startup_delay).await;
+            }
+
+            if let Err(e) = pool.initialize().await {
+                error!(
+                    error = ?e,
+                    "failed to initialize VM pool; periodic maintenance will keep retrying"
+                );
+            }
+
             let mut ticker = tokio::time::interval(interval);
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -133,7 +148,11 @@ impl CloudHypervisorWorker {
         });
 
         *self.maintenance_task.write().await = Some(handle);
-        info!(interval_secs = POOL_MAINTENANCE_INTERVAL_SECS, "pool maintenance task started");
+        info!(
+            interval_secs = POOL_MAINTENANCE_INTERVAL_SECS,
+            startup_delay_ms = self.config.startup_delay_ms,
+            "VM pool lifecycle task started"
+        );
     }
 
     /// Stop the pool maintenance background task.
@@ -188,17 +207,9 @@ impl Worker for CloudHypervisorWorker {
             "initializing Cloud Hypervisor worker"
         );
 
-        if let Err(e) = self.pool.initialize().await {
-            error!(error = ?e, "failed to initialize VM pool");
-            return Err(JobError::WorkerRegistrationFailed {
-                reason: format!("VM pool initialization failed: {}", e),
-            });
-        }
+        self.start_pool_lifecycle_task().await;
 
-        // Start pool maintenance background task
-        self.start_maintenance_task().await;
-
-        info!("Cloud Hypervisor worker initialized");
+        info!("Cloud Hypervisor worker lifecycle started");
         Ok(())
     }
 
@@ -314,6 +325,25 @@ mod tests {
         // CloudHypervisorWorker is a VM pool manager, not a job executor.
         // VMs register themselves as workers and handle ci_vm jobs directly.
         assert!(types.is_empty(), "should return empty (VM pool manager doesn't handle jobs)");
+    }
+
+    #[tokio::test]
+    async fn test_worker_on_start_returns_before_deferred_pool_warmup() {
+        let config = CloudHypervisorWorkerConfig {
+            startup_delay_ms: 60_000,
+            ..test_config()
+        };
+        let worker = CloudHypervisorWorker::new(config).unwrap();
+
+        tokio::time::timeout(Duration::from_millis(100), worker.on_start())
+            .await
+            .expect("on_start should not wait for deferred VM pool warmup")
+            .expect("on_start should start lifecycle task");
+
+        let status = worker.pool_status().await;
+        assert_eq!(status.total_vms, 0, "deferred warmup should not create VMs before returning");
+
+        worker.on_shutdown().await.expect("shutdown should abort deferred lifecycle task");
     }
 
     /// Helper to simulate the nix flag injection logic from execute_on_vm
