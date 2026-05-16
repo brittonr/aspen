@@ -21,9 +21,10 @@ pub fn init_tracing() {
 
     // Suppress noisy warnings from network-related crates:
     // - netlink_packet_route: kernel has newer NLA attributes than crate expects
-    // - quinn_udp: IPv6 unreachable errors when IPv6 is not available
+    // - quinn_udp/noq_udp: IPv6 unreachable errors when IPv6 is not available
     // - noq_proto: "failed closing path err=LastOpenPath" on idle single-path connections
-    const NOISY_CRATES: &str = ",netlink_packet_route=error,quinn_udp=error,netlink_packet_core=error,noq_proto=error";
+    // - iroh address lookup: expected direct-only noise when Aspen supplies explicit peer addresses
+    const NOISY_CRATES: &str = ",netlink_packet_route=error,quinn_udp=error,noq_udp=error,netlink_packet_core=error,noq_proto=error,iroh::socket::remote_map::remote_state=error";
 
     let base = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info".to_string()));
     // Always append noisy-crate suppressions, even when RUST_LOG is set explicitly
