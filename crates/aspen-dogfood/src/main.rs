@@ -13,6 +13,7 @@ mod forge;
 mod node;
 mod receipt;
 mod state;
+mod vmci_diagnostics;
 mod vmci_readiness;
 
 use std::fmt::Write as _;
@@ -1058,6 +1059,7 @@ async fn run_full_pipeline_with_receipts(
     recorder: &mut DogfoodReceiptRecorder,
 ) -> DogfoodResult<()> {
     recorder.run_stage(receipt::DogfoodStageKind::Push, || cmd_push(config)).await?;
+    let receipt_run_id = recorder.receipt.run_id.clone();
     let build_run_id = recorder
         .run_stage_with_artifacts_and_failure_artifacts(
             receipt::DogfoodStageKind::Build,
@@ -1065,7 +1067,7 @@ async fn run_full_pipeline_with_receipts(
                 let run_id = build_ci_pipeline(config).await?;
                 Ok((run_id.clone(), vec![ci_run_artifact(run_id)]))
             },
-            |error| build_failure_artifacts(config, error),
+            |error| build_failure_artifacts(config, error, &receipt_run_id),
         )
         .await?;
     recorder
@@ -1281,10 +1283,43 @@ fn ci_run_artifact(run_id: String) -> receipt::DogfoodArtifactReceipt {
     }
 }
 
-fn build_failure_artifacts(config: &RunConfig, error: &DogfoodError) -> Vec<receipt::DogfoodArtifactReceipt> {
+fn build_failure_artifacts(
+    config: &RunConfig,
+    error: &DogfoodError,
+    run_id: &str,
+) -> Vec<receipt::DogfoodArtifactReceipt> {
     match error {
         DogfoodError::VmCiReadiness { .. } => vec![vmci_node_log_artifact(config)],
+        DogfoodError::CiPipeline { .. } | DogfoodError::Timeout { .. } if config.vm_ci => {
+            let mut artifacts = ci_failure_artifacts(error);
+            artifacts.extend(preserve_vmci_failure_artifacts(config, run_id));
+            artifacts
+        }
         _ => ci_failure_artifacts(error),
+    }
+}
+
+fn preserve_vmci_failure_artifacts(config: &RunConfig, run_id: &str) -> Vec<receipt::DogfoodArtifactReceipt> {
+    let cluster_dir = Path::new(&config.cluster_dir);
+    let project_dir = Path::new(&config.project_dir);
+    match vmci_diagnostics::preserve_vmci_diagnostics(cluster_dir, project_dir, run_id) {
+        Ok(Some(path)) => {
+            let relative_path = path.strip_prefix(project_dir).unwrap_or(path.as_path()).to_string_lossy().to_string();
+            vec![receipt::DogfoodArtifactReceipt {
+                name: "vmci-diagnostics".to_string(),
+                kind: receipt::DogfoodArtifactKind::LogExcerpt,
+                store_id: None,
+                blob_id: None,
+                digest: None,
+                size_bytes: None,
+                relative_path: Some(relative_path),
+            }]
+        }
+        Ok(None) => Vec::new(),
+        Err(error) => {
+            tracing::warn!("failed to preserve VM-CI diagnostics before cleanup: {error}");
+            Vec::new()
+        }
     }
 }
 
@@ -1686,7 +1721,7 @@ mod tests {
             reason: "tap networking requires CAP_NET_ADMIN".to_string(),
         };
 
-        let artifacts = build_failure_artifacts(&config, &error);
+        let artifacts = build_failure_artifacts(&config, &error, "test-run");
 
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[0].name, "vmci-node-log");

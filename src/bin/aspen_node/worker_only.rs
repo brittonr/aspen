@@ -510,6 +510,15 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                         Some((rid.clone(), job_info.job_id.clone()));
                                 }
 
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    job_type = %job_info.job_type,
+                                    run_id = ?run_id_for_logs,
+                                    source_hash_present = job.spec.payload.get("source_hash").and_then(|value| value.as_str()).is_some(),
+                                    "VM-CI job assigned; workspace/blob materialization evidence captured"
+                                );
+
                                 // Spawn a background task to extend queue visibility every
                                 // 2 minutes during job execution. Without this, long nix builds
                                 // (20+ minutes for clippy) would exceed the visibility timeout
@@ -556,6 +565,11 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                 });
 
                                 let start_time = std::time::Instant::now();
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    "VM-CI guest executor started"
+                                );
                                 let job_result = worker_for_executor.execute(job).await;
                                 let processing_time_ms = start_time.elapsed().as_millis() as u64;
 
@@ -602,7 +616,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                                 worker_id = %worker_id_clone,
                                                 job_id = %job_info.job_id,
                                                 processing_time_ms,
-                                                "job completion reported"
+                                                "VM-CI job result published"
                                             );
                                         } else {
                                             warn!(
@@ -1080,6 +1094,24 @@ mod tests {
         let endpoint_config = build_worker_endpoint_config(&args, &config);
 
         assert_eq!(endpoint_config.bind_port, 12345);
+    }
+
+    #[test]
+    fn transform_nix_payload_preserves_source_hash_for_vm_workspace_fetch() {
+        let mut spec = aspen_jobs::JobSpec::new(aspen_ci::CI_JOB_TYPE_NIX)
+            .payload(serde_json::json!({
+                "flake_url": ".",
+                "attribute": "checks.x86_64-linux.vmci-smoke",
+                "run_id": "run-123",
+                "source_hash": "b3-source-hash",
+                "working_dir": "/tmp/ci-checkout-run-123"
+            }))
+            .unwrap();
+
+        let run_id = transform_nix_payload(&mut spec).unwrap();
+
+        assert_eq!(run_id.as_deref(), Some("run-123"));
+        assert_eq!(spec.payload.get("source_hash").and_then(|value| value.as_str()), Some("b3-source-hash"));
     }
 
     #[test]
