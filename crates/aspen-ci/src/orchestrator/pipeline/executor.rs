@@ -241,7 +241,7 @@ async fn build_job_payload<S: KeyValueStore + ?Sized>(
     match job.job_type {
         JobType::Shell => build_shell_payload(job, context, env),
         #[cfg(feature = "nix-executor")]
-        JobType::Nix => build_nix_payload(job, context, store).await,
+        JobType::Nix => build_nix_payload(job, context, env, store).await,
         #[cfg(not(feature = "nix-executor"))]
         JobType::Nix => Err(CiError::InvalidConfig {
             reason: format!("Nix job type '{}' requires the 'nix-executor' feature to be enabled", job.name),
@@ -314,6 +314,8 @@ fn build_shell_payload(
         "env": env,
         "working_dir": working_dir,
         "timeout_secs": job.timeout_secs,
+        "source_hash": context.source_hash,
+        "flake_input_paths": context.flake_input_paths,
     }))
 }
 
@@ -322,6 +324,7 @@ fn build_shell_payload(
 async fn build_nix_payload<S: KeyValueStore + ?Sized>(
     job: &JobConfig,
     context: &PipelineContext,
+    env: &HashMap<String, String>,
     store: &S,
 ) -> Result<serde_json::Value> {
     let flake_url = job.flake_url.clone().unwrap_or_else(|| ".".to_string());
@@ -368,6 +371,7 @@ async fn build_nix_payload<S: KeyValueStore + ?Sized>(
         flake_url,
         attribute,
         extra_args: job.args.clone(),
+        env: env.clone(),
         working_dir,
         timeout_secs: job.timeout_secs,
         sandbox: matches!(job.isolation, crate::config::types::IsolationMode::NixSandbox),
@@ -380,6 +384,7 @@ async fn build_nix_payload<S: KeyValueStore + ?Sized>(
         // VM workers cannot access the host checkout_dir, so they need
         // source_hash to download the checkout from blob store.
         source_hash: context.source_hash.clone(),
+        flake_input_paths: context.flake_input_paths.clone(),
     };
 
     serde_json::to_value(&nix_payload).map_err(|e| CiError::InvalidConfig {
@@ -422,6 +427,7 @@ fn build_vm_payload(
         source_hash: context.source_hash.clone(), // Download checkout from blob store
         checkout_dir: None,                       // VMs can't access host paths
         flake_attr: job.flake_attr.clone(),       // For nix command prefetching
+        flake_input_paths: context.flake_input_paths.clone(),
         run_id: if context.run_id.is_empty() {
             None
         } else {
@@ -483,6 +489,7 @@ mod tests {
             env: std::collections::HashMap::new(),
             checkout_dir: Some(std::path::PathBuf::from("/tmp/ci-test")),
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         }
     }
 
@@ -496,7 +503,7 @@ mod tests {
         let context = test_context();
         let store = test_store();
 
-        let value = build_nix_payload(&job, &context, &store).await.unwrap();
+        let value = build_nix_payload(&job, &context, &std::collections::HashMap::new(), &store).await.unwrap();
         let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
 
         assert!(payload.publish_to_cache);
@@ -510,7 +517,7 @@ mod tests {
         let context = test_context();
         let store = test_store();
 
-        let value = build_nix_payload(&job, &context, &store).await.unwrap();
+        let value = build_nix_payload(&job, &context, &std::collections::HashMap::new(), &store).await.unwrap();
         let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
 
         assert!(!payload.publish_to_cache);
@@ -522,11 +529,45 @@ mod tests {
         let context = test_context();
         let store = test_store();
 
-        let value = build_nix_payload(&job, &context, &store).await.unwrap();
+        let value = build_nix_payload(&job, &context, &std::collections::HashMap::new(), &store).await.unwrap();
         let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
 
         assert_eq!(payload.flake_url, ".");
         assert_eq!(payload.attribute, "packages.x86_64-linux.default");
+    }
+
+    #[tokio::test]
+    async fn test_build_nix_payload_preserves_vmci_local_store_env() {
+        let job = test_job_config();
+        let context = test_context();
+        let store = test_store();
+        let env = std::collections::HashMap::from([(
+            "ASPEN_CI_NIX_LOCAL_STORE_ROOT".to_string(),
+            "/workspace/.aspen-ci-nix-store".to_string(),
+        )]);
+
+        let value = build_nix_payload(&job, &context, &env, &store).await.unwrap();
+        let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
+
+        assert_eq!(
+            payload.env.get("ASPEN_CI_NIX_LOCAL_STORE_ROOT").map(String::as_str),
+            Some("/workspace/.aspen-ci-nix-store")
+        );
+    }
+
+    #[test]
+    fn test_build_shell_payload_preserves_source_hash_for_vm_workspace_fetch() {
+        let mut job = test_job_config();
+        job.job_type = JobType::Shell;
+        job.command = Some("test -f flake.nix".to_string());
+        job.flake_url = None;
+        job.flake_attr = None;
+        let mut context = test_context();
+        context.source_hash = Some("b3-source-hash".to_string());
+
+        let value = build_shell_payload(&job, &context, &std::collections::HashMap::new()).unwrap();
+
+        assert_eq!(value.get("source_hash").and_then(|value| value.as_str()), Some("b3-source-hash"));
     }
 
     /// Regression: run_id must be preserved in NixBuildPayload.
@@ -541,7 +582,7 @@ mod tests {
         let context = test_context();
         let store = test_store();
 
-        let value = build_nix_payload(&job, &context, &store).await.unwrap();
+        let value = build_nix_payload(&job, &context, &std::collections::HashMap::new(), &store).await.unwrap();
         let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
 
         assert_eq!(
@@ -559,7 +600,7 @@ mod tests {
         context.run_id = String::new(); // Simulates the bug
         let store = test_store();
 
-        let value = build_nix_payload(&job, &context, &store).await.unwrap();
+        let value = build_nix_payload(&job, &context, &std::collections::HashMap::new(), &store).await.unwrap();
         let payload: NixBuildPayload = serde_json::from_value(value).unwrap();
 
         // Empty run_id means log keys will have double colon: _ci:logs::<job>:<chunk>
@@ -610,6 +651,9 @@ mod tests {
                         expected_binary: None,
                         stateful: None,
                         validate_only: None,
+                        cached_execution: false,
+                        force_cold_boot: false,
+                        speculative_count: None,
                     }],
                     parallel: true,
                     depends_on: vec![],
@@ -644,6 +688,9 @@ mod tests {
                         expected_binary: None,
                         stateful: None,
                         validate_only: None,
+                        cached_execution: false,
+                        force_cold_boot: false,
+                        speculative_count: None,
                     }],
                     parallel: true,
                     depends_on: vec!["build".to_string()],

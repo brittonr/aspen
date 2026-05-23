@@ -16,7 +16,7 @@
 mod artifacts;
 mod config;
 mod execution;
-pub(crate) mod nix;
+pub mod nix;
 mod output;
 mod payload;
 #[cfg(feature = "snix")]
@@ -34,6 +34,7 @@ use aspen_jobs::JobResult;
 use aspen_jobs::Worker;
 use async_trait::async_trait;
 pub use config::LocalExecutorWorkerConfig;
+pub use nix::rewrite_flake_lock_with_store_paths;
 pub use output::OutputRef;
 pub use payload::LocalExecutorPayload;
 use tokio::sync::mpsc;
@@ -42,6 +43,20 @@ use tracing::info;
 
 use crate::agent::executor::Executor;
 use crate::agent::protocol::LogMessage;
+
+const CI_PROGRESS_MARKER: &str = "ASPEN_CI_COMMAND_PROGRESS";
+
+fn local_executor_worker_phase_marker(job_id: &str, phase: &'static str) -> String {
+    format!("{CI_PROGRESS_MARKER} phase={phase} job_id={job_id}\n")
+}
+
+fn try_emit_worker_phase(log_sink: Option<&LogSink>, job_id: &str, phase: &'static str) {
+    let marker = local_executor_worker_phase_marker(job_id, phase);
+    if let Some(sink) = log_sink {
+        let _ = sink.try_send(LogMessage::Stderr(marker.clone()));
+    }
+    info!(job_id = %job_id, marker = %marker.trim_end(), "local executor worker phase");
+}
 
 /// External log sink for real-time log streaming.
 ///
@@ -111,25 +126,36 @@ impl Worker for LocalExecutorWorker {
     async fn execute(&self, job: Job) -> JobResult {
         let job_id = job.id.to_string();
         info!(job_id = %job_id, job_type = %job.spec.job_type, "executing local job");
+        try_emit_worker_phase(self.log_sink.as_ref(), &job_id, "local_executor_execute_enter");
 
         // Parse payload
+        try_emit_worker_phase(self.log_sink.as_ref(), &job_id, "local_executor_payload_parse_enter");
         let payload: LocalExecutorPayload = match serde_json::from_value(job.spec.payload.clone()) {
-            Ok(p) => p,
+            Ok(p) => {
+                try_emit_worker_phase(self.log_sink.as_ref(), &job_id, "local_executor_payload_parse_done");
+                p
+            }
             Err(e) => {
                 error!(job_id = %job_id, error = ?e, "failed to parse job payload");
+                try_emit_worker_phase(self.log_sink.as_ref(), &job_id, "local_executor_payload_parse_failed");
                 return JobResult::failure(format!("invalid job payload: {}", e));
             }
         };
 
         // Validate payload
+        try_emit_worker_phase(self.log_sink.as_ref(), &job_id, "local_executor_payload_validate_enter");
         if let Err(e) = payload.validate() {
             error!(job_id = %job_id, error = %e, "invalid job payload");
+            try_emit_worker_phase(self.log_sink.as_ref(), &job_id, "local_executor_payload_validate_failed");
             return JobResult::failure(format!("invalid job payload: {}", e));
         }
+        try_emit_worker_phase(self.log_sink.as_ref(), &job_id, "local_executor_payload_validate_done");
 
         // Execute job
+        try_emit_worker_phase(self.log_sink.as_ref(), &job_id, "local_executor_execute_job_enter");
         match self.execute_job(&job, &payload).await {
             Ok((result, artifacts, upload_result, nix_output)) => {
+                try_emit_worker_phase(self.log_sink.as_ref(), &job_id, "local_executor_execute_job_returned");
                 if result.exit_code == 0 && result.error.is_none() {
                     // Build artifact list for output
                     let artifact_list: Vec<_> = if let Some(ref upload) = upload_result {
@@ -244,6 +270,7 @@ impl Worker for LocalExecutorWorker {
             }
             Err(e) => {
                 error!(job_id = %job_id, error = %e, "job execution failed");
+                try_emit_worker_phase(self.log_sink.as_ref(), &job_id, "local_executor_execute_job_failed");
                 JobResult::failure(format!("execution failed: {}", e))
             }
         }
@@ -281,6 +308,8 @@ impl Worker for LocalExecutorWorker {
 #[cfg(test)]
 mod tests {
     use super::nix::inject_nix_flags;
+    use super::nix::inject_vmci_local_store_flags;
+    use super::nix::vmci_local_store_root_from_env;
     use super::*;
 
     #[test]
@@ -294,6 +323,7 @@ mod tests {
             timeout_secs: 3600,
             artifacts: vec![],
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
             checkout_dir: None,
             flake_attr: None,
             run_id: None,
@@ -325,7 +355,47 @@ mod tests {
         assert!(!args.contains(&"--offline".to_string()));
         assert!(args.contains(&"--accept-flake-config".to_string()));
         assert!(args.contains(&"--no-write-lock-file".to_string()));
+        assert!(args.contains(&"--allow-dirty-locks".to_string()));
         assert!(args.contains(&"--output-lock-file".to_string()));
+    }
+
+    #[test]
+    fn vmci_local_store_flags_keep_nix_jobs_out_of_overlay_store() {
+        let mut args = vec!["build".to_string(), ".#checks.x86_64-linux.aspen-cli".to_string()];
+        let next = inject_vmci_local_store_flags(&mut args, 1, Some("/tmp/aspen-ci-nix-store"));
+
+        assert_eq!(next, 12);
+        assert_eq!(args[1], "--store");
+        assert_eq!(args[2], "local?root=/tmp/aspen-ci-nix-store");
+        assert!(
+            args.windows(3)
+                .any(|window| window == ["--option", "build-dir", "/tmp/aspen-ci-nix-store/.build-dir"])
+        );
+        assert!(args.windows(3).any(|window| window == ["--option", "min-free", "0"]));
+        assert!(args.windows(3).any(|window| window == ["--option", "max-free", "0"]));
+        assert_eq!(args.last().expect("flake ref"), ".#checks.x86_64-linux.aspen-cli");
+    }
+
+    #[test]
+    fn vmci_local_store_root_prefers_payload_env() {
+        let mut env = HashMap::new();
+        env.insert("ASPEN_CI_NIX_LOCAL_STORE_ROOT".to_string(), " /workspace/.aspen-ci-nix-store ".to_string());
+
+        assert_eq!(vmci_local_store_root_from_env(&env).as_deref(), Some("/workspace/.aspen-ci-nix-store"));
+    }
+
+    #[test]
+    fn vmci_local_store_flags_do_not_override_explicit_store() {
+        let mut args = vec![
+            "build".to_string(),
+            "--store".to_string(),
+            "daemon".to_string(),
+            ".#default".to_string(),
+        ];
+        let next = inject_vmci_local_store_flags(&mut args, 1, Some("/tmp/aspen-ci-nix-store"));
+
+        assert_eq!(next, 1);
+        assert_eq!(args, vec!["build", "--store", "daemon", ".#default"]);
     }
 
     #[test]
@@ -344,5 +414,15 @@ mod tests {
             "cloud_hypervisor belongs to CloudHypervisorWorker"
         );
         assert_eq!(types.len(), 2);
+    }
+
+    #[test]
+    fn local_executor_worker_phase_marker_is_bounded_and_redacted() {
+        let marker = local_executor_worker_phase_marker("job-123", "local_executor_execute_enter");
+
+        assert_eq!(marker, "ASPEN_CI_COMMAND_PROGRESS phase=local_executor_execute_enter job_id=job-123\n");
+        assert!(!marker.contains("nix build"));
+        assert!(!marker.contains("--secret"));
+        assert!(!marker.contains("checks.x86_64-linux"));
     }
 }

@@ -174,20 +174,19 @@ pub const DEFAULT_CI_LOG_FETCH_CHUNKS: u32 = 100;
 /// - `aspen-ci/workers/cloud_hypervisor/pool.rs`: VmPool capacity limits
 pub const MAX_CI_VMS_PER_NODE: u32 = 8;
 
-/// Default memory per CI VM in bytes (24 GB).
+/// Default memory per CI VM in bytes (32 GB).
 ///
 /// Tiger Style: Fixed default memory allocation per VM.
-/// 24GB is required for large Rust builds:
-/// - ~12GB for tmpfs writable store overlay (/nix/.rw-store)
+/// 32GB is required for medium Rust/Nix CI builds:
+/// - ~20GB for the guest-local `/tmp/aspen-ci-nix-store` tmpfs Nix store
+/// - ~16GB high-water budget for the writable `/nix/.rw-store` overlay
 /// - ~4GB for Nix evaluation (parsing 2000+ derivations)
 /// - ~4GB for build processes (cargo, rustc, linker)
-/// - ~4GB for system overhead
-///
-/// Note: Each VM also requires ~1GB virtiofsd shmem for virtiofs file sharing.
+/// - headroom for system services and virtiofsd shmem
 ///
 /// Used in:
 /// - `aspen-ci/workers/cloud_hypervisor/config.rs`: Default VM memory configuration
-pub const CI_VM_DEFAULT_MEMORY_BYTES: u64 = 25_769_803_776;
+pub const CI_VM_DEFAULT_MEMORY_BYTES: u64 = 34_359_738_368;
 
 /// Maximum memory per CI VM in bytes (64 GB).
 ///

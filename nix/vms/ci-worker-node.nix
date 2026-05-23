@@ -41,9 +41,10 @@
     hypervisor = "cloud-hypervisor";
 
     # Resource allocation for Rust builds
-    # 24GB RAM - tmpfs grows as store paths are fetched/built (~6-10GB),
-    # plus nix evaluation needs ~4GB, and build processes need ~4GB for linking
-    mem = 24576; # 24GB RAM for CI jobs
+    # 32GB RAM - tmpfs grows as the guest-local Nix store fetches/builds
+    # medium-rail dependency closures; keep explicit tmpfs sizes below the
+    # VM memory ceiling so failures are deterministic instead of host-dependent.
+    mem = 32768; # 32GB RAM for CI jobs
     vcpu = 4; # 4 vCPUs
 
     # Kernel parameters for minimal boot
@@ -295,6 +296,13 @@
     "+${pkgs.coreutils}/bin/mkdir -p /nix/.rw-store/store/.links"
   ];
 
+  # Keep `/tmp` large enough for the guest-local Nix store used by
+  # `ASPEN_CI_NIX_LOCAL_STORE_ROOT`. The previous implicit tmpfs default was
+  # half of guest RAM and failed during medium cache-warm closure realization
+  # with `No space left on device` under `/tmp/aspen-ci-nix-store`.
+  boot.tmp.useTmpfs = true;
+  boot.tmp.tmpfsSize = "20G";
+
   # Mount points for virtiofs shares
   # These extend the mounts created by microvm.nix from the shares config above
   # neededForBoot = true ensures they're mounted in the initrd before switch-root
@@ -320,12 +328,12 @@
     # Writable store overlay using tmpfs.
     # We use tmpfs instead of virtiofs because virtiofs lacks the filesystem
     # features required by overlayfs for its upper layer (xattr, etc.).
-    # Size set to 12GB to accommodate store paths fetched from substituters.
-    # With 24GB RAM total, this leaves ~12GB for system and build processes.
+    # Size set to 16GB to preserve overlay headroom while the separate
+    # guest-local Nix store uses `/tmp/aspen-ci-nix-store`.
     "/nix/.rw-store" = {
       fsType = "tmpfs";
       device = "tmpfs";
-      options = ["rw" "size=12G" "mode=755"];
+      options = ["rw" "size=16G" "mode=755"];
       neededForBoot = true;
     };
   };
@@ -404,6 +412,12 @@
       # for CI workspaces. The /workspace virtiofs mount is still used for the
       # cluster ticket file (ASPEN_CLUSTER_TICKET_FILE).
       ASPEN_CI_WORKSPACE_DIR = "/tmp/workspaces";
+      # Keep VM-CI Nix job outputs and fetched public source inputs out of the
+      # overlay-backed `/nix/store` whose lower layer is the host virtiofs store.
+      # This avoids re-traversing giant public source trees like nixpkgs through
+      # virtiofsd during `nix build`; the command line injects
+      # `--store local?root=$ASPEN_CI_NIX_LOCAL_STORE_ROOT` for Nix jobs.
+      ASPEN_CI_NIX_LOCAL_STORE_ROOT = "/tmp/aspen-ci-nix-store";
       # Debug logging for troubleshooting VM worker connections
       RUST_LOG = "info,aspen=debug,iroh=debug,iroh_net=debug";
       # mDNS cannot bind reliably in the nested VM TAP namespace; the cluster
@@ -566,6 +580,12 @@
   boot.postBootCommands =
     ''
       mkdir -p /tmp/workspaces
+      # The direct Cloud Hypervisor snapshot path can skip enough NixOS activation
+      # state that Nix's temporary GC root directory is absent. Nix fails early
+      # with `opening lock file /nix/var/nix/temproots/<pid>: No such file or
+      # directory` before the CI command can do useful work, so create the
+      # runtime directory before starting the worker.
+      mkdir -p /nix/var/nix/temproots
 
       # The direct Cloud Hypervisor path currently starts the worker from this
       # post-boot hook because systemd target isolation is unreliable under the
@@ -617,6 +637,12 @@
     ''
     + ''
       (
+        # The direct Cloud Hypervisor snapshot path does not launch the worker via
+        # systemd, so serviceConfig.LimitNOFILE does not apply. Apply the same FD
+        # headroom here before Nix copies/evaluates large nixpkgs trees.
+        ${pkgs.procps}/bin/sysctl -w fs.file-max=8388608 fs.nr_open=2097152 >/dev/ttyS0 2>&1 || true
+        ulimit -n 1048576 || true
+
         export HOME=/root
         export NIX_PATH=
         export NIX_CONFIG='experimental-features = nix-command flakes'

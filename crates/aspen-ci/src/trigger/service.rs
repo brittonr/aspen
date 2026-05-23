@@ -1124,7 +1124,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_scan_and_watch_mirrors() {
-        use aspen_core::KeyValueStore;
+        use aspen_core::KvWrite;
         use aspen_core::WriteRequest;
 
         let config = TriggerServiceConfig {
@@ -1148,12 +1148,7 @@ mod tests {
             "last_sync_timestamp": 1000,
             "created_at": 1000
         });
-        aspen_core::KeyValueStore::write(
-            kv.as_ref(),
-            WriteRequest::set("_fed:mirror:abc:def", mirror_json.to_string()),
-        )
-        .await
-        .unwrap();
+        kv.write(WriteRequest::set("_fed:mirror:abc:def", mirror_json.to_string())).await.unwrap();
 
         // Scan should discover and watch the mirror
         let newly_watched = service.scan_and_watch_mirrors(kv.as_ref()).await;

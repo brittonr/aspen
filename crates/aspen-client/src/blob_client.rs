@@ -28,6 +28,14 @@ use serde::Serialize;
 
 use crate::AspenClient;
 
+/// Maximum size for inline blob RPC responses (64 MiB).
+///
+/// Ordinary control-plane RPCs stay capped at `MAX_CLIENT_MESSAGE_SIZE` (16 MiB),
+/// but VM workspace source archives are intentionally bulk blob payloads. Keep
+/// this limit bounded and aligned with source-archive evidence rather than using
+/// an unbounded read.
+const MAX_RPC_BLOB_RESPONSE_SIZE: usize = 64 * 1024 * 1024;
+
 /// Result of a blob upload operation.
 #[derive(Debug, Clone)]
 pub struct BlobUploadResult {
@@ -171,7 +179,7 @@ impl<'a> BlobClient<'a> {
         let hash_str = hash.into();
         let request = ClientRpcRequest::GetBlob { hash: hash_str.clone() };
 
-        let response = self.client.send(request).await?;
+        let response = self.client.send_with_response_limit(request, MAX_RPC_BLOB_RESPONSE_SIZE).await?;
 
         match response {
             ClientRpcResponse::GetBlobResult(result) => {
@@ -618,13 +626,31 @@ mod rpc_blob_store {
 
             let request = ClientRpcRequest::GetBlob { hash: hash_str.clone() };
 
-            match self.client.send(request).await {
-                Ok(ClientRpcResponse::GetBlobResult(result)) => {
+            match self.client.send_with_trailing_response_limit(request, MAX_RPC_BLOB_RESPONSE_SIZE).await {
+                Ok((ClientRpcResponse::GetBlobResult(result), trailing_bytes)) => {
                     if result.was_found {
                         match result.data {
                             Some(data) => {
                                 debug!(hash = %hash_str, size = data.len(), "RpcBlobStore: blob retrieved");
                                 Ok(Some(Bytes::from(data)))
+                            }
+                            None if result.is_streaming => {
+                                if trailing_bytes.len() as u64 == result.size_bytes {
+                                    debug!(
+                                        hash = %hash_str,
+                                        size = trailing_bytes.len(),
+                                        "RpcBlobStore: streamed blob retrieved"
+                                    );
+                                    Ok(Some(Bytes::from(trailing_bytes)))
+                                } else {
+                                    Err(BlobStoreError::Storage {
+                                        message: format!(
+                                            "streamed blob length mismatch: expected {} bytes, got {} bytes",
+                                            result.size_bytes,
+                                            trailing_bytes.len()
+                                        ),
+                                    })
+                                }
                             }
                             None => {
                                 warn!(hash = %hash_str, "RpcBlobStore: blob found but no data returned");
@@ -637,7 +663,7 @@ mod rpc_blob_store {
                         Ok(None)
                     }
                 }
-                Ok(_) => Err(BlobStoreError::Storage {
+                Ok((_, _)) => Err(BlobStoreError::Storage {
                     message: "Unexpected response type for blob get".to_string(),
                 }),
                 Err(e) => Err(BlobStoreError::Storage {
@@ -854,6 +880,51 @@ mod rpc_blob_store {
             }
             Ok(missing.into_iter().collect())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use aspen_client_api::ClientRpcResponse;
+    use aspen_client_api::GetBlobResultResponse;
+    use aspen_client_api::MAX_CLIENT_MESSAGE_SIZE;
+
+    use super::MAX_RPC_BLOB_RESPONSE_SIZE;
+
+    #[test]
+    fn rpc_blob_response_limit_allows_vm_workspace_archive_without_unbounded_reads() {
+        let observed_vm_workspace_archive_size = 22_918_842usize;
+
+        assert!(MAX_RPC_BLOB_RESPONSE_SIZE > MAX_CLIENT_MESSAGE_SIZE);
+        assert!(MAX_RPC_BLOB_RESPONSE_SIZE >= observed_vm_workspace_archive_size);
+    }
+
+    #[test]
+    fn postcard_blob_stream_header_preserves_trailing_blob_bytes() {
+        let blob_bytes = b"streamed source archive bytes";
+        let header = ClientRpcResponse::GetBlobResult(GetBlobResultResponse {
+            was_found: true,
+            data: None,
+            error: None,
+            is_streaming: true,
+            size_bytes: blob_bytes.len() as u64,
+        });
+        let mut wire_bytes = postcard::to_stdvec(&header).expect("header serializes");
+        wire_bytes.extend_from_slice(blob_bytes);
+
+        let (decoded, trailing): (ClientRpcResponse, &[u8]) =
+            postcard::take_from_bytes(&wire_bytes).expect("header deserializes with trailing bytes");
+
+        match decoded {
+            ClientRpcResponse::GetBlobResult(result) => {
+                assert!(result.was_found);
+                assert!(result.is_streaming);
+                assert!(result.data.is_none());
+                assert_eq!(result.size_bytes, blob_bytes.len() as u64);
+            }
+            other => panic!("unexpected response: {other:?}"),
+        }
+        assert_eq!(trailing, blob_bytes);
     }
 }
 

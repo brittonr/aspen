@@ -1017,6 +1017,7 @@ dependencies = [
  "aspen-jobs",
  "aspen-ticket",
  "async-trait",
+ "blake3",
  "bytes",
  "chrono",
  "command-group",
@@ -1054,6 +1055,7 @@ dependencies = [
  "aspen-cache",
  "aspen-ci",
  "aspen-ci-core",
+ "aspen-ci-executor-shell",
  "aspen-client-api",
  "aspen-constants",
  "aspen-core",
@@ -5349,7 +5351,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -11934,7 +11936,7 @@ version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be769465445e8c1474e9c5dac2018218498557af32d9ed057325ec9a41ae81bf"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.10.5",
  "log",
  "multimap",
@@ -11954,7 +11956,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.10.5",
  "log",
  "multimap",
@@ -12034,7 +12036,7 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe500dc80e757a75e1e8fb7290e448d62dfba3105ece1d058579cb00b58151cd"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "prost 0.14.3",
  "prost-build 0.14.3",
  "prost-types 0.14.3",
@@ -14063,7 +14065,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -15940,7 +15942,7 @@ dependencies = [
 [[package]]
 name = "ucan"
 version = "0.1.0"
-source = "git+ssh://git@github.com/brittonr/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
+source = "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -15954,7 +15956,7 @@ dependencies = [
 [[package]]
 name = "ucan-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/brittonr/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
+source = "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
 
 [[package]]
 name = "ucd-trie"
@@ -16198,7 +16200,7 @@ dependencies = [
 [[package]]
 name = "verified-logic"
 version = "0.1.0"
-source = "git+ssh://git@github.com/brittonr/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
+source = "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
 dependencies = [
  "anyhow",
  "blake3",

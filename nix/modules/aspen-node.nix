@@ -180,6 +180,17 @@ in {
       description = "Directory for CI job workspaces when using local executor mode";
     };
 
+    ciNixLocalStoreRoot = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      description = ''
+        Optional local Nix store root for CI local-executor nix commands.
+        VM-CI dogfood uses this to keep guest Nix build outputs and build-dir
+        scratch under the writable workspace mount instead of the VM's small
+        /nix writable overlay.
+      '';
+    };
+
     # Federation cross-cluster communication
     enableFederation = lib.mkOption {
       type = lib.types.bool;
@@ -253,6 +264,9 @@ in {
         // lib.optionalAttrs cfg.ciLocalExecutor {
           ASPEN_CI_LOCAL_EXECUTOR = "1";
           ASPEN_CI_WORKSPACE_DIR = cfg.ciWorkspaceDir;
+        }
+        // lib.optionalAttrs (cfg.ciLocalExecutor && cfg.ciNixLocalStoreRoot != null) {
+          ASPEN_CI_NIX_LOCAL_STORE_ROOT = cfg.ciNixLocalStoreRoot;
         }
         # Cloud Hypervisor VM isolation mode (nested VMs for build isolation)
         // lib.optionalAttrs (!cfg.ciLocalExecutor && cfg.ciVmKernelPath != null) {

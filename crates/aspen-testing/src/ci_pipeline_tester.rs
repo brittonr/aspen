@@ -621,6 +621,7 @@ pub fn test_pipeline_context(repo_name: &str) -> PipelineContext {
         env: HashMap::new(),
         checkout_dir: None,
         source_hash: None,
+        flake_input_paths: std::collections::BTreeMap::new(),
     }
 }
 

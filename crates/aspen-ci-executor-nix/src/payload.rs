@@ -1,5 +1,7 @@
 //! Job payload for Nix builds.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use aspen_ci_core::CiCoreError;
@@ -40,6 +42,10 @@ pub struct NixBuildPayload {
     /// Extra arguments to pass to `nix build`.
     #[serde(default)]
     pub extra_args: Vec<String>,
+
+    /// Environment variables to apply while running Nix.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub env: HashMap<String, String>,
 
     /// Working directory for the build.
     #[serde(default)]
@@ -91,6 +97,10 @@ pub struct NixBuildPayload {
     /// checkout from the blob store instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_hash: Option<String>,
+
+    /// Host-prefetched flake input store paths keyed by flake.lock node name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub flake_input_paths: BTreeMap<String, String>,
 }
 
 impl NixBuildPayload {

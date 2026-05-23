@@ -3,6 +3,8 @@
 use std::path::PathBuf;
 #[cfg(feature = "nix-cache-proxy")]
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 use aspen_jobs::Job;
 use tokio::sync::mpsc;
@@ -13,6 +15,7 @@ use tracing::warn;
 use super::LocalExecutorPayload;
 use super::LocalExecutorWorker;
 use super::nix::inject_nix_flags_with_flake_rewrite;
+use super::nix::vmci_local_store_root_from_env;
 use super::output::OutputRef;
 use super::output::spawn_log_consumer;
 use crate::agent::protocol::ExecutionRequest;
@@ -22,6 +25,11 @@ use crate::agent::protocol::LogMessage;
 use crate::cache_proxy::CacheProxy;
 use crate::common::ArtifactCollectionResult;
 use crate::common::ArtifactUploadResult;
+
+const LOCAL_EXECUTOR_WATCHDOG_GRACE: Duration = Duration::from_secs(15);
+#[cfg(feature = "nix-cache-proxy")]
+const CACHE_PROXY_START_TIMEOUT: Duration = Duration::from_secs(10);
+const CI_PROGRESS_MARKER: &str = "ASPEN_CI_COMMAND_PROGRESS";
 
 /// Information about nix build outputs uploaded to the blob store.
 #[derive(Debug, Default)]
@@ -45,6 +53,90 @@ fn parse_nix_output_paths(stdout: &str) -> Vec<String> {
         .filter(|line| line.starts_with("/nix/store/"))
         .map(|line| line.trim().to_string())
         .collect()
+}
+
+fn executor_watchdog_timeout_marker(job_id: &str, timeout_secs: u64, grace_secs: u64) -> String {
+    format!(
+        "{CI_PROGRESS_MARKER} phase=executor_watchdog_timeout job_id={job_id} timeout_secs={timeout_secs} grace_secs={grace_secs}\n"
+    )
+}
+
+fn local_executor_phase_marker(job_id: &str, phase: &'static str) -> String {
+    format!("{CI_PROGRESS_MARKER} phase={phase} job_id={job_id}\n")
+}
+
+fn nix_local_store_request_details(request: &ExecutionRequest) -> (bool, bool, &str, &str) {
+    let has_local_store = request.args.iter().any(|arg| arg.starts_with("local?root="));
+    let has_build_dir = request.args.windows(3).any(|window| window[0] == "--option" && window[1] == "build-dir");
+    let local_store_root = request.args.iter().find_map(|arg| arg.strip_prefix("local?root=")).unwrap_or("absent");
+    let build_dir = request
+        .args
+        .windows(3)
+        .find_map(|window| (window[0] == "--option" && window[1] == "build-dir").then_some(window[2].as_str()))
+        .unwrap_or("absent");
+    (has_local_store, has_build_dir, local_store_root, build_dir)
+}
+
+fn command_request_diagnostics_marker(job_id: &str, request: &ExecutionRequest) -> String {
+    let (has_local_store, has_build_dir, local_store_root, build_dir) = nix_local_store_request_details(request);
+    format!(
+        "{CI_PROGRESS_MARKER} phase=command_request_diagnostics job_id={job_id} command={} args_count={} has_local_store={} has_build_dir={} local_store_root={} build_dir={} working_dir={}\n",
+        request.command,
+        request.args.len(),
+        has_local_store,
+        has_build_dir,
+        local_store_root,
+        build_dir,
+        request.working_dir.display()
+    )
+}
+
+fn vmci_shell_nix_local_store_marker(job_id: &str, request: &ExecutionRequest) -> String {
+    let (has_local_store, has_build_dir, local_store_root, build_dir) = nix_local_store_request_details(request);
+    format!(
+        "{CI_PROGRESS_MARKER} phase=vmci_shell_nix_local_store job_id={job_id} command={} has_local_store={} has_build_dir={} local_store_root={} build_dir={}\n",
+        request.command, has_local_store, has_build_dir, local_store_root, build_dir
+    )
+}
+
+async fn prepare_vmci_local_store_dirs(store_root: Option<&str>) -> Result<(), String> {
+    let Some(store_root) = store_root.map(str::trim).filter(|root| !root.is_empty()) else {
+        return Ok(());
+    };
+    let build_dir = format!("{}/.build-dir", store_root.trim_end_matches('/'));
+    tokio::fs::create_dir_all(store_root)
+        .await
+        .map_err(|error| format!("failed to create VMCI Nix local store root {store_root}: {error}"))?;
+    tokio::fs::create_dir_all(&build_dir)
+        .await
+        .map_err(|error| format!("failed to create VMCI Nix build dir {build_dir}: {error}"))?;
+    Ok(())
+}
+
+#[cfg(feature = "nix-cache-proxy")]
+fn local_executor_phase_marker_with_u64(job_id: &str, phase: &'static str, key: &str, value: u64) -> String {
+    format!("{CI_PROGRESS_MARKER} phase={phase} job_id={job_id} {key}={value}\n")
+}
+
+async fn send_local_executor_phase(log_tx: &mpsc::Sender<LogMessage>, job_id: &str, phase: &'static str) {
+    let _ = log_tx.send(LogMessage::Stderr(local_executor_phase_marker(job_id, phase))).await;
+}
+
+fn timeout_execution_result(job_id: &str, timeout_secs: u64, started_at: Instant) -> ExecutionResult {
+    let duration_ms = u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX);
+    ExecutionResult {
+        id: job_id.to_string(),
+        exit_code: -1,
+        stdout: String::new(),
+        stderr: String::new(),
+        duration_ms,
+        error: Some(format!(
+            "process execution timed out after {timeout_secs} seconds; local executor watchdog cancelled the job"
+        )),
+        cache_hits: 0,
+        cache_misses: 0,
+        cache_time_saved_ms: 0,
+    }
 }
 
 impl LocalExecutorWorker {
@@ -108,12 +200,35 @@ impl LocalExecutorWorker {
         payload: &LocalExecutorPayload,
     ) -> Result<(ExecutionResult, ArtifactCollectionResult, Option<ArtifactUploadResult>, NixOutputInfo), String> {
         let job_id = job.id.to_string();
+        let (preflight_log_tx, mut preflight_log_rx) = mpsc::channel::<LogMessage>(32);
+        let preflight_sink = self.log_sink.clone();
+        let preflight_forwarder = preflight_sink.map(|sink| {
+            tokio::spawn(async move {
+                while let Some(message) = preflight_log_rx.recv().await {
+                    let _ = sink.try_send(message);
+                }
+            })
+        });
+        info!(
+            job_id = %job_id,
+            marker = %local_executor_phase_marker(&job_id, "local_executor_payload_validated").trim_end(),
+            "local executor payload accepted"
+        );
+        send_local_executor_phase(&preflight_log_tx, &job_id, "local_executor_payload_validated").await;
 
         // Phase 1: Set up workspace (returns workspace path and optional flake store path)
         let (job_workspace, flake_store_path) = self
             .setup_job_workspace(&job_id, payload)
             .await
             .map_err(|e| format!("workspace setup failed: {}", e))?;
+        info!(
+            job_id = %job_id,
+            workspace = %job_workspace.display(),
+            flake_store_path_present = flake_store_path.is_some(),
+            marker = %local_executor_phase_marker(&job_id, "workspace_ready").trim_end(),
+            "local executor workspace ready"
+        );
+        send_local_executor_phase(&preflight_log_tx, &job_id, "workspace_ready").await;
 
         // Phase 2: Start cache proxy for nix commands if configured
         #[cfg(feature = "nix-cache-proxy")]
@@ -121,9 +236,13 @@ impl LocalExecutorWorker {
             let endpoint =
                 self.config.iroh_endpoint.as_ref().ok_or_else(|| "iroh endpoint not configured".to_string())?;
             let gateway = self.config.gateway_node.ok_or_else(|| "gateway node not configured".to_string())?;
+            send_local_executor_phase(&preflight_log_tx, &job_id, "cache_proxy_start_enter").await;
 
-            match CacheProxy::start(Arc::clone(endpoint), gateway).await {
-                Ok(proxy) => {
+            match tokio::time::timeout(CACHE_PROXY_START_TIMEOUT, CacheProxy::start(Arc::clone(endpoint), gateway))
+                .await
+            {
+                Ok(Ok(proxy)) => {
+                    send_local_executor_phase(&preflight_log_tx, &job_id, "cache_proxy_start_done").await;
                     info!(
                         job_id = %job_id,
                         substituter_url = %proxy.substituter_url(),
@@ -131,12 +250,27 @@ impl LocalExecutorWorker {
                     );
                     Some(proxy)
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
+                    send_local_executor_phase(&preflight_log_tx, &job_id, "cache_proxy_start_failed").await;
                     warn!(job_id = %job_id, error = ?e, "Failed to start cache proxy, proceeding without substituter");
+                    None
+                }
+                Err(_) => {
+                    let timeout_secs = CACHE_PROXY_START_TIMEOUT.as_secs();
+                    let _ = preflight_log_tx
+                        .send(LogMessage::Stderr(local_executor_phase_marker_with_u64(
+                            &job_id,
+                            "cache_proxy_start_timeout",
+                            "timeout_secs",
+                            timeout_secs,
+                        )))
+                        .await;
+                    warn!(job_id = %job_id, timeout_secs, "Timed out starting cache proxy, proceeding without substituter");
                     None
                 }
             }
         } else {
+            send_local_executor_phase(&preflight_log_tx, &job_id, "cache_proxy_skipped").await;
             None
         };
 
@@ -151,6 +285,31 @@ impl LocalExecutorWorker {
         );
         #[cfg(not(feature = "nix-cache-proxy"))]
         let request = self.build_execution_request(&job_id, payload, &job_workspace, flake_store_path.as_ref());
+        info!(
+            job_id = %job_id,
+            command = %request.command,
+            args_count = request.args.len(),
+            timeout_secs = request.timeout_secs,
+            marker = %local_executor_phase_marker(&job_id, "command_request_built").trim_end(),
+            "local executor command request built"
+        );
+        send_local_executor_phase(&preflight_log_tx, &job_id, "command_request_built").await;
+        let _ = preflight_log_tx
+            .send(LogMessage::Stderr(command_request_diagnostics_marker(&job_id, &request)))
+            .await;
+        if request.command == "nix" {
+            let (_, _, local_store_root, _) = nix_local_store_request_details(&request);
+            if local_store_root != "absent" {
+                prepare_vmci_local_store_dirs(Some(local_store_root)).await?;
+                let _ = preflight_log_tx
+                    .send(LogMessage::Stderr(vmci_shell_nix_local_store_marker(&job_id, &request)))
+                    .await;
+            }
+        }
+        drop(preflight_log_tx);
+        if let Some(handle) = preflight_forwarder {
+            handle.abort();
+        }
         let result = self.execute_with_streaming(&job_id, request, payload).await;
 
         // Phase 4: Shut down cache proxy
@@ -362,8 +521,17 @@ impl LocalExecutorWorker {
             job_workspace.join(&payload.working_dir)
         };
 
+        let mut env = payload.env.clone();
+        env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
+        let vmci_local_store_root = vmci_local_store_root_from_env(&env);
+
         let (command, mut args) = if payload.command == "nix" {
-            inject_nix_flags_with_flake_rewrite(&payload.args, flake_store_path, job_id)
+            inject_nix_flags_with_flake_rewrite(
+                &payload.args,
+                flake_store_path,
+                job_id,
+                vmci_local_store_root.as_deref(),
+            )
         } else {
             (payload.command.clone(), payload.args.clone())
         };
@@ -392,9 +560,6 @@ impl LocalExecutorWorker {
                 "Added cache substituter to nix command"
             );
         }
-
-        let mut env = payload.env.clone();
-        env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
 
         // Inject cached execution env var when enabled
         if payload.cached_execution {
@@ -429,14 +594,20 @@ impl LocalExecutorWorker {
             job_workspace.join(&payload.working_dir)
         };
 
+        let mut env = payload.env.clone();
+        env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
+        let vmci_local_store_root = vmci_local_store_root_from_env(&env);
+
         let (command, args) = if payload.command == "nix" {
-            inject_nix_flags_with_flake_rewrite(&payload.args, flake_store_path, job_id)
+            inject_nix_flags_with_flake_rewrite(
+                &payload.args,
+                flake_store_path,
+                job_id,
+                vmci_local_store_root.as_deref(),
+            )
         } else {
             (payload.command.clone(), payload.args.clone())
         };
-
-        let mut env = payload.env.clone();
-        env.entry("HOME".to_string()).or_insert_with(|| "/tmp".to_string());
 
         // Inject cached execution env var when enabled
         if payload.cached_execution {
@@ -527,7 +698,58 @@ impl LocalExecutorWorker {
             spawn_log_consumer(job_id.to_string(), log_rx)
         };
 
-        let exec_result = self.executor.execute(request, log_tx).await;
+        let execution_started = Instant::now();
+        let timeout_secs = request.timeout_secs;
+        send_local_executor_phase(&log_tx, job_id, "command_execute_enter").await;
+        let watchdog_after = Duration::from_secs(timeout_secs).saturating_add(LOCAL_EXECUTOR_WATCHDOG_GRACE);
+        let watchdog_marker_tx = log_tx.clone();
+        let executor = self.executor.clone();
+        let executor_log_tx = log_tx.clone();
+        let request_job_id = job_id.to_string();
+        let completion_local_store_marker =
+            (request.command == "nix").then(|| vmci_shell_nix_local_store_marker(job_id, &request));
+        let mut exec_task = tokio::spawn(async move { executor.execute(request, executor_log_tx).await });
+
+        let exec_result = tokio::select! {
+            joined = &mut exec_task => {
+                match joined {
+                    Ok(result) => result.map_err(|error| format!("execution failed: {error}")),
+                    Err(error) => Err(format!("executor task join failed: {error}")),
+                }
+            }
+            _ = tokio::time::sleep(watchdog_after) => {
+                warn!(
+                    job_id = %job_id,
+                    timeout_secs,
+                    grace_secs = LOCAL_EXECUTOR_WATCHDOG_GRACE.as_secs(),
+                    "local executor watchdog observed command still running after timeout"
+                );
+                let _ = watchdog_marker_tx
+                    .send(LogMessage::Stderr(executor_watchdog_timeout_marker(
+                        job_id,
+                        timeout_secs,
+                        LOCAL_EXECUTOR_WATCHDOG_GRACE.as_secs(),
+                    )))
+                    .await;
+                let _ = self.executor.cancel(job_id).await;
+                match tokio::time::timeout(LOCAL_EXECUTOR_WATCHDOG_GRACE, &mut exec_task).await {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(error)) => warn!(job_id = %job_id, "executor task join failed after watchdog cancel: {error}"),
+                    Err(_) => {
+                        warn!(job_id = %job_id, "executor task did not finish after watchdog cancellation; aborting task");
+                        exec_task.abort();
+                    }
+                }
+                Ok(timeout_execution_result(&request_job_id, timeout_secs, execution_started))
+            }
+        };
+
+        drop(watchdog_marker_tx);
+        send_local_executor_phase(&log_tx, job_id, "command_execute_returned").await;
+        if let Some(marker) = completion_local_store_marker {
+            let _ = log_tx.send(LogMessage::Stderr(marker)).await;
+        }
+        drop(log_tx);
 
         // Log consumer task is non-critical; if it panics, empty logs are acceptable
         let (collected_stdout, collected_stderr) = log_consumer.await.unwrap_or_default();
@@ -550,5 +772,173 @@ impl LocalExecutorWorker {
             }
             Err(e) => Err(format!("execution failed: {}", e)),
         }
+    }
+}
+
+#[cfg(test)]
+mod execution_tests {
+    use std::collections::HashMap;
+
+    use aspen_jobs::Job;
+    use aspen_jobs::JobResult;
+    use aspen_jobs::JobSpec;
+    use aspen_jobs::Worker;
+
+    use super::*;
+    use crate::LocalExecutorWorkerConfig;
+
+    #[test]
+    fn watchdog_timeout_marker_is_operator_visible_and_bounded() {
+        let marker = executor_watchdog_timeout_marker("job-123", 1800, 15);
+
+        assert_eq!(
+            marker,
+            "ASPEN_CI_COMMAND_PROGRESS phase=executor_watchdog_timeout job_id=job-123 timeout_secs=1800 grace_secs=15\n"
+        );
+        assert!(!marker.contains("nix build"));
+        assert!(!marker.contains("--secret"));
+    }
+
+    #[test]
+    fn local_executor_phase_marker_is_operator_visible_and_bounded() {
+        let marker = local_executor_phase_marker("job-123", "command_execute_enter");
+
+        assert_eq!(marker, "ASPEN_CI_COMMAND_PROGRESS phase=command_execute_enter job_id=job-123\n");
+        assert!(!marker.contains("nix build"));
+        assert!(!marker.contains("checks.x86_64-linux"));
+        assert!(!marker.contains("--secret"));
+    }
+
+    #[cfg(not(feature = "nix-cache-proxy"))]
+    #[test]
+    fn nix_execution_request_preserves_timeout_and_uses_instrumented_runner_shape() {
+        let mut config = LocalExecutorWorkerConfig::default();
+        config.workspace_dir = PathBuf::from("/tmp/aspen-local-executor-test");
+        let worker = LocalExecutorWorker::new(config);
+        let payload = LocalExecutorPayload {
+            job_name: Some("build-cli".to_string()),
+            command: "nix".to_string(),
+            args: vec![
+                "build".to_string(),
+                ".#checks.x86_64-linux.build-cli".to_string(),
+                "--print-out-paths".to_string(),
+            ],
+            working_dir: ".".to_string(),
+            env: std::collections::HashMap::from([(
+                "ASPEN_CI_NIX_LOCAL_STORE_ROOT".to_string(),
+                "/workspace/.aspen-ci-nix-store".to_string(),
+            )]),
+            timeout_secs: 7,
+            artifacts: Vec::new(),
+            source_hash: Some("b3-source".to_string()),
+            checkout_dir: None,
+            flake_attr: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
+            run_id: Some("run-123".to_string()),
+            cached_execution: false,
+        };
+
+        let request = worker.build_execution_request("job-123", &payload, &PathBuf::from("/workspace/job-123"), None);
+
+        assert_eq!(request.id, "job-123");
+        assert_eq!(request.command, "nix");
+        assert_eq!(request.timeout_secs, 7);
+        assert!(request.args.iter().any(|arg| arg.contains("build-cli")));
+        assert!(request.args.iter().any(|arg| arg == "--print-out-paths"));
+        assert!(
+            request
+                .args
+                .windows(2)
+                .any(|window| window == ["--store", "local?root=/workspace/.aspen-ci-nix-store"])
+        );
+        assert!(
+            request
+                .args
+                .windows(3)
+                .any(|window| window == ["--option", "build-dir", "/workspace/.aspen-ci-nix-store/.build-dir"])
+        );
+        let marker = vmci_shell_nix_local_store_marker("job-123", &request);
+        assert!(marker.contains("phase=vmci_shell_nix_local_store"));
+        assert!(marker.contains("has_local_store=true"));
+        assert!(marker.contains("has_build_dir=true"));
+        assert!(marker.contains("/workspace/.aspen-ci-nix-store/.build-dir"));
+    }
+
+    #[test]
+    fn watchdog_timeout_result_fails_job_with_stable_reason() {
+        let result = timeout_execution_result("job-123", 1800, Instant::now());
+
+        assert_eq!(result.id, "job-123");
+        assert_eq!(result.exit_code, -1);
+        assert!(result.stdout.is_empty());
+        assert!(result.stderr.is_empty());
+        assert_eq!(
+            result.error.as_deref(),
+            Some("process execution timed out after 1800 seconds; local executor watchdog cancelled the job")
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn over_timeout_nix_job_returns_failure_and_unregisters_executor_handle() {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+        use std::time::Duration;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let bin_dir = temp.path().join("bin");
+        let workspace_dir = temp.path().join("workspaces");
+        fs::create_dir_all(&bin_dir).expect("bin dir");
+        fs::create_dir_all(&workspace_dir).expect("workspace dir");
+
+        let fake_nix = bin_dir.join("nix");
+        fs::write(&fake_nix, "#!/bin/sh\nprintf 'fake nix entered\\n' >&2\nsleep 30\n").expect("write fake nix");
+        let mut perms = fs::metadata(&fake_nix).expect("fake nix metadata").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&fake_nix, perms).expect("chmod fake nix");
+
+        let mut env = HashMap::new();
+        env.insert("PATH".to_string(), format!("{}:/run/current-system/sw/bin:/usr/bin:/bin", bin_dir.display()));
+
+        let payload = LocalExecutorPayload {
+            job_name: Some("build-cli".to_string()),
+            command: "nix".to_string(),
+            args: vec![
+                "build".to_string(),
+                ".#checks.x86_64-linux.build-cli".to_string(),
+                "--print-out-paths".to_string(),
+            ],
+            working_dir: ".".to_string(),
+            env,
+            timeout_secs: 1,
+            artifacts: Vec::new(),
+            source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
+            checkout_dir: None,
+            flake_attr: None,
+            run_id: Some("run-timeout-proof".to_string()),
+            cached_execution: false,
+        };
+
+        let spec = JobSpec::new("local_executor").payload(payload).expect("payload serializes");
+        let job = Job::from_spec(spec);
+        let job_id = job.id.to_string();
+        let mut config = LocalExecutorWorkerConfig::default();
+        config.workspace_dir = workspace_dir;
+        config.should_cleanup_workspaces = true;
+        let worker = LocalExecutorWorker::new(config);
+
+        let result = tokio::time::timeout(Duration::from_secs(12), worker.execute(job))
+            .await
+            .expect("timeout proof must return before watchdog/dogfood wait");
+
+        match result {
+            JobResult::Failure(failure) => {
+                assert!(failure.reason.contains("timed out"), "reason: {}", failure.reason);
+                assert!(failure.reason.contains("fake nix entered"), "reason: {}", failure.reason);
+            }
+            other => panic!("expected failed timed-out nix job, got {other:?}"),
+        }
+        assert!(!worker.executor.is_running(&job_id).await);
     }
 }

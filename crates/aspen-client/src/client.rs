@@ -18,6 +18,7 @@ use iroh::Endpoint;
 use iroh::EndpointAddr;
 use iroh::RelayMode;
 use iroh::TransportAddr;
+use iroh::address_lookup::memory::MemoryLookup;
 use iroh::endpoint::VarInt;
 use serde::Deserialize;
 use serde::Serialize;
@@ -98,6 +99,24 @@ pub struct AspenClient {
 }
 
 fn loopback_only_addr(addr: &EndpointAddr) -> Option<EndpointAddr> {
+    let ipv4_loopback_addrs = addr
+        .addrs
+        .iter()
+        .filter_map(|transport_addr| match transport_addr {
+            TransportAddr::Ip(socket_addr) if socket_addr.ip().is_ipv4() && socket_addr.ip().is_loopback() => {
+                Some(TransportAddr::Ip(*socket_addr))
+            }
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+
+    if !ipv4_loopback_addrs.is_empty() {
+        return Some(EndpointAddr {
+            id: addr.id,
+            addrs: ipv4_loopback_addrs,
+        });
+    }
+
     let loopback_addrs = addr
         .addrs
         .iter()
@@ -122,6 +141,37 @@ fn remaining_timeout(deadline: Instant, timeout_context: &'static str) -> Result
         Some(remaining) if !remaining.is_zero() => Ok(remaining),
         _ => Err(anyhow::anyhow!(timeout_context)),
     }
+}
+
+fn missing_direct_route_peer_ids(ticket: &AspenClusterTicket) -> Vec<String> {
+    ticket
+        .bootstrap
+        .iter()
+        .filter(|peer| peer.direct_addrs.is_empty())
+        .map(|peer| peer.endpoint_id.to_string())
+        .collect()
+}
+
+fn validate_direct_only_bootstrap_routes(ticket: &AspenClusterTicket) -> Result<()> {
+    let missing = missing_direct_route_peer_ids(ticket);
+    if missing.is_empty() {
+        return Ok(());
+    }
+
+    anyhow::bail!(
+        "direct-only Iroh client has no direct address for bootstrap peer(s) {}; ticket/bootstrap address was not registered for later RPCs",
+        missing.join(",")
+    )
+}
+
+fn endpoint_addrs_for_direct_lookup(ticket: &AspenClusterTicket) -> Result<Vec<EndpointAddr>> {
+    let addrs = ticket.endpoint_addrs().context("cluster ticket contains invalid bootstrap endpoint address")?;
+    let scoped = addrs.iter().filter_map(loopback_only_addr).collect::<Vec<_>>();
+    if scoped.is_empty() { Ok(addrs) } else { Ok(scoped) }
+}
+
+fn memory_lookup_from_ticket(ticket: &AspenClusterTicket) -> Result<MemoryLookup> {
+    Ok(MemoryLookup::from_endpoint_info(endpoint_addrs_for_direct_lookup(ticket)?))
 }
 
 async fn run_stage_with_deadline<F, T, E>(
@@ -175,12 +225,16 @@ impl AspenClient {
             anyhow::bail!("ticket contains no bootstrap peers");
         }
 
-        let endpoint = Self::create_client_endpoint(relay_disabled).await?;
+        let direct_only = relay_disabled || std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1";
+        if direct_only {
+            validate_direct_only_bootstrap_routes(&ticket)?;
+        }
+        let endpoint = Self::create_client_endpoint(direct_only, Some(&ticket)).await?;
 
         debug!(
             endpoint_id = %endpoint.id(),
             bootstrap_peers = ticket.bootstrap.len(),
-            relay_disabled,
+            relay_disabled = direct_only,
             "Aspen client connected"
         );
 
@@ -189,7 +243,7 @@ impl AspenClient {
             ticket,
             rpc_timeout,
             token,
-            prefer_loopback_direct: relay_disabled || std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1",
+            prefer_loopback_direct: direct_only,
         })
     }
 
@@ -205,7 +259,11 @@ impl AspenClient {
             anyhow::bail!("ticket contains no bootstrap peers");
         }
 
-        let endpoint = Self::create_client_endpoint(false).await?;
+        let direct_only = std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1";
+        if direct_only {
+            validate_direct_only_bootstrap_routes(&ticket)?;
+        }
+        let endpoint = Self::create_client_endpoint(direct_only, Some(&ticket)).await?;
 
         debug!(
             endpoint_id = %endpoint.id(),
@@ -218,21 +276,29 @@ impl AspenClient {
             ticket,
             rpc_timeout,
             token,
-            prefer_loopback_direct: std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1",
+            prefer_loopback_direct: direct_only,
         })
     }
 
     /// Create an iroh Endpoint for the client.
     ///
     /// Respects `ASPEN_RELAY_DISABLED=1` for local/offline testing.
-    async fn create_client_endpoint(relay_disabled: bool) -> Result<Endpoint> {
+    async fn create_client_endpoint(relay_disabled: bool, ticket: Option<&AspenClusterTicket>) -> Result<Endpoint> {
         let secret_key = iroh::SecretKey::generate();
-        let mut builder = Endpoint::builder(iroh::endpoint::presets::N0)
-            .secret_key(secret_key)
-            .alpns(vec![CLIENT_ALPN.to_vec()]);
+        let direct_only = relay_disabled || std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1";
+        let mut builder = if direct_only {
+            Endpoint::builder(iroh::endpoint::presets::Minimal)
+        } else {
+            Endpoint::builder(iroh::endpoint::presets::N0)
+        }
+        .secret_key(secret_key)
+        .alpns(vec![CLIENT_ALPN.to_vec()]);
 
-        if relay_disabled || std::env::var("ASPEN_RELAY_DISABLED").unwrap_or_default() == "1" {
+        if direct_only {
             builder = builder.relay_mode(RelayMode::Disabled).clear_address_lookup();
+            if let Some(ticket) = ticket {
+                builder = builder.address_lookup(memory_lookup_from_ticket(ticket)?);
+            }
         }
 
         builder.bind().await.context("failed to create Iroh endpoint")
@@ -265,6 +331,31 @@ impl AspenClient {
     ///
     /// Includes automatic retry logic for transient failures.
     pub async fn send(&self, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        self.send_with_response_limit(request, MAX_CLIENT_MESSAGE_SIZE).await
+    }
+
+    /// Send an RPC request with an explicit response-size bound.
+    ///
+    /// Keep ordinary control-plane RPCs on `send`; this is for intentionally
+    /// bounded bulk responses such as VM workspace source archives.
+    pub async fn send_with_response_limit(
+        &self,
+        request: ClientRpcRequest,
+        max_response_size: usize,
+    ) -> Result<ClientRpcResponse> {
+        let (response, _trailing_bytes) = self.send_with_trailing_response_limit(request, max_response_size).await?;
+        Ok(response)
+    }
+
+    /// Send an RPC request and preserve any bytes following the first postcard frame.
+    ///
+    /// The blob service uses this for large `GetBlob` responses: the first frame is
+    /// a `GetBlobResult` header and the remaining bytes are the raw streamed blob.
+    pub async fn send_with_trailing_response_limit(
+        &self,
+        request: ClientRpcRequest,
+        max_response_size: usize,
+    ) -> Result<(ClientRpcResponse, Vec<u8>)> {
         let mut last_error = None;
         let retry_delay = Duration::from_millis(RETRY_DELAY_MS);
         let mut peer_index = 0usize;
@@ -275,8 +366,8 @@ impl AspenClient {
                 tokio::time::sleep(retry_delay).await;
             }
 
-            match self.send_to_peer(peer_index, request.clone()).await {
-                Ok(response) => {
+            match self.send_to_peer_with_trailing_response_limit(peer_index, request.clone(), max_response_size).await {
+                Ok((response, trailing_bytes)) => {
                     // Check for NOT_LEADER application-level error — rotate to next peer and retry
                     if let ClientRpcResponse::Error(ref e) = response
                         && e.code == "NOT_LEADER"
@@ -286,7 +377,7 @@ impl AspenClient {
                         last_error = Some(anyhow::anyhow!("NOT_LEADER: {}", e.message));
                         continue;
                     }
-                    return Ok(response);
+                    return Ok((response, trailing_bytes));
                 }
                 Err(e) => {
                     warn!(attempt, error = %e, "RPC request failed");
@@ -301,6 +392,26 @@ impl AspenClient {
 
     /// Send a single RPC request to a specific bootstrap peer.
     async fn send_to_peer(&self, peer_index: usize, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        self.send_to_peer_with_response_limit(peer_index, request, MAX_CLIENT_MESSAGE_SIZE).await
+    }
+
+    async fn send_to_peer_with_response_limit(
+        &self,
+        peer_index: usize,
+        request: ClientRpcRequest,
+        max_response_size: usize,
+    ) -> Result<ClientRpcResponse> {
+        let (response, _trailing_bytes) =
+            self.send_to_peer_with_trailing_response_limit(peer_index, request, max_response_size).await?;
+        Ok(response)
+    }
+
+    async fn send_to_peer_with_trailing_response_limit(
+        &self,
+        peer_index: usize,
+        request: ClientRpcRequest,
+        max_response_size: usize,
+    ) -> Result<(ClientRpcResponse, Vec<u8>)> {
         let peer = self
             .ticket
             .bootstrap
@@ -308,7 +419,7 @@ impl AspenClient {
             .or_else(|| self.ticket.bootstrap.first())
             .ok_or_else(|| anyhow::anyhow!("no bootstrap peers in ticket"))?;
         let target_addr = peer.to_endpoint_addr().context("cluster ticket contains invalid bootstrap endpoint id")?;
-        self.send_to_addr(&target_addr, request).await
+        self.send_to_addr_with_trailing_response_limit(&target_addr, request, max_response_size).await
     }
 
     /// Send an RPC request to a specific endpoint address.
@@ -321,6 +432,26 @@ impl AspenClient {
 
     /// Internal method to send to a specific address.
     async fn send_to_addr(&self, addr: &EndpointAddr, request: ClientRpcRequest) -> Result<ClientRpcResponse> {
+        self.send_to_addr_with_response_limit(addr, request, MAX_CLIENT_MESSAGE_SIZE).await
+    }
+
+    async fn send_to_addr_with_response_limit(
+        &self,
+        addr: &EndpointAddr,
+        request: ClientRpcRequest,
+        max_response_size: usize,
+    ) -> Result<ClientRpcResponse> {
+        let (response, _trailing_bytes) =
+            self.send_to_addr_with_trailing_response_limit(addr, request, max_response_size).await?;
+        Ok(response)
+    }
+
+    async fn send_to_addr_with_trailing_response_limit(
+        &self,
+        addr: &EndpointAddr,
+        request: ClientRpcRequest,
+        max_response_size: usize,
+    ) -> Result<(ClientRpcResponse, Vec<u8>)> {
         let mut addr_to_connect = addr.clone();
         if self.prefer_loopback_direct
             && let Some(loopback_addr) = loopback_only_addr(addr)
@@ -360,20 +491,20 @@ impl AspenClient {
         send.finish().context("failed to finish send stream")?;
         let response_bytes = run_stage_with_deadline(
             deadline,
-            recv.read_to_end(MAX_CLIENT_MESSAGE_SIZE),
+            recv.read_to_end(max_response_size),
             "response timeout",
             "failed to read response",
         )
         .await?;
 
-        // Deserialize response
-        let response: ClientRpcResponse =
-            postcard::from_bytes(&response_bytes).context("failed to deserialize response")?;
+        // Deserialize response and preserve any raw bytes appended after the postcard frame.
+        let (response, trailing_bytes): (ClientRpcResponse, &[u8]) =
+            postcard::take_from_bytes(&response_bytes).context("failed to deserialize response")?;
 
         // Close connection gracefully
         connection.close(VarInt::from_u32(0), b"done");
 
-        Ok(response)
+        Ok((response, trailing_bytes.to_vec()))
     }
 
     /// Get the cluster ID from the ticket.
@@ -422,9 +553,9 @@ mod tests {
 
         let loopback = loopback_only_addr(&addr).expect("loopback addrs should be extracted");
         assert_eq!(loopback.id, endpoint_id);
-        assert_eq!(loopback.addrs.len(), 2);
+        assert_eq!(loopback.addrs.len(), 1);
         assert!(loopback.addrs.contains(&TransportAddr::Ip("127.0.0.1:12345".parse().unwrap())));
-        assert!(loopback.addrs.contains(&TransportAddr::Ip("[::1]:12345".parse().unwrap())));
+        assert!(!loopback.addrs.contains(&TransportAddr::Ip("[::1]:12345".parse().unwrap())));
     }
 
     #[test]
@@ -436,6 +567,72 @@ mod tests {
         };
 
         assert!(loopback_only_addr(&addr).is_none());
+    }
+
+    #[test]
+    fn direct_only_preflight_accepts_ticket_direct_addrs() {
+        let topic_id = iroh_gossip::proto::TopicId::from_bytes([42; 32]);
+        let endpoint_id = iroh::SecretKey::from([3; 32]).public();
+        let addr = EndpointAddr {
+            id: endpoint_id,
+            addrs: [TransportAddr::Ip("127.0.0.1:12345".parse().unwrap())].into_iter().collect(),
+        };
+        let ticket = AspenClusterTicket::with_bootstrap_addr(topic_id, "test".to_string(), &addr);
+
+        validate_direct_only_bootstrap_routes(&ticket).expect("direct-only ticket should carry socket addresses");
+        let lookup = memory_lookup_from_ticket(&ticket).expect("ticket addrs should seed memory lookup");
+        assert!(lookup.get_endpoint_info(endpoint_id).is_some());
+    }
+
+    #[test]
+    fn direct_lookup_scopes_same_host_ticket_to_ipv4_loopback() {
+        let topic_id = iroh_gossip::proto::TopicId::from_bytes([44; 32]);
+        let endpoint_id = iroh::SecretKey::from([5; 32]).public();
+        let addr = EndpointAddr {
+            id: endpoint_id,
+            addrs: [
+                TransportAddr::Ip("10.200.0.1:39946".parse().unwrap()),
+                TransportAddr::Ip("127.0.0.1:39946".parse().unwrap()),
+                TransportAddr::Ip("[::1]:52328".parse().unwrap()),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let ticket = AspenClusterTicket::with_bootstrap_addr(topic_id, "test".to_string(), &addr);
+
+        let scoped = endpoint_addrs_for_direct_lookup(&ticket).expect("ticket addrs should be valid");
+        assert_eq!(scoped.len(), 1);
+        assert_eq!(scoped[0].id, endpoint_id);
+        assert_eq!(scoped[0].addrs.len(), 1);
+        assert!(scoped[0].addrs.contains(&TransportAddr::Ip("127.0.0.1:39946".parse().unwrap())));
+    }
+
+    #[test]
+    fn direct_lookup_keeps_non_loopback_ticket_for_vm_namespace() {
+        let topic_id = iroh_gossip::proto::TopicId::from_bytes([45; 32]);
+        let endpoint_id = iroh::SecretKey::from([6; 32]).public();
+        let addr = EndpointAddr {
+            id: endpoint_id,
+            addrs: [TransportAddr::Ip("10.200.0.1:39946".parse().unwrap())].into_iter().collect(),
+        };
+        let ticket = AspenClusterTicket::with_bootstrap_addr(topic_id, "test".to_string(), &addr);
+
+        let scoped = endpoint_addrs_for_direct_lookup(&ticket).expect("ticket addrs should be valid");
+        assert_eq!(scoped.len(), 1);
+        assert!(scoped[0].addrs.contains(&TransportAddr::Ip("10.200.0.1:39946".parse().unwrap())));
+    }
+
+    #[test]
+    fn direct_only_preflight_rejects_endpoint_id_only_ticket() {
+        let topic_id = iroh_gossip::proto::TopicId::from_bytes([43; 32]);
+        let endpoint_id = iroh::SecretKey::from([4; 32]).public();
+        let ticket = AspenClusterTicket::with_bootstrap(topic_id, "test".to_string(), endpoint_id);
+
+        let error =
+            validate_direct_only_bootstrap_routes(&ticket).expect_err("direct-only must fail without direct addrs");
+        let message = error.to_string();
+        assert!(message.contains("direct-only Iroh client has no direct address"));
+        assert!(message.contains("ticket/bootstrap address was not registered"));
     }
 
     #[tokio::test]

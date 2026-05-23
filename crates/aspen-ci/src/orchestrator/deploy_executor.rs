@@ -681,6 +681,7 @@ mod tests {
                 env: HashMap::new(),
                 checkout_dir: None,
                 source_hash: None,
+                flake_input_paths: std::collections::BTreeMap::new(),
             },
             status: PipelineStatus::Running,
             created_at: chrono::Utc::now(),

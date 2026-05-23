@@ -11,9 +11,323 @@ use tokio::time::timeout;
 use tracing::info;
 
 use crate::RunConfig;
+use crate::VmCiRail;
 use crate::error::DogfoodResult;
 use crate::error::ForgeSnafu;
 use crate::error::GitPushSnafu;
+
+const VMCI_SHELL_SMOKE_CI_CONFIG: &str = r#"# Aspen VM-CI shell smoke pipeline.
+# Narrow proof rail for host↔guest VMCI, source blob materialization, and
+# preserved command progress without running the full clippy/build/test graph.
+{
+  name = "aspen-vmci-smoke",
+  description = "Narrow VM-CI shell smoke proof for Aspen dogfood",
+  triggers = {
+    refs = ["refs/heads/main"],
+    ignore_paths = [],
+  },
+  stages = [
+    {
+      name = "smoke",
+      jobs = [
+        {
+          name = "workspace-materialization-smoke",
+          type = 'shell,
+          command = "test -f flake.nix && test -d crates/aspen-dogfood && echo ASPEN_VMCI_SMOKE_OK",
+          timeout_secs = 120,
+        },
+      ],
+    },
+  ],
+  artifacts = {
+    storage = 'blobs,
+    retention_days = 7,
+    compress = true,
+  },
+  env = {
+    RUST_BACKTRACE = "1",
+    RUST_LOG = "info,aspen_ci=debug",
+  },
+  timeout_secs = 600,
+  priority = 'normal,
+}
+"#;
+
+const VMCI_SOURCE_BLOB_CI_CONFIG: &str = r#"# Aspen VM-CI source/blob materialization pipeline.
+# Narrow proof rail for Forge source archive creation, source blob propagation,
+# guest workspace seeding, and shell executor start without guest Nix or Cargo.
+{
+  name = "aspen-vmci-source-blob",
+  description = "Narrow VM-CI source/blob materialization proof for Aspen dogfood",
+  triggers = {
+    refs = ["refs/heads/main"],
+    ignore_paths = [],
+  },
+  stages = [
+    {
+      name = "source-blob",
+      jobs = [
+        {
+          name = "source-blob-materialization",
+          type = 'shell,
+          command = "test -f flake.nix && test -d crates/aspen-dogfood && test -d .git && echo ASPEN_VMCI_SOURCE_BLOB_OK",
+          timeout_secs = 120,
+        },
+      ],
+    },
+  ],
+  artifacts = {
+    storage = 'blobs,
+    retention_days = 7,
+    compress = true,
+  },
+  env = {
+    RUST_BACKTRACE = "1",
+    RUST_LOG = "info,aspen_ci=debug",
+  },
+  timeout_secs = 600,
+  priority = 'normal,
+}
+"#;
+
+const VMCI_NIX_SMOKE_CI_CONFIG: &str = r#"# Aspen VM-CI Nix smoke pipeline.
+{
+  name = "aspen-vmci-nix-smoke",
+  description = "Narrow VM-CI proof that guest Nix works without building Aspen",
+  triggers = {
+    refs = ["refs/heads/main"],
+    ignore_paths = [],
+  },
+  stages = [
+    {
+      name = "nix-smoke",
+      jobs = [
+        {
+          name = "guest-nix-eval-smoke",
+          type = 'shell,
+          command = "test -f flake.nix && nix eval --expr '\"ASPEN_VMCI_NIX_SMOKE_OK\"'",
+          timeout_secs = 180,
+        },
+      ],
+    },
+  ],
+  artifacts = {
+    storage = 'blobs,
+    retention_days = 7,
+    compress = true,
+  },
+  env = {
+    RUST_BACKTRACE = "1",
+    RUST_LOG = "info,aspen_ci=debug",
+  },
+  timeout_secs = 600,
+  priority = 'normal,
+}
+"#;
+
+const VMCI_NIX_TIMEOUT_CI_CONFIG: &str = r#"# Aspen VM-CI Nix timeout/finalization pipeline.
+# Exercises the real ci_nix_build transform, guest command timeout, and job
+# result publication path with a deterministic short timeout.
+{
+  name = "aspen-vmci-nix-timeout",
+  description = "Narrow VM-CI proof that guest Nix build timeout finalizes",
+  triggers = {
+    refs = ["refs/heads/main"],
+    ignore_paths = [],
+  },
+  stages = [
+    {
+      name = "nix-timeout",
+      jobs = [
+        {
+          name = "guest-nix-timeout-finalization",
+          type = 'nix,
+          flake_url = ".",
+          flake_attr = "checks.x86_64-linux.fmt",
+          publish_to_cache = false,
+          timeout_secs = 5,
+        },
+      ],
+    },
+  ],
+  artifacts = {
+    storage = 'blobs,
+    retention_days = 7,
+    compress = true,
+  },
+  env = {
+    RUST_BACKTRACE = "1",
+    RUST_LOG = "info,aspen_ci=debug",
+  },
+  timeout_secs = 180,
+  priority = 'normal,
+}
+"#;
+
+const VMCI_CARGO_SMOKE_CI_CONFIG: &str = r#"# Aspen VM-CI Cargo smoke pipeline.
+{
+  name = "aspen-vmci-cargo-smoke",
+  description = "Medium VM-CI proof that a focused Rust crate check runs in the guest",
+  triggers = {
+    refs = ["refs/heads/main"],
+    ignore_paths = [],
+  },
+  stages = [
+    {
+      name = "cargo-smoke",
+      jobs = [
+        {
+          name = "guest-cargo-check-dogfood",
+          type = 'shell,
+          command = "test -f flake.nix && test -d crates/aspen-dogfood && tmpdir=$(mktemp -d) && cd $tmpdir && cargo init --bin --name aspen-vmci-cargo-smoke >/dev/null && cargo check && echo ASPEN_VMCI_CARGO_SMOKE_OK",
+          timeout_secs = 300,
+        },
+      ],
+    },
+  ],
+  artifacts = {
+    storage = 'blobs,
+    retention_days = 7,
+    compress = true,
+  },
+  env = {
+    RUST_BACKTRACE = "1",
+    RUST_LOG = "info,aspen_ci=debug",
+  },
+  timeout_secs = 1500,
+  priority = 'normal,
+}
+"#;
+
+const VMCI_MEDIUM_CI_CONFIG: &str = r#"# Aspen VM-CI medium acceptance pipeline.
+# Proves full source materialization plus real Nix package builds without the
+# expensive clippy/nextest/deploy gates that made the full rail time out first.
+# The cache-warm job realizes the build-cli dependency closure first. VMCI now
+# uses an isolated guest-local Nix store, so first-run medium rails may spend a
+# long bounded window fetching/building crate derivations before the Aspen build
+# itself starts; keeping that work in its own stage makes timeout origin explicit.
+{
+  name = "aspen-vmci-medium",
+  description = "Medium VM-CI acceptance: format plus build-only Nix jobs",
+  triggers = {
+    refs = ["refs/heads/main"],
+    ignore_paths = [],
+  },
+  stages = [
+    {
+      name = "check",
+      jobs = [
+        {
+          name = "format-check",
+          type = 'shell,
+          # Format still runs through `nix fmt`, but VMCI must not let this
+          # shell-stage Nix invocation fall back to the overlay-backed
+          # `/nix/store`: the latest medium receipt showed `nix fmt .`
+          # chmod-walking a fetched nixpkgs source through that boundary and
+          # failing with `Too many open files in system`. Mirror the explicit
+          # guest-local store strategy used by typed Nix jobs.
+          command = "nix --store local?root=$ASPEN_CI_NIX_LOCAL_STORE_ROOT --option min-free 0 --option max-free 0 --accept-flake-config fmt . -- --check",
+          timeout_secs = 300,
+        },
+      ],
+    },
+    {
+      name = "cache-warm",
+      depends_on = ["check"],
+      jobs = [
+        {
+          name = "build-cli-deps",
+          type = 'nix,
+          flake_url = ".",
+          flake_attr = "checks.x86_64-linux.build-cli-deps",
+          publish_to_cache = true,
+          timeout_secs = 2400,
+        },
+      ],
+    },
+    {
+      name = "build",
+      depends_on = ["cache-warm"],
+      jobs = [
+        {
+          name = "build-cli",
+          type = 'nix,
+          flake_url = ".",
+          flake_attr = "checks.x86_64-linux.build-cli",
+          publish_to_cache = true,
+          timeout_secs = 3600,
+        },
+      ],
+    },
+  ],
+  artifacts = {
+    storage = 'blobs,
+    retention_days = 14,
+    compress = true,
+  },
+  env = {
+    RUST_BACKTRACE = "1",
+    RUST_LOG = "info,aspen_ci=debug",
+    # Shell jobs that invoke Nix must receive the same guest-local store root
+    # as typed Nix jobs. Without this environment value the format stage falls
+    # back to the overlay-backed `/nix/store` and can hit virtiofs FD pressure
+    # while chmod-walking fetched public inputs.
+    ASPEN_CI_NIX_LOCAL_STORE_ROOT = "/tmp/aspen-ci-nix-store",
+  },
+  timeout_secs = 6900,
+  priority = 'normal,
+}
+"#;
+
+const VMCI_CLIPPY_CI_CONFIG: &str = r#"# Aspen VM-CI clippy pipeline.
+# Isolates the expensive clippy gate from VMCI/source/build acceptance rails.
+{
+  name = "aspen-vmci-clippy",
+  description = "Dedicated VM-CI clippy rail for expensive lint proof",
+  triggers = {
+    refs = ["refs/heads/main"],
+    ignore_paths = [],
+  },
+  stages = [
+    {
+      name = "clippy",
+      jobs = [
+        {
+          name = "clippy",
+          type = 'nix,
+          flake_url = ".",
+          flake_attr = "checks.x86_64-linux.clippy",
+          timeout_secs = 7200,
+        },
+      ],
+    },
+  ],
+  artifacts = {
+    storage = 'blobs,
+    retention_days = 14,
+    compress = true,
+  },
+  env = {
+    RUST_BACKTRACE = "1",
+    RUST_LOG = "info,aspen_ci=debug",
+  },
+  timeout_secs = 7500,
+  priority = 'normal,
+}
+"#;
+
+fn vmci_smoke_ci_config(rail: VmCiRail) -> Option<&'static str> {
+    match rail {
+        VmCiRail::Shell => Some(VMCI_SHELL_SMOKE_CI_CONFIG),
+        VmCiRail::SourceBlob => Some(VMCI_SOURCE_BLOB_CI_CONFIG),
+        VmCiRail::Nix => Some(VMCI_NIX_SMOKE_CI_CONFIG),
+        VmCiRail::NixTimeout => Some(VMCI_NIX_TIMEOUT_CI_CONFIG),
+        VmCiRail::Cargo => Some(VMCI_CARGO_SMOKE_CI_CONFIG),
+        VmCiRail::Medium => Some(VMCI_MEDIUM_CI_CONFIG),
+        VmCiRail::Clippy => Some(VMCI_CLIPPY_CI_CONFIG),
+        VmCiRail::Full => None,
+    }
+}
 
 /// Find a Forge repo by name.
 pub async fn lookup_repo_id(ticket: &str, repo_name: &str) -> DogfoodResult<Option<String>> {
@@ -257,6 +571,10 @@ async fn prepare_push_workspace(config: &RunConfig) -> DogfoodResult<PathBuf> {
         "tar extract dogfood source snapshot",
     )
     .await?;
+    overlay_tracked_worktree_changes(config, &snapshot_dir).await?;
+    if let Some(rail) = config.vmci_rail.and_then(VmCiRail::ci_config_override) {
+        write_vmci_smoke_ci_config(&snapshot_dir, rail).await?;
+    }
     let _ = tokio::fs::remove_file(&archive_path).await;
 
     run_process("git", &["init", "-b", "main"], &snapshot_dir, "git init snapshot").await?;
@@ -296,6 +614,87 @@ async fn reset_dir(path: &Path) -> DogfoodResult<()> {
             binary: format!("rm -rf {}", path.display()),
             source,
         }),
+    }
+}
+
+async fn overlay_tracked_worktree_changes(config: &RunConfig, snapshot_dir: &Path) -> DogfoodResult<()> {
+    let changed_files =
+        git_stdout(&config.project_dir, &["diff", "--name-only", "HEAD", "--"], "git diff --name-only HEAD").await?;
+    if changed_files.is_empty() {
+        return Ok(());
+    }
+
+    let patch_path = Path::new(&config.cluster_dir).join("source-snapshot-tracked.patch");
+    run_process(
+        "git",
+        &[
+            "diff",
+            "--binary",
+            "HEAD",
+            "--output",
+            &patch_path.display().to_string(),
+            "--",
+        ],
+        &config.project_dir,
+        "git diff --binary HEAD for dogfood source snapshot",
+    )
+    .await?;
+    run_process(
+        "git",
+        &["apply", &patch_path.display().to_string()],
+        snapshot_dir,
+        "git apply tracked worktree changes to dogfood source snapshot",
+    )
+    .await?;
+    let _ = tokio::fs::remove_file(&patch_path).await;
+    info!("  overlaid tracked worktree changes into source snapshot (files={})", changed_files.lines().count());
+    Ok(())
+}
+
+async fn write_vmci_smoke_ci_config(snapshot_dir: &Path, profile: &str) -> DogfoodResult<()> {
+    let Some(rail) = vmci_rail_for_profile(profile) else {
+        return ForgeSnafu {
+            operation: "select VM-CI smoke config",
+            reason: format!("unknown CI profile: {profile}"),
+        }
+        .fail();
+    };
+    let Some(ci_config) = vmci_smoke_ci_config(rail) else {
+        return ForgeSnafu {
+            operation: "select VM-CI smoke config",
+            reason: format!("CI rail has no smoke override: {}", rail.profile()),
+        }
+        .fail();
+    };
+    let config_dir = snapshot_dir.join(".aspen");
+    tokio::fs::create_dir_all(&config_dir)
+        .await
+        .map_err(|source| crate::error::DogfoodError::ProcessSpawn {
+            binary: format!("mkdir -p {}", config_dir.display()),
+            source,
+        })?;
+    let config_path = config_dir.join("ci.ncl");
+    tokio::fs::write(&config_path, ci_config)
+        .await
+        .map_err(|source| crate::error::DogfoodError::ProcessSpawn {
+            binary: format!("write {}", config_path.display()),
+            source,
+        })?;
+    info!("  using VM-CI smoke CI config profile={} at {}", rail.profile(), config_path.display());
+    Ok(())
+}
+
+fn vmci_rail_for_profile(profile: &str) -> Option<VmCiRail> {
+    match profile {
+        "vmci-smoke" => Some(VmCiRail::Shell),
+        "vmci-nix-smoke" => Some(VmCiRail::Nix),
+        "vmci-nix-timeout" => Some(VmCiRail::NixTimeout),
+        "vmci-cargo-smoke" => Some(VmCiRail::Cargo),
+        "vmci-source-blob" => Some(VmCiRail::SourceBlob),
+        "vmci-medium" => Some(VmCiRail::Medium),
+        "vmci-clippy" => Some(VmCiRail::Clippy),
+        "vmci-full" => Some(VmCiRail::Full),
+        _ => None,
     }
 }
 
@@ -363,7 +762,10 @@ pub(crate) fn git_push_args() -> [&'static str; 5] {
 
 /// Connect an `AspenClient` from a ticket string.
 async fn connect(ticket: &str) -> DogfoodResult<AspenClient> {
-    AspenClient::connect_direct(ticket, Duration::from_secs(10), None).await.map_err(|e| {
+    // Forge runs in the same host namespace as the dogfood node for VM-CI.
+    // Use the relay-disabled client path so offline VM-CI does not fall back to
+    // n0 relay/DNS discovery and lose the ticket's local direct route.
+    AspenClient::connect_direct(ticket, Duration::from_secs(30), None).await.map_err(|e| {
         crate::error::DogfoodError::ClientRpc {
             operation: "connect".to_string(),
             target: crate::cluster::ticket_preview(ticket),
@@ -428,6 +830,101 @@ mod tests {
         assert_eq!(git_stdout_sync(&snapshot, &["status", "--short"]), "");
     }
 
+    #[tokio::test]
+    async fn push_workspace_overrides_ci_config_for_vmci_smoke() {
+        let source = tempfile::tempdir().unwrap();
+        git(source.path(), &["init", "-b", "main"]);
+        git(source.path(), &["config", "user.name", "Test"]);
+        git(source.path(), &["config", "user.email", "test@example.invalid"]);
+        std::fs::create_dir_all(source.path().join(".aspen")).unwrap();
+        std::fs::write(source.path().join(".aspen/ci.ncl"), "{ name = \"full\" }").unwrap();
+        std::fs::write(source.path().join("flake.nix"), "{}\n").unwrap();
+        std::fs::create_dir_all(source.path().join("crates/aspen-dogfood")).unwrap();
+        git(source.path(), &["add", "-A"]);
+        git(source.path(), &["commit", "-m", "initial"]);
+
+        let cluster = tempfile::tempdir().unwrap();
+        let mut config = test_config(source.path().to_str().unwrap(), cluster.path().to_str().unwrap());
+        config.vmci_rail = Some(VmCiRail::Shell);
+
+        let snapshot = prepare_push_workspace(&config).await.unwrap();
+        let ci_config = std::fs::read_to_string(snapshot.join(".aspen/ci.ncl")).unwrap();
+
+        assert!(ci_config.contains("aspen-vmci-smoke"));
+        assert!(ci_config.contains("ASPEN_VMCI_SMOKE_OK"));
+        assert_eq!(git_stdout_sync(&snapshot, &["status", "--short"]), "");
+    }
+
+    #[tokio::test]
+    async fn push_workspace_can_select_layered_vmci_smoke_configs() {
+        for (profile, pipeline_name, marker) in [
+            ("vmci-source-blob", "aspen-vmci-source-blob", "ASPEN_VMCI_SOURCE_BLOB_OK"),
+            ("vmci-nix-smoke", "aspen-vmci-nix-smoke", "ASPEN_VMCI_NIX_SMOKE_OK"),
+            ("vmci-nix-timeout", "aspen-vmci-nix-timeout", "guest-nix-timeout-finalization"),
+            ("vmci-cargo-smoke", "aspen-vmci-cargo-smoke", "ASPEN_VMCI_CARGO_SMOKE_OK"),
+            ("vmci-medium", "aspen-vmci-medium", "build-cli"),
+            ("vmci-clippy", "aspen-vmci-clippy", "checks.x86_64-linux.clippy"),
+        ] {
+            let source = tempfile::tempdir().unwrap();
+            git(source.path(), &["init", "-b", "main"]);
+            git(source.path(), &["config", "user.name", "Test"]);
+            git(source.path(), &["config", "user.email", "test@example.invalid"]);
+            std::fs::write(source.path().join("flake.nix"), "{}\n").unwrap();
+            git(source.path(), &["add", "-A"]);
+            git(source.path(), &["commit", "-m", "initial"]);
+
+            let cluster = tempfile::tempdir().unwrap();
+            let mut config = test_config(source.path().to_str().unwrap(), cluster.path().to_str().unwrap());
+            config.vmci_rail = Some(vmci_rail_for_profile(profile).unwrap());
+
+            let snapshot = prepare_push_workspace(&config).await.unwrap();
+            let ci_config = std::fs::read_to_string(snapshot.join(".aspen/ci.ncl")).unwrap();
+
+            assert!(ci_config.contains(pipeline_name), "profile={profile}");
+            assert!(ci_config.contains(marker), "profile={profile}");
+            assert_eq!(git_stdout_sync(&snapshot, &["status", "--short"]), "");
+        }
+    }
+
+    #[test]
+    fn vmci_medium_allows_cold_guest_local_store_build() {
+        let config = vmci_smoke_ci_config(VmCiRail::Medium).expect("medium rail must have an override config");
+
+        assert!(config.contains("name = \"build-cli-deps\""));
+        assert!(config.contains("command = \"nix --store local?root=$ASPEN_CI_NIX_LOCAL_STORE_ROOT"));
+        assert!(config.contains("ASPEN_CI_NIX_LOCAL_STORE_ROOT = \"/tmp/aspen-ci-nix-store\""));
+        assert!(config.contains("--accept-flake-config fmt . -- --check"));
+        assert!(config.contains("flake_attr = \"checks.x86_64-linux.build-cli-deps\""));
+        assert!(config.contains("timeout_secs = 2400,"));
+        assert!(config.contains("name = \"build-cli\""));
+        assert!(config.contains("timeout_secs = 3600,"));
+        assert!(config.contains("timeout_secs = 6900,"));
+        assert!(config.contains("isolated guest-local Nix store"));
+        assert!(config.contains("dependency closure"));
+    }
+
+    #[test]
+    fn smoke_rails_do_not_select_full_workspace_ci_graph() {
+        for rail in [
+            VmCiRail::Shell,
+            VmCiRail::SourceBlob,
+            VmCiRail::Nix,
+            VmCiRail::NixTimeout,
+            VmCiRail::Cargo,
+            VmCiRail::Medium,
+        ] {
+            assert!(!rail.uses_full_workspace_ci(), "rail={rail:?}");
+            let config = vmci_smoke_ci_config(rail).expect("smoke rail must have an override config");
+            assert!(!config.contains("cargo clippy"), "rail={rail:?}");
+            assert!(!config.contains("cargo nextest"), "rail={rail:?}");
+            assert!(!config.contains("cargo test --workspace"), "rail={rail:?}");
+            assert!(!config.contains("cargo check -p aspen-dogfood"), "rail={rail:?}");
+        }
+
+        assert!(vmci_smoke_ci_config(VmCiRail::Full).is_none());
+        assert!(VmCiRail::Full.uses_full_workspace_ci());
+    }
+
     fn test_config(project_dir: &str, cluster_dir: &str) -> RunConfig {
         RunConfig {
             cluster_dir: cluster_dir.to_string(),
@@ -439,6 +936,7 @@ mod tests {
             nix_cache_gateway_bin: None,
             ci_timeout_secs: 60,
             git_push_timeout_secs: 60,
+            vmci_rail: None,
         }
     }
 

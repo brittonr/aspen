@@ -75,6 +75,11 @@ fn limit_usize(limit_opt: Option<u32>) -> usize {
     usize::try_from(limit_opt.unwrap_or(100).min(1000)).unwrap_or(1000)
 }
 
+#[inline]
+fn is_stale_running_poll(job: &aspen_jobs::Job, polling_worker_id: &str) -> bool {
+    job.status == JobStatus::Running && job.worker_id.as_deref() != Some(polling_worker_id)
+}
+
 /// Service executor for job queue operations.
 pub struct JobServiceExecutor {
     job_manager: Arc<JobManager<dyn KeyValueStore>>,
@@ -713,12 +718,41 @@ impl JobServiceExecutor {
             let execution_token = match self.job_manager.mark_started(&job.id, worker_id.clone()).await {
                 Ok(token) => token,
                 Err(e) => {
-                    warn!(
-                        worker_id,
-                        job_id = %job.id,
-                        error = %e,
-                        "failed to mark_started for polled job, skipping"
-                    );
+                    if is_stale_running_poll(&job, &worker_id) {
+                        let priority = job.spec.config.priority;
+                        match self.job_manager.ack_queue_item_by_priority(&dequeued_item.receipt_handle, priority).await
+                        {
+                            Ok(()) => {
+                                warn!(
+                                    worker_id,
+                                    job_id = %job.id,
+                                    current_worker = ?job.worker_id,
+                                    ?priority,
+                                    error = %e,
+                                    "consumed stale queue item for already-running polled job"
+                                );
+                            }
+                            Err(ack_error) => {
+                                warn!(
+                                    worker_id,
+                                    job_id = %job.id,
+                                    current_worker = ?job.worker_id,
+                                    ?priority,
+                                    error = %e,
+                                    ack_error = %ack_error,
+                                    "failed to consume stale queue item for already-running polled job"
+                                );
+                            }
+                        }
+                    } else {
+                        warn!(
+                            worker_id,
+                            job_id = %job.id,
+                            state = ?job.status,
+                            error = %e,
+                            "failed to mark_started for polled job, skipping"
+                        );
+                    }
                     continue;
                 }
             };
@@ -821,6 +855,27 @@ mod tests {
         "WorkerPollJobs",
         "WorkerCompleteJob",
     ];
+
+    fn running_job_for(worker_id: &str) -> aspen_jobs::Job {
+        let mut job = aspen_jobs::Job::from_spec(aspen_jobs::JobSpec::new("ci_nix_build"));
+        job.mark_started(worker_id.to_string());
+        job
+    }
+
+    #[test]
+    fn stale_running_poll_is_consumed_for_different_worker() {
+        let job = running_job_for("original-worker");
+        assert!(super::is_stale_running_poll(&job, "polling-worker"));
+    }
+
+    #[test]
+    fn stale_running_poll_does_not_consume_same_worker_or_pending_job() {
+        let running = running_job_for("same-worker");
+        assert!(!super::is_stale_running_poll(&running, "same-worker"));
+
+        let pending = aspen_jobs::Job::from_spec(aspen_jobs::JobSpec::new("ci_nix_build"));
+        assert!(!super::is_stale_running_poll(&pending, "polling-worker"));
+    }
 
     #[test]
     fn handles_count() {

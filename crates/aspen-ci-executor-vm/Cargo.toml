@@ -47,6 +47,7 @@ snafu = "0.8.9"
 tracing = { workspace = true }
 
 # Utilities
+blake3 = { workspace = true }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { workspace = true }
 glob = "0.3"

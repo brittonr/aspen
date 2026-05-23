@@ -37,6 +37,39 @@ use crate::config::NixBuildWorkerConfig;
 use crate::payload::NixBuildPayload;
 use crate::timing::BuildPhaseTimings;
 
+#[cfg(feature = "nix-cli-fallback")]
+const VMCI_LOCAL_STORE_ROOT_ENV: &str = "ASPEN_CI_NIX_LOCAL_STORE_ROOT";
+
+#[cfg(feature = "nix-cli-fallback")]
+fn vmci_local_store_root(payload: &NixBuildPayload) -> Option<String> {
+    payload
+        .env
+        .get(VMCI_LOCAL_STORE_ROOT_ENV)
+        .cloned()
+        .or_else(|| std::env::var(VMCI_LOCAL_STORE_ROOT_ENV).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+#[cfg(feature = "nix-cli-fallback")]
+fn vmci_local_store_flags(root: &str) -> [String; 6] {
+    [
+        "--store".to_string(),
+        format!("local?root={root}"),
+        "--option".to_string(),
+        "build-dir".to_string(),
+        format!("{root}/.build-dir"),
+        "--fallback".to_string(),
+    ]
+}
+
+#[cfg(feature = "nix-cli-fallback")]
+fn append_vmci_local_store_flags(cmd: &mut Command, root: &str) {
+    for arg in vmci_local_store_flags(root) {
+        cmd.arg(arg);
+    }
+}
+
 /// Output from a Nix build.
 #[derive(Debug, Clone)]
 pub(crate) struct NixBuildOutput {
@@ -198,6 +231,14 @@ impl NixBuildWorker {
 
         let mut cmd = Command::new(&self.config.nix_binary);
         cmd.arg("eval").arg("--raw").arg(&installable);
+        if let Some(root) = vmci_local_store_root(payload) {
+            append_vmci_local_store_flags(&mut cmd, &root);
+            info!(
+                local_store_root = %root,
+                build_dir = %format!("{root}/.build-dir"),
+                "VMCI Nix eval using guest-local store"
+            );
+        }
 
         if let Some(ref dir) = payload.working_dir {
             cmd.current_dir(dir);
@@ -1107,6 +1148,14 @@ impl NixBuildWorker {
     ) -> Result<NixBuildOutput> {
         let build_start_sub = Instant::now();
 
+        if let Some(root) = vmci_local_store_root(payload) {
+            if let Some(ref tx) = log_sender {
+                let _ = tx
+                    .send(format!("aspen-vmci-nix-diagnostics local_store_root={root} build_dir={root}/.build-dir\n"))
+                    .await;
+            }
+        }
+
         let mut child = self.spawn_nix_build(payload, flake_ref)?;
         let readers = Self::spawn_output_readers(&mut child, flake_ref, self.config.is_verbose, log_sender)?;
         let (output_paths, log, log_size) = Self::collect_output(readers).await?;
@@ -1220,6 +1269,15 @@ impl NixBuildWorker {
 
         if self.config.is_verbose {
             cmd.arg("-L");
+        }
+
+        if let Some(root) = vmci_local_store_root(payload) {
+            append_vmci_local_store_flags(&mut cmd, &root);
+            info!(
+                local_store_root = %root,
+                build_dir = %format!("{root}/.build-dir"),
+                "VMCI Nix build using guest-local store"
+            );
         }
 
         for arg in &payload.extra_args {

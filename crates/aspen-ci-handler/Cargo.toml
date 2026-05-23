@@ -19,6 +19,7 @@ aspen-constants = { path = "../aspen-constants" }
 aspen-cache = { path = "../aspen-cache" }
 aspen-forge = { path = "../aspen-forge", optional = true }
 aspen-blob = { path = "../aspen-blob", optional = true }
+aspen-ci-executor-shell = { path = "../aspen-ci-executor-shell", optional = true }
 aspen-jobs = { path = "../aspen-jobs" }
 aspen-jobs-worker-shell = { path = "../aspen-jobs-worker-shell" }
 
@@ -43,7 +44,7 @@ iroh-blobs = "0.99.0"
 [features]
 default = []
 forge = ["dep:aspen-forge"]
-blob = ["dep:aspen-blob"]
+blob = ["dep:aspen-blob", "dep:aspen-ci-executor-shell"]
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full", "test-util"] }

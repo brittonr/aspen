@@ -183,12 +183,14 @@ fn create_test_payload(flake_url: &str, attribute: Option<&str>) -> NixBuildPayl
         job_name: Some("test-build".to_string()),
         run_id: Some("test-run".to_string()),
         extra_args: vec![],
+        env: std::collections::HashMap::new(),
         working_dir: None,
         cache_key: None,
         publish_to_cache: true,
         cache_outputs: vec![],
         system: None,
         source_hash: None,
+        flake_input_paths: std::collections::BTreeMap::new(),
     }
 }
 

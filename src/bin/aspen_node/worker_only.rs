@@ -31,6 +31,34 @@ use crate::signals::shutdown_signal;
 #[cfg(feature = "ci")]
 const WORKER_ONLY_LOCAL_EXECUTOR_JOB_TYPE: &str = "local_executor";
 
+#[cfg(feature = "ci")]
+const VMCI_SOURCE_MATERIALIZATION_TIMEOUT_SECS: u64 = 120;
+#[cfg(feature = "ci")]
+const VMCI_EXECUTOR_TIMEOUT_GRACE_SECS: u64 = 30;
+
+#[cfg(feature = "ci")]
+fn vmci_preexecutor_progress_marker(phase: &str, job_id: &str) -> String {
+    format!("ASPEN_CI_COMMAND_PROGRESS phase={phase} job_id={job_id}")
+}
+
+#[cfg(feature = "ci")]
+fn try_send_vmci_progress_marker(log_tx: &tokio::sync::mpsc::Sender<aspen_ci::LogMessage>, marker: String) {
+    let _ = log_tx.try_send(aspen_ci::LogMessage::Stderr(format!("{marker}\n")));
+}
+
+#[cfg(feature = "ci")]
+fn vmci_executor_timeout_secs(job_spec: &aspen_jobs::JobSpec) -> u64 {
+    let command_timeout_secs = job_spec
+        .payload
+        .get("timeout_secs")
+        .and_then(serde_json::Value::as_u64)
+        .or_else(|| job_spec.config.timeout.map(|timeout| timeout.as_secs()))
+        .unwrap_or(300);
+    command_timeout_secs
+        .saturating_add(VMCI_SOURCE_MATERIALIZATION_TIMEOUT_SECS)
+        .saturating_add(VMCI_EXECUTOR_TIMEOUT_GRACE_SECS)
+}
+
 /// Build the ephemeral worker endpoint configuration from parsed CLI/env config.
 ///
 /// Worker-only mode bypasses full cluster config loading because it has no Raft
@@ -292,6 +320,7 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
     // The log sink enables real-time streaming: log messages from execution
     // are forwarded to a bridge task that writes chunks to cluster KV via RPC.
     let (log_sink_tx, log_sink_rx) = tokio::sync::mpsc::channel::<aspen_ci::LogMessage>(2048);
+    let log_sink_for_progress = log_sink_tx.clone();
     let mut _worker = LocalExecutorWorker::with_blob_store(worker_config, rpc_blob_store);
     _worker.set_log_sink(log_sink_tx);
 
@@ -407,12 +436,29 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
 
                                 active_jobs.push(job_info.job_id.clone());
 
-                                let job_spec: aspen_jobs::JobSpec = match serde_json::from_str(&job_info.job_spec_json) {
-                                    Ok(spec) => spec,
+                                let parse_input = job_info.job_spec_json.clone();
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    job_spec_bytes = parse_input.len(),
+                                    marker = %vmci_preexecutor_progress_marker("job_spec_parse_enter", &job_info.job_id),
+                                    "VM-CI guest pre-executor job spec parse enter"
+                                );
+                                let job_spec: aspen_jobs::JobSpec = match serde_json::from_str(&parse_input) {
+                                    Ok(spec) => {
+                                        info!(
+                                            worker_id = %worker_id_clone,
+                                            job_id = %job_info.job_id,
+                                            marker = %vmci_preexecutor_progress_marker("job_spec_parse_done", &job_info.job_id),
+                                            "VM-CI guest pre-executor job spec parse done"
+                                        );
+                                        spec
+                                    }
                                     Err(e) => {
                                         error!(
                                             job_id = %job_info.job_id,
                                             error = %e,
+                                            marker = %vmci_preexecutor_progress_marker("job_spec_parse_error", &job_info.job_id),
                                             "failed to parse job spec"
                                         );
                                         let complete_request = ClientRpcRequest::WorkerCompleteJob {
@@ -440,17 +486,45 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                     .get("run_id")
                                     .and_then(|v| v.as_str())
                                     .map(String::from);
+                                if let Some(ref rid) = run_id_for_logs {
+                                    *active_log_job.lock().await = Some((rid.clone(), job_info.job_id.clone()));
+                                    try_send_vmci_progress_marker(
+                                        &log_sink_for_progress,
+                                        vmci_preexecutor_progress_marker("job_spec_parse_done", &job_info.job_id),
+                                    );
+                                }
 
                                 // For ci_nix_build jobs, transform NixBuildPayload → LocalExecutorPayload.
                                 // The pipeline creates NixBuildPayload (flake_url, attribute, run_id)
                                 // but LocalExecutorWorker expects LocalExecutorPayload (command, args).
                                 if job_info.job_type == aspen_ci::CI_JOB_TYPE_NIX {
-                                    match transform_nix_payload(&mut job_spec) {
-                                        Ok(_) => {}
+                                    let marker = vmci_preexecutor_progress_marker("nix_payload_transform_enter", &job_info.job_id);
+                                    try_send_vmci_progress_marker(&log_sink_for_progress, marker.clone());
+                                    info!(
+                                        worker_id = %worker_id_clone,
+                                        job_id = %job_info.job_id,
+                                        marker = %marker,
+                                        "VM-CI guest pre-executor Nix payload transform enter"
+                                    );
+                                    match transform_nix_payload(&mut job_spec, Some(&job_info.job_id)) {
+                                        Ok(_) => {
+                                            let marker = vmci_preexecutor_progress_marker(
+                                                "nix_payload_transform_done",
+                                                &job_info.job_id,
+                                            );
+                                            try_send_vmci_progress_marker(&log_sink_for_progress, marker.clone());
+                                            info!(
+                                                worker_id = %worker_id_clone,
+                                                job_id = %job_info.job_id,
+                                                marker = %marker,
+                                                "VM-CI guest pre-executor Nix payload transform done"
+                                            );
+                                        }
                                         Err(e) => {
                                             error!(
                                                 job_id = %job_info.job_id,
                                                 error = %e,
+                                                marker = %vmci_preexecutor_progress_marker("nix_payload_transform_error", &job_info.job_id),
                                                 "failed to transform nix payload"
                                             );
                                             let complete_request = ClientRpcRequest::WorkerCompleteJob {
@@ -476,8 +550,26 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                 // which doesn't exist inside the VM. Replace any absolute
                                 // path not under /workspace with "." so the executor
                                 // resolves it relative to the job workspace directory.
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    marker = %vmci_preexecutor_progress_marker("working_dir_rewrite_enter", &job_info.job_id),
+                                    "VM-CI guest pre-executor working dir rewrite enter"
+                                );
                                 rewrite_working_dir_for_vm(&mut job_spec);
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    marker = %vmci_preexecutor_progress_marker("working_dir_rewrite_done", &job_info.job_id),
+                                    "VM-CI guest pre-executor working dir rewrite done"
+                                );
 
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    marker = %vmci_preexecutor_progress_marker("job_construct_enter", &job_info.job_id),
+                                    "VM-CI guest pre-executor local job construction enter"
+                                );
                                 let job = aspen_jobs::Job {
                                     id: aspen_jobs::JobId::parse(&job_info.job_id).unwrap_or_else(|_| aspen_jobs::JobId::new()),
                                     spec: job_spec,
@@ -502,6 +594,19 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                     blocking: Vec::new(),
                                     dependency_failure_policy: DependencyFailurePolicy::default(),
                                 };
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    marker = %vmci_preexecutor_progress_marker("job_construct_done", &job_info.job_id),
+                                    "VM-CI guest pre-executor local job construction done"
+                                );
+
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    marker = %vmci_preexecutor_progress_marker("active_log_job_enter", &job_info.job_id),
+                                    "VM-CI guest pre-executor active log job setup enter"
+                                );
 
                                 // Signal the log bridge with the active job's run_id + job_id
                                 // so it knows where to write log chunks in cluster KV.
@@ -509,6 +614,12 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                     *active_log_job.lock().await =
                                         Some((rid.clone(), job_info.job_id.clone()));
                                 }
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    marker = %vmci_preexecutor_progress_marker("active_log_job_done", &job_info.job_id),
+                                    "VM-CI guest pre-executor active log job setup done"
+                                );
 
                                 info!(
                                     worker_id = %worker_id_clone,
@@ -523,6 +634,12 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                 // 2 minutes during job execution. Without this, long nix builds
                                 // (20+ minutes for clippy) would exceed the visibility timeout
                                 // and the queue would reclaim the job mid-execution.
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    marker = %vmci_preexecutor_progress_marker("visibility_extender_spawn_enter", &job_info.job_id),
+                                    "VM-CI guest pre-executor visibility extender spawn enter"
+                                );
                                 let (extend_stop_tx, mut extend_stop_rx) = tokio::sync::watch::channel(false);
                                 let extend_rpc = rpc_for_poll.clone();
                                 let extend_receipt = job_info.receipt_handle.clone();
@@ -545,10 +662,29 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                                     additional_timeout_ms: 600_000, // +10 minutes
                                                 };
                                                 match extend_rpc.send(req).await {
-                                                    Ok(_) => {
+                                                    Ok(ClientRpcResponse::QueueExtendVisibilityResult(result)) if result.is_success => {
+                                                        let marker = format!(
+                                                            "ASPEN_CI_COMMAND_PROGRESS phase=visibility_extended job_id={} additional_timeout_ms=600000",
+                                                            extend_job_id
+                                                        );
                                                         debug!(
                                                             job_id = %extend_job_id,
+                                                            marker = %marker,
                                                             "extended queue visibility by 10 minutes"
+                                                        );
+                                                    }
+                                                    Ok(ClientRpcResponse::QueueExtendVisibilityResult(result)) => {
+                                                        warn!(
+                                                            job_id = %extend_job_id,
+                                                            error = ?result.error,
+                                                            "queue visibility extension was rejected"
+                                                        );
+                                                    }
+                                                    Ok(resp) => {
+                                                        warn!(
+                                                            job_id = %extend_job_id,
+                                                            response = ?resp,
+                                                            "unexpected response while extending visibility"
                                                         );
                                                     }
                                                     Err(e) => {
@@ -563,27 +699,64 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                         }
                                     }
                                 });
-
-                                let start_time = std::time::Instant::now();
                                 info!(
                                     worker_id = %worker_id_clone,
                                     job_id = %job_info.job_id,
+                                    marker = %vmci_preexecutor_progress_marker("visibility_extender_spawn_done", &job_info.job_id),
+                                    "VM-CI guest pre-executor visibility extender spawn done"
+                                );
+
+                                let executor_timeout_secs = vmci_executor_timeout_secs(&job.spec);
+                                let start_time = std::time::Instant::now();
+                                let marker = vmci_preexecutor_progress_marker("executor_enter", &job_info.job_id);
+                                try_send_vmci_progress_marker(&log_sink_for_progress, marker.clone());
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    timeout_secs = executor_timeout_secs,
+                                    marker = %marker,
                                     "VM-CI guest executor started"
                                 );
-                                let job_result = worker_for_executor.execute(job).await;
+                                let job_result = match tokio::time::timeout(
+                                    Duration::from_secs(executor_timeout_secs),
+                                    worker_for_executor.execute(job),
+                                )
+                                .await
+                                {
+                                    Ok(result) => result,
+                                    Err(_) => {
+                                        let elapsed_secs = start_time.elapsed().as_secs();
+                                        let marker = format!(
+                                            "ASPEN_CI_COMMAND_PROGRESS phase=executor_job_timeout job_id={} timeout_secs={} elapsed_secs={} origin=vmci_executor_wrapper",
+                                            job_info.job_id, executor_timeout_secs, elapsed_secs
+                                        );
+                                        try_send_vmci_progress_marker(&log_sink_for_progress, marker.clone());
+                                        warn!(
+                                            worker_id = %worker_id_clone,
+                                            job_id = %job_info.job_id,
+                                            timeout_secs = executor_timeout_secs,
+                                            marker = %marker,
+                                            "VM-CI guest executor job timed out before returning a result"
+                                        );
+                                        aspen_jobs::JobResult::failure(format!(
+                                            "VM-CI executor timed out after {executor_timeout_secs} seconds before publishing a result"
+                                        ))
+                                    }
+                                };
                                 let processing_time_ms = start_time.elapsed().as_millis() as u64;
+                                let marker = format!("ASPEN_CI_COMMAND_PROGRESS phase=result_publish_enter job_id={}", job_info.job_id);
+                                try_send_vmci_progress_marker(&log_sink_for_progress, marker.clone());
+                                info!(
+                                    worker_id = %worker_id_clone,
+                                    job_id = %job_info.job_id,
+                                    processing_time_ms,
+                                    marker = %marker,
+                                    "VM-CI guest executor returned; preparing result publication"
+                                );
 
                                 // Stop the visibility extension task
                                 let _ = extend_stop_tx.send(true);
                                 let _ = extend_handle.await;
-
-                                // Clear active job and give the log bridge a moment to
-                                // flush remaining buffered output before we report completion.
-                                if run_id_for_logs.is_some() {
-                                    *active_log_job.lock().await = None;
-                                    // Brief yield to let the log bridge flush its buffer
-                                    tokio::time::sleep(Duration::from_millis(100)).await;
-                                }
 
                                 let (is_success, error_message, output_data) = match &job_result {
                                     aspen_jobs::JobResult::Success(output) => {
@@ -612,10 +785,13 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                 match rpc_for_poll.send(complete_request).await {
                                     Ok(ClientRpcResponse::WorkerCompleteJobResult(result)) => {
                                         if result.is_success {
+                                            let marker = format!("ASPEN_CI_COMMAND_PROGRESS phase=result_published job_id={}", job_info.job_id);
+                                            try_send_vmci_progress_marker(&log_sink_for_progress, marker.clone());
                                             info!(
                                                 worker_id = %worker_id_clone,
                                                 job_id = %job_info.job_id,
                                                 processing_time_ms,
+                                                marker = %marker,
                                                 "VM-CI job result published"
                                             );
                                         } else {
@@ -641,6 +817,14 @@ pub async fn run_worker_only_mode(args: Args, config: NodeConfig) -> Result<()> 
                                             "failed to send job completion"
                                         );
                                     }
+                                }
+
+                                // Clear active job only after completion RPC and result markers have had a chance
+                                // to enter the log bridge. Clearing earlier can erase the final publication boundary
+                                // from central CI logs, which makes live VM-CI timeout evidence ambiguous.
+                                if run_id_for_logs.is_some() {
+                                    *active_log_job.lock().await = None;
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
                                 }
 
                                 active_jobs.retain(|id| id != &job_info.job_id);
@@ -765,7 +949,10 @@ fn rewrite_working_dir_for_vm(job_spec: &mut aspen_jobs::JobSpec) {
 /// `LocalExecutorPayload` (with command, args). This function converts between them.
 ///
 /// Returns the `run_id` from the nix payload (used for log streaming).
-fn transform_nix_payload(job_spec: &mut aspen_jobs::JobSpec) -> std::result::Result<Option<String>, String> {
+fn transform_nix_payload(
+    job_spec: &mut aspen_jobs::JobSpec,
+    job_id_for_marker: Option<&str>,
+) -> std::result::Result<Option<String>, String> {
     // Parse the payload as NixBuildPayload
     let nix_payload: serde_json::Value = job_spec.payload.clone();
 
@@ -813,6 +1000,7 @@ fn transform_nix_payload(job_spec: &mut aspen_jobs::JobSpec) -> std::result::Res
     // Source hash for VM workspace seeding — VMs cannot access the host's
     // checkout_dir, so they download the checkout from blob store instead.
     let source_hash = nix_payload.get("source_hash").and_then(|v| v.as_str()).map(String::from);
+    let flake_input_paths = nix_payload.get("flake_input_paths").cloned().unwrap_or_else(|| serde_json::json!({}));
 
     // Build LocalExecutorPayload
     let local_payload = serde_json::json!({
@@ -824,11 +1012,18 @@ fn transform_nix_payload(job_spec: &mut aspen_jobs::JobSpec) -> std::result::Res
         "timeout_secs": timeout_secs,
         "artifacts": artifacts,
         "source_hash": source_hash,
+        "flake_input_paths": flake_input_paths,
     });
 
     job_spec.payload = local_payload;
+    let marker_job_id = job_id_for_marker.unwrap_or("unknown");
     info!(
         run_id = ?run_id,
+        command = "nix",
+        args_count = args.len(),
+        timeout_secs,
+        source_hash_present = source_hash.is_some(),
+        marker = %format!("ASPEN_CI_COMMAND_PROGRESS phase=nix_payload_transformed job_id={marker_job_id} timeout_secs={timeout_secs}"),
         "transformed NixBuildPayload → LocalExecutorPayload for VM execution"
     );
 
@@ -1097,6 +1292,25 @@ mod tests {
     }
 
     #[test]
+    fn vmci_preexecutor_marker_is_bounded_and_phase_scoped() {
+        let marker = vmci_preexecutor_progress_marker("job_spec_parse_enter", "job-123");
+
+        assert_eq!(marker, "ASPEN_CI_COMMAND_PROGRESS phase=job_spec_parse_enter job_id=job-123");
+        assert!(!marker.contains("--cluster-ticket"));
+        assert!(!marker.contains("command="));
+    }
+
+    #[test]
+    fn vmci_executor_timeout_prefers_payload_timeout_with_materialization_grace() {
+        let spec = aspen_jobs::JobSpec::new("ci_nix_build").payload(serde_json::json!({ "timeout_secs": 5 })).unwrap();
+
+        assert_eq!(
+            vmci_executor_timeout_secs(&spec),
+            5 + VMCI_SOURCE_MATERIALIZATION_TIMEOUT_SECS + VMCI_EXECUTOR_TIMEOUT_GRACE_SECS
+        );
+    }
+
+    #[test]
     fn transform_nix_payload_preserves_source_hash_for_vm_workspace_fetch() {
         let mut spec = aspen_jobs::JobSpec::new(aspen_ci::CI_JOB_TYPE_NIX)
             .payload(serde_json::json!({
@@ -1104,14 +1318,28 @@ mod tests {
                 "attribute": "checks.x86_64-linux.vmci-smoke",
                 "run_id": "run-123",
                 "source_hash": "b3-source-hash",
+                "flake_input_paths": {"nixpkgs": "/nix/store/abc-source"},
                 "working_dir": "/tmp/ci-checkout-run-123"
             }))
             .unwrap();
 
-        let run_id = transform_nix_payload(&mut spec).unwrap();
+        let run_id = transform_nix_payload(&mut spec, Some("job-transform-test")).unwrap();
 
         assert_eq!(run_id.as_deref(), Some("run-123"));
         assert_eq!(spec.payload.get("source_hash").and_then(|value| value.as_str()), Some("b3-source-hash"));
+        assert_eq!(
+            spec.payload
+                .get("flake_input_paths")
+                .and_then(|value| value.get("nixpkgs"))
+                .and_then(|value| value.as_str()),
+            Some("/nix/store/abc-source")
+        );
+        assert_eq!(spec.payload.get("command").and_then(|value| value.as_str()), Some("nix"));
+        assert_eq!(spec.payload.get("timeout_secs").and_then(|value| value.as_u64()), Some(3600));
+        let args = spec.payload.get("args").and_then(|value| value.as_array()).unwrap();
+        assert_eq!(args.first().and_then(|value| value.as_str()), Some("build"));
+        assert!(args.iter().any(|value| value.as_str() == Some(".#checks.x86_64-linux.vmci-smoke")));
+        assert!(args.iter().any(|value| value.as_str() == Some("--print-out-paths")));
     }
 
     #[test]

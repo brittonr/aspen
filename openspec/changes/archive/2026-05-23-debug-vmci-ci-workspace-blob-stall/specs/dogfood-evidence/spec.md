@@ -37,6 +37,14 @@ VM-CI dogfood diagnostics MUST expose enough bounded progress evidence to identi
 - THEN diagnostics MUST record that executor start boundary separately from workspace/blob fetch
 - AND later failures MUST preserve stderr/log snippets using the existing CI failure diagnostics contract
 
+#### Scenario: Long-running command progress remains visible [r[dogfood-evidence.vmci.workspace-blob-progress.command-progress]]
+
+- GIVEN workspace materialization completes in the guest
+- AND the guest executor starts a long-running CI command
+- WHEN the command continues running until a CI or dogfood timeout
+- THEN diagnostics MUST preserve bounded command progress markers for command start, command-running heartbeat, and timeout where available
+- AND those markers MUST avoid exposing command arguments or environment values that can contain credentials
+
 ### Requirement: VM-CI Evidence Preservation Before Cleanup [r[dogfood-evidence.vmci.preserve-before-cleanup]]
 
 VM-CI dogfood tooling MUST preserve redacted host and guest evidence before stopping or deleting `/tmp/aspen-dogfood` when a run reaches VM job assignment but lacks a final success receipt.

@@ -453,7 +453,7 @@ Aspen enforces Tiger Style with the first-class `cargo-tigerstyle` Dylint runner
 * `dylint.toml` controls thresholds, allowlists, disabled lints, and per-lint levels.
 * `[workspace.metadata.tigerstyle]` in `Cargo.toml` controls the default package scope and cargo-check arguments used by `cargo tigerstyle check` and `scripts/tigerstyle-check.sh`.
 
-Aspen pins `github:brittonr/tigerstyle-rs` through the `tigerstyle` flake input and hard-gates the default scope by promoting every shipped lint to `deny`. The shipped catalog has 38 lints across six domains:
+Aspen pins `github:onixresearch/octet` through the `tigerstyle` flake input and hard-gates the default scope by promoting every shipped lint to `deny`. The shipped catalog has 38 lints across six domains:
 
 | Domain | Count | Lints |
 | --- | ---: | --- |

@@ -19,6 +19,8 @@ use crate::error::CloudHypervisorError;
 use crate::error::Result;
 use crate::error::{self};
 
+const VIRTIOFSD_NOFILE_LIMIT: libc::rlim_t = 1_048_576;
+
 impl ManagedCiVm {
     pub(super) fn ip_command_path() -> PathBuf {
         if let Some(path) = std::env::var_os("ASPEN_CI_IP_PATH") {
@@ -127,6 +129,10 @@ impl ManagedCiVm {
     pub(super) async fn start_virtiofsd(&self, source_dir: &str, tag: &str, cache_mode: &str) -> Result<Child> {
         let socket_path = self.config.virtiofs_socket_path(&self.id, tag);
 
+        if let Some(parent) = socket_path.parent() {
+            tokio::fs::create_dir_all(parent).await.context(error::WorkspaceSetupSnafu)?;
+        }
+
         // Remove stale socket
         let _ = tokio::fs::remove_file(&socket_path).await;
 
@@ -141,13 +147,20 @@ impl ManagedCiVm {
             "starting virtiofsd"
         );
 
-        let mut child = Command::new(virtiofsd_path)
+        let mut command = Command::new(virtiofsd_path);
+        command
             .arg("--socket-path")
             .arg(&socket_path)
             .arg("--shared-dir")
             .arg(source_dir)
             .arg("--cache")
             .arg(cache_mode)
+            // Avoid holding one O_PATH file descriptor per indexed inode when
+            // traversing large /nix/store source trees. This keeps virtiofsd
+            // below ordinary unprivileged RLIMIT_NOFILE ceilings during VM-CI
+            // Nix evaluation/copy operations; it falls back to descriptors if
+            // the backing filesystem cannot provide handles.
+            .arg("--inode-file-handles=prefer")
             .arg("--sandbox")
             .arg("none")
             // Enable POSIX ACL and xattr support - required for overlayfs to work on virtiofs.
@@ -159,9 +172,45 @@ impl ManagedCiVm {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .context(error::StartVirtiofsdSnafu)?;
+            .kill_on_drop(true);
+
+        // Nix evaluates/copies large nixpkgs source trees through the host-side
+        // /nix/store virtiofsd. The guest's sysctl/ulimit settings do not raise
+        // this host process limit, so the daemon can still return ENFILE as a
+        // guest `chmod ...: Too many open files in system` failure. Raise the
+        // daemon soft limit before exec, but never try to raise the inherited
+        // hard limit from the unprivileged worker process: doing so makes
+        // `setrlimit` fail with EPERM and prevents VM provisioning entirely.
+        #[cfg(unix)]
+        unsafe {
+            command.pre_exec(|| {
+                let mut current = libc::rlimit {
+                    rlim_cur: 0,
+                    rlim_max: 0,
+                };
+                if libc::getrlimit(libc::RLIMIT_NOFILE, &mut current) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+
+                let requested = VIRTIOFSD_NOFILE_LIMIT;
+                let target_soft = if current.rlim_max == libc::RLIM_INFINITY {
+                    requested
+                } else {
+                    requested.min(current.rlim_max)
+                };
+                let limit = libc::rlimit {
+                    rlim_cur: target_soft.max(current.rlim_cur),
+                    rlim_max: current.rlim_max,
+                };
+                if libc::setrlimit(libc::RLIMIT_NOFILE, &limit) == 0 {
+                    Ok(())
+                } else {
+                    Err(std::io::Error::last_os_error())
+                }
+            });
+        }
+
+        let mut child = command.spawn().context(error::StartVirtiofsdSnafu)?;
 
         // Give virtiofsd a moment to start, then check if it's still running
         // This catches immediate startup failures like missing directories
@@ -306,6 +355,12 @@ impl ManagedCiVm {
         let nix_store_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_NIX_STORE_TAG);
         let workspace_socket = self.config.virtiofs_socket_path(&self.id, CI_VM_WORKSPACE_TAG);
         // Note: rw-store uses tmpfs inside the VM, not virtiofs
+
+        for socket in [&api_socket, &vsock_socket, &nix_store_socket, &workspace_socket] {
+            if let Some(parent) = socket.parent() {
+                tokio::fs::create_dir_all(parent).await.context(error::WorkspaceSetupSnafu)?;
+            }
+        }
 
         // Remove stale sockets
         let _ = tokio::fs::remove_file(&api_socket).await;

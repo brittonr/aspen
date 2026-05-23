@@ -18,6 +18,7 @@
 //!                   (fetch .aspen/ci.ncl)      (execute pipeline)
 //! ```
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -38,6 +39,50 @@ use crate::error::LoadBlobFailedSnafu;
 use crate::error::LoadTreeFailedSnafu;
 use crate::error::Result;
 use crate::orchestrator::PipelineContext;
+
+fn parse_flake_archive_paths(stdout: &[u8]) -> BTreeMap<String, String> {
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(stdout) else {
+        return BTreeMap::new();
+    };
+
+    let mut paths = BTreeMap::new();
+    collect_flake_archive_paths(&value, &mut paths);
+    paths
+}
+
+fn collect_flake_archive_paths(value: &serde_json::Value, paths: &mut BTreeMap<String, String>) {
+    let Some(inputs) = value.get("inputs").and_then(|v| v.as_object()) else {
+        return;
+    };
+
+    for (name, input) in inputs {
+        if let Some(path) = input.get("path").and_then(|v| v.as_str()) {
+            paths.insert(name.clone(), encode_prefetched_input_path(path));
+        }
+        collect_flake_archive_paths(input, paths);
+    }
+}
+
+fn encode_prefetched_input_path(path: &str) -> String {
+    let nar_hash = std::process::Command::new("nix")
+        .args(["hash", "path", "--type", "sha256", "--sri", path])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout).ok()
+            } else {
+                None
+            }
+        })
+        .map(|hash| hash.trim().to_string())
+        .filter(|hash| !hash.is_empty());
+
+    match nar_hash {
+        Some(nar_hash) => serde_json::json!({ "path": path, "narHash": nar_hash }).to_string(),
+        None => path.to_string(),
+    }
+}
 use crate::orchestrator::PipelineOrchestrator;
 use crate::orchestrator::PipelineStatus;
 use crate::trigger::ConfigFetcher;
@@ -462,10 +507,12 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> PipelineStarte
 
         // Pre-fetch flake inputs into the host nix store so VMs can use them
         // via the shared virtiofs /nix/.ro-store mount without downloading.
-        self.prefetch_flake_inputs(&run_id, &checkout_dir).await;
+        let flake_input_paths = self.prefetch_flake_inputs(&run_id, &checkout_dir).await;
+        self.rewrite_checkout_flake_inputs_for_vm(&run_id, &checkout_dir, &flake_input_paths);
 
         let source_hash = self.start_pipeline_create_source_archive(&run_id, &checkout_dir).await;
-        let updated_context = self.start_pipeline_build_updated_context(&event, &run_id, &checkout_dir, source_hash);
+        let updated_context =
+            self.start_pipeline_build_updated_context(&event, &run_id, &checkout_dir, source_hash, flake_input_paths);
         self.orchestrator.update_run_context(&run_id, updated_context).await?;
 
         let run = self.orchestrator.execute_existing_run(&run_id, event.config).await?;
@@ -501,6 +548,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
             env,
             checkout_dir: None,
             source_hash: None,
+            flake_input_paths: BTreeMap::new(),
         }
     }
 
@@ -564,11 +612,11 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
     /// inputs (nixpkgs, crane, rust-overlay, etc.) into `/nix/store`. These
     /// store paths are then available to VMs via the virtiofs `/nix/.ro-store`
     /// mount, avoiding multi-GB downloads inside VMs.
-    async fn prefetch_flake_inputs(&self, run_id: &str, checkout_dir: &std::path::Path) {
+    async fn prefetch_flake_inputs(&self, run_id: &str, checkout_dir: &std::path::Path) -> BTreeMap<String, String> {
         let flake_nix = checkout_dir.join("flake.nix");
         if !flake_nix.exists() {
             debug!(run_id = %run_id, "No flake.nix in checkout, skipping flake input prefetch");
-            return;
+            return BTreeMap::new();
         }
 
         info!(run_id = %run_id, checkout_dir = %checkout_dir.display(), "Pre-fetching flake inputs for VM builds");
@@ -577,7 +625,13 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
         // when the network is unavailable (e.g., inside NixOS VM tests).
         let prefetch_timeout = std::time::Duration::from_secs(120);
         let child = match tokio::process::Command::new("nix")
-            .args(["flake", "archive", "--no-write-lock-file", "--accept-flake-config"])
+            .args([
+                "flake",
+                "archive",
+                "--json",
+                "--no-write-lock-file",
+                "--accept-flake-config",
+            ])
             .current_dir(checkout_dir)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -587,13 +641,15 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
             Ok(child) => child,
             Err(e) => {
                 warn!(run_id = %run_id, error = %e, "Failed to run nix flake archive (nix not in PATH?)");
-                return;
+                return BTreeMap::new();
             }
         };
 
         match tokio::time::timeout(prefetch_timeout, child.wait_with_output()).await {
             Ok(Ok(output)) if output.status.success() => {
-                info!(run_id = %run_id, "Flake inputs pre-fetched into host nix store");
+                let paths = parse_flake_archive_paths(&output.stdout);
+                info!(run_id = %run_id, inputs = paths.len(), "Flake inputs pre-fetched into host nix store");
+                paths
             }
             Ok(Ok(output)) => {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -603,15 +659,55 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
                     stderr = %stderr.chars().take(500).collect::<String>(),
                     "nix flake archive failed (VMs will download inputs directly)"
                 );
+                BTreeMap::new()
             }
             Ok(Err(e)) => {
                 warn!(run_id = %run_id, error = %e, "nix flake archive process error");
+                BTreeMap::new()
             }
             Err(_elapsed) => {
                 warn!(run_id = %run_id, timeout_secs = prefetch_timeout.as_secs(),
                     "nix flake archive timed out (network unavailable? VMs will download inputs directly)");
                 // The child process is dropped here which sends SIGKILL.
+                BTreeMap::new()
             }
+        }
+    }
+
+    /// Rewrite the checked-out flake before creating the source blob.
+    ///
+    /// VM jobs materialize this checkout from the blob store and may execute Nix
+    /// against `.#attr` directly from that workspace. Rewriting before archive
+    /// makes the source blob self-contained for private inputs such as `ucan-src`,
+    /// instead of relying on a later command-argument store-path rewrite.
+    fn rewrite_checkout_flake_inputs_for_vm(
+        &self,
+        run_id: &str,
+        checkout_dir: &std::path::Path,
+        flake_input_paths: &BTreeMap<String, String>,
+    ) {
+        if flake_input_paths.is_empty() {
+            debug!(run_id = %run_id, "No prefetched flake inputs available for checkout rewrite");
+            return;
+        }
+
+        match aspen_ci_executor_shell::local_executor::rewrite_flake_lock_with_store_paths(
+            checkout_dir,
+            flake_input_paths,
+        ) {
+            Ok(()) => info!(
+                run_id = %run_id,
+                checkout_dir = %checkout_dir.display(),
+                inputs = flake_input_paths.len(),
+                "Rewrote checkout flake inputs before VM source archive"
+            ),
+            Err(error) => warn!(
+                run_id = %run_id,
+                checkout_dir = %checkout_dir.display(),
+                inputs = flake_input_paths.len(),
+                error = %error,
+                "Failed to rewrite checkout flake inputs before VM source archive"
+            ),
         }
     }
 
@@ -650,6 +746,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
         run_id: &str,
         checkout_dir: &std::path::Path,
         source_hash: Option<String>,
+        flake_input_paths: BTreeMap<String, String>,
     ) -> PipelineContext {
         let mut env = HashMap::new();
         env.insert("CI_TRIGGERED_BY".to_string(), event.pusher.to_string());
@@ -668,6 +765,7 @@ impl<B: BlobStore + 'static, K: KeyValueStore + ?Sized + 'static> OrchestratorPi
             env,
             checkout_dir: Some(checkout_dir.to_path_buf()),
             source_hash,
+            flake_input_paths,
         }
     }
 }

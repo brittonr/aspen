@@ -43,6 +43,7 @@ const MAX_SOURCE_ARCHIVE_SIZE: u64 = 1_u64 << 30;
 /// Maximum files in source archive.
 #[allow(dead_code)]
 const MAX_SOURCE_FILES: usize = 100_000;
+const CI_PROGRESS_MARKER: &str = "ASPEN_CI_COMMAND_PROGRESS";
 
 /// Errors from common CI worker utilities.
 #[derive(Debug, Snafu)]
@@ -79,6 +80,24 @@ pub enum WorkerUtilError {
 
 /// Result type for common CI worker utilities.
 pub type Result<T> = std::result::Result<T, WorkerUtilError>;
+
+fn workspace_materialization_marker(job_id: &str, phase: &'static str) -> String {
+    format!("{CI_PROGRESS_MARKER} phase={phase} job_id={job_id}")
+}
+
+fn workspace_materialization_marker_with_u64(job_id: &str, phase: &'static str, key: &str, value: u64) -> String {
+    format!("{CI_PROGRESS_MARKER} phase={phase} job_id={job_id} {key}={value}")
+}
+
+fn workspace_materialization_marker_with_counts(
+    job_id: &str,
+    phase: &'static str,
+    bytes: u64,
+    extracted: u64,
+    skipped: u64,
+) -> String {
+    format!("{CI_PROGRESS_MARKER} phase={phase} job_id={job_id} bytes={bytes} extracted={extracted} skipped={skipped}")
+}
 
 #[derive(Copy, Clone)]
 struct LogChunkTarget<'a> {
@@ -306,22 +325,40 @@ pub async fn upload_artifacts_to_blob_store(
 ///
 /// The blob is expected to contain a tar.gz archive of the source tree.
 /// The archive is extracted to the workspace directory.
-///
-/// # Arguments
-/// * `blob_store` - The blob store to download from
-/// * `source_hash` - The hex-encoded blake3 hash of the source blob
-/// * `workspace_dir` - The directory to extract to
-///
-/// # Returns
-/// Ok(bytes_written) on success, or an error if seeding failed
 pub async fn seed_workspace_from_blob(
     blob_store: &Arc<dyn BlobStore>,
     source_hash: &str,
     workspace_dir: &Path,
 ) -> Result<u64> {
+    seed_workspace_from_blob_with_job(blob_store, source_hash, workspace_dir, None).await
+}
+
+/// Seed a workspace directory from a blob and emit bounded CI progress markers for a job.
+pub(crate) async fn seed_workspace_from_blob_for_job(
+    blob_store: &Arc<dyn BlobStore>,
+    source_hash: &str,
+    workspace_dir: &Path,
+    job_id: &str,
+) -> Result<u64> {
+    seed_workspace_from_blob_with_job(blob_store, source_hash, workspace_dir, Some(job_id)).await
+}
+
+async fn seed_workspace_from_blob_with_job(
+    blob_store: &Arc<dyn BlobStore>,
+    source_hash: &str,
+    workspace_dir: &Path,
+    job_id: Option<&str>,
+) -> Result<u64> {
     let hash = parse_hash(source_hash)?;
     info!(hash = %source_hash, workspace = ?workspace_dir, "seeding workspace from blob");
 
+    if let Some(job_id) = job_id {
+        info!(
+            job_id = %job_id,
+            marker = %workspace_materialization_marker(job_id, "source_blob_fetch_enter"),
+            "workspace source blob fetch starting"
+        );
+    }
     let content = blob_store.get_bytes(&hash).await.map_err(|e| WorkerUtilError::WorkspaceSeed {
         reason: format!("failed to download blob {}: {}", source_hash, e),
     })?;
@@ -329,11 +366,31 @@ pub async fn seed_workspace_from_blob(
         reason: format!("blob {} not found in store", source_hash),
     })?;
     let content_len = len_u64(content.len());
+    if let Some(job_id) = job_id {
+        info!(
+            job_id = %job_id,
+            bytes = content_len,
+            marker = %workspace_materialization_marker_with_u64(job_id, "source_blob_fetch_done", "bytes", content_len),
+            "workspace source blob fetch complete"
+        );
+        info!(
+            job_id = %job_id,
+            bytes = content_len,
+            marker = %workspace_materialization_marker_with_u64(job_id, "archive_decode_enter", "bytes", content_len),
+            "workspace source archive decode starting"
+        );
+        info!(
+            job_id = %job_id,
+            marker = %workspace_materialization_marker(job_id, "workspace_unpack_enter"),
+            "workspace source archive unpack starting"
+        );
+    }
     tokio::fs::create_dir_all(workspace_dir).await.map_err(|e| WorkerUtilError::WorkspaceSeed {
         reason: format!("failed to create workspace directory: {}", e),
     })?;
 
     let workspace_path = workspace_dir.to_path_buf();
+    let job_id_for_blocking = job_id.map(str::to_owned);
     let bytes_extracted = tokio::task::spawn_blocking(move || {
         let cursor = Cursor::new(&content);
         let decoder = GzDecoder::new(cursor);
@@ -375,6 +432,28 @@ pub async fn seed_workspace_from_blob(
             extracted += 1;
         }
 
+        if let Some(job_id) = job_id_for_blocking.as_deref() {
+            tracing::info!(
+                job_id = %job_id,
+                bytes = content_len,
+                extracted,
+                skipped,
+                marker = %workspace_materialization_marker_with_counts(
+                    job_id,
+                    "workspace_unpack_done",
+                    content_len,
+                    extracted,
+                    skipped,
+                ),
+                "workspace source archive unpack complete"
+            );
+            tracing::info!(
+                job_id = %job_id,
+                bytes = content_len,
+                marker = %workspace_materialization_marker_with_u64(job_id, "archive_decode_done", "bytes", content_len),
+                "workspace source archive decode complete"
+            );
+        }
         tracing::info!(extracted, skipped, "tar extraction complete");
         Ok::<u64, WorkerUtilError>(content_len)
     })
@@ -663,5 +742,19 @@ mod tests {
         assert_ne!(marker.status, "success");
         assert_ne!(marker.status, "failed");
         assert_ne!(marker.status, "cancelled");
+    }
+
+    #[test]
+    fn workspace_materialization_markers_are_bounded_and_redacted() {
+        let marker = workspace_materialization_marker_with_counts("job-123", "workspace_unpack_done", 42, 3, 1);
+
+        assert_eq!(
+            marker,
+            "ASPEN_CI_COMMAND_PROGRESS phase=workspace_unpack_done job_id=job-123 bytes=42 extracted=3 skipped=1"
+        );
+        assert!(!marker.contains("source_hash"));
+        assert!(!marker.contains("ticket"));
+        assert!(!marker.contains("password"));
+        assert!(!marker.contains("/tmp/"));
     }
 }

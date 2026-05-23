@@ -1,5 +1,6 @@
 //! LocalExecutorPayload - job payload definition and validation.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use aspen_core::CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS;
@@ -62,6 +63,10 @@ pub struct LocalExecutorPayload {
     /// Flake attribute to prefetch for nix commands.
     #[serde(default)]
     pub flake_attr: Option<String>,
+
+    /// Host-prefetched flake input store paths keyed by flake.lock node name.
+    #[serde(default)]
+    pub flake_input_paths: BTreeMap<String, String>,
 
     /// Pipeline run ID for CI log streaming.
     /// When set (along with a KV store on the worker), log chunks are written

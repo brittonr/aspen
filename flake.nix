@@ -59,7 +59,7 @@
     # Tiger Style lints - custom Dylint lints enforcing Tiger Style coding principles
     # Upstream repo; update with: nix flake update tigerstyle
     tigerstyle = {
-      url = "github:brittonr/tigerstyle-rs";
+      url = "github:onixresearch/octet";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.rust-overlay.follows = "rust-overlay";
       inputs.crane.follows = "crane";
@@ -70,7 +70,7 @@
     # Cargo.toml pins the same revision; the flake input lets Nix replace the
     # git checkout with a reproducible source path during vendoring.
     ucan-src = {
-      url = "git+ssh://git@github.com/brittonr/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d";
+      url = "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d";
       flake = false;
     };
   };
@@ -673,7 +673,7 @@
               builtins.any (
                 p:
                   builtins.isString (p.source or null)
-                  && lib.hasPrefix "git+ssh://git@github.com/brittonr/ucan.git" (p.source or "")
+                  && lib.hasPrefix "git+ssh://git@github.com/OnixResearch/ucan.git" (p.source or "")
               )
               ps;
           in
@@ -1279,7 +1279,7 @@
               builtins.any (
                 p:
                   builtins.isString (p.source or null)
-                  && lib.hasPrefix "git+ssh://git@github.com/brittonr/ucan.git" (p.source or "")
+                  && lib.hasPrefix "git+ssh://git@github.com/OnixResearch/ucan.git" (p.source or "")
               )
               ps;
           in
@@ -1566,7 +1566,7 @@
               builtins.any (
                 p:
                   builtins.isString (p.source or null)
-                  && lib.hasPrefix "git+ssh://git@github.com/brittonr/ucan.git" (p.source or "")
+                  && lib.hasPrefix "git+ssh://git@github.com/OnixResearch/ucan.git" (p.source or "")
               )
               ps;
           in
@@ -2973,7 +2973,7 @@
                     builtins.any (
                       p:
                         builtins.isString (p.source or null)
-                        && lib.hasPrefix "git+ssh://git@github.com/brittonr/ucan.git" (p.source or "")
+                        && lib.hasPrefix "git+ssh://git@github.com/OnixResearch/ucan.git" (p.source or "")
                     )
                     ps;
                 in
@@ -3582,6 +3582,15 @@
                   inherit (craneLib.crateNameFromCargoToml {cargoToml = ./Cargo.toml;}) pname version;
                   cargoExtraArgs = "--bin aspen-node --features node-runtime-apps,ci,docs,hooks,shell-worker,automerge,secrets,proxy,forge,git-bridge,blob,sql,net,deploy,federation,global-discovery,jobs,kv-branch,nostr-relay,relay-server,snix,snix-http,snix-daemon,snix-eval,snix-build";
                   doCheck = false;
+                }
+              );
+
+              build-cli-deps = craneLib.buildDepsOnly (
+                ciCompileFromSourceArgs
+                // {
+                  inherit (craneLib.crateNameFromCargoToml {cargoToml = ./crates/aspen-cli/Cargo.toml;}) pname version;
+                  pnameSuffix = "-build-cli-deps";
+                  cargoExtraArgs = "--package aspen-cli --bin aspen-cli --features forge,ci,automerge,sql,secrets,blob,proxy";
                 }
               );
 
@@ -5799,11 +5808,160 @@
 
                 export PROJECT_DIR="$PWD"
 
+                vmci_cluster_dir="''${ASPEN_DOGFOOD_VMCI_CLUSTER_DIR:-}"
+                if [ -z "$vmci_cluster_dir" ]; then
+                  if [ -n "''${HOME:-}" ] && [ -d "$HOME/.cargo-target" ]; then
+                    vmci_cluster_dir="$HOME/.cargo-target/aspen-dogfood-vmci"
+                  else
+                    vmci_cluster_dir="/tmp/aspen-dogfood"
+                  fi
+                fi
+                mkdir -p "$(dirname "$vmci_cluster_dir")"
+
                 if [ "$#" -eq 0 ]; then
                   set -- full
                 fi
 
-                exec ${bins.aspen-dogfood}/bin/aspen-dogfood --vm-ci "$@"
+                exec ${bins.aspen-dogfood}/bin/aspen-dogfood --cluster-dir "$vmci_cluster_dir" --vm-ci "$@"
+              ''}";
+            };
+
+            dogfood-local-vmci-smoke = let
+              ciVmConfig = nixpkgs.lib.nixosSystem {
+                system = "x86_64-linux";
+                modules = [
+                  microvm.nixosModules.microvm
+                  (import ./nix/vms/ci-worker-node.nix {
+                    inherit pkgs;
+                    lib = nixpkgs.lib;
+                    vmId = "aspen-smoke";
+                    aspenNodePackage = bins.aspen-node-vmci;
+                    ciBuildClosureInfo = null;
+                  })
+                ];
+              };
+              ciKernel = ciVmConfig.config.microvm.kernel;
+              ciInitrd = ciVmConfig.config.system.build.initialRamdisk;
+              ciToplevel = ciVmConfig.config.system.build.toplevel;
+              vmciNode = bins.aspen-node-vmci;
+            in {
+              type = "app";
+              meta.description = "Run narrow local Aspen dogfood VM-CI smoke proof.";
+              program = "${pkgs.writeShellScript "dogfood-local-vmci-smoke" ''
+                set -e
+
+                export PATH="${
+                  pkgs.lib.makeBinPath [
+                    vmciNode
+                    bins.aspen-cli
+                    bins.git-remote-aspen
+                    pkgs.bash
+                    pkgs.coreutils
+                    pkgs.gnugrep
+                    pkgs.gnused
+                    pkgs.git
+                    pkgs.nix
+                    pkgs.cloud-hypervisor
+                    pkgs.virtiofsd
+                    pkgs.iproute2
+                    pkgs.python3
+                    bins.aspen-tap-helper
+                  ]
+                }:$PATH"
+
+                export ASPEN_NODE_BIN="${vmciNode}/bin/aspen-node"
+                export ASPEN_CLI_BIN="${bins.aspen-cli}/bin/aspen-cli"
+                export GIT_REMOTE_ASPEN_BIN="${bins.git-remote-aspen}/bin/git-remote-aspen"
+                export CLOUD_HYPERVISOR_BIN="${pkgs.cloud-hypervisor}/bin/cloud-hypervisor"
+                export VIRTIOFSD_BIN="${pkgs.virtiofsd}/bin/virtiofsd"
+
+                default_tap_helper="/usr/local/libexec/aspen-ci-tap-helper"
+                if [ -z "''${ASPEN_CI_NETWORK_MODE+x}" ] && [ -x "$default_tap_helper" ]; then
+                  export ASPEN_CI_NETWORK_MODE="tap-helper"
+                  export ASPEN_CI_TAP_HELPER_PATH="''${ASPEN_CI_TAP_HELPER_PATH:-$default_tap_helper}"
+                elif [ "''${ASPEN_CI_NETWORK_MODE:-}" = "tap-helper" ] || [ "''${ASPEN_CI_NETWORK_MODE:-}" = "helper" ]; then
+                  export ASPEN_CI_TAP_HELPER_PATH="''${ASPEN_CI_TAP_HELPER_PATH:-$default_tap_helper}"
+                fi
+
+                export ASPEN_CI_VM_POOL_START_DELAY_SECS="''${ASPEN_CI_VM_POOL_START_DELAY_SECS:-30}"
+                export ASPEN_DOGFOOD_CI_TIMEOUT_SECS="''${ASPEN_DOGFOOD_CI_TIMEOUT_SECS:-1200}"
+                export ASPEN_CI_KERNEL_PATH="${ciKernel}/bzImage"
+                export ASPEN_CI_INITRD_PATH="${ciInitrd}/initrd"
+                export ASPEN_CI_TOPLEVEL_PATH="${ciToplevel}"
+                export PROJECT_DIR="$PWD"
+
+                vmci_cluster_dir="''${ASPEN_DOGFOOD_VMCI_CLUSTER_DIR:-}"
+                if [ -z "$vmci_cluster_dir" ]; then
+                  if [ -n "''${HOME:-}" ] && [ -d "$HOME/.cargo-target" ]; then
+                    vmci_cluster_dir="$HOME/.cargo-target/aspen-dogfood-vmci"
+                  else
+                    vmci_cluster_dir="/tmp/aspen-dogfood"
+                  fi
+                fi
+                mkdir -p "$(dirname "$vmci_cluster_dir")"
+
+                if [ "$#" -eq 0 ]; then
+                  set -- vm-ci-smoke
+                fi
+
+                exec ${bins.aspen-dogfood}/bin/aspen-dogfood --cluster-dir "$vmci_cluster_dir" --vm-ci "$@"
+              ''}";
+            };
+
+            dogfood-local-vmci-source-blob = {
+              type = "app";
+              meta.description = "Run narrow local Aspen dogfood VM-CI source/blob materialization proof.";
+              program = "${pkgs.writeShellScript "dogfood-local-vmci-source-blob" ''
+                set -e
+                exec ${self.apps.${system}.dogfood-local-vmci-smoke.program} vm-ci-source-blob "$@"
+              ''}";
+            };
+
+            dogfood-local-vmci-nix-smoke = {
+              type = "app";
+              meta.description = "Run narrow local Aspen dogfood VM-CI proof through guest Nix.";
+              program = "${pkgs.writeShellScript "dogfood-local-vmci-nix-smoke" ''
+                set -e
+                exec ${self.apps.${system}.dogfood-local-vmci-smoke.program} vm-ci-nix-smoke "$@"
+              ''}";
+            };
+
+            dogfood-local-vmci-nix-timeout = {
+              type = "app";
+              meta.description = "Run narrow local Aspen dogfood VM-CI proof that guest Nix build timeout finalizes.";
+              program = "${pkgs.writeShellScript "dogfood-local-vmci-nix-timeout" ''
+                set -e
+                export ASPEN_DOGFOOD_CI_TIMEOUT_SECS="''${ASPEN_DOGFOOD_CI_TIMEOUT_SECS:-300}"
+                exec ${self.apps.${system}.dogfood-local-vmci-smoke.program} vm-ci-nix-timeout "$@"
+              ''}";
+            };
+
+            dogfood-local-vmci-cargo-smoke = {
+              type = "app";
+              meta.description = "Run medium local Aspen dogfood VM-CI proof through guest Cargo.";
+              program = "${pkgs.writeShellScript "dogfood-local-vmci-cargo-smoke" ''
+                set -e
+                exec ${self.apps.${system}.dogfood-local-vmci-smoke.program} vm-ci-cargo-smoke "$@"
+              ''}";
+            };
+
+            dogfood-local-vmci-medium = {
+              type = "app";
+              meta.description = "Run medium local Aspen dogfood VM-CI acceptance: format plus build-only CI, no clippy/test/deploy.";
+              program = "${pkgs.writeShellScript "dogfood-local-vmci-medium" ''
+                set -e
+                export ASPEN_DOGFOOD_CI_TIMEOUT_SECS="''${ASPEN_DOGFOOD_CI_TIMEOUT_SECS:-7200}"
+                exec ${self.apps.${system}.dogfood-local-vmci-smoke.program} vm-ci-medium "$@"
+              ''}";
+            };
+
+            dogfood-local-vmci-clippy = {
+              type = "app";
+              meta.description = "Run dedicated local Aspen dogfood VM-CI clippy rail.";
+              program = "${pkgs.writeShellScript "dogfood-local-vmci-clippy" ''
+                set -e
+                export ASPEN_DOGFOOD_CI_TIMEOUT_SECS="''${ASPEN_DOGFOOD_CI_TIMEOUT_SECS:-7800}"
+                exec ${self.apps.${system}.dogfood-local-vmci-smoke.program} vm-ci-clippy "$@"
               ''}";
             };
 
@@ -5989,8 +6147,8 @@
                     # real snix source — needed by aspen-cache (nix-compat::narinfo).
                     ${pkgs.gnused}/bin/sed -i \
                       -e 's|mad-turmoil = { git = "[^"]*"[^}]*}|mad-turmoil = { path = ".nix-stubs/mad-turmoil", optional = true }|' \
-                      -e 's|ucan = { git = "ssh://git@github.com/brittonr/ucan.git"[^}]*}|ucan = { path = ".nix-inputs/ucan" }|' \
-                      -e 's|ucan-core = { git = "ssh://git@github.com/brittonr/ucan.git"[^}]*}|ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }|' \
+                      -e 's|ucan = { git = "ssh://git@github.com/OnixResearch/ucan.git"[^}]*}|ucan = { path = ".nix-inputs/ucan" }|' \
+                      -e 's|ucan-core = { git = "ssh://git@github.com/OnixResearch/ucan.git"[^}]*}|ucan-core = { path = ".nix-inputs/ucan/crates/ucan-core", default-features = false }|' \
                       $out/aspen/Cargo.toml
                     ${pkgs.gnused}/bin/sed -i \
                       -e '/^netlink-packet-core = { path = "vendor\/netlink-packet-core-0\.8\.1" }$/d' \
@@ -6139,7 +6297,7 @@
                         builtins.any (
                           p:
                             builtins.isString (p.source or null)
-                            && lib.hasPrefix "git+ssh://git@github.com/brittonr/ucan.git" (p.source or "")
+                            && lib.hasPrefix "git+ssh://git@github.com/OnixResearch/ucan.git" (p.source or "")
                         )
                         ps;
                     in

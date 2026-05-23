@@ -166,6 +166,7 @@ proptest! {
             flake_url: url.clone(),
             attribute: attr,
             extra_args: vec![],
+            env: std::collections::HashMap::new(),
             working_dir: None,
             timeout_secs: timeout,
             sandbox: true,
@@ -176,6 +177,7 @@ proptest! {
             cache_outputs: vec![],
             system: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
         let result = payload.validate();
         if url.is_empty() {

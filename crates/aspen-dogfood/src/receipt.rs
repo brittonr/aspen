@@ -65,6 +65,9 @@ impl DogfoodRunReceipt {
         validate_required("git_commit", &self.git_commit)?;
         validate_required("command", &self.command)?;
         validate_required("created_at", &self.created_at)?;
+        if let Some(vmci_rail) = &self.mode.vmci_rail {
+            validate_required("mode.vmci_rail", vmci_rail)?;
+        }
         validate_required("project_dir", &self.project_dir)?;
         validate_required("cluster_dir", &self.cluster_dir)?;
         if self.stages.len() > MAX_RECEIPT_STAGES {
@@ -115,6 +118,8 @@ pub struct DogfoodRunReceiptInit {
 pub struct DogfoodRunMode {
     pub federation: bool,
     pub vm_ci: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vmci_rail: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -419,6 +424,7 @@ mod tests {
             mode: DogfoodRunMode {
                 federation: false,
                 vm_ci: true,
+                vmci_rail: Some("vmci-full".to_string()),
             },
             project_dir: "/home/brittonr/git/aspen".to_string(),
             cluster_dir: "/tmp/aspen-dogfood".to_string(),
@@ -450,6 +456,7 @@ mod tests {
         assert!(json.contains("\"schema\":\"aspen.dogfood.run-receipt.v1\""));
         assert!(json.contains("\"run_id\":\"dogfood-20260503T040709Z\""));
         assert!(json.contains("\"command\":\"full\""));
+        assert!(json.contains("\"vmci_rail\":\"vmci-full\""));
         assert!(json.contains("\"stages\""));
         assert!(json.contains("\"artifacts\""));
         assert!(json.contains("\"elapsed_ms\":60000"));
@@ -507,6 +514,17 @@ mod tests {
 
         let error = receipt.validate().unwrap_err();
         assert_eq!(error, ReceiptValidationError::EmptyField { field: "run_id" });
+    }
+
+    #[test]
+    fn receipt_rejects_empty_vmci_rail() {
+        let mut receipt = sample_receipt();
+        receipt.mode.vmci_rail = Some(" ".to_string());
+
+        let error = receipt.validate().unwrap_err();
+        assert_eq!(error, ReceiptValidationError::EmptyField {
+            field: "mode.vmci_rail"
+        });
     }
 
     #[test]

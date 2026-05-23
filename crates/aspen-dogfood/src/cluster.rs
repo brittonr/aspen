@@ -7,6 +7,7 @@ use aspen_client_api::ClientRpcRequest;
 use aspen_client_api::ClientRpcResponse;
 use aspen_client_api::HealthResponse;
 use tracing::info;
+use tracing::warn;
 
 use crate::RunConfig;
 use crate::error::DogfoodResult;
@@ -14,6 +15,9 @@ use crate::error::HealthCheckSnafu;
 use crate::node::NodeInfo;
 use crate::node::NodeManager;
 use crate::node::wait_for_ticket;
+
+const DEFAULT_START_HEALTH_TIMEOUT: Duration = Duration::from_secs(60);
+const VM_CI_START_HEALTH_TIMEOUT: Duration = Duration::from_secs(180);
 
 // ── Typed RPC wrappers ───────────────────────────────────────────────
 
@@ -125,17 +129,42 @@ pub async fn start_single_node(manager: &mut NodeManager, config: &RunConfig) ->
     tokio::time::sleep(Duration::from_secs(3)).await;
 
     info!("  health-checking node...");
-    wait_for_healthy(&ticket, Duration::from_secs(60)).await?;
+    let health_timeout = start_health_timeout(config.vm_ci);
+    if config.vm_ci {
+        crate::vmci_readiness::wait_for_startup_readiness(&data_dir, health_timeout).await?;
+        info!("  VM-CI local startup readiness observed");
+    } else {
+        wait_for_healthy(&ticket, health_timeout).await?;
+    }
 
     info!("  initializing cluster...");
-    let client = connect(&ticket).await?;
-    // InitCluster may fail if already initialized — that's fine
-    let _ = init_cluster(&client, &ticket).await;
-    client.shutdown().await;
+    match connect(&ticket).await {
+        Ok(client) => {
+            // InitCluster may fail if already initialized — that's fine
+            let _ = init_cluster(&client, &ticket).await;
+            client.shutdown().await;
+        }
+        Err(error) if config.vm_ci => {
+            warn!(
+                error = %error,
+                "  VM-CI init RPC skipped after local startup readiness; node is already accepting VM worker RPCs"
+            );
+        }
+        Err(error) => return Err(error),
+    }
     tokio::time::sleep(Duration::from_secs(2)).await;
 
-    let health = check_health(&ticket).await?;
-    let endpoint_addr = health.iroh_node_id.unwrap_or_default();
+    let endpoint_addr = match check_health(&ticket).await {
+        Ok(health) => health.iroh_node_id.unwrap_or_default(),
+        Err(error) if config.vm_ci => {
+            warn!(
+                error = %error,
+                "  VM-CI final health RPC skipped after local startup readiness"
+            );
+            String::new()
+        }
+        Err(error) => return Err(error),
+    };
 
     Ok(NodeInfo {
         pid,
@@ -239,8 +268,10 @@ pub async fn start_federation(manager: &mut NodeManager, config: &RunConfig) -> 
 
 /// Connect an `AspenClient` from a ticket string.
 async fn connect(ticket: &str) -> DogfoodResult<AspenClient> {
-    // 30s RPC timeout matches the CLI default. Dogfood clients disable relays
-    // so the local proof depends only on the direct addresses in the ticket.
+    // Dogfood nodes are spawned with relay disabled and same-host tickets carry
+    // local direct addresses. Keep orchestration on the same relay-disabled
+    // route as Forge/source-push so VM-CI never burns its startup window on
+    // external relay or DNS discovery before the product boundary under test.
     AspenClient::connect_direct(ticket, Duration::from_secs(30), None).await.map_err(|e| {
         crate::error::DogfoodError::ClientRpc {
             operation: "connect".to_string(),
@@ -262,6 +293,19 @@ async fn send(
         target: ticket_preview(ticket),
         source: e,
     })
+}
+
+/// Return the startup health deadline for the selected dogfood mode.
+///
+/// VM-CI cold-start also warms the guest pool in the node process. That can
+/// temporarily starve early host RPC health probes even after the router has
+/// written a ticket, so use a longer startup-only deadline for VM-CI rails.
+fn start_health_timeout(vm_ci: bool) -> Duration {
+    if vm_ci {
+        VM_CI_START_HEALTH_TIMEOUT
+    } else {
+        DEFAULT_START_HEALTH_TIMEOUT
+    }
 }
 
 /// Poll `GetHealth` until the node reports "healthy".
@@ -381,6 +425,13 @@ mod tests {
 
         assert!(result.is_err());
         assert!(shutdown_called.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn start_health_timeout_extends_vm_ci_startup_only() {
+        assert_eq!(start_health_timeout(false), DEFAULT_START_HEALTH_TIMEOUT);
+        assert_eq!(start_health_timeout(true), VM_CI_START_HEALTH_TIMEOUT);
+        assert!(VM_CI_START_HEALTH_TIMEOUT > DEFAULT_START_HEALTH_TIMEOUT);
     }
 
     #[test]

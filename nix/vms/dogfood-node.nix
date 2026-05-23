@@ -152,6 +152,7 @@
     # avoids nested virtualization issues (vsock not working in nested VMs).
     ciLocalExecutor = true;
     ciWorkspaceDir = "/workspace";
+    ciNixLocalStoreRoot = "/workspace/.aspen-ci-nix-store";
   };
 
   # VM networking configuration

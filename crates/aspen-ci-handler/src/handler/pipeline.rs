@@ -183,7 +183,7 @@ async fn checkout_trigger_repository(
     repo_id: &str,
     commit_hash: &[u8; 32],
     run_id: &str,
-) -> Result<std::path::PathBuf, ClientRpcResponse> {
+) -> Result<(std::path::PathBuf, BTreeMap<String, String>), ClientRpcResponse> {
     use aspen_ci::checkout::checkout_dir_for_run;
     use aspen_ci::checkout::checkout_repository;
     use aspen_ci::checkout::prepare_for_ci_build;
@@ -208,7 +208,95 @@ async fn checkout_trigger_repository(
         return Err(ci_trigger_error_response(format!("Failed to prepare checkout for CI build: {}", error)));
     }
 
-    Ok(checkout_dir)
+    let flake_input_paths = prefetch_trigger_flake_inputs(&checkout_dir).await?;
+    rewrite_trigger_checkout_flake_inputs(&checkout_dir, &flake_input_paths);
+
+    Ok((checkout_dir, flake_input_paths))
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+async fn prefetch_trigger_flake_inputs(
+    checkout_dir: &std::path::Path,
+) -> Result<BTreeMap<String, String>, ClientRpcResponse> {
+    use serde_json::json;
+    use tokio::process::Command;
+
+    let output = Command::new("nix")
+        .args(["flake", "archive", "--json"])
+        .current_dir(checkout_dir)
+        .output()
+        .await
+        .map_err(|error| ci_trigger_error_response(format!("Failed to prefetch flake inputs: {error}")))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(ci_trigger_error_response(format!(
+            "Failed to prefetch flake inputs: {}",
+            stderr.chars().take(500).collect::<String>()
+        )));
+    }
+
+    let stdout = String::from_utf8(output.stdout)
+        .map_err(|error| ci_trigger_error_response(format!("Invalid flake archive UTF-8: {error}")))?;
+    let archive_json: serde_json::Value = serde_json::from_str(&stdout)
+        .map_err(|error| ci_trigger_error_response(format!("Failed to parse flake archive JSON: {error}")))?;
+
+    let mut paths = BTreeMap::new();
+    collect_trigger_flake_archive_paths(&archive_json, &mut paths);
+    info!(checkout_dir = %checkout_dir.display(), input_count = paths.len(), "ci-trigger: prefetched flake inputs");
+    Ok(paths
+        .into_iter()
+        .map(|(name, path)| {
+            let nar_hash = std::process::Command::new("nix")
+                .args(["hash", "path", "--type", "sha256", "--sri"])
+                .arg(&path)
+                .output()
+                .ok()
+                .filter(|output| output.status.success())
+                .and_then(|output| String::from_utf8(output.stdout).ok())
+                .map(|stdout| stdout.trim().to_string())
+                .filter(|hash| !hash.is_empty());
+            let encoded = match nar_hash {
+                Some(nar_hash) => json!({ "path": path, "narHash": nar_hash }).to_string(),
+                None => path,
+            };
+            (name, encoded)
+        })
+        .collect())
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+fn collect_trigger_flake_archive_paths(json: &serde_json::Value, paths: &mut BTreeMap<String, String>) {
+    if let Some(inputs) = json.get("inputs").and_then(|v| v.as_object()) {
+        for (name, value) in inputs {
+            if let Some(path) = value.get("path").and_then(|v| v.as_str()) {
+                paths.insert(name.clone(), path.to_string());
+            }
+            collect_trigger_flake_archive_paths(value, paths);
+        }
+    }
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+fn rewrite_trigger_checkout_flake_inputs(checkout_dir: &std::path::Path, flake_input_paths: &BTreeMap<String, String>) {
+    if flake_input_paths.is_empty() {
+        debug!(checkout_dir = %checkout_dir.display(), "ci-trigger: no prefetched flake inputs available for checkout rewrite");
+        return;
+    }
+
+    match aspen_ci_executor_shell::local_executor::rewrite_flake_lock_with_store_paths(checkout_dir, flake_input_paths)
+    {
+        Ok(()) => info!(
+            checkout_dir = %checkout_dir.display(),
+            inputs = flake_input_paths.len(),
+            "ci-trigger: rewrote checkout flake inputs before VM source archive"
+        ),
+        Err(error) => warn!(
+            checkout_dir = %checkout_dir.display(),
+            inputs = flake_input_paths.len(),
+            error = %error,
+            "ci-trigger: failed to rewrite checkout flake inputs before VM source archive"
+        ),
+    }
 }
 
 #[cfg(all(feature = "forge", feature = "blob"))]
@@ -217,6 +305,8 @@ fn build_trigger_context(
     commit_hash: [u8; 32],
     ref_name: &str,
     checkout_dir: &std::path::Path,
+    source_hash: Option<String>,
+    flake_input_paths: BTreeMap<String, String>,
 ) -> aspen_ci::orchestrator::PipelineContext {
     use aspen_ci::orchestrator::PipelineContext;
 
@@ -233,10 +323,44 @@ fn build_trigger_context(
         run_id: String::new(),
         env,
         checkout_dir: Some(checkout_dir.to_path_buf()),
-        source_hash: None,
+        source_hash,
+        flake_input_paths,
     };
     debug_assert!(context.checkout_dir.is_some());
     context
+}
+
+#[cfg(all(feature = "forge", feature = "blob"))]
+#[allow(clippy::result_large_err)]
+async fn create_trigger_source_archive(
+    orchestrator: &aspen_ci::PipelineOrchestrator<dyn aspen_core::KeyValueStore>,
+    run_id: &str,
+    checkout_dir: &std::path::Path,
+) -> Result<Option<String>, ClientRpcResponse> {
+    let Some(blob_store) = orchestrator.blob_store() else {
+        warn!(
+            run_id = %run_id,
+            checkout_dir = %checkout_dir.display(),
+            "ci-trigger: no blob store configured; RPC-triggered VM jobs will not have a source archive"
+        );
+        return Ok(None);
+    };
+
+    match aspen_ci_executor_shell::create_source_archive(checkout_dir, &blob_store).await {
+        Ok(hash) => {
+            info!(
+                run_id = %run_id,
+                source_hash = %hash,
+                checkout_dir = %checkout_dir.display(),
+                "ci-trigger: created source archive for VM jobs"
+            );
+            Ok(Some(hash))
+        }
+        Err(error) => {
+            cleanup_trigger_checkout(checkout_dir).await;
+            Err(ci_trigger_error_response(format!("Failed to create source archive for CI workspace: {}", error)))
+        }
+    }
 }
 
 /// Handle CiTriggerPipeline request.
@@ -291,11 +415,17 @@ pub async fn handle_trigger_pipeline(
     };
 
     let run_id = uuid::Uuid::new_v4().to_string();
-    let checkout_dir = match checkout_trigger_repository(forge_node, &repo_id, &commit_hash, &run_id).await {
-        Ok(path) => path,
+    let (checkout_dir, flake_input_paths) =
+        match checkout_trigger_repository(forge_node, &repo_id, &commit_hash, &run_id).await {
+            Ok(result) => result,
+            Err(response) => return Ok(response),
+        };
+    let source_hash = match create_trigger_source_archive(orchestrator.as_ref(), &run_id, &checkout_dir).await {
+        Ok(hash) => hash,
         Err(response) => return Ok(response),
     };
-    let context = build_trigger_context(repo_id_parsed, commit_hash, &ref_name, &checkout_dir);
+    let context =
+        build_trigger_context(repo_id_parsed, commit_hash, &ref_name, &checkout_dir, source_hash, flake_input_paths);
 
     info!(repo_id = %repo_id, "ci-trigger: starting pipeline via orchestrator");
     let run = match orchestrator.execute(pipeline_config, context).await {
@@ -738,10 +868,14 @@ pub async fn handle_cancel_run(
 mod tests {
     use std::collections::HashMap;
     use std::path::Path;
+    use std::path::PathBuf;
     use std::sync::Arc;
 
+    use aspen_blob::InMemoryBlobStore;
+    use aspen_blob::prelude::BlobStore;
     use aspen_ci::orchestrator::JobStatus;
     use aspen_ci::orchestrator::PipelineContext;
+    use aspen_ci::orchestrator::PipelineOrchestratorConfig;
     use aspen_ci::orchestrator::PipelineRun;
     use aspen_ci::orchestrator::PipelineStatus;
     use aspen_ci::orchestrator::StageStatus;
@@ -756,6 +890,12 @@ mod tests {
     use chrono::Utc;
 
     use super::*;
+
+    fn unique_temp_dir(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("aspen-ci-handler-{name}-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&path).expect("temp dir is created");
+        path
+    }
 
     fn trigger_response(response: ClientRpcResponse) -> CiTriggerPipelineResponse {
         match response {
@@ -819,7 +959,17 @@ mod tests {
         let repo_id = RepoId([7u8; 32]);
         let commit_hash = [9u8; 32];
         let checkout_dir = Path::new("/tmp/aspen-checkout/test-run");
-        let context = build_trigger_context(repo_id, commit_hash, "main", checkout_dir);
+        let source_hash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string();
+        let mut flake_input_paths = BTreeMap::new();
+        flake_input_paths.insert("ucan-src".to_string(), "/nix/store/ucan-src".to_string());
+        let context = build_trigger_context(
+            repo_id,
+            commit_hash,
+            "main",
+            checkout_dir,
+            Some(source_hash.clone()),
+            flake_input_paths.clone(),
+        );
 
         assert_eq!(context.repo_id, repo_id);
         assert_eq!(context.commit_hash, commit_hash);
@@ -828,7 +978,46 @@ mod tests {
         assert!(context.run_id.is_empty());
         assert_eq!(context.env.get("CI_CHECKOUT_DIR").map(String::as_str), Some("/tmp/aspen-checkout/test-run"));
         assert_eq!(context.checkout_dir.as_deref(), Some(checkout_dir));
-        assert!(context.source_hash.is_none());
+        assert_eq!(context.source_hash.as_deref(), Some(source_hash.as_str()));
+        assert_eq!(context.flake_input_paths, flake_input_paths);
+    }
+
+    #[tokio::test]
+    async fn rpc_trigger_source_archive_materializes_flake_root() {
+        let kv_store: Arc<dyn aspen_core::KeyValueStore> = aspen_testing_core::DeterministicKeyValueStore::new();
+        let job_manager = Arc::new(aspen_jobs::JobManager::new(kv_store.clone()));
+        let workflow_manager = Arc::new(aspen_jobs::WorkflowManager::new(job_manager.clone(), kv_store.clone()));
+        let blob_store: Arc<dyn BlobStore> = Arc::new(InMemoryBlobStore::new());
+        let orchestrator = aspen_ci::PipelineOrchestrator::new(
+            PipelineOrchestratorConfig::default(),
+            workflow_manager,
+            job_manager,
+            Some(blob_store.clone()),
+            kv_store,
+        );
+
+        let checkout_dir = unique_temp_dir("checkout");
+        tokio::fs::write(checkout_dir.join("flake.nix"), b"{ outputs = { self }: {}; }\n")
+            .await
+            .expect("flake fixture is written");
+        tokio::fs::create_dir_all(checkout_dir.join(".aspen")).await.expect("ci config dir is created");
+        tokio::fs::write(checkout_dir.join(".aspen/ci.ncl"), b"{ stages = [] }\n")
+            .await
+            .expect("ci config fixture is written");
+
+        let source_hash = create_trigger_source_archive(&orchestrator, "run-rpc-source", &checkout_dir)
+            .await
+            .expect("source archive creation succeeds")
+            .expect("blob-backed orchestrator returns a source hash");
+        let workspace_dir = unique_temp_dir("workspace");
+        aspen_ci_executor_shell::seed_workspace_from_blob(&blob_store, &source_hash, &workspace_dir)
+            .await
+            .expect("source archive seeds workspace");
+
+        assert!(workspace_dir.join("flake.nix").is_file(), "RPC-triggered VM workspace must contain flake.nix");
+
+        let _ = tokio::fs::remove_dir_all(checkout_dir).await;
+        let _ = tokio::fs::remove_dir_all(workspace_dir).await;
     }
 
     fn receipt_test_run(run_id: &str, job_id: &str) -> PipelineRun {
@@ -865,6 +1054,7 @@ mod tests {
                 env: HashMap::new(),
                 checkout_dir: None,
                 source_hash: None,
+                flake_input_paths: std::collections::BTreeMap::new(),
             },
             status: PipelineStatus::Failed,
             created_at,
@@ -918,6 +1108,7 @@ mod tests {
                 env: HashMap::new(),
                 checkout_dir: None,
                 source_hash: None,
+                flake_input_paths: std::collections::BTreeMap::new(),
             },
             status: PipelineStatus::Failed,
             created_at,

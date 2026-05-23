@@ -11,6 +11,10 @@ use aspen_core::CI_VM_MAX_VCPUS;
 
 use crate::NetworkMode;
 
+const VM_SOCKET_RUNTIME_DIR: &str = "/tmp/aspen-ci-vm-sockets";
+const UNIX_DOMAIN_SOCKET_PATH_LIMIT: usize = 107;
+const SOCKET_STATE_HASH_BYTES: usize = 8;
+
 /// Configuration for the CloudHypervisorWorker.
 #[derive(Debug, Clone)]
 pub struct CloudHypervisorWorkerConfig {
@@ -188,7 +192,7 @@ impl Default for CloudHypervisorWorkerConfig {
             toplevel_path: PathBuf::new(),
             pool_size: 2,
             max_vms: 8,
-            // 24GB - matches NixOS VM config (ci-worker-node.nix)
+            // 32GB - matches NixOS VM config (ci-worker-node.nix)
             vm_memory_mib: (CI_VM_DEFAULT_MEMORY_BYTES / (1024 * 1024)) as u32,
             vm_vcpus: CI_VM_DEFAULT_VCPUS,
             boot_timeout_ms: 60_000,
@@ -261,24 +265,48 @@ impl CloudHypervisorWorkerConfig {
         Ok(())
     }
 
+    /// Get the runtime socket directory for this worker state directory.
+    ///
+    /// Cloud Hypervisor and virtiofsd use UNIX domain sockets, whose Linux
+    /// `sockaddr_un.sun_path` budget is 108 bytes including the trailing NUL.
+    /// VM state directories can be deeply nested under dogfood cluster dirs, so
+    /// socket files live under a short runtime directory keyed by a stable digest
+    /// of `state_dir` instead of under `state_dir` itself.
+    pub fn socket_runtime_dir(&self) -> PathBuf {
+        let state_dir = self.state_dir.to_string_lossy();
+        let digest = blake3::hash(state_dir.as_bytes());
+        let digest_prefix = hex::encode(&digest.as_bytes()[..SOCKET_STATE_HASH_BYTES]);
+
+        PathBuf::from(VM_SOCKET_RUNTIME_DIR).join(digest_prefix)
+    }
+
+    fn runtime_socket_path(&self, vm_id: &str, suffix: &str) -> PathBuf {
+        self.socket_runtime_dir().join(format!("{vm_id}-{suffix}.sock"))
+    }
+
     /// Get the API socket path for a VM.
     pub fn api_socket_path(&self, vm_id: &str) -> PathBuf {
-        self.state_dir.join(format!("{}-api.sock", vm_id))
+        self.runtime_socket_path(vm_id, "api")
     }
 
     /// Get the console socket path for a VM.
     pub fn console_socket_path(&self, vm_id: &str) -> PathBuf {
-        self.state_dir.join(format!("{}-console.sock", vm_id))
+        self.runtime_socket_path(vm_id, "console")
     }
 
     /// Get the virtiofs socket path for a VM share.
     pub fn virtiofs_socket_path(&self, vm_id: &str, tag: &str) -> PathBuf {
-        self.state_dir.join(format!("{}-virtiofs-{}.sock", vm_id, tag))
+        self.runtime_socket_path(vm_id, &format!("virtiofs-{tag}"))
     }
 
     /// Get the vsock path for a VM.
     pub fn vsock_socket_path(&self, vm_id: &str) -> PathBuf {
-        self.state_dir.join(format!("{}-vsock.sock", vm_id))
+        self.runtime_socket_path(vm_id, "vsock")
+    }
+
+    /// Return whether a socket path fits Linux `sockaddr_un.sun_path`.
+    pub fn socket_path_fits_unix_limit(path: &std::path::Path) -> bool {
+        path.to_string_lossy().len() <= UNIX_DOMAIN_SOCKET_PATH_LIMIT
     }
 
     /// Get the serial log path for a VM.
@@ -435,6 +463,35 @@ mod tests {
 
         assert!(config.api_socket_path(vm_id).to_string_lossy().contains("-api.sock"));
         assert!(config.vsock_socket_path(vm_id).to_string_lossy().contains("-vsock.sock"));
+    }
+
+    #[test]
+    fn socket_paths_stay_below_unix_domain_socket_limit_for_long_state_dirs() {
+        let config = CloudHypervisorWorkerConfig {
+            state_dir: PathBuf::from("/datapool/aspen-builds/tmp/dogfood-vmci-medium-shell-store/cluster/node1/ci/vms"),
+            ..Default::default()
+        };
+        let vm_id = config.generate_vm_id(229);
+        let paths = [
+            config.api_socket_path(&vm_id),
+            config.vsock_socket_path(&vm_id),
+            config.virtiofs_socket_path(&vm_id, aspen_core::CI_VM_NIX_STORE_TAG),
+            config.virtiofs_socket_path(&vm_id, aspen_core::CI_VM_WORKSPACE_TAG),
+        ];
+
+        for path in paths {
+            assert!(
+                CloudHypervisorWorkerConfig::socket_path_fits_unix_limit(&path),
+                "socket path exceeds UNIX domain socket limit: {} ({} bytes)",
+                path.display(),
+                path.to_string_lossy().len()
+            );
+            assert!(
+                path.starts_with(VM_SOCKET_RUNTIME_DIR),
+                "socket path should use short runtime dir: {}",
+                path.display()
+            );
+        }
     }
 
     #[test]

@@ -7,14 +7,18 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::path::PathBuf;
+use std::time::Duration;
 
 use crate::error::DogfoodError;
 use crate::error::DogfoodResult;
+use crate::error::HealthCheckSnafu;
 
 const CAP_NET_ADMIN_BIT: u32 = 12;
 const DEFAULT_NETWORK_MODE: &str = "tap";
 const VM_CI_BRIDGE_NAME: &str = "aspen-ci-br0";
 const VM_CI_NETWORK_SETUP_MARKER: &str = "/tmp/aspen-ci-network-configured-v3";
+const VM_CI_STARTUP_READINESS_POLL: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VmCiReadinessInput {
@@ -51,6 +55,91 @@ impl VmCiReadinessInput {
 
 pub fn check_current_environment() -> DogfoodResult<()> {
     check_readiness(&VmCiReadinessInput::from_host()).map_err(|reason| DogfoodError::VmCiReadiness { reason })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VmCiStartupReadiness {
+    pub router_spawned: bool,
+    pub ticket_written: bool,
+    pub vm_pool_initialized: bool,
+    pub worker_ready: bool,
+}
+
+impl VmCiStartupReadiness {
+    fn ready(self) -> bool {
+        // Worker registration/polling happens after the host initializes the
+        // cluster. Requiring it here creates a startup deadlock: dogfood waits
+        // for workers, while workers wait for InitCluster. Treat VM pool
+        // initialization as the local VM-CI startup gate; worker progress is
+        // proven by the later CI rail markers.
+        self.router_spawned && self.ticket_written && self.vm_pool_initialized
+    }
+}
+
+pub async fn wait_for_startup_readiness(data_dir: &str, timeout: Duration) -> DogfoodResult<()> {
+    let start = tokio::time::Instant::now();
+    let data_dir = PathBuf::from(data_dir);
+    loop {
+        let readiness = read_startup_readiness(&data_dir).await;
+        if readiness.ready() {
+            return Ok(());
+        }
+
+        if start.elapsed() > timeout {
+            return HealthCheckSnafu {
+                target: "VM-CI local startup readiness".to_string(),
+                reason: format!(
+                    "not ready after {}s (router_spawned={}, ticket_written={}, vm_pool_initialized={}, worker_ready={})",
+                    timeout.as_secs(),
+                    readiness.router_spawned,
+                    readiness.ticket_written,
+                    readiness.vm_pool_initialized,
+                    readiness.worker_ready
+                ),
+            }
+            .fail();
+        }
+
+        tokio::time::sleep(VM_CI_STARTUP_READINESS_POLL).await;
+    }
+}
+
+async fn read_startup_readiness(data_dir: &Path) -> VmCiStartupReadiness {
+    let node_log = tokio::fs::read_to_string(data_dir.with_extension("log")).await.unwrap_or_default();
+    let mut readiness = parse_startup_readiness(&node_log, "");
+
+    let serial_dir = data_dir.join("ci/vms");
+    if let Ok(mut entries) = tokio::fs::read_dir(serial_dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+            if path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.ends_with("-serial.log")) {
+                let serial = tokio::fs::read_to_string(path).await.unwrap_or_default();
+                readiness = merge_startup_readiness(readiness, parse_startup_readiness("", &serial));
+            }
+        }
+    }
+
+    readiness
+}
+
+fn parse_startup_readiness(node_log: &str, serial_logs: &str) -> VmCiStartupReadiness {
+    VmCiStartupReadiness {
+        router_spawned: node_log.contains("Iroh Router spawned"),
+        ticket_written: node_log.contains("cluster ticket written to file"),
+        vm_pool_initialized: node_log.contains("VM pool initialized"),
+        worker_ready: serial_logs.contains("worker registered with cluster")
+            || serial_logs.contains("ephemeral CI worker ready")
+            || serial_logs.contains("polling for jobs"),
+    }
+}
+
+fn merge_startup_readiness(left: VmCiStartupReadiness, right: VmCiStartupReadiness) -> VmCiStartupReadiness {
+    VmCiStartupReadiness {
+        router_spawned: left.router_spawned || right.router_spawned,
+        ticket_written: left.ticket_written || right.ticket_written,
+        vm_pool_initialized: left.vm_pool_initialized || right.vm_pool_initialized,
+        worker_ready: left.worker_ready || right.worker_ready,
+    }
 }
 
 pub fn check_readiness(input: &VmCiReadinessInput) -> Result<(), String> {
@@ -180,6 +269,30 @@ mod tests {
     #[test]
     fn ready_host_passes() {
         assert!(check_readiness(&ready_input()).is_ok());
+    }
+
+    #[test]
+    fn startup_readiness_requires_router_ticket_and_pool() {
+        let node_log = "Iroh Router spawned\ncluster ticket written to file\nVM pool initialized";
+        let serial_log = "worker registered with cluster\nephemeral CI worker ready - polling for jobs";
+
+        let readiness = parse_startup_readiness(node_log, serial_log);
+
+        assert!(readiness.ready());
+        assert!(readiness.worker_ready);
+    }
+
+    #[test]
+    fn startup_readiness_does_not_require_worker_before_cluster_init() {
+        let node_log = "Iroh Router spawned\ncluster ticket written to file\nVM pool initialized";
+
+        let readiness = parse_startup_readiness(node_log, "");
+
+        assert!(readiness.ready());
+        assert!(readiness.router_spawned);
+        assert!(readiness.ticket_written);
+        assert!(readiness.vm_pool_initialized);
+        assert!(!readiness.worker_ready);
     }
 
     #[test]

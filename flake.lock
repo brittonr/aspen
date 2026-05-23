@@ -258,16 +258,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1778023325,
-        "narHash": "sha256-yBrTeIBGu4NisBLa4+n5Gc8jCj/0bn77rqaw1l5VVBA=",
-        "owner": "brittonr",
-        "repo": "tigerstyle-rs",
-        "rev": "8deed8e5c30b8f1be046465aeebb594b0c651b77",
+        "lastModified": 1779248365,
+        "narHash": "sha256-H7sWzfYiLs4rWKGR24dYFBkUmoRCH20SVK6vkobkag4=",
+        "owner": "onixresearch",
+        "repo": "octet",
+        "rev": "7fb94b717496c53f61048161d5cc34b8cfec0b40",
         "type": "github"
       },
       "original": {
-        "owner": "brittonr",
-        "repo": "tigerstyle-rs",
+        "owner": "onixresearch",
+        "repo": "octet",
         "type": "github"
       }
     },
@@ -280,12 +280,12 @@
         "rev": "ad61b53e89fa45f9bf7d313ce14c45de645bf53d",
         "revCount": 85,
         "type": "git",
-        "url": "ssh://git@github.com/brittonr/ucan.git"
+        "url": "ssh://git@github.com/OnixResearch/ucan.git"
       },
       "original": {
         "rev": "ad61b53e89fa45f9bf7d313ce14c45de645bf53d",
         "type": "git",
-        "url": "ssh://git@github.com/brittonr/ucan.git"
+        "url": "ssh://git@github.com/OnixResearch/ucan.git"
       }
     },
     "unit2nix": {

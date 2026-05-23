@@ -78,6 +78,20 @@ enum Command {
     Full(FullArgs),
     /// Run a cheaper local proof: start → push/CI-watch trigger → stop.
     PushCheck,
+    /// Run a narrow VM-CI proof: start → push → tiny shell CI build → stop.
+    VmCiSmoke,
+    /// Run a narrow VM-CI proof through guest Nix without building Aspen.
+    VmCiNixSmoke,
+    /// Run a narrow VM-CI proof that a guest Nix build times out and finalizes.
+    VmCiNixTimeout,
+    /// Run a medium VM-CI proof through a focused guest Cargo check.
+    VmCiCargoSmoke,
+    /// Run a VM-CI source/blob materialization proof without guest Nix or Cargo.
+    VmCiSourceBlob,
+    /// Run a medium VM-CI acceptance rail: format plus build-only CI, no clippy/test/deploy.
+    VmCiMedium,
+    /// Run the expensive VM-CI clippy gate as its own rail.
+    VmCiClippy,
     /// Inspect durable dogfood run receipts.
     Receipts {
         #[command(subcommand)]
@@ -138,6 +152,77 @@ struct FullArgs {
     leave_running: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum VmCiRail {
+    Shell,
+    Nix,
+    NixTimeout,
+    Cargo,
+    SourceBlob,
+    Medium,
+    Clippy,
+    Full,
+}
+
+impl VmCiRail {
+    fn command_name(self) -> &'static str {
+        match self {
+            Self::Shell => "vm-ci-smoke",
+            Self::Nix => "vm-ci-nix-smoke",
+            Self::NixTimeout => "vm-ci-nix-timeout",
+            Self::Cargo => "vm-ci-cargo-smoke",
+            Self::SourceBlob => "vm-ci-source-blob",
+            Self::Medium => "vm-ci-medium",
+            Self::Clippy => "vm-ci-clippy",
+            Self::Full => "full",
+        }
+    }
+
+    pub(crate) fn profile(self) -> &'static str {
+        match self {
+            Self::Shell => "vmci-smoke",
+            Self::Nix => "vmci-nix-smoke",
+            Self::NixTimeout => "vmci-nix-timeout",
+            Self::Cargo => "vmci-cargo-smoke",
+            Self::SourceBlob => "vmci-source-blob",
+            Self::Medium => "vmci-medium",
+            Self::Clippy => "vmci-clippy",
+            Self::Full => "vmci-full",
+        }
+    }
+
+    pub(crate) fn ci_config_override(self) -> Option<&'static str> {
+        match self {
+            Self::Shell
+            | Self::Nix
+            | Self::NixTimeout
+            | Self::Cargo
+            | Self::SourceBlob
+            | Self::Medium
+            | Self::Clippy => Some(self.profile()),
+            Self::Full => None,
+        }
+    }
+
+    pub(crate) fn uses_full_workspace_ci(self) -> bool {
+        matches!(self, Self::Full)
+    }
+
+    fn minimum_ci_wait_timeout_secs(self) -> u64 {
+        match self {
+            Self::Shell | Self::SourceBlob | Self::Nix | Self::NixTimeout | Self::Cargo => 1200,
+            // VMCI medium cold-starts a guest-local Nix store.  The cache-warm
+            // job is allowed 2400s and build-cli is allowed 3600s, and the wait
+            // budget must also cover pipeline discovery, format, source
+            // materialization, and stop/receipt bookkeeping.  Keep this in
+            // process logic as a guardrail so wrapper defaults cannot silently
+            // reintroduce the smoke budget.
+            Self::Medium => 7200,
+            Self::Clippy | Self::Full => 7800,
+        }
+    }
+}
+
 fn main() {
     if let Err(error) = run_main() {
         tracing::error!("❌ {error}");
@@ -185,6 +270,7 @@ fn build_run_config(cli: &Cli) -> RunConfig {
         nix_cache_gateway_bin: std::env::var("ASPEN_NIX_CACHE_GATEWAY_BIN").ok(),
         ci_timeout_secs,
         git_push_timeout_secs,
+        vmci_rail: None,
     }
 }
 
@@ -205,11 +291,19 @@ async fn dispatch_command(config: &RunConfig, command: Command) -> DogfoodResult
         Command::FullLoop => cmd_full_loop(config).await,
         Command::Full(args) => cmd_full(config, &args).await,
         Command::PushCheck => cmd_push_check(config).await,
+        Command::VmCiSmoke => cmd_vm_ci_rail(config, VmCiRail::Shell).await,
+        Command::VmCiNixSmoke => cmd_vm_ci_rail(config, VmCiRail::Nix).await,
+        Command::VmCiNixTimeout => cmd_vm_ci_rail(config, VmCiRail::NixTimeout).await,
+        Command::VmCiCargoSmoke => cmd_vm_ci_rail(config, VmCiRail::Cargo).await,
+        Command::VmCiSourceBlob => cmd_vm_ci_rail(config, VmCiRail::SourceBlob).await,
+        Command::VmCiMedium => cmd_vm_ci_rail(config, VmCiRail::Medium).await,
+        Command::VmCiClippy => cmd_vm_ci_rail(config, VmCiRail::Clippy).await,
         Command::Receipts { command } => cmd_receipts(config, command).await,
     }
 }
 
 /// Runtime configuration derived from CLI args and environment.
+#[derive(Clone)]
 pub struct RunConfig {
     pub cluster_dir: String,
     pub federation: bool,
@@ -220,6 +314,7 @@ pub struct RunConfig {
     pub nix_cache_gateway_bin: Option<String>,
     pub ci_timeout_secs: u64,
     pub git_push_timeout_secs: u64,
+    pub vmci_rail: Option<VmCiRail>,
 }
 
 impl RunConfig {
@@ -797,6 +892,18 @@ fn diagnose_receipt(receipt: &receipt::DogfoodRunReceipt, path: &Path) -> String
     let _ = writeln!(output, "  created_at: {}", receipt.created_at);
 
     let Some(stage) = receipt.stages.iter().find(|stage| stage.status == receipt::DogfoodStageStatus::Failed) else {
+        if let Some(running_stage) =
+            receipt.stages.iter().rev().find(|stage| stage.status == receipt::DogfoodStageStatus::Running)
+        {
+            let _ = writeln!(output, "  status: running");
+            let _ = writeln!(output, "  running_stage: {}", running_stage.stage.as_str());
+            let _ = writeln!(output, "  last_boundary: {}", running_stage_boundary(running_stage.stage));
+            let _ = writeln!(output, "  first_checks:");
+            for check in dogfood_running_stage_checks(running_stage.stage) {
+                let _ = writeln!(output, "    - {check}");
+            }
+            return output;
+        }
         let succeeded =
             receipt.stages.iter().filter(|stage| stage.status == receipt::DogfoodStageStatus::Succeeded).count();
         let _ = writeln!(
@@ -925,6 +1032,40 @@ fn operator_receipt_value_has_secret_marker(value: &str) -> bool {
     .any(|marker| value.contains(marker))
 }
 
+fn dogfood_running_stage_checks(stage: receipt::DogfoodStageKind) -> &'static [&'static str] {
+    match stage {
+        receipt::DogfoodStageKind::Push => &[
+            "Treat this as a Forge source push/archive/CI-trigger boundary until a later receipt stage appears.",
+            "Inspect dogfood logs around repository creation, source snapshot preparation, git push, and CiWatchRepo trigger registration.",
+            "Prefer the layered VMCI smoke rails before rerunning full CI acceptance.",
+        ],
+        receipt::DogfoodStageKind::Build => &[
+            "Treat this as CI wait/execution in progress; inspect CI run id artifacts if present.",
+            "For VM-CI, check preserved VMCI diagnostics before changing lower networking or workspace code.",
+        ],
+        receipt::DogfoodStageKind::Start => &[
+            "Treat this as cluster startup/health in progress; inspect node logs and startup health checks.",
+            "Do not classify it as VM registration or CI execution until start completes.",
+        ],
+        _ => &[
+            "The stage was running when the receipt was last written; inspect logs for that stage boundary before rerunning.",
+            "If the process was killed, use this running stage as the last durable boundary reached.",
+        ],
+    }
+}
+
+fn running_stage_boundary(stage: receipt::DogfoodStageKind) -> &'static str {
+    match stage {
+        receipt::DogfoodStageKind::Start => "cluster_start_or_health_check",
+        receipt::DogfoodStageKind::Push => "forge_source_push_archive_or_ci_trigger",
+        receipt::DogfoodStageKind::Build => "ci_wait_vm_registration_workspace_or_executor",
+        receipt::DogfoodStageKind::Deploy => "deployment_trigger_or_wait",
+        receipt::DogfoodStageKind::Verify => "deployment_verification",
+        receipt::DogfoodStageKind::PublishReceipt => "receipt_publication",
+        receipt::DogfoodStageKind::Stop => "cluster_cleanup",
+    }
+}
+
 fn dogfood_diagnosis_checks(stage: receipt::DogfoodStageKind, category: &str) -> &'static [&'static str] {
     match (stage, category) {
         (receipt::DogfoodStageKind::Start, "process_spawn") => &[
@@ -951,7 +1092,23 @@ fn dogfood_diagnosis_checks(stage: receipt::DogfoodStageKind, category: &str) ->
             "Use the CI run artifact from the receipt, then inspect CI status and logs for that exact run id.",
             "Check failed job output before rerunning or changing source.",
         ],
-        (receipt::DogfoodStageKind::Build, "timeout") => &[
+        (receipt::DogfoodStageKind::Build, "vm_registration_timeout") => &[
+            "Treat this as VM guest registration or worker pool readiness; inspect VM serial logs and worker registration events.",
+            "Do not change Forge/source/archive code unless the push stage also failed or remained running.",
+        ],
+        (receipt::DogfoodStageKind::Build, "workspace_materialization") => &[
+            "Treat this as source blob/workspace materialization; inspect source_hash, RpcBlobStore, and tar extraction diagnostics.",
+            "Run the vmci-source-blob rail before rerunning full CI acceptance.",
+        ],
+        (receipt::DogfoodStageKind::Build, "executor_timeout") => &[
+            "Treat this as an executor timeout only when timeout-origin markers are present (command_timeout, executor_job_timeout, or executor_watchdog_timeout).",
+            "Inspect ASPEN_CI_COMMAND_PROGRESS markers to identify which timeout layer fired before changing source or networking code.",
+        ],
+        (receipt::DogfoodStageKind::Build, "executor_command_failed") => &[
+            "Treat this as an executor command failure, not a timeout, unless timeout-origin markers are present.",
+            "Inspect the full paginated job log tail for the Nix/build error after command_running markers.",
+        ],
+        (receipt::DogfoodStageKind::Build, "ci_wait_timeout") | (receipt::DogfoodStageKind::Build, "timeout") => &[
             "Use CI status/logs to distinguish a still-running local Nix build from a stuck worker.",
             "If the build is still making progress, consider increasing ASPEN_DOGFOOD_CI_TIMEOUT_SECS before changing source.",
         ],
@@ -999,7 +1156,53 @@ async fn cmd_push_check(config: &RunConfig) -> DogfoodResult<()> {
     stop_result
 }
 
+async fn cmd_vm_ci_rail(config: &RunConfig, rail: VmCiRail) -> DogfoodResult<()> {
+    let mut rail_config = config.clone();
+    rail_config.vmci_rail = Some(rail);
+    rail_config.vm_ci = true;
+    rail_config.ci_timeout_secs = rail_config.ci_timeout_secs.max(rail.minimum_ci_wait_timeout_secs());
+    run_vm_ci_smoke(&rail_config, rail.command_name()).await
+}
+
+async fn run_vm_ci_smoke(config: &RunConfig, command_name: &str) -> DogfoodResult<()> {
+    let mut recorder = DogfoodReceiptRecorder::new(config, command_name)?;
+    if let Err(error) = recorder.run_stage(receipt::DogfoodStageKind::Start, || cmd_start(config)).await {
+        recorder.log_path();
+        return Err(error);
+    }
+    install_ctrl_c_shutdown(config);
+    let result = async {
+        recorder.run_stage(receipt::DogfoodStageKind::Push, || cmd_push(config)).await?;
+        let receipt_run_id = recorder.receipt.run_id.clone();
+        recorder
+            .run_stage_with_artifacts_and_failure_artifacts(
+                receipt::DogfoodStageKind::Build,
+                || async {
+                    let run_id = build_ci_pipeline(config).await?;
+                    Ok((run_id.clone(), vec![ci_run_artifact(run_id)]))
+                },
+                |error| build_failure_artifacts(config, error, &receipt_run_id),
+            )
+            .await?;
+        Ok(())
+    }
+    .await;
+    let stop_result = recorder.run_stage(receipt::DogfoodStageKind::Stop, || cmd_stop(config)).await;
+    recorder.log_path();
+    result?;
+    stop_result
+}
+
 async fn cmd_full(config: &RunConfig, args: &FullArgs) -> DogfoodResult<()> {
+    let mut full_config;
+    let config = if config.vm_ci && config.vmci_rail.is_none() {
+        full_config = config.clone();
+        full_config.vmci_rail = Some(VmCiRail::Full);
+        &full_config
+    } else {
+        config
+    };
+
     let mut recorder = DogfoodReceiptRecorder::new(config, "full")?;
     if let Err(error) = recorder.run_stage(receipt::DogfoodStageKind::Start, || cmd_start(config)).await {
         recorder.log_path();
@@ -1094,6 +1297,7 @@ impl DogfoodReceiptRecorder {
             mode: receipt::DogfoodRunMode {
                 federation: config.federation,
                 vm_ci: config.vm_ci,
+                vmci_rail: config.vmci_rail.map(|rail| rail.profile().to_string()),
             },
             project_dir: config.project_dir.clone(),
             cluster_dir: config.cluster_dir.clone(),
@@ -1133,23 +1337,35 @@ impl DogfoodReceiptRecorder {
     {
         let started_at = current_timestamp_utc();
         let started_instant = Instant::now();
+        let stage_index = self.receipt.stages.len();
+        self.receipt.stages.push(receipt::DogfoodStageReceipt {
+            stage,
+            status: receipt::DogfoodStageStatus::Running,
+            started_at: started_at.clone(),
+            finished_at: None,
+            elapsed_ms: None,
+            failure: None,
+            artifacts: Vec::new(),
+        });
+        self.write()?;
+
         match operation().await {
             Ok((value, artifacts)) => {
-                self.receipt.stages.push(receipt::DogfoodStageReceipt {
+                self.receipt.stages[stage_index] = receipt::DogfoodStageReceipt {
                     stage,
                     status: receipt::DogfoodStageStatus::Succeeded,
-                    started_at,
+                    started_at: started_at.clone(),
                     finished_at: Some(current_timestamp_utc()),
                     elapsed_ms: Some(elapsed_ms_since(started_instant)),
                     failure: None,
                     artifacts,
-                });
+                };
                 self.write()?;
                 Ok(value)
             }
             Err(error) => {
                 let failure = dogfood_failure_summary(stage, &error);
-                self.receipt.stages.push(receipt::DogfoodStageReceipt {
+                self.receipt.stages[stage_index] = receipt::DogfoodStageReceipt {
                     stage,
                     status: receipt::DogfoodStageStatus::Failed,
                     started_at,
@@ -1157,7 +1373,7 @@ impl DogfoodReceiptRecorder {
                     elapsed_ms: Some(elapsed_ms_since(started_instant)),
                     failure: Some(failure),
                     artifacts: failure_artifacts(&error),
-                });
+                };
                 if let Err(write_error) = self.write() {
                     tracing::warn!("failed to write dogfood receipt after stage failure: {write_error}");
                 }
@@ -1230,11 +1446,14 @@ fn dogfood_failure_summary(stage: receipt::DogfoodStageKind, error: &DogfoodErro
     receipt::DogfoodFailureSummary {
         operation: dogfood_failure_operation(stage, error).to_string(),
         category: dogfood_error_category_for_stage(stage, error).to_string(),
-        message: crate::error::redact_credential_fragments(&error.to_string()),
+        message: redact_operator_receipt_value("failure.message", &error.to_string()),
     }
 }
 
 fn dogfood_failure_operation(stage: receipt::DogfoodStageKind, error: &DogfoodError) -> &'static str {
+    if stage == receipt::DogfoodStageKind::Build {
+        return dogfood_build_failure_operation(error);
+    }
     if stage != receipt::DogfoodStageKind::Push {
         return stage.as_str();
     }
@@ -1243,6 +1462,10 @@ fn dogfood_failure_operation(stage: receipt::DogfoodStageKind, error: &DogfoodEr
         DogfoodError::ClientRpc { operation, .. } if operation.starts_with("Forge") => "push:forge_rpc",
         DogfoodError::Forge { operation, .. } if operation.contains("create") => "push:forge_repo_create",
         DogfoodError::Forge { operation, .. } if operation.contains("list") => "push:forge_repo_lookup",
+        DogfoodError::ProcessSpawn { binary, .. } if is_source_snapshot_operation(binary) => {
+            "push:source_snapshot_prepare"
+        }
+        DogfoodError::GitPush { .. } if is_source_snapshot_failure_message(error) => "push:source_snapshot_prepare",
         DogfoodError::ProcessSpawn { binary, .. } if binary.contains("git remote") => "push:local_git_remote_config",
         DogfoodError::ProcessSpawn { binary, .. } if binary.contains("git push") => "push:local_git_invocation",
         DogfoodError::Timeout { operation, .. } if operation.contains("git push") => "push:push_completion",
@@ -1251,7 +1474,98 @@ fn dogfood_failure_operation(stage: receipt::DogfoodStageKind, error: &DogfoodEr
     }
 }
 
+fn is_source_snapshot_operation(operation: &str) -> bool {
+    [
+        "git rev-parse HEAD",
+        "git archive HEAD",
+        "tar extract dogfood source snapshot",
+        "git init snapshot",
+        "git config snapshot",
+        "git add snapshot",
+        "git commit snapshot",
+        "select VM-CI smoke config",
+    ]
+    .iter()
+    .any(|marker| operation.contains(marker))
+}
+
+fn is_source_snapshot_failure_message(error: &DogfoodError) -> bool {
+    match error {
+        DogfoodError::GitPush { stderr, .. } => is_source_snapshot_operation(stderr),
+        DogfoodError::Forge { operation, .. } => is_source_snapshot_operation(operation),
+        _ => false,
+    }
+}
+
+fn dogfood_build_failure_operation(error: &DogfoodError) -> &'static str {
+    match dogfood_build_error_category(error) {
+        "vm_registration_timeout" => "build:vm_registration",
+        "workspace_materialization" => "build:workspace_materialization",
+        "executor_timeout" | "executor_command_failed" => "build:executor_command",
+        "ci_wait_timeout" => "build:ci_wait",
+        "vm_ci_readiness" => "build:vm_ci_readiness",
+        "ci_pipeline" => "build:ci_pipeline",
+        _ => "build",
+    }
+}
+
+fn dogfood_build_error_category(error: &DogfoodError) -> &'static str {
+    match error {
+        DogfoodError::Timeout { operation, .. } if operation.contains("CI pipeline") => "ci_wait_timeout",
+        DogfoodError::VmCiReadiness { .. } => "vm_ci_readiness",
+        DogfoodError::CiPipeline { status, detail, .. } => {
+            let combined = format!("{status}\n{detail}").to_ascii_lowercase();
+            if contains_any(&combined, &[
+                "registration timed out",
+                "worker registration",
+                "no vm worker",
+                "guest registration",
+            ]) {
+                "vm_registration_timeout"
+            } else if contains_any(&combined, &[
+                "workspace materialization",
+                "workspace_source_materialization",
+                "workspace seeding failed",
+                "failed to download blob",
+                "does not contain a 'flake.nix'",
+                "could not find a flake.nix",
+                "source_hash missing",
+                "source_hash_present=false",
+            ]) {
+                "workspace_materialization"
+            } else if contains_any(&combined, &[
+                "aspen_ci_command_progress phase=command_timeout",
+                "aspen_ci_command_progress phase=executor_job_timeout",
+                "aspen_ci_command_progress phase=executor_watchdog_timeout",
+                "command timeout",
+            ]) {
+                "executor_timeout"
+            } else if contains_any(&combined, &[
+                "aspen_ci_command_progress phase=command_started",
+                "aspen_ci_command_progress phase=command_running",
+                "aspen_ci_command_progress phase=command_execute_returned",
+                "executor started",
+                "starting nix build",
+            ]) {
+                "executor_command_failed"
+            } else if status == "timeout" {
+                "ci_wait_timeout"
+            } else {
+                "ci_pipeline"
+            }
+        }
+        _ => dogfood_error_category(error),
+    }
+}
+
+fn contains_any(haystack: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| haystack.contains(needle))
+}
+
 fn dogfood_error_category_for_stage(stage: receipt::DogfoodStageKind, error: &DogfoodError) -> &'static str {
+    if stage == receipt::DogfoodStageKind::Build {
+        return dogfood_build_error_category(error);
+    }
     if stage == receipt::DogfoodStageKind::Push {
         return dogfood_push_error_category(error);
     }
@@ -1263,6 +1577,8 @@ fn dogfood_push_error_category(error: &DogfoodError) -> &'static str {
         DogfoodError::ClientRpc { operation, .. } if operation.starts_with("Forge") => "forge_rpc",
         DogfoodError::ClientRpc { operation, .. } if operation == "CiWatchRepo" => "ci_trigger_watch",
         DogfoodError::Forge { .. } => "forge_repo",
+        DogfoodError::ProcessSpawn { binary, .. } if is_source_snapshot_operation(binary) => "source_snapshot_prepare",
+        DogfoodError::GitPush { .. } if is_source_snapshot_failure_message(error) => "source_snapshot_prepare",
         DogfoodError::ProcessSpawn { binary, .. } if binary.contains("git remote") => "local_git_remote_config",
         DogfoodError::ProcessSpawn { binary, .. } if binary.contains("git push") => "local_git_invocation",
         DogfoodError::Timeout { operation, .. } if operation.contains("git push") => "push_timeout",
@@ -1446,6 +1762,7 @@ mod tests {
             nix_cache_gateway_bin: None,
             ci_timeout_secs: 60,
             git_push_timeout_secs: 60,
+            vmci_rail: None,
         }
     }
 
@@ -1462,6 +1779,7 @@ mod tests {
             mode: receipt::DogfoodRunMode {
                 federation: false,
                 vm_ci: false,
+                vmci_rail: None,
             },
             project_dir: "/repo".to_string(),
             cluster_dir: "/tmp/test-dogfood".to_string(),
@@ -1483,6 +1801,28 @@ mod tests {
                 artifacts: vec![ci_run_artifact("run-123".to_string())],
             }],
         })
+    }
+
+    #[test]
+    fn vmci_rail_mapping_is_stable_and_separates_full_workspace() {
+        let rails = [
+            (VmCiRail::Shell, "vm-ci-smoke", "vmci-smoke", Some("vmci-smoke"), false, 1200),
+            (VmCiRail::Nix, "vm-ci-nix-smoke", "vmci-nix-smoke", Some("vmci-nix-smoke"), false, 1200),
+            (VmCiRail::NixTimeout, "vm-ci-nix-timeout", "vmci-nix-timeout", Some("vmci-nix-timeout"), false, 1200),
+            (VmCiRail::Cargo, "vm-ci-cargo-smoke", "vmci-cargo-smoke", Some("vmci-cargo-smoke"), false, 1200),
+            (VmCiRail::SourceBlob, "vm-ci-source-blob", "vmci-source-blob", Some("vmci-source-blob"), false, 1200),
+            (VmCiRail::Medium, "vm-ci-medium", "vmci-medium", Some("vmci-medium"), false, 7200),
+            (VmCiRail::Clippy, "vm-ci-clippy", "vmci-clippy", Some("vmci-clippy"), false, 7800),
+            (VmCiRail::Full, "full", "vmci-full", None, true, 7800),
+        ];
+
+        for (rail, command_name, profile, override_profile, full_workspace, min_timeout_secs) in rails {
+            assert_eq!(rail.command_name(), command_name);
+            assert_eq!(rail.profile(), profile);
+            assert_eq!(rail.ci_config_override(), override_profile);
+            assert_eq!(rail.uses_full_workspace_ci(), full_workspace);
+            assert_eq!(rail.minimum_ci_wait_timeout_secs(), min_timeout_secs);
+        }
     }
 
     #[test]
@@ -1563,6 +1903,73 @@ mod tests {
         assert_eq!(summary.final_status, "failed");
         assert_eq!(summary.succeeded_stages, 1);
         assert_eq!(summary.total_stages, 2);
+    }
+
+    #[test]
+    fn diagnose_receipt_classifies_running_push_as_source_boundary() {
+        let mut receipt =
+            sample_receipt("dogfood-running-push", "2026-05-03T04:00:00Z", receipt::DogfoodStageStatus::Succeeded);
+        receipt.stages.clear();
+        receipt.stages.push(receipt::DogfoodStageReceipt {
+            stage: receipt::DogfoodStageKind::Start,
+            status: receipt::DogfoodStageStatus::Succeeded,
+            started_at: "2026-05-03T01:00:00Z".to_string(),
+            finished_at: Some("2026-05-03T01:00:10Z".to_string()),
+            elapsed_ms: Some(10_000),
+            failure: None,
+            artifacts: Vec::new(),
+        });
+        receipt.stages.push(receipt::DogfoodStageReceipt {
+            stage: receipt::DogfoodStageKind::Push,
+            status: receipt::DogfoodStageStatus::Running,
+            started_at: "2026-05-03T01:00:10Z".to_string(),
+            finished_at: None,
+            elapsed_ms: None,
+            failure: None,
+            artifacts: Vec::new(),
+        });
+
+        let diagnosis = diagnose_receipt(&receipt, Path::new("/tmp/dogfood-running-push.json"));
+
+        assert!(diagnosis.contains("status: running"));
+        assert!(diagnosis.contains("running_stage: push"));
+        assert!(diagnosis.contains("last_boundary: forge_source_push_archive_or_ci_trigger"));
+    }
+
+    #[test]
+    fn push_source_snapshot_errors_classify_to_source_boundary() {
+        let error = DogfoodError::ProcessSpawn {
+            binary: "git archive HEAD".to_string(),
+            source: std::io::Error::new(std::io::ErrorKind::NotFound, "missing git"),
+        };
+
+        assert_eq!(dogfood_failure_operation(receipt::DogfoodStageKind::Push, &error), "push:source_snapshot_prepare");
+        assert_eq!(
+            dogfood_error_category_for_stage(receipt::DogfoodStageKind::Push, &error),
+            "source_snapshot_prepare"
+        );
+    }
+
+    #[test]
+    fn push_git_failures_from_snapshot_prepare_classify_to_source_boundary() {
+        let error = DogfoodError::GitPush {
+            exit_code: 1,
+            stderr: "status=exit stdout= stderr=git commit snapshot failed".to_string(),
+        };
+
+        assert_eq!(dogfood_failure_operation(receipt::DogfoodStageKind::Push, &error), "push:source_snapshot_prepare");
+        assert_eq!(
+            dogfood_error_category_for_stage(receipt::DogfoodStageKind::Push, &error),
+            "source_snapshot_prepare"
+        );
+    }
+
+    #[test]
+    fn running_stage_boundary_names_build_without_claiming_vmci_root_cause() {
+        assert_eq!(
+            running_stage_boundary(receipt::DogfoodStageKind::Build),
+            "ci_wait_vm_registration_workspace_or_executor"
+        );
     }
 
     #[test]
@@ -1699,6 +2106,92 @@ mod tests {
             timeout_secs: 600,
         };
         assert_eq!(dogfood_error_category(&error), "timeout");
+        let summary = dogfood_failure_summary(receipt::DogfoodStageKind::Build, &error);
+        assert_eq!(summary.operation, "build:ci_wait");
+        assert_eq!(summary.category, "ci_wait_timeout");
+    }
+
+    #[test]
+    fn build_receipts_classify_vmci_failure_boundaries() {
+        let cases = [
+            (
+                DogfoodError::CiPipeline {
+                    run_id: "run-vm-registration".to_string(),
+                    status: "timeout".to_string(),
+                    detail: "guest registration timed out before any worker registration completed".to_string(),
+                },
+                "build:vm_registration",
+                "vm_registration_timeout",
+            ),
+            (
+                DogfoodError::CiPipeline {
+                    run_id: "run-workspace".to_string(),
+                    status: "failed".to_string(),
+                    detail: "workspace seeding failed: source_hash_present=false".to_string(),
+                },
+                "build:workspace_materialization",
+                "workspace_materialization",
+            ),
+            (
+                DogfoodError::CiPipeline {
+                    run_id: "run-executor".to_string(),
+                    status: "failed".to_string(),
+                    detail:
+                        "ASPEN_CI_COMMAND_PROGRESS phase=command_timeout job_id=abc timeout_secs=7200 elapsed_secs=7200"
+                            .to_string(),
+                },
+                "build:executor_command",
+                "executor_timeout",
+            ),
+            (
+                DogfoodError::CiPipeline {
+                    run_id: "run-executor-command".to_string(),
+                    status: "failed".to_string(),
+                    detail: "ASPEN_CI_COMMAND_PROGRESS phase=command_running job_id=abc elapsed_secs=720".to_string(),
+                },
+                "build:executor_command",
+                "executor_command_failed",
+            ),
+        ];
+
+        for (error, operation, category) in cases {
+            let summary = dogfood_failure_summary(receipt::DogfoodStageKind::Build, &error);
+            assert_eq!(summary.operation, operation);
+            assert_eq!(summary.category, category);
+        }
+    }
+
+    #[test]
+    fn dogfood_failure_summary_redacts_secret_assignments_and_raw_env() {
+        let error = DogfoodError::CiPipeline {
+            run_id: "run-redact".to_string(),
+            status: "failed".to_string(),
+            detail: "env TOKEN=synthetic-secret-marker password=hunter2 args=[--secret raw-value]".to_string(),
+        };
+
+        let summary = dogfood_failure_summary(receipt::DogfoodStageKind::Build, &error);
+
+        assert_eq!(summary.message, "[REDACTED]");
+        assert!(!summary.message.contains("synthetic-secret-marker"));
+        assert!(!summary.message.contains("hunter2"));
+        assert!(!summary.message.contains("raw-value"));
+    }
+
+    #[test]
+    fn command_progress_diagnostics_do_not_require_raw_args_or_env() {
+        let guest = concat!(
+            "worker registered with cluster\n",
+            "received job ci_nix_build\n",
+            "workspace ready\n",
+            "ASPEN_CI_COMMAND_PROGRESS phase=command_started job_id=abc command=nix args_count=2 timeout_secs=7200\n",
+            "ASPEN_CI_COMMAND_PROGRESS phase=command_timeout job_id=abc timeout_secs=7200 elapsed_secs=7200 origin=select\n",
+        )
+        .to_string();
+        let summary = vmci_diagnostics::classify_vmci_logs("", &[guest]);
+
+        assert_eq!(summary.boundary, vmci_diagnostics::VmCiBoundary::ExecutorStarted);
+        assert_eq!(summary.class, vmci_diagnostics::VmCiFailureClass::PostRegistrationCiExecution);
+        assert!(summary.evidence.contains(&"executor_started"));
     }
 
     #[test]
@@ -1709,7 +2202,7 @@ mod tests {
 
         let summary = dogfood_failure_summary(receipt::DogfoodStageKind::Build, &error);
 
-        assert_eq!(summary.operation, "build");
+        assert_eq!(summary.operation, "build:vm_ci_readiness");
         assert_eq!(summary.category, "vm_ci_readiness");
         assert!(summary.message.contains("CAP_NET_ADMIN"));
     }

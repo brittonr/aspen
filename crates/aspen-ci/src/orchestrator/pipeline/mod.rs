@@ -27,6 +27,7 @@ mod persistence;
 pub use persistence::RefStatus;
 mod status;
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 // Deploy dispatcher uses std::sync::RwLock (not tokio) because:
@@ -153,6 +154,15 @@ pub struct PipelineContext {
     /// since VMs cannot access the host's checkout directory directly.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_hash: Option<String>,
+
+    /// Host-prefetched flake input store paths keyed by flake.lock node name.
+    ///
+    /// VM workers use these paths to rewrite the materialized workspace's
+    /// flake.lock to `path:/nix/store/...` inputs that are already visible via
+    /// the read-only store mount. This avoids downloading and copying large
+    /// source inputs (notably nixpkgs) into the guest overlay store.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub flake_input_paths: BTreeMap<String, String>,
 }
 
 impl PipelineContext {
@@ -1144,6 +1154,7 @@ mod tests {
             env: HashMap::new(),
             checkout_dir: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
 
         let run = PipelineRun::new("test-pipeline".to_string(), context);
@@ -1195,6 +1206,7 @@ mod tests {
             env: HashMap::new(),
             checkout_dir: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
 
         assert_eq!(context.short_hash(), "abcdef12");

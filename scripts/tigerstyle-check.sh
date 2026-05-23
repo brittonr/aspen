@@ -41,6 +41,6 @@ if [[ "${TIGERSTYLE_USE_PATH:-0}" == "1" ]] && command -v cargo-tigerstyle >/dev
 fi
 
 # Build from the pinned upstream flake
-_TIGERSTYLE_FLAKE="${TIGERSTYLE_FLAKE:-github:brittonr/tigerstyle-rs}"
+_TIGERSTYLE_FLAKE="${TIGERSTYLE_FLAKE:-github:onixresearch/octet}"
 echo "[tigerstyle] running ${_TIGERSTYLE_FLAKE}#cargo-tigerstyle..."
 exec nix run "${_TIGERSTYLE_FLAKE}#cargo-tigerstyle" -- check "$@"

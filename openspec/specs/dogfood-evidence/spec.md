@@ -360,3 +360,92 @@ Aspen MUST treat a fresh dogfood full-loop acceptance claim as valid only when a
 - WHEN evidence is captured for the run
 - THEN Aspen SHALL record diagnostic evidence and failure category without marking the run accepted
 - AND the OpenSpec implementation tasks SHALL remain incomplete until a successful rerun or explicit scope change exists
+
+### Requirement: VM-CI Post-Registration Diagnostics [r[dogfood-evidence.vmci.post-registration-diagnostics]]
+
+VM-CI dogfood runs MUST classify failures after VM worker registration separately from bridge/firewall or ticket-scoping connectivity failures.
+
+#### Scenario: Worker registers and receives a CI job [r[dogfood-evidence.vmci.post-registration-diagnostics.job-assigned]]
+
+- GIVEN a VM-CI dogfood run where the guest worker connects directly to the host over `aspen-ci-br0`
+- AND the host assigns a `ci_nix_build` job to that guest worker
+- WHEN the job does not complete before the dogfood timeout
+- THEN the dogfood evidence MUST classify the failure as post-registration CI execution rather than guest-to-host Iroh/QUIC connectivity
+- AND the evidence MUST include stable handles for the host node log, guest serial log, and top-level dogfood run log
+
+#### Scenario: Connectivity regression remains distinguishable [r[dogfood-evidence.vmci.post-registration-diagnostics.connectivity-regression]]
+
+- GIVEN a VM-CI dogfood run where guest serial logs show repeated RPC connection timeouts before worker registration
+- WHEN diagnostics summarize the run
+- THEN the evidence MUST classify the failure as a connectivity/bootstrap regression
+- AND it MUST include the bridge marker version, guest ticket address summary, and relay policy summary needed to re-check the bridge/firewall boundary
+
+### Requirement: VM-CI Workspace and Blob Progress Evidence [r[dogfood-evidence.vmci.workspace-blob-progress]]
+
+VM-CI dogfood diagnostics MUST expose enough bounded progress evidence to identify whether a post-registration stall occurs while resolving the workspace ticket, fetching workspace blobs, starting the guest executor, preparing the Nix build command, invoking Nix, streaming logs, enforcing command timeout, draining output, publishing the job result, or waiting for CI run completion.
+
+#### Scenario: Workspace materialization stalls [r[dogfood-evidence.vmci.workspace-blob-progress.materialization-stall]]
+
+- GIVEN a VM worker has accepted a CI job with workspace/blob inputs
+- WHEN workspace materialization does not complete before the configured timeout
+- THEN the job or dogfood diagnostic output MUST identify the workspace/blob phase as the last observed phase
+- AND it MUST include a redacted workspace/blob identifier or count, timeout duration, and the guest log artifact path
+
+#### Scenario: Nix executor starts after workspace materialization [r[dogfood-evidence.vmci.workspace-blob-progress.executor-started]]
+
+- GIVEN workspace materialization completes in the guest
+- WHEN the guest executor starts Nix or the configured CI command
+- THEN diagnostics MUST record that executor start boundary separately from workspace/blob fetch
+- AND later failures MUST preserve stderr/log snippets using the existing CI failure diagnostics contract
+
+#### Scenario: Nix build command preparation is visible [r[dogfood-evidence.vmci.workspace-blob-progress.nix-command-preparation]]
+
+- GIVEN workspace materialization completes for a `ci_nix_build` job
+- WHEN the guest prepares to transform the Nix payload into an executable command request
+- THEN diagnostics MUST preserve bounded phase markers for payload decode, workspace readiness, payload transformation, command request construction, and command execute entry
+- AND a dogfood timeout before `command_started` MUST classify the failure as a pre-spawn `ci_nix_build` execution stall rather than generic CI wait timeout
+
+#### Scenario: Long-running command progress remains visible [r[dogfood-evidence.vmci.workspace-blob-progress.command-progress]]
+
+- GIVEN workspace materialization completes in the guest
+- AND the guest executor starts a long-running CI command
+- WHEN the command continues running until a CI or dogfood timeout
+- THEN diagnostics MUST preserve bounded command progress markers for command start, command-running heartbeat, and timeout where available
+- AND those markers MUST avoid exposing command arguments or environment values that can contain credentials
+
+#### Scenario: Missing command progress is explicit [r[dogfood-evidence.vmci.workspace-blob-progress.missing-command-progress]]
+
+- GIVEN a VM-CI dogfood run reaches `executor_started` for a `ci_nix_build` job
+- AND the CI job remains `running` until dogfood wait timeout
+- WHEN no command progress marker is present in the retained CI logs or VM diagnostics
+- THEN the dogfood failure detail MUST explicitly report `no_command_progress_marker` with the job id, job type, worker id when known, and the last observed VMCI boundary
+- AND the diagnostic summary MUST preserve handles to the relevant host node log, guest serial log, receipt, and CI run id
+
+### Requirement: VMCI Layered Harness Rails [r[dogfood-evidence.vmci.layered-harness]]
+
+The VMCI layered harness MUST provide named rails that exercise progressively larger parts of the product path while preserving Forge push, CI trigger, source archive, VM worker, workspace materialization, and job-result evidence appropriate to each rail.
+
+#### Scenario: Nix-build timeout finalization rail [r[dogfood-evidence.vmci.layered-harness.nix-timeout-finalization]]
+
+- GIVEN an operator needs to verify `ci_nix_build` timeout and job-result publication without running the full Aspen workspace build
+- WHEN the operator runs the dedicated VMCI Nix-build timeout/finalization rail
+- THEN the rail MUST submit a real `ci_nix_build` job through the VMCI product path with a deterministic short timeout
+- AND the receipt MUST prove either a failed job result was published after timeout or identify the exact last phase before publication
+- AND the rail MUST complete substantially faster than `vmci-medium` under normal timeout-regression conditions
+
+### Requirement: VM-CI Evidence Preservation Before Cleanup [r[dogfood-evidence.vmci.preserve-before-cleanup]]
+
+VM-CI dogfood tooling MUST preserve redacted host and guest evidence before stopping or deleting `/tmp/aspen-dogfood` when a run reaches VM job assignment but lacks a final success receipt.
+
+#### Scenario: Failed VM-CI run preserves artifacts [r[dogfood-evidence.vmci.preserve-before-cleanup.failed-run]]
+
+- GIVEN a `dogfood-local-vmci -- full` run reaches VM worker registration or job assignment and then fails or times out
+- WHEN cleanup runs
+- THEN the top-level dogfood log, `/tmp/aspen-dogfood/node1.log`, relevant VM serial logs, and any receipt JSON MUST be copied to `target/runtime-proof/` or an equivalent configured evidence directory before removal
+- AND shared summaries MUST redact secrets, tickets, and long opaque credential-like values
+
+#### Scenario: Operator can archive classified evidence [r[dogfood-evidence.vmci.preserve-before-cleanup.archive-ready]]
+
+- GIVEN a classified VM-CI failure evidence bundle exists
+- WHEN the OpenSpec task is marked complete
+- THEN the evidence bundle MUST include enough stable artifact paths and command outputs to support archive review without requiring the live VM processes to still be running

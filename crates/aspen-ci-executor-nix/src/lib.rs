@@ -90,6 +90,7 @@ mod tests {
             flake_url: ".".to_string(),
             attribute: "packages.x86_64-linux.default".to_string(),
             extra_args: vec![],
+            env: std::collections::HashMap::new(),
             working_dir: None,
             timeout_secs: 1800,
             sandbox: true,
@@ -100,6 +101,7 @@ mod tests {
             cache_outputs: vec![],
             system: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
 
         assert!(valid.validate().is_ok());
@@ -113,6 +115,7 @@ mod tests {
             flake_url: "".to_string(),
             attribute: "default".to_string(),
             extra_args: vec![],
+            env: std::collections::HashMap::new(),
             working_dir: None,
             timeout_secs: 1800,
             sandbox: true,
@@ -123,6 +126,7 @@ mod tests {
             cache_outputs: vec![],
             system: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
 
         assert!(invalid.validate().is_err());
@@ -136,6 +140,7 @@ mod tests {
             flake_url: ".".to_string(),
             attribute: "default".to_string(),
             extra_args: vec![],
+            env: std::collections::HashMap::new(),
             working_dir: None,
             timeout_secs: 100000, // Way too long
             sandbox: true,
@@ -146,6 +151,7 @@ mod tests {
             cache_outputs: vec![],
             system: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
 
         assert!(invalid.validate().is_err());
@@ -159,6 +165,7 @@ mod tests {
             flake_url: "github:owner/repo".to_string(),
             attribute: "packages.x86_64-linux.default".to_string(),
             extra_args: vec![],
+            env: std::collections::HashMap::new(),
             working_dir: None,
             timeout_secs: 1800,
             sandbox: true,
@@ -169,6 +176,7 @@ mod tests {
             cache_outputs: vec![],
             system: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
 
         assert_eq!(payload.flake_ref(), "github:owner/repo#packages.x86_64-linux.default");
@@ -182,6 +190,7 @@ mod tests {
             flake_url: ".".to_string(),
             attribute: "".to_string(),
             extra_args: vec![],
+            env: std::collections::HashMap::new(),
             working_dir: None,
             timeout_secs: 1800,
             sandbox: true,
@@ -192,6 +201,7 @@ mod tests {
             cache_outputs: vec![],
             system: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
 
         assert_eq!(payload.flake_ref(), ".");
@@ -224,6 +234,7 @@ mod tests {
             flake_url: ".".to_string(),
             attribute: "packages.x86_64-linux.default".to_string(),
             extra_args: vec![],
+            env: std::collections::HashMap::new(),
             working_dir: None,
             timeout_secs: 1800,
             sandbox: true,
@@ -234,6 +245,7 @@ mod tests {
             cache_outputs: vec![],
             system: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
 
         let result = worker.try_native_build(&payload, &payload.flake_ref(), None).await;
@@ -277,6 +289,7 @@ mod tests {
             flake_url: ".".to_string(),
             attribute: "default".to_string(),
             extra_args: vec![],
+            env: std::collections::HashMap::new(),
             working_dir: None,
             timeout_secs: 1800,
             sandbox: true,
@@ -287,6 +300,7 @@ mod tests {
             cache_outputs: vec![],
             system: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
 
         let result: std::result::Result<std::path::PathBuf, _> = worker.resolve_drv_path(&payload, ".#default").await;

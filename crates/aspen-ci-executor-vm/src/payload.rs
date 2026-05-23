@@ -2,6 +2,7 @@
 //!
 //! These types are used for job serialization.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use aspen_core::CI_VM_DEFAULT_EXECUTION_TIMEOUT_MS;
@@ -69,6 +70,10 @@ pub struct CloudHypervisorPayload {
     /// If not set, will attempt to extract from args.
     #[serde(default)]
     pub flake_attr: Option<String>,
+
+    /// Host-prefetched flake input store paths keyed by flake.lock node name.
+    #[serde(default)]
+    pub flake_input_paths: BTreeMap<String, String>,
 
     /// Pipeline run ID for CI log streaming.
     /// When set (along with a KV store on the worker), log chunks are written
@@ -159,6 +164,7 @@ mod tests {
             timeout_secs: 3600,
             artifacts: vec![],
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
             checkout_dir: None,
             flake_attr: None,
             run_id: None,

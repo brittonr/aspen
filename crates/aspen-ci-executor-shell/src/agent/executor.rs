@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -31,39 +33,49 @@ use crate::agent::protocol::ExecutionRequest;
 use crate::agent::protocol::ExecutionResult;
 use crate::agent::protocol::LogMessage;
 
-/// Maximum line length for stdout/stderr (64 KB).
-/// Lines longer than this are truncated.
-const MAX_LINE_LENGTH: usize = 64 * 1024;
-
-/// Heartbeat interval during execution.
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
-
-/// Grace period for SIGTERM before SIGKILL.
 const GRACE_PERIOD: Duration = Duration::from_secs(5);
+const OUTPUT_DRAIN_GRACE: Duration = Duration::from_secs(2);
+const MAX_LINE_LENGTH: usize = 64 * 1024;
+const CI_PROGRESS_MARKER: &str = "ASPEN_CI_COMMAND_PROGRESS";
+
+fn command_start_marker(request: &ExecutionRequest) -> String {
+    format!(
+        "{CI_PROGRESS_MARKER} phase=command_started job_id={} command={} args_count={} working_dir={} timeout_secs={}\n",
+        request.id,
+        request.command,
+        request.args.len(),
+        request.working_dir.display(),
+        request.timeout_secs
+    )
+}
+
+fn command_heartbeat_marker(job_id: &str, elapsed_secs: u64) -> String {
+    format!("{CI_PROGRESS_MARKER} phase=command_running job_id={job_id} elapsed_secs={elapsed_secs}\n")
+}
+
+fn command_timeout_marker(job_id: &str, timeout_secs: u64, elapsed_secs: u64, origin: &'static str) -> String {
+    format!(
+        "{CI_PROGRESS_MARKER} phase=command_timeout job_id={job_id} timeout_secs={timeout_secs} elapsed_secs={elapsed_secs} origin={origin}\n"
+    )
+}
+
+fn try_send_progress_marker(log_tx: &mpsc::Sender<LogMessage>, job_id: &str, marker: String, phase: &'static str) {
+    match log_tx.try_send(LogMessage::Stderr(marker)) {
+        Ok(()) => {}
+        Err(mpsc::error::TrySendError::Full(_)) => {
+            warn!(job_id = %job_id, phase, "dropping progress marker because log channel is full");
+        }
+        Err(mpsc::error::TrySendError::Closed(_)) => {
+            debug!(job_id = %job_id, phase, "dropping progress marker because log receiver is closed");
+        }
+    }
+}
 
 #[allow(unknown_lints)]
 #[allow(ambient_clock, reason = "CI executor measures real monotonic process durations")]
 fn monotonic_now() -> Instant {
     Instant::now()
-}
-
-#[allow(unknown_lints)]
-#[allow(
-    ambient_clock,
-    reason = "CI executor reads tokio monotonic deadlines for shutdown polling"
-)]
-fn tokio_monotonic_now() -> tokio::time::Instant {
-    tokio::time::Instant::now()
-}
-
-#[allow(unknown_lints)]
-#[allow(ambient_clock, reason = "CI executor polls real monotonic shutdown deadlines")]
-fn monotonic_deadline_after(duration: Duration) -> tokio::time::Instant {
-    tokio_monotonic_now() + duration
-}
-
-fn has_monotonic_deadline_passed(deadline: tokio::time::Instant) -> bool {
-    tokio_monotonic_now() >= deadline
 }
 
 fn elapsed_ms_u64(start: Instant) -> u64 {
@@ -92,6 +104,7 @@ impl JobHandle {
 }
 
 /// Executor that runs commands and streams output.
+#[derive(Clone)]
 pub struct Executor {
     /// Currently running jobs, keyed by job ID.
     running_jobs: Arc<Mutex<HashMap<String, JobHandle>>>,
@@ -253,6 +266,7 @@ impl Executor {
         log_tx: mpsc::Sender<LogMessage>,
         mut cancel_rx: oneshot::Receiver<()>,
     ) -> Result<(i32, String, String)> {
+        let start = monotonic_now();
         info!(
             job_id = %request.id,
             command = %request.command,
@@ -260,6 +274,9 @@ impl Executor {
             timeout_secs = request.timeout_secs,
             "executing command"
         );
+
+        // Emit a durable progress marker through the same stream that CI diagnostics preserve.
+        try_send_progress_marker(&log_tx, &request.id, command_start_marker(&request), "command_started");
 
         // Build command
         let mut cmd = Command::new(&request.command);
@@ -294,6 +311,16 @@ impl Executor {
             command: request.command.clone(),
             source: std::io::Error::other("stderr pipe not available"),
         })?;
+
+        let timeout_guard_fired = Arc::new(AtomicBool::new(false));
+        let timeout_guard_handle = spawn_process_timeout_guard(
+            child.inner().id(),
+            request.id.clone(),
+            request.timeout_secs,
+            log_tx.clone(),
+            start,
+            timeout_guard_fired.clone(),
+        );
 
         // Stream stdout
         let stdout_tx = log_tx.clone();
@@ -369,6 +396,13 @@ impl Executor {
                 heartbeat_timer.tick().await;
                 let elapsed_secs = start.elapsed().as_secs();
                 debug!(job_id = %job_id, elapsed_secs, "sending heartbeat");
+                if heartbeat_tx
+                    .send(LogMessage::Stderr(command_heartbeat_marker(&job_id, elapsed_secs)))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
                 if heartbeat_tx.send(LogMessage::Heartbeat { elapsed_secs }).await.is_err() {
                     break;
                 }
@@ -401,13 +435,25 @@ impl Executor {
 
         // Handle termination if needed
         let result: Result<i32> = match exit_reason {
+            ExitReason::Completed(_) if timeout_guard_fired.load(Ordering::SeqCst) => {
+                Err(AgentError::ExecutionTimeout {
+                    timeout_secs: request.timeout_secs,
+                })
+            }
             ExitReason::Completed(status) => Ok(status.code().unwrap_or(-1)),
             ExitReason::WaitError(e) => {
                 error!("process wait failed: {}", e);
                 Ok(-1)
             }
             ExitReason::Timeout => {
+                timeout_guard_fired.store(true, Ordering::SeqCst);
                 warn!(job_id = %request.id, timeout_secs = request.timeout_secs, "execution timed out");
+                try_send_progress_marker(
+                    &log_tx,
+                    &request.id,
+                    command_timeout_marker(&request.id, request.timeout_secs, start.elapsed().as_secs(), "select"),
+                    "command_timeout",
+                );
                 terminate_process_group(&mut child, GRACE_PERIOD).await;
                 Err(AgentError::ExecutionTimeout {
                     timeout_secs: request.timeout_secs,
@@ -420,12 +466,17 @@ impl Executor {
             }
         };
 
-        // Stop heartbeat
+        // Stop heartbeat and the independent process timeout guard.
         heartbeat_handle.abort();
+        if let Some(handle) = timeout_guard_handle {
+            handle.abort();
+        }
 
-        // Collect output
-        let stdout_result = stdout_handle.await.unwrap_or_default();
-        let stderr_result = stderr_handle.await.unwrap_or_default();
+        // Collect output. A timed-out process can leave stdout/stderr pipes open via
+        // descendants, so bound the drain; otherwise the timeout marker is emitted
+        // but the worker never returns a failed job result to the cluster.
+        let stdout_result = collect_stream_output(stdout_handle, OUTPUT_DRAIN_GRACE, &request.id, "stdout").await;
+        let stderr_result = collect_stream_output(stderr_handle, OUTPUT_DRAIN_GRACE, &request.id, "stderr").await;
 
         match result {
             Ok(exit_code) => Ok((exit_code, stdout_result, stderr_result)),
@@ -440,6 +491,66 @@ impl Default for Executor {
     }
 }
 
+#[cfg(unix)]
+fn spawn_process_timeout_guard(
+    child_pid: Option<u32>,
+    job_id: String,
+    timeout_secs: u64,
+    log_tx: mpsc::Sender<LogMessage>,
+    start: Instant,
+    fired: Arc<AtomicBool>,
+) -> Option<tokio::task::JoinHandle<()>> {
+    let pid = child_pid?;
+    Some(tokio::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(timeout_secs)).await;
+        fired.store(true, Ordering::SeqCst);
+        warn!(job_id = %job_id, timeout_secs, "process timeout guard firing");
+        try_send_progress_marker(
+            &log_tx,
+            &job_id,
+            command_timeout_marker(&job_id, timeout_secs, start.elapsed().as_secs(), "guard"),
+            "command_timeout",
+        );
+        terminate_process_group_by_pid(pid, GRACE_PERIOD).await;
+    }))
+}
+
+#[cfg(not(unix))]
+fn spawn_process_timeout_guard(
+    _child_pid: Option<u32>,
+    _job_id: String,
+    _timeout_secs: u64,
+    _log_tx: mpsc::Sender<LogMessage>,
+    _start: Instant,
+    _fired: Arc<AtomicBool>,
+) -> Option<tokio::task::JoinHandle<()>> {
+    None
+}
+
+async fn collect_stream_output(
+    mut handle: tokio::task::JoinHandle<String>,
+    grace: Duration,
+    job_id: &str,
+    stream: &'static str,
+) -> String {
+    tokio::select! {
+        joined = &mut handle => {
+            match joined {
+                Ok(output) => output,
+                Err(error) => {
+                    warn!(job_id = %job_id, stream, error = %error, "output stream task failed");
+                    String::new()
+                }
+            }
+        }
+        _ = tokio::time::sleep(grace) => {
+            warn!(job_id = %job_id, stream, grace_ms = grace.as_millis(), "output stream drain timed out");
+            handle.abort();
+            String::new()
+        }
+    }
+}
+
 /// Terminate a process group gracefully.
 ///
 /// On Unix:
@@ -448,43 +559,39 @@ impl Default for Executor {
 /// 3. Send SIGKILL if still running
 /// 4. Reap the process
 #[cfg(unix)]
-async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) {
+async fn terminate_process_group_by_pid(pid: u32, grace: Duration) {
     use nix::sys::signal::Signal;
     use nix::sys::signal::{self};
     use nix::unistd::Pid;
 
     debug_assert!(grace >= Duration::from_millis(100));
     debug_assert!(grace <= Duration::from_secs(60));
-    let Some(pid) = child.inner().id() else {
-        return; // Already exited
-    };
     let pgid = Pid::from_raw(-(pid as i32));
 
-    // Send SIGTERM to process group
     if let Err(e) = signal::kill(pgid, Signal::SIGTERM)
         && e != nix::errno::Errno::ESRCH
     {
         warn!(pid, error = ?e, "SIGTERM to process group failed");
     }
 
-    // Wait for graceful exit
-    let deadline = monotonic_deadline_after(grace);
-    for _poll_idx in 0..u32::MAX {
-        if has_monotonic_deadline_passed(deadline) {
-            break;
-        }
-        if child.inner().try_wait().ok().flatten().is_some() {
-            return; // Exited gracefully
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
+    tokio::time::sleep(grace).await;
 
-    // Force kill
     if let Err(e) = signal::kill(pgid, Signal::SIGKILL)
         && e != nix::errno::Errno::ESRCH
     {
         warn!(pid, error = ?e, "SIGKILL to process group failed");
     }
+}
+
+#[cfg(unix)]
+async fn terminate_process_group(child: &mut AsyncGroupChild, grace: Duration) {
+    debug_assert!(grace >= Duration::from_millis(100));
+    debug_assert!(grace <= Duration::from_secs(60));
+    let Some(pid) = child.inner().id() else {
+        return; // Already exited
+    };
+
+    terminate_process_group_by_pid(pid, grace).await;
 
     // Reap
     if let Err(error) = child.wait().await {
@@ -791,11 +898,92 @@ mod tests {
     }
 
     #[test]
+    fn test_command_progress_markers_are_bounded_and_redacted() {
+        let request = ExecutionRequest {
+            id: "job-123".to_string(),
+            command: "nix".to_string(),
+            args: vec!["build".to_string(), ".#clippy".to_string()],
+            working_dir: Path::new("/workspace/job-123").to_path_buf(),
+            env: HashMap::new(),
+            timeout_secs: 7200,
+        };
+
+        let started = command_start_marker(&request);
+        assert!(started.contains("ASPEN_CI_COMMAND_PROGRESS phase=command_started"));
+        assert!(started.contains("job_id=job-123"));
+        assert!(started.contains("command=nix"));
+        assert!(started.contains("args_count=2"));
+        assert!(started.contains("timeout_secs=7200"));
+        assert!(!started.contains(".#clippy"));
+
+        let running = command_heartbeat_marker("job-123", 60);
+        assert_eq!(running, "ASPEN_CI_COMMAND_PROGRESS phase=command_running job_id=job-123 elapsed_secs=60\n");
+
+        let timeout = command_timeout_marker("job-123", 7200, 7201, "select");
+        assert_eq!(
+            timeout,
+            "ASPEN_CI_COMMAND_PROGRESS phase=command_timeout job_id=job-123 timeout_secs=7200 elapsed_secs=7201 origin=select\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_timeout_returns_even_when_log_channel_is_full() {
+        let workspace = tempfile::tempdir().unwrap();
+        let executor = Executor::with_workspace_root(workspace.path().to_path_buf());
+        let (log_tx, mut log_rx) = mpsc::channel(1);
+        log_tx.send(LogMessage::Heartbeat { elapsed_secs: 0 }).await.unwrap();
+
+        let request = ExecutionRequest {
+            id: "full-log-timeout".to_string(),
+            command: "sh".to_string(),
+            args: vec!["-c".to_string(), "sleep 30".to_string()],
+            working_dir: workspace.path().to_path_buf(),
+            env: HashMap::new(),
+            timeout_secs: 1,
+        };
+
+        let started = monotonic_now();
+        let result = tokio::time::timeout(Duration::from_secs(10), executor.execute(request, log_tx))
+            .await
+            .expect("executor should not hang on full log channel")
+            .expect("execution result should be returned");
+
+        assert_eq!(result.exit_code, -1);
+        assert!(result.error.unwrap().contains("timed out"));
+        assert!(started.elapsed() < Duration::from_secs(10));
+        assert!(matches!(log_rx.try_recv(), Ok(LogMessage::Heartbeat { elapsed_secs: 0 })));
+    }
+
+    #[tokio::test]
+    async fn test_collect_stream_output_returns_completed_output() {
+        let handle = tokio::spawn(async { "done".to_string() });
+
+        let output = collect_stream_output(handle, Duration::from_secs(1), "job-123", "stdout").await;
+
+        assert_eq!(output, "done");
+    }
+
+    #[tokio::test]
+    async fn test_collect_stream_output_bounds_stuck_reader() {
+        let handle = tokio::spawn(async {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            "late".to_string()
+        });
+        let started = monotonic_now();
+
+        let output = collect_stream_output(handle, Duration::from_millis(10), "job-123", "stderr").await;
+
+        assert!(output.is_empty());
+        assert!(started.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
     fn test_constants() {
         // Verify constants are reasonable
         assert_eq!(MAX_LINE_LENGTH, 64 * 1024);
         assert_eq!(HEARTBEAT_INTERVAL, Duration::from_secs(30));
         assert_eq!(GRACE_PERIOD, Duration::from_secs(5));
+        assert_eq!(OUTPUT_DRAIN_GRACE, Duration::from_secs(2));
     }
 
     #[test]

@@ -337,6 +337,8 @@ async fn test_pipeline_run_limits() {
             env: HashMap::new(),
             checkout_dir: None,
             source_hash: None,
+            flake_input_paths: std::collections::BTreeMap::new(),
+            flake_input_paths: std::collections::BTreeMap::new(),
         };
 
         match t.submit_pipeline_to_cluster(pipeline_config, context).await {
@@ -475,5 +477,6 @@ fn test_context(repo_name: &str) -> PipelineContext {
         env: HashMap::new(),
         checkout_dir: None,
         source_hash: None,
+        flake_input_paths: std::collections::BTreeMap::new(),
     }
 }
