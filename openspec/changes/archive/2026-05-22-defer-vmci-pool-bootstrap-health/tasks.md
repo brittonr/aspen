@@ -11,4 +11,5 @@
 
 - [x] [depends:implementation] Run focused VM executor tests and formatting checks.
 - [x] [depends:verification] Run OpenSpec validation and live VM-CI dogfood retry.
-- [ ] [depends:dogfood] Archive the OpenSpec, commit, push, and report evidence.
+- [x] [depends:dogfood] Archive the OpenSpec, commit, push, and report evidence.
+  - Archived to `openspec/changes/archive/2026-05-22-defer-vmci-pool-bootstrap-health/` after validating the change and manually merging the worker-readiness scenarios into the canonical dogfood evidence spec.
