@@ -8,7 +8,8 @@
 
 - [x] [serial] Add a bounded VMCI phase receipt model with schema/version, rail name, phase timestamps, status, last boundary, CI run id, and diagnostics handles.
   - [x] Record each stage as `running` before invoking it so interrupted/killed full VMCI runs retain the last active boundary in memory/diagnostics summaries.
-- [ ] [serial] Instrument dogfood cluster, Forge repo creation, source push/archive, CI trigger, VM registration, job assignment, workspace materialization, executor command, and job result boundaries.
+- [x] [serial] Instrument dogfood cluster, Forge repo creation, source push/archive, CI trigger, VM registration, job assignment, workspace materialization, executor command, and job result boundaries.
+  - Verified in the landed harness with dogfood receipt stages (`start`, `push`, `build`), source push/archive/trigger running-stage diagnosis (`last_boundary=forge_source_push_archive_or_ci_trigger`), VMCI diagnostic boundaries (`worker_registered`, `job_assigned`, `workspace_materialized`, `executor_started`, `job_result_published`), bounded `ASPEN_CI_COMMAND_PROGRESS` phase summaries, and the successful medium proof `dogfood-20260523T002711Z` / CI run `ef06231a-3b09-4ac0-a749-7272ad97014b`.
 - [x] [parallel] Add phase-specific timeout classification for source push/archive/trigger stalls distinct from VM registration, workspace materialization, executor, and full CI failures.
   - [x] Classify interrupted/running `push` stages as `forge_source_push_or_archive` instead of a generic unknown/full-CI failure.
   - [x] Classify source snapshot/archive preparation failures under the push source boundary.
@@ -30,4 +31,5 @@
   - Medium receipt: `/home/brittonr/.cargo-target/aspen-dogfood-vmci-receipts/dogfood-20260518T135733Z.json` (`vmci-medium`) proved startup/push/worker execution and failed at `build:ci_wait` because the wrapper wait timeout (`1200s`) was shorter than the rail command timeout (`3600s`).
   - Medium rerun receipt: `/home/brittonr/.cargo-target/aspen-dogfood-vmci-receipts/dogfood-20260518T143256Z.json` (`vmci-medium`) used the corrected `3900s` wrapper wait timeout; `format-check` succeeded and `build-cli` remained running, narrowing the blocker to post-registration CI execution rather than VMCI plumbing.
   - Diagnostic evidence: `/home/brittonr/git/aspen/target/runtime-proof/vmci-diagnostics/dogfood-20260518T143256Z/` reported `vm_ci_boundary=worker_registered` and `vm_ci_failure_class=post_registration_ci_execution`; node log also showed a stale queue redelivery for already-running job `833c1d99-1d68-4662-9d0b-031c7748f68d`.
-- [ ] [depends:validation] Update operator documentation or AGENTS notes with the preferred VMCI harness debug order and receipt locations.
+- [x] [depends:validation] Update operator documentation or AGENTS notes with the preferred VMCI harness debug order and receipt locations.
+  - Added `docs/operator-receipts.md` VM-CI layered harness triage covering rail order, default receipt directory, diagnostics summary path, boundary-specific debug order, and the `dogfood-20260523T002711Z` medium proof; guarded by `tests/operator_receipts_docs.rs`.

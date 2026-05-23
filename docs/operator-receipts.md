@@ -113,6 +113,53 @@ High-signal patterns:
 - `verify` failed: inspect service health and the verification command output.
 - `publish_receipt` failed: the local JSON receipt is still useful, but the run did not prove cluster-backed receipt readback.
 
+### VM-CI layered harness triage
+
+Use the VM-CI rails from narrowest boundary to broadest instead of starting with full CI:
+
+```bash
+nix run .#dogfood-local-vmci-smoke
+nix run .#dogfood-local-vmci-source-blob
+nix run .#dogfood-local-vmci-nix-smoke
+nix run .#dogfood-local-vmci-cargo-smoke
+nix run .#dogfood-local-vmci-medium
+nix run .#dogfood-local-vmci-clippy
+nix run .#dogfood-local-vmci-full
+```
+
+The default VM-CI cluster directory is `/home/brittonr/.cargo-target/aspen-dogfood-vmci`. Local VM-CI receipts are written to the sibling directory:
+
+```text
+/home/brittonr/.cargo-target/aspen-dogfood-vmci-receipts/<run-id>.json
+```
+
+When a VM-CI rail fails or is interrupted before cleanup, first inspect the preserved diagnostics artifact from the build-stage receipt or the run-specific directory under:
+
+```text
+target/runtime-proof/vmci-diagnostics/<run-id>/summary.txt
+```
+
+Debug in this order:
+
+1. `start` or direct-route failure: inspect host health, cluster startup, direct route, and ticket reachability. Do not copy raw cluster tickets or iroh secret keys into notes.
+2. `push` failure or `last_boundary=forge_source_push_archive_or_ci_trigger`: inspect Forge repo creation, source snapshot/archive creation, git push, and CI trigger discovery before changing VM worker code.
+3. `build` with `vm_ci_boundary=worker_registered`: VM boot and worker registration worked; inspect CI job assignment and queue visibility before changing networking.
+4. `build` with `vm_ci_boundary=workspace_materialized` or `workspace_source_materialization`: inspect source hash, blob fetch, archive decode, and workspace unpack progress.
+5. `build` with `vm_ci_boundary=executor_started` or `latest_phase=command_*`: inspect bounded executor progress markers, command timeout, local guest Nix store, and job logs.
+6. `vm_ci_boundary=job_result_published`: lower VMCI plumbing finished; inspect the selected rail's CI semantics, such as medium build, clippy, or full pipeline gates.
+
+The latest medium acceptance proof for the VM-CI harness is:
+
+```text
+run_id: dogfood-20260523T002711Z
+local receipt: /home/brittonr/.cargo-target/aspen-dogfood-vmci-receipts/dogfood-20260523T002711Z.json
+runtime log: target/runtime-proof/vmci-medium-20260523T001418Z.log
+ci_run: ef06231a-3b09-4ac0-a749-7272ad97014b
+result: vmci-medium passed; format-check, build-cli-deps, and build-cli succeeded
+```
+
+Treat this as VM-CI medium evidence only. Use `dogfood-local-vmci-full` or the normal full dogfood rail when you need fresh final acceptance.
+
 ## Native CI run receipts
 
 Native CI receipts are returned over Aspen's iroh client RPC path by `CiGetRunReceipt` and exposed through `aspen-cli`:
