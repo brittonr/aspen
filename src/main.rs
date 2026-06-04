@@ -467,6 +467,8 @@ enum NodeCommand {
         #[arg(long)]
         live_ticket_out: Option<PathBuf>,
         #[arg(long)]
+        supervisor_policy: Option<PathBuf>,
+        #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
     Status {
@@ -533,6 +535,26 @@ enum NodeCommand {
         policy_refs: Vec<String>,
         #[arg(long = "revocation")]
         revocation_refs: Vec<String>,
+        #[arg(long = "evidence")]
+        evidence_refs: Vec<String>,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    SupervisorPolicyFixture {
+        #[arg(long)]
+        state_root: Option<PathBuf>,
+        #[arg(long, default_value_t = 0)]
+        max_restarts: u64,
+        #[arg(long, default_value_t = 1)]
+        restart_window_ticks: u64,
+        #[arg(long, default_value_t = 1)]
+        heartbeat_timeout_ticks: u64,
+        #[arg(long, default_value_t = 1)]
+        shutdown_drain_ticks: u64,
+        #[arg(long)]
+        allow_stale_lock_recovery: bool,
+        #[arg(long = "policy")]
+        policy_refs: Vec<String>,
         #[arg(long = "evidence")]
         evidence_refs: Vec<String>,
         #[arg(long)]
@@ -5192,8 +5214,11 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             live_event_timeout_ms,
             service_receipt_out,
             live_ticket_out,
+            supervisor_policy,
             receipt_out,
         } => {
+            let supervisor_policy_value =
+                supervisor_policy.as_ref().map(|path| read_preserves_file(path)).transpose()?;
             if live_iroh {
                 let runtime =
                     tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(MoltenError::from)?;
@@ -5204,6 +5229,7 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                         max_events: live_max_events,
                         event_timeout_ms: live_event_timeout_ms,
                         max_requests_per_tick,
+                        supervisor_policy_value: supervisor_policy_value.as_ref(),
                     },
                 ))?;
                 if let Some(path) = service_receipt_out.as_ref() {
@@ -5236,6 +5262,7 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                     topic: &topic,
                     max_ticks,
                     max_requests_per_tick,
+                    supervisor_policy_value: supervisor_policy_value.as_ref(),
                 })?;
                 emit_named_receipt(
                     receipt_out.as_ref(),
@@ -5361,6 +5388,35 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 node_daemon::import_node_control_authority_grant(state_root, &value)?;
             }
             println!("node authority grant {} written to {}", grant_ref, out.display());
+            Ok(())
+        }
+        NodeCommand::SupervisorPolicyFixture {
+            state_root,
+            max_restarts,
+            restart_window_ticks,
+            heartbeat_timeout_ticks,
+            shutdown_drain_ticks,
+            allow_stale_lock_recovery,
+            policy_refs,
+            evidence_refs,
+            out,
+        } => {
+            let value =
+                node_daemon::node_control_supervisor_policy_value(&node_daemon::NodeControlSupervisorPolicyInput {
+                    max_restarts,
+                    restart_window_ticks,
+                    heartbeat_timeout_ticks,
+                    shutdown_drain_ticks,
+                    stale_lock_recovery: allow_stale_lock_recovery,
+                    policy_refs: &policy_refs,
+                    evidence_refs: &evidence_refs,
+                })?;
+            let policy_ref = canonical_hash(&value)?;
+            write_file(&out, &to_text(&value)?)?;
+            if let Some(state_root) = state_root.as_ref() {
+                node_daemon::import_node_control_supervisor_policy(state_root, &value)?;
+            }
+            println!("node supervisor policy {} written to {}", policy_ref, out.display());
             Ok(())
         }
         NodeCommand::LiveTicketExport {

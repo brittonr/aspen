@@ -721,6 +721,66 @@ fn cli_node_serve_live_iroh_empty_listener_receipt() -> CliResult<()> {
 }
 
 #[test]
+fn cli_node_supervisor_policy_fixture_and_serve_receipt() -> CliResult<()> {
+    let dir = temp_dir("cli-node-supervisor-policy")?;
+    let state_root = dir.join("node-state");
+    let policy = dir.join("supervisor-policy.preserves");
+    let service_receipt = dir.join("service.preserves");
+    let policy_ref = test_ref("supervisor-policy")?;
+
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(&state_root)
+            .args(["--node-id", "node:cli-supervisor"])
+            .output()?,
+        "node supervisor init",
+    );
+    assert_success(
+        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
+        "node supervisor run",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "supervisor-policy-fixture", "--state-root"])
+            .arg(&state_root)
+            .args([
+                "--max-restarts",
+                "1",
+                "--restart-window-ticks",
+                "2",
+                "--heartbeat-timeout-ticks",
+                "2",
+                "--shutdown-drain-ticks",
+                "2",
+                "--allow-stale-lock-recovery",
+                "--policy",
+            ])
+            .arg(&policy_ref)
+            .args(["--out"])
+            .arg(&policy)
+            .output()?,
+        "node supervisor policy fixture",
+    );
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&policy)?), "node-control-supervisor-policy");
+    let served = molten_cmd()
+        .args(["test", "node", "serve", "--state-root"])
+        .arg(&state_root)
+        .args(["--max-ticks", "1", "--supervisor-policy"])
+        .arg(&policy)
+        .args(["--receipt-out"])
+        .arg(&service_receipt)
+        .output()?;
+    assert_success(&served, "node supervisor serve");
+    let service_value = read_preserves(&service_receipt)?;
+    assert_eq!(molten::ledger::artifact_kind(&service_value), "node-control-service-run-receipt");
+    let service_text = to_text(&service_value)?;
+    assert!(service_text.contains("supervisor-policy"));
+    assert!(service_text.contains("supervisor-receipts"));
+    Ok(())
+}
+
+#[test]
 fn cli_node_serve_drains_shutdown_request() -> CliResult<()> {
     let dir = temp_dir("cli-node-serve")?;
     let state_root = dir.join("node-state");

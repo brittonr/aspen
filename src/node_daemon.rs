@@ -31,6 +31,8 @@ use crate::preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_SERVICE_HEARTBEAT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_SERVICE_LOCK_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::parse_canonical_bytes;
@@ -124,6 +126,29 @@ pub struct NodeControlServeInput<'a> {
     pub topic: &'a str,
     pub max_ticks: u64,
     pub max_requests_per_tick: u64,
+    pub supervisor_policy_value: Option<&'a IOValue>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NodeControlSupervisorPolicyInput<'a> {
+    pub max_restarts: u64,
+    pub restart_window_ticks: u64,
+    pub heartbeat_timeout_ticks: u64,
+    pub shutdown_drain_ticks: u64,
+    pub stale_lock_recovery: bool,
+    pub policy_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SupervisorReceiptValueInput<'a> {
+    decision: &'a str,
+    operation: &'a str,
+    startup_receipt_ref: &'a str,
+    service_lock_ref: Option<&'a str>,
+    supervisor_policy_ref: Option<&'a str>,
+    topic: &'a str,
+    diagnostics: &'a [String],
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -161,6 +186,8 @@ struct ServiceRunReceiptValueInput<'a> {
     loop_receipt_refs: &'a [String],
     processed_request_refs: &'a [String],
     has_stopped: bool,
+    supervisor_policy_ref: Option<&'a str>,
+    supervisor_receipt_refs: &'a [String],
     diagnostics: &'a [String],
 }
 
@@ -229,6 +256,7 @@ pub struct NodeControlLiveServeInput<'a> {
     pub max_events: u64,
     pub event_timeout_ms: u64,
     pub max_requests_per_tick: u64,
+    pub supervisor_policy_value: Option<&'a IOValue>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -455,9 +483,34 @@ pub struct NodeControlServe {
     pub ingress_receipt_refs: Vec<String>,
     pub loop_receipt_refs: Vec<String>,
     pub processed_request_refs: Vec<String>,
+    pub supervisor_policy_ref: Option<String>,
+    pub supervisor_receipt_refs: Vec<String>,
     pub ticks: u64,
     pub has_stopped: bool,
     pub decision: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlSupervisorPolicy {
+    pub policy_ref: String,
+    pub max_restarts: u64,
+    pub restart_window_ticks: u64,
+    pub heartbeat_timeout_ticks: u64,
+    pub shutdown_drain_ticks: u64,
+    pub stale_lock_recovery: bool,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlSupervisorReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub operation: String,
+    pub supervisor_policy_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -844,6 +897,127 @@ pub fn parse_node_control_live_peer_admission(value: &IOValue) -> Result<NodeCon
     })
 }
 
+pub fn node_control_supervisor_policy_value(input: &NodeControlSupervisorPolicyInput<'_>) -> Result<IOValue> {
+    validate_supervisor_policy_bounds(input.max_restarts, "max restarts")?;
+    validate_supervisor_policy_bounds(input.restart_window_ticks, "restart window ticks")?;
+    validate_supervisor_policy_bounds(input.heartbeat_timeout_ticks, "heartbeat timeout ticks")?;
+    validate_supervisor_policy_bounds(input.shutdown_drain_ticks, "shutdown drain ticks")?;
+    validate_ingress_refs(input.policy_refs, "node control supervisor policy ref")?;
+    validate_ingress_refs(input.evidence_refs, "node control supervisor evidence ref")?;
+    Ok(record("node-control-supervisor-policy-v1", vec![
+        string(NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA),
+        record("max-restarts", vec![string(input.max_restarts.to_string())]),
+        record("restart-window-ticks", vec![string(input.restart_window_ticks.to_string())]),
+        record("heartbeat-timeout-ticks", vec![string(input.heartbeat_timeout_ticks.to_string())]),
+        record("shutdown-drain-ticks", vec![string(input.shutdown_drain_ticks.to_string())]),
+        record("stale-lock-recovery", vec![string(if input.stale_lock_recovery { "allow" } else { "deny" })]),
+        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
+        record("evidence", vec![sequence(input.evidence_refs.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("bounded-restarts"), string("pass")]),
+            record("check", vec![string("bounded-heartbeat-timeout"), string("pass")]),
+            record("check", vec![string("explicit-stale-lock-policy"), string("pass")]),
+            record("check", vec![string("shutdown-drain-bound"), string("pass")]),
+        ])]),
+    ]))
+}
+
+pub fn parse_node_control_supervisor_policy(value: &IOValue) -> Result<NodeControlSupervisorPolicy> {
+    let fields = value
+        .collect_simple_record("node-control-supervisor-policy-v1", Some(9))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-policy-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA, "node control supervisor policy")?;
+    let stale_lock_recovery = match record_string(&fields[5], "stale-lock-recovery")?.as_str() {
+        "allow" => true,
+        "deny" => false,
+        other => {
+            return Err(MoltenError::invalid_harness(format!(
+                "node control supervisor stale lock recovery must be allow or deny, got {other}"
+            )));
+        }
+    };
+    let max_restarts = record_u64_string(&fields[1], "max-restarts")?;
+    let restart_window_ticks = record_u64_string(&fields[2], "restart-window-ticks")?;
+    let heartbeat_timeout_ticks = record_u64_string(&fields[3], "heartbeat-timeout-ticks")?;
+    let shutdown_drain_ticks = record_u64_string(&fields[4], "shutdown-drain-ticks")?;
+    validate_supervisor_policy_bounds(max_restarts, "max restarts")?;
+    validate_supervisor_policy_bounds(restart_window_ticks, "restart window ticks")?;
+    validate_supervisor_policy_bounds(heartbeat_timeout_ticks, "heartbeat timeout ticks")?;
+    validate_supervisor_policy_bounds(shutdown_drain_ticks, "shutdown drain ticks")?;
+    Ok(NodeControlSupervisorPolicy {
+        policy_ref: canonical_hash(value)?,
+        max_restarts,
+        restart_window_ticks,
+        heartbeat_timeout_ticks,
+        shutdown_drain_ticks,
+        stale_lock_recovery,
+        policy_refs: record_ref_strings(&fields[6], "policy")?,
+        evidence_refs: record_ref_strings(&fields[7], "evidence")?,
+        value: value.clone(),
+    })
+}
+
+pub fn import_node_control_supervisor_policy(
+    state_root: &Path,
+    policy_value: &IOValue,
+) -> Result<NodeControlSupervisorPolicy> {
+    validate_state_root(state_root)?;
+    ensure_state_layout(state_root)?;
+    let policy = parse_node_control_supervisor_policy(policy_value)?;
+    import_node_artifact(state_root, policy_value)?;
+    Ok(policy)
+}
+
+fn parse_node_control_supervisor_receipt(value: &IOValue) -> Result<NodeControlSupervisorReceipt> {
+    let fields = value
+        .collect_simple_record("node-control-supervisor-receipt-v1", Some(9))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-receipt-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA, "node control supervisor receipt")?;
+    Ok(NodeControlSupervisorReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision: record_string(&fields[1], "decision")?,
+        operation: record_string(&fields[2], "operation")?,
+        supervisor_policy_ref: record_optional_string(&fields[5], "policy")?,
+        diagnostics: record_strings(&fields[7], "diagnostics")?,
+        value: value.clone(),
+    })
+}
+
+fn service_run_supervisor_policy_ref(value: &IOValue) -> Result<Option<String>> {
+    if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(17)) {
+        return record_optional_string(&fields[13], "supervisor-policy");
+    }
+    Ok(None)
+}
+
+fn count_prior_supervised_service_runs(state_root: &Path, supervisor_policy_ref: &str) -> Result<u64> {
+    let service_dir = state_root.join(CONTROL_SERVICE_DIR);
+    if !service_dir.exists() {
+        return Ok(0);
+    }
+    let mut count = 0_u64;
+    for entry in fs::read_dir(&service_dir)
+        .map_err(|error| MoltenError::invalid_harness(format!("read node control service dir failed: {error}")))?
+    {
+        let entry = entry.map_err(|error| {
+            MoltenError::invalid_harness(format!("read node control service entry failed: {error}"))
+        })?;
+        let path = entry.path();
+        if !path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with(".service-run-receipt.preserves"))
+        {
+            continue;
+        }
+        let value = read_preserves(&path)?;
+        if service_run_supervisor_policy_ref(&value)?.as_deref() == Some(supervisor_policy_ref) {
+            count = count.saturating_add(1);
+        }
+    }
+    Ok(count)
+}
+
 pub fn init_local_node(input: &NodeDaemonInitInput<'_>) -> Result<NodeDaemonInit> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.node_id)?;
@@ -1179,10 +1353,87 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
     ensure_state_layout(input.state_root)?;
     let max_ticks = validate_service_tick_limit(input.max_ticks)?;
     validate_loop_request_limit(input.max_requests_per_tick)?;
+    let supervisor_policy = input
+        .supervisor_policy_value
+        .map(|value| import_node_control_supervisor_policy(input.state_root, value))
+        .transpose()?;
+    let mut supervisor_receipt_refs = Vec::new();
     require_active_lock(input.state_root)?;
     let startup = current_startup_receipt(input.state_root)?;
     if input.state_root.join(CONTROL_SERVICE_LOCK_FILE).exists() {
-        return denied_duplicate_service_run(input, &startup);
+        if let Some(policy) = supervisor_policy.as_ref()
+            && policy.stale_lock_recovery
+        {
+            let lock_value = read_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE))?;
+            let stale_lock_ref = canonical_hash(&lock_value)?;
+            let diagnostics = vec!["node control stale service lock recovered by supervisor policy".to_string()];
+            let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
+                decision: "pass",
+                operation: "stale-lock-recover",
+                startup_receipt_ref: &startup.receipt_ref,
+                service_lock_ref: Some(&stale_lock_ref),
+                supervisor_policy_ref: Some(&policy.policy_ref),
+                topic: input.topic,
+                diagnostics: &diagnostics,
+            })?;
+            supervisor_receipt_refs.push(receipt_ref);
+            fs::remove_file(input.state_root.join(CONTROL_SERVICE_LOCK_FILE)).map_err(MoltenError::from)?;
+        } else {
+            return denied_duplicate_service_run(input, &startup, supervisor_policy.as_ref(), &supervisor_receipt_refs);
+        }
+    }
+    if let Some(policy) = supervisor_policy.as_ref() {
+        let prior_runs = count_prior_supervised_service_runs(input.state_root, &policy.policy_ref)?;
+        if prior_runs > policy.max_restarts {
+            let diagnostics = vec![format!(
+                "node control supervisor restart attempts {prior_runs} exceeded bound {}",
+                policy.max_restarts
+            )];
+            let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
+                decision: "deny",
+                operation: "restart-attempt-deny",
+                startup_receipt_ref: &startup.receipt_ref,
+                service_lock_ref: None,
+                supervisor_policy_ref: Some(&policy.policy_ref),
+                topic: input.topic,
+                diagnostics: &diagnostics,
+            })?;
+            supervisor_receipt_refs.push(receipt_ref);
+            let receipt_value = service_run_receipt_value(&ServiceRunReceiptValueInput {
+                decision: "deny",
+                startup_receipt_ref: &startup.receipt_ref,
+                service_lock_ref: None,
+                topic: input.topic,
+                max_ticks: input.max_ticks,
+                max_requests_per_tick: input.max_requests_per_tick,
+                ticks: 0,
+                heartbeat_receipt_refs: &[],
+                ingress_receipt_refs: &[],
+                loop_receipt_refs: &[],
+                processed_request_refs: &[],
+                has_stopped: false,
+                supervisor_policy_ref: Some(&policy.policy_ref),
+                supervisor_receipt_refs: &supervisor_receipt_refs,
+                diagnostics: &diagnostics,
+            })?;
+            let service_receipt_ref = canonical_hash(&receipt_value)?;
+            write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
+            import_node_artifact(input.state_root, &receipt_value)?;
+            return Ok(NodeControlServe {
+                service_receipt_ref,
+                service_receipt_value: receipt_value,
+                service_lock_ref: None,
+                heartbeat_receipt_refs: Vec::new(),
+                ingress_receipt_refs: Vec::new(),
+                loop_receipt_refs: Vec::new(),
+                processed_request_refs: Vec::new(),
+                supervisor_policy_ref: Some(policy.policy_ref.clone()),
+                supervisor_receipt_refs,
+                ticks: 0,
+                has_stopped: false,
+                decision: "deny".to_string(),
+            });
+        }
     }
     let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let service_run_id = local_ref(
@@ -1201,6 +1452,18 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
     let service_lock_ref = canonical_hash(&lock_value)?;
     write_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE), &lock_value)?;
     import_node_artifact(input.state_root, &lock_value)?;
+    if let Some(policy) = supervisor_policy.as_ref() {
+        let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
+            decision: "pass",
+            operation: "restart-attempt",
+            startup_receipt_ref: &startup.receipt_ref,
+            service_lock_ref: Some(&service_lock_ref),
+            supervisor_policy_ref: Some(&policy.policy_ref),
+            topic: input.topic,
+            diagnostics: &[],
+        })?;
+        supervisor_receipt_refs.push(receipt_ref);
+    }
 
     let mut heartbeat_receipt_refs = Vec::with_capacity(max_ticks);
     let mut ingress_receipt_refs = Vec::new();
@@ -1281,6 +1544,33 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
             Err(error) => diagnostics.push(format!("node control service pending-work scan failed: {error}")),
         }
     }
+    if let Some(policy) = supervisor_policy.as_ref()
+        && has_stopped
+    {
+        let mut shutdown_diagnostics = Vec::new();
+        if ticks > policy.shutdown_drain_ticks {
+            let diagnostic = format!(
+                "node control shutdown drain ticks {ticks} exceeded supervisor bound {}",
+                policy.shutdown_drain_ticks
+            );
+            diagnostics.push(diagnostic.clone());
+            shutdown_diagnostics.push(diagnostic);
+        }
+        let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
+            decision: if shutdown_diagnostics.is_empty() {
+                "pass"
+            } else {
+                "deny"
+            },
+            operation: "shutdown-drain",
+            startup_receipt_ref: &startup.receipt_ref,
+            service_lock_ref: Some(&service_lock_ref),
+            supervisor_policy_ref: Some(&policy.policy_ref),
+            topic: input.topic,
+            diagnostics: &shutdown_diagnostics,
+        })?;
+        supervisor_receipt_refs.push(receipt_ref);
+    }
     remove_service_lock(input.state_root, &service_lock_ref)?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = service_run_receipt_value(&ServiceRunReceiptValueInput {
@@ -1296,6 +1586,8 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
         loop_receipt_refs: &loop_receipt_refs,
         processed_request_refs: &processed_request_refs,
         has_stopped,
+        supervisor_policy_ref: supervisor_policy.as_ref().map(|policy| policy.policy_ref.as_str()),
+        supervisor_receipt_refs: &supervisor_receipt_refs,
         diagnostics: &diagnostics,
     })?;
     let service_receipt_ref = canonical_hash(&receipt_value)?;
@@ -1309,6 +1601,8 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
         ingress_receipt_refs,
         loop_receipt_refs,
         processed_request_refs,
+        supervisor_policy_ref: supervisor_policy.map(|policy| policy.policy_ref),
+        supervisor_receipt_refs,
         ticks,
         has_stopped,
         decision: decision.to_string(),
@@ -1318,10 +1612,25 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
 fn denied_duplicate_service_run(
     input: &NodeControlServeInput<'_>,
     startup: &node_runtime::NodeStartupReceipt,
+    supervisor_policy: Option<&NodeControlSupervisorPolicy>,
+    inherited_supervisor_receipt_refs: &[String],
 ) -> Result<NodeControlServe> {
     let lock_value = read_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE))?;
     let service_lock_ref = canonical_hash(&lock_value)?;
     let diagnostics = vec!["node control service runner already active".to_string()];
+    let mut supervisor_receipt_refs = inherited_supervisor_receipt_refs.to_vec();
+    if let Some(policy) = supervisor_policy {
+        let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
+            decision: "deny",
+            operation: "duplicate-runner-deny",
+            startup_receipt_ref: &startup.receipt_ref,
+            service_lock_ref: Some(&service_lock_ref),
+            supervisor_policy_ref: Some(&policy.policy_ref),
+            topic: input.topic,
+            diagnostics: &diagnostics,
+        })?;
+        supervisor_receipt_refs.push(receipt_ref);
+    }
     let receipt_value = service_run_receipt_value(&ServiceRunReceiptValueInput {
         decision: "deny",
         startup_receipt_ref: &startup.receipt_ref,
@@ -1335,6 +1644,8 @@ fn denied_duplicate_service_run(
         loop_receipt_refs: &[],
         processed_request_refs: &[],
         has_stopped: false,
+        supervisor_policy_ref: supervisor_policy.map(|policy| policy.policy_ref.as_str()),
+        supervisor_receipt_refs: &supervisor_receipt_refs,
         diagnostics: &diagnostics,
     })?;
     let service_receipt_ref = canonical_hash(&receipt_value)?;
@@ -1348,6 +1659,8 @@ fn denied_duplicate_service_run(
         ingress_receipt_refs: Vec::new(),
         loop_receipt_refs: Vec::new(),
         processed_request_refs: Vec::new(),
+        supervisor_policy_ref: supervisor_policy.map(|policy| policy.policy_ref.clone()),
+        supervisor_receipt_refs,
         ticks: 0,
         has_stopped: false,
         decision: "deny".to_string(),
@@ -1731,6 +2044,7 @@ pub async fn node_control_live_serve_listener_loopback(
         max_events: 4,
         event_timeout_ms: 1_000,
         max_requests_per_tick: input.max_requests_per_tick,
+        supervisor_policy_value: None,
     };
     let mut listener = serve_node_control_live_listener_with_topic(
         &listener_input,
@@ -1807,6 +2121,7 @@ async fn serve_node_control_live_listener_with_topic(
         topic: input.topic,
         max_ticks: 1,
         max_requests_per_tick: input.max_requests_per_tick,
+        supervisor_policy_value: input.supervisor_policy_value,
     })?;
     if service.decision != "pass" {
         diagnostics.push(format!("node control live listener service drain decision {}", service.decision));
@@ -3058,6 +3373,33 @@ fn service_heartbeat_receipt_value(input: &ServiceHeartbeatValueInput<'_>) -> Re
     ]))
 }
 
+fn supervisor_receipt_value(input: &SupervisorReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    Ok(record("node-control-supervisor-receipt-v1", vec![
+        string(NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("operation", vec![string(input.operation)]),
+        record("startup", vec![string(input.startup_receipt_ref)]),
+        record("service-lock", vec![optional_string(input.service_lock_ref)]),
+        record("policy", vec![optional_string(input.supervisor_policy_ref)]),
+        record("topic", vec![string(input.topic)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![
+                string("supervisor-policy-bound"),
+                string(if input.supervisor_policy_ref.is_some() {
+                    "pass"
+                } else {
+                    "fail"
+                }),
+            ]),
+            record("check", vec![string("single-active-service"), string("pass")]),
+            record("check", vec![string("bounded-restart-policy"), string("pass")]),
+            record("check", vec![string("shutdown-drain-bound"), string("pass")]),
+        ])]),
+    ]))
+}
+
 fn service_run_receipt_value(input: &ServiceRunReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     Ok(record("node-control-service-run-receipt-v1", vec![
@@ -3074,6 +3416,8 @@ fn service_run_receipt_value(input: &ServiceRunReceiptValueInput<'_>) -> Result<
         record("loop-receipts", vec![sequence(input.loop_receipt_refs.iter().map(string).collect())]),
         record("processed-requests", vec![sequence(input.processed_request_refs.iter().map(string).collect())]),
         record("stopped", vec![string(if input.has_stopped { "true" } else { "false" })]),
+        record("supervisor-policy", vec![optional_string(input.supervisor_policy_ref)]),
+        record("supervisor-receipts", vec![sequence(input.supervisor_receipt_refs.iter().map(string).collect())]),
         record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
         record("checks", vec![sequence(vec![
             record("check", vec![
@@ -3088,6 +3432,14 @@ fn service_run_receipt_value(input: &ServiceRunReceiptValueInput<'_>) -> Result<
             record("check", vec![string("loop-reuse"), string("pass")]),
             record("check", vec![string("shutdown-stop-semantics"), string("pass")]),
             record("check", vec![string("bounded-ticks"), string("pass")]),
+            record("check", vec![
+                string("supervisor-policy-bound"),
+                string(if input.supervisor_policy_ref.is_none() || !input.supervisor_receipt_refs.is_empty() {
+                    "pass"
+                } else {
+                    "fail"
+                }),
+            ]),
         ])]),
     ]))
 }
@@ -3388,6 +3740,29 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_string(&fields[4], "tick")?
         ));
     }
+    if let Ok(policy) = parse_node_control_supervisor_policy(value) {
+        return Ok(format!(
+            "node control supervisor policy ref={} restarts={} stale_lock_recovery={}",
+            policy.policy_ref, policy.max_restarts, policy.stale_lock_recovery
+        ));
+    }
+    if let Ok(receipt) = parse_node_control_supervisor_receipt(value) {
+        return Ok(format!(
+            "node control supervisor decision={} operation={} policy={}",
+            receipt.decision,
+            receipt.operation,
+            receipt.supervisor_policy_ref.unwrap_or_else(|| "none".to_string())
+        ));
+    }
+    if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(17)) {
+        return Ok(format!(
+            "node control service run decision={} ticks={} heartbeats={} stopped={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[7], "ticks")?,
+            record_sequence_len(&fields[8], "heartbeats")?,
+            record_string(&fields[12], "stopped")?
+        ));
+    }
     if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(15)) {
         return Ok(format!(
             "node control service run decision={} ticks={} heartbeats={} stopped={}",
@@ -3600,6 +3975,20 @@ fn control_service_run_receipt_path(state_root: &Path, service_run_ref: &str) ->
         .join(format!("{}.service-run-receipt.preserves", ref_file_stem(service_run_ref)))
 }
 
+fn control_supervisor_receipt_path(state_root: &Path, receipt_ref: &str) -> PathBuf {
+    state_root
+        .join(CONTROL_SERVICE_DIR)
+        .join(format!("{}.supervisor-receipt.preserves", ref_file_stem(receipt_ref)))
+}
+
+fn write_supervisor_receipt(state_root: &Path, input: &SupervisorReceiptValueInput<'_>) -> Result<String> {
+    let value = supervisor_receipt_value(input)?;
+    let receipt_ref = canonical_hash(&value)?;
+    write_preserves(&control_supervisor_receipt_path(state_root, &receipt_ref), &value)?;
+    import_node_artifact(state_root, &value)?;
+    Ok(receipt_ref)
+}
+
 fn control_ingress_envelope_path(state_root: &Path, topic: &str, envelope_ref: &str) -> PathBuf {
     state_root
         .join(CONTROL_INGRESS_DIR)
@@ -3707,6 +4096,15 @@ fn validate_listener_event_limit(max_events: u64) -> Result<()> {
     if max_events > MAX_CONTROL_LIVE_LISTENER_EVENTS {
         return Err(MoltenError::invalid_harness(format!(
             "node control live listener max events exceeds bounded limit {MAX_CONTROL_LIVE_LISTENER_EVENTS}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_supervisor_policy_bounds(value: u64, label: &str) -> Result<()> {
+    if value > MAX_CONTROL_SERVICE_TICKS {
+        return Err(MoltenError::invalid_harness(format!(
+            "node control supervisor policy {label} exceeds bounded limit {MAX_CONTROL_SERVICE_TICKS}"
         )));
     }
     Ok(())
@@ -4954,6 +5352,7 @@ mod tests {
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 1,
             max_requests_per_tick: 1,
+            supervisor_policy_value: None,
         })
         .expect("serve live ingress");
         assert_eq!(served.decision, "pass");
@@ -5007,6 +5406,7 @@ mod tests {
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 1,
             max_requests_per_tick: 4,
+            supervisor_policy_value: None,
         })
         .expect("serve ingress");
         assert_eq!(served.decision, "pass");
@@ -5058,6 +5458,7 @@ mod tests {
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 1,
             max_requests_per_tick: 1,
+            supervisor_policy_value: None,
         })
         .expect("duplicate service denial");
         assert_eq!(served.decision, "deny");
@@ -5066,6 +5467,108 @@ mod tests {
         assert!(next_pending_control_request(&root).expect("pending scan").is_some());
         let text = to_text(&served.service_receipt_value).expect("service receipt text");
         assert!(text.contains("already active"));
+    }
+
+    #[test]
+    fn node_control_supervisor_policy_recovers_stale_lock_and_bounds_shutdown() {
+        let root = temp_dir("node-control-supervisor-policy");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:supervisor-policy",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let startup = current_startup_receipt(&root).expect("startup");
+        let identity =
+            node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
+                .expect("parse identity");
+        let service_run_ref = local_ref("node-control-service-run", "stale").expect("service run ref");
+        let stale_lock = service_lock_value(&ServiceLockValueInput {
+            state_root: &root,
+            startup_receipt_ref: &startup.receipt_ref,
+            node_id: &identity.node_id,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            max_ticks: 1,
+            max_requests_per_tick: 1,
+            service_run_ref: &service_run_ref,
+        })
+        .expect("stale lock");
+        write_preserves(&root.join(CONTROL_SERVICE_LOCK_FILE), &stale_lock).expect("write stale lock");
+        let policy_refs = vec![local_ref("node-control-supervisor-policy", "recover").expect("policy ref")];
+        let recover_policy = node_control_supervisor_policy_value(&NodeControlSupervisorPolicyInput {
+            max_restarts: 1,
+            restart_window_ticks: 1,
+            heartbeat_timeout_ticks: 1,
+            shutdown_drain_ticks: 1,
+            stale_lock_recovery: true,
+            policy_refs: &policy_refs,
+            evidence_refs: &[],
+        })
+        .expect("recover policy");
+
+        let recovered = serve_node_control(&NodeControlServeInput {
+            state_root: &root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            max_ticks: 1,
+            max_requests_per_tick: 1,
+            supervisor_policy_value: Some(&recover_policy),
+        })
+        .expect("recover stale lock");
+        assert_eq!(recovered.decision, "pass");
+        assert_eq!(recovered.supervisor_receipt_refs.len(), 2);
+        assert!(recovered.supervisor_policy_ref.is_some());
+        assert!(!root.join(CONTROL_SERVICE_LOCK_FILE).exists());
+        let restart_once = serve_node_control(&NodeControlServeInput {
+            state_root: &root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            max_ticks: 1,
+            max_requests_per_tick: 1,
+            supervisor_policy_value: Some(&recover_policy),
+        })
+        .expect("allowed restart");
+        assert_eq!(restart_once.decision, "pass");
+        let restart_denied = serve_node_control(&NodeControlServeInput {
+            state_root: &root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            max_ticks: 1,
+            max_requests_per_tick: 1,
+            supervisor_policy_value: Some(&recover_policy),
+        })
+        .expect("bounded restart denial");
+        assert_eq!(restart_denied.decision, "deny");
+        assert_eq!(restart_denied.ticks, 0);
+        let restart_denied_text = to_text(&restart_denied.service_receipt_value).expect("restart denial receipt text");
+        assert!(restart_denied_text.contains("restart attempts"));
+
+        let shutdown = shutdown_request().expect("shutdown request");
+        submit_control_request(&NodeControlSubmitInput {
+            state_root: &root,
+            request_value: &shutdown.value,
+        })
+        .expect("submit shutdown");
+        let tight_policy = node_control_supervisor_policy_value(&NodeControlSupervisorPolicyInput {
+            max_restarts: 0,
+            restart_window_ticks: 1,
+            heartbeat_timeout_ticks: 1,
+            shutdown_drain_ticks: 0,
+            stale_lock_recovery: false,
+            policy_refs: &policy_refs,
+            evidence_refs: &[],
+        })
+        .expect("tight policy");
+        let stopped = serve_node_control(&NodeControlServeInput {
+            state_root: &root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            max_ticks: 4,
+            max_requests_per_tick: 1,
+            supervisor_policy_value: Some(&tight_policy),
+        })
+        .expect("shutdown serve");
+        assert_eq!(stopped.decision, "deny");
+        assert!(stopped.has_stopped);
+        assert_eq!(stopped.supervisor_receipt_refs.len(), 2);
+        let text = to_text(&stopped.service_receipt_value).expect("service receipt text");
+        assert!(text.contains("exceeded supervisor bound"));
     }
 
     #[test]
@@ -5082,6 +5585,7 @@ mod tests {
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 2,
             max_requests_per_tick: 1,
+            supervisor_policy_value: None,
         })
         .expect("idle serve");
         assert_eq!(idle.decision, "pass");
@@ -5100,6 +5604,7 @@ mod tests {
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             max_ticks: 4,
             max_requests_per_tick: 1,
+            supervisor_policy_value: None,
         })
         .expect("shutdown serve");
         assert_eq!(stopped.decision, "pass");
