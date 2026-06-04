@@ -18,6 +18,7 @@
 | 2026-06-03 | self | New `operator_dogfood` helpers reintroduced Octet/TigerStyle warnings (`bool_naming`, negated predicate, `&mut Vec` helper, and two high-arity functions). | For new runtime slices, use positive predicate names, buffer/option structs, and Vec extension helpers from the start before refreshing Octet gates. |
 | 2026-06-04 | self | After this compaction I again started editing before rereading `.agent/napkin.md`. | Treat the napkin read as a hard first step after every compacted-summary handoff, before searches or edits. |
 | 2026-06-04 | self | Some test temp-dir helpers still omitted the process id, so parallel nextest cleanup could delete another live test's `/tmp/molten-*` directory and cause unrelated redaction/catalog failures. | All `/tmp/molten-*` test dirs must include `std::process::id()` before the per-process counter, or cleanup must not remove pidless live-looking dirs during parallel runs. |
+| 2026-06-04 | self | While staging live-listener work, I typoed `status-result` as `status_result` inside the standard Steel process wrapper and wasted a tool call. | Copy the known-good Steel validation/staging wrapper exactly; avoid hand-editing variable names in nested error branches. |
 
 ## User Preferences
 - Prefer explicit Nickel and Steel contract boundaries where applicable: Nickel for static declarative policy/config/schema gates, Steel only for reviewed dynamic predicates/trusted callables, both enforced through Basalt before side effects.

@@ -18,6 +18,7 @@ use crate::octet_gate;
 use crate::preserves_rail::NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LOOP_RECEIPT_SCHEMA;
@@ -58,7 +59,10 @@ const MAX_PENDING_CONTROL_REQUESTS: usize = 1024;
 const MAX_CONTROL_LOOP_REQUESTS: u64 = 1024;
 pub const DEFAULT_CONTROL_LOOP_REQUESTS: u64 = 64;
 const MAX_CONTROL_SERVICE_TICKS: u64 = 4096;
+const MAX_CONTROL_LIVE_LISTENER_EVENTS: u64 = 4096;
 pub const DEFAULT_CONTROL_SERVICE_TICKS: u64 = 1;
+pub const DEFAULT_CONTROL_LIVE_LISTENER_EVENTS: u64 = 1;
+pub const DEFAULT_CONTROL_LIVE_LISTENER_TIMEOUT_MS: u64 = 250;
 
 const _: () = assert!(MAX_PENDING_CONTROL_REQUESTS > 0);
 const _: () = assert!(MAX_CONTROL_LOOP_REQUESTS > 0);
@@ -67,6 +71,9 @@ const _: () = assert!(DEFAULT_CONTROL_LOOP_REQUESTS <= MAX_CONTROL_LOOP_REQUESTS
 const _: () = assert!(MAX_CONTROL_SERVICE_TICKS > 0);
 const _: () = assert!(DEFAULT_CONTROL_SERVICE_TICKS > 0);
 const _: () = assert!(DEFAULT_CONTROL_SERVICE_TICKS <= MAX_CONTROL_SERVICE_TICKS);
+const _: () = assert!(MAX_CONTROL_LIVE_LISTENER_EVENTS > 0);
+const _: () = assert!(DEFAULT_CONTROL_LIVE_LISTENER_EVENTS <= MAX_CONTROL_LIVE_LISTENER_EVENTS);
+const _: () = assert!(DEFAULT_CONTROL_LIVE_LISTENER_TIMEOUT_MS > 0);
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeDaemonInitInput<'a> {
@@ -209,6 +216,47 @@ pub struct NodeControlLiveLoopbackInput<'a> {
     pub policy_refs: &'a [String],
     pub resource_refs: &'a [String],
     pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveServeInput<'a> {
+    pub state_root: &'a Path,
+    pub topic: &'a str,
+    pub max_events: u64,
+    pub event_timeout_ms: u64,
+    pub max_requests_per_tick: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveServeLoopbackInput<'a> {
+    pub state_root: &'a Path,
+    pub request_value: &'a IOValue,
+    pub from_peer: &'a str,
+    pub to_node: &'a str,
+    pub topic: &'a str,
+    pub sequence: u64,
+    pub peer_bootstrap_refs: &'a [String],
+    pub authority_refs: &'a [String],
+    pub policy_refs: &'a [String],
+    pub resource_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+    pub max_requests_per_tick: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ListenerReceiptValueInput<'a> {
+    decision: &'a str,
+    startup_receipt_ref: &'a str,
+    node_id: &'a str,
+    logical_endpoint_id: &'a str,
+    bound_endpoint_id: &'a str,
+    topic: &'a str,
+    max_events: u64,
+    observed_events: u64,
+    transport_receipt_refs: &'a [String],
+    neighbor_events: &'a [String],
+    service_receipt_ref: &'a str,
+    diagnostics: &'a [String],
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -418,6 +466,24 @@ pub struct NodeControlLiveLoopback {
     pub receive_receipt_value: IOValue,
     pub ingress_receipt_ref: String,
     pub has_enqueued: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveServe {
+    pub listener_receipt_ref: String,
+    pub listener_receipt_value: IOValue,
+    pub service: NodeControlServe,
+    pub transport_receipt_refs: Vec<String>,
+    pub neighbor_events: Vec<String>,
+    pub observed_events: u64,
+    pub bound_endpoint_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveServeLoopback {
+    pub envelope_ref: String,
+    pub publish_receipt_ref: String,
+    pub listener: NodeControlLiveServe,
 }
 
 pub fn init_local_node(input: &NodeDaemonInitInput<'_>) -> Result<NodeDaemonInit> {
@@ -1210,6 +1276,201 @@ pub async fn node_control_live_iroh_loopback(
         receive_receipt_value: received.transport_receipt_value,
         ingress_receipt_ref: received.ingress_receipt_ref,
         has_enqueued: received.has_enqueued,
+    })
+}
+
+pub async fn serve_node_control_live_listener(input: &NodeControlLiveServeInput<'_>) -> Result<NodeControlLiveServe> {
+    validate_state_root(input.state_root)?;
+    validate_node_id(input.topic)?;
+    validate_listener_event_limit(input.max_events)?;
+    validate_loop_request_limit(input.max_requests_per_tick)?;
+    ensure_state_layout(input.state_root)?;
+    let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let lookup = iroh::address_lookup::memory::MemoryLookup::new();
+    let endpoint = live_gossip_endpoint(&lookup).await?;
+    let bound_endpoint_id = format!("iroh:{}", endpoint.id());
+    lookup.add_endpoint_info(endpoint.addr());
+    let gossip = iroh_gossip::Gossip::builder().spawn(endpoint.clone());
+    let router = iroh::protocol::Router::builder(endpoint).accept(iroh_gossip::ALPN, gossip.clone()).spawn();
+    let mut topic = gossip
+        .subscribe(node_control_live_topic_id(input.topic), Vec::new())
+        .await
+        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve subscribe failed: {error}")))?;
+    let served = serve_node_control_live_listener_with_topic(
+        input,
+        &mut topic,
+        &identity.node_id,
+        &identity.endpoint_id,
+        &bound_endpoint_id,
+    )
+    .await;
+    router
+        .shutdown()
+        .await
+        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve router shutdown failed: {error}")))?;
+    served
+}
+
+pub async fn node_control_live_serve_listener_loopback(
+    input: &NodeControlLiveServeLoopbackInput<'_>,
+) -> Result<NodeControlLiveServeLoopback> {
+    validate_state_root(input.state_root)?;
+    ensure_state_layout(input.state_root)?;
+    let envelope_input = NodeControlIngressEnvelopeInput {
+        request_value: input.request_value,
+        from_peer: input.from_peer,
+        to_node: input.to_node,
+        topic: input.topic,
+        sequence: input.sequence,
+        peer_bootstrap_refs: input.peer_bootstrap_refs,
+        authority_refs: input.authority_refs,
+        policy_refs: input.policy_refs,
+        resource_refs: input.resource_refs,
+        evidence_refs: input.evidence_refs,
+    };
+    let envelope = node_control_live_ingress_envelope(&envelope_input)?;
+    let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let lookup = iroh::address_lookup::memory::MemoryLookup::new();
+    let receiver_endpoint = live_gossip_endpoint(&lookup).await?;
+    let sender_endpoint = live_gossip_endpoint(&lookup).await?;
+    lookup.add_endpoint_info(receiver_endpoint.addr());
+    lookup.add_endpoint_info(sender_endpoint.addr());
+    let receiver_id = receiver_endpoint.id();
+    let sender_id = sender_endpoint.id();
+    let bound_endpoint_id = format!("iroh:{receiver_id}");
+    let receiver_gossip = iroh_gossip::Gossip::builder().spawn(receiver_endpoint.clone());
+    let sender_gossip = iroh_gossip::Gossip::builder().spawn(sender_endpoint.clone());
+    let receiver_router = iroh::protocol::Router::builder(receiver_endpoint)
+        .accept(iroh_gossip::ALPN, receiver_gossip.clone())
+        .spawn();
+    let sender_router = iroh::protocol::Router::builder(sender_endpoint)
+        .accept(iroh_gossip::ALPN, sender_gossip.clone())
+        .spawn();
+    let topic_id = node_control_live_topic_id(input.topic);
+    let mut receiver_topic = receiver_gossip.subscribe(topic_id, vec![sender_id]).await.map_err(|error| {
+        MoltenError::invalid_harness(format!("live Iroh listener receiver subscribe failed: {error}"))
+    })?;
+    let sender_topic = sender_gossip
+        .subscribe_and_join(topic_id, vec![receiver_id])
+        .await
+        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh listener sender join failed: {error}")))?;
+    let (sender, _unused_receiver) = sender_topic.split();
+    let published = publish_node_control_live_ingress(&NodeControlLiveIngressPublishInput {
+        sender: &sender,
+        envelope_value: &envelope.value,
+        node_id: input.from_peer,
+    })
+    .await?;
+    let listener_input = NodeControlLiveServeInput {
+        state_root: input.state_root,
+        topic: input.topic,
+        max_events: 4,
+        event_timeout_ms: 1_000,
+        max_requests_per_tick: input.max_requests_per_tick,
+    };
+    let listener = serve_node_control_live_listener_with_topic(
+        &listener_input,
+        &mut receiver_topic,
+        &identity.node_id,
+        &identity.endpoint_id,
+        &bound_endpoint_id,
+    )
+    .await?;
+    receiver_router.shutdown().await.map_err(|error| {
+        MoltenError::invalid_harness(format!("live Iroh listener receiver shutdown failed: {error}"))
+    })?;
+    sender_router
+        .shutdown()
+        .await
+        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh listener sender shutdown failed: {error}")))?;
+    Ok(NodeControlLiveServeLoopback {
+        envelope_ref: envelope.envelope_ref,
+        publish_receipt_ref: published.transport_receipt_ref,
+        listener,
+    })
+}
+
+async fn serve_node_control_live_listener_with_topic(
+    input: &NodeControlLiveServeInput<'_>,
+    receiver: &mut iroh_gossip::api::GossipTopic,
+    node_id: &str,
+    logical_endpoint_id: &str,
+    bound_endpoint_id: &str,
+) -> Result<NodeControlLiveServe> {
+    validate_listener_event_limit(input.max_events)?;
+    validate_loop_request_limit(input.max_requests_per_tick)?;
+    let startup = current_startup_receipt(input.state_root)?;
+    let mut diagnostics = Vec::new();
+    let mut transport_receipt_refs = Vec::new();
+    let mut neighbor_events = Vec::new();
+    let mut observed_events = 0_u64;
+    let timeout = std::time::Duration::from_millis(input.event_timeout_ms);
+    for _ in 0..input.max_events {
+        let event = match tokio::time::timeout(timeout, receiver.next()).await {
+            Ok(Some(Ok(event))) => event,
+            Ok(Some(Err(error))) => {
+                diagnostics.push(format!("live Iroh serve listener receive failed: {error}"));
+                break;
+            }
+            Ok(None) => break,
+            Err(_) => break,
+        };
+        observed_events += 1;
+        match &event {
+            iroh_gossip::api::Event::NeighborUp(endpoint) => {
+                neighbor_events.push(format!("up:iroh:{endpoint}"));
+            }
+            iroh_gossip::api::Event::NeighborDown(endpoint) => {
+                neighbor_events.push(format!("down:iroh:{endpoint}"));
+            }
+            iroh_gossip::api::Event::Lagged => diagnostics.push("live Iroh serve listener lagged".to_string()),
+            iroh_gossip::api::Event::Received(_) => {
+                if let Some(received) =
+                    receive_node_control_live_ingress_event(input.state_root, &event, input.topic, node_id)?
+                {
+                    transport_receipt_refs.push(received.transport_receipt_ref);
+                }
+            }
+        }
+        if !transport_receipt_refs.is_empty() {
+            break;
+        }
+    }
+    let service = serve_node_control(&NodeControlServeInput {
+        state_root: input.state_root,
+        topic: input.topic,
+        max_ticks: 1,
+        max_requests_per_tick: input.max_requests_per_tick,
+    })?;
+    if service.decision != "pass" {
+        diagnostics.push(format!("node control live listener service drain decision {}", service.decision));
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let receipt_value = live_listener_receipt_value(&ListenerReceiptValueInput {
+        decision,
+        startup_receipt_ref: &startup.receipt_ref,
+        node_id,
+        logical_endpoint_id,
+        bound_endpoint_id,
+        topic: input.topic,
+        max_events: input.max_events,
+        observed_events,
+        transport_receipt_refs: &transport_receipt_refs,
+        neighbor_events: &neighbor_events,
+        service_receipt_ref: &service.service_receipt_ref,
+        diagnostics: &diagnostics,
+    })?;
+    let listener_receipt_ref = canonical_hash(&receipt_value)?;
+    write_preserves(&control_live_listener_receipt_path(input.state_root, &listener_receipt_ref), &receipt_value)?;
+    import_node_artifact(input.state_root, &receipt_value)?;
+    Ok(NodeControlLiveServe {
+        listener_receipt_ref,
+        listener_receipt_value: receipt_value,
+        service,
+        transport_receipt_refs,
+        neighbor_events,
+        observed_events,
+        bound_endpoint_id: bound_endpoint_id.to_string(),
     })
 }
 
@@ -2052,6 +2313,32 @@ fn control_receipt_for_request(
     })
 }
 
+fn live_listener_receipt_value(input: &ListenerReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    Ok(record("node-control-live-listener-receipt-v1", vec![
+        string(NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("startup", vec![string(input.startup_receipt_ref)]),
+        record("node", vec![string(input.node_id)]),
+        record("logical-endpoint", vec![string(input.logical_endpoint_id)]),
+        record("bound-endpoint", vec![string(input.bound_endpoint_id)]),
+        record("topic", vec![string(input.topic)]),
+        record("max-events", vec![string(input.max_events.to_string())]),
+        record("observed-events", vec![string(input.observed_events.to_string())]),
+        record("transport-receipts", vec![sequence(input.transport_receipt_refs.iter().map(string).collect())]),
+        record("neighbor-events", vec![sequence(input.neighbor_events.iter().map(string).collect())]),
+        record("service-run", vec![string(input.service_receipt_ref)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("live-iroh-listener"), string("pass")]),
+            record("check", vec![string("receive-before-drain"), string("pass")]),
+            record("check", vec![string("session-evidence-not-authority"), string("pass")]),
+            record("check", vec![string("bounded-listener"), string("pass")]),
+            record("check", vec![string("durable-inbox-boundary"), string("pass")]),
+        ])]),
+    ]))
+}
+
 fn live_transport_receipt_value(input: &LiveTransportReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let has_peer_bootstrap = !input.envelope.peer_bootstrap_refs.is_empty();
@@ -2351,6 +2638,16 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_string(&fields[10], "request")?
         ));
     }
+    if let Some(fields) = value.collect_simple_record("node-control-live-listener-receipt-v1", Some(14)) {
+        require_schema(&fields[0], NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA, "node control live listener receipt")?;
+        return Ok(format!(
+            "node control live listener decision={} topic={} events={} service={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[6], "topic")?,
+            record_string(&fields[8], "observed-events")?,
+            record_string(&fields[11], "service-run")?
+        ));
+    }
     if let Some(fields) = value.collect_simple_record("node-control-live-transport-receipt-v1", Some(11)) {
         require_schema(&fields[0], NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA, "node control live transport receipt")?;
         return Ok(format!(
@@ -2633,6 +2930,12 @@ fn control_live_transport_receipt_path(state_root: &Path, envelope_ref: &str, op
     ))
 }
 
+fn control_live_listener_receipt_path(state_root: &Path, listener_ref: &str) -> PathBuf {
+    state_root
+        .join(CONTROL_SERVICE_DIR)
+        .join(format!("{}.live-listener-receipt.preserves", ref_file_stem(listener_ref)))
+}
+
 fn ref_file_stem(value_ref: &str) -> String {
     value_ref.replace(':', "-")
 }
@@ -2669,6 +2972,15 @@ fn validate_decision(decision: &str) -> Result<()> {
     } else {
         Err(MoltenError::invalid_harness(format!("invalid node control decision `{decision}`")))
     }
+}
+
+fn validate_listener_event_limit(max_events: u64) -> Result<()> {
+    if max_events > MAX_CONTROL_LIVE_LISTENER_EVENTS {
+        return Err(MoltenError::invalid_harness(format!(
+            "node control live listener max events exceeds bounded limit {MAX_CONTROL_LIVE_LISTENER_EVENTS}"
+        )));
+    }
+    Ok(())
 }
 
 fn validate_service_tick_limit(max_ticks: u64) -> Result<usize> {
@@ -3478,6 +3790,56 @@ mod tests {
         let receipt_text = to_text(&delivered.ingress_receipt_value).expect("receipt text");
         assert!(receipt_text.contains("authority refs missing"));
         assert!(next_pending_control_request(&root).expect("pending request scan").is_none());
+    }
+
+    #[tokio::test]
+    async fn node_control_live_serve_listener_loopback_dispatches_through_service() {
+        let root = temp_dir("node-control-live-listener");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:live-listener",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let authority_refs = vec![local_ref("node-control-authority", "live-listener").expect("authority ref")];
+        let policy_refs = vec![local_ref("node-control-policy", "live-listener").expect("policy ref")];
+        let resource_refs = vec![local_ref("node-control-resource", "live-listener").expect("resource ref")];
+        let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:listener").expect("bootstrap ref")];
+        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "status",
+            target_ref: None,
+            payload_ref: None,
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("status request");
+
+        let loopback = node_control_live_serve_listener_loopback(&NodeControlLiveServeLoopbackInput {
+            state_root: &root,
+            request_value: &request_value,
+            from_peer: "peer:listener",
+            to_node: "node:live-listener",
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            sequence: 1,
+            peer_bootstrap_refs: &peer_bootstrap_refs,
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+            max_requests_per_tick: 1,
+        })
+        .await
+        .expect("live listener loopback");
+        assert_eq!(
+            ledger::artifact_kind(&loopback.listener.listener_receipt_value),
+            "node-control-live-listener-receipt"
+        );
+        assert_eq!(loopback.listener.service.decision, "pass");
+        assert_eq!(loopback.listener.service.processed_request_refs.len(), 1);
+        assert_eq!(loopback.listener.transport_receipt_refs.len(), 1);
+        assert!(loopback.listener.observed_events >= 1);
     }
 
     #[tokio::test]

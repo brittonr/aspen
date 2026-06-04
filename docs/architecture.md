@@ -385,6 +385,7 @@ Current architectural changes are recorded under `cairn/changes/`:
 - `node-control-iroh-ingress` — deterministic local-Iroh ingress envelopes and receipts that validate peer bootstrap, authority, policy, resource, and scoped delivery idempotency before enqueueing into the durable control inbox.
 - `node-control-supervised-runner` — bounded `molten node serve` supervisor around local-Iroh ingress delivery and the durable control loop, with service locks, heartbeat receipts, duplicate-runner denial, and shutdown stop receipts.
 - `node-control-live-iroh-transport` — real `iroh-gossip` transport boundary for canonical node-control ingress bytes, live transport receipts, and loopback coverage that feeds the same durable ingress path without granting authority.
+- `node-control-live-serve-listener` — bounded `serve --live-iroh` listener mode that records listener/session/neighbor receipts, accepts live gossip events through the live receive boundary, and drains through the supervised control loop.
 - `sam-service-supervision-runtime` — demand-driven SAM services with readiness/failure assertions, logical supervision, restart policy, resource bounds, and cleanup receipts.
 - `trellis-protocol-session-runtime` — Trellis-gated protocol manifests, endpoint projection, protocol-message envelopes, session state, and dataspace-backed interpreters.
 - `raft-control-plane-registry` — first Raft-backed strongly consistent control-plane registry for protocol/artifact/policy/capability pointers and receipt indexes.

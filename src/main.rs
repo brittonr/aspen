@@ -457,6 +457,14 @@ enum NodeCommand {
         #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_LOOP_REQUESTS)]
         max_requests_per_tick: u64,
         #[arg(long)]
+        live_iroh: bool,
+        #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_LIVE_LISTENER_EVENTS)]
+        live_max_events: u64,
+        #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_LIVE_LISTENER_TIMEOUT_MS)]
+        live_event_timeout_ms: u64,
+        #[arg(long)]
+        service_receipt_out: Option<PathBuf>,
+        #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
     Status {
@@ -5122,31 +5130,68 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             topic,
             max_ticks,
             max_requests_per_tick,
+            live_iroh,
+            live_max_events,
+            live_event_timeout_ms,
+            service_receipt_out,
             receipt_out,
         } => {
-            let served = node_daemon::serve_node_control(&node_daemon::NodeControlServeInput {
-                state_root: &state_root,
-                topic: &topic,
-                max_ticks,
-                max_requests_per_tick,
-            })?;
-            emit_named_receipt(
-                receipt_out.as_ref(),
-                "node control service run receipt",
-                &served.service_receipt_value,
-            )?;
-            println!(
-                "node serve decision={} receipt={} ticks={} heartbeats={} ingress={} loops={} processed={} stopped={}",
-                served.decision,
-                served.service_receipt_ref,
-                served.ticks,
-                served.heartbeat_receipt_refs.len(),
-                served.ingress_receipt_refs.len(),
-                served.loop_receipt_refs.len(),
-                served.processed_request_refs.len(),
-                if served.has_stopped { "yes" } else { "no" }
-            );
-            Ok(())
+            if live_iroh {
+                let runtime =
+                    tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(MoltenError::from)?;
+                let served = runtime.block_on(node_daemon::serve_node_control_live_listener(
+                    &node_daemon::NodeControlLiveServeInput {
+                        state_root: &state_root,
+                        topic: &topic,
+                        max_events: live_max_events,
+                        event_timeout_ms: live_event_timeout_ms,
+                        max_requests_per_tick,
+                    },
+                ))?;
+                if let Some(path) = service_receipt_out.as_ref() {
+                    write_file(path, &to_text(&served.service.service_receipt_value)?)?;
+                }
+                emit_named_receipt(
+                    receipt_out.as_ref(),
+                    "node control live listener receipt",
+                    &served.listener_receipt_value,
+                )?;
+                println!(
+                    "node serve live-iroh listener={} service={} endpoint={} events={} transports={} processed={} stopped={}",
+                    served.listener_receipt_ref,
+                    served.service.service_receipt_ref,
+                    served.bound_endpoint_id,
+                    served.observed_events,
+                    served.transport_receipt_refs.len(),
+                    served.service.processed_request_refs.len(),
+                    if served.service.has_stopped { "yes" } else { "no" }
+                );
+                Ok(())
+            } else {
+                let served = node_daemon::serve_node_control(&node_daemon::NodeControlServeInput {
+                    state_root: &state_root,
+                    topic: &topic,
+                    max_ticks,
+                    max_requests_per_tick,
+                })?;
+                emit_named_receipt(
+                    receipt_out.as_ref(),
+                    "node control service run receipt",
+                    &served.service_receipt_value,
+                )?;
+                println!(
+                    "node serve decision={} receipt={} ticks={} heartbeats={} ingress={} loops={} processed={} stopped={}",
+                    served.decision,
+                    served.service_receipt_ref,
+                    served.ticks,
+                    served.heartbeat_receipt_refs.len(),
+                    served.ingress_receipt_refs.len(),
+                    served.loop_receipt_refs.len(),
+                    served.processed_request_refs.len(),
+                    if served.has_stopped { "yes" } else { "no" }
+                );
+                Ok(())
+            }
         }
         NodeCommand::Status {
             state_root,

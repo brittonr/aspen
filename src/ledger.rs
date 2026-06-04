@@ -308,6 +308,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("node-control-ingress-envelope-v1", "node-control-ingress-envelope"),
     ("node-control-ingress-receipt-v1", "node-control-ingress-receipt"),
     ("node-control-live-transport-receipt-v1", "node-control-live-transport-receipt"),
+    ("node-control-live-listener-receipt-v1", "node-control-live-listener-receipt"),
     ("node-health-receipt-v1", "node-health-receipt"),
     ("node-shutdown-receipt-v1", "node-shutdown-receipt"),
     ("operator-workflow-v1", "operator-workflow"),

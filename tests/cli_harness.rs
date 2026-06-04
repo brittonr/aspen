@@ -633,6 +633,45 @@ fn cli_node_live_ingress_loopback_enqueues_request() -> CliResult<()> {
 }
 
 #[test]
+fn cli_node_serve_live_iroh_empty_listener_receipt() -> CliResult<()> {
+    let dir = temp_dir("cli-node-serve-live")?;
+    let state_root = dir.join("node-state");
+    let listener_receipt = dir.join("listener.preserves");
+    let service_receipt = dir.join("service.preserves");
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(&state_root)
+            .args(["--node-id", "node:cli-serve-live"])
+            .output()?,
+        "node serve live init",
+    );
+    assert_success(
+        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
+        "node serve live run",
+    );
+    let served = molten_cmd()
+        .args(["test", "node", "serve", "--state-root"])
+        .arg(&state_root)
+        .args(["--live-iroh", "--live-max-events", "0", "--service-receipt-out"])
+        .arg(&service_receipt)
+        .args(["--receipt-out"])
+        .arg(&listener_receipt)
+        .output()?;
+    assert_success(&served, "node serve live listener");
+    assert!(stdout(&served).contains("node serve live-iroh"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&listener_receipt)?),
+        "node-control-live-listener-receipt"
+    );
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&service_receipt)?),
+        "node-control-service-run-receipt"
+    );
+    Ok(())
+}
+
+#[test]
 fn cli_node_serve_drains_shutdown_request() -> CliResult<()> {
     let dir = temp_dir("cli-node-serve")?;
     let state_root = dir.join("node-state");
