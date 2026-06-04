@@ -553,6 +553,75 @@ fn cli_node_control_ingress_build_publish_deliver_work() -> CliResult<()> {
 }
 
 #[test]
+fn cli_node_serve_drains_shutdown_request() -> CliResult<()> {
+    let dir = temp_dir("cli-node-serve")?;
+    let state_root = dir.join("node-state");
+    let request = dir.join("shutdown.preserves");
+    let queue_receipt = dir.join("queue.preserves");
+    let service_receipt = dir.join("service.preserves");
+    let authority_ref = test_ref("serve-authority")?;
+    let policy_ref = test_ref("serve-policy")?;
+    let resource_ref = test_ref("serve-resource")?;
+
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(&state_root)
+            .args(["--node-id", "node:cli-serve"])
+            .output()?,
+        "node serve init",
+    );
+    assert_success(
+        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
+        "node serve run",
+    );
+    assert_success(
+        &molten_cmd()
+            .args([
+                "test",
+                "node",
+                "control-request",
+                "--operation",
+                "shutdown",
+                "--authority",
+            ])
+            .arg(&authority_ref)
+            .args(["--policy"])
+            .arg(&policy_ref)
+            .args(["--resource"])
+            .arg(&resource_ref)
+            .args(["--out"])
+            .arg(&request)
+            .output()?,
+        "node serve shutdown request",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "control-submit", "--state-root"])
+            .arg(&state_root)
+            .arg(&request)
+            .args(["--receipt-out"])
+            .arg(&queue_receipt)
+            .output()?,
+        "node serve submit",
+    );
+    let served = molten_cmd()
+        .args(["test", "node", "serve", "--state-root"])
+        .arg(&state_root)
+        .args(["--max-ticks", "2", "--max-requests-per-tick", "1", "--receipt-out"])
+        .arg(&service_receipt)
+        .output()?;
+    assert_success(&served, "node serve");
+    assert!(stdout(&served).contains("node serve decision=pass"));
+    assert!(stdout(&served).contains("stopped=yes"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&service_receipt)?),
+        "node-control-service-run-receipt"
+    );
+    Ok(())
+}
+
+#[test]
 fn cli_octet_artifacts_imports_raw_artifacts_to_ledger() -> CliResult<()> {
     let dir = temp_dir("cli-octet-artifacts-import")?;
     let artifacts = dir.join("artifacts");

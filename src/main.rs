@@ -447,6 +447,18 @@ enum NodeCommand {
         #[arg(long)]
         heartbeat_out: Option<PathBuf>,
     },
+    Serve {
+        #[arg(long)]
+        state_root: PathBuf,
+        #[arg(long, default_value = node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+        topic: String,
+        #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_SERVICE_TICKS)]
+        max_ticks: u64,
+        #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_LOOP_REQUESTS)]
+        max_requests_per_tick: u64,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     Status {
         #[arg(long)]
         state_root: PathBuf,
@@ -5052,6 +5064,37 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 loop_run.heartbeat_receipt_ref,
                 loop_run.processed_request_refs.len(),
                 if loop_run.has_stopped { "yes" } else { "no" }
+            );
+            Ok(())
+        }
+        NodeCommand::Serve {
+            state_root,
+            topic,
+            max_ticks,
+            max_requests_per_tick,
+            receipt_out,
+        } => {
+            let served = node_daemon::serve_node_control(&node_daemon::NodeControlServeInput {
+                state_root: &state_root,
+                topic: &topic,
+                max_ticks,
+                max_requests_per_tick,
+            })?;
+            emit_named_receipt(
+                receipt_out.as_ref(),
+                "node control service run receipt",
+                &served.service_receipt_value,
+            )?;
+            println!(
+                "node serve decision={} receipt={} ticks={} heartbeats={} ingress={} loops={} processed={} stopped={}",
+                served.decision,
+                served.service_receipt_ref,
+                served.ticks,
+                served.heartbeat_receipt_refs.len(),
+                served.ingress_receipt_refs.len(),
+                served.loop_receipt_refs.len(),
+                served.processed_request_refs.len(),
+                if served.has_stopped { "yes" } else { "no" }
             );
             Ok(())
         }
