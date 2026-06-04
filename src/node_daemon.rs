@@ -15,6 +15,8 @@ use crate::ledger;
 use crate::node_identity;
 use crate::node_runtime;
 use crate::octet_gate;
+use crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA;
@@ -241,6 +243,28 @@ pub struct NodeControlLiveServeLoopbackInput<'a> {
     pub resource_refs: &'a [String],
     pub evidence_refs: &'a [String],
     pub max_requests_per_tick: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NodeControlAuthorityGrantInput<'a> {
+    pub peer_id: &'a str,
+    pub node_id: &'a str,
+    pub operations: &'a [String],
+    pub target_scope: &'a str,
+    pub resource_scope: &'a str,
+    pub epoch: u64,
+    pub expires_at: Option<u64>,
+    pub policy_refs: &'a [String],
+    pub revocation_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AuthorityReceiptValueInput<'a> {
+    decision: &'a str,
+    envelope: &'a NodeControlIngressEnvelope,
+    grant_ref: Option<&'a str>,
+    diagnostics: &'a [String],
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -484,6 +508,95 @@ pub struct NodeControlLiveServeLoopback {
     pub envelope_ref: String,
     pub publish_receipt_ref: String,
     pub listener: NodeControlLiveServe,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlAuthorityGrant {
+    pub grant_ref: String,
+    pub peer_id: String,
+    pub node_id: String,
+    pub operations: Vec<String>,
+    pub target_scope: String,
+    pub resource_scope: String,
+    pub epoch: u64,
+    pub expires_at: Option<u64>,
+    pub policy_refs: Vec<String>,
+    pub revocation_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub value: IOValue,
+}
+
+pub fn node_control_authority_grant_value(input: &NodeControlAuthorityGrantInput<'_>) -> Result<IOValue> {
+    validate_node_id(input.peer_id)?;
+    validate_node_id(input.node_id)?;
+    validate_node_id(input.target_scope)?;
+    validate_node_id(input.resource_scope)?;
+    if input.operations.is_empty() {
+        return Err(MoltenError::invalid_harness("node control authority grant operations missing"));
+    }
+    for operation in input.operations {
+        validate_node_id(operation)?;
+    }
+    validate_ingress_refs(input.policy_refs, "node control authority grant policy ref")?;
+    validate_ingress_refs(input.revocation_refs, "node control authority grant revocation ref")?;
+    validate_ingress_refs(input.evidence_refs, "node control authority grant evidence ref")?;
+    Ok(record("node-control-authority-grant-v1", vec![
+        string(NODE_CONTROL_AUTHORITY_GRANT_SCHEMA),
+        record("peer", vec![string(input.peer_id)]),
+        record("node", vec![string(input.node_id)]),
+        record("operations", vec![sequence(input.operations.iter().map(string).collect())]),
+        record("target-scope", vec![string(input.target_scope)]),
+        record("resource-scope", vec![string(input.resource_scope)]),
+        record("epoch", vec![string(input.epoch.to_string())]),
+        record("expires-at", vec![optional_string(
+            input.expires_at.map(|value| value.to_string()).as_deref(),
+        )]),
+        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
+        record("revocations", vec![sequence(input.revocation_refs.iter().map(string).collect())]),
+        record("evidence", vec![sequence(input.evidence_refs.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("peer-node-bound"), string("pass")]),
+            record("check", vec![string("operation-scope-bound"), string("pass")]),
+            record("check", vec![string("revocation-checked-at-ingress"), string("pass")]),
+            record("check", vec![string("transport-is-not-authority"), string("pass")]),
+        ])]),
+    ]))
+}
+
+pub fn parse_node_control_authority_grant(value: &IOValue) -> Result<NodeControlAuthorityGrant> {
+    let fields = value
+        .collect_simple_record("node-control-authority-grant-v1", Some(12))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-authority-grant-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_AUTHORITY_GRANT_SCHEMA, "node control authority grant")?;
+    let operations = record_strings(&fields[3], "operations")?;
+    if operations.is_empty() {
+        return Err(MoltenError::invalid_harness("node control authority grant operations missing"));
+    }
+    Ok(NodeControlAuthorityGrant {
+        grant_ref: canonical_hash(value)?,
+        peer_id: record_string(&fields[1], "peer")?,
+        node_id: record_string(&fields[2], "node")?,
+        operations,
+        target_scope: record_string(&fields[4], "target-scope")?,
+        resource_scope: record_string(&fields[5], "resource-scope")?,
+        epoch: record_u64_string(&fields[6], "epoch")?,
+        expires_at: record_optional_u64_string(&fields[7], "expires-at")?,
+        policy_refs: record_ref_strings(&fields[8], "policy")?,
+        revocation_refs: record_ref_strings(&fields[9], "revocations")?,
+        evidence_refs: record_ref_strings(&fields[10], "evidence")?,
+        value: value.clone(),
+    })
+}
+
+pub fn import_node_control_authority_grant(
+    state_root: &Path,
+    grant_value: &IOValue,
+) -> Result<NodeControlAuthorityGrant> {
+    validate_state_root(state_root)?;
+    ensure_state_layout(state_root)?;
+    let grant = parse_node_control_authority_grant(grant_value)?;
+    import_node_artifact(state_root, grant_value)?;
+    Ok(grant)
 }
 
 pub fn init_local_node(input: &NodeDaemonInitInput<'_>) -> Result<NodeDaemonInit> {
@@ -1749,7 +1862,126 @@ fn ingress_pre_enqueue_diagnostics(
     if envelope.resource_refs.is_empty() || envelope.request.resource_refs.is_empty() {
         diagnostics.push("node control ingress resource refs missing".to_string());
     }
+    if diagnostics.is_empty() && envelope.transport == LIVE_CONTROL_INGRESS_TRANSPORT {
+        diagnostics.extend(evaluate_live_authority_delegation(state_root, envelope)?);
+    }
     Ok(diagnostics)
+}
+
+fn evaluate_live_authority_delegation(state_root: &Path, envelope: &NodeControlIngressEnvelope) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    let mut admitted_grant_ref = None;
+    let candidate_authority_refs = envelope
+        .authority_refs
+        .iter()
+        .filter(|authority_ref| envelope.request.authority_refs.contains(*authority_ref))
+        .collect::<Vec<_>>();
+    if candidate_authority_refs.is_empty() {
+        diagnostics.push("node control live authority refs are not bound to the request".to_string());
+    }
+    for authority_ref in candidate_authority_refs {
+        match read_node_ledger_artifact(state_root, authority_ref) {
+            Ok(value) => match parse_node_control_authority_grant(&value) {
+                Ok(grant) => {
+                    let grant_diagnostics = authority_grant_diagnostics(envelope, &grant);
+                    if grant_diagnostics.is_empty() {
+                        admitted_grant_ref = Some(grant.grant_ref);
+                        break;
+                    }
+                    diagnostics.extend(grant_diagnostics);
+                }
+                Err(error) => {
+                    diagnostics.push(format!("node control authority ref {authority_ref} is not a grant: {error}"))
+                }
+            },
+            Err(error) => diagnostics.push(format!("node control authority grant {authority_ref} not found: {error}")),
+        }
+    }
+    if admitted_grant_ref.is_none() {
+        diagnostics.push("node control live authority delegation missing admitted grant".to_string());
+    }
+    let decision = if admitted_grant_ref.is_some() { "pass" } else { "deny" };
+    let receipt_value = authority_receipt_value(&AuthorityReceiptValueInput {
+        decision,
+        envelope,
+        grant_ref: admitted_grant_ref.as_deref(),
+        diagnostics: &diagnostics,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    write_preserves(&control_authority_receipt_path(state_root, &envelope.envelope_ref), &receipt_value)?;
+    import_node_artifact(state_root, &receipt_value)?;
+    if decision == "deny" {
+        diagnostics.push(format!("node control authority receipt {receipt_ref} denied"));
+    }
+    Ok(diagnostics)
+}
+
+fn authority_grant_diagnostics(
+    envelope: &NodeControlIngressEnvelope,
+    grant: &NodeControlAuthorityGrant,
+) -> Vec<String> {
+    let mut diagnostics = Vec::new();
+    if grant.peer_id != envelope.from_peer {
+        diagnostics.push(format!(
+            "node control authority grant {} peer {} does not match {}",
+            grant.grant_ref, grant.peer_id, envelope.from_peer
+        ));
+    }
+    if grant.node_id != envelope.to_node {
+        diagnostics.push(format!(
+            "node control authority grant {} node {} does not match {}",
+            grant.grant_ref, grant.node_id, envelope.to_node
+        ));
+    }
+    if !grant
+        .operations
+        .iter()
+        .any(|operation| operation == "*" || operation == &envelope.request.operation)
+    {
+        diagnostics.push(format!(
+            "node control authority grant {} does not allow operation {}",
+            grant.grant_ref, envelope.request.operation
+        ));
+    }
+    if grant.epoch > envelope.sequence {
+        diagnostics
+            .push(format!("node control authority grant {} is not valid until epoch {}", grant.grant_ref, grant.epoch));
+    }
+    if let Some(expires_at) = grant.expires_at
+        && expires_at < envelope.sequence
+    {
+        diagnostics.push(format!("node control authority grant {} expired at epoch {expires_at}", grant.grant_ref));
+    }
+    if !grant.revocation_refs.is_empty() {
+        diagnostics.push(format!("node control authority grant {} has revocation refs", grant.grant_ref));
+    }
+    if !scope_matches_request(
+        &grant.target_scope,
+        envelope.request.target_ref.as_deref(),
+        envelope.request.payload_ref.as_deref(),
+    ) {
+        diagnostics.push(format!(
+            "node control authority grant {} target scope {} does not match request",
+            grant.grant_ref, grant.target_scope
+        ));
+    }
+    if !scope_matches_refs(&grant.resource_scope, &envelope.resource_refs, &envelope.request.resource_refs) {
+        diagnostics.push(format!(
+            "node control authority grant {} resource scope {} does not match request",
+            grant.grant_ref, grant.resource_scope
+        ));
+    }
+    diagnostics
+}
+
+fn scope_matches_request(scope: &str, target_ref: Option<&str>, payload_ref: Option<&str>) -> bool {
+    scope == "*" || target_ref == Some(scope) || payload_ref == Some(scope)
+}
+
+fn scope_matches_refs(scope: &str, envelope_refs: &[String], request_refs: &[String]) -> bool {
+    scope == "*"
+        || envelope_refs.iter().any(|reference| reference == scope)
+        || request_refs.iter().any(|reference| reference == scope)
 }
 
 fn ingress_idempotency_evidence_refs(envelope: &NodeControlIngressEnvelope) -> Vec<String> {
@@ -2313,6 +2545,33 @@ fn control_receipt_for_request(
     })
 }
 
+fn authority_receipt_value(input: &AuthorityReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    Ok(record("node-control-authority-receipt-v1", vec![
+        string(NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("envelope", vec![string(&input.envelope.envelope_ref)]),
+        record("request", vec![string(&input.envelope.request.request_ref)]),
+        record("from-peer", vec![string(&input.envelope.from_peer)]),
+        record("to-node", vec![string(&input.envelope.to_node)]),
+        record("operation", vec![string(&input.envelope.request.operation)]),
+        record("grant", vec![optional_string(input.grant_ref)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![
+                string("peer-node-bound"),
+                string(if input.grant_ref.is_some() { "pass" } else { "fail" }),
+            ]),
+            record("check", vec![
+                string("operation-scope-bound"),
+                string(if input.grant_ref.is_some() { "pass" } else { "fail" }),
+            ]),
+            record("check", vec![string("revocation-checked-at-ingress"), string("pass")]),
+            record("check", vec![string("transport-is-not-authority"), string("pass")]),
+        ])]),
+    ]))
+}
+
 fn live_listener_receipt_value(input: &ListenerReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     Ok(record("node-control-live-listener-receipt-v1", vec![
@@ -2500,6 +2759,14 @@ fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IOValue
                 string(if has_authority { "pass" } else { "fail" }),
             ]),
             record("check", vec![
+                string("authority-delegation-before-enqueue"),
+                string(if input.envelope.transport != LIVE_CONTROL_INGRESS_TRANSPORT || input.decision == "pass" {
+                    "pass"
+                } else {
+                    "fail"
+                }),
+            ]),
+            record("check", vec![
                 string("policy-before-enqueue"),
                 string(if has_policy { "pass" } else { "fail" }),
             ]),
@@ -2636,6 +2903,25 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_string(&fields[2], "phase")?,
             record_string(&fields[8], "envelope")?,
             record_string(&fields[10], "request")?
+        ));
+    }
+    if let Ok(grant) = parse_node_control_authority_grant(value) {
+        return Ok(format!(
+            "node control authority grant ref={} peer={} node={} operations={}",
+            grant.grant_ref,
+            grant.peer_id,
+            grant.node_id,
+            grant.operations.join(",")
+        ));
+    }
+    if let Some(fields) = value.collect_simple_record("node-control-authority-receipt-v1", Some(10)) {
+        require_schema(&fields[0], NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA, "node control authority receipt")?;
+        return Ok(format!(
+            "node control authority decision={} envelope={} operation={} grant={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[2], "envelope")?,
+            record_string(&fields[6], "operation")?,
+            record_optional_string(&fields[7], "grant")?.unwrap_or_else(|| "none".to_string())
         ));
     }
     if let Some(fields) = value.collect_simple_record("node-control-live-listener-receipt-v1", Some(14)) {
@@ -2936,6 +3222,13 @@ fn control_live_listener_receipt_path(state_root: &Path, listener_ref: &str) -> 
         .join(format!("{}.live-listener-receipt.preserves", ref_file_stem(listener_ref)))
 }
 
+fn control_authority_receipt_path(state_root: &Path, envelope_ref: &str) -> PathBuf {
+    state_root
+        .join(CONTROL_INGRESS_DIR)
+        .join("receipts")
+        .join(format!("{}.authority-receipt.preserves", ref_file_stem(envelope_ref)))
+}
+
 fn ref_file_stem(value_ref: &str) -> String {
     value_ref.replace(':', "-")
 }
@@ -2945,6 +3238,25 @@ fn optional_string(value: Option<&str>) -> IOValue {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
     }
+}
+
+fn record_strings(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Vec<String>> {
+    let record_value = crate::preserves_rail::value_to_iovalue(value);
+    let fields = record_value
+        .collect_simple_record(tag, Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{tag} [...]>")))?;
+    let items = fields[0]
+        .collect_sequence()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} must contain a sequence")))?;
+    let mut values = Vec::with_capacity(items.len());
+    for item in items.iter() {
+        let item = item
+            .as_string()
+            .map(|value| value.into_owned())
+            .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} sequence contains non-string")))?;
+        values.push(item);
+    }
+    Ok(values)
 }
 
 fn record_optional_string(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Option<String>> {
@@ -2964,6 +3276,15 @@ fn record_optional_string(value: &preserves::Value<preserves::IOValue>, tag: &st
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} <some> must contain a string")))?;
     Ok(Some(value))
+}
+
+fn record_optional_u64_string(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Option<u64>> {
+    match record_optional_string(value, tag)? {
+        Some(value) => value.parse::<u64>().map(Some).map_err(|_| {
+            MoltenError::invalid_harness(format!("{tag} optional value must contain an unsigned integer string"))
+        }),
+        None => Ok(None),
+    }
 }
 
 fn validate_decision(decision: &str) -> Result<()> {
@@ -3166,6 +3487,31 @@ fn control_request(operation: &str) -> Result<node_runtime::NodeControlRequest> 
         evidence_refs: &[],
     })?;
     node_runtime::parse_node_control_request(&value)
+}
+
+#[cfg(test)]
+fn test_live_authority_refs(
+    state_root: &Path,
+    peer_id: &str,
+    node_id: &str,
+    operation: &str,
+    policy_refs: &[String],
+) -> Result<Vec<String>> {
+    let operations = vec![operation.to_string()];
+    let grant_value = node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
+        peer_id,
+        node_id,
+        operations: &operations,
+        target_scope: "*",
+        resource_scope: "*",
+        epoch: 1,
+        expires_at: None,
+        policy_refs,
+        revocation_refs: &[],
+        evidence_refs: &[],
+    })?;
+    let grant = import_node_control_authority_grant(state_root, &grant_value)?;
+    Ok(vec![grant.grant_ref])
 }
 
 fn index_receipt_refs(state_root: &Path) -> Result<Vec<String>> {
@@ -3792,6 +4138,201 @@ mod tests {
         assert!(next_pending_control_request(&root).expect("pending request scan").is_none());
     }
 
+    #[test]
+    fn node_control_live_authority_delegation_fails_closed() {
+        struct Case<'a> {
+            name: &'a str,
+            grant_peer: Option<&'a str>,
+            grant_node: &'a str,
+            grant_operations: &'a [&'a str],
+            target_ref: Option<&'a str>,
+            target_scope: &'a str,
+            resource_scope: &'a str,
+            epoch: u64,
+            expires_at: Option<u64>,
+            revoked: bool,
+            sequence: u64,
+            expected: &'a str,
+        }
+        let cases = [
+            Case {
+                name: "unknown-grant",
+                grant_peer: None,
+                grant_node: "node:live-authority",
+                grant_operations: &["status"],
+                target_ref: None,
+                target_scope: "*",
+                resource_scope: "*",
+                epoch: 1,
+                expires_at: None,
+                revoked: false,
+                sequence: 1,
+                expected: "not found",
+            },
+            Case {
+                name: "wrong-peer",
+                grant_peer: Some("peer:other"),
+                grant_node: "node:live-authority",
+                grant_operations: &["status"],
+                target_ref: None,
+                target_scope: "*",
+                resource_scope: "*",
+                epoch: 1,
+                expires_at: None,
+                revoked: false,
+                sequence: 1,
+                expected: "does not match peer:case",
+            },
+            Case {
+                name: "wrong-op",
+                grant_peer: Some("peer:case"),
+                grant_node: "node:live-authority",
+                grant_operations: &["shutdown"],
+                target_ref: None,
+                target_scope: "*",
+                resource_scope: "*",
+                epoch: 1,
+                expires_at: None,
+                revoked: false,
+                sequence: 1,
+                expected: "does not allow operation status",
+            },
+            Case {
+                name: "wrong-target",
+                grant_peer: Some("peer:case"),
+                grant_node: "node:live-authority",
+                grant_operations: &["status"],
+                target_ref: Some("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+                target_scope: "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                resource_scope: "*",
+                epoch: 1,
+                expires_at: None,
+                revoked: false,
+                sequence: 1,
+                expected: "target scope",
+            },
+            Case {
+                name: "wrong-resource",
+                grant_peer: Some("peer:case"),
+                grant_node: "node:live-authority",
+                grant_operations: &["status"],
+                target_ref: None,
+                target_scope: "*",
+                resource_scope: "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                epoch: 1,
+                expires_at: None,
+                revoked: false,
+                sequence: 1,
+                expected: "resource scope",
+            },
+            Case {
+                name: "expired",
+                grant_peer: Some("peer:case"),
+                grant_node: "node:live-authority",
+                grant_operations: &["status"],
+                target_ref: None,
+                target_scope: "*",
+                resource_scope: "*",
+                epoch: 1,
+                expires_at: Some(1),
+                revoked: false,
+                sequence: 2,
+                expected: "expired at epoch 1",
+            },
+            Case {
+                name: "revoked",
+                grant_peer: Some("peer:case"),
+                grant_node: "node:live-authority",
+                grant_operations: &["status"],
+                target_ref: None,
+                target_scope: "*",
+                resource_scope: "*",
+                epoch: 1,
+                expires_at: None,
+                revoked: true,
+                sequence: 1,
+                expected: "has revocation refs",
+            },
+        ];
+        for case in cases {
+            let root = temp_dir(&format!("node-control-live-authority-{}", case.name));
+            init_local_node(&NodeDaemonInitInput {
+                state_root: &root,
+                node_id: "node:live-authority",
+            })
+            .expect("init node");
+            run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+            let policy_refs = vec![local_ref("node-control-policy", case.name).expect("policy ref")];
+            let resource_refs = vec![local_ref("node-control-resource", case.name).expect("resource ref")];
+            let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:case").expect("bootstrap ref")];
+            let authority_refs = if let Some(grant_peer) = case.grant_peer {
+                let operations =
+                    case.grant_operations.iter().map(|operation| (*operation).to_string()).collect::<Vec<_>>();
+                let revocation_refs = if case.revoked {
+                    vec![local_ref("node-control-revocation", case.name).expect("revocation ref")]
+                } else {
+                    Vec::new()
+                };
+                let grant_value = node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
+                    peer_id: grant_peer,
+                    node_id: case.grant_node,
+                    operations: &operations,
+                    target_scope: case.target_scope,
+                    resource_scope: case.resource_scope,
+                    epoch: case.epoch,
+                    expires_at: case.expires_at,
+                    policy_refs: &policy_refs,
+                    revocation_refs: &revocation_refs,
+                    evidence_refs: &[],
+                })
+                .expect("authority grant value");
+                vec![
+                    import_node_control_authority_grant(&root, &grant_value).expect("import authority grant").grant_ref,
+                ]
+            } else {
+                vec![local_ref("node-control-authority", case.name).expect("authority ref")]
+            };
+            let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: case.target_ref,
+                payload_ref: None,
+                authority_refs: &authority_refs,
+                policy_refs: &policy_refs,
+                resource_refs: &resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("status request");
+            let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+                request_value: &request_value,
+                from_peer: "peer:case",
+                to_node: "node:live-authority",
+                topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+                sequence: case.sequence,
+                peer_bootstrap_refs: &peer_bootstrap_refs,
+                authority_refs: &authority_refs,
+                policy_refs: &policy_refs,
+                resource_refs: &resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("live envelope");
+            publish_node_control_ingress(&NodeControlIngressPublishInput {
+                state_root: &root,
+                envelope_value: &envelope.value,
+            })
+            .expect("publish live envelope");
+            let delivered = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
+                state_root: &root,
+                topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+                envelope_ref: &envelope.envelope_ref,
+            })
+            .expect("deliver live envelope");
+            assert!(!delivered.has_enqueued, "{} enqueued", case.name);
+            let receipt_text = to_text(&delivered.ingress_receipt_value).expect("receipt text");
+            assert!(receipt_text.contains(case.expected), "{} receipt: {receipt_text}", case.name);
+            assert!(next_pending_control_request(&root).expect("pending request scan").is_none());
+        }
+    }
+
     #[tokio::test]
     async fn node_control_live_serve_listener_loopback_dispatches_through_service() {
         let root = temp_dir("node-control-live-listener");
@@ -3801,8 +4342,10 @@ mod tests {
         })
         .expect("init node");
         run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-        let authority_refs = vec![local_ref("node-control-authority", "live-listener").expect("authority ref")];
         let policy_refs = vec![local_ref("node-control-policy", "live-listener").expect("policy ref")];
+        let authority_refs =
+            test_live_authority_refs(&root, "peer:listener", "node:live-listener", "status", &policy_refs)
+                .expect("authority grant ref");
         let resource_refs = vec![local_ref("node-control-resource", "live-listener").expect("resource ref")];
         let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:listener").expect("bootstrap ref")];
         let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
@@ -3851,8 +4394,9 @@ mod tests {
         })
         .expect("init node");
         run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-        let authority_refs = vec![local_ref("node-control-authority", "live-ingress").expect("authority ref")];
         let policy_refs = vec![local_ref("node-control-policy", "live-ingress").expect("policy ref")];
+        let authority_refs = test_live_authority_refs(&root, "peer:live", "node:live-ingress", "status", &policy_refs)
+            .expect("authority grant ref");
         let resource_refs = vec![local_ref("node-control-resource", "live-ingress").expect("resource ref")];
         let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:live").expect("bootstrap ref")];
         let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {

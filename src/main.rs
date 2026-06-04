@@ -510,6 +510,32 @@ enum NodeCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    AuthorityGrantFixture {
+        #[arg(long)]
+        state_root: Option<PathBuf>,
+        #[arg(long)]
+        peer: String,
+        #[arg(long)]
+        node: String,
+        #[arg(long = "operation")]
+        operations: Vec<String>,
+        #[arg(long, default_value = "*")]
+        target_scope: String,
+        #[arg(long, default_value = "*")]
+        resource_scope: String,
+        #[arg(long, default_value_t = 1)]
+        epoch: u64,
+        #[arg(long)]
+        expires_at: Option<u64>,
+        #[arg(long = "policy")]
+        policy_refs: Vec<String>,
+        #[arg(long = "revocation")]
+        revocation_refs: Vec<String>,
+        #[arg(long = "evidence")]
+        evidence_refs: Vec<String>,
+        #[arg(long)]
+        out: PathBuf,
+    },
     ControlSubmit {
         #[arg(long)]
         state_root: PathBuf,
@@ -5258,6 +5284,46 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             let value = provenance::synthetic_reviewed_provenance_record(&artifact_ref)?;
             write_file(&out, &to_text(&value)?)?;
             println!("node provenance fixture {} written to {}", canonical_hash(&value)?, out.display());
+            Ok(())
+        }
+        NodeCommand::AuthorityGrantFixture {
+            state_root,
+            peer,
+            node,
+            operations,
+            target_scope,
+            resource_scope,
+            epoch,
+            expires_at,
+            policy_refs,
+            revocation_refs,
+            evidence_refs,
+            out,
+        } => {
+            let operations = if operations.is_empty() {
+                vec!["status".to_string()]
+            } else {
+                operations
+            };
+            let value =
+                node_daemon::node_control_authority_grant_value(&node_daemon::NodeControlAuthorityGrantInput {
+                    peer_id: &peer,
+                    node_id: &node,
+                    operations: &operations,
+                    target_scope: &target_scope,
+                    resource_scope: &resource_scope,
+                    epoch,
+                    expires_at,
+                    policy_refs: &policy_refs,
+                    revocation_refs: &revocation_refs,
+                    evidence_refs: &evidence_refs,
+                })?;
+            let grant_ref = canonical_hash(&value)?;
+            write_file(&out, &to_text(&value)?)?;
+            if let Some(state_root) = state_root.as_ref() {
+                node_daemon::import_node_control_authority_grant(state_root, &value)?;
+            }
+            println!("node authority grant {} written to {}", grant_ref, out.display());
             Ok(())
         }
         NodeCommand::ControlSubmit {

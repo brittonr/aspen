@@ -559,7 +559,7 @@ fn cli_node_live_ingress_loopback_enqueues_request() -> CliResult<()> {
     let request = dir.join("status.preserves");
     let publish_receipt = dir.join("publish.preserves");
     let receive_receipt = dir.join("receive.preserves");
-    let authority_ref = test_ref("live-authority")?;
+    let authority_grant = dir.join("authority-grant.preserves");
     let policy_ref = test_ref("live-policy")?;
     let resource_ref = test_ref("live-resource")?;
     let bootstrap_ref = test_ref("live-bootstrap")?;
@@ -576,6 +576,26 @@ fn cli_node_live_ingress_loopback_enqueues_request() -> CliResult<()> {
         &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
         "node live run",
     );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "authority-grant-fixture", "--state-root"])
+            .arg(&state_root)
+            .args([
+                "--peer",
+                "peer:cli-live",
+                "--node",
+                "node:cli-live",
+                "--operation",
+                "status",
+                "--policy",
+            ])
+            .arg(&policy_ref)
+            .args(["--out"])
+            .arg(&authority_grant)
+            .output()?,
+        "node live authority grant",
+    );
+    let authority_ref = molten::preserves_rail::canonical_hash(&read_preserves(&authority_grant)?)?;
     assert_success(
         &molten_cmd()
             .args([
