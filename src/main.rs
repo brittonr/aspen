@@ -60,6 +60,7 @@ use molten::preserves_rail::record;
 use molten::preserves_rail::string;
 use molten::preserves_rail::to_text;
 use molten::protocol_session;
+use molten::provenance;
 use molten::raft_control_plane;
 use molten::remote_dataspace;
 use molten::rewrites;
@@ -436,6 +437,16 @@ enum NodeCommand {
         #[arg(long)]
         startup_out: Option<PathBuf>,
     },
+    RunLoop {
+        #[arg(long)]
+        state_root: PathBuf,
+        #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_LOOP_REQUESTS)]
+        max_requests: u64,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+        #[arg(long)]
+        heartbeat_out: Option<PathBuf>,
+    },
     Status {
         #[arg(long)]
         state_root: PathBuf,
@@ -470,6 +481,14 @@ enum NodeCommand {
         policy_refs: Vec<String>,
         #[arg(long = "resource")]
         resource_refs: Vec<String>,
+        #[arg(long = "evidence")]
+        evidence_refs: Vec<String>,
+    },
+    ProvenanceFixture {
+        #[arg(long)]
+        artifact_ref: String,
+        #[arg(long)]
+        out: PathBuf,
     },
     ControlSubmit {
         #[arg(long)]
@@ -4974,6 +4993,29 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             );
             Ok(())
         }
+        NodeCommand::RunLoop {
+            state_root,
+            max_requests,
+            receipt_out,
+            heartbeat_out,
+        } => {
+            let loop_run = node_daemon::run_control_loop(&node_daemon::NodeControlLoopInput {
+                state_root: &state_root,
+                max_requests,
+            })?;
+            if let Some(path) = heartbeat_out.as_ref() {
+                write_file(path, &to_text(&loop_run.heartbeat_receipt_value)?)?;
+            }
+            emit_named_receipt(receipt_out.as_ref(), "node control loop receipt", &loop_run.loop_receipt_value)?;
+            println!(
+                "node run-loop loop_receipt={} heartbeat={} processed={} stopped={}",
+                loop_run.loop_receipt_ref,
+                loop_run.heartbeat_receipt_ref,
+                loop_run.processed_request_refs.len(),
+                if loop_run.has_stopped { "yes" } else { "no" }
+            );
+            Ok(())
+        }
         NodeCommand::Status {
             state_root,
             health_out,
@@ -5020,6 +5062,7 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             authority_refs,
             policy_refs,
             resource_refs,
+            evidence_refs,
         } => {
             let value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
                 operation: &operation,
@@ -5028,9 +5071,16 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 authority_refs: &authority_refs,
                 policy_refs: &policy_refs,
                 resource_refs: &resource_refs,
+                evidence_refs: &evidence_refs,
             })?;
             write_file(&out, &to_text(&value)?)?;
             println!("node control request {} written to {}", canonical_hash(&value)?, out.display());
+            Ok(())
+        }
+        NodeCommand::ProvenanceFixture { artifact_ref, out } => {
+            let value = provenance::synthetic_reviewed_provenance_record(&artifact_ref)?;
+            write_file(&out, &to_text(&value)?)?;
+            println!("node provenance fixture {} written to {}", canonical_hash(&value)?, out.display());
             Ok(())
         }
         NodeCommand::ControlSubmit {
@@ -7274,7 +7324,49 @@ mod tests {
         .expect("test ref")
     }
 
+    fn cleanup_stale_molten_temp_dirs() {
+        static CLEAN_STALE_TEMP_DIRS: std::sync::Once = std::sync::Once::new();
+        CLEAN_STALE_TEMP_DIRS.call_once(|| {
+            let Ok(entries) = fs::read_dir(std::env::temp_dir()) else {
+                return;
+            };
+            for entry_result in entries {
+                let Ok(entry) = entry_result else {
+                    continue;
+                };
+                let Ok(file_type) = entry.file_type() else {
+                    continue;
+                };
+                if file_type.is_dir() {
+                    let file_name = entry.file_name();
+                    let Some(name) = file_name.to_str() else {
+                        continue;
+                    };
+                    if is_stale_molten_temp_dir(name) {
+                        let remove_result = fs::remove_dir_all(entry.path());
+                        if remove_result.is_err() {
+                            continue;
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    fn is_stale_molten_temp_dir(name: &str) -> bool {
+        name.starts_with("molten-") && live_process_token_count(name) == 0
+    }
+
+    fn live_process_token_count(name: &str) -> usize {
+        let current_pid = u64::from(std::process::id());
+        name.split('-')
+            .filter_map(|token| token.parse::<u64>().ok())
+            .filter(|pid| *pid == current_pid || std::path::Path::new("/proc").join(pid.to_string()).exists())
+            .count()
+    }
+
     fn temp_dir(label: &str) -> PathBuf {
+        cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{label}-{}-{nonce}", std::process::id()));

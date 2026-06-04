@@ -302,7 +302,7 @@ fn cli_node_init_run_status_and_stop_write_receipts() -> CliResult<()> {
     let shutdown_request = dir.join("node-socket-shutdown-request.preserves");
     let shutdown_queue = dir.join("node-socket-shutdown-queue.preserves");
     let shutdown = state_root.join("shutdown-receipt.preserves");
-    let stop_receipt = dir.join("node-stop-control.preserves");
+    let loop_receipt = dir.join("node-control-loop.preserves");
 
     let init = molten_cmd()
         .args(["node", "init", "--state-root"])
@@ -387,14 +387,14 @@ fn cli_node_init_run_status_and_stop_write_receipts() -> CliResult<()> {
         .output()?;
     assert_success(&shutdown_submit, "node socket shutdown submit");
     let stop = molten_cmd()
-        .args(["node", "control-dispatch", "--state-root"])
+        .args(["node", "run-loop", "--state-root"])
         .arg(&state_root)
-        .args(["--receipt-out"])
-        .arg(&stop_receipt)
+        .args(["--max-requests", "4", "--receipt-out"])
+        .arg(&loop_receipt)
         .output()?;
-    assert_success(&stop, "node socket shutdown dispatch");
+    assert_success(&stop, "node socket shutdown loop");
     assert_eq!(molten::ledger::artifact_kind(&read_preserves(&shutdown)?), "node-shutdown-receipt");
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&stop_receipt)?), "node-control-receipt");
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&loop_receipt)?), "node-control-loop-receipt");
 
     let stopped = molten_cmd().args(["node", "status", "--state-root"]).arg(&state_root).output()?;
     assert_success(&stopped, "node stopped status");
@@ -407,8 +407,18 @@ fn cli_node_control_request_and_deny_receipt_work() -> CliResult<()> {
     let dir = temp_dir("cli-node-control")?;
     let request = dir.join("node-control-request.preserves");
     let receipt = dir.join("node-control-receipt.preserves");
+    let provenance = dir.join("node-control-provenance.preserves");
     let payload_ref = test_ref("node-control-payload")?;
     let startup_ref = test_ref("node-startup")?;
+
+    let provenance_out = molten_cmd()
+        .args(["test", "node", "provenance-fixture", "--artifact-ref"])
+        .arg(&payload_ref)
+        .args(["--out"])
+        .arg(&provenance)
+        .output()?;
+    assert_success(&provenance_out, "node provenance fixture");
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&provenance)?), "provenance-record");
 
     let request_out = molten_cmd()
         .args(["test", "node", "control-request", "--operation", "gate", "--payload"])
@@ -604,7 +614,49 @@ fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
+fn cleanup_stale_molten_temp_dirs() {
+    static CLEAN_STALE_TEMP_DIRS: std::sync::Once = std::sync::Once::new();
+    CLEAN_STALE_TEMP_DIRS.call_once(|| {
+        let Ok(entries) = fs::read_dir(std::env::temp_dir()) else {
+            return;
+        };
+        for entry_result in entries {
+            let Ok(entry) = entry_result else {
+                continue;
+            };
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if file_type.is_dir() {
+                let file_name = entry.file_name();
+                let Some(name) = file_name.to_str() else {
+                    continue;
+                };
+                if is_stale_molten_temp_dir(name) {
+                    let remove_result = fs::remove_dir_all(entry.path());
+                    if remove_result.is_err() {
+                        continue;
+                    }
+                }
+            }
+        }
+    });
+}
+
+fn is_stale_molten_temp_dir(name: &str) -> bool {
+    name.starts_with("molten-") && live_process_token_count(name) == 0
+}
+
+fn live_process_token_count(name: &str) -> usize {
+    let current_pid = u64::from(std::process::id());
+    name.split('-')
+        .filter_map(|token| token.parse::<u64>().ok())
+        .filter(|pid| *pid == current_pid || std::path::Path::new("/proc").join(pid.to_string()).exists())
+        .count()
+}
+
 fn temp_dir(label: &str) -> CliResult<PathBuf> {
+    cleanup_stale_molten_temp_dirs();
     let nonce = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let dir = std::env::temp_dir().join(format!("molten-{label}-{}-{nonce}", std::process::id()));
     if dir.exists() {

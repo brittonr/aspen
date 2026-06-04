@@ -2826,6 +2826,7 @@ mod tests {
     }
 
     fn temp_dir(label: &str) -> PathBuf {
+        crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
         let nanos = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-octet-gate-{label}-{}-{nanos}", std::process::id()));

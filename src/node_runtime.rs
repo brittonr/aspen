@@ -85,6 +85,7 @@ pub struct ControlRequestValueInput<'a> {
     pub authority_refs: &'a [String],
     pub policy_refs: &'a [String],
     pub resource_refs: &'a [String],
+    pub evidence_refs: &'a [String],
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -149,6 +150,7 @@ pub struct NodeControlRequest {
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub resource_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
     pub value: IOValue,
 }
 
@@ -559,6 +561,38 @@ pub fn node_control_request_value(input: &ControlRequestValueInput<'_>) -> Resul
     validate_refs(input.authority_refs, "node control authority ref")?;
     validate_refs(input.policy_refs, "node control policy ref")?;
     validate_refs(input.resource_refs, "node control resource ref")?;
+    validate_refs(input.evidence_refs, "node control evidence ref")?;
+    Ok(record("node-control-request-v1", vec![
+        string(NODE_CONTROL_REQUEST_SCHEMA),
+        record("operation", vec![string(input.operation)]),
+        record("target", vec![optional_ref_value(input.target_ref)]),
+        record("payload", vec![optional_ref_value(input.payload_ref)]),
+        record("authority", vec![refs_sequence(input.authority_refs)]),
+        record("policy", vec![refs_sequence(input.policy_refs)]),
+        record("resource", vec![refs_sequence(input.resource_refs)]),
+        record("evidence", vec![refs_sequence(input.evidence_refs)]),
+        record("control-profile", vec![string("local-preserves-control-v1")]),
+        checks_value(&[
+            ("local-only-control", "pass"),
+            ("preserves-control-surface", "pass"),
+            ("authority-refs-explicit", status(!input.authority_refs.is_empty())),
+            ("resource-refs-explicit", status(!input.resource_refs.is_empty())),
+            ("evidence-refs-canonical", "pass"),
+        ]),
+    ]))
+}
+
+pub fn legacy_node_control_request_value(input: &ControlRequestValueInput<'_>) -> Result<IOValue> {
+    validate_control_operation(input.operation)?;
+    if let Some(target_ref) = input.target_ref {
+        validate_ref(target_ref, "node control target ref")?;
+    }
+    if let Some(payload_ref) = input.payload_ref {
+        validate_ref(payload_ref, "node control payload ref")?;
+    }
+    validate_refs(input.authority_refs, "node control authority ref")?;
+    validate_refs(input.policy_refs, "node control policy ref")?;
+    validate_refs(input.resource_refs, "node control resource ref")?;
     Ok(record("node-control-request-v1", vec![
         string(NODE_CONTROL_REQUEST_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -578,6 +612,22 @@ pub fn node_control_request_value(input: &ControlRequestValueInput<'_>) -> Resul
 }
 
 pub fn parse_node_control_request(value: &IOValue) -> Result<NodeControlRequest> {
+    if let Some(fields) = value.collect_simple_record("node-control-request-v1", Some(10)) {
+        require_schema(&fields[0], NODE_CONTROL_REQUEST_SCHEMA, "node control request")?;
+        let operation = record_string(&fields[1], "operation")?;
+        validate_control_operation(&operation)?;
+        return Ok(NodeControlRequest {
+            request_ref: canonical_hash(value)?,
+            operation,
+            target_ref: record_optional_ref(&fields[2], "target")?,
+            payload_ref: record_optional_ref(&fields[3], "payload")?,
+            authority_refs: record_ref_sequence(&fields[4], "authority")?,
+            policy_refs: record_ref_sequence(&fields[5], "policy")?,
+            resource_refs: record_ref_sequence(&fields[6], "resource")?,
+            evidence_refs: record_ref_sequence(&fields[7], "evidence")?,
+            value: value.clone(),
+        });
+    }
     let fields = value
         .collect_simple_record("node-control-request-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-request-v1 ...>"))?;
@@ -592,6 +642,7 @@ pub fn parse_node_control_request(value: &IOValue) -> Result<NodeControlRequest>
         authority_refs: record_ref_sequence(&fields[4], "authority")?,
         policy_refs: record_ref_sequence(&fields[5], "policy")?,
         resource_refs: record_ref_sequence(&fields[6], "resource")?,
+        evidence_refs: Vec::new(),
         value: value.clone(),
     })
 }
@@ -1291,6 +1342,7 @@ mod tests {
             authority_refs: &authority_refs,
             policy_refs: &policy_refs,
             resource_refs: &resource_refs,
+            evidence_refs: &[],
         })
         .expect("control request");
         let request = parse_node_control_request(&request_value).expect("parse control request");
@@ -1327,6 +1379,7 @@ mod tests {
             authority_refs: &[],
             policy_refs: &[],
             resource_refs: &[],
+            evidence_refs: &[],
         })
         .expect("request");
         let request = parse_node_control_request(&request_value).expect("parse request");

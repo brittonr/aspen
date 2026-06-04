@@ -27,6 +27,7 @@ pub mod peer_bootstrap;
 pub mod plugin_host;
 pub mod preserves_rail;
 pub mod protocol_session;
+pub mod provenance;
 pub mod raft_control_plane;
 pub mod remote_dataspace;
 pub mod resources;
@@ -40,6 +41,9 @@ pub mod service_supervision;
 pub mod transcripts;
 pub mod typed_storage;
 pub mod upgrades;
+
+#[cfg(test)]
+pub(crate) mod test_support;
 
 pub use error::MoltenError;
 pub use error::Result;

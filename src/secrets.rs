@@ -1698,6 +1698,7 @@ mod tests {
     use crate::preserves_rail::parse_text;
 
     fn temp_dir(label: &str) -> std::path::PathBuf {
+        crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let id = TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!("molten-{label}-{id}"));

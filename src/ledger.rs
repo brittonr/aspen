@@ -300,6 +300,8 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("node-control-lock-v1", "node-control-lock"),
     ("node-control-queue-receipt-v1", "node-control-queue-receipt"),
     ("node-control-operation-receipt-v1", "node-control-operation-receipt"),
+    ("node-control-heartbeat-receipt-v1", "node-control-heartbeat-receipt"),
+    ("node-control-loop-receipt-v1", "node-control-loop-receipt"),
     ("node-health-receipt-v1", "node-health-receipt"),
     ("node-shutdown-receipt-v1", "node-shutdown-receipt"),
     ("operator-workflow-v1", "operator-workflow"),
@@ -339,6 +341,8 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("peer-handshake-v1", "peer-handshake"),
     ("peer-agreement-v1", "peer-agreement"),
     ("peer-bootstrap-receipt-v1", "peer-bootstrap-receipt"),
+    ("provenance-record-v1", "provenance-record"),
+    ("provenance-receipt-v1", "provenance-receipt"),
     ("authority-identity-v1", "authority-identity"),
     ("authority-context-v1", "authority-context"),
     ("authority-revocation-v1", "authority-revocation"),
@@ -502,6 +506,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
+        crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));

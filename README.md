@@ -80,6 +80,7 @@ Current Cairn roadmap changes live under `cairn/changes/`:
 - `molten-node-runtime-daemon`
 - `node-control-socket-runtime`
 - `node-control-operation-dispatch`
+- `node-control-daemon-loop`
 - `sam-service-supervision-runtime`
 - `sam-service-records-ledger`
 - `sam-service-demand-runtime`
@@ -102,15 +103,18 @@ molten node init --state-root target/node --node-id node:local
 molten node run --state-root target/node
 molten node control-request --operation status --out target/node.status-request.preserves \
   --authority blake3:authority --policy blake3:policy --resource blake3:resource
+molten node provenance-fixture --artifact-ref blake3:payload --out target/node.payload-provenance.preserves
 molten node control-submit --state-root target/node target/node.status-request.preserves \
   --receipt-out target/node.status-queue.preserves
+molten node run-loop --state-root target/node --max-requests 8 \
+  --receipt-out target/node.control-loop.preserves
 molten node control-dispatch --state-root target/node --receipt-out target/node.status-dispatch.preserves
 molten node status --state-root target/node --health-out target/node.health.preserves
 molten node stop --state-root target/node --shutdown-out target/node.shutdown.preserves
 molten node show target/node/startup-receipt.preserves
 ```
 
-`init` writes canonical `node-config-v1` and node identity receipts under the explicit state root. `run` validates the source gate, starts required adapters in deterministic dependency order, writes an active startup-bound node lock, and emits `node-startup-receipt-v1` plus adapter receipts. `control-submit` persists canonical requests in the explicit state-root inbox and writes queue receipts; `control-dispatch` requires the active lock, emits dispatch receipts, routes `status`/`shutdown`, and dispatches side-effecting `install`/`run`/`gate` operations through ledger-resolved payloads before importing operation subreceipts into the node ledger. `install` writes node-control artifacts into the node registry, `run` executes a node-local job execution request with its matching admission receipt, and `gate` validates strict Octet source-gate evidence for the target subject. Missing authority, policy, resource, operation-required target/payload, or ledger evidence fails closed before operation side effects. `status` and `stop` are convenience paths over local Preserves control requests whose rendered text is non-normative; the canonical evidence is the emitted queue/control/health/shutdown receipts imported into the node ledger.
+`init` writes canonical `node-config-v1` and node identity receipts under the explicit state root. `run` validates the source gate, starts required adapters in deterministic dependency order, writes an active startup-bound node lock, and emits `node-startup-receipt-v1` plus adapter receipts. `control-submit` persists canonical requests in the explicit state-root inbox and writes queue receipts; `control-dispatch` requires the active lock, emits dispatch receipts, routes `status`/`shutdown`, and dispatches side-effecting `install`/`run`/`gate` operations through ledger-resolved payloads before importing operation subreceipts into the node ledger. `control-request` accepts explicit `--evidence` refs, and `provenance-fixture` emits a synthetic reviewed `provenance-record-v1` for local tests. `run-loop` drains the inbox in deterministic path order up to `--max-requests`, emits heartbeat and loop receipts, returns prior receipts for duplicate request refs, and stops after a passing shutdown dispatch removes the active lock. `install` writes node-control artifacts into the node registry only after reviewed/reproducible/policy-trusted provenance for the payload ref passes; `run` executes a node-local job execution request only after admitted provenance for the job ref passes; and `gate` validates strict Octet source-gate evidence for the target subject. Missing authority, policy, resource, provenance, operation-required target/payload, or ledger evidence fails closed before operation side effects. `status` and `stop` are convenience paths over local Preserves control requests whose rendered text is non-normative; the canonical evidence is the emitted queue/control/health/shutdown/provenance receipts imported into the node ledger.
 
 ## Development
 
@@ -149,7 +153,7 @@ cargo octet object corpus receipt \
   src/coordination.rs src/delivery_idempotency.rs src/job_dag.rs \
   src/main.rs src/node_daemon.rs src/node_runtime.rs src/octet_gate.rs \
   src/operator_dogfood.rs \
-  src/plugin_host.rs src/raft_control_plane.rs src/remote_dataspace.rs \
+  src/plugin_host.rs src/provenance.rs src/raft_control_plane.rs src/remote_dataspace.rs \
   src/secrets.rs src/transcripts.rs
 cargo run -- test octet artifacts import \
   --artifacts target/octet \
@@ -172,7 +176,7 @@ cargo run --manifest-path /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615
   --strict
 ```
 
-The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 1300 objects (`b3:bf351b8fbbbf78e58a3ebd2ee3f6a01c99b168642e4ef534e396494728ae6ef9`); latest artifact import receipt is `blake3:ba33bea0f057cfb2ae288f65f02fd614401b49a8432fda1496bdbf4276dd1976`, latest strict pass receipt is `blake3:d6ffe9b38d25ed0dfd568db98c99081989d04121d3671174f2303392a05b5b7f`, and latest remediation plan receipt is `blake3:6185fb05fbe50248bdabaeb979f38b85504358cfa09f9a7e973c1623112894b7`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
+The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 1338 objects (`b3:0fb63563911d4ad22d5476ed31337453c44d506f99b9ceeadeee962ac945c45a`); latest artifact import receipt is `blake3:4616b7ec0499aa384c7da2634ebfdad8e3e29c0e4be5b756ff45936a97be2eab`, latest strict pass receipt is `blake3:703d7c66589dfe020db841a78f98e294251d14ae850a1e784695d0811a5889cf`, and latest remediation plan receipt is `blake3:b0e644bfc5c812950666eaefecc8eb38f7bb0bc8a65a2c648e1249184259cd7f`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
 
 ```sh
 cargo run -- test octet baseline write \

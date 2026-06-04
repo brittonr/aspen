@@ -12,7 +12,9 @@ use crate::ledger;
 use crate::node_identity;
 use crate::node_runtime;
 use crate::octet_gate;
+use crate::preserves_rail::NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LOOP_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_OPERATION_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
@@ -21,6 +23,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::to_text;
+use crate::provenance;
 
 const CONFIG_FILE: &str = "config.preserves";
 const STARTUP_FILE: &str = "startup-receipt.preserves";
@@ -34,8 +37,13 @@ const CONTROL_LOCK_FILE: &str = "control/node.lock.preserves";
 const IDENTITY_RECEIPT_FILE: &str = "identity-receipt.preserves";
 const IDENTITY_FILE: &str = "identity.preserves";
 const MAX_PENDING_CONTROL_REQUESTS: usize = 1024;
+const MAX_CONTROL_LOOP_REQUESTS: u64 = 1024;
+pub const DEFAULT_CONTROL_LOOP_REQUESTS: u64 = 64;
 
 const _: () = assert!(MAX_PENDING_CONTROL_REQUESTS > 0);
+const _: () = assert!(MAX_CONTROL_LOOP_REQUESTS > 0);
+const _: () = assert!(DEFAULT_CONTROL_LOOP_REQUESTS > 0);
+const _: () = assert!(DEFAULT_CONTROL_LOOP_REQUESTS <= MAX_CONTROL_LOOP_REQUESTS);
 
 #[derive(Debug, Clone, Copy)]
 pub struct NodeDaemonInitInput<'a> {
@@ -71,6 +79,12 @@ pub struct NodeControlDispatchInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct NodeControlLoopInput<'a> {
+    pub state_root: &'a Path,
+    pub max_requests: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
 struct QueueReceiptValueInput<'a> {
     decision: &'a str,
     phase: &'a str,
@@ -84,6 +98,27 @@ struct QueueReceiptValueInput<'a> {
 struct OperationReceiptValueInput<'a> {
     decision: &'a str,
     request: &'a node_runtime::NodeControlRequest,
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct HeartbeatReceiptValueInput<'a> {
+    startup_receipt_ref: &'a str,
+    lock_ref: &'a str,
+    loop_sequence: u64,
+    processed_count: u64,
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LoopReceiptValueInput<'a> {
+    decision: &'a str,
+    startup_receipt_ref: &'a str,
+    heartbeat_receipt_ref: &'a str,
+    max_requests: u64,
+    processed_request_refs: &'a [String],
+    dispatch_receipt_refs: &'a [String],
+    has_stopped: bool,
     diagnostics: &'a [String],
 }
 
@@ -144,6 +179,17 @@ pub struct NodeControlDispatch {
     pub control_receipt_ref: String,
     pub control_receipt_value: IOValue,
     pub subreceipt_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLoop {
+    pub loop_receipt_ref: String,
+    pub loop_receipt_value: IOValue,
+    pub heartbeat_receipt_ref: String,
+    pub heartbeat_receipt_value: IOValue,
+    pub processed_request_refs: Vec<String>,
+    pub dispatch_receipt_refs: Vec<String>,
+    pub has_stopped: bool,
 }
 
 pub fn init_local_node(input: &NodeDaemonInitInput<'_>) -> Result<NodeDaemonInit> {
@@ -387,6 +433,11 @@ pub fn dispatch_control_request(input: &NodeControlDispatchInput<'_>) -> Result<
     let request_value = read_preserves(&request_path)?;
     let request = node_runtime::parse_node_control_request(&request_value)?;
     import_node_artifact(input.state_root, &request_value)?;
+    if let Some(prior) = prior_dispatch_for_request(input.state_root, &request)? {
+        archive_dispatched_request(input.state_root, &request_path, &request.value)?;
+        write_dispatch_queue_receipt(input.state_root, &request, "duplicate-dispatch")?;
+        return Ok(prior);
+    }
     let dispatch = match request.operation.as_str() {
         "status" => dispatch_status_request(input.state_root, &request)?,
         "shutdown" => dispatch_shutdown_request(input.state_root, &request)?,
@@ -398,22 +449,132 @@ pub fn dispatch_control_request(input: &NodeControlDispatchInput<'_>) -> Result<
         }
     };
     archive_dispatched_request(input.state_root, &request_path, &request.value)?;
+    write_dispatch_queue_receipt(input.state_root, &request, "dispatch")?;
+    Ok(dispatch)
+}
+
+pub fn run_control_loop(input: &NodeControlLoopInput<'_>) -> Result<NodeControlLoop> {
+    validate_state_root(input.state_root)?;
+    ensure_state_layout(input.state_root)?;
+    let max_requests = validate_loop_request_limit(input.max_requests)?;
+    require_active_lock(input.state_root)?;
+    let startup = current_startup_receipt(input.state_root)?;
+    let lock_value = read_preserves(&input.state_root.join(CONTROL_LOCK_FILE))?;
+    let lock_ref = canonical_hash(&lock_value)?;
+    let initial_diagnostics = Vec::new();
+    let heartbeat_value = heartbeat_receipt_value(&HeartbeatReceiptValueInput {
+        startup_receipt_ref: &startup.receipt_ref,
+        lock_ref: &lock_ref,
+        loop_sequence: 0,
+        processed_count: 0,
+        diagnostics: &initial_diagnostics,
+    })?;
+    let heartbeat_receipt_ref = canonical_hash(&heartbeat_value)?;
+    write_preserves(&control_heartbeat_receipt_path(input.state_root, &heartbeat_receipt_ref), &heartbeat_value)?;
+    import_node_artifact(input.state_root, &heartbeat_value)?;
+
+    let mut processed_request_refs = Vec::with_capacity(max_requests);
+    let mut dispatch_receipt_refs = Vec::with_capacity(max_requests);
+    let mut diagnostics = Vec::new();
+    let mut has_stopped = false;
+    for _ in 0..max_requests {
+        let Some(request_path) = next_pending_control_request(input.state_root)? else {
+            break;
+        };
+        let dispatched = dispatch_control_request(&NodeControlDispatchInput {
+            state_root: input.state_root,
+            request_path: Some(&request_path),
+        })?;
+        let control = node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value)?;
+        processed_request_refs.push(dispatched.request_ref.clone());
+        dispatch_receipt_refs.push(dispatched.control_receipt_ref.clone());
+        if dispatched.operation == "shutdown" && control.decision == "pass" {
+            has_stopped = true;
+            break;
+        }
+    }
+    if processed_request_refs.len() == max_requests && next_pending_control_request(input.state_root)?.is_some() {
+        diagnostics.push("node control loop reached max requests with pending inbox entries".to_string());
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let loop_value = loop_receipt_value(&LoopReceiptValueInput {
+        decision,
+        startup_receipt_ref: &startup.receipt_ref,
+        heartbeat_receipt_ref: &heartbeat_receipt_ref,
+        max_requests: input.max_requests,
+        processed_request_refs: &processed_request_refs,
+        dispatch_receipt_refs: &dispatch_receipt_refs,
+        has_stopped,
+        diagnostics: &diagnostics,
+    })?;
+    let loop_receipt_ref = canonical_hash(&loop_value)?;
+    write_preserves(&control_loop_receipt_path(input.state_root, &loop_receipt_ref), &loop_value)?;
+    import_node_artifact(input.state_root, &loop_value)?;
+    Ok(NodeControlLoop {
+        loop_receipt_ref,
+        loop_receipt_value: loop_value,
+        heartbeat_receipt_ref,
+        heartbeat_receipt_value: heartbeat_value,
+        processed_request_refs,
+        dispatch_receipt_refs,
+        has_stopped,
+    })
+}
+
+fn prior_dispatch_for_request(
+    state_root: &Path,
+    request: &node_runtime::NodeControlRequest,
+) -> Result<Option<NodeControlDispatch>> {
+    let receipt_path = control_outbox_receipt_path(state_root, &request.request_ref);
+    if !receipt_path.exists() {
+        return Ok(None);
+    }
+    let archived_path = control_outbox_request_path(state_root, &request.request_ref);
+    if archived_path.exists() {
+        let archived_value = read_preserves(&archived_path)?;
+        let archived_ref = canonical_hash(&archived_value)?;
+        if archived_ref != request.request_ref {
+            return Err(MoltenError::invalid_harness(
+                "node control duplicate request conflicts with archived request evidence",
+            ));
+        }
+    }
+    let control_receipt_value = read_preserves(&receipt_path)?;
+    let control = node_runtime::parse_node_control_receipt(&control_receipt_value)?;
+    if control.request_ref != request.request_ref {
+        return Err(MoltenError::invalid_harness("node control duplicate receipt conflicts with request ref"));
+    }
+    Ok(Some(NodeControlDispatch {
+        operation: request.operation.clone(),
+        request_ref: request.request_ref.clone(),
+        control_receipt_ref: control.receipt_ref,
+        control_receipt_value: control.value,
+        subreceipt_refs: control.subreceipt_refs,
+    }))
+}
+
+fn write_dispatch_queue_receipt(
+    state_root: &Path,
+    request: &node_runtime::NodeControlRequest,
+    phase: &str,
+) -> Result<String> {
     let location_ref = local_ref(
         "node-control-outbox-path",
-        &control_outbox_receipt_path(input.state_root, &request.request_ref).display().to_string(),
+        &control_outbox_receipt_path(state_root, &request.request_ref).display().to_string(),
     )?;
     let diagnostics = Vec::new();
     let queue_receipt = queue_receipt_value(&QueueReceiptValueInput {
         decision: "pass",
-        phase: "dispatch",
+        phase,
         operation: &request.operation,
         request_ref: &request.request_ref,
         location_ref: &location_ref,
         diagnostics: &diagnostics,
     })?;
-    write_preserves(&dispatch_receipt_path(input.state_root, &request.request_ref), &queue_receipt)?;
-    import_node_artifact(input.state_root, &queue_receipt)?;
-    Ok(dispatch)
+    let queue_receipt_ref = canonical_hash(&queue_receipt)?;
+    write_preserves(&dispatch_receipt_path(state_root, &request.request_ref), &queue_receipt)?;
+    import_node_artifact(state_root, &queue_receipt)?;
+    Ok(queue_receipt_ref)
 }
 
 fn dispatch_status_request(
@@ -444,6 +605,45 @@ fn dispatch_shutdown_request(
         control_receipt_value: stop.control_receipt_value,
         subreceipt_refs: vec![stop.shutdown_ref],
     })
+}
+
+#[derive(Debug, Clone, Copy)]
+struct NodeControlProvenanceInput<'a> {
+    state_root: &'a Path,
+    request: &'a node_runtime::NodeControlRequest,
+    artifact_ref: &'a str,
+    operation: &'a str,
+    subreceipt_kind: &'a str,
+}
+
+fn evaluate_node_control_provenance(
+    input: &NodeControlProvenanceInput<'_>,
+) -> Result<provenance::ProvenanceEvaluation> {
+    let mut provenance_diagnostics = Vec::with_capacity(input.request.evidence_refs.len().saturating_add(1));
+    if input.request.evidence_refs.is_empty() {
+        provenance_diagnostics.push("node control provenance evidence refs missing".to_string());
+    }
+    let mut provenance_values = Vec::with_capacity(input.request.evidence_refs.len());
+    for evidence_ref in &input.request.evidence_refs {
+        match read_node_ledger_artifact(input.state_root, evidence_ref) {
+            Ok(value) => provenance_values.push(value),
+            Err(error) => provenance_diagnostics
+                .push(format!("node control provenance evidence {evidence_ref} not found in node ledger: {error}")),
+        }
+    }
+    let evaluation = provenance::evaluate_provenance(&provenance::ProvenanceEvaluationInput {
+        operation: input.operation,
+        profile: "node-control",
+        artifact_ref: input.artifact_ref,
+        provenance_values: &provenance_values,
+        prior_diagnostics: &provenance_diagnostics,
+    })?;
+    write_preserves(
+        &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, input.subreceipt_kind),
+        &evaluation.receipt_value,
+    )?;
+    import_node_artifact(input.state_root, &evaluation.receipt_value)?;
+    Ok(evaluation)
 }
 
 fn dispatch_install_request(
@@ -484,13 +684,34 @@ fn dispatch_install_request(
             });
         }
     };
+    let provenance = evaluate_node_control_provenance(&NodeControlProvenanceInput {
+        state_root,
+        request,
+        artifact_ref: payload_ref,
+        operation: "install",
+        subreceipt_kind: "artifact-provenance",
+    })?;
+    let provenance_receipt_refs = [provenance.receipt_ref.clone()];
+    diagnostics.extend(provenance.diagnostics.iter().cloned());
+    if provenance.decision != "pass" {
+        return finalize_operation_dispatch(&OperationFinalizeInput {
+            state_root,
+            request,
+            startup_receipt_ref: &startup.receipt_ref,
+            subreceipt_refs: &provenance_receipt_refs,
+            diagnostics: &diagnostics,
+        });
+    }
     let schema_refs = match request.target_ref.as_ref() {
         Some(target_ref) => vec![target_ref.clone()],
         None => vec![local_ref("node-control-install-schema", &request.request_ref)?],
     };
-    let extra_evidence_refs = if request.target_ref.is_some() { 2 } else { 1 };
-    let mut evidence_refs = Vec::with_capacity(request.resource_refs.len() + extra_evidence_refs);
+    let extra_evidence_refs = if request.target_ref.is_some() { 3 } else { 2 };
+    let mut evidence_refs =
+        Vec::with_capacity(request.resource_refs.len() + request.evidence_refs.len() + extra_evidence_refs);
     evidence_refs.extend(request.resource_refs.iter().cloned());
+    evidence_refs.extend(request.evidence_refs.iter().cloned());
+    evidence_refs.push(provenance_receipt_refs[0].clone());
     evidence_refs.push(payload_ref.to_string());
     if let Some(target_ref) = request.target_ref.as_ref() {
         evidence_refs.push(target_ref.clone());
@@ -513,7 +734,7 @@ fn dispatch_install_request(
                 state_root,
                 request,
                 startup_receipt_ref: &startup.receipt_ref,
-                subreceipt_refs: &[],
+                subreceipt_refs: &provenance_receipt_refs,
                 diagnostics: &diagnostics,
             });
         }
@@ -536,7 +757,7 @@ fn dispatch_install_request(
         state_root,
         request,
         startup_receipt_ref: &startup.receipt_ref,
-        subreceipt_refs: std::slice::from_ref(&install_receipt_ref),
+        subreceipt_refs: &[provenance.receipt_ref, install_receipt_ref],
         diagnostics: &diagnostics,
     })
 }
@@ -586,6 +807,37 @@ fn dispatch_run_request(state_root: &Path, request: &node_runtime::NodeControlRe
             });
         }
     };
+    let execution_request = match job_dag::parse_job_execution_request_value(&execution_request_value) {
+        Ok(execution_request) => execution_request,
+        Err(error) => {
+            diagnostics.push(format!("node control run execution request malformed: {error}"));
+            return finalize_operation_dispatch(&OperationFinalizeInput {
+                state_root,
+                request,
+                startup_receipt_ref: &startup.receipt_ref,
+                subreceipt_refs: &[],
+                diagnostics: &diagnostics,
+            });
+        }
+    };
+    let provenance = evaluate_node_control_provenance(&NodeControlProvenanceInput {
+        state_root,
+        request,
+        artifact_ref: &execution_request.job_ref,
+        operation: "run",
+        subreceipt_kind: "job-provenance",
+    })?;
+    let provenance_receipt_refs = [provenance.receipt_ref.clone()];
+    diagnostics.extend(provenance.diagnostics.iter().cloned());
+    if provenance.decision != "pass" {
+        return finalize_operation_dispatch(&OperationFinalizeInput {
+            state_root,
+            request,
+            startup_receipt_ref: &startup.receipt_ref,
+            subreceipt_refs: &provenance_receipt_refs,
+            diagnostics: &diagnostics,
+        });
+    }
     let admission_receipt_value = match read_node_ledger_artifact(state_root, admission_ref) {
         Ok(value) => value,
         Err(error) => {
@@ -594,7 +846,7 @@ fn dispatch_run_request(state_root: &Path, request: &node_runtime::NodeControlRe
                 state_root,
                 request,
                 startup_receipt_ref: &startup.receipt_ref,
-                subreceipt_refs: &[],
+                subreceipt_refs: &provenance_receipt_refs,
                 diagnostics: &diagnostics,
             });
         }
@@ -612,7 +864,8 @@ fn dispatch_run_request(state_root: &Path, request: &node_runtime::NodeControlRe
         &execution.receipt_value,
     )?;
     import_node_artifact(state_root, &execution.receipt_value)?;
-    let mut subreceipt_refs = Vec::with_capacity(2);
+    let mut subreceipt_refs = Vec::with_capacity(3);
+    subreceipt_refs.push(provenance.receipt_ref);
     subreceipt_refs.push(execution.receipt_ref.clone());
     if let Some(run) = execution.run.as_ref() {
         let run_ref = canonical_hash(&run.receipt_value)?;
@@ -845,6 +1098,46 @@ fn operation_receipt_value(input: &OperationReceiptValueInput<'_>) -> Result<IOV
     ]))
 }
 
+fn heartbeat_receipt_value(input: &HeartbeatReceiptValueInput<'_>) -> Result<IOValue> {
+    Ok(record("node-control-heartbeat-receipt-v1", vec![
+        string(NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA),
+        record("decision", vec![string(if input.diagnostics.is_empty() { "pass" } else { "deny" })]),
+        record("startup", vec![string(input.startup_receipt_ref)]),
+        record("lock", vec![string(input.lock_ref)]),
+        record("loop-sequence", vec![string(input.loop_sequence.to_string())]),
+        record("processed-count", vec![string(input.processed_count.to_string())]),
+        record("profile", vec![string("local-preserves-control-loop-v1")]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("active-lock-bound"), string("pass")]),
+            record("check", vec![string("heartbeat-is-receipted"), string("pass")]),
+            record("check", vec![string("no-ambient-socket-authority"), string("pass")]),
+        ])]),
+    ]))
+}
+
+fn loop_receipt_value(input: &LoopReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    Ok(record("node-control-loop-receipt-v1", vec![
+        string(NODE_CONTROL_LOOP_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("startup", vec![string(input.startup_receipt_ref)]),
+        record("heartbeat", vec![string(input.heartbeat_receipt_ref)]),
+        record("max-requests", vec![string(input.max_requests.to_string())]),
+        record("processed-requests", vec![sequence(input.processed_request_refs.iter().map(string).collect())]),
+        record("dispatch-receipts", vec![sequence(input.dispatch_receipt_refs.iter().map(string).collect())]),
+        record("stopped", vec![string(if input.has_stopped { "yes" } else { "no" })]),
+        record("profile", vec![string("local-preserves-control-loop-v1")]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("bounded-request-loop"), string("pass")]),
+            record("check", vec![string("deterministic-inbox-order"), string("pass")]),
+            record("check", vec![string("idempotent-request-dispatch"), string("pass")]),
+            record("check", vec![string("shutdown-stops-loop"), string("pass")]),
+        ])]),
+    ]))
+}
+
 pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
     if let Ok(config) = node_runtime::parse_node_config(value) {
         return Ok(format!(
@@ -904,6 +1197,26 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_string(&fields[2], "operation")?,
             record_string(&fields[3], "request")?
         ));
+    }
+    if let Some(fields) = value.collect_simple_record("node-control-heartbeat-receipt-v1", Some(9)) {
+        return Ok(format!(
+            "node control heartbeat decision={} startup={} processed={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[2], "startup")?,
+            record_string(&fields[5], "processed-count")?
+        ));
+    }
+    if let Some(fields) = value.collect_simple_record("node-control-loop-receipt-v1", Some(11)) {
+        return Ok(format!(
+            "node control loop decision={} startup={} processed={} stopped={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[2], "startup")?,
+            record_sequence_len(&fields[5], "processed-requests")?,
+            record_string(&fields[7], "stopped")?
+        ));
+    }
+    if let Ok(summary) = provenance::provenance_summary(value) {
+        return Ok(summary);
     }
     Err(MoltenError::invalid_harness("unsupported node daemon artifact for show"))
 }
@@ -971,6 +1284,16 @@ fn import_node_artifact(state_root: &Path, value: &IOValue) -> Result<String> {
 }
 
 fn first_pending_control_request(state_root: &Path) -> Result<PathBuf> {
+    next_pending_control_request(state_root)?
+        .ok_or_else(|| MoltenError::invalid_harness("node control inbox has no pending requests"))
+}
+
+fn next_pending_control_request(state_root: &Path) -> Result<Option<PathBuf>> {
+    let mut paths = pending_control_request_paths(state_root)?;
+    Ok(paths.pop())
+}
+
+fn pending_control_request_paths(state_root: &Path) -> Result<Vec<PathBuf>> {
     let inbox = state_root.join(CONTROL_INBOX_DIR);
     let mut paths = Vec::with_capacity(MAX_PENDING_CONTROL_REQUESTS);
     for entry_result in fs::read_dir(&inbox).map_err(MoltenError::from)? {
@@ -984,11 +1307,8 @@ fn first_pending_control_request(state_root: &Path) -> Result<PathBuf> {
             paths.push(path);
         }
     }
-    paths.sort();
-    paths
-        .into_iter()
-        .next()
-        .ok_or_else(|| MoltenError::invalid_harness("node control inbox has no pending requests"))
+    paths.sort_by(|left, right| right.cmp(left));
+    Ok(paths)
 }
 
 fn archive_dispatched_request(state_root: &Path, request_path: &Path, request_value: &IOValue) -> Result<()> {
@@ -1041,6 +1361,18 @@ fn control_operation_subreceipt_path(state_root: &Path, request_ref: &str, label
         .join(format!("{}.{}.preserves", ref_file_stem(request_ref), label))
 }
 
+fn control_heartbeat_receipt_path(state_root: &Path, heartbeat_ref: &str) -> PathBuf {
+    state_root
+        .join(CONTROL_OUTBOX_DIR)
+        .join(format!("{}.heartbeat-receipt.preserves", ref_file_stem(heartbeat_ref)))
+}
+
+fn control_loop_receipt_path(state_root: &Path, loop_ref: &str) -> PathBuf {
+    state_root
+        .join(CONTROL_OUTBOX_DIR)
+        .join(format!("{}.loop-receipt.preserves", ref_file_stem(loop_ref)))
+}
+
 fn ref_file_stem(value_ref: &str) -> String {
     value_ref.replace(':', "-")
 }
@@ -1060,6 +1392,19 @@ fn validate_decision(decision: &str) -> Result<()> {
     }
 }
 
+fn validate_loop_request_limit(max_requests: u64) -> Result<usize> {
+    if max_requests == 0 {
+        return Err(MoltenError::invalid_harness("node control loop max requests must be positive"));
+    }
+    if max_requests > MAX_CONTROL_LOOP_REQUESTS {
+        return Err(MoltenError::invalid_harness(format!(
+            "node control loop max requests exceeds bounded limit {MAX_CONTROL_LOOP_REQUESTS}"
+        )));
+    }
+    usize::try_from(max_requests)
+        .map_err(|_| MoltenError::invalid_harness("node control loop max requests does not fit this platform"))
+}
+
 fn record_string(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<String> {
     let record_value = crate::preserves_rail::value_to_iovalue(value);
     let fields = record_value
@@ -1069,6 +1414,17 @@ fn record_string(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Res
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} must contain a string")))
+}
+
+fn record_sequence_len(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<usize> {
+    let record_value = crate::preserves_rail::value_to_iovalue(value);
+    let fields = record_value
+        .collect_simple_record(tag, Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{tag} sequence>")))?;
+    fields[0]
+        .collect_sequence()
+        .map(|items| items.len())
+        .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} must contain a sequence")))
 }
 
 fn require_schema(value: &preserves::Value<preserves::IOValue>, expected: &str, context: &str) -> Result<()> {
@@ -1148,6 +1504,7 @@ fn control_request(operation: &str) -> Result<node_runtime::NodeControlRequest> 
         authority_refs: &authority_refs,
         policy_refs: &policy_refs,
         resource_refs: &resource_refs,
+        evidence_refs: &[],
     })?;
     node_runtime::parse_node_control_request(&value)
 }
@@ -1357,6 +1714,7 @@ mod tests {
             authority_refs: &status_request.authority_refs,
             policy_refs: &status_request.policy_refs,
             resource_refs: &status_request.resource_refs,
+            evidence_refs: &[],
         })
         .expect("install request");
         let install_submitted = submit_control_request(&NodeControlSubmitInput {
@@ -1381,6 +1739,7 @@ mod tests {
             authority_refs: &[],
             policy_refs: &status_request.policy_refs,
             resource_refs: &status_request.resource_refs,
+            evidence_refs: &[],
         })
         .expect("missing authority request");
         let missing_submitted = submit_control_request(&NodeControlSubmitInput {
@@ -1423,6 +1782,236 @@ mod tests {
     }
 
     #[test]
+    fn control_loop_processes_queue_idempotently_and_stops_on_shutdown() {
+        let root = temp_dir("node-control-loop");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:loop",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let status_request = status_request().expect("status request");
+        submit_control_request(&NodeControlSubmitInput {
+            state_root: &root,
+            request_value: &status_request.value,
+        })
+        .expect("submit status");
+        let first_loop = run_control_loop(&NodeControlLoopInput {
+            state_root: &root,
+            max_requests: 1,
+        })
+        .expect("run one status request");
+        assert_eq!(first_loop.processed_request_refs, vec![status_request.request_ref.clone()]);
+        assert!(!first_loop.has_stopped);
+        assert_eq!(ledger::artifact_kind(&first_loop.loop_receipt_value), "node-control-loop-receipt");
+        assert_eq!(ledger::artifact_kind(&first_loop.heartbeat_receipt_value), "node-control-heartbeat-receipt");
+
+        submit_control_request(&NodeControlSubmitInput {
+            state_root: &root,
+            request_value: &status_request.value,
+        })
+        .expect("resubmit duplicate status");
+        let duplicate_loop = run_control_loop(&NodeControlLoopInput {
+            state_root: &root,
+            max_requests: 1,
+        })
+        .expect("run duplicate status request");
+        assert_eq!(duplicate_loop.processed_request_refs, vec![status_request.request_ref.clone()]);
+        assert_eq!(duplicate_loop.dispatch_receipt_refs, first_loop.dispatch_receipt_refs);
+
+        let shutdown_request = shutdown_request().expect("shutdown request");
+        submit_control_request(&NodeControlSubmitInput {
+            state_root: &root,
+            request_value: &shutdown_request.value,
+        })
+        .expect("submit shutdown");
+        let shutdown_loop = run_control_loop(&NodeControlLoopInput {
+            state_root: &root,
+            max_requests: DEFAULT_CONTROL_LOOP_REQUESTS,
+        })
+        .expect("run shutdown request");
+        assert!(shutdown_loop.has_stopped);
+        assert!(!root.join(CONTROL_LOCK_FILE).exists());
+        let after_stop = run_control_loop(&NodeControlLoopInput {
+            state_root: &root,
+            max_requests: 1,
+        })
+        .expect_err("stopped node loop denied");
+        assert!(after_stop.to_string().contains("active node lock"));
+
+        let kinds = ledger::list_artifacts(&root.join("ledger"))
+            .expect("list loop ledger")
+            .into_iter()
+            .map(|entry| entry.artifact_kind)
+            .collect::<Vec<_>>();
+        assert!(kinds.iter().any(|kind| kind == "node-control-loop-receipt"));
+        assert!(kinds.iter().any(|kind| kind == "node-control-heartbeat-receipt"));
+    }
+
+    #[test]
+    fn duplicate_request_with_conflicting_archive_fails_closed() {
+        let root = temp_dir("node-control-duplicate-conflict");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:duplicate",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let status_request = status_request().expect("status request");
+        let submitted = submit_control_request(&NodeControlSubmitInput {
+            state_root: &root,
+            request_value: &status_request.value,
+        })
+        .expect("submit status");
+        dispatch_control_request(&NodeControlDispatchInput {
+            state_root: &root,
+            request_path: Some(&submitted.inbox_path),
+        })
+        .expect("dispatch status");
+        write_preserves(
+            &control_outbox_request_path(&root, &status_request.request_ref),
+            &record("tampered-node-control-request", vec![string("conflict")]),
+        )
+        .expect("tamper archived request");
+        let duplicate = submit_control_request(&NodeControlSubmitInput {
+            state_root: &root,
+            request_value: &status_request.value,
+        })
+        .expect("resubmit duplicate");
+        let denied = dispatch_control_request(&NodeControlDispatchInput {
+            state_root: &root,
+            request_path: Some(&duplicate.inbox_path),
+        })
+        .expect_err("conflicting duplicate denied");
+        assert!(denied.to_string().contains("conflicts with archived request evidence"));
+    }
+
+    #[test]
+    fn node_control_provenance_gate_denies_missing_and_tampered_evidence_before_side_effects() {
+        let root = temp_dir("node-control-provenance");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:provenance",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let authority_refs = vec![local_ref("node-control-authority", "provenance").expect("authority ref")];
+        let policy_refs = vec![local_ref("node-control-policy", "provenance").expect("policy ref")];
+        let resource_refs = vec![local_ref("node-control-resource", "provenance").expect("resource ref")];
+
+        let payload_value = record("node-control-install-payload", vec![string("missing-provenance")]);
+        let payload_ref = import_node_artifact(&root, &payload_value).expect("import payload");
+        let missing_provenance_request =
+            node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+                operation: "install",
+                target_ref: None,
+                payload_ref: Some(&payload_ref),
+                authority_refs: &authority_refs,
+                policy_refs: &policy_refs,
+                resource_refs: &resource_refs,
+                evidence_refs: &[],
+            })
+            .expect("missing provenance request");
+        let submitted = submit_control_request(&NodeControlSubmitInput {
+            state_root: &root,
+            request_value: &missing_provenance_request,
+        })
+        .expect("submit missing provenance");
+        let dispatch = dispatch_control_request(&NodeControlDispatchInput {
+            state_root: &root,
+            request_path: Some(&submitted.inbox_path),
+        })
+        .expect("dispatch missing provenance");
+        let receipt =
+            node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("control receipt");
+        assert_eq!(receipt.decision, "deny");
+        assert!(receipt.subreceipt_refs.iter().any(|reference| reference.starts_with("blake3:")));
+        assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("provenance evidence refs missing")));
+        assert!(
+            artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
+                .expect("list registry")
+                .is_empty()
+        );
+
+        let queued_payload = record("node-control-install-payload", vec![string("queued-missing-provenance")]);
+        let queued_payload_ref = import_node_artifact(&root, &queued_payload).expect("import queued payload");
+        let queued_request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "install",
+            target_ref: None,
+            payload_ref: Some(&queued_payload_ref),
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("queued missing provenance request");
+        let queued = node_runtime::parse_node_control_request(&queued_request).expect("queued request parse");
+        submit_control_request(&NodeControlSubmitInput {
+            state_root: &root,
+            request_value: &queued_request,
+        })
+        .expect("submit queued missing provenance");
+        let loop_result = run_control_loop(&NodeControlLoopInput {
+            state_root: &root,
+            max_requests: 1,
+        })
+        .expect("process queued missing provenance");
+        assert_eq!(loop_result.processed_request_refs, vec![queued.request_ref.clone()]);
+        let queued_receipt_value =
+            read_preserves(&control_outbox_receipt_path(&root, &queued.request_ref)).expect("queued receipt value");
+        let queued_receipt = node_runtime::parse_node_control_receipt(&queued_receipt_value).expect("queued receipt");
+        assert_eq!(queued_receipt.decision, "deny");
+        assert!(
+            queued_receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("missing provenance evidence"))
+        );
+
+        let tampered_payload = record("node-control-install-payload", vec![string("tampered-provenance")]);
+        let tampered_payload_ref = import_node_artifact(&root, &tampered_payload).expect("import tampered payload");
+        let wrong_artifact_ref = local_ref("node-control-wrong-provenance-artifact", "tampered").expect("wrong ref");
+        let wrong_provenance =
+            provenance::synthetic_reviewed_provenance_record(&wrong_artifact_ref).expect("wrong provenance");
+        let wrong_provenance_ref = import_node_artifact(&root, &wrong_provenance).expect("import wrong provenance");
+        let tampered_evidence_refs = vec![wrong_provenance_ref];
+        let tampered_request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "install",
+            target_ref: None,
+            payload_ref: Some(&tampered_payload_ref),
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &tampered_evidence_refs,
+        })
+        .expect("tampered request");
+        let tampered_submitted = submit_control_request(&NodeControlSubmitInput {
+            state_root: &root,
+            request_value: &tampered_request,
+        })
+        .expect("submit tampered provenance");
+        let tampered_dispatch = dispatch_control_request(&NodeControlDispatchInput {
+            state_root: &root,
+            request_path: Some(&tampered_submitted.inbox_path),
+        })
+        .expect("dispatch tampered provenance");
+        let tampered_receipt = node_runtime::parse_node_control_receipt(&tampered_dispatch.control_receipt_value)
+            .expect("tampered receipt");
+        assert_eq!(tampered_receipt.decision, "deny");
+        assert!(
+            tampered_receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("no provenance record matches"))
+        );
+        assert!(
+            artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
+                .expect("list registry after tampered")
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn control_operation_dispatch_installs_runs_and_gates_with_receipts() {
         let root = temp_dir("node-control-operations");
         init_local_node(&NodeDaemonInitInput {
@@ -1437,6 +2026,11 @@ mod tests {
 
         let payload_value = record("node-control-install-payload", vec![string("payload")]);
         let payload_ref = import_node_artifact(&root, &payload_value).expect("import payload");
+        let payload_provenance =
+            provenance::synthetic_reviewed_provenance_record(&payload_ref).expect("payload provenance");
+        let payload_provenance_ref =
+            import_node_artifact(&root, &payload_provenance).expect("import payload provenance");
+        let install_evidence_refs = vec![payload_provenance_ref];
         let install_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
@@ -1444,6 +2038,7 @@ mod tests {
             authority_refs: &authority_refs,
             policy_refs: &policy_refs,
             resource_refs: &resource_refs,
+            evidence_refs: &install_evidence_refs,
         })
         .expect("install request");
         let install_submitted = submit_control_request(&NodeControlSubmitInput {
@@ -1473,6 +2068,7 @@ mod tests {
             authority_refs: &authority_refs,
             policy_refs: &policy_refs,
             resource_refs: &resource_refs,
+            evidence_refs: &[],
         })
         .expect("gate request");
         let gate_submitted = submit_control_request(&NodeControlSubmitInput {
@@ -1495,6 +2091,10 @@ mod tests {
             import_node_artifact(&root, &job_fixture.execution_request).expect("import execution request");
         let admission_ref =
             import_node_artifact(&root, &job_fixture.admission_receipt).expect("import admission receipt");
+        let job_provenance =
+            provenance::synthetic_reviewed_provenance_record(&job_fixture.job_ref).expect("job provenance");
+        let job_provenance_ref = import_node_artifact(&root, &job_provenance).expect("import job provenance");
+        let run_evidence_refs = vec![job_provenance_ref];
         let run_request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "run",
             target_ref: Some(&admission_ref),
@@ -1502,6 +2102,7 @@ mod tests {
             authority_refs: &authority_refs,
             policy_refs: &policy_refs,
             resource_refs: &resource_refs,
+            evidence_refs: &run_evidence_refs,
         })
         .expect("run request");
         let run_submitted = submit_control_request(&NodeControlSubmitInput {
@@ -1524,6 +2125,8 @@ mod tests {
             .map(|entry| entry.artifact_kind)
             .collect::<Vec<_>>();
         assert!(kinds.iter().any(|kind| kind == "artifact-registry-receipt"));
+        assert!(kinds.iter().any(|kind| kind == "provenance-record"));
+        assert!(kinds.iter().any(|kind| kind == "provenance-receipt"));
         assert!(kinds.iter().any(|kind| kind == "job-execution-receipt"));
         assert!(kinds.iter().any(|kind| kind == "octet-source-gate-validation"));
         assert!(kinds.iter().any(|kind| kind == "node-control-operation-receipt"));
@@ -1532,6 +2135,7 @@ mod tests {
     struct NodeJobFixture {
         execution_request: IOValue,
         admission_receipt: IOValue,
+        job_ref: String,
     }
 
     fn install_node_job_fixture(root: &Path) -> NodeJobFixture {
@@ -1647,6 +2251,7 @@ mod tests {
         NodeJobFixture {
             execution_request,
             admission_receipt: admission.receipt_value,
+            job_ref: installed.job_ref,
         }
     }
 
@@ -1707,6 +2312,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
+        crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));

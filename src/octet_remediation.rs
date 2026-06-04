@@ -747,6 +747,7 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
+        crate::test_support::cleanup_stale_molten_temp_dirs();
         let path = std::env::temp_dir().join(format!("molten-octet-remediation-{name}-{}", std::process::id()));
         let remove_error = match fs::remove_dir_all(&path) {
             Ok(()) => None,
