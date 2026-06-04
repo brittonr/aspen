@@ -553,6 +553,86 @@ fn cli_node_control_ingress_build_publish_deliver_work() -> CliResult<()> {
 }
 
 #[test]
+fn cli_node_live_ingress_loopback_enqueues_request() -> CliResult<()> {
+    let dir = temp_dir("cli-node-live-ingress")?;
+    let state_root = dir.join("node-state");
+    let request = dir.join("status.preserves");
+    let publish_receipt = dir.join("publish.preserves");
+    let receive_receipt = dir.join("receive.preserves");
+    let authority_ref = test_ref("live-authority")?;
+    let policy_ref = test_ref("live-policy")?;
+    let resource_ref = test_ref("live-resource")?;
+    let bootstrap_ref = test_ref("live-bootstrap")?;
+
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(&state_root)
+            .args(["--node-id", "node:cli-live"])
+            .output()?,
+        "node live init",
+    );
+    assert_success(
+        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
+        "node live run",
+    );
+    assert_success(
+        &molten_cmd()
+            .args([
+                "test",
+                "node",
+                "control-request",
+                "--operation",
+                "status",
+                "--authority",
+            ])
+            .arg(&authority_ref)
+            .args(["--policy"])
+            .arg(&policy_ref)
+            .args(["--resource"])
+            .arg(&resource_ref)
+            .args(["--out"])
+            .arg(&request)
+            .output()?,
+        "node live status request",
+    );
+    let loopback = molten_cmd()
+        .args(["test", "node", "control-ingress-live-loopback", "--state-root"])
+        .arg(&state_root)
+        .args([
+            "--from-peer",
+            "peer:cli-live",
+            "--to-node",
+            "node:cli-live",
+            "--peer-bootstrap",
+        ])
+        .arg(&bootstrap_ref)
+        .args(["--authority"])
+        .arg(&authority_ref)
+        .args(["--policy"])
+        .arg(&policy_ref)
+        .args(["--resource"])
+        .arg(&resource_ref)
+        .args(["--publish-receipt-out"])
+        .arg(&publish_receipt)
+        .args(["--receive-receipt-out"])
+        .arg(&receive_receipt)
+        .arg(&request)
+        .output()?;
+    assert_success(&loopback, "node live ingress loopback");
+    assert!(stdout(&loopback).contains("enqueued=yes"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&publish_receipt)?),
+        "node-control-live-transport-receipt"
+    );
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&receive_receipt)?),
+        "node-control-live-transport-receipt"
+    );
+    Ok(())
+}
+
+#[test]
 fn cli_node_serve_drains_shutdown_request() -> CliResult<()> {
     let dir = temp_dir("cli-node-serve")?;
     let state_root = dir.join("node-state");

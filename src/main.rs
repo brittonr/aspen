@@ -540,6 +540,56 @@ enum NodeCommand {
         #[arg(long = "evidence")]
         evidence_refs: Vec<String>,
     },
+    ControlIngressLiveBuild {
+        request: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        from_peer: String,
+        #[arg(long)]
+        to_node: String,
+        #[arg(long, default_value = node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+        topic: String,
+        #[arg(long, default_value_t = 1)]
+        sequence: u64,
+        #[arg(long = "peer-bootstrap")]
+        peer_bootstrap_refs: Vec<String>,
+        #[arg(long = "authority")]
+        authority_refs: Vec<String>,
+        #[arg(long = "policy")]
+        policy_refs: Vec<String>,
+        #[arg(long = "resource")]
+        resource_refs: Vec<String>,
+        #[arg(long = "evidence")]
+        evidence_refs: Vec<String>,
+    },
+    ControlIngressLiveLoopback {
+        #[arg(long)]
+        state_root: PathBuf,
+        request: PathBuf,
+        #[arg(long)]
+        from_peer: String,
+        #[arg(long)]
+        to_node: String,
+        #[arg(long, default_value = node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+        topic: String,
+        #[arg(long, default_value_t = 1)]
+        sequence: u64,
+        #[arg(long = "peer-bootstrap")]
+        peer_bootstrap_refs: Vec<String>,
+        #[arg(long = "authority")]
+        authority_refs: Vec<String>,
+        #[arg(long = "policy")]
+        policy_refs: Vec<String>,
+        #[arg(long = "resource")]
+        resource_refs: Vec<String>,
+        #[arg(long = "evidence")]
+        evidence_refs: Vec<String>,
+        #[arg(long)]
+        publish_receipt_out: Option<PathBuf>,
+        #[arg(long)]
+        receive_receipt_out: Option<PathBuf>,
+    },
     ControlIngressPublish {
         #[arg(long)]
         state_root: PathBuf,
@@ -5235,6 +5285,93 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 envelope.envelope_ref,
                 envelope.request.request_ref,
                 out.display()
+            );
+            Ok(())
+        }
+        NodeCommand::ControlIngressLiveBuild {
+            request,
+            out,
+            from_peer,
+            to_node,
+            topic,
+            sequence,
+            peer_bootstrap_refs,
+            authority_refs,
+            policy_refs,
+            resource_refs,
+            evidence_refs,
+        } => {
+            let request_value = read_preserves_file(&request)?;
+            let envelope =
+                node_daemon::node_control_live_ingress_envelope(&node_daemon::NodeControlIngressEnvelopeInput {
+                    request_value: &request_value,
+                    from_peer: &from_peer,
+                    to_node: &to_node,
+                    topic: &topic,
+                    sequence,
+                    peer_bootstrap_refs: &peer_bootstrap_refs,
+                    authority_refs: &authority_refs,
+                    policy_refs: &policy_refs,
+                    resource_refs: &resource_refs,
+                    evidence_refs: &evidence_refs,
+                })?;
+            write_file(&out, &to_text(&envelope.value)?)?;
+            println!(
+                "node control live ingress envelope={} request={} written to {}",
+                envelope.envelope_ref,
+                envelope.request.request_ref,
+                out.display()
+            );
+            Ok(())
+        }
+        NodeCommand::ControlIngressLiveLoopback {
+            state_root,
+            request,
+            from_peer,
+            to_node,
+            topic,
+            sequence,
+            peer_bootstrap_refs,
+            authority_refs,
+            policy_refs,
+            resource_refs,
+            evidence_refs,
+            publish_receipt_out,
+            receive_receipt_out,
+        } => {
+            let request_value = read_preserves_file(&request)?;
+            let runtime =
+                tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(MoltenError::from)?;
+            let loopback = runtime.block_on(node_daemon::node_control_live_iroh_loopback(
+                &node_daemon::NodeControlLiveLoopbackInput {
+                    state_root: &state_root,
+                    request_value: &request_value,
+                    from_peer: &from_peer,
+                    to_node: &to_node,
+                    topic: &topic,
+                    sequence,
+                    peer_bootstrap_refs: &peer_bootstrap_refs,
+                    authority_refs: &authority_refs,
+                    policy_refs: &policy_refs,
+                    resource_refs: &resource_refs,
+                    evidence_refs: &evidence_refs,
+                },
+            ))?;
+            if let Some(path) = publish_receipt_out.as_ref() {
+                write_file(path, &to_text(&loopback.publish_receipt_value)?)?;
+            }
+            emit_named_receipt(
+                receive_receipt_out.as_ref(),
+                "node control live transport receipt",
+                &loopback.receive_receipt_value,
+            )?;
+            println!(
+                "node control live ingress loopback envelope={} publish_receipt={} receive_receipt={} ingress_receipt={} enqueued={}",
+                loopback.envelope_ref,
+                loopback.publish_receipt_ref,
+                loopback.receive_receipt_ref,
+                loopback.ingress_receipt_ref,
+                if loopback.has_enqueued { "yes" } else { "no" }
             );
             Ok(())
         }

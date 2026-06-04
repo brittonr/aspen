@@ -33,6 +33,7 @@ iroh = "1.0.0-rc.1"
 iroh-blobs = "0.102.0"
 iroh-docs = "0.100.0"
 iroh-gossip = "0.100.0"
+n0-future = "0.3.2"
 nickel-lang = "2.1.0"
 octet = { git = "ssh://git@github.com/OnixResearch/octet.git", package = "valence-core" }
 preserves = "5.0.0-rc.7"
@@ -46,6 +47,7 @@ syndicate = "0.44.0-rc.3"
 toml = "0.9"
 tracing = "0.1"
 trellis = { git = "ssh://git@github.com/OnixResearch/trellis.git", version = "0.2.0", package = "verified-logic" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 wasmparser = "0.240"
 wasmtime = "45.0.0"
 wasmtime-wasi = "45"

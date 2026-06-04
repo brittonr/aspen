@@ -104,6 +104,7 @@ pub const NODE_CONTROL_SERVICE_HEARTBEAT_RECEIPT_SCHEMA: &str = "molten.node.con
 pub const NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA: &str = "molten.node.control-service-run-receipt.v1";
 pub const NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA: &str = "molten.node.control-ingress-envelope.v1";
 pub const NODE_CONTROL_INGRESS_RECEIPT_SCHEMA: &str = "molten.node.control-ingress-receipt.v1";
+pub const NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA: &str = "molten.node.control-live-transport-receipt.v1";
 pub const NODE_HEALTH_RECEIPT_SCHEMA: &str = "molten.node.health-receipt.v1";
 pub const NODE_SHUTDOWN_RECEIPT_SCHEMA: &str = "molten.node.shutdown-receipt.v1";
 pub const OPERATOR_WORKFLOW_SCHEMA: &str = "molten.operator.workflow.v1";
