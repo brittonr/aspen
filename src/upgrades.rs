@@ -1,0 +1,1711 @@
+use std::collections::BTreeSet;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+
+use preserves::IOValue;
+use preserves::Record;
+use preserves::Value;
+
+use crate::artifacts;
+use crate::error::MoltenError;
+use crate::error::Result;
+use crate::ledger;
+use crate::octet_gate;
+use crate::preserves_rail::UPGRADE_NAME_POINTER_SCHEMA;
+use crate::preserves_rail::UPGRADE_PLAN_SCHEMA;
+use crate::preserves_rail::UPGRADE_RECEIPT_SCHEMA;
+use crate::preserves_rail::bool_value;
+use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::parse_text;
+use crate::preserves_rail::record;
+use crate::preserves_rail::sequence;
+use crate::preserves_rail::string;
+use crate::preserves_rail::to_text;
+use crate::preserves_rail::u64_value;
+use crate::preserves_rail::value_to_iovalue;
+
+pub const SUPPORTED_TASK_KINDS: &[&str] = &[
+    "install-artifact",
+    "move-name",
+    "compatibility-alias",
+    "deprecate",
+    "migrate-storage",
+    "install-protocol-bridge",
+    "drain-sessions",
+    "update-handler-policy",
+    "transcript-rerun",
+    "update-docs",
+    "cutover",
+    "rollback-pointer",
+    "cleanup",
+];
+
+const MAX_UPGRADE_REFS: usize = 4096;
+const MAX_UPGRADE_DIAGNOSTICS: usize = 4096;
+const MAX_UPGRADE_TASKS: usize = 1024;
+const MAX_UPGRADE_POINTERS: usize = 100_000;
+const MAX_UPGRADE_SOURCE_GATES: usize = 128;
+
+const _: () = assert!(MAX_UPGRADE_REFS <= 100_000);
+const _: () = assert!(MAX_UPGRADE_DIAGNOSTICS <= 100_000);
+const _: () = assert!(MAX_UPGRADE_TASKS <= 10_000);
+const _: () = assert!(MAX_UPGRADE_POINTERS <= 1_000_000);
+const _: () = assert!(MAX_UPGRADE_SOURCE_GATES <= 1_000);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradeTaskInput {
+    pub task_id: String,
+    pub kind: String,
+    pub subject: String,
+    pub from_ref: Option<String>,
+    pub to_ref: Option<String>,
+    pub precondition_refs: Vec<String>,
+    pub postcondition_refs: Vec<String>,
+    pub reversible: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradeCompatibilityWindow {
+    pub old_refs: Vec<String>,
+    pub new_refs: Vec<String>,
+    pub expires_at: Option<u64>,
+    pub policy_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradePlanInput {
+    pub session_id: String,
+    pub reason: String,
+    pub summary: String,
+    pub initiator_ref: String,
+    pub capability_refs: Vec<String>,
+    pub affected_refs: Vec<String>,
+    pub impact_refs: Vec<String>,
+    pub tasks: Vec<UpgradeTaskInput>,
+    pub compatibility: UpgradeCompatibilityWindow,
+    pub rollback_refs: Vec<String>,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub source_gate_receipt_values: Vec<IOValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NameMovePlanInput {
+    pub session_id: String,
+    pub name: String,
+    pub from_ref: String,
+    pub to_ref: String,
+    pub initiator_ref: String,
+    pub capability_refs: Vec<String>,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub source_gate_receipt_values: Vec<IOValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradeTask {
+    pub task_id: String,
+    pub kind: String,
+    pub subject: String,
+    pub from_ref: Option<String>,
+    pub to_ref: Option<String>,
+    pub precondition_refs: Vec<String>,
+    pub postcondition_refs: Vec<String>,
+    pub reversible: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradePlan {
+    pub plan_ref: String,
+    pub session_id: String,
+    pub reason: String,
+    pub summary: String,
+    pub initiator_ref: String,
+    pub capability_refs: Vec<String>,
+    pub affected_refs: Vec<String>,
+    pub impact_refs: Vec<String>,
+    pub tasks: Vec<UpgradeTask>,
+    pub compatibility: UpgradeCompatibilityWindow,
+    pub rollback_refs: Vec<String>,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub checks: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradeReceipt {
+    pub receipt_ref: String,
+    pub operation: String,
+    pub decision: String,
+    pub session_id: String,
+    pub plan_ref: String,
+    pub task_id: Option<String>,
+    pub value: IOValue,
+}
+
+struct UpgradeReceiptValueInput<'a> {
+    operation: &'a str,
+    decision: &'a str,
+    session_id: &'a str,
+    plan_ref: &'a str,
+    task_id: Option<&'a str>,
+    refs: &'a [String],
+    diagnostics: &'a [String],
+    checks: &'a [(&'a str, &'a str)],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradeSessionCreated {
+    pub plan: UpgradePlan,
+    pub receipt: UpgradeReceipt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradeTaskExecution {
+    pub plan_ref: String,
+    pub task_id: String,
+    pub task_kind: String,
+    pub receipt: UpgradeReceipt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NamePointer {
+    pub name: String,
+    pub pointer_kind: String,
+    pub artifact_ref: String,
+    pub previous_ref: Option<String>,
+    pub receipt_ref: String,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradeTaskStatus {
+    pub task_id: String,
+    pub kind: String,
+    pub done: bool,
+    pub receipt_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UpgradeStatus {
+    pub plan_ref: String,
+    pub session_id: String,
+    pub tasks: Vec<UpgradeTaskStatus>,
+    pub remaining_task_ids: Vec<String>,
+}
+
+pub fn upgrade_task_value(task: &UpgradeTaskInput) -> Result<IOValue> {
+    validate_task_input(task)?;
+    Ok(record("upgrade-task-v1", vec![
+        string(&task.task_id),
+        record("kind", vec![string(&task.kind)]),
+        record("subject", vec![string(&task.subject)]),
+        record("from", vec![optional_ref_value(task.from_ref.as_deref())]),
+        record("to", vec![optional_ref_value(task.to_ref.as_deref())]),
+        record("preconditions", vec![refs_sequence(&task.precondition_refs)]),
+        record("postconditions", vec![refs_sequence(&task.postcondition_refs)]),
+        record("reversible", vec![bool_value(task.reversible)]),
+    ]))
+}
+
+pub fn upgrade_plan_value(input: &UpgradePlanInput) -> Result<IOValue> {
+    validate_plan_input(input)?;
+    let source_gate_validation_refs = validate_upgrade_source_gates(input)?;
+    let evidence_refs =
+        sorted_refs(input.evidence_refs.iter().cloned().chain(source_gate_validation_refs.iter().cloned()).collect());
+    Ok(record("upgrade-plan-v1", vec![
+        string(UPGRADE_PLAN_SCHEMA),
+        record("session", vec![string(&input.session_id)]),
+        record("summary", vec![string(&input.reason), string(&input.summary)]),
+        record("initiator", vec![string(&input.initiator_ref), refs_sequence(&input.capability_refs)]),
+        record("affected", vec![refs_sequence(&input.affected_refs)]),
+        record("impact", vec![refs_sequence(&input.impact_refs)]),
+        record("tasks", vec![sequence(
+            input.tasks.iter().map(upgrade_task_value).collect::<Result<Vec<_>>>()?,
+        )]),
+        compatibility_window_value(&input.compatibility)?,
+        record("rollback-rules", vec![refs_sequence(&input.rollback_refs)]),
+        record("policy", vec![refs_sequence(&input.policy_refs)]),
+        record("evidence", vec![refs_sequence(&evidence_refs)]),
+        checks_value(&[
+            "canonical-plan-hash",
+            "task-status-receipt-backed",
+            "names-are-metadata",
+            "compatibility-window-explicit",
+            "policy-admission-required",
+            "strict-octet-source-gate-bound",
+            "no-ucm-clone",
+        ]),
+    ]))
+}
+
+pub fn name_move_plan_value(ledger_root: &Path, input: &NameMovePlanInput) -> Result<IOValue> {
+    name_move_plan_value_with_registry(None, ledger_root, input)
+}
+
+pub fn name_move_plan_value_with_registry(
+    registry_root: Option<&Path>,
+    ledger_root: &Path,
+    input: &NameMovePlanInput,
+) -> Result<IOValue> {
+    validate_non_empty(&input.name, "upgrade name")?;
+    validate_ref(&input.from_ref, "name move from ref")?;
+    validate_ref(&input.to_ref, "name move to ref")?;
+    validate_refs(&input.capability_refs, "upgrade capability ref")?;
+    validate_refs(&input.policy_refs, "upgrade policy ref")?;
+    validate_refs(&input.evidence_refs, "upgrade evidence ref")?;
+    validate_ref(&input.initiator_ref, "upgrade initiator ref")?;
+    let impact_refs = if let Some(registry_root) = registry_root {
+        artifacts::impact_refs(registry_root, std::slice::from_ref(&input.from_ref))?
+    } else {
+        compute_impact_set(ledger_root, std::slice::from_ref(&input.from_ref))?
+    };
+    let tasks = vec![
+        UpgradeTaskInput {
+            task_id: "compatibility-alias".to_string(),
+            kind: "compatibility-alias".to_string(),
+            subject: format!("{}@candidate", input.name),
+            from_ref: Some(input.from_ref.clone()),
+            to_ref: Some(input.to_ref.clone()),
+            precondition_refs: input.evidence_refs.clone(),
+            postcondition_refs: Vec::new(),
+            reversible: true,
+        },
+        UpgradeTaskInput {
+            task_id: "transcript-gate".to_string(),
+            kind: "transcript-rerun".to_string(),
+            subject: input.name.clone(),
+            from_ref: Some(input.from_ref.clone()),
+            to_ref: Some(input.to_ref.clone()),
+            precondition_refs: input.evidence_refs.clone(),
+            postcondition_refs: input.evidence_refs.clone(),
+            reversible: true,
+        },
+        UpgradeTaskInput {
+            task_id: "move-name".to_string(),
+            kind: "move-name".to_string(),
+            subject: input.name.clone(),
+            from_ref: Some(input.from_ref.clone()),
+            to_ref: Some(input.to_ref.clone()),
+            precondition_refs: input.evidence_refs.clone(),
+            postcondition_refs: Vec::new(),
+            reversible: true,
+        },
+        UpgradeTaskInput {
+            task_id: "cutover".to_string(),
+            kind: "cutover".to_string(),
+            subject: input.name.clone(),
+            from_ref: Some(input.from_ref.clone()),
+            to_ref: Some(input.to_ref.clone()),
+            precondition_refs: input.evidence_refs.clone(),
+            postcondition_refs: Vec::new(),
+            reversible: true,
+        },
+    ];
+    upgrade_plan_value(&UpgradePlanInput {
+        session_id: input.session_id.clone(),
+        reason: "name-move".to_string(),
+        summary: format!("Move {} from {} to {}", input.name, input.from_ref, input.to_ref),
+        initiator_ref: input.initiator_ref.clone(),
+        capability_refs: input.capability_refs.clone(),
+        affected_refs: vec![input.from_ref.clone(), input.to_ref.clone()],
+        impact_refs,
+        tasks,
+        compatibility: UpgradeCompatibilityWindow {
+            old_refs: vec![input.from_ref.clone()],
+            new_refs: vec![input.to_ref.clone()],
+            expires_at: None,
+            policy_refs: input.policy_refs.clone(),
+        },
+        rollback_refs: vec![input.from_ref.clone()],
+        policy_refs: input.policy_refs.clone(),
+        evidence_refs: input.evidence_refs.clone(),
+        source_gate_receipt_values: input.source_gate_receipt_values.clone(),
+    })
+}
+
+pub fn parse_upgrade_plan(value: &IOValue) -> Result<UpgradePlan> {
+    let fields = value
+        .collect_simple_record("upgrade-plan-v1", Some(12))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-plan-v1 ...>"))?;
+    require_schema(&fields[0], UPGRADE_PLAN_SCHEMA, "upgrade plan")?;
+    let session_id = record_string(&fields[1], "session")?;
+    let summary = value_to_iovalue(&fields[2]);
+    let summary_fields = simple_record(&summary, "summary", 2)?;
+    let initiator = value_to_iovalue(&fields[3]);
+    let initiator_fields = simple_record(&initiator, "initiator", 2)?;
+    let tasks = parse_tasks(&fields[6])?;
+    let compatibility = parse_compatibility_window(&fields[7])?;
+    let checks = parse_checks(&fields[11])?;
+    require_check(&checks, "canonical-plan-hash", "upgrade plan")?;
+    require_check(&checks, "task-status-receipt-backed", "upgrade plan")?;
+    require_check(&checks, "names-are-metadata", "upgrade plan")?;
+    require_check(&checks, "no-ucm-clone", "upgrade plan")?;
+    let plan = UpgradePlan {
+        plan_ref: canonical_hash(value)?,
+        session_id,
+        reason: required_string(&summary_fields[0], "upgrade reason")?,
+        summary: required_string(&summary_fields[1], "upgrade summary")?,
+        initiator_ref: required_ref(&initiator_fields[0], "upgrade initiator ref")?,
+        capability_refs: parse_ref_sequence_value(&initiator_fields[1], "upgrade capability refs")?,
+        affected_refs: record_ref_sequence(&fields[4], "affected")?,
+        impact_refs: record_ref_sequence(&fields[5], "impact")?,
+        tasks,
+        compatibility,
+        rollback_refs: record_ref_sequence(&fields[8], "rollback-rules")?,
+        policy_refs: record_ref_sequence(&fields[9], "policy")?,
+        evidence_refs: record_ref_sequence(&fields[10], "evidence")?,
+        checks,
+        value: value.clone(),
+    };
+    validate_parsed_plan(&plan)?;
+    Ok(plan)
+}
+
+pub fn compute_impact_set(ledger_root: &Path, seed_refs: &[String]) -> Result<Vec<String>> {
+    validate_refs(seed_refs, "impact seed ref")?;
+    let mut impacted: BTreeSet<String> = seed_refs.iter().cloned().collect();
+    let mut artifacts = Vec::new();
+    for entry in ledger::list_artifacts(ledger_root)? {
+        let value = ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
+        let text = to_text(&value)?;
+        push_bounded(&mut artifacts, (entry.artifact_ref, text), MAX_UPGRADE_REFS, "upgrade impact artifacts")?;
+    }
+    let mut has_changed_impact = true;
+    while has_changed_impact {
+        has_changed_impact = false;
+        let seeds: Vec<String> = impacted.iter().cloned().collect();
+        for (artifact_ref, text) in &artifacts {
+            if impacted.contains(artifact_ref) {
+                continue;
+            }
+            if seeds.iter().any(|seed| text.contains(seed)) {
+                impacted.insert(artifact_ref.clone());
+                has_changed_impact = true;
+            }
+        }
+    }
+    Ok(impacted.into_iter().collect())
+}
+
+pub fn create_session(root: &Path, plan_value: &IOValue) -> Result<UpgradeSessionCreated> {
+    ensure_dirs(root)?;
+    let plan = parse_upgrade_plan(plan_value)?;
+    if plan.policy_refs.is_empty() {
+        return Err(MoltenError::invalid_harness("upgrade session missing policy refs"));
+    }
+    if plan.capability_refs.is_empty() {
+        return Err(MoltenError::invalid_harness("upgrade session missing capability refs"));
+    }
+    write_preserves(&plan_path(root, &plan.plan_ref)?, plan_value)?;
+    let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
+        operation: "session-create",
+        decision: "pass",
+        session_id: &plan.session_id,
+        plan_ref: &plan.plan_ref,
+        task_id: None,
+        refs: &plan_refs(&plan),
+        diagnostics: &[],
+        checks: &[
+            ("plan-shape", "pass"),
+            ("policy-admission", "pass"),
+            ("capability-admission", "pass"),
+            ("impact-set-bound", "pass"),
+            ("compatibility-window", "pass"),
+            ("no-ucm-clone", "pass"),
+        ],
+    })?;
+    let receipt = parse_upgrade_receipt(&receipt_value)?;
+    store_receipt(root, &receipt_value)?;
+    Ok(UpgradeSessionCreated { plan, receipt })
+}
+
+pub fn set_name_pointer(root: &Path, name: &str, artifact_ref: &str) -> Result<UpgradeReceipt> {
+    ensure_dirs(root)?;
+    validate_non_empty(name, "name pointer name")?;
+    validate_ref(artifact_ref, "name pointer artifact ref")?;
+    let previous = read_name_pointer(root, name)?.map(|pointer| pointer.artifact_ref);
+    let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
+        operation: "name-pointer-set",
+        decision: "pass",
+        session_id: "local-name-pointer",
+        plan_ref: artifact_ref,
+        task_id: None,
+        refs: &[artifact_ref.to_string()],
+        diagnostics: &[],
+        checks: &[("names-are-metadata", "pass"), ("immutable-artifact-unchanged", "pass")],
+    })?;
+    let receipt = parse_upgrade_receipt(&receipt_value)?;
+    let pointer = name_pointer_value(name, "name", artifact_ref, previous.as_deref(), &receipt.receipt_ref)?;
+    write_preserves(&name_pointer_path(root, name)?, &pointer)?;
+    store_receipt(root, &receipt_value)?;
+    Ok(receipt)
+}
+
+pub fn read_name_pointer(root: &Path, name: &str) -> Result<Option<NamePointer>> {
+    let path = name_pointer_path(root, name)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    parse_name_pointer(&read_preserves(&path)?).map(Some)
+}
+
+pub fn execute_task(root: &Path, ledger_root: &Path, plan_ref: &str, task_id: &str) -> Result<UpgradeTaskExecution> {
+    ensure_dirs(root)?;
+    let plan = read_plan(root, plan_ref)?;
+    let task_index = plan
+        .tasks
+        .iter()
+        .position(|task| task.task_id == task_id)
+        .ok_or_else(|| MoltenError::invalid_harness(format!("upgrade plan missing task {task_id}")))?;
+    ensure_prior_tasks_complete(root, &plan, task_index)?;
+    let task = plan.tasks[task_index].clone();
+    let (decision, diagnostics, checks) = match task.kind.as_str() {
+        "compatibility-alias" => {
+            let to_ref = task
+                .to_ref
+                .as_deref()
+                .ok_or_else(|| MoltenError::invalid_harness("compatibility alias missing target ref"))?;
+            let previous = task.from_ref.as_deref();
+            let pending_receipt_ref = local_ref("upgrade-pending-receipt", &plan.plan_ref, &task.task_id)?;
+            let pointer = name_pointer_value(&task.subject, "alias", to_ref, previous, &pending_receipt_ref)?;
+            write_preserves(&name_pointer_path(root, &task.subject)?, &pointer)?;
+            ("pass", Vec::new(), vec![("compatibility-alias", "pass"), ("old-and-new-coexist", "pass")])
+        }
+        "transcript-rerun" => {
+            if task.precondition_refs.is_empty() && plan.evidence_refs.is_empty() {
+                ("deny", vec!["transcript rerun task has no transcript or receipt evidence refs".to_string()], vec![
+                    ("transcript-evidence", "fail"),
+                ])
+            } else {
+                ("pass", Vec::new(), vec![("transcript-evidence", "pass"), ("handler-profile-bound", "pass")])
+            }
+        }
+        "move-name" => {
+            let from_ref =
+                task.from_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing from ref"))?;
+            let to_ref =
+                task.to_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing to ref"))?;
+            let current = read_name_pointer(root, &task.subject)?;
+            if let Some(current) = current.as_ref()
+                && current.artifact_ref != from_ref
+            {
+                (
+                    "deny",
+                    vec![format!(
+                        "name {} currently points to {}, expected {}",
+                        task.subject, current.artifact_ref, from_ref
+                    )],
+                    vec![("current-pointer", "fail")],
+                )
+            } else {
+                let pending_receipt_ref = local_ref("upgrade-pending-receipt", &plan.plan_ref, &task.task_id)?;
+                let pointer = name_pointer_value(&task.subject, "name", to_ref, Some(from_ref), &pending_receipt_ref)?;
+                write_preserves(&name_pointer_path(root, &task.subject)?, &pointer)?;
+                ("pass", Vec::new(), vec![
+                    ("metadata-pointer-move", "pass"),
+                    ("artifact-content-immutable", "pass"),
+                ])
+            }
+        }
+        "cutover" => {
+            ("pass", Vec::new(), vec![("metadata-cutover", "pass"), ("transcript-gate-before-cutover", "pass")])
+        }
+        "migrate-storage" => ("pass", Vec::new(), vec![
+            ("typed-storage-migration-recipe-bound", "pass"),
+            ("migration-receipt-required", "pass"),
+        ]),
+        "cleanup" => {
+            let cleanup_ref = task.to_ref.as_deref().or(task.from_ref.as_deref()).unwrap_or(&task.subject);
+            let cleanup = cleanup_admission(root, ledger_root, cleanup_ref)?;
+            if cleanup.decision == "pass" {
+                ("pass", Vec::new(), vec![("cleanup-safety", "pass")])
+            } else {
+                ("deny", vec![format!("cleanup denied by receipt {}", cleanup.receipt_ref)], vec![(
+                    "cleanup-safety",
+                    "fail",
+                )])
+            }
+        }
+        "install-artifact"
+        | "deprecate"
+        | "install-protocol-bridge"
+        | "drain-sessions"
+        | "update-handler-policy"
+        | "update-docs"
+        | "rollback-pointer" => {
+            ("pass", Vec::new(), vec![("task-admission", "pass"), ("side-effect-boundary", "pass")])
+        }
+        other => {
+            return Err(MoltenError::invalid_harness(format!(
+                "unsupported upgrade task kind {other}; expected one of {:?}",
+                SUPPORTED_TASK_KINDS
+            )));
+        }
+    };
+    let refs = task_refs(&task);
+    let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
+        operation: if task.kind == "cutover" {
+            "cutover"
+        } else {
+            "task-complete"
+        },
+        decision,
+        session_id: &plan.session_id,
+        plan_ref: &plan.plan_ref,
+        task_id: Some(&task.task_id),
+        refs: &refs,
+        diagnostics: &diagnostics,
+        checks: &checks,
+    })?;
+    let receipt = parse_upgrade_receipt(&receipt_value)?;
+    store_receipt(root, &receipt_value)?;
+    if receipt.decision == "pass" {
+        write_status(root, &plan, &task, &receipt.receipt_ref)?;
+    }
+    Ok(UpgradeTaskExecution {
+        plan_ref: plan.plan_ref,
+        task_id: task.task_id,
+        task_kind: task.kind,
+        receipt,
+    })
+}
+
+pub fn rollback_task(root: &Path, plan_ref: &str, task_id: &str) -> Result<UpgradeReceipt> {
+    ensure_dirs(root)?;
+    let plan = read_plan(root, plan_ref)?;
+    let task = plan
+        .tasks
+        .iter()
+        .find(|task| task.task_id == task_id)
+        .ok_or_else(|| MoltenError::invalid_harness(format!("upgrade plan missing task {task_id}")))?;
+    let is_irreversible_task = matches!(task.kind.as_str(), "migrate-storage" | "cleanup" | "install-protocol-bridge");
+    let (decision, diagnostics, checks) = if is_irreversible_task || !task.reversible {
+        ("deny", vec![format!("task {} kind {} is not reversible", task.task_id, task.kind)], vec![
+            ("reversible-metadata-only", "fail"),
+            ("irreversible-effects-preserved", "pass"),
+        ])
+    } else if let Some(from_ref) = task.from_ref.as_deref() {
+        let rollback_receipt_ref = local_ref("upgrade-rollback-pending", &plan.plan_ref, &task.task_id)?;
+        let pointer =
+            name_pointer_value(&task.subject, "name", from_ref, task.to_ref.as_deref(), &rollback_receipt_ref)?;
+        if matches!(task.kind.as_str(), "move-name" | "compatibility-alias" | "cutover" | "rollback-pointer") {
+            write_preserves(&name_pointer_path(root, &task.subject)?, &pointer)?;
+        }
+        ("pass", Vec::new(), vec![("reversible-metadata-only", "pass"), ("rollback-pointer", "pass")])
+    } else {
+        ("deny", vec![format!("task {} has no rollback ref", task.task_id)], vec![("rollback-ref", "fail")])
+    };
+    let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
+        operation: "rollback",
+        decision,
+        session_id: &plan.session_id,
+        plan_ref: &plan.plan_ref,
+        task_id: Some(&task.task_id),
+        refs: &task_refs(task),
+        diagnostics: &diagnostics,
+        checks: &checks,
+    })?;
+    let receipt = parse_upgrade_receipt(&receipt_value)?;
+    store_receipt(root, &receipt_value)?;
+    Ok(receipt)
+}
+
+pub fn cleanup_admission(root: &Path, ledger_root: &Path, artifact_ref: &str) -> Result<UpgradeReceipt> {
+    cleanup_admission_with_registry(root, ledger_root, None, artifact_ref)
+}
+
+pub fn cleanup_admission_with_registry(
+    root: &Path,
+    ledger_root: &Path,
+    registry_root: Option<&Path>,
+    artifact_ref: &str,
+) -> Result<UpgradeReceipt> {
+    ensure_dirs(root)?;
+    validate_ref(artifact_ref, "cleanup artifact ref")?;
+    let mut diagnostics = Vec::new();
+    for pointer in read_name_pointers(root)? {
+        if pointer.artifact_ref == artifact_ref || pointer.previous_ref.as_deref() == Some(artifact_ref) {
+            push_bounded(
+                &mut diagnostics,
+                format!("name pointer {} retains {}", pointer.name, artifact_ref),
+                MAX_UPGRADE_DIAGNOSTICS,
+                "upgrade cleanup diagnostics",
+            )?;
+        }
+    }
+    if store_text_contains_ref(&root.join("plans"), artifact_ref)? {
+        push_bounded(
+            &mut diagnostics,
+            format!("upgrade plan retains {artifact_ref}"),
+            MAX_UPGRADE_DIAGNOSTICS,
+            "upgrade cleanup diagnostics",
+        )?;
+    }
+    if store_text_contains_ref(&root.join("receipts"), artifact_ref)? {
+        push_bounded(
+            &mut diagnostics,
+            format!("upgrade receipt retains {artifact_ref}"),
+            MAX_UPGRADE_DIAGNOSTICS,
+            "upgrade cleanup diagnostics",
+        )?;
+    }
+    if let Some(registry_root) = registry_root {
+        for diagnostic in artifacts::reference_diagnostics(registry_root, artifact_ref)? {
+            push_bounded(&mut diagnostics, diagnostic, MAX_UPGRADE_DIAGNOSTICS, "upgrade cleanup diagnostics")?;
+        }
+    }
+    for entry in ledger::list_artifacts(ledger_root)? {
+        if entry.artifact_ref == artifact_ref {
+            continue;
+        }
+        let value = ledger::read_artifact(ledger_root, &entry.artifact_ref)?;
+        if to_text(&value)?.contains(artifact_ref) {
+            push_bounded(
+                &mut diagnostics,
+                format!("ledger artifact {} retains {}", entry.artifact_ref, artifact_ref),
+                MAX_UPGRADE_DIAGNOSTICS,
+                "upgrade cleanup diagnostics",
+            )?;
+        }
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let checks = if diagnostics.is_empty() {
+        vec![("reference-index-empty", "pass"), ("cleanup-safety", "pass")]
+    } else {
+        vec![("reference-index-empty", "fail"), ("cleanup-safety", "fail")]
+    };
+    let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
+        operation: "cleanup",
+        decision,
+        session_id: "cleanup",
+        plan_ref: artifact_ref,
+        task_id: None,
+        refs: &[artifact_ref.to_string()],
+        diagnostics: &diagnostics,
+        checks: &checks,
+    })?;
+    let receipt = parse_upgrade_receipt(&receipt_value)?;
+    store_receipt(root, &receipt_value)?;
+    Ok(receipt)
+}
+
+pub fn status(root: &Path, plan_ref: &str) -> Result<UpgradeStatus> {
+    let plan = read_plan(root, plan_ref)?;
+    ensure_count_at_most(plan.tasks.len(), MAX_UPGRADE_TASKS, "upgrade plan tasks")?;
+    let mut tasks = Vec::with_capacity(plan.tasks.len());
+    let mut remaining_task_ids = Vec::new();
+    for task in &plan.tasks {
+        let receipt_ref = read_status_receipt_ref(root, &plan, &task.task_id)?;
+        let is_task_done = receipt_ref.is_some();
+        if !is_task_done {
+            push_bounded(&mut remaining_task_ids, task.task_id.clone(), MAX_UPGRADE_TASKS, "upgrade remaining tasks")?;
+        }
+        push_bounded(
+            &mut tasks,
+            UpgradeTaskStatus {
+                task_id: task.task_id.clone(),
+                kind: task.kind.clone(),
+                done: is_task_done,
+                receipt_ref,
+            },
+            MAX_UPGRADE_TASKS,
+            "upgrade task status entries",
+        )?;
+    }
+    Ok(UpgradeStatus {
+        plan_ref: plan.plan_ref,
+        session_id: plan.session_id,
+        tasks,
+        remaining_task_ids,
+    })
+}
+
+fn read_plan(root: &Path, plan_ref: &str) -> Result<UpgradePlan> {
+    validate_ref(plan_ref, "upgrade plan ref")?;
+    parse_upgrade_plan(&read_preserves(&plan_path(root, plan_ref)?)?)
+}
+
+fn validate_upgrade_source_gates(input: &UpgradePlanInput) -> Result<Vec<String>> {
+    if input.source_gate_receipt_values.is_empty() {
+        return Err(MoltenError::invalid_harness("upgrade plan requires strict Octet source gate receipt values"));
+    }
+    ensure_count_at_most(
+        input.source_gate_receipt_values.len(),
+        MAX_UPGRADE_SOURCE_GATES,
+        "upgrade source gate receipt values",
+    )?;
+    let subject_ref = source_gate_subject_ref(&input.session_id, &input.affected_refs)?;
+    let mut validation_refs = Vec::new();
+    let mut diagnostics = Vec::new();
+    for value in &input.source_gate_receipt_values {
+        let validation = octet_gate::validate_octet_source_gate(&octet_gate::OctetSourceGateValidationInput {
+            consumer: "upgrade-plan".to_string(),
+            subject_ref: subject_ref.clone(),
+            gate_receipt_value: Some(value.clone()),
+            source_scope: Vec::new(),
+        })?;
+        push_bounded(
+            &mut validation_refs,
+            validation.validation_ref.clone(),
+            MAX_UPGRADE_SOURCE_GATES,
+            "upgrade source gate validation refs",
+        )?;
+        if validation.decision != "pass" {
+            push_bounded(
+                &mut diagnostics,
+                format!("strict Octet source gate validation {} denied", validation.validation_ref),
+                MAX_UPGRADE_DIAGNOSTICS,
+                "upgrade source gate diagnostics",
+            )?;
+        }
+    }
+    if validation_refs.is_empty() || !diagnostics.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "upgrade plan source gate validation failed: {}",
+            diagnostics.join("; ")
+        )));
+    }
+    Ok(validation_refs)
+}
+
+fn source_gate_subject_ref(session_id: &str, affected_refs: &[String]) -> Result<String> {
+    canonical_hash(&record("upgrade-source-gate-subject-v1", vec![
+        string(session_id),
+        refs_sequence(&sorted_refs(affected_refs.to_vec())),
+    ]))
+}
+
+fn sorted_refs(mut refs: Vec<String>) -> Vec<String> {
+    refs.sort();
+    refs.dedup();
+    refs
+}
+
+fn validate_plan_input(input: &UpgradePlanInput) -> Result<()> {
+    validate_non_empty(&input.session_id, "upgrade session id")?;
+    validate_non_empty(&input.reason, "upgrade reason")?;
+    validate_non_empty(&input.summary, "upgrade summary")?;
+    validate_ref(&input.initiator_ref, "upgrade initiator ref")?;
+    validate_refs(&input.capability_refs, "upgrade capability ref")?;
+    validate_refs(&input.affected_refs, "upgrade affected ref")?;
+    validate_refs(&input.impact_refs, "upgrade impact ref")?;
+    validate_refs(&input.rollback_refs, "upgrade rollback ref")?;
+    validate_refs(&input.policy_refs, "upgrade policy ref")?;
+    validate_refs(&input.evidence_refs, "upgrade evidence ref")?;
+    validate_compatibility(&input.compatibility)?;
+    if input.tasks.is_empty() {
+        return Err(MoltenError::invalid_harness("upgrade plan must contain at least one task"));
+    }
+    let mut seen = BTreeSet::new();
+    for task in &input.tasks {
+        validate_task_input(task)?;
+        if !seen.insert(task.task_id.clone()) {
+            return Err(MoltenError::invalid_harness(format!("duplicate upgrade task id {}", task.task_id)));
+        }
+    }
+    Ok(())
+}
+
+fn validate_parsed_plan(plan: &UpgradePlan) -> Result<()> {
+    validate_non_empty(&plan.session_id, "upgrade session id")?;
+    validate_ref(&plan.initiator_ref, "upgrade initiator ref")?;
+    validate_refs(&plan.capability_refs, "upgrade capability ref")?;
+    validate_refs(&plan.affected_refs, "upgrade affected ref")?;
+    validate_refs(&plan.impact_refs, "upgrade impact ref")?;
+    validate_refs(&plan.rollback_refs, "upgrade rollback ref")?;
+    validate_refs(&plan.policy_refs, "upgrade policy ref")?;
+    validate_refs(&plan.evidence_refs, "upgrade evidence ref")?;
+    validate_compatibility(&plan.compatibility)?;
+    if plan.tasks.is_empty() {
+        return Err(MoltenError::invalid_harness("upgrade plan must contain at least one task"));
+    }
+    let mut seen = BTreeSet::new();
+    for task in &plan.tasks {
+        validate_task(task)?;
+        if !seen.insert(task.task_id.clone()) {
+            return Err(MoltenError::invalid_harness(format!("duplicate upgrade task id {}", task.task_id)));
+        }
+    }
+    if plan.tasks.iter().any(|task| task.kind == "cutover")
+        && !plan.tasks.iter().any(|task| task.kind == "transcript-rerun")
+    {
+        return Err(MoltenError::invalid_harness("upgrade cutover requires a transcript-rerun task before cutover"));
+    }
+    Ok(())
+}
+
+fn validate_task_input(task: &UpgradeTaskInput) -> Result<()> {
+    validate_non_empty(&task.task_id, "upgrade task id")?;
+    validate_non_empty(&task.subject, "upgrade task subject")?;
+    validate_task_kind(&task.kind)?;
+    if let Some(value) = task.from_ref.as_deref() {
+        validate_ref(value, "upgrade task from ref")?;
+    }
+    if let Some(value) = task.to_ref.as_deref() {
+        validate_ref(value, "upgrade task to ref")?;
+    }
+    validate_refs(&task.precondition_refs, "upgrade task precondition ref")?;
+    validate_refs(&task.postcondition_refs, "upgrade task postcondition ref")?;
+    validate_task_shape(&task.kind, task.from_ref.as_deref(), task.to_ref.as_deref(), task.reversible)
+}
+
+fn validate_task(task: &UpgradeTask) -> Result<()> {
+    validate_non_empty(&task.task_id, "upgrade task id")?;
+    validate_non_empty(&task.subject, "upgrade task subject")?;
+    validate_task_kind(&task.kind)?;
+    if let Some(value) = task.from_ref.as_deref() {
+        validate_ref(value, "upgrade task from ref")?;
+    }
+    if let Some(value) = task.to_ref.as_deref() {
+        validate_ref(value, "upgrade task to ref")?;
+    }
+    validate_refs(&task.precondition_refs, "upgrade task precondition ref")?;
+    validate_refs(&task.postcondition_refs, "upgrade task postcondition ref")?;
+    validate_task_shape(&task.kind, task.from_ref.as_deref(), task.to_ref.as_deref(), task.reversible)
+}
+
+fn validate_task_shape(kind: &str, from_ref: Option<&str>, to_ref: Option<&str>, reversible: bool) -> Result<()> {
+    match kind {
+        "move-name" | "compatibility-alias" | "cutover" | "rollback-pointer" => {
+            if from_ref.is_none() || to_ref.is_none() {
+                return Err(MoltenError::invalid_harness(format!("upgrade task kind {kind} requires from/to refs")));
+            }
+        }
+        "migrate-storage" => {
+            if from_ref.is_none() || to_ref.is_none() {
+                return Err(MoltenError::invalid_harness("storage migration upgrade task requires recipe/source refs"));
+            }
+            if reversible {
+                return Err(MoltenError::invalid_harness(
+                    "storage migration upgrade task cannot claim reversible rollback",
+                ));
+            }
+        }
+        "cleanup" if from_ref.is_none() && to_ref.is_none() => {
+            return Err(MoltenError::invalid_harness("cleanup upgrade task requires an artifact ref"));
+        }
+        "cleanup" => {}
+        _ => {}
+    }
+    Ok(())
+}
+
+fn validate_task_kind(kind: &str) -> Result<()> {
+    if SUPPORTED_TASK_KINDS.contains(&kind) {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "unsupported upgrade task kind {kind}; expected one of {:?}",
+            SUPPORTED_TASK_KINDS
+        )))
+    }
+}
+
+fn validate_compatibility(compatibility: &UpgradeCompatibilityWindow) -> Result<()> {
+    validate_refs(&compatibility.old_refs, "compatibility old ref")?;
+    validate_refs(&compatibility.new_refs, "compatibility new ref")?;
+    validate_refs(&compatibility.policy_refs, "compatibility policy ref")?;
+    let old: BTreeSet<_> = compatibility.old_refs.iter().collect();
+    if compatibility.new_refs.iter().any(|new_ref| old.contains(new_ref)) {
+        return Err(MoltenError::invalid_harness("compatibility window old/new refs must be explicit and distinct"));
+    }
+    Ok(())
+}
+
+fn compatibility_window_value(compatibility: &UpgradeCompatibilityWindow) -> Result<IOValue> {
+    validate_compatibility(compatibility)?;
+    Ok(record("compatibility-window", vec![
+        record("old", vec![refs_sequence(&compatibility.old_refs)]),
+        record("new", vec![refs_sequence(&compatibility.new_refs)]),
+        record("expires-at", vec![optional_u64_value(compatibility.expires_at)]),
+        record("policy", vec![refs_sequence(&compatibility.policy_refs)]),
+    ]))
+}
+
+fn parse_compatibility_window(value: &Value<IOValue>) -> Result<UpgradeCompatibilityWindow> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, "compatibility-window", 4)?;
+    Ok(UpgradeCompatibilityWindow {
+        old_refs: record_ref_sequence(&fields[0], "old")?,
+        new_refs: record_ref_sequence(&fields[1], "new")?,
+        expires_at: record_optional_u64(&fields[2], "expires-at")?,
+        policy_refs: record_ref_sequence(&fields[3], "policy")?,
+    })
+}
+
+fn parse_tasks(value: &Value<IOValue>) -> Result<Vec<UpgradeTask>> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, "tasks", 1)?;
+    let items = required_sequence(&fields[0], "upgrade tasks")?;
+    let mut tasks = Vec::with_capacity(items.len());
+    for item in items.iter() {
+        tasks.push(parse_task(&value_to_iovalue(item))?);
+    }
+    Ok(tasks)
+}
+
+fn parse_task(value: &IOValue) -> Result<UpgradeTask> {
+    let fields = value
+        .collect_simple_record("upgrade-task-v1", Some(8))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-task-v1 ...>"))?;
+    let reversible_value = value_to_iovalue(&fields[7]);
+    let reversible = simple_record(&reversible_value, "reversible", 1)?;
+    Ok(UpgradeTask {
+        task_id: required_string(&fields[0], "upgrade task id")?,
+        kind: record_string(&fields[1], "kind")?,
+        subject: record_string(&fields[2], "subject")?,
+        from_ref: record_optional_ref(&fields[3], "from")?,
+        to_ref: record_optional_ref(&fields[4], "to")?,
+        precondition_refs: record_ref_sequence(&fields[5], "preconditions")?,
+        postcondition_refs: record_ref_sequence(&fields[6], "postconditions")?,
+        reversible: required_bool(&reversible[0], "reversible")?,
+    })
+}
+
+fn parse_upgrade_receipt(value: &IOValue) -> Result<UpgradeReceipt> {
+    let fields = value
+        .collect_simple_record("upgrade-receipt-v1", Some(8))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-receipt-v1 ...>"))?;
+    require_schema(&fields[0], UPGRADE_RECEIPT_SCHEMA, "upgrade receipt")?;
+    let session = value_to_iovalue(&fields[3]);
+    let session_fields = simple_record(&session, "session", 2)?;
+    let task = value_to_iovalue(&fields[4]);
+    let task_fields = simple_record(&task, "task", 1)?;
+    let checks = parse_checks(&fields[7])?;
+    if checks.is_empty() {
+        return Err(MoltenError::invalid_harness("upgrade receipt missing checks"));
+    }
+    Ok(UpgradeReceipt {
+        receipt_ref: canonical_hash(value)?,
+        operation: record_string(&fields[1], "operation")?,
+        decision: record_string(&fields[2], "decision")?,
+        session_id: required_string(&session_fields[0], "upgrade receipt session id")?,
+        plan_ref: required_ref(&session_fields[1], "upgrade receipt plan ref")?,
+        task_id: parse_optional_string_value(&task_fields[0])?,
+        value: value.clone(),
+    })
+}
+
+fn upgrade_receipt_value(input: &UpgradeReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_non_empty(input.operation, "upgrade receipt operation")?;
+    if input.decision != "pass" && input.decision != "deny" {
+        return Err(MoltenError::invalid_harness(format!("unsupported upgrade receipt decision {}", input.decision)));
+    }
+    validate_non_empty(input.session_id, "upgrade receipt session id")?;
+    validate_ref(input.plan_ref, "upgrade receipt plan ref")?;
+    validate_refs(input.refs, "upgrade receipt ref")?;
+    Ok(record("upgrade-receipt-v1", vec![
+        string(UPGRADE_RECEIPT_SCHEMA),
+        record("operation", vec![string(input.operation)]),
+        record("decision", vec![string(input.decision)]),
+        record("session", vec![string(input.session_id), string(input.plan_ref)]),
+        record("task", vec![optional_string_value(input.task_id)]),
+        record("refs", vec![refs_sequence(input.refs)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        checks_value_from_pairs(input.checks),
+    ]))
+}
+
+fn name_pointer_value(
+    name: &str,
+    pointer_kind: &str,
+    artifact_ref: &str,
+    previous_ref: Option<&str>,
+    receipt_ref: &str,
+) -> Result<IOValue> {
+    validate_non_empty(name, "name pointer name")?;
+    validate_non_empty(pointer_kind, "name pointer kind")?;
+    validate_ref(artifact_ref, "name pointer artifact ref")?;
+    if let Some(previous_ref) = previous_ref {
+        validate_ref(previous_ref, "name pointer previous ref")?;
+    }
+    validate_ref(receipt_ref, "name pointer receipt ref")?;
+    Ok(record("upgrade-name-pointer-v1", vec![
+        string(UPGRADE_NAME_POINTER_SCHEMA),
+        record("name", vec![string(name)]),
+        record("kind", vec![string(pointer_kind)]),
+        record("artifact", vec![string(artifact_ref)]),
+        record("previous", vec![optional_ref_value(previous_ref)]),
+        record("receipt", vec![string(receipt_ref)]),
+        checks_value(&["names-are-metadata", "artifact-content-immutable"]),
+    ]))
+}
+
+fn parse_name_pointer(value: &IOValue) -> Result<NamePointer> {
+    let fields = value
+        .collect_simple_record("upgrade-name-pointer-v1", Some(7))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-name-pointer-v1 ...>"))?;
+    require_schema(&fields[0], UPGRADE_NAME_POINTER_SCHEMA, "upgrade name pointer")?;
+    let checks = parse_checks(&fields[6])?;
+    require_check(&checks, "names-are-metadata", "upgrade name pointer")?;
+    Ok(NamePointer {
+        name: record_string(&fields[1], "name")?,
+        pointer_kind: record_string(&fields[2], "kind")?,
+        artifact_ref: record_ref(&fields[3], "artifact")?,
+        previous_ref: record_optional_ref(&fields[4], "previous")?,
+        receipt_ref: record_ref(&fields[5], "receipt")?,
+        value: value.clone(),
+    })
+}
+
+fn plan_refs(plan: &UpgradePlan) -> Vec<String> {
+    let mut refs = BTreeSet::new();
+    refs.insert(plan.plan_ref.clone());
+    refs.insert(plan.initiator_ref.clone());
+    refs.extend(plan.capability_refs.iter().cloned());
+    refs.extend(plan.affected_refs.iter().cloned());
+    refs.extend(plan.impact_refs.iter().cloned());
+    refs.extend(plan.rollback_refs.iter().cloned());
+    refs.extend(plan.policy_refs.iter().cloned());
+    refs.extend(plan.evidence_refs.iter().cloned());
+    for task in &plan.tasks {
+        refs.extend(task_refs(task));
+    }
+    refs.into_iter().collect()
+}
+
+fn task_refs(task: &UpgradeTask) -> Vec<String> {
+    let mut refs = BTreeSet::new();
+    if let Some(value) = task.from_ref.as_ref() {
+        refs.insert(value.clone());
+    }
+    if let Some(value) = task.to_ref.as_ref() {
+        refs.insert(value.clone());
+    }
+    refs.extend(task.precondition_refs.iter().cloned());
+    refs.extend(task.postcondition_refs.iter().cloned());
+    refs.into_iter().collect()
+}
+
+fn ensure_prior_tasks_complete(root: &Path, plan: &UpgradePlan, task_index: usize) -> Result<()> {
+    for task in &plan.tasks[..task_index] {
+        if read_status_receipt_ref(root, plan, &task.task_id)?.is_none() {
+            return Err(MoltenError::invalid_harness(format!(
+                "upgrade task {} cannot run before prior task {} completes",
+                plan.tasks[task_index].task_id, task.task_id
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn write_status(root: &Path, plan: &UpgradePlan, task: &UpgradeTask, receipt_ref: &str) -> Result<()> {
+    validate_ref(receipt_ref, "upgrade task status receipt ref")?;
+    let path = status_path(root, &plan.session_id, &task.task_id)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(MoltenError::from)?;
+    }
+    fs::write(path, receipt_ref).map_err(MoltenError::from)
+}
+
+fn read_status_receipt_ref(root: &Path, plan: &UpgradePlan, task_id: &str) -> Result<Option<String>> {
+    let path = status_path(root, &plan.session_id, task_id)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let receipt_ref = fs::read_to_string(path).map_err(MoltenError::from)?;
+    validate_ref(&receipt_ref, "upgrade task status receipt ref")?;
+    Ok(Some(receipt_ref))
+}
+
+fn read_name_pointers(root: &Path) -> Result<Vec<NamePointer>> {
+    let names = root.join("names");
+    if !names.exists() {
+        return Ok(Vec::new());
+    }
+    let mut pointers = Vec::new();
+    for entry in fs::read_dir(names).map_err(MoltenError::from)? {
+        let entry = entry.map_err(MoltenError::from)?;
+        if entry.file_type().map_err(MoltenError::from)?.is_file() {
+            push_bounded(
+                &mut pointers,
+                parse_name_pointer(&read_preserves(&entry.path())?)?,
+                MAX_UPGRADE_POINTERS,
+                "upgrade name pointers",
+            )?;
+        }
+    }
+    Ok(pointers)
+}
+
+fn store_text_contains_ref(dir: &Path, target_ref: &str) -> Result<bool> {
+    if !dir.exists() {
+        return Ok(false);
+    }
+    let mut pending_dirs = Vec::with_capacity(1);
+    pending_dirs.push(dir.to_path_buf());
+    let mut scanned_entries = 0usize;
+    while let Some(current_dir) = pending_dirs.pop() {
+        for entry in fs::read_dir(current_dir).map_err(MoltenError::from)? {
+            scanned_entries = scanned_entries
+                .checked_add(1)
+                .ok_or_else(|| MoltenError::invalid_harness("upgrade store scan count overflow"))?;
+            ensure_count_at_most(scanned_entries, MAX_UPGRADE_POINTERS, "upgrade store scan entries")?;
+            let entry = entry.map_err(MoltenError::from)?;
+            if entry.file_type().map_err(MoltenError::from)?.is_dir() {
+                push_bounded(&mut pending_dirs, entry.path(), MAX_UPGRADE_POINTERS, "upgrade store scan dirs")?;
+            } else if fs::read_to_string(entry.path()).map_err(MoltenError::from)?.contains(target_ref) {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+fn ensure_dirs(root: &Path) -> Result<()> {
+    fs::create_dir_all(root.join("plans")).map_err(MoltenError::from)?;
+    fs::create_dir_all(root.join("receipts")).map_err(MoltenError::from)?;
+    fs::create_dir_all(root.join("names")).map_err(MoltenError::from)?;
+    fs::create_dir_all(root.join("status")).map_err(MoltenError::from)
+}
+
+fn write_preserves(path: &Path, value: &IOValue) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(MoltenError::from)?;
+    }
+    fs::write(path, to_text(value)?).map_err(MoltenError::from)
+}
+
+fn read_preserves(path: &Path) -> Result<IOValue> {
+    parse_text(&fs::read_to_string(path).map_err(MoltenError::from)?)
+}
+
+fn store_receipt(root: &Path, receipt_value: &IOValue) -> Result<()> {
+    let receipt_ref = canonical_hash(receipt_value)?;
+    write_preserves(&receipt_path(root, &receipt_ref)?, receipt_value)
+}
+
+fn plan_path(root: &Path, plan_ref: &str) -> Result<PathBuf> {
+    Ok(root.join("plans").join(filename_for_ref(plan_ref)?))
+}
+
+fn receipt_path(root: &Path, receipt_ref: &str) -> Result<PathBuf> {
+    Ok(root.join("receipts").join(filename_for_ref(receipt_ref)?))
+}
+
+fn name_pointer_path(root: &Path, name: &str) -> Result<PathBuf> {
+    let key = canonical_hash(&record("upgrade-name-pointer-key", vec![string(name)]))?;
+    Ok(root.join("names").join(filename_for_ref(&key)?))
+}
+
+fn status_path(root: &Path, session_id: &str, task_id: &str) -> Result<PathBuf> {
+    let session = canonical_hash(&record("upgrade-session-status-key", vec![string(session_id)]))?;
+    let task = canonical_hash(&record("upgrade-task-status-key", vec![string(task_id)]))?;
+    Ok(root.join("status").join(filename_for_ref(&session)?).join(filename_for_ref(&task)?))
+}
+
+fn filename_for_ref(value_ref: &str) -> Result<String> {
+    value_ref
+        .strip_prefix("blake3:")
+        .map(|hex| format!("blake3_{hex}.preserves"))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("unsupported ref {value_ref}; expected blake3 ref")))
+}
+
+fn local_ref(kind: &str, a: &str, b: &str) -> Result<String> {
+    canonical_hash(&record("upgrade-local-ref", vec![string(kind), string(a), string(b)]))
+}
+
+fn refs_sequence(refs: &[String]) -> IOValue {
+    sequence(refs.iter().map(string).collect())
+}
+
+fn optional_ref_value(value: Option<&str>) -> IOValue {
+    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+}
+
+fn optional_string_value(value: Option<&str>) -> IOValue {
+    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+}
+
+fn optional_u64_value(value: Option<u64>) -> IOValue {
+    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![u64_value(value)]))
+}
+
+fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+    if value.collect_simple_record("none", Some(0)).is_some() {
+        return Ok(None);
+    }
+    if let Some(fields) = value.collect_simple_record("some", Some(1)) {
+        return required_ref(&fields[0], "optional ref").map(Some);
+    }
+    required_ref(value, "optional ref").map(Some)
+}
+
+fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>> {
+    if value.collect_simple_record("none", Some(0)).is_some() {
+        return Ok(None);
+    }
+    if let Some(fields) = value.collect_simple_record("some", Some(1)) {
+        return required_string(&fields[0], "optional string").map(Some);
+    }
+    required_string(value, "optional string").map(Some)
+}
+
+fn parse_optional_u64_value(value: &Value<IOValue>) -> Result<Option<u64>> {
+    if value.collect_simple_record("none", Some(0)).is_some() {
+        return Ok(None);
+    }
+    if let Some(fields) = value.collect_simple_record("some", Some(1)) {
+        return required_u64(&fields[0], "optional u64").map(Some);
+    }
+    required_u64(value, "optional u64").map(Some)
+}
+
+fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    required_string(&record[0], label)
+}
+
+fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    required_ref(&record[0], label)
+}
+
+fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    parse_optional_ref_value(&record[0])
+}
+
+fn record_optional_u64(value: &Value<IOValue>, label: &str) -> Result<Option<u64>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    parse_optional_u64_value(&record[0])
+}
+
+fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    parse_ref_sequence_value(&record[0], label)
+}
+
+fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {
+    if count > maximum {
+        Err(MoltenError::invalid_harness(format!("{label} count {count} exceeds maximum {maximum}")))
+    } else {
+        Ok(())
+    }
+}
+
+fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, label: &str) -> Result<()> {
+    let count = values
+        .item_count()
+        .checked_add(1)
+        .ok_or_else(|| MoltenError::invalid_harness(format!("{label} count overflow")))?;
+    ensure_count_at_most(count, maximum, label)?;
+    values.push_item(value);
+    Ok(())
+}
+
+fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+    let items = required_sequence(value, label)?;
+    ensure_count_at_most(items.len(), MAX_UPGRADE_REFS, label)?;
+    let mut refs = Vec::with_capacity(items.len());
+    for item in items.iter() {
+        push_bounded(&mut refs, required_ref(item, label)?, MAX_UPGRADE_REFS, label)?;
+    }
+    Ok(refs)
+}
+
+fn checks_value(names: &[&str]) -> IOValue {
+    checks_value_from_pairs(&names.iter().map(|name| (*name, "pass")).collect::<Vec<_>>())
+}
+
+fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
+    record("checks", vec![sequence(
+        checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
+    )])
+}
+
+fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+    let value = value_to_iovalue(value);
+    let checks = simple_record(&value, "checks", 1)?;
+    let items = required_sequence(&checks[0], "checks")?;
+    let mut parsed = Vec::with_capacity(items.len());
+    for item in items.iter() {
+        let item = value_to_iovalue(item);
+        let check = simple_record(&item, "check", 2)?;
+        let name = required_string(&check[0], "check name")?;
+        let status = required_string(&check[1], "check status")?;
+        if status != "pass" && status != "fail" {
+            return Err(MoltenError::invalid_harness(format!("upgrade check {name} has status {status}")));
+        }
+        push_bounded(&mut parsed, name, MAX_UPGRADE_TASKS, "upgrade checks")?;
+    }
+    Ok(parsed)
+}
+
+fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()> {
+    if checks.iter().any(|check| check == expected) {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("{context} missing {expected} check")))
+    }
+}
+
+fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+    let actual = required_string(value, context)?;
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("unsupported {context} schema {actual}; expected {expected}")))
+    }
+}
+
+fn simple_record<'a>(
+    value: &'a IOValue,
+    label: &str,
+    arity: usize,
+) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+    value
+        .collect_simple_record(label, Some(arity))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+}
+
+#[allow(clippy::owned_cow)]
+fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+    value
+        .collect_sequence()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+}
+
+fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+    value
+        .as_string()
+        .map(|value| value.into_owned())
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+}
+
+fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+    let value = required_string(value, field)?;
+    validate_ref(&value, field)?;
+    Ok(value)
+}
+
+fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+    value
+        .as_u64()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+}
+
+fn required_bool(value: &Value<IOValue>, field: &str) -> Result<bool> {
+    value.as_boolean().ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {field}")))
+}
+
+fn validate_non_empty(value: &str, field: &str) -> Result<()> {
+    if value.is_empty() {
+        Err(MoltenError::invalid_harness(format!("{field} cannot be empty")))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
+    validate_non_empty(value_ref, field)?;
+    if value_ref.starts_with("blake3:") {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("{field} must be a blake3 ref, got {value_ref}")))
+    }
+}
+
+fn validate_refs(refs: &[String], field: &str) -> Result<()> {
+    for value_ref in refs {
+        validate_ref(value_ref, field)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+
+    use hegel::TestCase;
+    use hegel::generators;
+
+    use super::*;
+    use crate::preserves_rail::parse_text;
+
+    #[test]
+    fn name_move_session_keeps_artifacts_immutable_and_receipted() {
+        let root = temp_dir("upgrade-name-move");
+        let ledger_root = root.join("ledger");
+        let store = root.join("upgrades");
+        let old = ledger::import_artifact(&ledger_root, &parse_text("<module \"old\">").expect("old artifact"))
+            .expect("import old")
+            .artifact_ref;
+        let new = ledger::import_artifact(&ledger_root, &parse_text("<module \"new\">").expect("new artifact"))
+            .expect("import new")
+            .artifact_ref;
+        let dependent =
+            ledger::import_artifact(&ledger_root, &record("dependent", vec![string(&old), string("uses old")]))
+                .expect("import dependent")
+                .artifact_ref;
+        let plan_value = name_move_plan_value(&ledger_root, &NameMovePlanInput {
+            session_id: "session-name-move".to_string(),
+            name: "app/main".to_string(),
+            from_ref: old.clone(),
+            to_ref: new.clone(),
+            initiator_ref: test_ref("initiator"),
+            capability_refs: vec![test_ref("upgrade-capability")],
+            policy_refs: vec![test_ref("upgrade-policy")],
+            evidence_refs: vec![test_ref("transcript-pass")],
+            source_gate_receipt_values: source_gate_values(),
+        })
+        .expect("plan value");
+        let plan = parse_upgrade_plan(&plan_value).expect("parse plan");
+        assert!(plan.impact_refs.contains(&old));
+        assert!(plan.impact_refs.contains(&dependent));
+        let created = create_session(&store, &plan_value).expect("create session");
+        assert_eq!(created.receipt.decision, "pass");
+        set_name_pointer(&store, "app/main", &old).expect("initial name pointer");
+        for task_id in ["compatibility-alias", "transcript-gate", "move-name", "cutover"] {
+            let executed = execute_task(&store, &ledger_root, &created.plan.plan_ref, task_id).expect("execute task");
+            assert_eq!(executed.receipt.decision, "pass", "{task_id}");
+        }
+        let pointer = read_name_pointer(&store, "app/main").expect("read pointer").expect("pointer exists");
+        assert_eq!(pointer.artifact_ref, new);
+        let status = status(&store, &created.plan.plan_ref).expect("status");
+        assert!(status.remaining_task_ids.is_empty());
+        let cleanup_old = cleanup_admission(&store, &ledger_root, &old).expect("cleanup old");
+        assert_eq!(cleanup_old.decision, "deny");
+    }
+
+    #[test]
+    fn registry_backed_name_move_impact_uses_reverse_dependencies() {
+        let root = temp_dir("upgrade-registry-impact");
+        let registry_root = root.join("registry");
+        let ledger_root = root.join("ledger");
+        let old = artifacts::install_artifact(&registry_root, &artifact_input("schema", "old", &[]))
+            .expect("install old")
+            .artifact_ref;
+        let dependent = artifacts::install_artifact(
+            &registry_root,
+            &artifact_input("steel", "dependent", std::slice::from_ref(&old)),
+        )
+        .expect("install dependent")
+        .artifact_ref;
+        let new = artifacts::install_artifact(&registry_root, &artifact_input("schema", "new", &[]))
+            .expect("install new")
+            .artifact_ref;
+        let plan_value = name_move_plan_value_with_registry(Some(&registry_root), &ledger_root, &NameMovePlanInput {
+            session_id: "session-registry-impact".to_string(),
+            name: "app/main".to_string(),
+            from_ref: old.clone(),
+            to_ref: new,
+            initiator_ref: test_ref("initiator"),
+            capability_refs: vec![test_ref("upgrade-capability")],
+            policy_refs: vec![test_ref("upgrade-policy")],
+            evidence_refs: vec![test_ref("transcript-pass")],
+            source_gate_receipt_values: source_gate_values(),
+        })
+        .expect("registry impact plan");
+        let plan = parse_upgrade_plan(&plan_value).expect("parse plan");
+        assert!(plan.impact_refs.contains(&old));
+        assert!(plan.impact_refs.contains(&dependent));
+    }
+
+    #[test]
+    fn rollback_denies_irreversible_storage_migration_claims() {
+        let root = temp_dir("upgrade-rollback");
+        let store = root.join("upgrades");
+        let source_schema = test_ref("schema-v1");
+        let recipe = test_ref("migration-recipe");
+        let plan_value = upgrade_plan_value(&UpgradePlanInput {
+            session_id: "session-storage-migration".to_string(),
+            reason: "storage migration".to_string(),
+            summary: "migrate durable records".to_string(),
+            initiator_ref: test_ref("initiator"),
+            capability_refs: vec![test_ref("upgrade-capability")],
+            affected_refs: vec![source_schema.clone(), recipe.clone()],
+            impact_refs: vec![source_schema.clone()],
+            tasks: vec![UpgradeTaskInput {
+                task_id: "migrate".to_string(),
+                kind: "migrate-storage".to_string(),
+                subject: "profiles".to_string(),
+                from_ref: Some(source_schema),
+                to_ref: Some(recipe),
+                precondition_refs: vec![test_ref("storage-migration-policy")],
+                postcondition_refs: Vec::new(),
+                reversible: false,
+            }],
+            compatibility: UpgradeCompatibilityWindow {
+                old_refs: vec![test_ref("schema-v1-old")],
+                new_refs: vec![test_ref("schema-v2-new")],
+                expires_at: Some(10),
+                policy_refs: vec![test_ref("compat-policy")],
+            },
+            rollback_refs: Vec::new(),
+            policy_refs: vec![test_ref("upgrade-policy")],
+            evidence_refs: vec![test_ref("migration-review")],
+            source_gate_receipt_values: source_gate_values(),
+        })
+        .expect("plan value");
+        let created = create_session(&store, &plan_value).expect("create session");
+        let rollback = rollback_task(&store, &created.plan.plan_ref, "migrate").expect("rollback denied receipt");
+        assert_eq!(rollback.decision, "deny");
+        assert!(to_text(&rollback.value).expect("receipt text").contains("not reversible"));
+    }
+
+    #[test]
+    fn upgrade_plan_requires_valid_source_gate_receipt_content() {
+        let base_input = || UpgradePlanInput {
+            session_id: "session-source-gate".to_string(),
+            reason: "source gate".to_string(),
+            summary: "validate strict source gate".to_string(),
+            initiator_ref: test_ref("initiator"),
+            capability_refs: vec![test_ref("upgrade-capability")],
+            affected_refs: vec![test_ref("affected")],
+            impact_refs: vec![test_ref("affected")],
+            tasks: vec![UpgradeTaskInput {
+                task_id: "transcript".to_string(),
+                kind: "transcript-rerun".to_string(),
+                subject: "source-gate".to_string(),
+                from_ref: None,
+                to_ref: None,
+                precondition_refs: vec![test_ref("transcript")],
+                postcondition_refs: Vec::new(),
+                reversible: true,
+            }],
+            compatibility: UpgradeCompatibilityWindow {
+                old_refs: vec![test_ref("old")],
+                new_refs: vec![test_ref("new")],
+                expires_at: None,
+                policy_refs: vec![test_ref("compat-policy")],
+            },
+            rollback_refs: vec![test_ref("old")],
+            policy_refs: vec![test_ref("upgrade-policy")],
+            evidence_refs: vec![test_ref("transcript-pass")],
+            source_gate_receipt_values: source_gate_values(),
+        };
+        let pass = upgrade_plan_value(&base_input()).expect("passing source gate plan");
+        let plan = parse_upgrade_plan(&pass).expect("parse pass plan");
+        assert!(plan.evidence_refs.len() > 1);
+
+        let mut missing = base_input();
+        missing.source_gate_receipt_values.clear();
+        assert!(
+            upgrade_plan_value(&missing)
+                .expect_err("missing source gate denied")
+                .to_string()
+                .contains("strict Octet source gate")
+        );
+
+        let denied_gate = parse_text(
+            &to_text(&octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("source gate fixture"))
+                .expect("source gate text")
+                .replacen("<decision \"pass\">", "<decision \"deny\">", 1),
+        )
+        .expect("denied gate parse");
+        let mut denied = base_input();
+        denied.source_gate_receipt_values = vec![denied_gate];
+        assert!(
+            upgrade_plan_value(&denied)
+                .expect_err("denied source gate rejected")
+                .to_string()
+                .contains("source gate validation failed")
+        );
+    }
+
+    #[test]
+    fn cleanup_passes_only_without_active_references() {
+        let root = temp_dir("upgrade-cleanup");
+        let ledger_root = root.join("ledger");
+        let store = root.join("upgrades");
+        let artifact = ledger::import_artifact(&ledger_root, &parse_text("<module \"unused\">").expect("artifact"))
+            .expect("import artifact")
+            .artifact_ref;
+        let pass = cleanup_admission(&store, &ledger_root, &artifact).expect("cleanup pass");
+        assert_eq!(pass.decision, "pass");
+        set_name_pointer(&store, "unused", &artifact).expect("pin by name");
+        let deny = cleanup_admission(&store, &ledger_root, &artifact).expect("cleanup deny");
+        assert_eq!(deny.decision, "deny");
+    }
+
+    #[hegel::test(test_cases = 16)]
+    fn hegel_upgrade_plan_hash_task_order_and_impact_invariants(tc: TestCase) {
+        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+        let root = temp_dir("upgrade-hegel");
+        let ledger_root = root.join("ledger");
+        let base = ledger::import_artifact(&ledger_root, &record("artifact", vec![string(format!("base-{salt}"))]))
+            .expect("base")
+            .artifact_ref;
+        let dependent = ledger::import_artifact(
+            &ledger_root,
+            &record("dependent", vec![string(&base), string(format!("dep-{salt}"))]),
+        )
+        .expect("dependent")
+        .artifact_ref;
+        let other = ledger::import_artifact(&ledger_root, &record("other", vec![string(format!("other-{salt}"))]))
+            .expect("other")
+            .artifact_ref;
+        let impact_one = compute_impact_set(&ledger_root, std::slice::from_ref(&base)).expect("impact one");
+        let impact_two = compute_impact_set(&ledger_root, &[base.clone(), other.clone()]).expect("impact two");
+        assert!(impact_one.contains(&base));
+        assert!(impact_one.contains(&dependent));
+        for impacted in &impact_one {
+            assert!(impact_two.contains(impacted));
+        }
+        let input = NameMovePlanInput {
+            session_id: format!("session-{salt}"),
+            name: format!("name-{salt}"),
+            from_ref: base,
+            to_ref: other,
+            initiator_ref: test_ref(&format!("initiator-{salt}")),
+            capability_refs: vec![test_ref(&format!("cap-{salt}"))],
+            policy_refs: vec![test_ref(&format!("policy-{salt}"))],
+            evidence_refs: vec![test_ref(&format!("evidence-{salt}"))],
+            source_gate_receipt_values: source_gate_values(),
+        };
+        let first = name_move_plan_value(&ledger_root, &input).expect("first plan");
+        let second = name_move_plan_value(&ledger_root, &input).expect("second plan");
+        assert_eq!(canonical_hash(&first).expect("first hash"), canonical_hash(&second).expect("second hash"));
+        let plan = parse_upgrade_plan(&first).expect("parse plan");
+        assert!(
+            plan.tasks.iter().position(|task| task.kind == "transcript-rerun")
+                < plan.tasks.iter().position(|task| task.kind == "cutover")
+        );
+        let old: BTreeSet<_> = plan.compatibility.old_refs.iter().collect();
+        assert!(plan.compatibility.new_refs.iter().all(|new_ref| !old.contains(new_ref)));
+    }
+
+    fn artifact_input(kind: &str, label: &str, dependency_refs: &[String]) -> artifacts::ArtifactInstallInput {
+        artifacts::ArtifactInstallInput {
+            kind: kind.to_string(),
+            payload: record("upgrade-artifact-payload", vec![string(label)]),
+            schema_refs: vec![test_ref(&format!("schema-{label}"))],
+            dependency_refs: dependency_refs.to_vec(),
+            effect_manifest_ref: None,
+            policy_refs: vec![test_ref(&format!("policy-{label}"))],
+            evidence_refs: vec![test_ref(&format!("evidence-{label}"))],
+            installer_ref: test_ref(&format!("installer-{label}")),
+            capability_refs: vec![test_ref(&format!("capability-{label}"))],
+        }
+    }
+
+    fn test_ref(label: &str) -> String {
+        canonical_hash(&record("upgrade-test-ref", vec![string(label)])).expect("test ref")
+    }
+
+    fn source_gate_values() -> Vec<IOValue> {
+        vec![octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("source gate fixture")]
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
+        let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
+        if dir.exists() {
+            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+        }
+        fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+}

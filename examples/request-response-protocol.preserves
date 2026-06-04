@@ -1,0 +1,20 @@
+<protocol-manifest-v1 "molten.protocol.manifest.v1"
+  <protocol-id "proto:request-response">
+  <roles ["client" "server"]>
+  <labels ["request" "response"]>
+  <payloads [
+    <payload "request" "blake3:request-schema">
+    <payload "response" "blake3:response-schema">
+  ]>
+  <global <global-script [
+    <comm <from "client"> <to "server"> <label "request"> <payload "request">>
+    <comm <from "server"> <to "client"> <label "response"> <payload "response">>
+  ]>>
+  <policy ["blake3:protocol-policy"]>
+  <capability ["blake3:protocol-capability"]>
+  <resource ["blake3:protocol-resource"]>
+  <checks [
+    <check "finite-protocol" "pass">
+    <check "canonical-protocol-manifest" "pass">
+    <check "transport-neutral" "pass">
+  ]>>

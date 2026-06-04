@@ -1,0 +1,4 @@
+Downloading cpython-3.14.3-linux-x86_64-gnu (download) (34.6MiB)
+ Downloaded cpython-3.14.3-linux-x86_64-gnu (download)
+Installed 5 packages in 3ms
+Reader loop exiting: ConnectionClosedError: Connection closed

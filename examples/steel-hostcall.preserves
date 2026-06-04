@@ -1,0 +1,17 @@
+<harness-suite-v1 "molten.harness.suite.v1" "steel-hostcall" 3
+  <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
+  <actor-registry-v1 "molten.harness.actor-registry.v1" [
+    <actor "producer" "steel" <steel-executor-v1 "molten.runtime.steel-executor.v1"
+      <source "(define (main input) input)">
+      <callable "main">
+      <allowed-hostcalls ["assert" "send"]>>>
+    <actor "consumer" "native">
+  ]>
+  <capabilities-v1 "molten.harness.capabilities.v1" [
+    <grant "producer" "assert" #f "service.ready">
+    <grant "producer" "send" "consumer" #f>
+  ]>
+  [
+    <assert "producer" "service.ready">
+    <send "producer" "consumer" "hello-from-reviewed-steel">
+  ]>

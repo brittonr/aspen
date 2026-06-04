@@ -1,0 +1,22 @@
+<harness-suite-v1 "molten.harness.suite.v1" "two-actor" 7
+  <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
+  <actor-registry-v1 "molten.harness.actor-registry.v1" [
+    <actor "consumer" "native">
+    <actor "producer" "native">
+  ]>
+  <capabilities-v1 "molten.harness.capabilities.v1" [
+    <grant "consumer" "observe" #f "service.ready">
+    <grant "producer" "assert" #f "service.ready">
+    <grant "producer" "send" "consumer" #f>
+    <grant "producer" "clock" #f #f>
+    <grant "producer" "random" #f #f>
+    <grant "producer" "retract" #f "service.ready">
+  ]>
+  [
+    <observe "consumer" "service.ready">
+    <assert "producer" "service.ready">
+    <send "producer" "consumer" "hello">
+    <clock "producer">
+    <random "producer" 100>
+    <retract "producer" "service.ready">
+  ]>

@@ -1,0 +1,17 @@
+<harness-suite-v1 "molten.harness.suite.v1" "wasm-hostcall" 5
+  <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
+  <actor-registry-v1 "molten.harness.actor-registry.v1" [
+    <actor "module" "wasm" <wasm-executor-v1 "molten.runtime.wasm-executor.v1"
+      <module-hex "0061736d010000000104016000000231020f6d6f6c74656e3a686f737463616c6c0661737365727400000f6d6f6c74656e3a686f737463616c6c0473656e6400000303020000073102166d6f6c74656e5f686f737463616c6c5f6173736572740002146d6f6c74656e5f686f737463616c6c5f73656e6400030a0b02040010000b040010010b">
+      <wit "molten:hostcalls/runtime-spine@1.0.0">
+      <allowed-hostcalls ["assert" "send"]>>>
+    <actor "consumer" "native">
+  ]>
+  <capabilities-v1 "molten.harness.capabilities.v1" [
+    <grant "module" "assert" #f "service.ready">
+    <grant "module" "send" "consumer" #f>
+  ]>
+  [
+    <assert "module" "service.ready">
+    <send "module" "consumer" "hello-from-reviewed-wasm">
+  ]>

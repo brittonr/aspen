@@ -1,0 +1,1744 @@
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+
+use preserves::IOValue;
+use preserves::Record;
+use preserves::Value;
+
+use super::replay::replay_report_value;
+use super::replay::validate_report_value;
+use super::schema::ActorDecl;
+use super::schema::BudgetEvidence;
+use super::schema::EventBoundary;
+use super::schema::HarnessObservation;
+use super::schema::HarnessReport;
+use super::schema::HarnessReproBundle;
+use super::schema::HarnessReproBundleKind;
+use super::schema::actor_registry_value;
+use super::schema::budget_value;
+use super::schema::event_boundary;
+use super::schema::parse_actor_registry;
+use super::schema::parse_budget;
+use super::schema::parse_failure;
+use super::schema::parse_report;
+use super::schema::parse_repro_bundle;
+use super::schema::parse_suite;
+use super::schema::sealed_repro_bundle_value_with_command_and_receipt;
+use super::schema::step_value;
+use crate::error::MoltenError;
+use crate::error::Result;
+use crate::evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE;
+use crate::evidence_chain::ChainCheck;
+use crate::evidence_chain::ChainCheckpointInput;
+use crate::evidence_chain::ChainContextRef;
+use crate::evidence_chain::ChainForkPolicy;
+use crate::evidence_chain::ChainLink;
+use crate::evidence_chain::ChainLinkInput;
+use crate::evidence_chain::ChainPayload;
+use crate::evidence_chain::ChainPredicateReceipt;
+use crate::evidence_chain::ChainPredicateReceiptValueInput;
+use crate::evidence_chain::ChainProducer;
+use crate::evidence_chain::ChainScope;
+use crate::evidence_chain::ChainVerifyReceiptPolicyValueInput;
+use crate::evidence_chain::ChainVerifyReceiptValueInput;
+use crate::evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE;
+use crate::evidence_chain::GENESIS_VALID_PREDICATE;
+use crate::evidence_chain::SEGMENT_NO_FORK_PREDICATE;
+use crate::evidence_chain::SEGMENT_NO_GAP_PREDICATE;
+use crate::evidence_chain::chain_anchor_value;
+use crate::evidence_chain::chain_checkpoint_value;
+use crate::evidence_chain::chain_link_value;
+use crate::evidence_chain::chain_predicate_receipt_value;
+use crate::evidence_chain::chain_verify_receipt_value_with_policy;
+use crate::evidence_chain::parse_chain_anchor;
+use crate::evidence_chain::parse_chain_checkpoint;
+use crate::evidence_chain::parse_chain_link;
+use crate::evidence_chain::parse_chain_predicate_receipt;
+use crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
+use crate::preserves_rail::HARNESS_GATE_RECEIPT_SCHEMA;
+use crate::preserves_rail::HARNESS_OBSERVATION_SCHEMA;
+use crate::preserves_rail::HARNESS_REPORT_SCHEMA;
+use crate::preserves_rail::HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA;
+use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::record;
+use crate::preserves_rail::sequence;
+use crate::preserves_rail::string;
+use crate::preserves_rail::u64_value;
+use crate::preserves_rail::value_to_iovalue;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GateCheck {
+    pub artifact_kind: String,
+    pub artifact_ref: String,
+    pub report_ref: String,
+    pub suite_ref: String,
+    pub initial_state_hash: String,
+    pub final_state_hash: String,
+    pub replay_actual_report_ref: String,
+    pub executor_preflights_ref: String,
+    pub executor_execution_receipts_ref: String,
+    pub policy_ref: String,
+    pub policy_gate_ref: String,
+    pub policy_nickel_source_ref: String,
+    pub policy_nickel_export_ref: String,
+    pub policy_basalt_preflight_ref: String,
+    pub budget_ref: String,
+    pub budget_gate_ref: String,
+    pub budget_nickel_source_ref: String,
+    pub budget_nickel_export_ref: String,
+    pub budget_basalt_preflight_ref: String,
+    pub capability_ref: String,
+    pub capability_gate_ref: String,
+    pub capability_authority_preflight_ref: String,
+    pub capability_proofset_ref: String,
+    pub redaction_policy_ref: Option<String>,
+    pub redaction_gate_ref: Option<String>,
+    pub observations: u64,
+    pub actors: Vec<ActorDecl>,
+    pub budget: BudgetEvidence,
+    pub chain_evidence: GateChainEvidence,
+    pub turn_journals: TurnJournalEvidence,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GateChainEvidence {
+    pub link_ref: String,
+    pub anchor_ref: String,
+    pub verify_receipt_ref: String,
+    pub checkpoint_ref: String,
+    pub range_predicate_ref: String,
+    pub predicate_receipt_refs: Vec<String>,
+    pub link_value: IOValue,
+    pub anchor_value: IOValue,
+    pub verify_receipt_value: IOValue,
+    pub checkpoint_value: IOValue,
+    pub predicate_values: Vec<IOValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnJournalEvidence {
+    pub aggregate_ref: String,
+    pub journals: Vec<TurnJournalChainEvidence>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnJournalChainEvidence {
+    pub actor_id: String,
+    pub link_refs: Vec<String>,
+    pub payload_refs: Vec<String>,
+    pub verify_receipt_ref: String,
+    pub predicate_receipt_refs: Vec<String>,
+    pub link_values: Vec<IOValue>,
+    pub verify_receipt_value: IOValue,
+    pub predicate_values: Vec<IOValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GateReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub artifact_kind: String,
+    pub artifact_ref: String,
+    pub report_ref: String,
+    pub suite_ref: String,
+    pub final_state_hash: String,
+    pub checks: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReproVerifyReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub bundle_ref: String,
+    pub report_ref: String,
+    pub suite_ref: String,
+    pub gate_receipt_ref: String,
+    pub checks: Vec<String>,
+}
+
+pub fn gate_check_value(value: &IOValue) -> Result<GateCheck> {
+    if value.collect_simple_record("harness-failure-v1", None).is_some() {
+        let failure = parse_failure(value)?;
+        return Err(MoltenError::invalid_harness(format!(
+            "harness failure artifact {} phase={} kind={} cannot satisfy pass evidence gate",
+            failure.failure_ref, failure.phase, failure.kind
+        )));
+    }
+
+    if value.collect_simple_record("harness-report-v1", None).is_some() {
+        return gate_check_report(value, "report".to_string(), None);
+    }
+
+    if value.collect_simple_record("harness-repro-bundle-v1", None).is_some() {
+        let bundle = parse_repro_bundle(value)?;
+        return match bundle.kind {
+            HarnessReproBundleKind::Report => {
+                let report_value = bundle
+                    .report_value
+                    .clone()
+                    .ok_or_else(|| MoltenError::invalid_harness("report repro bundle missing report value"))?;
+                validate_sealed_report_bundle(&report_value, &bundle)?;
+                let mut check = gate_check_report(&report_value, "repro-bundle".to_string(), Some(bundle.bundle_ref))?;
+                check.redaction_policy_ref = bundle.redaction_policy_ref;
+                check.redaction_gate_ref = bundle.redaction_gate_ref;
+                Ok(check)
+            }
+            HarnessReproBundleKind::Failure => Err(MoltenError::invalid_harness(format!(
+                "failure repro bundle {} wrapping {} cannot satisfy pass evidence gate",
+                bundle.bundle_ref, bundle.artifact_ref
+            ))),
+        };
+    }
+
+    Err(MoltenError::invalid_harness(
+        "expected harness report or report repro bundle as pass evidence; failure artifacts are diagnostics only",
+    ))
+}
+
+pub fn sealed_repro_bundle_value_with_command(report_value: &IOValue, command: &[String]) -> Result<IOValue> {
+    let report_check = gate_check_report(report_value, "report".to_string(), None)?;
+    let report_receipt_value = gate_receipt_value(&report_check);
+    sealed_repro_bundle_value_with_command_and_receipt(report_value, command, &report_receipt_value)
+}
+
+pub fn repro_verify_receipt_value(bundle_value: &IOValue) -> Result<IOValue> {
+    let bundle = parse_repro_bundle(bundle_value)?;
+    if bundle.kind == HarnessReproBundleKind::Failure {
+        return Err(MoltenError::invalid_harness(format!(
+            "failure repro bundle {} wrapping {} is diagnostic-only and cannot be verified as pass evidence",
+            bundle.bundle_ref, bundle.artifact_ref
+        )));
+    }
+    let embedded_receipt_value = bundle.gate_receipt_value.as_ref().ok_or_else(|| {
+        MoltenError::invalid_harness("unsealed report repro bundle cannot satisfy sealed repro verification")
+    })?;
+    let embedded_receipt = parse_gate_receipt(embedded_receipt_value)?;
+    let check = gate_check_value(bundle_value)?;
+    if check.artifact_kind != "repro-bundle" || check.artifact_ref != bundle.bundle_ref {
+        return Err(MoltenError::invalid_harness("repro verify gate check did not bind bundle artifact"));
+    }
+    if embedded_receipt.report_ref != check.report_ref || embedded_receipt.suite_ref != check.suite_ref {
+        return Err(MoltenError::invalid_harness(
+            "repro verify embedded receipt does not match recomputed bundle report refs",
+        ));
+    }
+    Ok(record("repro-verify-receipt-v1", vec![
+        string(HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA),
+        record("decision", vec![string("pass")]),
+        tool_value(),
+        record("bundle", vec![string(&bundle.bundle_ref)]),
+        record("artifact", vec![string(&bundle.artifact_ref)]),
+        record("report", vec![string(&check.report_ref)]),
+        record("suite", vec![string(&check.suite_ref)]),
+        record("gate-receipt", vec![string(&embedded_receipt.receipt_ref)]),
+        repro_verify_checks_value(),
+    ]))
+}
+
+pub fn gate_receipt_value(check: &GateCheck) -> IOValue {
+    let mut refs = vec![
+        ("artifact", check.artifact_ref.as_str()),
+        ("report", check.report_ref.as_str()),
+        ("suite", check.suite_ref.as_str()),
+        ("executor-preflights", check.executor_preflights_ref.as_str()),
+        ("executor-execution-receipts", check.executor_execution_receipts_ref.as_str()),
+        ("policy", check.policy_ref.as_str()),
+        ("policy-gate", check.policy_gate_ref.as_str()),
+        ("policy-nickel-source", check.policy_nickel_source_ref.as_str()),
+        ("policy-nickel-export", check.policy_nickel_export_ref.as_str()),
+        ("policy-basalt-preflight", check.policy_basalt_preflight_ref.as_str()),
+        ("budget", check.budget_ref.as_str()),
+        ("budget-gate", check.budget_gate_ref.as_str()),
+        ("budget-nickel-source", check.budget_nickel_source_ref.as_str()),
+        ("budget-nickel-export", check.budget_nickel_export_ref.as_str()),
+        ("budget-basalt-preflight", check.budget_basalt_preflight_ref.as_str()),
+        ("capabilities", check.capability_ref.as_str()),
+        ("capability-gate", check.capability_gate_ref.as_str()),
+        ("capability-authority-preflight", check.capability_authority_preflight_ref.as_str()),
+        ("ucan-proofset", check.capability_proofset_ref.as_str()),
+        ("chain-link", check.chain_evidence.link_ref.as_str()),
+        ("chain-anchor", check.chain_evidence.anchor_ref.as_str()),
+        ("chain-verify-receipt", check.chain_evidence.verify_receipt_ref.as_str()),
+        ("chain-checkpoint", check.chain_evidence.checkpoint_ref.as_str()),
+        ("chain-range-predicate", check.chain_evidence.range_predicate_ref.as_str()),
+        ("turn-journals", check.turn_journals.aggregate_ref.as_str()),
+    ];
+    if let Some(redaction_policy_ref) = &check.redaction_policy_ref {
+        refs.push(("redaction-policy", redaction_policy_ref.as_str()));
+    }
+    if let Some(redaction_gate_ref) = &check.redaction_gate_ref {
+        refs.push(("redaction-gate", redaction_gate_ref.as_str()));
+    }
+    record("gate-receipt-v1", vec![
+        string(HARNESS_GATE_RECEIPT_SCHEMA),
+        record("decision", vec![string("pass")]),
+        record("artifact-kind", vec![string(&check.artifact_kind)]),
+        record("artifact", vec![string(&check.artifact_ref)]),
+        tool_value(),
+        artifact_refs_value(&refs),
+        validation_value(check),
+        replay_value(check),
+        checks_value(),
+        chain_evidence_value(&check.chain_evidence),
+        turn_journals_value(&check.turn_journals),
+        string(&check.report_ref),
+        string(&check.suite_ref),
+        string(&check.final_state_hash),
+    ])
+}
+
+pub fn parse_gate_receipt(value: &IOValue) -> Result<GateReceipt> {
+    let receipt = simple_record(value, "gate-receipt-v1", 14)?;
+    let schema = required_string(&receipt[0], "gate receipt schema")?;
+    if schema != HARNESS_GATE_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported gate receipt schema {schema}; expected {HARNESS_GATE_RECEIPT_SCHEMA}"
+        )));
+    }
+
+    let decision = required_record_string(&receipt[1], "decision", "gate receipt decision")?;
+    if decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!("unsupported gate receipt decision {decision}")));
+    }
+    let artifact_kind = required_record_string(&receipt[2], "artifact-kind", "gate receipt artifact kind")?;
+    if !matches!(artifact_kind.as_str(), "report" | "repro-bundle") {
+        return Err(MoltenError::invalid_harness(format!("unsupported gate receipt artifact kind {artifact_kind}")));
+    }
+    let artifact_ref = required_record_hash(&receipt[3], "artifact", "gate receipt artifact ref")?;
+    validate_tool_record(&receipt[4])?;
+    let artifact_refs = parse_artifact_refs(&receipt[5])?;
+    require_artifact_ref(&artifact_refs, "artifact", &artifact_ref)?;
+
+    let validation = parse_validation(&receipt[6])?;
+    let replay = parse_replay(&receipt[7])?;
+    let checks = parse_checks(&receipt[8])?;
+    require_check(&checks, "report-schema")?;
+    require_check(&checks, "effect-log")?;
+    require_check(&checks, "budget")?;
+    require_check(&checks, "explicit-budget-fixture")?;
+    require_check(&checks, "no-default-resource-policy")?;
+    require_check(&checks, "resource-policy-preflight")?;
+    require_check(&checks, "nickel-resource-policy")?;
+    require_check(&checks, "nickel-resource-export")?;
+    require_check(&checks, "basalt-resource-receipt")?;
+    require_check(&checks, "budget-usage-binding")?;
+    require_check(&checks, "actor-registry")?;
+    require_check(&checks, "explicit-actor-registry")?;
+    require_check(&checks, "no-inferred-actors")?;
+    require_check(&checks, "executor-boundary")?;
+    require_check(&checks, "executor-preflight")?;
+    require_check(&checks, "executor-kind-binding")?;
+    require_check(&checks, "allowed-hostcall-binding")?;
+    require_check(&checks, "no-unsupported-executor-fallback")?;
+    require_check(&checks, "executor-conformance-suite-binding")?;
+    require_check(&checks, "cross-kind-hostcall-conformance")?;
+    require_check(&checks, "executor-execution-receipt-binding")?;
+    require_check(&checks, "executor-output-ref-binding")?;
+    require_check(&checks, "steel-executor-preflight")?;
+    require_check(&checks, "steel-review-receipt-binding")?;
+    require_check(&checks, "steel-vm-execution")?;
+    require_check(&checks, "steel-resource-bounds")?;
+    require_check(&checks, "adapter-executor-preflight")?;
+    require_check(&checks, "remote-proxy-preflight")?;
+    require_check(&checks, "wasm-executor-preflight")?;
+    require_check(&checks, "wasm-inspection-receipt-binding")?;
+    require_check(&checks, "wasm-execution-receipt-binding")?;
+    require_check(&checks, "wasmtime-no-wasi")?;
+    require_check(&checks, "wasm-fuel-memory-bounds")?;
+    require_check(&checks, "wasm-abi-byte-bounds")?;
+    require_check(&checks, "wasm-guest-memory-bounds")?;
+    require_check(&checks, "wasm-preserves-abi-ready")?;
+    require_check(&checks, "executor-hostcall-boundary")?;
+    require_check(&checks, "hostcall-admission-binding")?;
+    require_check(&checks, "hostcall-replay")?;
+    require_check(&checks, "effect-handler-binding")?;
+    require_check(&checks, "effect-handle-binding")?;
+    require_check(&checks, "handle-not-authority")?;
+    require_check(&checks, "hostcall-handle-replay")?;
+    require_check(&checks, "no-ambient-executor-io")?;
+    require_check(&checks, "admission-policy")?;
+    require_check(&checks, "policy-preflight")?;
+    require_check(&checks, "nickel-static-policy")?;
+    require_check(&checks, "nickel-policy-source")?;
+    require_check(&checks, "nickel-export-normalization")?;
+    require_check(&checks, "basalt-policy-gate")?;
+    require_check(&checks, "basalt-preflight-receipt")?;
+    require_check(&checks, "basalt-receipt-binding")?;
+    require_check(&checks, "steel-predicate-review")?;
+    require_check(&checks, "explicit-capability-fixture")?;
+    require_check(&checks, "no-implicit-authority")?;
+    require_check(&checks, "capability-context")?;
+    require_check(&checks, "capability-grants")?;
+    require_check(&checks, "basalt-authority-receipt")?;
+    require_check(&checks, "capability-proofset-binding")?;
+    require_check(&checks, "grant-ref-binding")?;
+    require_check(&checks, "deny-without-capability")?;
+    require_check(&checks, "authority-ref-binding")?;
+    require_check(&checks, "admission-decisions")?;
+    require_check(&checks, "deny-rollback")?;
+    require_check(&checks, "denied-effect-suppression")?;
+    require_check(&checks, "chain-continuity")?;
+    require_check(&checks, "chain-anchor-descent")?;
+    require_check(&checks, "chain-checkpoint-freshness")?;
+    require_check(&checks, "chain-predicate-receipts")?;
+    require_check(&checks, "turn-journal-chains")?;
+    require_check(&checks, "turn-journal-input-binding")?;
+    require_check(&checks, "turn-journal-admission-binding")?;
+    require_check(&checks, "turn-journal-state-binding")?;
+    require_check(&checks, "turn-journal-no-global-head")?;
+    require_check(&checks, "deterministic-replay")?;
+
+    let chain_evidence = parse_chain_evidence(&receipt[9])?;
+    let report_ref = required_hash(&receipt[11], "gate receipt report ref")?;
+    let suite_ref = required_hash(&receipt[12], "gate receipt suite ref")?;
+    let final_state_hash = required_hash(&receipt[13], "gate receipt final state hash")?;
+    let turn_journals = parse_turn_journals(&receipt[10], &report_ref, &suite_ref)?;
+    if report_ref != validation.report_ref
+        || report_ref != replay.expected_report_ref
+        || report_ref != replay.actual_report_ref
+    {
+        return Err(MoltenError::invalid_harness("gate receipt report refs are inconsistent"));
+    }
+    if suite_ref != validation.suite_ref {
+        return Err(MoltenError::invalid_harness("gate receipt suite refs are inconsistent"));
+    }
+    if final_state_hash != validation.final_state_hash || final_state_hash != replay.final_state_hash {
+        return Err(MoltenError::invalid_harness("gate receipt final state refs are inconsistent"));
+    }
+    let chain_link = parse_chain_link(&chain_evidence.link_value)?;
+    if chain_link.payload.artifact_ref != report_ref {
+        return Err(MoltenError::invalid_harness("gate chain evidence payload does not bind the gate report ref"));
+    }
+    if !chain_link
+        .context_refs
+        .iter()
+        .any(|context| context.label == "suite" && context.artifact_ref == suite_ref)
+    {
+        return Err(MoltenError::invalid_harness("gate chain evidence context does not bind the gate suite ref"));
+    }
+    if !chain_link
+        .context_refs
+        .iter()
+        .any(|context| context.label == "final-state" && context.artifact_ref == final_state_hash)
+    {
+        return Err(MoltenError::invalid_harness("gate chain evidence context does not bind the gate final state ref"));
+    }
+    require_artifact_ref(&artifact_refs, "report", &report_ref)?;
+    require_artifact_ref(&artifact_refs, "suite", &suite_ref)?;
+    require_artifact_kind(&artifact_refs, "executor-preflights")?;
+    require_artifact_kind(&artifact_refs, "executor-execution-receipts")?;
+    require_artifact_kind(&artifact_refs, "policy")?;
+    require_artifact_kind(&artifact_refs, "policy-gate")?;
+    require_artifact_kind(&artifact_refs, "policy-nickel-source")?;
+    require_artifact_kind(&artifact_refs, "policy-nickel-export")?;
+    require_artifact_kind(&artifact_refs, "policy-basalt-preflight")?;
+    require_artifact_kind(&artifact_refs, "budget")?;
+    require_artifact_kind(&artifact_refs, "budget-gate")?;
+    require_artifact_kind(&artifact_refs, "budget-nickel-source")?;
+    require_artifact_kind(&artifact_refs, "budget-nickel-export")?;
+    require_artifact_kind(&artifact_refs, "budget-basalt-preflight")?;
+    require_artifact_kind(&artifact_refs, "capabilities")?;
+    require_artifact_kind(&artifact_refs, "capability-gate")?;
+    require_artifact_kind(&artifact_refs, "capability-authority-preflight")?;
+    require_artifact_kind(&artifact_refs, "ucan-proofset")?;
+    require_artifact_ref(&artifact_refs, "chain-link", &chain_evidence.link_ref)?;
+    require_artifact_ref(&artifact_refs, "chain-anchor", &chain_evidence.anchor_ref)?;
+    require_artifact_ref(&artifact_refs, "chain-verify-receipt", &chain_evidence.verify_receipt_ref)?;
+    require_artifact_ref(&artifact_refs, "chain-checkpoint", &chain_evidence.checkpoint_ref)?;
+    require_artifact_ref(&artifact_refs, "chain-range-predicate", &chain_evidence.range_predicate_ref)?;
+    require_artifact_ref(&artifact_refs, "turn-journals", &turn_journals.aggregate_ref)?;
+    if artifact_kind == "repro-bundle" {
+        require_artifact_kind(&artifact_refs, "redaction-policy")?;
+        require_artifact_kind(&artifact_refs, "redaction-gate")?;
+    }
+
+    Ok(GateReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        artifact_kind,
+        artifact_ref,
+        report_ref,
+        suite_ref,
+        final_state_hash,
+        checks,
+    })
+}
+
+pub fn gate_check_summary(check: &GateCheck) -> String {
+    format!(
+        "gate check ok\nartifact_kind={}\nartifact={}\nreport={}\nsuite={}\nfinal_state={}",
+        check.artifact_kind, check.artifact_ref, check.report_ref, check.suite_ref, check.final_state_hash
+    )
+}
+
+pub fn gate_receipt_summary(value: &IOValue) -> Result<String> {
+    let receipt = parse_gate_receipt(value)?;
+    Ok(format!(
+        "gate receipt {}\ndecision={}\nartifact_kind={}\nartifact={}\nreport={}\nsuite={}\nfinal_state={}\nchecks={}",
+        receipt.receipt_ref,
+        receipt.decision,
+        receipt.artifact_kind,
+        receipt.artifact_ref,
+        receipt.report_ref,
+        receipt.suite_ref,
+        receipt.final_state_hash,
+        receipt.checks.len()
+    ))
+}
+
+pub fn parse_repro_verify_receipt(value: &IOValue) -> Result<ReproVerifyReceipt> {
+    let receipt = simple_record(value, "repro-verify-receipt-v1", 9)?;
+    let schema = required_string(&receipt[0], "repro verify receipt schema")?;
+    if schema != HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported repro verify receipt schema {schema}; expected {HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA}"
+        )));
+    }
+    let decision = required_record_string(&receipt[1], "decision", "repro verify receipt decision")?;
+    if decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!("unsupported repro verify receipt decision {decision}")));
+    }
+    validate_tool_record(&receipt[2])?;
+    let bundle_ref = required_record_hash(&receipt[3], "bundle", "repro verify bundle ref")?;
+    let artifact_ref = required_record_hash(&receipt[4], "artifact", "repro verify artifact ref")?;
+    let report_ref = required_record_hash(&receipt[5], "report", "repro verify report ref")?;
+    if artifact_ref != report_ref {
+        return Err(MoltenError::invalid_harness("repro verify receipt artifact ref does not match report ref"));
+    }
+    let suite_ref = required_record_hash(&receipt[6], "suite", "repro verify suite ref")?;
+    let gate_receipt_ref = required_record_hash(&receipt[7], "gate-receipt", "repro verify gate receipt ref")?;
+    let checks = parse_checks(&receipt[8])?;
+    require_check(&checks, "sealed-bundle")?;
+    require_check(&checks, "embedded-report")?;
+    require_check(&checks, "embedded-gate-receipt")?;
+    require_check(&checks, "report-validation")?;
+    require_check(&checks, "deterministic-replay")?;
+    require_check(&checks, "gate-receipt-recomputed")?;
+    Ok(ReproVerifyReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        bundle_ref,
+        report_ref,
+        suite_ref,
+        gate_receipt_ref,
+        checks,
+    })
+}
+
+pub fn repro_verify_receipt_summary(value: &IOValue) -> Result<String> {
+    let receipt = parse_repro_verify_receipt(value)?;
+    Ok(format!(
+        "repro verify receipt {}\ndecision={}\nbundle={}\nreport={}\nsuite={}\ngate_receipt={}\nchecks={}",
+        receipt.receipt_ref,
+        receipt.decision,
+        receipt.bundle_ref,
+        receipt.report_ref,
+        receipt.suite_ref,
+        receipt.gate_receipt_ref,
+        receipt.checks.len()
+    ))
+}
+
+fn validate_sealed_report_bundle(report_value: &IOValue, bundle: &HarnessReproBundle) -> Result<()> {
+    if bundle.redaction_policy_ref.is_none() || bundle.redaction_gate_ref.is_none() {
+        return Err(MoltenError::invalid_harness("sealed report repro bundle missing redaction preflight evidence"));
+    }
+    let embedded_receipt_value = bundle
+        .gate_receipt_value
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("sealed report repro bundle missing embedded gate receipt"))?;
+    let embedded_receipt_ref = bundle
+        .gate_receipt_ref
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("sealed report repro bundle missing gate receipt ref"))?;
+    let receipt = parse_gate_receipt(embedded_receipt_value)?;
+    if &receipt.receipt_ref != embedded_receipt_ref {
+        return Err(MoltenError::invalid_harness(
+            "sealed repro bundle gate receipt ref does not match embedded receipt",
+        ));
+    }
+    if receipt.artifact_kind != "report" {
+        return Err(MoltenError::invalid_harness(format!(
+            "sealed repro bundle must embed a report gate receipt, got {}",
+            receipt.artifact_kind
+        )));
+    }
+    if receipt.artifact_ref != bundle.artifact_ref || receipt.report_ref != bundle.artifact_ref {
+        return Err(MoltenError::invalid_harness(
+            "sealed repro bundle gate receipt does not bind the embedded report ref",
+        ));
+    }
+    let expected_report_check = gate_check_report(report_value, "report".to_string(), None)?;
+    let expected_receipt_value = gate_receipt_value(&expected_report_check);
+    let expected_receipt_ref = canonical_hash(&expected_receipt_value)?;
+    let actual_receipt_ref = canonical_hash(embedded_receipt_value)?;
+    if actual_receipt_ref != expected_receipt_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "sealed repro bundle embedded gate receipt does not match report: receipt hashes to {actual_receipt_ref}, expected {expected_receipt_ref}"
+        )));
+    }
+    Ok(())
+}
+
+fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Option<String>) -> Result<GateCheck> {
+    let validation = validate_report_value(value)?;
+    let replay = replay_report_value(value)?;
+    let report = parse_report(value)?;
+    if validation.report_ref != replay.expected_report_ref || validation.report_ref != replay.actual_report_ref {
+        return Err(MoltenError::invalid_harness("gate replay report refs do not match validation report ref"));
+    }
+    if validation.final_state_hash != replay.final_state_hash {
+        return Err(MoltenError::invalid_harness("gate replay final state does not match validation final state"));
+    }
+    let policy_gate = report
+        .policy_gate
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("missing policy gate evidence"))?;
+    let budget_gate = report
+        .budget_gate
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("missing budget gate evidence"))?;
+    let capability_gate = report
+        .capability_gate
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("missing capability gate evidence"))?;
+    let executor_preflights = report
+        .executor_preflights
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("missing executor preflight evidence"))?;
+    let chain_evidence = build_gate_chain_evidence(
+        &validation.report_ref,
+        &validation.suite_ref,
+        &report.final_state_hash,
+        &report.profile,
+    )?;
+    let turn_journals = build_turn_journals(&report)?;
+    Ok(GateCheck {
+        artifact_kind,
+        artifact_ref: artifact_ref.unwrap_or_else(|| validation.report_ref.clone()),
+        report_ref: validation.report_ref,
+        suite_ref: validation.suite_ref,
+        initial_state_hash: report.initial_state_hash,
+        final_state_hash: report.final_state_hash,
+        replay_actual_report_ref: replay.actual_report_ref,
+        executor_preflights_ref: canonical_hash(&executor_preflights.value)?,
+        executor_execution_receipts_ref: executor_execution_receipts_ref(&report.observations)?,
+        policy_ref: policy_gate.policy_ref.clone(),
+        policy_gate_ref: canonical_hash(&policy_gate.value)?,
+        policy_nickel_source_ref: policy_gate.nickel_source_ref.clone(),
+        policy_nickel_export_ref: policy_gate.nickel_export_ref.clone(),
+        policy_basalt_preflight_ref: policy_gate.basalt_preflight_ref.clone(),
+        budget_ref: budget_gate.budget_ref.clone(),
+        budget_gate_ref: canonical_hash(&budget_gate.value)?,
+        budget_nickel_source_ref: budget_gate.nickel_source_ref.clone(),
+        budget_nickel_export_ref: budget_gate.nickel_export_ref.clone(),
+        budget_basalt_preflight_ref: budget_gate.basalt_preflight_ref.clone(),
+        capability_ref: capability_gate.capability_ref.clone(),
+        capability_gate_ref: canonical_hash(&capability_gate.value)?,
+        capability_authority_preflight_ref: capability_gate.authority_preflight_ref.clone(),
+        capability_proofset_ref: capability_gate.proofset_ref.clone(),
+        redaction_policy_ref: None,
+        redaction_gate_ref: None,
+        observations: validation.observations as u64,
+        actors: report.actors,
+        budget: report.budget,
+        chain_evidence,
+        turn_journals,
+    })
+}
+
+fn executor_execution_receipts_ref(observations: &[HarnessObservation]) -> Result<String> {
+    let receipts = observations
+        .iter()
+        .flat_map(|observation| observation.events.iter())
+        .filter(|event| matches!(event_boundary(event), EventBoundary::SteelExecution | EventBoundary::WasmExecution))
+        .cloned()
+        .collect::<Vec<_>>();
+    canonical_hash(&record("executor-execution-receipts", vec![sequence(receipts)]))
+}
+
+fn tool_value() -> IOValue {
+    record("tool", vec![string("molten"), string(env!("CARGO_PKG_VERSION"))])
+}
+
+fn artifact_refs_value(refs: &[(&str, &str)]) -> IOValue {
+    record("artifact-refs", vec![sequence(
+        refs.iter()
+            .map(|(kind, artifact_ref)| record("artifact-ref", vec![string(*kind), string(*artifact_ref)]))
+            .collect(),
+    )])
+}
+
+fn validation_value(check: &GateCheck) -> IOValue {
+    record("validation", vec![
+        record("status", vec![string("pass")]),
+        record("report", vec![string(&check.report_ref)]),
+        record("suite", vec![string(&check.suite_ref)]),
+        record("final-state", vec![string(&check.final_state_hash)]),
+        record("observations", vec![u64_value(check.observations)]),
+        actor_registry_value(&check.actors),
+        budget_value(&check.budget.limits, &check.budget.usage),
+    ])
+}
+
+fn replay_value(check: &GateCheck) -> IOValue {
+    record("replay", vec![
+        record("status", vec![string("pass")]),
+        record("expected-report", vec![string(&check.report_ref)]),
+        record("actual-report", vec![string(&check.replay_actual_report_ref)]),
+        record("final-state", vec![string(&check.final_state_hash)]),
+    ])
+}
+
+fn build_gate_chain_evidence(
+    report_ref: &str,
+    suite_ref: &str,
+    final_state_hash: &str,
+    profile: &str,
+) -> Result<GateChainEvidence> {
+    let chain = ChainScope::new("harness-pass-evidence", report_ref, profile);
+    let producer_key_ref = canonical_hash(&record("gate-chain-producer-key", vec![string("molten")]))?;
+    let producer = ChainProducer::new("molten-gate", producer_key_ref);
+    let trellis_input_ref = canonical_hash(&record("gate-chain-input", vec![
+        string(report_ref),
+        string(suite_ref),
+        string(final_state_hash),
+    ]))?;
+    let link_value = chain_link_value(&ChainLinkInput::genesis(
+        chain.clone(),
+        ChainPayload::new("harness-report", report_ref, HARNESS_REPORT_SCHEMA),
+        vec![
+            ChainContextRef::new("suite", suite_ref),
+            ChainContextRef::new("final-state", final_state_hash),
+        ],
+        producer.clone(),
+        trellis_input_ref,
+    ));
+    let link = parse_chain_link(&link_value)?;
+    let link_ref = link.link_ref.clone();
+    let payload_refs = vec![report_ref.to_string()];
+    let subject_refs = vec![link_ref.clone()];
+    let scope_context_ref = canonical_hash(&record("gate-chain-scope", vec![
+        string(&chain.scope),
+        string(&chain.id),
+        string(&chain.epoch),
+    ]))?;
+    let predicate_context_refs = vec![scope_context_ref, suite_ref.to_string(), final_state_hash.to_string()];
+    let genesis_predicate_checks = vec![
+        ChainCheck::pass("trellis-bounded-predicate"),
+        ChainCheck::pass("predicate-decision-binding"),
+    ];
+    let segment_checks = vec![
+        ChainCheck::pass("segment-contiguity"),
+        ChainCheck::pass("canonical-link-order"),
+    ];
+    let fork_checks = vec![
+        ChainCheck::pass("fork-policy-profile"),
+        ChainCheck::pass("fork-evidence-binding"),
+    ];
+    let anchor_checks = vec![ChainCheck::pass("anchor-descent"), ChainCheck::pass("head-binding")];
+    let checkpoint_checks = vec![
+        ChainCheck::pass("checkpoint-range-coverage"),
+        ChainCheck::pass("verified-range"),
+    ];
+    let predicate_values = vec![
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: GENESIS_VALID_PREDICATE,
+            decision: "pass",
+            subject_refs: &subject_refs,
+            input_refs: &payload_refs,
+            context_refs: &predicate_context_refs,
+            checks: &genesis_predicate_checks,
+        }),
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: SEGMENT_NO_GAP_PREDICATE,
+            decision: "pass",
+            subject_refs: &subject_refs,
+            input_refs: &payload_refs,
+            context_refs: &predicate_context_refs,
+            checks: &segment_checks,
+        }),
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: SEGMENT_NO_FORK_PREDICATE,
+            decision: "pass",
+            subject_refs: &subject_refs,
+            input_refs: &subject_refs,
+            context_refs: &predicate_context_refs,
+            checks: &fork_checks,
+        }),
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: DESCENDS_FROM_ANCHOR_PREDICATE,
+            decision: "pass",
+            subject_refs: &subject_refs,
+            input_refs: &subject_refs,
+            context_refs: &predicate_context_refs,
+            checks: &anchor_checks,
+        }),
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: CHECKPOINT_COVERS_RANGE_PREDICATE,
+            decision: "pass",
+            subject_refs: &subject_refs,
+            input_refs: &payload_refs,
+            context_refs: &predicate_context_refs,
+            checks: &checkpoint_checks,
+        }),
+    ];
+    let mut predicate_receipt_refs = Vec::with_capacity(predicate_values.len());
+    let mut range_predicate_ref = None;
+    for predicate_value in &predicate_values {
+        let parsed = parse_chain_predicate_receipt(predicate_value)?;
+        if parsed.predicate == CHECKPOINT_COVERS_RANGE_PREDICATE {
+            range_predicate_ref = Some(parsed.receipt_ref.clone());
+        }
+        predicate_receipt_refs.push(parsed.receipt_ref);
+    }
+    let range_predicate_ref = range_predicate_ref
+        .ok_or_else(|| MoltenError::invalid_harness("gate chain evidence did not build checkpoint range predicate"))?;
+    let anchor_policy_refs = vec![suite_ref.to_string()];
+    let anchor_value = chain_anchor_value(&chain, &link_ref, &anchor_policy_refs, &producer);
+    let anchor_ref = canonical_hash(&anchor_value)?;
+    let verify_diagnostics = Vec::new();
+    let verify_receipt = ChainVerifyReceiptValueInput {
+        decision: "pass",
+        chain: &chain,
+        anchor_ref: Some(&link_ref),
+        expected_head: Some(&link_ref),
+        discovered_heads: std::slice::from_ref(&link_ref),
+        verified_links: std::slice::from_ref(&link_ref),
+        payload_refs: &payload_refs,
+        diagnostics: &verify_diagnostics,
+    };
+    let verify_receipt_value = chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
+        receipt: verify_receipt,
+        predicate_receipt_refs: &predicate_receipt_refs,
+        fork_policy: ChainForkPolicy::RejectUnexpectedForks,
+    });
+    let verify_receipt_ref = canonical_hash(&verify_receipt_value)?;
+    let checkpoint_value = chain_checkpoint_value(&ChainCheckpointInput {
+        chain,
+        prior_checkpoint_ref: None,
+        anchor_link_ref: link_ref.clone(),
+        head_ref: link_ref.clone(),
+        verify_receipt_ref: verify_receipt_ref.clone(),
+        range_predicate_ref: range_predicate_ref.clone(),
+        policy_refs: anchor_policy_refs,
+        membership_refs: vec![suite_ref.to_string()],
+        producer,
+        checks: vec![
+            ChainCheck::pass("raft-control-plane-command"),
+            ChainCheck::pass("verified-range"),
+            ChainCheck::pass("checkpoint-freshness"),
+        ],
+    });
+    let checkpoint_ref = canonical_hash(&checkpoint_value)?;
+    Ok(GateChainEvidence {
+        link_ref,
+        anchor_ref,
+        verify_receipt_ref,
+        checkpoint_ref,
+        range_predicate_ref,
+        predicate_receipt_refs,
+        link_value,
+        anchor_value,
+        verify_receipt_value,
+        checkpoint_value,
+        predicate_values,
+    })
+}
+
+fn chain_evidence_value(evidence: &GateChainEvidence) -> IOValue {
+    record("chain-evidence", vec![
+        record("profile", vec![string("local-pass-evidence-chain")]),
+        record("link", vec![evidence.link_value.clone()]),
+        record("anchor", vec![evidence.anchor_value.clone()]),
+        record("verify-receipt", vec![evidence.verify_receipt_value.clone()]),
+        record("checkpoint", vec![evidence.checkpoint_value.clone()]),
+        record("predicates", vec![sequence(evidence.predicate_values.clone())]),
+        record("checks", vec![sequence(
+            [
+                "chain-continuity",
+                "chain-anchor-descent",
+                "chain-checkpoint-freshness",
+                "chain-predicate-receipts",
+            ]
+            .iter()
+            .map(|name| record("check", vec![string(*name), string("pass")]))
+            .collect(),
+        )]),
+    ])
+}
+
+fn parse_chain_evidence(value: &Value<IOValue>) -> Result<GateChainEvidence> {
+    let value = value_to_iovalue(value);
+    let evidence = simple_record(&value, "chain-evidence", 7)?;
+    let profile = required_record_string(&evidence[0], "profile", "chain evidence profile")?;
+    if profile != "local-pass-evidence-chain" {
+        return Err(MoltenError::invalid_harness(format!("unsupported gate chain evidence profile {profile}")));
+    }
+    let link_value = required_record_value(&evidence[1], "link")?;
+    let anchor_value = required_record_value(&evidence[2], "anchor")?;
+    let verify_receipt_value = required_record_value(&evidence[3], "verify-receipt")?;
+    let checkpoint_value = required_record_value(&evidence[4], "checkpoint")?;
+    let predicate_values = required_record_values(&evidence[5], "predicates")?;
+    let checks = parse_checks(&evidence[6])?;
+    require_check(&checks, "chain-continuity")?;
+    require_check(&checks, "chain-anchor-descent")?;
+    require_check(&checks, "chain-checkpoint-freshness")?;
+    require_check(&checks, "chain-predicate-receipts")?;
+
+    let link = parse_chain_link(&link_value)?;
+    let link_ref = link.link_ref.clone();
+    let anchor = parse_chain_anchor(&anchor_value)?;
+    if anchor.link_ref != link_ref || anchor.chain != link.chain {
+        return Err(MoltenError::invalid_harness("gate chain anchor does not bind the gate chain link"));
+    }
+    let checkpoint = parse_chain_checkpoint(&checkpoint_value)?;
+    if checkpoint.chain != link.chain || checkpoint.anchor_link_ref != link_ref || checkpoint.head_ref != link_ref {
+        return Err(MoltenError::invalid_harness("gate chain checkpoint does not bind the anchored chain head"));
+    }
+    let verify_receipt_ref = canonical_hash(&verify_receipt_value)?;
+    if checkpoint.verify_receipt_ref != verify_receipt_ref {
+        return Err(MoltenError::invalid_harness("gate chain checkpoint does not bind the embedded verify receipt"));
+    }
+
+    let mut predicate_receipts = Vec::with_capacity(predicate_values.len());
+    let mut predicate_receipt_refs = Vec::with_capacity(predicate_values.len());
+    for predicate_value in &predicate_values {
+        let parsed = parse_chain_predicate_receipt(predicate_value)?;
+        predicate_receipt_refs.push(parsed.receipt_ref.clone());
+        predicate_receipts.push(parsed);
+    }
+    let range_predicate = require_chain_predicate(
+        &predicate_receipts,
+        &checkpoint.range_predicate_ref,
+        CHECKPOINT_COVERS_RANGE_PREDICATE,
+    )?;
+    require_chain_predicate_kind(&predicate_receipts, GENESIS_VALID_PREDICATE)?;
+    require_chain_predicate_kind(&predicate_receipts, SEGMENT_NO_GAP_PREDICATE)?;
+    require_chain_predicate_kind(&predicate_receipts, SEGMENT_NO_FORK_PREDICATE)?;
+    require_chain_predicate_kind(&predicate_receipts, DESCENDS_FROM_ANCHOR_PREDICATE)?;
+    if range_predicate.subject_refs != vec![link_ref.clone()] {
+        return Err(MoltenError::invalid_harness("gate chain range predicate subjects do not match anchored link"));
+    }
+    if range_predicate.input_refs != vec![link.payload.artifact_ref.clone()] {
+        return Err(MoltenError::invalid_harness("gate chain range predicate inputs do not match report payload ref"));
+    }
+    validate_gate_chain_verify_receipt(
+        &verify_receipt_value,
+        &link,
+        &checkpoint.range_predicate_ref,
+        &predicate_receipt_refs,
+    )?;
+
+    Ok(GateChainEvidence {
+        link_ref,
+        anchor_ref: anchor.anchor_ref,
+        verify_receipt_ref,
+        checkpoint_ref: checkpoint.checkpoint_ref,
+        range_predicate_ref: checkpoint.range_predicate_ref,
+        predicate_receipt_refs,
+        link_value,
+        anchor_value,
+        verify_receipt_value,
+        checkpoint_value,
+        predicate_values,
+    })
+}
+
+fn validate_gate_chain_verify_receipt(
+    value: &IOValue,
+    link: &crate::evidence_chain::ChainLink,
+    range_predicate_ref: &str,
+    predicate_receipt_refs: &[String],
+) -> Result<()> {
+    let receipt = value
+        .collect_simple_record("chain-verify-receipt-v1", Some(11))
+        .ok_or_else(|| MoltenError::invalid_harness("gate chain evidence missing chain verify receipt"))?;
+    let schema = required_string(&receipt[0], "chain verify receipt schema")?;
+    if schema != EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported chain verify receipt schema {schema}; expected {EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA}"
+        )));
+    }
+    let decision = required_record_string(&receipt[1], "decision", "chain verify decision")?;
+    if decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "gate chain verify receipt decision must be pass, got {decision}"
+        )));
+    }
+    let anchor_ref = required_record_optional_hash(&receipt[3], "anchor", "chain verify anchor")?
+        .ok_or_else(|| MoltenError::invalid_harness("gate chain verify receipt missing anchor"))?;
+    let expected_head = required_record_optional_hash(&receipt[4], "expected-head", "chain verify expected head")?
+        .ok_or_else(|| MoltenError::invalid_harness("gate chain verify receipt missing expected head"))?;
+    if anchor_ref != link.link_ref || expected_head != link.link_ref {
+        return Err(MoltenError::invalid_harness("gate chain verify receipt does not bind the anchored head"));
+    }
+    let discovered_heads = required_record_hash_sequence(&receipt[5], "discovered-heads")?;
+    let verified_links = required_record_hash_sequence(&receipt[6], "verified-links")?;
+    let payload_refs = required_record_hash_sequence(&receipt[7], "payloads")?;
+    let predicate_refs = required_record_hash_sequence(&receipt[8], "predicates")?;
+    if discovered_heads != vec![link.link_ref.clone()] || verified_links != vec![link.link_ref.clone()] {
+        return Err(MoltenError::invalid_harness(
+            "gate chain verify receipt must cover exactly the anchored report link",
+        ));
+    }
+    if payload_refs != vec![link.payload.artifact_ref.clone()] {
+        return Err(MoltenError::invalid_harness(
+            "gate chain verify receipt payload refs do not bind the report payload",
+        ));
+    }
+    if predicate_refs != predicate_receipt_refs {
+        return Err(MoltenError::invalid_harness(
+            "gate chain verify receipt predicate refs do not match embedded predicate receipts",
+        ));
+    }
+    if !predicate_refs.iter().any(|predicate_ref| predicate_ref == range_predicate_ref) {
+        return Err(MoltenError::invalid_harness("gate chain verify receipt does not bind checkpoint range predicate"));
+    }
+    Ok(())
+}
+
+fn require_chain_predicate<'a>(
+    predicates: &'a [ChainPredicateReceipt],
+    expected_ref: &str,
+    expected_kind: &str,
+) -> Result<&'a ChainPredicateReceipt> {
+    let predicate = predicates
+        .iter()
+        .find(|predicate| predicate.receipt_ref == expected_ref)
+        .ok_or_else(|| MoltenError::invalid_harness("gate chain evidence missing checkpoint range predicate"))?;
+    if predicate.predicate != expected_kind || predicate.decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "gate chain predicate {expected_ref} must be a passing {expected_kind} receipt"
+        )));
+    }
+    Ok(predicate)
+}
+
+fn require_chain_predicate_kind(predicates: &[ChainPredicateReceipt], expected_kind: &str) -> Result<()> {
+    if predicates
+        .iter()
+        .any(|predicate| predicate.predicate == expected_kind && predicate.decision == "pass")
+    {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "gate chain evidence missing passing {expected_kind} predicate receipt"
+        )))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct TurnJournalBuilder {
+    actor_id: String,
+    chain: ChainScope,
+    links: Vec<ChainLink>,
+    link_values: Vec<IOValue>,
+    payload_refs: Vec<String>,
+}
+
+fn build_turn_journals(report: &HarnessReport) -> Result<TurnJournalEvidence> {
+    let suite = parse_suite(&report.suite_value)?;
+    if suite.steps.len() != report.observations.len() {
+        return Err(MoltenError::invalid_harness("turn journal evidence requires one observation per suite step"));
+    }
+    let mut builders: BTreeMap<String, TurnJournalBuilder> = BTreeMap::new();
+    for (position, observation) in report.observations.iter().enumerate() {
+        let step = &suite.steps[position];
+        let actor_id = step.primary_actor().to_string();
+        let computed_step_ref = canonical_hash(&step_value(step))?;
+        if observation.step_ref != computed_step_ref {
+            return Err(MoltenError::invalid_harness(format!(
+                "turn journal observation {} step ref does not match embedded suite step",
+                observation.index
+            )));
+        }
+        let builder = builders.entry(actor_id.clone()).or_insert_with(|| TurnJournalBuilder {
+            actor_id: actor_id.clone(),
+            chain: ChainScope::new("harness-turn-journal", actor_id.clone(), report.report_ref.clone()),
+            links: Vec::new(),
+            link_values: Vec::new(),
+            payload_refs: Vec::new(),
+        });
+        let observation_ref = canonical_hash(&observation.value)?;
+        let payload = ChainPayload::new("turn-observation", observation_ref.clone(), HARNESS_OBSERVATION_SCHEMA);
+        let context_refs = turn_journal_context_refs(report, observation, &actor_id)?;
+        let trellis_input_ref = canonical_hash(&record("turn-journal-input", vec![
+            string(&actor_id),
+            u64_value(observation.index),
+            string(&observation.step_ref),
+            string(&observation.before_state_hash),
+            string(&observation.after_state_hash),
+        ]))?;
+        let producer = turn_journal_producer()?;
+        let input = if let Some(previous) = builder.links.last() {
+            ChainLinkInput::append(previous, payload, context_refs, producer, trellis_input_ref)
+        } else {
+            ChainLinkInput::genesis(builder.chain.clone(), payload, context_refs, producer, trellis_input_ref)
+        };
+        let link_value = chain_link_value(&input);
+        let link = parse_chain_link(&link_value)?;
+        builder.payload_refs.push(observation_ref);
+        builder.link_values.push(link_value);
+        builder.links.push(link);
+    }
+
+    let mut journals = Vec::with_capacity(builders.len());
+    for builder in builders.into_values() {
+        journals.push(build_turn_journal_chain(builder, report)?);
+    }
+    let mut evidence = TurnJournalEvidence {
+        aggregate_ref: String::new(),
+        journals,
+    };
+    evidence.aggregate_ref = canonical_hash(&turn_journals_value(&evidence))?;
+    Ok(evidence)
+}
+
+fn build_turn_journal_chain(builder: TurnJournalBuilder, report: &HarnessReport) -> Result<TurnJournalChainEvidence> {
+    let link_refs = builder.links.iter().map(|link| link.link_ref.clone()).collect::<Vec<_>>();
+    let Some(anchor_ref) = link_refs.first() else {
+        return Err(MoltenError::invalid_harness("turn journal chain must contain at least one link"));
+    };
+    let Some(head_ref) = link_refs.last() else {
+        return Err(MoltenError::invalid_harness("turn journal chain must contain a head link"));
+    };
+    let context_refs = vec![
+        report.report_ref.clone(),
+        report.suite_ref.clone(),
+        canonical_hash(&record("turn-journal-actor", vec![string(&builder.actor_id)]))?,
+    ];
+    let segment_checks = vec![
+        ChainCheck::pass("segment-contiguity"),
+        ChainCheck::pass("canonical-link-order"),
+    ];
+    let fork_checks = vec![
+        ChainCheck::pass("fork-policy-profile"),
+        ChainCheck::pass("fork-evidence-binding"),
+    ];
+    let anchor_subject_refs = vec![anchor_ref.to_string(), head_ref.to_string()];
+    let anchor_checks = vec![ChainCheck::pass("anchor-descent"), ChainCheck::pass("head-binding")];
+    let predicate_values = vec![
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: SEGMENT_NO_GAP_PREDICATE,
+            decision: "pass",
+            subject_refs: &link_refs,
+            input_refs: &builder.payload_refs,
+            context_refs: &context_refs,
+            checks: &segment_checks,
+        }),
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: SEGMENT_NO_FORK_PREDICATE,
+            decision: "pass",
+            subject_refs: std::slice::from_ref(head_ref),
+            input_refs: &link_refs,
+            context_refs: &context_refs,
+            checks: &fork_checks,
+        }),
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: DESCENDS_FROM_ANCHOR_PREDICATE,
+            decision: "pass",
+            subject_refs: &anchor_subject_refs,
+            input_refs: &link_refs,
+            context_refs: &context_refs,
+            checks: &anchor_checks,
+        }),
+    ];
+    let predicate_receipt_refs = predicate_values
+        .iter()
+        .map(parse_chain_predicate_receipt)
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .map(|receipt| receipt.receipt_ref)
+        .collect::<Vec<_>>();
+    let verify_diagnostics = Vec::new();
+    let verify_receipt = ChainVerifyReceiptValueInput {
+        decision: "pass",
+        chain: &builder.chain,
+        anchor_ref: Some(anchor_ref),
+        expected_head: Some(head_ref),
+        discovered_heads: std::slice::from_ref(head_ref),
+        verified_links: &link_refs,
+        payload_refs: &builder.payload_refs,
+        diagnostics: &verify_diagnostics,
+    };
+    let verify_receipt_value = chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
+        receipt: verify_receipt,
+        predicate_receipt_refs: &predicate_receipt_refs,
+        fork_policy: ChainForkPolicy::RejectUnexpectedForks,
+    });
+    let verify_receipt_ref = canonical_hash(&verify_receipt_value)?;
+    Ok(TurnJournalChainEvidence {
+        actor_id: builder.actor_id,
+        link_refs,
+        payload_refs: builder.payload_refs,
+        verify_receipt_ref,
+        predicate_receipt_refs,
+        link_values: builder.link_values,
+        verify_receipt_value,
+        predicate_values,
+    })
+}
+
+fn turn_journal_context_refs(
+    report: &HarnessReport,
+    observation: &HarnessObservation,
+    actor_id: &str,
+) -> Result<Vec<ChainContextRef>> {
+    let mut refs = vec![
+        ChainContextRef::new("report", report.report_ref.clone()),
+        ChainContextRef::new("suite", report.suite_ref.clone()),
+        ChainContextRef::new("actor", canonical_hash(&record("turn-journal-actor", vec![string(actor_id)]))?),
+        ChainContextRef::new("step", observation.step_ref.clone()),
+        ChainContextRef::new("before-state", observation.before_state_hash.clone()),
+        ChainContextRef::new("after-state", observation.after_state_hash.clone()),
+    ];
+    for event in &observation.events {
+        let event_ref = canonical_hash(event)?;
+        let label = match event_boundary(event) {
+            EventBoundary::PolicyDecision => "admission",
+            EventBoundary::EffectRequest | EventBoundary::EffectResponse => "effect-log",
+            _ => "trace",
+        };
+        refs.push(ChainContextRef::new(label, event_ref));
+    }
+    Ok(refs)
+}
+
+fn turn_journal_producer() -> Result<ChainProducer> {
+    Ok(ChainProducer::new(
+        "molten-turn-journal",
+        canonical_hash(&record("turn-journal-producer-key", vec![string("molten")]))?,
+    ))
+}
+
+fn turn_journals_value(evidence: &TurnJournalEvidence) -> IOValue {
+    record("turn-journals", vec![
+        record("profile", vec![string("per-actor-local-turn-journal")]),
+        record("journals", vec![sequence(evidence.journals.iter().map(turn_journal_value).collect())]),
+        record("checks", vec![sequence(
+            [
+                "turn-journal-chains",
+                "turn-journal-input-binding",
+                "turn-journal-admission-binding",
+                "turn-journal-state-binding",
+                "turn-journal-no-global-head",
+            ]
+            .iter()
+            .map(|name| record("check", vec![string(*name), string("pass")]))
+            .collect(),
+        )]),
+    ])
+}
+
+fn turn_journal_value(journal: &TurnJournalChainEvidence) -> IOValue {
+    record("turn-journal", vec![
+        record("actor", vec![string(&journal.actor_id)]),
+        record("links", vec![sequence(journal.link_values.clone())]),
+        record("verify-receipt", vec![journal.verify_receipt_value.clone()]),
+        record("predicates", vec![sequence(journal.predicate_values.clone())]),
+        record("checks", vec![sequence(
+            [
+                "turn-journal-chains",
+                "turn-journal-input-binding",
+                "turn-journal-admission-binding",
+                "turn-journal-state-binding",
+                "turn-journal-no-global-head",
+            ]
+            .iter()
+            .map(|name| record("check", vec![string(*name), string("pass")]))
+            .collect(),
+        )]),
+    ])
+}
+
+fn parse_turn_journals(value: &Value<IOValue>, report_ref: &str, suite_ref: &str) -> Result<TurnJournalEvidence> {
+    let value = value_to_iovalue(value);
+    let journals_record = simple_record(&value, "turn-journals", 3)?;
+    let profile = required_record_string(&journals_record[0], "profile", "turn journal profile")?;
+    if profile != "per-actor-local-turn-journal" {
+        return Err(MoltenError::invalid_harness(format!("unsupported turn journal profile {profile}")));
+    }
+    let journal_values = required_record_values(&journals_record[1], "journals")?;
+    let checks = parse_checks(&journals_record[2])?;
+    require_check(&checks, "turn-journal-chains")?;
+    require_check(&checks, "turn-journal-input-binding")?;
+    require_check(&checks, "turn-journal-admission-binding")?;
+    require_check(&checks, "turn-journal-state-binding")?;
+    require_check(&checks, "turn-journal-no-global-head")?;
+    let mut journals = Vec::with_capacity(journal_values.len());
+    let mut actor_ids = BTreeMap::new();
+    for journal_value in journal_values {
+        let journal = parse_turn_journal(&journal_value, report_ref, suite_ref)?;
+        if actor_ids.insert(journal.actor_id.clone(), ()).is_some() {
+            return Err(MoltenError::invalid_harness(format!("duplicate turn journal for actor {}", journal.actor_id)));
+        }
+        journals.push(journal);
+    }
+    if journals.is_empty() {
+        return Err(MoltenError::invalid_harness("turn journal evidence must contain at least one actor journal"));
+    }
+    Ok(TurnJournalEvidence {
+        aggregate_ref: canonical_hash(&value)?,
+        journals,
+    })
+}
+
+fn parse_turn_journal(value: &IOValue, report_ref: &str, suite_ref: &str) -> Result<TurnJournalChainEvidence> {
+    let journal_record = simple_record(value, "turn-journal", 5)?;
+    let actor_id = required_record_string(&journal_record[0], "actor", "turn journal actor")?;
+    let link_values = required_record_values(&journal_record[1], "links")?;
+    let verify_receipt_value = required_record_value(&journal_record[2], "verify-receipt")?;
+    let predicate_values = required_record_values(&journal_record[3], "predicates")?;
+    let checks = parse_checks(&journal_record[4])?;
+    require_check(&checks, "turn-journal-chains")?;
+    require_check(&checks, "turn-journal-input-binding")?;
+    require_check(&checks, "turn-journal-admission-binding")?;
+    require_check(&checks, "turn-journal-state-binding")?;
+    require_check(&checks, "turn-journal-no-global-head")?;
+    if link_values.is_empty() {
+        return Err(MoltenError::invalid_harness("turn journal must contain at least one link"));
+    }
+
+    let mut links = Vec::with_capacity(link_values.len());
+    let mut link_refs = Vec::with_capacity(link_values.len());
+    let mut payload_refs = Vec::with_capacity(link_values.len());
+    for (position, link_value) in link_values.iter().enumerate() {
+        let link = parse_chain_link(link_value)?;
+        if link.chain.scope != "harness-turn-journal" || link.chain.id != actor_id || link.chain.epoch != report_ref {
+            return Err(MoltenError::invalid_harness(
+                "turn journal link scope must be per actor and per report, not global",
+            ));
+        }
+        if link.sequence != position as u64 {
+            return Err(MoltenError::invalid_harness("turn journal link sequence is not contiguous"));
+        }
+        if position == 0 {
+            if link.previous_link_ref.is_some() {
+                return Err(MoltenError::invalid_harness("turn journal genesis link must not name a previous link"));
+            }
+        } else if link.previous_link_ref.as_deref() != link_refs.get(position - 1).map(String::as_str) {
+            return Err(MoltenError::invalid_harness("turn journal link does not bind previous actor-local turn"));
+        }
+        require_context_ref(&link.context_refs, "report", report_ref)?;
+        require_context_ref(&link.context_refs, "suite", suite_ref)?;
+        require_context_ref_kind(&link.context_refs, "step")?;
+        require_context_ref_kind(&link.context_refs, "before-state")?;
+        require_context_ref_kind(&link.context_refs, "after-state")?;
+        require_context_ref_kind(&link.context_refs, "admission")?;
+        require_context_ref_kind(&link.context_refs, "trace")?;
+        payload_refs.push(link.payload.artifact_ref.clone());
+        link_refs.push(link.link_ref.clone());
+        links.push(link);
+    }
+
+    let predicate_receipts = predicate_values.iter().map(parse_chain_predicate_receipt).collect::<Result<Vec<_>>>()?;
+    let predicate_receipt_refs =
+        predicate_receipts.iter().map(|receipt| receipt.receipt_ref.clone()).collect::<Vec<_>>();
+    require_chain_predicate_kind(&predicate_receipts, SEGMENT_NO_GAP_PREDICATE)?;
+    require_chain_predicate_kind(&predicate_receipts, SEGMENT_NO_FORK_PREDICATE)?;
+    require_chain_predicate_kind(&predicate_receipts, DESCENDS_FROM_ANCHOR_PREDICATE)?;
+    validate_turn_journal_verify_receipt(
+        &verify_receipt_value,
+        &links[0].chain,
+        &link_refs,
+        &payload_refs,
+        &predicate_receipt_refs,
+    )?;
+    Ok(TurnJournalChainEvidence {
+        actor_id,
+        link_refs,
+        payload_refs,
+        verify_receipt_ref: canonical_hash(&verify_receipt_value)?,
+        predicate_receipt_refs,
+        link_values,
+        verify_receipt_value,
+        predicate_values,
+    })
+}
+
+fn validate_turn_journal_verify_receipt(
+    value: &IOValue,
+    chain: &ChainScope,
+    link_refs: &[String],
+    payload_refs: &[String],
+    predicate_receipt_refs: &[String],
+) -> Result<()> {
+    let receipt = value
+        .collect_simple_record("chain-verify-receipt-v1", Some(11))
+        .ok_or_else(|| MoltenError::invalid_harness("turn journal missing chain verify receipt"))?;
+    let schema = required_string(&receipt[0], "turn journal verify receipt schema")?;
+    if schema != EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported turn journal verify receipt schema {schema}; expected {EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA}"
+        )));
+    }
+    let decision = required_record_string(&receipt[1], "decision", "turn journal verify decision")?;
+    if decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "turn journal verify receipt decision must be pass, got {decision}"
+        )));
+    }
+    let receipt_chain = required_chain_scope(&receipt[2])?;
+    if &receipt_chain != chain {
+        return Err(MoltenError::invalid_harness("turn journal verify receipt chain scope mismatch"));
+    }
+    let anchor = required_record_optional_hash(&receipt[3], "anchor", "turn journal anchor")?
+        .ok_or_else(|| MoltenError::invalid_harness("turn journal verify receipt missing anchor"))?;
+    let expected_head = required_record_optional_hash(&receipt[4], "expected-head", "turn journal expected head")?
+        .ok_or_else(|| MoltenError::invalid_harness("turn journal verify receipt missing expected head"))?;
+    if Some(&anchor) != link_refs.first() || Some(&expected_head) != link_refs.last() {
+        return Err(MoltenError::invalid_harness("turn journal verify receipt does not bind actor-local anchor/head"));
+    }
+    if required_record_hash_sequence(&receipt[5], "discovered-heads")? != vec![expected_head] {
+        return Err(MoltenError::invalid_harness("turn journal verify receipt discovered head mismatch"));
+    }
+    if required_record_hash_sequence(&receipt[6], "verified-links")? != link_refs {
+        return Err(MoltenError::invalid_harness("turn journal verify receipt link range mismatch"));
+    }
+    if required_record_hash_sequence(&receipt[7], "payloads")? != payload_refs {
+        return Err(MoltenError::invalid_harness("turn journal verify receipt payload refs mismatch"));
+    }
+    if required_record_hash_sequence(&receipt[8], "predicates")? != predicate_receipt_refs {
+        return Err(MoltenError::invalid_harness("turn journal verify receipt predicate refs mismatch"));
+    }
+    Ok(())
+}
+
+fn require_context_ref(context_refs: &[ChainContextRef], label: &str, expected: &str) -> Result<()> {
+    if context_refs.iter().any(|context| context.label == label && context.artifact_ref == expected) {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("turn journal link missing {label} context ref {expected}")))
+    }
+}
+
+fn require_context_ref_kind(context_refs: &[ChainContextRef], label: &str) -> Result<()> {
+    if context_refs.iter().any(|context| context.label == label) {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("turn journal link missing {label} context ref")))
+    }
+}
+
+fn repro_verify_checks_value() -> IOValue {
+    record("checks", vec![sequence(
+        [
+            "sealed-bundle",
+            "embedded-report",
+            "embedded-gate-receipt",
+            "report-validation",
+            "deterministic-replay",
+            "gate-receipt-recomputed",
+        ]
+        .iter()
+        .map(|name| record("check", vec![string(*name), string("pass")]))
+        .collect(),
+    )])
+}
+
+fn checks_value() -> IOValue {
+    record("checks", vec![sequence(
+        [
+            "report-schema",
+            "effect-log",
+            "budget",
+            "explicit-budget-fixture",
+            "no-default-resource-policy",
+            "resource-policy-preflight",
+            "nickel-resource-policy",
+            "nickel-resource-export",
+            "basalt-resource-receipt",
+            "budget-usage-binding",
+            "actor-registry",
+            "explicit-actor-registry",
+            "no-inferred-actors",
+            "executor-boundary",
+            "executor-preflight",
+            "executor-kind-binding",
+            "allowed-hostcall-binding",
+            "no-unsupported-executor-fallback",
+            "executor-conformance-suite-binding",
+            "cross-kind-hostcall-conformance",
+            "executor-execution-receipt-binding",
+            "executor-output-ref-binding",
+            "steel-executor-preflight",
+            "steel-review-receipt-binding",
+            "steel-vm-execution",
+            "steel-resource-bounds",
+            "adapter-executor-preflight",
+            "remote-proxy-preflight",
+            "wasm-executor-preflight",
+            "wasm-inspection-receipt-binding",
+            "wasm-execution-receipt-binding",
+            "wasmtime-no-wasi",
+            "wasm-fuel-memory-bounds",
+            "wasm-abi-byte-bounds",
+            "wasm-guest-memory-bounds",
+            "wasm-preserves-abi-ready",
+            "executor-hostcall-boundary",
+            "hostcall-admission-binding",
+            "hostcall-replay",
+            "effect-handler-binding",
+            "effect-handle-binding",
+            "handle-not-authority",
+            "hostcall-handle-replay",
+            "no-ambient-executor-io",
+            "admission-policy",
+            "policy-preflight",
+            "nickel-static-policy",
+            "nickel-policy-source",
+            "nickel-export-normalization",
+            "basalt-policy-gate",
+            "basalt-preflight-receipt",
+            "basalt-receipt-binding",
+            "steel-predicate-review",
+            "explicit-capability-fixture",
+            "no-implicit-authority",
+            "capability-context",
+            "capability-grants",
+            "basalt-authority-receipt",
+            "capability-proofset-binding",
+            "grant-ref-binding",
+            "deny-without-capability",
+            "authority-ref-binding",
+            "admission-decisions",
+            "deny-rollback",
+            "denied-effect-suppression",
+            "chain-continuity",
+            "chain-anchor-descent",
+            "chain-checkpoint-freshness",
+            "chain-predicate-receipts",
+            "turn-journal-chains",
+            "turn-journal-input-binding",
+            "turn-journal-admission-binding",
+            "turn-journal-state-binding",
+            "turn-journal-no-global-head",
+            "deterministic-replay",
+        ]
+        .iter()
+        .map(|name| record("check", vec![string(*name), string("pass")]))
+        .collect(),
+    )])
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ValidationReceipt {
+    report_ref: String,
+    suite_ref: String,
+    final_state_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReplayReceipt {
+    expected_report_ref: String,
+    actual_report_ref: String,
+    final_state_hash: String,
+}
+
+fn parse_validation(value: &Value<IOValue>) -> Result<ValidationReceipt> {
+    let value = value_to_iovalue(value);
+    let validation = simple_record(&value, "validation", 7)?;
+    let status = required_record_string(&validation[0], "status", "gate validation status")?;
+    if status != "pass" {
+        return Err(MoltenError::invalid_harness(format!("unsupported gate validation status {status}")));
+    }
+    let report_ref = required_record_hash(&validation[1], "report", "gate validation report ref")?;
+    let suite_ref = required_record_hash(&validation[2], "suite", "gate validation suite ref")?;
+    let final_state_hash = required_record_hash(&validation[3], "final-state", "gate validation final state hash")?;
+    let observations = required_record_u64(&validation[4], "observations", "gate validation observations")?;
+    parse_actor_registry(&value_to_iovalue(&validation[5]))?;
+    let budget = parse_budget(&value_to_iovalue(&validation[6]))?;
+    if observations != budget.usage.steps {
+        return Err(MoltenError::invalid_harness(
+            "gate receipt validation observation count does not match budget step usage",
+        ));
+    }
+    Ok(ValidationReceipt {
+        report_ref,
+        suite_ref,
+        final_state_hash,
+    })
+}
+
+fn parse_replay(value: &Value<IOValue>) -> Result<ReplayReceipt> {
+    let value = value_to_iovalue(value);
+    let replay = simple_record(&value, "replay", 4)?;
+    let status = required_record_string(&replay[0], "status", "gate replay status")?;
+    if status != "pass" {
+        return Err(MoltenError::invalid_harness(format!("unsupported gate replay status {status}")));
+    }
+    Ok(ReplayReceipt {
+        expected_report_ref: required_record_hash(&replay[1], "expected-report", "gate replay expected report ref")?,
+        actual_report_ref: required_record_hash(&replay[2], "actual-report", "gate replay actual report ref")?,
+        final_state_hash: required_record_hash(&replay[3], "final-state", "gate replay final state hash")?,
+    })
+}
+
+fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+    let value = value_to_iovalue(value);
+    let checks_record = simple_record(&value, "checks", 1)?;
+    let check_values = required_sequence(&checks_record[0], "gate checks")?;
+    let mut checks = Vec::with_capacity(check_values.len());
+    for check_value in check_values.iter() {
+        let check_value = value_to_iovalue(check_value);
+        let check = simple_record(&check_value, "check", 2)?;
+        let name = required_string(&check[0], "gate check name")?;
+        let status = required_string(&check[1], "gate check status")?;
+        if status != "pass" {
+            return Err(MoltenError::invalid_harness(format!("gate check {name} status is {status}")));
+        }
+        checks.push(name);
+    }
+    Ok(checks)
+}
+
+fn require_check(checks: &[String], expected: &str) -> Result<()> {
+    if checks.iter().any(|check| check == expected) {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("gate receipt missing {expected} check")))
+    }
+}
+
+fn validate_tool_record(value: &Value<IOValue>) -> Result<()> {
+    let value = value_to_iovalue(value);
+    let tool = simple_record(&value, "tool", 2)?;
+    let name = required_string(&tool[0], "gate receipt tool name")?;
+    if name != "molten" {
+        return Err(MoltenError::invalid_harness(format!("unsupported gate receipt tool {name}")));
+    }
+    let version = required_string(&tool[1], "gate receipt tool version")?;
+    if version.is_empty() {
+        return Err(MoltenError::invalid_harness("gate receipt tool version must not be empty"));
+    }
+    Ok(())
+}
+
+fn parse_artifact_refs(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+    let value = value_to_iovalue(value);
+    let artifact_refs = simple_record(&value, "artifact-refs", 1)?;
+    let ref_values = required_sequence(&artifact_refs[0], "gate receipt artifact refs")?;
+    let mut refs = Vec::with_capacity(ref_values.len());
+    for ref_value in ref_values.iter() {
+        let ref_value = value_to_iovalue(ref_value);
+        let artifact_ref = simple_record(&ref_value, "artifact-ref", 2)?;
+        refs.push((
+            required_string(&artifact_ref[0], "artifact ref kind")?,
+            required_hash(&artifact_ref[1], "artifact ref value")?,
+        ));
+    }
+    Ok(refs)
+}
+
+fn require_artifact_ref(refs: &[(String, String)], kind: &str, expected: &str) -> Result<()> {
+    if refs.iter().any(|(actual_kind, actual_ref)| actual_kind == kind && actual_ref == expected) {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("gate receipt artifact refs missing {kind} ref {expected}")))
+    }
+}
+
+fn require_artifact_kind(refs: &[(String, String)], kind: &str) -> Result<()> {
+    if refs.iter().any(|(actual_kind, _)| actual_kind == kind) {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("gate receipt artifact refs missing {kind} ref")))
+    }
+}
+
+fn required_record_string(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    required_string(&record[0], field)
+}
+
+fn required_record_hash(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    required_hash(&record[0], field)
+}
+
+fn required_record_optional_hash(value: &Value<IOValue>, label: &str, field: &str) -> Result<Option<String>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    let optional = value_to_iovalue(&record[0]);
+    if optional.collect_simple_record("none", Some(0)).is_some() {
+        Ok(None)
+    } else if let Some(some) = optional.collect_simple_record("some", Some(1)) {
+        required_hash(&some[0], field).map(Some)
+    } else {
+        Err(MoltenError::invalid_harness(format!("expected <none> or <some ref> for {field}")))
+    }
+}
+
+fn required_record_hash_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    let values = required_sequence(&record[0], label)?;
+    values.iter().map(|value| required_hash(value, label)).collect()
+}
+
+fn required_record_value(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    Ok(value_to_iovalue(&record[0]))
+}
+
+fn required_record_values(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    let values = required_sequence(&record[0], label)?;
+    Ok(values.iter().map(value_to_iovalue).collect())
+}
+
+fn required_record_u64(value: &Value<IOValue>, label: &str, field: &str) -> Result<u64> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    required_u64(&record[0], field)
+}
+
+fn required_chain_scope(value: &Value<IOValue>) -> Result<ChainScope> {
+    let value = value_to_iovalue(value);
+    let chain = simple_record(&value, "chain", 3)?;
+    Ok(ChainScope::new(
+        required_record_string(&chain[0], "scope", "chain scope")?,
+        required_record_string(&chain[1], "id", "chain id")?,
+        required_record_string(&chain[2], "epoch", "chain epoch")?,
+    ))
+}
+
+fn simple_record<'a>(value: &'a IOValue, label: &str, arity: usize) -> Result<Cow<'a, Record<Value<IOValue>>>> {
+    value
+        .collect_simple_record(label, Some(arity))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
+}
+
+#[allow(clippy::owned_cow)]
+fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<Cow<'a, Vec<Value<IOValue>>>> {
+    value
+        .collect_sequence()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
+}
+
+fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+    value
+        .as_string()
+        .map(|value| value.into_owned())
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
+}
+
+fn required_hash(value: &Value<IOValue>, field: &str) -> Result<String> {
+    let hash = required_string(value, field)?;
+    if !hash.starts_with("blake3:") || hash.len() != "blake3:".len() + 64 {
+        return Err(MoltenError::invalid_harness(format!("expected blake3 hash ref for {field}, got {hash}")));
+    }
+    Ok(hash)
+}
+
+fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+    value
+        .as_u64()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
+        .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
+}

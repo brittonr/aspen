@@ -1,0 +1,18 @@
+# Rust
+target/
+**/target/
+Cargo.lock.bak
+
+# Nix
+/result*
+.direnv/
+
+# IDE/editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Agent/editor state
+.pi/
+.pirs/

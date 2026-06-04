@@ -1,0 +1,19 @@
+unstable_features = true
+edition = "2024"
+max_width = 120
+
+reorder_imports = true
+imports_granularity = "Item"
+group_imports = "StdExternalCrate"
+
+fn_params_layout = "Tall"
+fn_call_width = 100
+
+where_single_line = true
+trailing_comma = "Vertical"
+overflow_delimited_expr = true
+wrap_comments = true
+comment_width = 100
+chain_width = 100
+inline_attribute_width = 0
+merge_derives = false
