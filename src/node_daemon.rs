@@ -3247,9 +3247,10 @@ fn record_strings(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Re
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{tag} [...]>")))?;
     let items = fields[0]
         .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} must contain a sequence")))?;
-    let mut values = Vec::with_capacity(items.len());
-    for item in items.iter() {
+        .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} must contain a sequence")))?
+        .into_owned();
+    let mut values = Vec::new();
+    for item in items {
         let item = item
             .as_string()
             .map(|value| value.into_owned())
