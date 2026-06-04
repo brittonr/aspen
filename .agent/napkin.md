@@ -20,6 +20,7 @@
 | 2026-06-04 | self | Some test temp-dir helpers still omitted the process id, so parallel nextest cleanup could delete another live test's `/tmp/molten-*` directory and cause unrelated redaction/catalog failures. | All `/tmp/molten-*` test dirs must include `std::process::id()` before the per-process counter, or cleanup must not remove pidless live-looking dirs during parallel runs. |
 | 2026-06-04 | self | While staging live-listener work, I typoed `status-result` as `status_result` inside the standard Steel process wrapper and wasted a tool call. | Copy the known-good Steel validation/staging wrapper exactly; avoid hand-editing variable names in nested error branches. |
 | 2026-06-04 | self | During node-control authority delegation, I edited before actually re-reading `.agent/napkin.md` in the retained post-compaction turn and only noticed later. | The very first retained tool call after compaction/resume must be `read .agent/napkin.md`; summaries saying it happened earlier are not enough. |
+| 2026-06-04 | self | While validating live peer tickets, I hand-wrote a deeply nested Steel `let`/`spawn-process` command and introduced a mismatched parenthesis. | For long commands, bind the argument list and child in separate top-level `define`s instead of nesting everything in one expression. |
 
 ## User Preferences
 - Prefer explicit Nickel and Steel contract boundaries where applicable: Nickel for static declarative policy/config/schema gates, Steel only for reviewed dynamic predicates/trusted callables, both enforced through Basalt before side effects.

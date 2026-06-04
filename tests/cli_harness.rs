@@ -560,9 +560,10 @@ fn cli_node_live_ingress_loopback_enqueues_request() -> CliResult<()> {
     let publish_receipt = dir.join("publish.preserves");
     let receive_receipt = dir.join("receive.preserves");
     let authority_grant = dir.join("authority-grant.preserves");
+    let live_ticket = dir.join("live-ticket.preserves");
+    let peer_admission = dir.join("peer-admission.preserves");
     let policy_ref = test_ref("live-policy")?;
     let resource_ref = test_ref("live-resource")?;
-    let bootstrap_ref = test_ref("live-bootstrap")?;
 
     assert_success(
         &molten_cmd()
@@ -596,6 +597,30 @@ fn cli_node_live_ingress_loopback_enqueues_request() -> CliResult<()> {
         "node live authority grant",
     );
     let authority_ref = molten::preserves_rail::canonical_hash(&read_preserves(&authority_grant)?)?;
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "live-ticket-export", "--state-root"])
+            .arg(&state_root)
+            .args(["--policy"])
+            .arg(&policy_ref)
+            .args(["--out"])
+            .arg(&live_ticket)
+            .output()?,
+        "node live ticket export",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "live-peer-admit", "--state-root"])
+            .arg(&state_root)
+            .args(["--peer", "peer:cli-live", "--policy"])
+            .arg(&policy_ref)
+            .args(["--receipt-out"])
+            .arg(&peer_admission)
+            .arg(&live_ticket)
+            .output()?,
+        "node live peer admit",
+    );
+    let bootstrap_ref = molten::preserves_rail::canonical_hash(&read_preserves(&peer_admission)?)?;
     assert_success(
         &molten_cmd()
             .args([
@@ -658,6 +683,7 @@ fn cli_node_serve_live_iroh_empty_listener_receipt() -> CliResult<()> {
     let state_root = dir.join("node-state");
     let listener_receipt = dir.join("listener.preserves");
     let service_receipt = dir.join("service.preserves");
+    let live_ticket = dir.join("live-ticket.preserves");
     assert_success(
         &molten_cmd()
             .args(["test", "node", "init", "--state-root"])
@@ -675,6 +701,8 @@ fn cli_node_serve_live_iroh_empty_listener_receipt() -> CliResult<()> {
         .arg(&state_root)
         .args(["--live-iroh", "--live-max-events", "0", "--service-receipt-out"])
         .arg(&service_receipt)
+        .args(["--live-ticket-out"])
+        .arg(&live_ticket)
         .args(["--receipt-out"])
         .arg(&listener_receipt)
         .output()?;
@@ -688,6 +716,7 @@ fn cli_node_serve_live_iroh_empty_listener_receipt() -> CliResult<()> {
         molten::ledger::artifact_kind(&read_preserves(&service_receipt)?),
         "node-control-service-run-receipt"
     );
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&live_ticket)?), "node-control-live-ticket");
     Ok(())
 }
 

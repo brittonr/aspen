@@ -465,6 +465,8 @@ enum NodeCommand {
         #[arg(long)]
         service_receipt_out: Option<PathBuf>,
         #[arg(long)]
+        live_ticket_out: Option<PathBuf>,
+        #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
     Status {
@@ -535,6 +537,35 @@ enum NodeCommand {
         evidence_refs: Vec<String>,
         #[arg(long)]
         out: PathBuf,
+    },
+    LiveTicketExport {
+        #[arg(long)]
+        state_root: PathBuf,
+        #[arg(long, default_value = node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+        topic: String,
+        #[arg(long = "policy")]
+        policy_refs: Vec<String>,
+        #[arg(long = "evidence")]
+        evidence_refs: Vec<String>,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    LivePeerAdmit {
+        #[arg(long)]
+        state_root: PathBuf,
+        #[arg(long)]
+        peer: String,
+        #[arg(long, default_value_t = 1)]
+        sequence: u64,
+        #[arg(long)]
+        expires_at: Option<u64>,
+        #[arg(long = "policy")]
+        policy_refs: Vec<String>,
+        #[arg(long = "evidence")]
+        evidence_refs: Vec<String>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+        ticket: PathBuf,
     },
     ControlSubmit {
         #[arg(long)]
@@ -5160,6 +5191,7 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             live_max_events,
             live_event_timeout_ms,
             service_receipt_out,
+            live_ticket_out,
             receipt_out,
         } => {
             if live_iroh {
@@ -5176,6 +5208,11 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 ))?;
                 if let Some(path) = service_receipt_out.as_ref() {
                     write_file(path, &to_text(&served.service.service_receipt_value)?)?;
+                }
+                if let Some(path) = live_ticket_out.as_ref()
+                    && let Some(ticket_value) = served.live_ticket_value.as_ref()
+                {
+                    write_file(path, &to_text(ticket_value)?)?;
                 }
                 emit_named_receipt(
                     receipt_out.as_ref(),
@@ -5324,6 +5361,51 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 node_daemon::import_node_control_authority_grant(state_root, &value)?;
             }
             println!("node authority grant {} written to {}", grant_ref, out.display());
+            Ok(())
+        }
+        NodeCommand::LiveTicketExport {
+            state_root,
+            topic,
+            policy_refs,
+            evidence_refs,
+            out,
+        } => {
+            let ticket =
+                node_daemon::export_node_control_live_ticket(&node_daemon::NodeControlLiveTicketExportInput {
+                    state_root: &state_root,
+                    topic: &topic,
+                    policy_refs: &policy_refs,
+                    evidence_refs: &evidence_refs,
+                })?;
+            write_file(&out, &to_text(&ticket.value)?)?;
+            println!("node live ticket {} written to {}", ticket.ticket_ref, out.display());
+            Ok(())
+        }
+        NodeCommand::LivePeerAdmit {
+            state_root,
+            peer,
+            sequence,
+            expires_at,
+            policy_refs,
+            evidence_refs,
+            receipt_out,
+            ticket,
+        } => {
+            let ticket_value = read_preserves_file(&ticket)?;
+            let admission = node_daemon::admit_node_control_live_peer(&node_daemon::NodeControlLivePeerAdmitInput {
+                state_root: &state_root,
+                ticket_value: &ticket_value,
+                peer_id: &peer,
+                sequence,
+                expires_at,
+                policy_refs: &policy_refs,
+                evidence_refs: &evidence_refs,
+            })?;
+            emit_named_receipt(receipt_out.as_ref(), "node live peer admission", &admission.value)?;
+            println!(
+                "node live peer admit decision={} admission={} peer={} node={} topic={}",
+                admission.decision, admission.admission_ref, admission.peer_id, admission.node_id, admission.topic
+            );
             Ok(())
         }
         NodeCommand::ControlSubmit {

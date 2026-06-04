@@ -21,6 +21,8 @@ use crate::preserves_rail::NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LOOP_RECEIPT_SCHEMA;
@@ -256,6 +258,37 @@ pub struct NodeControlAuthorityGrantInput<'a> {
     pub expires_at: Option<u64>,
     pub policy_refs: &'a [String],
     pub revocation_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveTicketInput<'a> {
+    pub node_id: &'a str,
+    pub node_identity_ref: &'a str,
+    pub logical_endpoint_id: &'a str,
+    pub live_endpoint_id: &'a str,
+    pub topic: &'a str,
+    pub address_refs: &'a [String],
+    pub policy_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveTicketExportInput<'a> {
+    pub state_root: &'a Path,
+    pub topic: &'a str,
+    pub policy_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NodeControlLivePeerAdmitInput<'a> {
+    pub state_root: &'a Path,
+    pub ticket_value: &'a IOValue,
+    pub peer_id: &'a str,
+    pub sequence: u64,
+    pub expires_at: Option<u64>,
+    pub policy_refs: &'a [String],
     pub evidence_refs: &'a [String],
 }
 
@@ -501,6 +534,8 @@ pub struct NodeControlLiveServe {
     pub neighbor_events: Vec<String>,
     pub observed_events: u64,
     pub bound_endpoint_id: String,
+    pub live_ticket_ref: Option<String>,
+    pub live_ticket_value: Option<IOValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -523,6 +558,36 @@ pub struct NodeControlAuthorityGrant {
     pub policy_refs: Vec<String>,
     pub revocation_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveTicket {
+    pub ticket_ref: String,
+    pub node_id: String,
+    pub node_identity_ref: String,
+    pub logical_endpoint_id: String,
+    pub live_endpoint_id: String,
+    pub topic: String,
+    pub address_refs: Vec<String>,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLivePeerAdmission {
+    pub admission_ref: String,
+    pub decision: String,
+    pub peer_id: String,
+    pub ticket_ref: String,
+    pub node_id: String,
+    pub topic: String,
+    pub sequence: u64,
+    pub expires_at: Option<u64>,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
     pub value: IOValue,
 }
 
@@ -597,6 +662,186 @@ pub fn import_node_control_authority_grant(
     let grant = parse_node_control_authority_grant(grant_value)?;
     import_node_artifact(state_root, grant_value)?;
     Ok(grant)
+}
+
+pub fn node_control_live_ticket_value(input: &NodeControlLiveTicketInput<'_>) -> Result<IOValue> {
+    validate_node_id(input.node_id)?;
+    validate_ingress_ref(input.node_identity_ref, "node control live ticket identity ref")?;
+    validate_node_id(input.logical_endpoint_id)?;
+    validate_node_id(input.live_endpoint_id)?;
+    validate_node_id(input.topic)?;
+    validate_ingress_refs(input.policy_refs, "node control live ticket policy ref")?;
+    validate_ingress_refs(input.evidence_refs, "node control live ticket evidence ref")?;
+    Ok(record("node-control-live-ticket-v1", vec![
+        string(NODE_CONTROL_LIVE_TICKET_SCHEMA),
+        record("node", vec![
+            record("id", vec![string(input.node_id)]),
+            record("identity", vec![string(input.node_identity_ref)]),
+            record("logical-endpoint", vec![string(input.logical_endpoint_id)]),
+        ]),
+        record("live", vec![
+            record("endpoint-id", vec![string(input.live_endpoint_id)]),
+            record("topic", vec![string(input.topic)]),
+            record("addresses", vec![sequence(input.address_refs.iter().map(string).collect())]),
+        ]),
+        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
+        record("evidence", vec![sequence(input.evidence_refs.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("node-identity-bound"), string("pass")]),
+            record("check", vec![string("live-endpoint-bound"), string("pass")]),
+            record("check", vec![string("ticket-is-bootstrap-not-authority"), string("pass")]),
+            record("check", vec![string("authority-grant-still-required"), string("pass")]),
+        ])]),
+    ]))
+}
+
+pub fn parse_node_control_live_ticket(value: &IOValue) -> Result<NodeControlLiveTicket> {
+    let fields = value
+        .collect_simple_record("node-control-live-ticket-v1", Some(6))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-ticket-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_LIVE_TICKET_SCHEMA, "node control live ticket")?;
+    let node = crate::preserves_rail::value_to_iovalue(&fields[1]);
+    let node_fields = node
+        .collect_simple_record("node", Some(3))
+        .ok_or_else(|| MoltenError::invalid_harness("node control live ticket missing node"))?;
+    let live = crate::preserves_rail::value_to_iovalue(&fields[2]);
+    let live_fields = live
+        .collect_simple_record("live", Some(3))
+        .ok_or_else(|| MoltenError::invalid_harness("node control live ticket missing live endpoint"))?;
+    Ok(NodeControlLiveTicket {
+        ticket_ref: canonical_hash(value)?,
+        node_id: record_string(&node_fields[0], "id")?,
+        node_identity_ref: record_ref_string(&node_fields[1], "identity")?,
+        logical_endpoint_id: record_string(&node_fields[2], "logical-endpoint")?,
+        live_endpoint_id: record_string(&live_fields[0], "endpoint-id")?,
+        topic: record_string(&live_fields[1], "topic")?,
+        address_refs: record_strings(&live_fields[2], "addresses")?,
+        policy_refs: record_ref_strings(&fields[3], "policy")?,
+        evidence_refs: record_ref_strings(&fields[4], "evidence")?,
+        value: value.clone(),
+    })
+}
+
+pub fn export_node_control_live_ticket(input: &NodeControlLiveTicketExportInput<'_>) -> Result<NodeControlLiveTicket> {
+    validate_state_root(input.state_root)?;
+    validate_node_id(input.topic)?;
+    ensure_state_layout(input.state_root)?;
+    let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let address_refs = Vec::new();
+    let value = node_control_live_ticket_value(&NodeControlLiveTicketInput {
+        node_id: &identity.node_id,
+        node_identity_ref: &identity.identity_ref,
+        logical_endpoint_id: &identity.endpoint_id,
+        live_endpoint_id: &stable_live_endpoint_id(&identity),
+        topic: input.topic,
+        address_refs: &address_refs,
+        policy_refs: input.policy_refs,
+        evidence_refs: input.evidence_refs,
+    })?;
+    let ticket = parse_node_control_live_ticket(&value)?;
+    import_node_artifact(input.state_root, &value)?;
+    Ok(ticket)
+}
+
+pub fn admit_node_control_live_peer(input: &NodeControlLivePeerAdmitInput<'_>) -> Result<NodeControlLivePeerAdmission> {
+    validate_state_root(input.state_root)?;
+    validate_node_id(input.peer_id)?;
+    validate_ingress_refs(input.policy_refs, "node control live peer admission policy ref")?;
+    validate_ingress_refs(input.evidence_refs, "node control live peer admission evidence ref")?;
+    ensure_state_layout(input.state_root)?;
+    let ticket = parse_node_control_live_ticket(input.ticket_value)?;
+    import_node_artifact(input.state_root, input.ticket_value)?;
+    let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
+    let mut diagnostics = Vec::new();
+    if ticket.node_id != identity.node_id {
+        diagnostics.push(format!(
+            "node control live ticket node {} does not match local node {}",
+            ticket.node_id, identity.node_id
+        ));
+    }
+    if ticket.node_identity_ref != identity.identity_ref {
+        diagnostics.push("node control live ticket identity ref does not match local identity".to_string());
+    }
+    let expected_live_endpoint = stable_live_endpoint_id(&identity);
+    if ticket.live_endpoint_id != expected_live_endpoint {
+        diagnostics.push(format!(
+            "node control live ticket endpoint {} does not match local endpoint {}",
+            ticket.live_endpoint_id, expected_live_endpoint
+        ));
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let value = node_control_live_peer_admission_value(
+        decision,
+        input.peer_id,
+        &ticket,
+        input.sequence,
+        input.expires_at,
+        input.policy_refs,
+        input.evidence_refs,
+        &diagnostics,
+    )?;
+    let admission = parse_node_control_live_peer_admission(&value)?;
+    import_node_artifact(input.state_root, &value)?;
+    Ok(admission)
+}
+
+fn node_control_live_peer_admission_value(
+    decision: &str,
+    peer_id: &str,
+    ticket: &NodeControlLiveTicket,
+    admission_sequence: u64,
+    expires_at: Option<u64>,
+    policy_refs: &[String],
+    evidence_refs: &[String],
+    diagnostics: &[String],
+) -> Result<IOValue> {
+    validate_decision(decision)?;
+    Ok(record("node-control-live-peer-admission-v1", vec![
+        string(NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("peer", vec![string(peer_id)]),
+        record("ticket", vec![string(&ticket.ticket_ref)]),
+        record("node", vec![string(&ticket.node_id)]),
+        record("topic", vec![string(&ticket.topic)]),
+        record("sequence", vec![string(admission_sequence.to_string())]),
+        record("expires-at", vec![optional_string(expires_at.map(|value| value.to_string()).as_deref())]),
+        record("policy", vec![sequence(policy_refs.iter().map(string).collect())]),
+        record("evidence", vec![sequence(evidence_refs.iter().map(string).collect())]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![
+                string("ticket-bound"),
+                string(if decision == "pass" { "pass" } else { "fail" }),
+            ]),
+            record("check", vec![
+                string("peer-topic-bound"),
+                string(if decision == "pass" { "pass" } else { "fail" }),
+            ]),
+            record("check", vec![string("bootstrap-not-authority"), string("pass")]),
+            record("check", vec![string("authority-grant-still-required"), string("pass")]),
+        ])]),
+    ]))
+}
+
+pub fn parse_node_control_live_peer_admission(value: &IOValue) -> Result<NodeControlLivePeerAdmission> {
+    let fields = value
+        .collect_simple_record("node-control-live-peer-admission-v1", Some(12))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-peer-admission-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA, "node control live peer admission")?;
+    Ok(NodeControlLivePeerAdmission {
+        admission_ref: canonical_hash(value)?,
+        decision: record_string(&fields[1], "decision")?,
+        peer_id: record_string(&fields[2], "peer")?,
+        ticket_ref: record_ref_string(&fields[3], "ticket")?,
+        node_id: record_string(&fields[4], "node")?,
+        topic: record_string(&fields[5], "topic")?,
+        sequence: record_u64_string(&fields[6], "sequence")?,
+        expires_at: record_optional_u64_string(&fields[7], "expires-at")?,
+        policy_refs: record_ref_strings(&fields[8], "policy")?,
+        evidence_refs: record_ref_strings(&fields[9], "evidence")?,
+        diagnostics: record_strings(&fields[10], "diagnostics")?,
+        value: value.clone(),
+    })
 }
 
 pub fn init_local_node(input: &NodeDaemonInitInput<'_>) -> Result<NodeDaemonInit> {
@@ -1334,8 +1579,8 @@ pub async fn node_control_live_iroh_loopback(
     let envelope = node_control_live_ingress_envelope(&envelope_input)?;
     let topic_id = node_control_live_topic_id(input.topic);
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
-    let receiver_endpoint = live_gossip_endpoint(&lookup).await?;
-    let sender_endpoint = live_gossip_endpoint(&lookup).await?;
+    let receiver_endpoint = live_gossip_endpoint(&lookup, None).await?;
+    let sender_endpoint = live_gossip_endpoint(&lookup, None).await?;
     lookup.add_endpoint_info(receiver_endpoint.addr());
     lookup.add_endpoint_info(sender_endpoint.addr());
     let receiver_id = receiver_endpoint.id();
@@ -1400,8 +1645,9 @@ pub async fn serve_node_control_live_listener(input: &NodeControlLiveServeInput<
     ensure_state_layout(input.state_root)?;
     let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
-    let endpoint = live_gossip_endpoint(&lookup).await?;
+    let endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
     let bound_endpoint_id = format!("iroh:{}", endpoint.id());
+    let live_ticket = live_ticket_for_bound_endpoint(input.state_root, &identity, input.topic, &endpoint.addr())?;
     lookup.add_endpoint_info(endpoint.addr());
     let gossip = iroh_gossip::Gossip::builder().spawn(endpoint.clone());
     let router = iroh::protocol::Router::builder(endpoint).accept(iroh_gossip::ALPN, gossip.clone()).spawn();
@@ -1421,7 +1667,10 @@ pub async fn serve_node_control_live_listener(input: &NodeControlLiveServeInput<
         .shutdown()
         .await
         .map_err(|error| MoltenError::invalid_harness(format!("live Iroh serve router shutdown failed: {error}")))?;
-    served
+    let mut served = served?;
+    served.live_ticket_ref = Some(live_ticket.ticket_ref);
+    served.live_ticket_value = Some(live_ticket.value);
+    Ok(served)
 }
 
 pub async fn node_control_live_serve_listener_loopback(
@@ -1444,8 +1693,10 @@ pub async fn node_control_live_serve_listener_loopback(
     let envelope = node_control_live_ingress_envelope(&envelope_input)?;
     let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
-    let receiver_endpoint = live_gossip_endpoint(&lookup).await?;
-    let sender_endpoint = live_gossip_endpoint(&lookup).await?;
+    let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
+    let sender_endpoint = live_gossip_endpoint(&lookup, None).await?;
+    let live_ticket =
+        live_ticket_for_bound_endpoint(input.state_root, &identity, input.topic, &receiver_endpoint.addr())?;
     lookup.add_endpoint_info(receiver_endpoint.addr());
     lookup.add_endpoint_info(sender_endpoint.addr());
     let receiver_id = receiver_endpoint.id();
@@ -1481,7 +1732,7 @@ pub async fn node_control_live_serve_listener_loopback(
         event_timeout_ms: 1_000,
         max_requests_per_tick: input.max_requests_per_tick,
     };
-    let listener = serve_node_control_live_listener_with_topic(
+    let mut listener = serve_node_control_live_listener_with_topic(
         &listener_input,
         &mut receiver_topic,
         &identity.node_id,
@@ -1489,6 +1740,8 @@ pub async fn node_control_live_serve_listener_loopback(
         &bound_endpoint_id,
     )
     .await?;
+    listener.live_ticket_ref = Some(live_ticket.ticket_ref);
+    listener.live_ticket_value = Some(live_ticket.value);
     receiver_router.shutdown().await.map_err(|error| {
         MoltenError::invalid_harness(format!("live Iroh listener receiver shutdown failed: {error}"))
     })?;
@@ -1584,6 +1837,8 @@ async fn serve_node_control_live_listener_with_topic(
         neighbor_events,
         observed_events,
         bound_endpoint_id: bound_endpoint_id.to_string(),
+        live_ticket_ref: None,
+        live_ticket_value: None,
     })
 }
 
@@ -1603,14 +1858,58 @@ async fn receive_first_live_ingress_event(
     Err(MoltenError::invalid_harness("live Iroh receiver closed before node control envelope arrived"))
 }
 
-async fn live_gossip_endpoint(lookup: &iroh::address_lookup::memory::MemoryLookup) -> Result<iroh::Endpoint> {
-    iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
+fn stable_live_endpoint_secret(identity: &node_identity::NodeIdentity) -> iroh::SecretKey {
+    let seed = blake3::hash(
+        format!("molten.node-control.live.endpoint.v1:{}:{}", identity.node_id, identity.endpoint_id).as_bytes(),
+    );
+    iroh::SecretKey::from_bytes(seed.as_bytes())
+}
+
+fn stable_live_endpoint_id(identity: &node_identity::NodeIdentity) -> String {
+    format!("iroh:{}", stable_live_endpoint_secret(identity).public())
+}
+
+fn live_ticket_address_refs(addr: &iroh::EndpointAddr) -> Vec<String> {
+    addr.addrs.iter().map(ToString::to_string).collect()
+}
+
+fn live_ticket_for_bound_endpoint(
+    state_root: &Path,
+    identity: &node_identity::NodeIdentity,
+    topic: &str,
+    addr: &iroh::EndpointAddr,
+) -> Result<NodeControlLiveTicket> {
+    let address_refs = live_ticket_address_refs(addr);
+    let value = node_control_live_ticket_value(&NodeControlLiveTicketInput {
+        node_id: &identity.node_id,
+        node_identity_ref: &identity.identity_ref,
+        logical_endpoint_id: &identity.endpoint_id,
+        live_endpoint_id: &format!("iroh:{}", addr.id),
+        topic,
+        address_refs: &address_refs,
+        policy_refs: &identity.policy_refs,
+        evidence_refs: &identity.receipt_refs,
+    })?;
+    let ticket = parse_node_control_live_ticket(&value)?;
+    import_node_artifact(state_root, &value)?;
+    Ok(ticket)
+}
+
+async fn live_gossip_endpoint(
+    lookup: &iroh::address_lookup::memory::MemoryLookup,
+    secret_key: Option<iroh::SecretKey>,
+) -> Result<iroh::Endpoint> {
+    let mut builder = iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
         .relay_mode(iroh::RelayMode::Disabled)
         .address_lookup(lookup.clone())
         .alpns(vec![iroh_gossip::ALPN.to_vec()])
         .clear_ip_transports()
         .bind_addr((Ipv4Addr::LOCALHOST, 0))
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh endpoint bind addr failed: {error}")))?
+        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh endpoint bind addr failed: {error}")))?;
+    if let Some(secret_key) = secret_key {
+        builder = builder.secret_key(secret_key);
+    }
+    builder
         .bind()
         .await
         .map_err(|error| MoltenError::invalid_harness(format!("live Iroh endpoint bind failed: {error}")))
@@ -1863,7 +2162,103 @@ fn ingress_pre_enqueue_diagnostics(
         diagnostics.push("node control ingress resource refs missing".to_string());
     }
     if diagnostics.is_empty() && envelope.transport == LIVE_CONTROL_INGRESS_TRANSPORT {
+        diagnostics.extend(evaluate_live_peer_bootstrap(state_root, envelope)?);
+    }
+    if diagnostics.is_empty() && envelope.transport == LIVE_CONTROL_INGRESS_TRANSPORT {
         diagnostics.extend(evaluate_live_authority_delegation(state_root, envelope)?);
+    }
+    Ok(diagnostics)
+}
+
+fn evaluate_live_peer_bootstrap(state_root: &Path, envelope: &NodeControlIngressEnvelope) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    let mut admitted_peer_ref = None;
+    for peer_ref in envelope.peer_bootstrap_refs.iter() {
+        match read_node_ledger_artifact(state_root, peer_ref) {
+            Ok(value) => match parse_node_control_live_peer_admission(&value) {
+                Ok(admission) => {
+                    let admission_diagnostics = live_peer_admission_diagnostics(state_root, envelope, &admission)?;
+                    if admission_diagnostics.is_empty() {
+                        admitted_peer_ref = Some(admission.admission_ref);
+                        break;
+                    }
+                    diagnostics.extend(admission_diagnostics);
+                }
+                Err(error) => diagnostics
+                    .push(format!("node control live peer bootstrap ref {peer_ref} is not an admission: {error}")),
+            },
+            Err(error) => diagnostics.push(format!("node control live peer bootstrap {peer_ref} not found: {error}")),
+        }
+    }
+    if admitted_peer_ref.is_none() {
+        diagnostics.push("node control live peer bootstrap missing admitted ticket".to_string());
+    }
+    Ok(diagnostics)
+}
+
+fn live_peer_admission_diagnostics(
+    state_root: &Path,
+    envelope: &NodeControlIngressEnvelope,
+    admission: &NodeControlLivePeerAdmission,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    if admission.decision != "pass" {
+        diagnostics.push(format!(
+            "node control live peer admission {} decision {}",
+            admission.admission_ref, admission.decision
+        ));
+    }
+    if admission.peer_id != envelope.from_peer {
+        diagnostics.push(format!(
+            "node control live peer admission {} peer {} does not match {}",
+            admission.admission_ref, admission.peer_id, envelope.from_peer
+        ));
+    }
+    if admission.node_id != envelope.to_node {
+        diagnostics.push(format!(
+            "node control live peer admission {} node {} does not match {}",
+            admission.admission_ref, admission.node_id, envelope.to_node
+        ));
+    }
+    if admission.topic != envelope.topic {
+        diagnostics.push(format!(
+            "node control live peer admission {} topic {} does not match {}",
+            admission.admission_ref, admission.topic, envelope.topic
+        ));
+    }
+    match read_node_ledger_artifact(state_root, &admission.ticket_ref) {
+        Ok(value) => match parse_node_control_live_ticket(&value) {
+            Ok(ticket) => {
+                if ticket.node_id != admission.node_id || ticket.topic != admission.topic {
+                    diagnostics.push(format!(
+                        "node control live peer admission {} ticket binding mismatch",
+                        admission.admission_ref
+                    ));
+                }
+            }
+            Err(error) => diagnostics.push(format!(
+                "node control live peer admission {} ticket is not a live ticket: {error}",
+                admission.admission_ref
+            )),
+        },
+        Err(error) => diagnostics.push(format!(
+            "node control live peer admission {} ticket {} not found: {error}",
+            admission.admission_ref, admission.ticket_ref
+        )),
+    }
+    if admission.sequence > envelope.sequence {
+        diagnostics.push(format!(
+            "node control live peer admission {} is not valid until sequence {}",
+            admission.admission_ref, admission.sequence
+        ));
+    }
+    if let Some(expires_at) = admission.expires_at
+        && expires_at < envelope.sequence
+    {
+        diagnostics.push(format!(
+            "node control live peer admission {} expired at sequence {expires_at}",
+            admission.admission_ref
+        ));
     }
     Ok(diagnostics)
 }
@@ -2905,6 +3300,18 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_string(&fields[10], "request")?
         ));
     }
+    if let Ok(ticket) = parse_node_control_live_ticket(value) {
+        return Ok(format!(
+            "node control live ticket ref={} node={} topic={} endpoint={}",
+            ticket.ticket_ref, ticket.node_id, ticket.topic, ticket.live_endpoint_id
+        ));
+    }
+    if let Ok(admission) = parse_node_control_live_peer_admission(value) {
+        return Ok(format!(
+            "node control live peer admission decision={} peer={} node={} topic={}",
+            admission.decision, admission.peer_id, admission.node_id, admission.topic
+        ));
+    }
     if let Ok(grant) = parse_node_control_authority_grant(value) {
         return Ok(format!(
             "node control authority grant ref={} peer={} node={} operations={}",
@@ -3513,6 +3920,31 @@ fn test_live_authority_refs(
     })?;
     let grant = import_node_control_authority_grant(state_root, &grant_value)?;
     Ok(vec![grant.grant_ref])
+}
+
+#[cfg(test)]
+fn test_live_peer_bootstrap_refs(
+    state_root: &Path,
+    peer_id: &str,
+    topic: &str,
+    policy_refs: &[String],
+) -> Result<Vec<String>> {
+    let ticket = export_node_control_live_ticket(&NodeControlLiveTicketExportInput {
+        state_root,
+        topic,
+        policy_refs,
+        evidence_refs: &[],
+    })?;
+    let admission = admit_node_control_live_peer(&NodeControlLivePeerAdmitInput {
+        state_root,
+        ticket_value: &ticket.value,
+        peer_id,
+        sequence: 1,
+        expires_at: None,
+        policy_refs,
+        evidence_refs: &[],
+    })?;
+    Ok(vec![admission.admission_ref])
 }
 
 fn index_receipt_refs(state_root: &Path) -> Result<Vec<String>> {
@@ -4140,6 +4572,87 @@ mod tests {
     }
 
     #[test]
+    fn node_control_live_peer_ticket_admission_gates_bootstrap() {
+        let root = temp_dir("node-control-live-peer-ticket");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:live-ticket",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let policy_refs = vec![local_ref("node-control-policy", "live-ticket").expect("policy ref")];
+        let resource_refs = vec![local_ref("node-control-resource", "live-ticket").expect("resource ref")];
+        let peer_bootstrap_refs =
+            test_live_peer_bootstrap_refs(&root, "peer:ticket", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
+                .expect("peer admission ref");
+        let authority_refs = test_live_authority_refs(&root, "peer:ticket", "node:live-ticket", "status", &policy_refs)
+            .expect("authority grant ref");
+        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "status",
+            target_ref: None,
+            payload_ref: None,
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("status request");
+        let admitted = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: &request_value,
+            from_peer: "peer:ticket",
+            to_node: "node:live-ticket",
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            sequence: 1,
+            peer_bootstrap_refs: &peer_bootstrap_refs,
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("admitted envelope");
+        publish_node_control_ingress(&NodeControlIngressPublishInput {
+            state_root: &root,
+            envelope_value: &admitted.value,
+        })
+        .expect("publish admitted");
+        let delivered = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
+            state_root: &root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            envelope_ref: &admitted.envelope_ref,
+        })
+        .expect("deliver admitted");
+        assert!(delivered.has_enqueued);
+
+        let denied = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: &request_value,
+            from_peer: "peer:other-ticket",
+            to_node: "node:live-ticket",
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            sequence: 1,
+            peer_bootstrap_refs: &peer_bootstrap_refs,
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("denied envelope");
+        publish_node_control_ingress(&NodeControlIngressPublishInput {
+            state_root: &root,
+            envelope_value: &denied.value,
+        })
+        .expect("publish denied");
+        let denied_delivery = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
+            state_root: &root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            envelope_ref: &denied.envelope_ref,
+        })
+        .expect("deliver denied");
+        assert!(!denied_delivery.has_enqueued);
+        let receipt_text = to_text(&denied_delivery.ingress_receipt_value).expect("receipt text");
+        assert!(receipt_text.contains("peer peer:ticket does not match peer:other-ticket"));
+    }
+
+    #[test]
     fn node_control_live_authority_delegation_fails_closed() {
         struct Case<'a> {
             name: &'a str,
@@ -4265,7 +4778,9 @@ mod tests {
             run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
             let policy_refs = vec![local_ref("node-control-policy", case.name).expect("policy ref")];
             let resource_refs = vec![local_ref("node-control-resource", case.name).expect("resource ref")];
-            let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:case").expect("bootstrap ref")];
+            let peer_bootstrap_refs =
+                test_live_peer_bootstrap_refs(&root, "peer:case", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
+                    .expect("peer admission ref");
             let authority_refs = if let Some(grant_peer) = case.grant_peer {
                 let operations =
                     case.grant_operations.iter().map(|operation| (*operation).to_string()).collect::<Vec<_>>();
@@ -4348,7 +4863,9 @@ mod tests {
             test_live_authority_refs(&root, "peer:listener", "node:live-listener", "status", &policy_refs)
                 .expect("authority grant ref");
         let resource_refs = vec![local_ref("node-control-resource", "live-listener").expect("resource ref")];
-        let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:listener").expect("bootstrap ref")];
+        let peer_bootstrap_refs =
+            test_live_peer_bootstrap_refs(&root, "peer:listener", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
+                .expect("peer admission ref");
         let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "status",
             target_ref: None,
@@ -4399,7 +4916,9 @@ mod tests {
         let authority_refs = test_live_authority_refs(&root, "peer:live", "node:live-ingress", "status", &policy_refs)
             .expect("authority grant ref");
         let resource_refs = vec![local_ref("node-control-resource", "live-ingress").expect("resource ref")];
-        let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:live").expect("bootstrap ref")];
+        let peer_bootstrap_refs =
+            test_live_peer_bootstrap_refs(&root, "peer:live", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
+                .expect("peer admission ref");
         let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "status",
             target_ref: None,
