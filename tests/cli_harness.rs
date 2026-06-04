@@ -446,6 +446,113 @@ fn cli_node_control_request_and_deny_receipt_work() -> CliResult<()> {
 }
 
 #[test]
+fn cli_node_control_ingress_build_publish_deliver_work() -> CliResult<()> {
+    let dir = temp_dir("cli-node-control-ingress")?;
+    let state_root = dir.join("node-state");
+    let request = dir.join("request.preserves");
+    let envelope = dir.join("ingress-envelope.preserves");
+    let publish_receipt = dir.join("ingress-publish.preserves");
+    let deliver_receipt = dir.join("ingress-deliver.preserves");
+    let loop_receipt = dir.join("loop.preserves");
+    let authority_ref = test_ref("ingress-authority")?;
+    let policy_ref = test_ref("ingress-policy")?;
+    let resource_ref = test_ref("ingress-resource")?;
+    let bootstrap_ref = test_ref("ingress-bootstrap")?;
+
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(&state_root)
+            .args(["--node-id", "node:cli-ingress"])
+            .output()?,
+        "node ingress init",
+    );
+    assert_success(
+        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
+        "node ingress run",
+    );
+    assert_success(
+        &molten_cmd()
+            .args([
+                "test",
+                "node",
+                "control-request",
+                "--operation",
+                "status",
+                "--authority",
+            ])
+            .arg(&authority_ref)
+            .args(["--policy"])
+            .arg(&policy_ref)
+            .args(["--resource"])
+            .arg(&resource_ref)
+            .args(["--out"])
+            .arg(&request)
+            .output()?,
+        "node ingress request",
+    );
+    assert_success(
+        &molten_cmd()
+            .args([
+                "test",
+                "node",
+                "control-ingress-build",
+                "--from-peer",
+                "peer:cli",
+                "--to-node",
+                "node:cli-ingress",
+                "--peer-bootstrap",
+            ])
+            .arg(&bootstrap_ref)
+            .args(["--authority"])
+            .arg(&authority_ref)
+            .args(["--policy"])
+            .arg(&policy_ref)
+            .args(["--resource"])
+            .arg(&resource_ref)
+            .args(["--out"])
+            .arg(&envelope)
+            .arg(&request)
+            .output()?,
+        "node ingress build",
+    );
+    let envelope_value = read_preserves(&envelope)?;
+    assert_eq!(molten::ledger::artifact_kind(&envelope_value), "node-control-ingress-envelope");
+    let envelope_ref = molten::preserves_rail::canonical_hash(&envelope_value)?;
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "control-ingress-publish", "--state-root"])
+            .arg(&state_root)
+            .arg(&envelope)
+            .args(["--receipt-out"])
+            .arg(&publish_receipt)
+            .output()?,
+        "node ingress publish",
+    );
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&publish_receipt)?), "node-control-ingress-receipt");
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "control-ingress-deliver", "--state-root"])
+            .arg(&state_root)
+            .arg(&envelope_ref)
+            .args(["--receipt-out"])
+            .arg(&deliver_receipt)
+            .output()?,
+        "node ingress deliver",
+    );
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&deliver_receipt)?), "node-control-ingress-receipt");
+    let loop_out = molten_cmd()
+        .args(["test", "node", "run-loop", "--state-root"])
+        .arg(&state_root)
+        .args(["--max-requests", "1", "--receipt-out"])
+        .arg(&loop_receipt)
+        .output()?;
+    assert_success(&loop_out, "node ingress loop");
+    assert!(stdout(&loop_out).contains("processed=1"));
+    Ok(())
+}
+
+#[test]
 fn cli_octet_artifacts_imports_raw_artifacts_to_ledger() -> CliResult<()> {
     let dir = temp_dir("cli-octet-artifacts-import")?;
     let artifacts = dir.join("artifacts");

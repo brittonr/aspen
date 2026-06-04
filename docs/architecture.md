@@ -382,6 +382,7 @@ Current architectural changes are recorded under `cairn/changes/`:
 - `node-control-operation-dispatch` — side-effecting node control operations for artifact install, node-local job run, and strict source-gate validation with ledger-resolved payloads and fail-closed preflight.
 - `node-control-daemon-loop` — bounded local node control loop with deterministic inbox drain order, heartbeat/loop receipts, idempotent duplicate dispatch, and shutdown stop semantics.
 - `node-control-provenance-gates` — canonical provenance records/receipts and node-control install/run preflights that require admitted reviewed/reproducible/policy-trusted provenance before side effects.
+- `node-control-iroh-ingress` — deterministic local-Iroh ingress envelopes and receipts that validate peer bootstrap, authority, policy, resource, and scoped delivery idempotency before enqueueing into the durable control inbox.
 - `sam-service-supervision-runtime` — demand-driven SAM services with readiness/failure assertions, logical supervision, restart policy, resource bounds, and cleanup receipts.
 - `trellis-protocol-session-runtime` — Trellis-gated protocol manifests, endpoint projection, protocol-message envelopes, session state, and dataspace-backed interpreters.
 - `raft-control-plane-registry` — first Raft-backed strongly consistent control-plane registry for protocol/artifact/policy/capability pointers and receipt indexes.

@@ -1793,7 +1793,7 @@ mod tests {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!("molten-raft-control-{label}-{id}"));
+        let path = std::env::temp_dir().join(format!("molten-raft-control-{label}-{}-{id}", std::process::id()));
         if path.exists() {
             std::fs::remove_dir_all(&path).expect("remove stale temp dir");
         }

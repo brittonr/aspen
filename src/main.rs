@@ -505,6 +505,45 @@ enum NodeCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    ControlIngressBuild {
+        request: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        from_peer: String,
+        #[arg(long)]
+        to_node: String,
+        #[arg(long, default_value = node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+        topic: String,
+        #[arg(long, default_value_t = 1)]
+        sequence: u64,
+        #[arg(long = "peer-bootstrap")]
+        peer_bootstrap_refs: Vec<String>,
+        #[arg(long = "authority")]
+        authority_refs: Vec<String>,
+        #[arg(long = "policy")]
+        policy_refs: Vec<String>,
+        #[arg(long = "resource")]
+        resource_refs: Vec<String>,
+        #[arg(long = "evidence")]
+        evidence_refs: Vec<String>,
+    },
+    ControlIngressPublish {
+        #[arg(long)]
+        state_root: PathBuf,
+        envelope: PathBuf,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    ControlIngressDeliver {
+        #[arg(long)]
+        state_root: PathBuf,
+        #[arg(long, default_value = node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+        topic: String,
+        envelope_ref: String,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     ControlDeny {
         request: PathBuf,
         #[arg(long)]
@@ -5118,6 +5157,81 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 dispatched.request_ref,
                 dispatched.control_receipt_ref,
                 dispatched.subreceipt_refs.len()
+            );
+            Ok(())
+        }
+        NodeCommand::ControlIngressBuild {
+            request,
+            out,
+            from_peer,
+            to_node,
+            topic,
+            sequence,
+            peer_bootstrap_refs,
+            authority_refs,
+            policy_refs,
+            resource_refs,
+            evidence_refs,
+        } => {
+            let request_value = read_preserves_file(&request)?;
+            let envelope = node_daemon::node_control_ingress_envelope(&node_daemon::NodeControlIngressEnvelopeInput {
+                request_value: &request_value,
+                from_peer: &from_peer,
+                to_node: &to_node,
+                topic: &topic,
+                sequence,
+                peer_bootstrap_refs: &peer_bootstrap_refs,
+                authority_refs: &authority_refs,
+                policy_refs: &policy_refs,
+                resource_refs: &resource_refs,
+                evidence_refs: &evidence_refs,
+            })?;
+            write_file(&out, &to_text(&envelope.value)?)?;
+            println!(
+                "node control ingress envelope={} request={} written to {}",
+                envelope.envelope_ref,
+                envelope.request.request_ref,
+                out.display()
+            );
+            Ok(())
+        }
+        NodeCommand::ControlIngressPublish {
+            state_root,
+            envelope,
+            receipt_out,
+        } => {
+            let envelope_value = read_preserves_file(&envelope)?;
+            let published = node_daemon::publish_node_control_ingress(&node_daemon::NodeControlIngressPublishInput {
+                state_root: &state_root,
+                envelope_value: &envelope_value,
+            })?;
+            emit_named_receipt(receipt_out.as_ref(), "node control ingress receipt", &published.receipt_value)?;
+            println!(
+                "node control ingress publish envelope={} receipt={} path={}",
+                published.envelope_ref,
+                published.receipt_ref,
+                published.envelope_path.display()
+            );
+            Ok(())
+        }
+        NodeCommand::ControlIngressDeliver {
+            state_root,
+            topic,
+            envelope_ref,
+            receipt_out,
+        } => {
+            let delivered = node_daemon::deliver_node_control_ingress(&node_daemon::NodeControlIngressDeliverInput {
+                state_root: &state_root,
+                topic: &topic,
+                envelope_ref: &envelope_ref,
+            })?;
+            emit_named_receipt(receipt_out.as_ref(), "node control ingress receipt", &delivered.ingress_receipt_value)?;
+            println!(
+                "node control ingress deliver envelope={} request={} receipt={} enqueued={}",
+                delivered.envelope_ref,
+                delivered.request_ref,
+                delivered.ingress_receipt_ref,
+                if delivered.has_enqueued { "yes" } else { "no" }
             );
             Ok(())
         }
