@@ -686,6 +686,10 @@ enum NodeCommand {
         from_peer: String,
         #[arg(long, default_value_t = 1)]
         sequence: u64,
+        #[arg(long = "operation-id")]
+        operation_id: Option<String>,
+        #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS)]
+        max_attempts: u64,
         #[arg(long = "peer-bootstrap")]
         peer_bootstrap_refs: Vec<String>,
         #[arg(long = "authority")]
@@ -700,6 +704,10 @@ enum NodeCommand {
         join_timeout_ms: u64,
         #[arg(long)]
         transport_receipt_out: Option<PathBuf>,
+        #[arg(long)]
+        retry_receipts_dir: Option<PathBuf>,
+        #[arg(long)]
+        duplicate_receipt_out: Option<PathBuf>,
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
@@ -5676,6 +5684,8 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             ticket,
             from_peer,
             sequence,
+            operation_id,
+            max_attempts,
             peer_bootstrap_refs,
             authority_refs,
             policy_refs,
@@ -5683,6 +5693,8 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             evidence_refs,
             join_timeout_ms,
             transport_receipt_out,
+            retry_receipts_dir,
+            duplicate_receipt_out,
             receipt_out,
         } => {
             let request_value = read_preserves_file(&request)?;
@@ -5696,6 +5708,8 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                     receiver_ticket_value: &ticket_value,
                     from_peer: &from_peer,
                     sequence,
+                    expected_operation_ref: operation_id.as_deref(),
+                    max_attempts,
                     peer_bootstrap_refs: &peer_bootstrap_refs,
                     authority_refs: &authority_refs,
                     policy_refs: &policy_refs,
@@ -5707,14 +5721,27 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             if let (Some(path), Some(value)) = (transport_receipt_out.as_ref(), sent.transport_receipt_value.as_ref()) {
                 write_file(path, &to_text(value)?)?;
             }
+            if let Some(dir) = retry_receipts_dir.as_ref() {
+                fs::create_dir_all(dir).map_err(MoltenError::from)?;
+                for (reference, value) in sent.retry_receipt_refs.iter().zip(sent.retry_receipt_values.iter()) {
+                    let path = dir.join(format!("{}.preserves", reference.replace(':', "-")));
+                    write_file(&path, &to_text(value)?)?;
+                }
+            }
+            if let (Some(path), Some(value)) = (duplicate_receipt_out.as_ref(), sent.duplicate_receipt_value.as_ref()) {
+                write_file(path, &to_text(value)?)?;
+            }
             emit_named_receipt(receipt_out.as_ref(), "node control live send receipt", &sent.send_receipt_value)?;
             println!(
-                "node control live ingress send envelope={} ticket={} endpoint={} transport_receipt={} send_receipt={}",
+                "node control live ingress send envelope={} operation={} ticket={} endpoint={} transport_receipt={} send_receipt={} retries={} duplicate_receipt={}",
                 sent.envelope_ref,
+                sent.operation_ref,
                 sent.receiver_ticket_ref,
                 sent.receiver_endpoint_id,
                 sent.transport_receipt_ref.as_deref().unwrap_or("none"),
-                sent.send_receipt_ref
+                sent.send_receipt_ref,
+                sent.retry_receipt_refs.len(),
+                sent.duplicate_receipt_ref.as_deref().unwrap_or("none")
             );
             Ok(())
         }

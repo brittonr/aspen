@@ -23,7 +23,9 @@ use crate::preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA;
@@ -69,6 +71,9 @@ const MAX_CONTROL_LOOP_REQUESTS: u64 = 1024;
 pub const DEFAULT_CONTROL_LOOP_REQUESTS: u64 = 64;
 const MAX_CONTROL_SERVICE_TICKS: u64 = 4096;
 const MAX_CONTROL_LIVE_LISTENER_EVENTS: u64 = 4096;
+const MAX_CONTROL_LIVE_SEND_ATTEMPTS: u64 = 5;
+const MAX_CONTROL_LIVE_SEND_TIMEOUT_MS: u64 = 60_000;
+pub const DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS: u64 = 1;
 pub const DEFAULT_CONTROL_SERVICE_TICKS: u64 = 1;
 pub const DEFAULT_CONTROL_LIVE_LISTENER_EVENTS: u64 = 1;
 pub const DEFAULT_CONTROL_LIVE_LISTENER_TIMEOUT_MS: u64 = 250;
@@ -81,6 +86,10 @@ const _: () = assert!(MAX_CONTROL_SERVICE_TICKS > 0);
 const _: () = assert!(DEFAULT_CONTROL_SERVICE_TICKS > 0);
 const _: () = assert!(DEFAULT_CONTROL_SERVICE_TICKS <= MAX_CONTROL_SERVICE_TICKS);
 const _: () = assert!(MAX_CONTROL_LIVE_LISTENER_EVENTS > 0);
+const _: () = assert!(MAX_CONTROL_LIVE_SEND_ATTEMPTS > 0);
+const _: () = assert!(MAX_CONTROL_LIVE_SEND_TIMEOUT_MS > 0);
+const _: () = assert!(DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS > 0);
+const _: () = assert!(DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS <= MAX_CONTROL_LIVE_SEND_ATTEMPTS);
 const _: () = assert!(DEFAULT_CONTROL_LIVE_LISTENER_EVENTS <= MAX_CONTROL_LIVE_LISTENER_EVENTS);
 const _: () = assert!(DEFAULT_CONTROL_LIVE_LISTENER_TIMEOUT_MS > 0);
 
@@ -285,6 +294,8 @@ pub struct NodeControlLiveSendInput<'a> {
     pub receiver_ticket_value: &'a IOValue,
     pub from_peer: &'a str,
     pub sequence: u64,
+    pub expected_operation_ref: Option<&'a str>,
+    pub max_attempts: u64,
     pub peer_bootstrap_refs: &'a [String],
     pub authority_refs: &'a [String],
     pub policy_refs: &'a [String],
@@ -393,6 +404,48 @@ struct LiveSendReceiptValueInput<'a> {
     envelope: &'a NodeControlIngressEnvelope,
     transport_receipt_ref: Option<&'a str>,
     diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveSendRetryReceiptValueInput<'a> {
+    decision: &'a str,
+    attempt: u64,
+    max_attempts: u64,
+    from_peer: &'a str,
+    ticket: &'a NodeControlLiveTicket,
+    envelope: &'a NodeControlIngressEnvelope,
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveSendDuplicateReceiptValueInput<'a> {
+    from_peer: &'a str,
+    ticket: &'a NodeControlLiveTicket,
+    envelope: &'a NodeControlIngressEnvelope,
+    prior_send_receipt_ref: &'a str,
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LivePeerAdmissionValueInput<'a> {
+    decision: &'a str,
+    peer_id: &'a str,
+    ticket: &'a NodeControlLiveTicket,
+    admission_sequence: u64,
+    expires_at: Option<u64>,
+    policy_refs: &'a [String],
+    evidence_refs: &'a [String],
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug)]
+struct DeniedLiveSendInput<'a> {
+    input: &'a NodeControlLiveSendInput<'a>,
+    ticket: &'a NodeControlLiveTicket,
+    envelope: NodeControlIngressEnvelope,
+    diagnostics: Vec<String>,
+    retry_receipt_refs: Vec<String>,
+    retry_receipt_values: Vec<IOValue>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -635,10 +688,15 @@ pub struct NodeControlLiveLoopback {
 pub struct NodeControlLiveSend {
     pub envelope_ref: String,
     pub envelope_value: IOValue,
+    pub operation_ref: String,
     pub receiver_ticket_ref: String,
     pub receiver_endpoint_id: String,
     pub transport_receipt_ref: Option<String>,
     pub transport_receipt_value: Option<IOValue>,
+    pub retry_receipt_refs: Vec<String>,
+    pub retry_receipt_values: Vec<IOValue>,
+    pub duplicate_receipt_ref: Option<String>,
+    pub duplicate_receipt_value: Option<IOValue>,
     pub send_receipt_ref: String,
     pub send_receipt_value: IOValue,
 }
@@ -912,52 +970,45 @@ pub fn admit_node_control_live_peer(input: &NodeControlLivePeerAdmitInput<'_>) -
         ));
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = node_control_live_peer_admission_value(
+    let value = node_control_live_peer_admission_value(&LivePeerAdmissionValueInput {
         decision,
-        input.peer_id,
-        &ticket,
-        input.sequence,
-        input.expires_at,
-        input.policy_refs,
-        input.evidence_refs,
-        &diagnostics,
-    )?;
+        peer_id: input.peer_id,
+        ticket: &ticket,
+        admission_sequence: input.sequence,
+        expires_at: input.expires_at,
+        policy_refs: input.policy_refs,
+        evidence_refs: input.evidence_refs,
+        diagnostics: &diagnostics,
+    })?;
     let admission = parse_node_control_live_peer_admission(&value)?;
     import_node_artifact(input.state_root, &value)?;
     Ok(admission)
 }
 
-fn node_control_live_peer_admission_value(
-    decision: &str,
-    peer_id: &str,
-    ticket: &NodeControlLiveTicket,
-    admission_sequence: u64,
-    expires_at: Option<u64>,
-    policy_refs: &[String],
-    evidence_refs: &[String],
-    diagnostics: &[String],
-) -> Result<IOValue> {
-    validate_decision(decision)?;
+fn node_control_live_peer_admission_value(input: &LivePeerAdmissionValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
     Ok(record("node-control-live-peer-admission-v1", vec![
         string(NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("peer", vec![string(peer_id)]),
-        record("ticket", vec![string(&ticket.ticket_ref)]),
-        record("node", vec![string(&ticket.node_id)]),
-        record("topic", vec![string(&ticket.topic)]),
-        record("sequence", vec![string(admission_sequence.to_string())]),
-        record("expires-at", vec![optional_string(expires_at.map(|value| value.to_string()).as_deref())]),
-        record("policy", vec![sequence(policy_refs.iter().map(string).collect())]),
-        record("evidence", vec![sequence(evidence_refs.iter().map(string).collect())]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        record("decision", vec![string(input.decision)]),
+        record("peer", vec![string(input.peer_id)]),
+        record("ticket", vec![string(&input.ticket.ticket_ref)]),
+        record("node", vec![string(&input.ticket.node_id)]),
+        record("topic", vec![string(&input.ticket.topic)]),
+        record("sequence", vec![string(input.admission_sequence.to_string())]),
+        record("expires-at", vec![optional_string(
+            input.expires_at.map(|value| value.to_string()).as_deref(),
+        )]),
+        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
+        record("evidence", vec![sequence(input.evidence_refs.iter().map(string).collect())]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
         record("checks", vec![sequence(vec![
             record("check", vec![
                 string("ticket-bound"),
-                string(if decision == "pass" { "pass" } else { "fail" }),
+                string(if input.decision == "pass" { "pass" } else { "fail" }),
             ]),
             record("check", vec![
                 string("peer-topic-bound"),
-                string(if decision == "pass" { "pass" } else { "fail" }),
+                string(if input.decision == "pass" { "pass" } else { "fail" }),
             ]),
             record("check", vec![string("bootstrap-not-authority"), string("pass")]),
             record("check", vec![string("authority-grant-still-required"), string("pass")]),
@@ -1016,7 +1067,7 @@ pub fn parse_node_control_supervisor_policy(value: &IOValue) -> Result<NodeContr
         .collect_simple_record("node-control-supervisor-policy-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-policy-v1 ...>"))?;
     require_schema(&fields[0], NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA, "node control supervisor policy")?;
-    let stale_lock_recovery = match record_string(&fields[5], "stale-lock-recovery")?.as_str() {
+    let has_stale_lock_recovery = match record_string(&fields[5], "stale-lock-recovery")?.as_str() {
         "allow" => true,
         "deny" => false,
         other => {
@@ -1039,7 +1090,7 @@ pub fn parse_node_control_supervisor_policy(value: &IOValue) -> Result<NodeContr
         restart_window_ticks,
         heartbeat_timeout_ticks,
         shutdown_drain_ticks,
-        stale_lock_recovery,
+        stale_lock_recovery: has_stale_lock_recovery,
         policy_refs: record_ref_strings(&fields[6], "policy")?,
         evidence_refs: record_ref_strings(&fields[7], "evidence")?,
         value: value.clone(),
@@ -1441,7 +1492,7 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
     validate_node_id(input.topic)?;
     ensure_state_layout(input.state_root)?;
     let max_ticks = validate_service_tick_limit(input.max_ticks)?;
-    validate_loop_request_limit(input.max_requests_per_tick)?;
+    let max_requests_per_tick = validate_loop_request_limit(input.max_requests_per_tick)?;
     let supervisor_policy = input
         .supervisor_policy_value
         .map(|value| import_node_control_supervisor_policy(input.state_root, value))
@@ -1554,11 +1605,12 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
         supervisor_receipt_refs.push(receipt_ref);
     }
 
+    let max_service_events = max_ticks.saturating_mul(max_requests_per_tick);
     let mut heartbeat_receipt_refs = Vec::with_capacity(max_ticks);
-    let mut ingress_receipt_refs = Vec::new();
+    let mut ingress_receipt_refs = Vec::with_capacity(max_service_events);
     let mut loop_receipt_refs = Vec::with_capacity(max_ticks);
-    let mut processed_request_refs = Vec::new();
-    let mut diagnostics = Vec::new();
+    let mut processed_request_refs = Vec::with_capacity(max_service_events);
+    let mut diagnostics = Vec::with_capacity(max_ticks.saturating_mul(2));
     let mut has_stopped = false;
     let mut ticks = 0_u64;
 
@@ -1761,11 +1813,14 @@ fn pending_ingress_envelope_refs(state_root: &Path, topic: &str) -> Result<Vec<S
     if !topic_dir.exists() {
         return Ok(Vec::new());
     }
-    let mut paths = Vec::new();
+    let mut paths = Vec::with_capacity(MAX_PENDING_CONTROL_REQUESTS);
     for entry_result in fs::read_dir(&topic_dir).map_err(MoltenError::from)? {
         let entry = entry_result.map_err(MoltenError::from)?;
         let file_type = entry.file_type().map_err(MoltenError::from)?;
         if file_type.is_file() {
+            if paths.len() >= MAX_PENDING_CONTROL_REQUESTS {
+                return Err(MoltenError::invalid_harness("node control ingress pending envelope bound exceeded"));
+            }
             paths.push(entry.path());
         }
     }
@@ -2046,18 +2101,11 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
     }
     validate_node_id(input.from_peer)?;
     validate_live_send_timeout(input.join_timeout_ms)?;
-    let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
-    if ticket.address_refs.is_empty() {
-        return denied_node_control_live_send(
-            input,
-            &ticket,
-            "node control live send ticket has no endpoint addresses",
-        );
+    validate_live_send_attempts(input.max_attempts)?;
+    if let Some(operation_ref) = input.expected_operation_ref {
+        validate_ingress_ref(operation_ref, "node control live send operation id")?;
     }
-    let receiver_addr = match live_ticket_endpoint_addr(&ticket) {
-        Ok(addr) => addr,
-        Err(error) => return denied_node_control_live_send(input, &ticket, &error.to_string()),
-    };
+    let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
     let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
         request_value: input.request_value,
         from_peer: input.from_peer,
@@ -2070,38 +2118,86 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
         resource_refs: input.resource_refs,
         evidence_refs: input.evidence_refs,
     })?;
-    let lookup = iroh::address_lookup::memory::MemoryLookup::new();
-    lookup.add_endpoint_info(receiver_addr.clone());
-    let sender_endpoint = live_gossip_endpoint(&lookup, None).await?;
-    lookup.add_endpoint_info(sender_endpoint.addr());
-    let sender_gossip = iroh_gossip::Gossip::builder().spawn(sender_endpoint.clone());
-    let sender_router = iroh::protocol::Router::builder(sender_endpoint)
-        .accept(iroh_gossip::ALPN, sender_gossip.clone())
-        .spawn();
-    let topic_id = node_control_live_topic_id(&ticket.topic);
-    let join_timeout = std::time::Duration::from_millis(input.join_timeout_ms);
-    let sender_topic =
-        tokio::time::timeout(join_timeout, sender_gossip.subscribe_and_join(topic_id, vec![receiver_addr.id]))
-            .await
-            .map_err(|_| MoltenError::invalid_harness("live Iroh node control send timed out joining topic"))?
-            .map_err(|error| {
-                MoltenError::invalid_harness(format!("live Iroh node control send join failed: {error}"))
-            })?;
-    let (sender, _receiver_unused) = sender_topic.split();
-    let published = publish_node_control_live_ingress(&NodeControlLiveIngressPublishInput {
-        sender: &sender,
-        envelope_value: &envelope.value,
-        node_id: input.from_peer,
-    })
-    .await;
-    if published.is_ok() {
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    if let Some(operation_ref) = input.expected_operation_ref
+        && operation_ref != envelope.operation_ref
+    {
+        let diagnostics = vec![format!(
+            "node control live send operation-id {operation_ref} does not match derived {}",
+            envelope.operation_ref
+        )];
+        return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
+            input,
+            ticket: &ticket,
+            envelope,
+            diagnostics,
+            retry_receipt_refs: Vec::new(),
+            retry_receipt_values: Vec::new(),
+        });
     }
-    sender_router
-        .shutdown()
-        .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh sender router shutdown failed: {error}")))?;
-    let published = published?;
+    if ticket.address_refs.is_empty() {
+        return denied_node_control_live_send(
+            input,
+            &ticket,
+            envelope,
+            "node control live send ticket has no endpoint addresses",
+        );
+    }
+    let receiver_addr = match live_ticket_endpoint_addr(&ticket) {
+        Ok(addr) => addr,
+        Err(error) => return denied_node_control_live_send(input, &ticket, envelope, &error.to_string()),
+    };
+    if let Some(state_root) = input.state_root
+        && let Some(duplicate) = duplicate_node_control_live_send(input, state_root, &ticket, &envelope)?
+    {
+        return Ok(duplicate);
+    }
+    let attempt_capacity = usize::try_from(input.max_attempts)
+        .map_err(|_| MoltenError::invalid_harness("node control live send attempts exceed usize capacity"))?;
+    let mut retry_receipt_refs = Vec::with_capacity(attempt_capacity);
+    let mut retry_receipt_values = Vec::with_capacity(attempt_capacity);
+    let mut diagnostics = Vec::with_capacity(attempt_capacity);
+    let mut published = None;
+    for attempt in 1..=input.max_attempts {
+        match attempt_node_control_live_send(input, &receiver_addr, &envelope).await? {
+            Ok(receipt) => {
+                published = Some(receipt);
+                break;
+            }
+            Err(diagnostic) => {
+                let attempt_diagnostics = vec![format!(
+                    "node control live send attempt {attempt}/{} failed: {diagnostic}",
+                    input.max_attempts
+                )];
+                diagnostics.extend(attempt_diagnostics.iter().cloned());
+                let retry_value = live_send_retry_receipt_value(&LiveSendRetryReceiptValueInput {
+                    decision: if attempt == input.max_attempts { "deny" } else { "fail" },
+                    attempt,
+                    max_attempts: input.max_attempts,
+                    from_peer: input.from_peer,
+                    ticket: &ticket,
+                    envelope: &envelope,
+                    diagnostics: &attempt_diagnostics,
+                })?;
+                let retry_ref = canonical_hash(&retry_value)?;
+                if let Some(state_root) = input.state_root {
+                    write_preserves(&control_live_send_retry_receipt_path(state_root, &retry_ref), &retry_value)?;
+                    import_node_artifact(state_root, &retry_value)?;
+                }
+                retry_receipt_refs.push(retry_ref);
+                retry_receipt_values.push(retry_value);
+            }
+        }
+    }
+    let Some(published) = published else {
+        return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
+            input,
+            ticket: &ticket,
+            envelope,
+            diagnostics,
+            retry_receipt_refs,
+            retry_receipt_values,
+        });
+    };
     let send_receipt_value = live_send_receipt_value(&LiveSendReceiptValueInput {
         decision: "pass",
         from_peer: input.from_peer,
@@ -2129,59 +2225,192 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
     Ok(NodeControlLiveSend {
         envelope_ref: envelope.envelope_ref,
         envelope_value: envelope.value,
+        operation_ref: envelope.operation_ref,
         receiver_ticket_ref: ticket.ticket_ref,
         receiver_endpoint_id: ticket.live_endpoint_id,
         transport_receipt_ref: Some(published.transport_receipt_ref),
         transport_receipt_value: Some(published.transport_receipt_value),
+        retry_receipt_refs,
+        retry_receipt_values,
+        duplicate_receipt_ref: None,
+        duplicate_receipt_value: None,
         send_receipt_ref,
         send_receipt_value,
     })
 }
 
+async fn attempt_node_control_live_send(
+    input: &NodeControlLiveSendInput<'_>,
+    receiver_addr: &iroh::EndpointAddr,
+    envelope: &NodeControlIngressEnvelope,
+) -> Result<std::result::Result<NodeControlLiveIngressPublish, String>> {
+    let lookup = iroh::address_lookup::memory::MemoryLookup::new();
+    lookup.add_endpoint_info(receiver_addr.clone());
+    let sender_endpoint = match live_gossip_endpoint(&lookup, None).await {
+        Ok(endpoint) => endpoint,
+        Err(error) => return Ok(Err(format!("live Iroh sender endpoint failed: {error}"))),
+    };
+    lookup.add_endpoint_info(sender_endpoint.addr());
+    let sender_gossip = iroh_gossip::Gossip::builder().spawn(sender_endpoint.clone());
+    let sender_router = iroh::protocol::Router::builder(sender_endpoint)
+        .accept(iroh_gossip::ALPN, sender_gossip.clone())
+        .spawn();
+    let topic_id = node_control_live_topic_id(&envelope.topic);
+    let join_timeout = std::time::Duration::from_millis(input.join_timeout_ms);
+    let join_result =
+        tokio::time::timeout(join_timeout, sender_gossip.subscribe_and_join(topic_id, vec![receiver_addr.id])).await;
+    let mut result = match join_result {
+        Err(_) => Err(format!(
+            "live Iroh node control send timed out joining topic {} at endpoint {}",
+            envelope.topic, receiver_addr.id
+        )),
+        Ok(Err(error)) => Err(format!(
+            "live Iroh node control send join failed for topic {} endpoint {}: {error}",
+            envelope.topic, receiver_addr.id
+        )),
+        Ok(Ok(sender_topic)) => {
+            let (sender, _receiver_unused) = sender_topic.split();
+            let published = publish_node_control_live_ingress(&NodeControlLiveIngressPublishInput {
+                sender: &sender,
+                envelope_value: &envelope.value,
+                node_id: input.from_peer,
+            })
+            .await;
+            if published.is_ok() {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            published.map_err(|error| format!("live Iroh node control send publish failed: {error}"))
+        }
+    };
+    if let Err(error) = sender_router.shutdown().await {
+        let diagnostic = format!("live Iroh sender router shutdown failed: {error}");
+        if result.is_ok() {
+            return Ok(Err(diagnostic));
+        }
+        result = result.map_err(|existing| format!("{existing}; {diagnostic}"));
+    }
+    Ok(result)
+}
+
+fn duplicate_node_control_live_send(
+    input: &NodeControlLiveSendInput<'_>,
+    state_root: &Path,
+    ticket: &NodeControlLiveTicket,
+    envelope: &NodeControlIngressEnvelope,
+) -> Result<Option<NodeControlLiveSend>> {
+    let transport_receipt_value = live_transport_receipt_value(&LiveTransportReceiptValueInput {
+        operation: "publish",
+        decision: "pass",
+        node_id: input.from_peer,
+        delivered_from: None,
+        envelope,
+        ingress_receipt_ref: None,
+        diagnostics: &[],
+    })?;
+    let transport_receipt_ref = canonical_hash(&transport_receipt_value)?;
+    let send_receipt_value = live_send_receipt_value(&LiveSendReceiptValueInput {
+        decision: "pass",
+        from_peer: input.from_peer,
+        ticket,
+        envelope,
+        transport_receipt_ref: Some(&transport_receipt_ref),
+        diagnostics: &[],
+    })?;
+    let send_receipt_ref = canonical_hash(&send_receipt_value)?;
+    let send_path = control_live_send_receipt_path(state_root, &send_receipt_ref);
+    if !send_path.exists() {
+        return Ok(None);
+    }
+    let prior_send_value = read_preserves(&send_path)?;
+    let prior_send = parse_node_control_live_send_receipt(&prior_send_value)?;
+    if prior_send.receipt_ref != send_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live send prior receipt path is stale"));
+    }
+    if prior_send.decision != "pass" || prior_send.envelope_ref != envelope.envelope_ref {
+        return Ok(None);
+    }
+    let diagnostics = vec![format!(
+        "node control live send duplicate operation {} reused prior send receipt {send_receipt_ref}",
+        envelope.operation_ref
+    )];
+    let duplicate_receipt_value = live_send_duplicate_receipt_value(&LiveSendDuplicateReceiptValueInput {
+        from_peer: input.from_peer,
+        ticket,
+        envelope,
+        prior_send_receipt_ref: &send_receipt_ref,
+        diagnostics: &diagnostics,
+    })?;
+    let duplicate_receipt_ref = canonical_hash(&duplicate_receipt_value)?;
+    write_preserves(
+        &control_live_send_duplicate_receipt_path(state_root, &duplicate_receipt_ref),
+        &duplicate_receipt_value,
+    )?;
+    import_node_artifact(state_root, &duplicate_receipt_value)?;
+    Ok(Some(NodeControlLiveSend {
+        envelope_ref: envelope.envelope_ref.clone(),
+        envelope_value: envelope.value.clone(),
+        operation_ref: envelope.operation_ref.clone(),
+        receiver_ticket_ref: ticket.ticket_ref.clone(),
+        receiver_endpoint_id: ticket.live_endpoint_id.clone(),
+        transport_receipt_ref: Some(transport_receipt_ref),
+        transport_receipt_value: Some(transport_receipt_value),
+        retry_receipt_refs: Vec::new(),
+        retry_receipt_values: Vec::new(),
+        duplicate_receipt_ref: Some(duplicate_receipt_ref),
+        duplicate_receipt_value: Some(duplicate_receipt_value),
+        send_receipt_ref,
+        send_receipt_value: prior_send_value,
+    }))
+}
+
 fn denied_node_control_live_send(
     input: &NodeControlLiveSendInput<'_>,
     ticket: &NodeControlLiveTicket,
+    envelope: NodeControlIngressEnvelope,
     diagnostic: &str,
 ) -> Result<NodeControlLiveSend> {
-    let diagnostics = vec![diagnostic.to_string()];
-    let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
-        request_value: input.request_value,
-        from_peer: input.from_peer,
-        to_node: &ticket.node_id,
-        topic: &ticket.topic,
-        sequence: input.sequence,
-        peer_bootstrap_refs: input.peer_bootstrap_refs,
-        authority_refs: input.authority_refs,
-        policy_refs: input.policy_refs,
-        resource_refs: input.resource_refs,
-        evidence_refs: input.evidence_refs,
-    })?;
+    denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
+        input,
+        ticket,
+        envelope,
+        diagnostics: vec![diagnostic.to_string()],
+        retry_receipt_refs: Vec::new(),
+        retry_receipt_values: Vec::new(),
+    })
+}
+
+fn denied_node_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_>) -> Result<NodeControlLiveSend> {
     let send_receipt_value = live_send_receipt_value(&LiveSendReceiptValueInput {
         decision: "deny",
-        from_peer: input.from_peer,
-        ticket,
-        envelope: &envelope,
+        from_peer: denied.input.from_peer,
+        ticket: denied.ticket,
+        envelope: &denied.envelope,
         transport_receipt_ref: None,
-        diagnostics: &diagnostics,
+        diagnostics: &denied.diagnostics,
     })?;
     let send_receipt_ref = canonical_hash(&send_receipt_value)?;
-    if let Some(state_root) = input.state_root {
-        import_node_artifact(state_root, input.receiver_ticket_value)?;
+    if let Some(state_root) = denied.input.state_root {
+        import_node_artifact(state_root, denied.input.receiver_ticket_value)?;
         write_preserves(
-            &control_ingress_envelope_path(state_root, &ticket.topic, &envelope.envelope_ref),
-            &envelope.value,
+            &control_ingress_envelope_path(state_root, &denied.ticket.topic, &denied.envelope.envelope_ref),
+            &denied.envelope.value,
         )?;
-        import_node_artifact(state_root, &envelope.value)?;
+        import_node_artifact(state_root, &denied.envelope.value)?;
         write_preserves(&control_live_send_receipt_path(state_root, &send_receipt_ref), &send_receipt_value)?;
         import_node_artifact(state_root, &send_receipt_value)?;
     }
     Ok(NodeControlLiveSend {
-        envelope_ref: envelope.envelope_ref,
-        envelope_value: envelope.value,
-        receiver_ticket_ref: ticket.ticket_ref.clone(),
-        receiver_endpoint_id: ticket.live_endpoint_id.clone(),
+        envelope_ref: denied.envelope.envelope_ref,
+        envelope_value: denied.envelope.value,
+        operation_ref: denied.envelope.operation_ref,
+        receiver_ticket_ref: denied.ticket.ticket_ref.clone(),
+        receiver_endpoint_id: denied.ticket.live_endpoint_id.clone(),
         transport_receipt_ref: None,
         transport_receipt_value: None,
+        retry_receipt_refs: denied.retry_receipt_refs,
+        retry_receipt_values: denied.retry_receipt_values,
+        duplicate_receipt_ref: None,
+        duplicate_receipt_value: None,
         send_receipt_ref,
         send_receipt_value,
     })
@@ -2224,7 +2453,7 @@ pub fn node_control_live_workflow_receipt(
     let authority = parse_node_control_authority_grant(input.authority_grant_value)?;
     let send = parse_node_control_live_send_receipt(input.send_receipt_value)?;
     let service_receipt_ref = service_run_receipt_ref(input.service_receipt_value)?;
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(input.receive_receipt_values.len().saturating_add(8));
     if admission.ticket_ref != ticket.ticket_ref {
         diagnostics.push("node control live workflow admission does not bind receiver ticket".to_string());
     }
@@ -2480,10 +2709,12 @@ async fn serve_node_control_live_listener_with_topic(
 ) -> Result<NodeControlLiveServe> {
     validate_listener_event_limit(input.max_events)?;
     validate_loop_request_limit(input.max_requests_per_tick)?;
+    let event_capacity = usize::try_from(input.max_events)
+        .map_err(|_| MoltenError::invalid_harness("node control live listener max events exceeds usize capacity"))?;
     let startup = current_startup_receipt(input.state_root)?;
-    let mut diagnostics = Vec::new();
-    let mut transport_receipt_refs = Vec::new();
-    let mut neighbor_events = Vec::new();
+    let mut diagnostics = Vec::with_capacity(event_capacity.saturating_add(2));
+    let mut transport_receipt_refs = Vec::with_capacity(event_capacity);
+    let mut neighbor_events = Vec::with_capacity(event_capacity);
     let mut observed_events = 0_u64;
     let timeout = std::time::Duration::from_millis(input.event_timeout_ms);
     for _ in 0..input.max_events {
@@ -2564,14 +2795,19 @@ async fn receive_first_live_ingress_event(
     topic: &str,
     receiver_node: &str,
 ) -> Result<NodeControlLiveIngressReceive> {
-    while let Some(event) = receiver.next().await {
+    for _ in 0..MAX_CONTROL_LIVE_LISTENER_EVENTS {
+        let Some(event) = receiver.next().await else {
+            return Err(MoltenError::invalid_harness("live Iroh receiver closed before node control envelope arrived"));
+        };
         let event =
             event.map_err(|error| MoltenError::invalid_harness(format!("live Iroh receive failed: {error}")))?;
         if let Some(received) = receive_node_control_live_ingress_event(state_root, &event, topic, receiver_node)? {
             return Ok(received);
         }
     }
-    Err(MoltenError::invalid_harness("live Iroh receiver closed before node control envelope arrived"))
+    Err(MoltenError::invalid_harness(
+        "live Iroh receiver exceeded bounded event scan before node control envelope arrived",
+    ))
 }
 
 fn stable_live_endpoint_secret(identity: &node_identity::NodeIdentity) -> iroh::SecretKey {
@@ -2916,7 +3152,7 @@ fn ingress_pre_enqueue_diagnostics(
 }
 
 fn evaluate_live_peer_bootstrap(state_root: &Path, envelope: &NodeControlIngressEnvelope) -> Result<Vec<String>> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(envelope.peer_bootstrap_refs.len().saturating_add(1));
     let mut admitted_peer_ref = None;
     for peer_ref in envelope.peer_bootstrap_refs.iter() {
         match read_node_ledger_artifact(state_root, peer_ref) {
@@ -2946,7 +3182,7 @@ fn live_peer_admission_diagnostics(
     envelope: &NodeControlIngressEnvelope,
     admission: &NodeControlLivePeerAdmission,
 ) -> Result<Vec<String>> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(8);
     if admission.decision != "pass" {
         diagnostics.push(format!(
             "node control live peer admission {} decision {}",
@@ -3009,7 +3245,7 @@ fn live_peer_admission_diagnostics(
 }
 
 fn evaluate_live_authority_delegation(state_root: &Path, envelope: &NodeControlIngressEnvelope) -> Result<Vec<String>> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(envelope.authority_refs.len().saturating_add(2));
     let mut admitted_grant_ref = None;
     let candidate_authority_refs = envelope
         .authority_refs
@@ -3060,7 +3296,7 @@ fn authority_grant_diagnostics(
     envelope: &NodeControlIngressEnvelope,
     grant: &NodeControlAuthorityGrant,
 ) -> Vec<String> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(8);
     if grant.peer_id != envelope.from_peer {
         diagnostics.push(format!(
             "node control authority grant {} peer {} does not match {}",
@@ -3846,10 +4082,58 @@ fn live_send_receipt_value(input: &LiveSendReceiptValueInput<'_>) -> Result<IOVa
                 string("receiver-address-bound"),
                 string(if has_addresses { "pass" } else { "fail" }),
             ]),
+            record("check", vec![string("operation-id-bound"), string("pass")]),
             record("check", vec![string("canonical-envelope-ref"), string("pass")]),
             record("check", vec![string("live-iroh-gossip"), string("pass")]),
             record("check", vec![string("transport-is-not-authority"), string("pass")]),
             record("check", vec![string("durable-inbox-boundary"), string("pass")]),
+        ])]),
+    ]))
+}
+
+fn live_send_retry_receipt_value(input: &LiveSendRetryReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    Ok(record("node-control-live-send-retry-receipt-v1", vec![
+        string(NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("attempt", vec![string(input.attempt.to_string())]),
+        record("max-attempts", vec![string(input.max_attempts.to_string())]),
+        record("transport", vec![string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
+        record("topic", vec![string(&input.envelope.topic)]),
+        record("from-peer", vec![string(input.from_peer)]),
+        record("to-node", vec![string(&input.ticket.node_id)]),
+        record("receiver-ticket", vec![string(&input.ticket.ticket_ref)]),
+        record("receiver-endpoint", vec![string(&input.ticket.live_endpoint_id)]),
+        record("envelope", vec![string(&input.envelope.envelope_ref)]),
+        record("operation", vec![string(&input.envelope.operation_ref)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("bounded-retry"), string("pass")]),
+            record("check", vec![string("operation-id-bound"), string("pass")]),
+            record("check", vec![string("transport-is-not-authority"), string("pass")]),
+        ])]),
+    ]))
+}
+
+fn live_send_duplicate_receipt_value(input: &LiveSendDuplicateReceiptValueInput<'_>) -> Result<IOValue> {
+    Ok(record("node-control-live-send-duplicate-receipt-v1", vec![
+        string(NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA),
+        record("decision", vec![string("pass")]),
+        record("transport", vec![string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
+        record("topic", vec![string(&input.envelope.topic)]),
+        record("from-peer", vec![string(input.from_peer)]),
+        record("to-node", vec![string(&input.ticket.node_id)]),
+        record("receiver-ticket", vec![string(&input.ticket.ticket_ref)]),
+        record("receiver-endpoint", vec![string(&input.ticket.live_endpoint_id)]),
+        record("envelope", vec![string(&input.envelope.envelope_ref)]),
+        record("operation", vec![string(&input.envelope.operation_ref)]),
+        record("prior-send-receipt", vec![string(input.prior_send_receipt_ref)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("duplicate-side-effect-suppressed"), string("pass")]),
+            record("check", vec![string("operation-id-bound"), string("pass")]),
+            record("check", vec![string("prior-send-receipt-bound"), string("pass")]),
+            record("check", vec![string("transport-is-not-authority"), string("pass")]),
         ])]),
     ]))
 }
@@ -4223,6 +4507,32 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_string(&fields[11], "service-run")?
         ));
     }
+    if let Some(fields) = value.collect_simple_record("node-control-live-send-retry-receipt-v1", Some(14)) {
+        require_schema(
+            &fields[0],
+            NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA,
+            "node control live send retry receipt",
+        )?;
+        return Ok(format!(
+            "node control live send retry decision={} attempt={}/{} envelope={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[2], "attempt")?,
+            record_string(&fields[3], "max-attempts")?,
+            record_string(&fields[10], "envelope")?
+        ));
+    }
+    if let Some(fields) = value.collect_simple_record("node-control-live-send-duplicate-receipt-v1", Some(13)) {
+        require_schema(
+            &fields[0],
+            NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA,
+            "node control live send duplicate receipt",
+        )?;
+        return Ok(format!(
+            "node control live send duplicate operation={} prior={}",
+            record_string(&fields[9], "operation")?,
+            record_string(&fields[10], "prior-send-receipt")?
+        ));
+    }
     if let Some(fields) = value.collect_simple_record("node-control-live-send-receipt-v1", Some(13)) {
         require_schema(&fields[0], NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA, "node control live send receipt")?;
         return Ok(format!(
@@ -4560,6 +4870,20 @@ fn control_live_send_receipt_path(state_root: &Path, send_ref: &str) -> PathBuf 
         .join(format!("{}.live-send.receipt.preserves", ref_file_stem(send_ref)))
 }
 
+fn control_live_send_retry_receipt_path(state_root: &Path, retry_ref: &str) -> PathBuf {
+    state_root
+        .join(CONTROL_INGRESS_DIR)
+        .join("receipts")
+        .join(format!("{}.live-send-retry.receipt.preserves", ref_file_stem(retry_ref)))
+}
+
+fn control_live_send_duplicate_receipt_path(state_root: &Path, duplicate_ref: &str) -> PathBuf {
+    state_root
+        .join(CONTROL_INGRESS_DIR)
+        .join("receipts")
+        .join(format!("{}.live-send-duplicate.receipt.preserves", ref_file_stem(duplicate_ref)))
+}
+
 fn control_live_workflow_receipt_path(state_root: &Path, workflow_ref: &str) -> PathBuf {
     state_root
         .join(CONTROL_INGRESS_DIR)
@@ -4600,7 +4924,7 @@ fn record_strings(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Re
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} must contain a sequence")))?
         .into_owned();
-    let mut values = Vec::new();
+    let mut values = Vec::with_capacity(items.len());
     for item in items {
         let item = item
             .as_string()
@@ -4651,8 +4975,22 @@ fn validate_live_send_timeout(timeout_ms: u64) -> Result<()> {
     if timeout_ms == 0 {
         return Err(MoltenError::invalid_harness("node control live send timeout must be positive"));
     }
-    if timeout_ms > 60_000 {
-        return Err(MoltenError::invalid_harness("node control live send timeout exceeds bounded limit 60000"));
+    if timeout_ms > MAX_CONTROL_LIVE_SEND_TIMEOUT_MS {
+        return Err(MoltenError::invalid_harness(format!(
+            "node control live send timeout exceeds bounded limit {MAX_CONTROL_LIVE_SEND_TIMEOUT_MS}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_live_send_attempts(max_attempts: u64) -> Result<()> {
+    if max_attempts == 0 {
+        return Err(MoltenError::invalid_harness("node control live send attempts must be positive"));
+    }
+    if max_attempts > MAX_CONTROL_LIVE_SEND_ATTEMPTS {
+        return Err(MoltenError::invalid_harness(format!(
+            "node control live send attempts exceed bounded limit {MAX_CONTROL_LIVE_SEND_ATTEMPTS}"
+        )));
     }
     Ok(())
 }
@@ -5672,23 +6010,35 @@ mod tests {
                 evidence_refs: &[],
             })
             .expect("status request");
-            let sent = send_node_control_live_ingress(&NodeControlLiveSendInput {
-                state_root: None,
+            let send_input = NodeControlLiveSendInput {
+                state_root: Some(&root),
                 request_value: &request_value,
                 receiver_ticket_value: &live_ticket.value,
                 from_peer: "peer:external-send",
                 sequence: 1,
+                expected_operation_ref: None,
+                max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
                 peer_bootstrap_refs: &peer_bootstrap_refs,
                 authority_refs: &authority_refs,
                 policy_refs: &policy_refs,
                 resource_refs: &resource_refs,
                 evidence_refs: &[],
                 join_timeout_ms: 10_000,
-            })
-            .await
-            .expect("live send");
+            };
+            let sent = send_node_control_live_ingress(&send_input).await.expect("live send");
             assert_eq!(ledger::artifact_kind(&sent.send_receipt_value), "node-control-live-send-receipt");
             assert!(sent.transport_receipt_ref.is_some());
+            assert_eq!(
+                sent.operation_ref,
+                parse_node_control_ingress_envelope(&sent.envelope_value).expect("envelope").operation_ref
+            );
+            let duplicate = send_node_control_live_ingress(&send_input).await.expect("duplicate live send");
+            assert_eq!(duplicate.send_receipt_ref, sent.send_receipt_ref);
+            assert!(duplicate.duplicate_receipt_ref.is_some());
+            assert_eq!(
+                ledger::artifact_kind(duplicate.duplicate_receipt_value.as_ref().expect("duplicate receipt")),
+                "node-control-live-send-duplicate-receipt"
+            );
             let listener_input = NodeControlLiveServeInput {
                 state_root: &root,
                 topic: DEFAULT_CONTROL_INGRESS_TOPIC,

@@ -684,6 +684,7 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
     let request = dir.join("status.preserves");
     let ticket = dir.join("live-ticket.preserves");
     let send_receipt = dir.join("send.preserves");
+    let operation_mismatch_receipt = dir.join("operation-mismatch.preserves");
     let transport_receipt = dir.join("transport.preserves");
     let authority_grant = dir.join("authority-grant.preserves");
     let peer_admission = dir.join("peer-admission.preserves");
@@ -691,6 +692,7 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
     let workflow_receipt = dir.join("workflow.preserves");
     let policy_ref = test_ref("live-send-policy")?;
     let resource_ref = test_ref("live-send-resource")?;
+    let wrong_operation_ref = test_ref("wrong-live-send-operation")?;
 
     assert_success(
         &molten_cmd()
@@ -792,6 +794,27 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
     assert!(!transport_receipt.exists());
     let text = to_text(&read_preserves(&send_receipt)?)?;
     assert!(text.contains("ticket has no endpoint addresses"));
+    let operation_mismatch = molten_cmd()
+        .args(["test", "node", "control-ingress-live-send", "--state-root"])
+        .arg(&state_root)
+        .arg(&request)
+        .arg(&ticket)
+        .args(["--from-peer", "peer:cli-live-send", "--operation-id"])
+        .arg(&wrong_operation_ref)
+        .args(["--peer-bootstrap"])
+        .arg(&bootstrap_ref)
+        .args(["--authority"])
+        .arg(&authority_ref)
+        .args(["--policy"])
+        .arg(&policy_ref)
+        .args(["--resource"])
+        .arg(&resource_ref)
+        .args(["--receipt-out"])
+        .arg(&operation_mismatch_receipt)
+        .output()?;
+    assert_success(&operation_mismatch, "node live send deny operation mismatch");
+    let mismatch_text = to_text(&read_preserves(&operation_mismatch_receipt)?)?;
+    assert!(mismatch_text.contains("operation-id"));
     assert_success(
         &molten_cmd()
             .args(["test", "node", "serve", "--state-root"])
