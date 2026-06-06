@@ -160,7 +160,12 @@ Trellis LocalChoreo per role
         |
         v
 dataspace-backed endpoint interpreter
+        |
+        v
+protocol-session gate receipt
 ```
+
+Installed protocol manifests emit canonical install receipts, projected endpoint records, session-state records, protocol-message records, and per-operation receipts. Completed lifecycles can be replay-gated with `<protocol-session-gate-receipt-v1 "molten.protocol.session-gate-receipt.v1" ...>` receipts that recompute install/operation evidence and bind terminal state refs. These receipts are operational/replay evidence only; they do not grant authority, policy admission, resource rights, provenance, or transport trust.
 
 Use choreography for:
 
@@ -401,7 +406,7 @@ Current architectural changes are recorded under `cairn/changes/`:
 - `node-control-live-workflow-bundle-reconcile` — receiver evidence reconciliation receipts that bind apply/send refs to receiver ingress, durable queue, and optional control receipts while surfacing missing/wrong/denied receiver outcomes; reconcile receipts remain non-authority/non-provenance.
 - `node-control-live-workflow-bundle-ack` — portable ack bundles and import/export receipts that carry reconcile plus receiver evidence back to the sender ledger after ref/operation/request binding checks; ack artifacts remain non-authority/non-provenance.
 - `sam-service-supervision-runtime` — demand-driven SAM services with readiness/failure assertions, logical supervision, restart policy, resource bounds, cleanup receipts, and replay-bound supervision gate receipts.
-- `trellis-protocol-session-runtime` — Trellis-gated protocol manifests, endpoint projection, protocol-message envelopes, session state, and dataspace-backed interpreters.
+- `trellis-protocol-session-runtime` — Trellis-gated protocol manifests, endpoint projection, protocol-message envelopes, session state, dataspace-backed interpreters, and replay-bound protocol session gate receipts.
 - `raft-control-plane-registry` — first Raft-backed strongly consistent control-plane registry for protocol/artifact/policy/capability pointers and receipt indexes.
 - `job-dag-iroh-worker-execution` — remote-shaped job worker requests/results over remote dataspace/Iroh using target sync, admission, execution receipts, and recorded replay logs.
 - `dataspace-delivery-idempotency` — scoped operation ids, dedup windows, retry receipts, and replay protection for remote/local dataspace, services, protocols, and job workers.

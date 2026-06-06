@@ -252,7 +252,7 @@ nix build .#checks.x86_64-linux.nextest
 nix build .#checks.x86_64-linux.nextest-config
 ```
 
-For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false` -> `/nix/store/ylnz1w988b5izqx90p6iy1jnaayczmfl-molten-nextest`.
+For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false` -> `/nix/store/0m275p6z7r4c27lrn1q821ydh173d2al-molten-nextest`.
 
 Strict Octet source-gate sequence:
 
@@ -263,10 +263,10 @@ cargo octet object corpus receipt \
   --output target/octet/object-corpus-receipt.json \
   src/artifacts.rs src/catalog.rs src/catalog_mcp.rs \
   src/coordination.rs src/delivery_idempotency.rs src/job_dag.rs \
-  src/main.rs src/node_daemon.rs src/node_runtime.rs src/octet_gate.rs \
-  src/operator_dogfood.rs \
-  src/plugin_host.rs src/provenance.rs src/raft_control_plane.rs src/remote_dataspace.rs \
-  src/secrets.rs src/transcripts.rs
+  src/ledger.rs src/main.rs src/node_daemon.rs src/node_runtime.rs src/octet_gate.rs \
+  src/operator_dogfood.rs src/plugin_host.rs src/preserves_rail.rs \
+  src/protocol_session.rs src/provenance.rs src/raft_control_plane.rs \
+  src/remote_dataspace.rs src/secrets.rs src/service_supervision.rs src/transcripts.rs
 cargo run -- test octet artifacts import \
   --artifacts target/octet \
   --ledger target/octet-ledger \
@@ -288,7 +288,7 @@ cargo run --manifest-path /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615
   --strict
 ```
 
-The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 1338 objects (`b3:0fb63563911d4ad22d5476ed31337453c44d506f99b9ceeadeee962ac945c45a`); latest artifact import receipt is `blake3:4616b7ec0499aa384c7da2634ebfdad8e3e29c0e4be5b756ff45936a97be2eab`, latest strict pass receipt is `blake3:703d7c66589dfe020db841a78f98e294251d14ae850a1e784695d0811a5889cf`, and latest remediation plan receipt is `blake3:b0e644bfc5c812950666eaefecc8eb38f7bb0bc8a65a2c648e1249184259cd7f`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
+The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 1803 objects (`b3:bfb537e1a12544df209e06934968f98ba638364140f89a6203fac136d7895305`); latest artifact import receipt is `blake3:dfe3bd1d3e41af593e8ce76cf26d00134e7b0702e2c1652dc1147e8c00697f91`, latest strict pass receipt is `blake3:ebd75ed7189f1f13d10ad07e0f44cdf3375224f3f50cb42374a97bec504fde93`, and latest remediation plan receipt is `blake3:344e23b28ada1658d27f6e26dd00d57d74c62f7c4be4f5a213410efa1f1c45ac`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
 
 ```sh
 cargo run -- test octet baseline write \
@@ -339,6 +339,17 @@ cargo run -- service gate-supervision target/molten-service-supervision/report.p
 ```
 
 These commands exercise demand-driven service failure supervision over canonical SAM service records. The supervision report carries failure markers, failed/final statuses, lifecycle receipts, deterministic monitor notifications, restart decisions, scheduled restart demand, cleanup receipts, owned-state retractions, and retention inputs as Preserves evidence. `gate-supervision` emits canonical `<service-supervision-gate-receipt-v1 "molten.service.supervision-gate-receipt.v1" ...>` receipts that replay the report, bind status/lifecycle/restart/monitor/cleanup evidence, and stay operational evidence only: they do not grant service authority, resource rights, provenance, or transport trust.
+
+Trellis protocol session CLI slice:
+
+```sh
+cargo run -- test protocol run-request-response --out target/molten-protocol
+cargo run -- test protocol gate-lifecycle target/molten-protocol \
+  --receipt-out target/molten-protocol/gate-receipt.preserves
+cargo run -- test protocol show target/molten-protocol/gate-receipt.preserves
+```
+
+`run-request-response` installs a finite Trellis-backed protocol manifest, writes endpoint/session/message/operation evidence, and advances projected client/server states through a canonical request/response exchange. `gate-lifecycle` emits `<protocol-session-gate-receipt-v1 "molten.protocol.session-gate-receipt.v1" ...>` after replaying the install receipt and operation receipts against the state/message evidence and checking terminal session state. The gate receipt is replay evidence only; it does not grant protocol authority, resource rights, provenance, policy admission, or transport trust.
 
 Remote SAM/Iroh dataspace CLI slice:
 

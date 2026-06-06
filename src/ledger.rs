@@ -435,6 +435,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("protocol-session-state-v1", "protocol-session-state"),
     ("protocol-message-v1", "protocol-message"),
     ("protocol-operation-receipt-v1", "protocol-operation-receipt"),
+    ("protocol-session-gate-receipt-v1", "protocol-session-gate-receipt"),
     ("raft-group-manifest-v1", "raft-group-manifest"),
     ("raft-command-envelope-v1", "raft-command-envelope"),
     ("raft-log-entry-v1", "raft-log-entry"),

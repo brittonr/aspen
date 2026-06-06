@@ -9,7 +9,7 @@ Existing remote dataspace envelopes move canonical messages/assertions between p
 - Compile the manifest to Trellis `GlobalChoreo`, run projectability checks, and project each role to `LocalChoreo`.
 - Interpret local endpoint actions over Molten dataspace messages and remote dataspace envelopes.
 - Enforce session sequence numbers, payload schema refs, expected local action, branch label admissibility, and replay windows.
-- Emit receipts for install, send, receive, internal choice, offer, session close, and denial.
+- Emit receipts for install, send, receive, internal choice, offer, session close, denial, and full lifecycle gate replay.
 
 ## Non-Goals
 
@@ -48,6 +48,21 @@ Existing remote dataspace envelopes move canonical messages/assertions between p
   <checks [<check "projected-action" "pass"> ...]>>
 ```
 
+```preserves
+<protocol-session-gate-receipt-v1 "molten.protocol.session-gate-receipt.v1"
+  <decision "pass">
+  <install <install-receipt-ref>>
+  <protocol <manifest-ref>>
+  <sessions ["session:request-response"]>
+  <initial-states [<state-ref> ...]>
+  <operations [<operation-receipt-ref> ...]>
+  <messages [<message-ref> ...]>
+  <final-states [<terminal-state-ref> ...]>
+  <diagnostics []>
+  <checks [<check "install-replay" "pass"> ...
+           <check "protocol-session-gate-is-not-authority" "pass">]>>
+```
+
 ## Interpreter Algorithm
 
 1. Install manifest: canonicalize, build registries, lower to Trellis, check projectability, project endpoints, emit install receipt.
@@ -56,7 +71,8 @@ Existing remote dataspace envelopes move canonical messages/assertions between p
 4. Receive: verify message matches current endpoint offer/receive state, sequence/replay window, payload tag/schema, and participant mapping; then advance state.
 5. Branch: require the selected label is one of the projected offers and bind selection evidence.
 6. Close: emit session close receipt when all endpoints reach terminal local states.
+7. Lifecycle gate: parse the install receipt, initial states, operation receipts, protocol messages, and next states; replay install and passing operations; deny if bindings diverge or roles fail to reach terminal state.
 
 ## Replay and Diagnostics
 
-Replay stops at the first divergent protocol boundary: manifest ref, endpoint projection ref, local state ref, message ref, sequence number, selected label, payload ref, admission decision, or resulting local state ref.
+Replay stops at the first divergent protocol boundary: manifest ref, endpoint projection ref, local state ref, message ref, sequence number, selected label, payload ref, admission decision, resulting local state ref, or lifecycle gate terminal-state evidence. Gate receipts are operational evidence only and do not grant authority, resource rights, provenance, policy admission, or transport trust.

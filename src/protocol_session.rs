@@ -9,6 +9,7 @@ use crate::preserves_rail::PROTOCOL_LOCAL_STATE_SCHEMA;
 use crate::preserves_rail::PROTOCOL_MANIFEST_SCHEMA;
 use crate::preserves_rail::PROTOCOL_MESSAGE_SCHEMA;
 use crate::preserves_rail::PROTOCOL_OPERATION_RECEIPT_SCHEMA;
+use crate::preserves_rail::PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::PROTOCOL_SESSION_STATE_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -225,8 +226,49 @@ pub struct ProtocolOperationReceipt {
     pub message_ref: Option<String>,
     pub next_state_ref: Option<String>,
     pub sequence: u64,
+    pub authority_refs: Vec<String>,
+    pub resource_refs: Vec<String>,
+    pub carrier_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProtocolSessionGateInput {
+    pub install_receipt: IOValue,
+    pub initial_states: Vec<IOValue>,
+    pub operation_receipts: Vec<IOValue>,
+    pub messages: Vec<IOValue>,
+    pub next_states: Vec<IOValue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProtocolSessionGate {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub install_ref: String,
+    pub protocol_ref: String,
+    pub session_ids: Vec<String>,
+    pub initial_state_count: usize,
+    pub operation_count: usize,
+    pub message_count: usize,
+    pub final_state_count: usize,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProtocolSessionGateReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub install_ref: String,
+    pub protocol_ref: String,
+    pub session_ids: Vec<String>,
+    pub initial_state_refs: Vec<String>,
+    pub operation_refs: Vec<String>,
+    pub message_refs: Vec<String>,
+    pub final_state_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -292,6 +334,26 @@ struct OperationReceiptValueInput<'a> {
     resource_refs: &'a [String],
     carrier_refs: &'a [String],
     diagnostics: &'a [String],
+}
+
+struct ProtocolSessionGateValueInput<'a> {
+    decision: &'a str,
+    install_ref: &'a str,
+    protocol_ref: &'a str,
+    session_ids: &'a [String],
+    initial_state_refs: &'a [String],
+    operation_refs: &'a [String],
+    message_refs: &'a [String],
+    final_state_refs: &'a [String],
+    diagnostics: &'a [String],
+}
+
+struct ProtocolSessionGateParsed {
+    install: ProtocolInstallReceipt,
+    initial_states: Vec<ProtocolSessionState>,
+    operation_receipts: Vec<ProtocolOperationReceipt>,
+    messages: Vec<ProtocolMessage>,
+    next_states: Vec<ProtocolSessionState>,
 }
 
 pub fn protocol_comm_value(input: &ProtocolCommInput) -> Result<IOValue> {
@@ -743,8 +805,73 @@ pub fn parse_protocol_operation_receipt(value: &IOValue) -> Result<ProtocolOpera
         message_ref: record_optional_ref(&fields[7], "message")?,
         next_state_ref: record_optional_ref(&fields[8], "next-state")?,
         sequence: record_u64(&fields[9], "sequence")?,
+        authority_refs: parse_ref_sequence(&fields[10], "authority")?,
+        resource_refs: parse_ref_sequence(&fields[11], "resource")?,
+        carrier_refs: parse_ref_sequence(&fields[12], "carrier")?,
         diagnostics: parse_string_sequence(&fields[13], "diagnostics")?,
         value: value.clone(),
+    })
+}
+
+pub fn gate_protocol_session_lifecycle(input: ProtocolSessionGateInput) -> Result<ProtocolSessionGate> {
+    let parsed = parse_protocol_session_gate_input(input)?;
+    let diagnostics = protocol_session_gate_diagnostics(&parsed)?;
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let initial_state_refs = state_refs(&parsed.initial_states);
+    let operation_refs = operation_refs(&parsed.operation_receipts);
+    let message_refs = message_refs(&parsed.messages);
+    let final_state_refs = terminal_state_refs(&parsed.next_states);
+    let session_ids = session_ids(&parsed.initial_states)?;
+    let receipt_value = protocol_session_gate_receipt_value(&ProtocolSessionGateValueInput {
+        decision,
+        install_ref: &parsed.install.receipt_ref,
+        protocol_ref: &parsed.install.manifest.manifest_ref,
+        session_ids: &session_ids,
+        initial_state_refs: &initial_state_refs,
+        operation_refs: &operation_refs,
+        message_refs: &message_refs,
+        final_state_refs: &final_state_refs,
+        diagnostics: &diagnostics,
+    })?;
+    Ok(ProtocolSessionGate {
+        receipt_ref: canonical_hash(&receipt_value)?,
+        decision: decision.to_string(),
+        install_ref: parsed.install.receipt_ref,
+        protocol_ref: parsed.install.manifest.manifest_ref,
+        session_ids,
+        initial_state_count: parsed.initial_states.len(),
+        operation_count: parsed.operation_receipts.len(),
+        message_count: parsed.messages.len(),
+        final_state_count: final_state_refs.len(),
+        diagnostics,
+        value: receipt_value,
+    })
+}
+
+pub fn parse_protocol_session_gate_receipt(value: &IOValue) -> Result<ProtocolSessionGateReceipt> {
+    let fields = value
+        .collect_simple_record("protocol-session-gate-receipt-v1", Some(11))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-session-gate-receipt-v1 ...>"))?;
+    require_schema(&fields[0], PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA, "protocol session gate receipt schema")?;
+    let checks = parse_checks(&fields[10])?;
+    require_check(&checks, "protocol-session-gate-is-not-authority", "protocol session gate receipt")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_gate_decision(&decision, "protocol session gate decision")?;
+    let session_ids = parse_string_sequence(&fields[4], "sessions")?;
+    for session_id in &session_ids {
+        validate_session_id(session_id)?;
+    }
+    Ok(ProtocolSessionGateReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        install_ref: record_ref(&fields[2], "install")?,
+        protocol_ref: record_ref(&fields[3], "protocol")?,
+        session_ids,
+        initial_state_refs: parse_ref_sequence(&fields[5], "initial-states")?,
+        operation_refs: parse_ref_sequence(&fields[6], "operations")?,
+        message_refs: parse_ref_sequence(&fields[7], "messages")?,
+        final_state_refs: parse_ref_sequence(&fields[8], "final-states")?,
+        diagnostics: parse_string_sequence(&fields[9], "diagnostics")?,
     })
 }
 
@@ -770,6 +897,18 @@ pub fn protocol_summary(value: &IOValue) -> Result<String> {
             receipt.session_id,
             receipt.role,
             receipt.sequence
+        ));
+    }
+    if value.collect_simple_record("protocol-session-gate-receipt-v1", Some(11)).is_some() {
+        let receipt = parse_protocol_session_gate_receipt(value)?;
+        return Ok(format!(
+            "protocol session gate receipt ref={} decision={} protocol={} sessions={} operations={} diagnostics={}",
+            receipt.receipt_ref,
+            receipt.decision,
+            receipt.protocol_ref,
+            receipt.session_ids.len(),
+            receipt.operation_refs.len(),
+            receipt.diagnostics.len()
         ));
     }
     Err(MoltenError::invalid_harness("unsupported protocol summary record"))
@@ -881,6 +1020,463 @@ pub struct RequestResponseLifecycle {
     pub install: ProtocolInstallReceipt,
     pub initial_states: Vec<ProtocolSessionState>,
     pub operations: Vec<ProtocolOperationRun>,
+}
+
+fn parse_protocol_session_gate_input(input: ProtocolSessionGateInput) -> Result<ProtocolSessionGateParsed> {
+    ensure_count_at_most(input.initial_states.len(), MAX_PROTOCOL_ITEMS, "protocol gate initial states")?;
+    ensure_count_at_most(input.operation_receipts.len(), MAX_PROTOCOL_STEPS, "protocol gate operations")?;
+    ensure_count_at_most(input.messages.len(), MAX_PROTOCOL_STEPS, "protocol gate messages")?;
+    ensure_count_at_most(input.next_states.len(), MAX_PROTOCOL_STEPS, "protocol gate next states")?;
+    Ok(ProtocolSessionGateParsed {
+        install: parse_protocol_install_receipt(&input.install_receipt)?,
+        initial_states: parse_protocol_states(&input.initial_states)?,
+        operation_receipts: parse_protocol_operation_receipts(&input.operation_receipts)?,
+        messages: parse_protocol_messages(&input.messages)?,
+        next_states: parse_protocol_states(&input.next_states)?,
+    })
+}
+
+fn parse_protocol_states(values: &[IOValue]) -> Result<Vec<ProtocolSessionState>> {
+    let mut states = Vec::with_capacity(values.len());
+    for value in values {
+        states.push(parse_protocol_session_state(value)?);
+    }
+    Ok(states)
+}
+
+fn parse_protocol_operation_receipts(values: &[IOValue]) -> Result<Vec<ProtocolOperationReceipt>> {
+    let mut receipts = Vec::with_capacity(values.len());
+    for value in values {
+        receipts.push(parse_protocol_operation_receipt(value)?);
+    }
+    Ok(receipts)
+}
+
+fn parse_protocol_messages(values: &[IOValue]) -> Result<Vec<ProtocolMessage>> {
+    let mut messages = Vec::with_capacity(values.len());
+    for value in values {
+        messages.push(parse_protocol_message(value)?);
+    }
+    Ok(messages)
+}
+
+fn protocol_session_gate_diagnostics(parsed: &ProtocolSessionGateParsed) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::with_capacity(8);
+    if parsed.install.decision != "pass" {
+        diagnostics.push("protocol session gate requires a passing install receipt".to_string());
+    }
+    match install_protocol_manifest(&parsed.install.manifest) {
+        Ok(recomputed) => {
+            if recomputed.receipt_ref != parsed.install.receipt_ref {
+                diagnostics.push("protocol install receipt does not replay from manifest".to_string());
+            }
+        }
+        Err(error) => diagnostics.push(format!("protocol install replay failed: {error}")),
+    }
+    if parsed.initial_states.is_empty() {
+        diagnostics.push("protocol session gate requires initial state evidence".to_string());
+    }
+    if parsed.operation_receipts.is_empty() {
+        diagnostics.push("protocol session gate requires operation receipt evidence".to_string());
+    }
+    for state in &parsed.initial_states {
+        diagnostics.extend(initial_state_gate_diagnostics(parsed, state));
+    }
+    for message in &parsed.messages {
+        diagnostics.extend(message_gate_diagnostics(parsed, message));
+    }
+    for receipt in &parsed.operation_receipts {
+        diagnostics.extend(operation_gate_diagnostics(parsed, receipt)?);
+    }
+    diagnostics.extend(terminal_role_diagnostics(parsed));
+    Ok(diagnostics)
+}
+
+fn initial_state_gate_diagnostics(parsed: &ProtocolSessionGateParsed, state: &ProtocolSessionState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(4);
+    if state.protocol_ref != parsed.install.manifest.manifest_ref {
+        diagnostics.push(format!("initial state {} protocol does not match install", state.state_ref));
+    }
+    if state.endpoint.protocol_ref != state.protocol_ref {
+        diagnostics.push(format!("initial state {} endpoint protocol mismatch", state.state_ref));
+    }
+    if !parsed.install.endpoints.iter().any(|endpoint| endpoint.endpoint_ref == state.endpoint.endpoint_ref) {
+        diagnostics.push(format!("initial state {} endpoint is not installed", state.state_ref));
+    }
+    if !parsed.install.manifest.roles.iter().any(|role| role == &state.role) {
+        diagnostics.push(format!("initial state {} role is not in manifest", state.state_ref));
+    }
+    diagnostics
+}
+
+fn message_gate_diagnostics(parsed: &ProtocolSessionGateParsed, message: &ProtocolMessage) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(3);
+    if message.protocol_ref != parsed.install.manifest.manifest_ref {
+        diagnostics.push(format!("protocol message {} protocol does not match install", message.message_ref));
+    }
+    if !parsed.install.manifest.roles.iter().any(|role| role == &message.from_role) {
+        diagnostics.push(format!("protocol message {} sender role is not in manifest", message.message_ref));
+    }
+    if !parsed.install.manifest.roles.iter().any(|role| role == &message.to_role) {
+        diagnostics.push(format!("protocol message {} receiver role is not in manifest", message.message_ref));
+    }
+    if !parsed.install.manifest.payloads.iter().any(|payload| payload.tag == message.payload_tag) {
+        diagnostics.push(format!("protocol message {} payload tag is not declared", message.message_ref));
+    }
+    diagnostics
+}
+
+fn operation_gate_diagnostics(
+    parsed: &ProtocolSessionGateParsed,
+    receipt: &ProtocolOperationReceipt,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::with_capacity(8);
+    if !matches!(receipt.decision.as_str(), "pass" | "deny") {
+        diagnostics.push(format!("protocol operation {} has unsupported decision", receipt.receipt_ref));
+    }
+    if !matches!(receipt.operation.as_str(), "send" | "receive" | "branch" | "offer") {
+        diagnostics.push(format!("protocol operation {} has unsupported operation", receipt.receipt_ref));
+    }
+    if receipt.protocol_ref != parsed.install.manifest.manifest_ref {
+        diagnostics.push(format!("protocol operation {} protocol does not match install", receipt.receipt_ref));
+    }
+    let Some(prior) = find_state(parsed, &receipt.prior_state_ref) else {
+        diagnostics.push(format!("protocol operation {} prior state is missing", receipt.receipt_ref));
+        return Ok(diagnostics);
+    };
+    diagnostics.extend(operation_prior_diagnostics(receipt, prior));
+    let message = match &receipt.message_ref {
+        Some(reference) => match find_message(parsed, reference) {
+            Some(message) => Some(message),
+            None => {
+                diagnostics.push(format!("protocol operation {} message is missing", receipt.receipt_ref));
+                None
+            }
+        },
+        None => None,
+    };
+    if let Some(message) = message {
+        diagnostics.extend(operation_message_diagnostics(receipt, prior, message));
+    }
+    match receipt.decision.as_str() {
+        "pass" => diagnostics.extend(pass_operation_gate_diagnostics(parsed, receipt, prior, message)?),
+        "deny" => diagnostics.extend(deny_operation_gate_diagnostics(receipt)),
+        _ => {}
+    }
+    Ok(diagnostics)
+}
+
+fn operation_prior_diagnostics(receipt: &ProtocolOperationReceipt, prior: &ProtocolSessionState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(4);
+    if receipt.session_id != prior.session_id {
+        diagnostics.push(format!("protocol operation {} session does not match prior state", receipt.receipt_ref));
+    }
+    if receipt.role != prior.role {
+        diagnostics.push(format!("protocol operation {} role does not match prior state", receipt.receipt_ref));
+    }
+    if receipt.sequence != prior.sequence {
+        diagnostics.push(format!("protocol operation {} sequence does not match prior state", receipt.receipt_ref));
+    }
+    diagnostics
+}
+
+fn operation_message_diagnostics(
+    receipt: &ProtocolOperationReceipt,
+    prior: &ProtocolSessionState,
+    message: &ProtocolMessage,
+) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(4);
+    if message.protocol_ref != prior.protocol_ref || message.session_id != prior.session_id {
+        diagnostics.push(format!("protocol operation {} message session binding mismatch", receipt.receipt_ref));
+    }
+    if receipt.operation == "send" && message.from_role != prior.role {
+        diagnostics.push(format!("protocol operation {} send message sender mismatch", receipt.receipt_ref));
+    }
+    if receipt.operation == "receive" && message.to_role != prior.role {
+        diagnostics.push(format!("protocol operation {} receive message receiver mismatch", receipt.receipt_ref));
+    }
+    diagnostics
+}
+
+fn pass_operation_gate_diagnostics(
+    parsed: &ProtocolSessionGateParsed,
+    receipt: &ProtocolOperationReceipt,
+    prior: &ProtocolSessionState,
+    message: Option<&ProtocolMessage>,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::with_capacity(8);
+    let Some(next_ref) = &receipt.next_state_ref else {
+        diagnostics.push(format!("protocol operation {} pass is missing next state", receipt.receipt_ref));
+        return Ok(diagnostics);
+    };
+    let Some(next) = find_state(parsed, next_ref) else {
+        diagnostics.push(format!("protocol operation {} next state is missing", receipt.receipt_ref));
+        return Ok(diagnostics);
+    };
+    if next.protocol_ref != prior.protocol_ref || next.session_id != prior.session_id || next.role != prior.role {
+        diagnostics.push(format!("protocol operation {} next state binding mismatch", receipt.receipt_ref));
+    }
+    if next.sequence != prior.sequence.saturating_add(1) {
+        diagnostics.push(format!("protocol operation {} next sequence is not prior+1", receipt.receipt_ref));
+    }
+    match replay_protocol_operation(receipt, prior, message, next) {
+        Ok(replayed) => diagnostics.extend(replayed_operation_diagnostics(receipt, &replayed)),
+        Err(error) => diagnostics.push(format!("protocol operation {} replay failed: {error}", receipt.receipt_ref)),
+    }
+    Ok(diagnostics)
+}
+
+fn deny_operation_gate_diagnostics(receipt: &ProtocolOperationReceipt) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(2);
+    if receipt.next_state_ref.is_some() {
+        diagnostics.push(format!("protocol operation {} deny unexpectedly has next state", receipt.receipt_ref));
+    }
+    if receipt.diagnostics.is_empty() {
+        diagnostics.push(format!("protocol operation {} deny is missing diagnostics", receipt.receipt_ref));
+    }
+    diagnostics
+}
+
+fn replay_protocol_operation(
+    receipt: &ProtocolOperationReceipt,
+    prior: &ProtocolSessionState,
+    message: Option<&ProtocolMessage>,
+    next: &ProtocolSessionState,
+) -> Result<ProtocolOperationRun> {
+    match receipt.operation.as_str() {
+        "send" => {
+            let message = message.ok_or_else(|| MoltenError::invalid_harness("send replay requires message"))?;
+            let evidence_refs =
+                send_evidence_prefix(&message.evidence_refs, &receipt.authority_refs, &receipt.resource_refs)?;
+            send_protocol_message(ProtocolSendInput {
+                state: prior.value.clone(),
+                to_role: message.to_role.clone(),
+                label: message.label.clone(),
+                payload_tag: message.payload_tag.clone(),
+                body_or_ref: message.body_or_ref.clone(),
+                authority_refs: receipt.authority_refs.clone(),
+                resource_refs: receipt.resource_refs.clone(),
+                evidence_refs,
+            })
+        }
+        "receive" => {
+            let message = message.ok_or_else(|| MoltenError::invalid_harness("receive replay requires message"))?;
+            receive_protocol_message(ProtocolReceiveInput {
+                state: prior.value.clone(),
+                message: message.value.clone(),
+                authority_refs: receipt.authority_refs.clone(),
+                resource_refs: receipt.resource_refs.clone(),
+                carrier_refs: receipt.carrier_refs.clone(),
+            })
+        }
+        "branch" => choose_protocol_branch(ProtocolBranchOperationInput {
+            state: prior.value.clone(),
+            label: transition_branch_label(prior, next, "branch")?,
+            authority_refs: receipt.authority_refs.clone(),
+            resource_refs: receipt.resource_refs.clone(),
+            carrier_refs: receipt.carrier_refs.clone(),
+        }),
+        "offer" => offer_protocol_branch(ProtocolBranchOperationInput {
+            state: prior.value.clone(),
+            label: transition_branch_label(prior, next, "offer")?,
+            authority_refs: receipt.authority_refs.clone(),
+            resource_refs: receipt.resource_refs.clone(),
+            carrier_refs: receipt.carrier_refs.clone(),
+        }),
+        value => Err(MoltenError::invalid_harness(format!("unsupported protocol operation replay {value}"))),
+    }
+}
+
+fn replayed_operation_diagnostics(receipt: &ProtocolOperationReceipt, replayed: &ProtocolOperationRun) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(3);
+    if replayed.receipt.receipt_ref != receipt.receipt_ref {
+        diagnostics.push(format!("protocol operation {} receipt does not replay", receipt.receipt_ref));
+    }
+    if replayed.receipt.message_ref != receipt.message_ref {
+        diagnostics.push(format!("protocol operation {} message ref does not replay", receipt.receipt_ref));
+    }
+    if replayed.receipt.next_state_ref != receipt.next_state_ref {
+        diagnostics.push(format!("protocol operation {} next state ref does not replay", receipt.receipt_ref));
+    }
+    diagnostics
+}
+
+fn send_evidence_prefix(
+    evidence_refs: &[String],
+    authority_refs: &[String],
+    resource_refs: &[String],
+) -> Result<Vec<String>> {
+    let suffix_count = authority_refs
+        .len()
+        .checked_add(resource_refs.len())
+        .ok_or_else(|| MoltenError::invalid_harness("protocol evidence suffix overflow"))?;
+    if evidence_refs.len() < suffix_count {
+        return Err(MoltenError::invalid_harness("protocol message evidence is missing gate refs"));
+    }
+    let prefix_count = evidence_refs.len() - suffix_count;
+    let authority_end = prefix_count + authority_refs.len();
+    if &evidence_refs[prefix_count..authority_end] != authority_refs {
+        return Err(MoltenError::invalid_harness("protocol message evidence authority suffix mismatch"));
+    }
+    if &evidence_refs[authority_end..] != resource_refs {
+        return Err(MoltenError::invalid_harness("protocol message evidence resource suffix mismatch"));
+    }
+    Ok(evidence_refs[..prefix_count].to_vec())
+}
+
+fn transition_branch_label(
+    prior: &ProtocolSessionState,
+    next: &ProtocolSessionState,
+    operation: &str,
+) -> Result<String> {
+    let branches = match (operation, &prior.local_state.terminal) {
+        ("branch", ProtocolLocalTerminal::InternalChoice(branches)) => branches,
+        ("offer", ProtocolLocalTerminal::Offer { branches, .. }) => branches,
+        _ => return Err(MoltenError::invalid_harness("protocol state does not contain requested branch shape")),
+    };
+    let mut matched = Vec::with_capacity(branches.len());
+    for branch in branches {
+        let candidate = ProtocolLocalState {
+            actions: branch.actions.clone(),
+            terminal: ProtocolLocalTerminal::End,
+        };
+        if candidate == next.local_state {
+            matched.push(branch.label.clone());
+        }
+    }
+    if matched.len() == 1 {
+        return Ok(matched.remove(0));
+    }
+    Err(MoltenError::invalid_harness("protocol branch transition is ambiguous or missing"))
+}
+
+fn terminal_role_diagnostics(parsed: &ProtocolSessionGateParsed) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(parsed.initial_states.len());
+    for state in &parsed.initial_states {
+        diagnostics.extend(terminal_trace_diagnostics(parsed, state));
+    }
+    diagnostics
+}
+
+fn terminal_trace_diagnostics(parsed: &ProtocolSessionGateParsed, state: &ProtocolSessionState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(2);
+    let mut current_ref = state.state_ref.as_str();
+    for _ in 0..MAX_PROTOCOL_STEPS {
+        let Some(current) = find_state(parsed, current_ref) else {
+            diagnostics.push(format!("protocol role {} in {} reaches missing state", state.role, state.session_id));
+            return diagnostics;
+        };
+        if is_terminal_local_state(&current.local_state) {
+            return diagnostics;
+        }
+        let mut next_ref: Option<&str> = None;
+        let mut successor_count = 0usize;
+        for receipt in &parsed.operation_receipts {
+            if receipt.decision == "pass" && receipt.prior_state_ref == current_ref {
+                successor_count += 1;
+                next_ref = receipt.next_state_ref.as_deref();
+            }
+        }
+        if successor_count == 1 {
+            if let Some(reference) = next_ref {
+                current_ref = reference;
+            } else {
+                diagnostics.push(format!(
+                    "protocol role {} in {} has pass operation without next state",
+                    state.role, state.session_id
+                ));
+                return diagnostics;
+            }
+        } else if successor_count == 0 {
+            diagnostics
+                .push(format!("protocol role {} in {} does not reach a terminal state", state.role, state.session_id));
+            return diagnostics;
+        } else {
+            diagnostics
+                .push(format!("protocol role {} in {} has ambiguous state successors", state.role, state.session_id));
+            return diagnostics;
+        }
+    }
+    diagnostics.push(format!("protocol role {} in {} exceeds replay step bound", state.role, state.session_id));
+    diagnostics
+}
+
+fn find_state<'a>(parsed: &'a ProtocolSessionGateParsed, reference: &str) -> Option<&'a ProtocolSessionState> {
+    parsed
+        .initial_states
+        .iter()
+        .chain(parsed.next_states.iter())
+        .find(|state| state.state_ref == reference)
+}
+
+fn find_message<'a>(parsed: &'a ProtocolSessionGateParsed, reference: &str) -> Option<&'a ProtocolMessage> {
+    parsed.messages.iter().find(|message| message.message_ref == reference)
+}
+
+fn is_terminal_local_state(state: &ProtocolLocalState) -> bool {
+    state.actions.is_empty() && matches!(state.terminal, ProtocolLocalTerminal::End)
+}
+
+fn session_ids(states: &[ProtocolSessionState]) -> Result<Vec<String>> {
+    let mut sessions = Vec::with_capacity(states.len());
+    for state in states {
+        if !sessions.iter().any(|session| session == &state.session_id) {
+            sessions.push(state.session_id.clone());
+        }
+    }
+    ensure_count_at_most(sessions.len(), MAX_PROTOCOL_ITEMS, "protocol gate sessions")?;
+    Ok(sessions)
+}
+
+fn state_refs(states: &[ProtocolSessionState]) -> Vec<String> {
+    states.iter().map(|state| state.state_ref.clone()).collect()
+}
+
+fn operation_refs(receipts: &[ProtocolOperationReceipt]) -> Vec<String> {
+    receipts.iter().map(|receipt| receipt.receipt_ref.clone()).collect()
+}
+
+fn message_refs(messages: &[ProtocolMessage]) -> Vec<String> {
+    messages.iter().map(|message| message.message_ref.clone()).collect()
+}
+
+fn terminal_state_refs(states: &[ProtocolSessionState]) -> Vec<String> {
+    states
+        .iter()
+        .filter(|state| is_terminal_local_state(&state.local_state))
+        .map(|state| state.state_ref.clone())
+        .collect()
+}
+
+fn protocol_session_gate_receipt_value(input: &ProtocolSessionGateValueInput<'_>) -> Result<IOValue> {
+    validate_gate_decision(input.decision, "protocol session gate receipt decision")?;
+    validate_refs(input.initial_state_refs, "protocol gate initial state ref")?;
+    validate_refs(input.operation_refs, "protocol gate operation ref")?;
+    validate_refs(input.message_refs, "protocol gate message ref")?;
+    validate_refs(input.final_state_refs, "protocol gate final state ref")?;
+    for session_id in input.session_ids {
+        validate_session_id(session_id)?;
+    }
+    let gate_status = if input.decision == "pass" { "pass" } else { "fail" };
+    Ok(record("protocol-session-gate-receipt-v1", vec![
+        string(PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("install", vec![string(input.install_ref)]),
+        record("protocol", vec![string(input.protocol_ref)]),
+        record("sessions", vec![strings_sequence(input.session_ids)]),
+        record("initial-states", vec![refs_sequence(input.initial_state_refs)]),
+        record("operations", vec![refs_sequence(input.operation_refs)]),
+        record("messages", vec![refs_sequence(input.message_refs)]),
+        record("final-states", vec![refs_sequence(input.final_state_refs)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("install-replay"), string(gate_status)]),
+            record("check", vec![string("projected-operation-replay"), string(gate_status)]),
+            record("check", vec![string("terminal-session-state"), string(gate_status)]),
+            record("check", vec![string("transport-neutral-message"), string(gate_status)]),
+            record("check", vec![string("protocol-session-gate-is-not-authority"), string("pass")]),
+        ])]),
+    ]))
 }
 
 fn validate_protocol_manifest_input(input: &ProtocolManifestInput) -> Result<()> {
@@ -1820,6 +2416,13 @@ fn validate_direction(value: &str) -> Result<()> {
     Err(MoltenError::invalid_harness(format!("unsupported protocol local action direction {value}")))
 }
 
+fn validate_gate_decision(value: &str, label: &str) -> Result<()> {
+    if matches!(value, "pass" | "deny") {
+        return Ok(());
+    }
+    Err(MoltenError::invalid_harness(format!("unsupported {label} {value}")))
+}
+
 fn validate_name(value: &str, label: &str) -> Result<()> {
     let has_valid_chars = value
         .chars()
@@ -1939,6 +2542,24 @@ mod tests {
         vec![test_ref("resource")]
     }
 
+    fn gate_input(lifecycle: &RequestResponseLifecycle) -> ProtocolSessionGateInput {
+        ProtocolSessionGateInput {
+            install_receipt: lifecycle.install.value.clone(),
+            initial_states: lifecycle.initial_states.iter().map(|state| state.value.clone()).collect(),
+            operation_receipts: lifecycle.operations.iter().map(|operation| operation.receipt.value.clone()).collect(),
+            messages: lifecycle
+                .operations
+                .iter()
+                .filter_map(|operation| operation.message.as_ref().map(|message| message.value.clone()))
+                .collect(),
+            next_states: lifecycle
+                .operations
+                .iter()
+                .filter_map(|operation| operation.next_state.as_ref().map(|state| state.value.clone()))
+                .collect(),
+        }
+    }
+
     fn temp_dir(label: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -1960,6 +2581,12 @@ mod tests {
         for operation in &lifecycle.operations {
             assert_eq!(operation.decision, "pass");
         }
+        let gate = gate_protocol_session_lifecycle(gate_input(&lifecycle)).expect("protocol session gate");
+        assert_eq!(gate.decision, "pass");
+        assert_eq!(gate.operation_count, 4);
+        let gate_receipt = parse_protocol_session_gate_receipt(&gate.value).expect("parse protocol gate receipt");
+        assert_eq!(gate_receipt.decision, "pass");
+        assert_eq!(gate_receipt.operation_refs.len(), 4);
         assert!(matches!(
             lifecycle
                 .operations
@@ -2033,6 +2660,20 @@ mod tests {
         .expect("missing auth denial");
         assert_eq!(missing_auth.decision, "deny");
         assert!(missing_auth.receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("authority")));
+    }
+
+    #[test]
+    fn protocol_session_gate_denies_missing_next_state() {
+        let lifecycle = request_response_lifecycle().expect("lifecycle");
+        let mut input = gate_input(&lifecycle);
+        input.next_states.pop();
+        let gate = gate_protocol_session_lifecycle(input).expect("gate missing next state");
+        assert_eq!(gate.decision, "deny");
+        assert!(
+            gate.diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("next state") || diagnostic.contains("terminal"))
+        );
     }
 
     #[test]
@@ -2183,8 +2824,10 @@ mod tests {
     #[test]
     fn ledger_catalog_and_mcp_classify_protocol_records() {
         let lifecycle = request_response_lifecycle().expect("lifecycle");
+        let gate = gate_protocol_session_lifecycle(gate_input(&lifecycle)).expect("protocol session gate");
         assert_eq!(ledger::artifact_kind(&lifecycle.manifest_value), "protocol-manifest");
         assert_eq!(ledger::artifact_kind(&lifecycle.install.value), "protocol-install-receipt");
+        assert_eq!(ledger::artifact_kind(&gate.value), "protocol-session-gate-receipt");
         assert_eq!(ledger::artifact_kind(&lifecycle.install.endpoints[0].value), "protocol-endpoint");
         assert_eq!(ledger::artifact_kind(&lifecycle.initial_states[0].value), "protocol-session-state");
         assert_eq!(

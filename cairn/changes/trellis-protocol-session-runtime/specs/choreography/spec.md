@@ -37,3 +37,18 @@ r[molten.trellis_protocol_session.spec.transport_neutral] Protocol message seman
 - WHEN they are delivered over a local dataspace and over a remote dataspace envelope
 - THEN endpoint interpretation yields the same protocol operation result
 - AND carrier-specific receipts remain separate evidence refs
+
+### Requirement: Protocol lifecycle gates replay session evidence
+r[molten.trellis_protocol_session.spec.lifecycle_gate] Protocol lifecycle gate receipts MUST replay install and operation receipts against canonical endpoint state, message evidence, and terminal state refs before accepting a completed session lifecycle.
+
+#### Scenario: Valid lifecycle gates
+- GIVEN a protocol install receipt, initial endpoint states, protocol messages, operation receipts, and terminal next states from a completed request/response session
+- WHEN Molten gates the lifecycle
+- THEN it emits a passing protocol session gate receipt
+- AND the receipt binds install, protocol, session ids, state refs, operation refs, message refs, diagnostics, and non-authority checks
+
+#### Scenario: Missing terminal evidence denies
+- GIVEN the same lifecycle evidence with a required next state removed
+- WHEN Molten gates the lifecycle
+- THEN it emits a denial receipt
+- AND diagnostics identify missing replay or terminal-state evidence

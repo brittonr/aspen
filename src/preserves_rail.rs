@@ -215,6 +215,7 @@ pub const PROTOCOL_LOCAL_STATE_SCHEMA: &str = "molten.protocol.local-state.v1";
 pub const PROTOCOL_SESSION_STATE_SCHEMA: &str = "molten.protocol.session-state.v1";
 pub const PROTOCOL_MESSAGE_SCHEMA: &str = "molten.protocol.message.v1";
 pub const PROTOCOL_OPERATION_RECEIPT_SCHEMA: &str = "molten.protocol.operation-receipt.v1";
+pub const PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA: &str = "molten.protocol.session-gate-receipt.v1";
 pub const RAFT_GROUP_MANIFEST_SCHEMA: &str = "molten.raft.group-manifest.v1";
 pub const RAFT_COMMAND_ENVELOPE_SCHEMA: &str = "molten.raft.command-envelope.v1";
 pub const RAFT_LOG_ENTRY_SCHEMA: &str = "molten.raft.log-entry.v1";

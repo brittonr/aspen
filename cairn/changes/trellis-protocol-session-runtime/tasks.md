@@ -25,3 +25,10 @@
 - [x] [serial] r[molten.trellis_protocol_session.spec.endpoint_state] Test projectability rejection, endpoint projection, send/receive, branch offer, replay rejection, and receipt parsing.
 - [x] [parallel] r[molten.trellis_protocol_session.spec.endpoint_state] Test wrong role, wrong label, wrong sequence, bad payload tag, stale endpoint state, and missing authority.
 - [x] [parallel] r[molten.trellis_protocol_session.spec.endpoint_state] Add Hegel properties for generated finite protocols within supported Trellis bounds.
+
+## Phase 5: Lifecycle gate receipts
+
+- [x] [serial] r[molten.trellis_protocol_session.spec.lifecycle_gate] Define `protocol-session-gate-receipt-v1` with install/protocol/session/state/operation/message/final-state refs and non-authority checks.
+- [x] [serial] r[molten.trellis_protocol_session.spec.lifecycle_gate] Replay the install receipt and passing operation receipts against canonical endpoint state before accepting a lifecycle.
+- [x] [parallel] r[molten.trellis_protocol_session.spec.lifecycle_gate] Add `molten test protocol gate-lifecycle` CLI and receipt parsing/show support.
+- [x] [parallel] r[molten.trellis_protocol_session.spec.lifecycle_gate] Cover passing request/response lifecycle gates and missing terminal evidence denial.

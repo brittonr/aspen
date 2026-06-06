@@ -72,6 +72,9 @@ use molten::transcripts;
 use molten::typed_storage;
 use molten::upgrades;
 
+const PROTOCOL_LIFECYCLE_INDEX_LIMIT: usize = 256;
+const _: () = assert!(PROTOCOL_LIFECYCLE_INDEX_LIMIT > 0);
+
 #[derive(Debug, Parser)]
 #[command(name = "molten", version, about = "Molten runtime prototype")]
 struct Cli {
@@ -221,6 +224,11 @@ enum ProtocolCommand {
     RunRequestResponse {
         #[arg(long)]
         out: PathBuf,
+    },
+    GateLifecycle {
+        dir: PathBuf,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
     },
     Show {
         receipt: PathBuf,
@@ -4852,6 +4860,20 @@ fn run_protocol_command(command: ProtocolCommand) -> Result<()> {
             );
             Ok(())
         }
+        ProtocolCommand::GateLifecycle { dir, receipt_out } => {
+            let gate = protocol_session::gate_protocol_session_lifecycle(read_protocol_lifecycle_gate_input(&dir)?)?;
+            emit_named_receipt(receipt_out.as_ref(), "protocol session gate receipt", &gate.value)?;
+            println!(
+                "protocol session gate {} install={} protocol={} sessions={} operations={} diagnostics={}",
+                gate.decision,
+                gate.install_ref,
+                gate.protocol_ref,
+                gate.session_ids.len(),
+                gate.operation_count,
+                gate.diagnostics.len()
+            );
+            Ok(())
+        }
         ProtocolCommand::Show { receipt } => {
             let value = read_preserves_file(&receipt)?;
             println!("{}", protocol_session::protocol_summary(&value)?);
@@ -5213,6 +5235,32 @@ fn write_protocol_lifecycle(out: &Path, lifecycle: &protocol_session::RequestRes
     write_indexed_values(out, "message", &messages)?;
     write_indexed_values(out, "operation", &receipts)?;
     write_indexed_values(out, "next-state", &next_states)
+}
+
+fn read_protocol_lifecycle_gate_input(dir: &Path) -> Result<protocol_session::ProtocolSessionGateInput> {
+    Ok(protocol_session::ProtocolSessionGateInput {
+        install_receipt: read_preserves_file(&dir.join("install-receipt.preserves"))?,
+        initial_states: read_indexed_values(dir, "initial-state")?,
+        operation_receipts: read_indexed_values(dir, "operation")?,
+        messages: read_indexed_values(dir, "message")?,
+        next_states: read_indexed_values(dir, "next-state")?,
+    })
+}
+
+fn read_indexed_values(dir: &Path, prefix: &str) -> Result<Vec<preserves::IOValue>> {
+    let mut values = Vec::with_capacity(PROTOCOL_LIFECYCLE_INDEX_LIMIT.min(16));
+    for index in 0..PROTOCOL_LIFECYCLE_INDEX_LIMIT {
+        let path = dir.join(format!("{prefix}-{index}.preserves"));
+        if !path.exists() {
+            return Ok(values);
+        }
+        values.push(read_preserves_file(&path)?);
+    }
+    let overflow_path = dir.join(format!("{prefix}-{PROTOCOL_LIFECYCLE_INDEX_LIMIT}.preserves"));
+    if overflow_path.exists() {
+        return Err(MoltenError::invalid_harness(format!("protocol lifecycle {prefix} evidence exceeds index limit")));
+    }
+    Ok(values)
 }
 
 fn write_service_runtime_run(
@@ -7939,6 +7987,17 @@ mod tests {
             receipt: receipt.clone(),
         })
         .expect("show protocol install");
+        let gate_receipt = dir.join("protocol-gate.preserves");
+        run_protocol_command(ProtocolCommand::GateLifecycle {
+            dir: out.clone(),
+            receipt_out: Some(gate_receipt.clone()),
+        })
+        .expect("gate protocol lifecycle");
+        let gate = protocol_session::parse_protocol_session_gate_receipt(
+            &read_preserves_file(&gate_receipt).expect("read protocol gate receipt"),
+        )
+        .expect("parse protocol gate receipt");
+        assert_eq!(gate.decision, "pass");
         let install_out = dir.join("install-only");
         run_protocol_command(ProtocolCommand::Install {
             manifest: out.join("manifest.preserves"),

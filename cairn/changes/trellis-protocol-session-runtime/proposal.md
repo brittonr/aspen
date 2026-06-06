@@ -8,6 +8,7 @@ Molten's architecture names Trellis choreography as the finite protocol-shape la
 - Lower role/label/payload names to Trellis ids and reject non-projectable choreographies before installation.
 - Interpret projected local endpoints over the dataspace/remote dataspace boundary.
 - Bind sequence/replay, payload schema refs, policy/capability/resource refs, and Trellis predicate evidence into per-operation receipts.
+- Add replay-bound lifecycle gate receipts that recompute install/operation evidence and prove terminal session state without granting authority.
 - Add a first two-role request/response protocol example and tests.
 
 ## Impact
