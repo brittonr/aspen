@@ -683,6 +683,7 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     let receiver_root = dir.join("receiver-node");
     let sender_root = dir.join("sender-node");
     let bundle_sender_root = dir.join("bundle-sender-node");
+    let bundle_apply_root = dir.join("bundle-apply-node");
     let authority_grant = dir.join("authority-grant.preserves");
     let live_ticket = dir.join("live-ticket.preserves");
     let peer_admission = dir.join("peer-admission.preserves");
@@ -692,6 +693,7 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     let bundle_export = dir.join("workflow-bundle-export.preserves");
     let bundle_verify = dir.join("workflow-bundle-verify.preserves");
     let bundle_gate = dir.join("workflow-bundle-gate.preserves");
+    let bundle_apply = dir.join("workflow-bundle-apply.preserves");
     let bundle_import = dir.join("workflow-bundle-import.preserves");
     let bundle_import_send_receipt = dir.join("bundle-import-send.preserves");
     let ticket_import = dir.join("ticket-import.preserves");
@@ -726,6 +728,14 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
             .args(["--node-id", "node:cli-live-bundle-sender"])
             .output()?,
         "bundle sender init",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(&bundle_apply_root)
+            .args(["--node-id", "node:cli-live-bundle-apply"])
+            .output()?,
+        "bundle apply init",
     );
     assert_success(
         &molten_cmd()
@@ -898,6 +908,36 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     );
     let bundle_gate_text = to_text(&read_preserves(&bundle_gate)?)?;
     assert!(bundle_gate_text.contains("gate-receipt-is-not-authority"));
+
+    let bundle_apply_out = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle-apply", "--state-root"])
+        .arg(&bundle_apply_root)
+        .arg(&workflow_bundle)
+        .args(["--gate-receipt"])
+        .arg(&bundle_gate)
+        .args([
+            "--require-gate-receipt",
+            "--expected-node",
+            "node:cli-live-import",
+            "--expected-topic",
+            "node-control",
+            "--expected-peer",
+            "peer:cli-live-import",
+            "--operation",
+            "status",
+            "--receipt-out",
+        ])
+        .arg(&bundle_apply)
+        .output()?;
+    assert_success(&bundle_apply_out, "live workflow bundle apply");
+    assert!(stdout(&bundle_apply_out).contains("decision=pass"));
+    assert!(stdout(&bundle_apply_out).contains("next-step=dry-run-or-send-request"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&bundle_apply)?),
+        "node-control-live-workflow-bundle-apply-receipt"
+    );
+    let bundle_apply_text = to_text(&read_preserves(&bundle_apply)?)?;
+    assert!(bundle_apply_text.contains("apply-receipt-is-not-authority"));
 
     let bundle_import_out = molten_cmd()
         .args(["test", "node", "live-workflow-bundle-import", "--state-root"])

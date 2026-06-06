@@ -839,6 +839,61 @@ enum NodeCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    LiveWorkflowBundleApply {
+        #[arg(long)]
+        state_root: PathBuf,
+        bundle: PathBuf,
+        #[arg(long)]
+        gate_receipt: Option<PathBuf>,
+        #[arg(long)]
+        require_gate_receipt: bool,
+        #[arg(long)]
+        request: Option<PathBuf>,
+        #[arg(long)]
+        send: bool,
+        #[arg(long)]
+        from_peer: Option<String>,
+        #[arg(long, default_value_t = 1)]
+        sequence: u64,
+        #[arg(long = "operation-id")]
+        operation_id: Option<String>,
+        #[arg(long)]
+        expected_node: Option<String>,
+        #[arg(long)]
+        expected_topic: Option<String>,
+        #[arg(long)]
+        expected_endpoint: Option<String>,
+        #[arg(long)]
+        expected_peer: Option<String>,
+        #[arg(long = "operation")]
+        operations: Vec<String>,
+        #[arg(long)]
+        target_scope: Option<String>,
+        #[arg(long)]
+        resource_scope: Option<String>,
+        #[arg(long, default_value_t = 1)]
+        as_of_sequence: u64,
+        #[arg(long, default_value_t = 1)]
+        as_of_epoch: u64,
+        #[arg(long = "peer-bootstrap")]
+        peer_bootstrap_refs: Vec<String>,
+        #[arg(long = "authority")]
+        authority_refs: Vec<String>,
+        #[arg(long = "policy")]
+        policy_refs: Vec<String>,
+        #[arg(long = "resource")]
+        resource_refs: Vec<String>,
+        #[arg(long = "evidence")]
+        evidence_refs: Vec<String>,
+        #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS)]
+        max_attempts: u64,
+        #[arg(long, default_value_t = 10_000)]
+        join_timeout_ms: u64,
+        #[arg(long)]
+        send_receipt_out: Option<PathBuf>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     LiveWorkflowBundleImport {
         #[arg(long)]
         state_root: PathBuf,
@@ -6125,6 +6180,90 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             print_live_workflow_bundle_gate_next_step(&gated);
             Ok(())
         }
+        NodeCommand::LiveWorkflowBundleApply {
+            state_root,
+            bundle,
+            gate_receipt,
+            require_gate_receipt,
+            request,
+            send,
+            from_peer,
+            sequence,
+            operation_id,
+            expected_node,
+            expected_topic,
+            expected_endpoint,
+            expected_peer,
+            operations,
+            target_scope,
+            resource_scope,
+            as_of_sequence,
+            as_of_epoch,
+            peer_bootstrap_refs,
+            authority_refs,
+            policy_refs,
+            resource_refs,
+            evidence_refs,
+            max_attempts,
+            join_timeout_ms,
+            send_receipt_out,
+            receipt_out,
+        } => {
+            let bundle_value = read_preserves_file(&bundle)?;
+            let gate_receipt_value = gate_receipt.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let request_value = request.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let runtime =
+                tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(MoltenError::from)?;
+            let applied = runtime.block_on(node_daemon::apply_node_control_live_workflow_bundle(
+                &node_daemon::NodeControlLiveWorkflowBundleApplyInput {
+                    state_root: &state_root,
+                    bundle_value: &bundle_value,
+                    gate_receipt_value: gate_receipt_value.as_ref(),
+                    is_gate_receipt_required: require_gate_receipt,
+                    request_value: request_value.as_ref(),
+                    should_send: send,
+                    from_peer: from_peer.as_deref(),
+                    sequence,
+                    expected_operation_ref: operation_id.as_deref(),
+                    expected_node: expected_node.as_deref(),
+                    expected_topic: expected_topic.as_deref(),
+                    expected_endpoint: expected_endpoint.as_deref(),
+                    expected_peer: expected_peer.as_deref(),
+                    expected_operations: &operations,
+                    expected_target_scope: target_scope.as_deref(),
+                    expected_resource_scope: resource_scope.as_deref(),
+                    as_of_sequence,
+                    as_of_epoch,
+                    peer_bootstrap_refs: &peer_bootstrap_refs,
+                    authority_refs: &authority_refs,
+                    policy_refs: &policy_refs,
+                    resource_refs: &resource_refs,
+                    evidence_refs: &evidence_refs,
+                    max_attempts,
+                    join_timeout_ms,
+                },
+            ))?;
+            if let (Some(path), Some(value)) = (send_receipt_out.as_ref(), applied.send_receipt_value.as_ref()) {
+                write_file(path, &to_text(value)?)?;
+            }
+            emit_named_receipt(
+                receipt_out.as_ref(),
+                "node control live workflow bundle apply receipt",
+                &applied.receipt_value,
+            )?;
+            println!(
+                "node live workflow bundle apply decision={} bundle={} gate={} import={} imported={} send={} diagnostics={}",
+                applied.decision,
+                applied.bundle_ref,
+                applied.gate_receipt_ref.as_deref().unwrap_or("none"),
+                applied.import_receipt_ref.as_deref().unwrap_or("none"),
+                applied.imported_refs.len(),
+                applied.send_receipt_ref.as_deref().unwrap_or("none"),
+                applied.diagnostics.len()
+            );
+            print_live_workflow_bundle_apply_next_step(&applied, request_value.is_some(), send);
+            Ok(())
+        }
         NodeCommand::LiveWorkflowBundleImport {
             state_root,
             bundle,
@@ -6268,6 +6407,45 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn print_live_workflow_bundle_apply_next_step(
+    applied: &node_daemon::NodeControlLiveWorkflowBundleApply,
+    has_request: bool,
+    was_send_requested: bool,
+) {
+    if applied.decision == "pass" {
+        if was_send_requested {
+            println!("next-step=inspect-live-send-receipt command=\"molten node show <send-receipt>\"");
+        } else if has_request {
+            println!(
+                "next-step=send-live-workflow-bundle command=\"molten node live-workflow-bundle-apply ... --send\""
+            );
+        } else {
+            println!(
+                "next-step=dry-run-or-send-request command=\"molten node live-workflow-bundle-apply ... --request <request> [--send]\""
+            );
+        }
+        return;
+    }
+    let has_gate_problem = applied.diagnostics.iter().any(|diagnostic| {
+        diagnostic.contains("gate receipt")
+            || diagnostic.contains("requires a current gate receipt")
+            || diagnostic.contains("recomputed verify")
+    });
+    if has_gate_problem {
+        println!("next-step=rerun-gate command=\"molten node live-workflow-bundle-gate ... --receipt-out ...\"");
+        return;
+    }
+    let has_address_problem = applied
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.contains("no endpoint addresses") || diagnostic.contains("unsupported address"));
+    if has_address_problem {
+        println!("next-step=refresh-bound-live-ticket command=\"molten node serve --live-iroh --live-ticket-out ...\"");
+        return;
+    }
+    println!("next-step=inspect-apply-diagnostics command=\"molten node show <apply-receipt>\"");
 }
 
 fn print_live_workflow_bundle_gate_next_step(gated: &node_daemon::NodeControlLiveWorkflowBundleGate) {

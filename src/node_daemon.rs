@@ -30,6 +30,7 @@ use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA;
@@ -365,6 +366,35 @@ pub struct NodeControlLiveWorkflowBundleGateInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveWorkflowBundleApplyInput<'a> {
+    pub state_root: &'a Path,
+    pub bundle_value: &'a IOValue,
+    pub gate_receipt_value: Option<&'a IOValue>,
+    pub is_gate_receipt_required: bool,
+    pub request_value: Option<&'a IOValue>,
+    pub should_send: bool,
+    pub from_peer: Option<&'a str>,
+    pub sequence: u64,
+    pub expected_operation_ref: Option<&'a str>,
+    pub expected_node: Option<&'a str>,
+    pub expected_topic: Option<&'a str>,
+    pub expected_endpoint: Option<&'a str>,
+    pub expected_peer: Option<&'a str>,
+    pub expected_operations: &'a [String],
+    pub expected_target_scope: Option<&'a str>,
+    pub expected_resource_scope: Option<&'a str>,
+    pub as_of_sequence: u64,
+    pub as_of_epoch: u64,
+    pub peer_bootstrap_refs: &'a [String],
+    pub authority_refs: &'a [String],
+    pub policy_refs: &'a [String],
+    pub resource_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+    pub max_attempts: u64,
+    pub join_timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleImportInput<'a> {
     pub state_root: &'a Path,
     pub bundle_value: &'a IOValue,
@@ -588,6 +618,23 @@ struct LiveWorkflowBundleGateReceiptValueInput<'a> {
     peer_admission_ref: Option<&'a str>,
     authority_grant_ref: Option<&'a str>,
     receipt_refs: &'a [String],
+    expected: &'a LiveWorkflowBundleExpectedInput<'a>,
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveWorkflowBundleApplyReceiptValueInput<'a> {
+    decision: &'a str,
+    state_root: &'a Path,
+    bundle_ref: &'a str,
+    gate_receipt_ref: Option<&'a str>,
+    recomputed_verify_receipt_ref: &'a str,
+    import_receipt_ref: Option<&'a str>,
+    imported_refs: &'a [String],
+    mode: &'a str,
+    envelope_ref: Option<&'a str>,
+    operation_ref: Option<&'a str>,
+    send_receipt_ref: Option<&'a str>,
     expected: &'a LiveWorkflowBundleExpectedInput<'a>,
     diagnostics: &'a [String],
 }
@@ -960,6 +1007,46 @@ pub struct NodeControlLiveWorkflowBundleGate {
     pub peer_admission_ref: Option<String>,
     pub authority_grant_ref: Option<String>,
     pub receipt_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub receipt_ref: String,
+    pub receipt_value: IOValue,
+    pub decision: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveWorkflowBundleGateReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub bundle_ref: String,
+    pub verify_receipt_ref: Option<String>,
+    pub recomputed_verify_receipt_ref: String,
+    pub ticket_ref: Option<String>,
+    pub peer_admission_ref: Option<String>,
+    pub authority_grant_ref: Option<String>,
+    pub receipt_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveSendPreflight {
+    pub decision: String,
+    pub envelope_ref: String,
+    pub operation_ref: String,
+    pub receiver_ticket_ref: String,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveWorkflowBundleApply {
+    pub bundle_ref: String,
+    pub gate_receipt_ref: Option<String>,
+    pub recomputed_verify_receipt_ref: String,
+    pub import_receipt_ref: Option<String>,
+    pub imported_refs: Vec<String>,
+    pub envelope_ref: Option<String>,
+    pub operation_ref: Option<String>,
+    pub send_receipt_ref: Option<String>,
+    pub send_receipt_value: Option<IOValue>,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
     pub receipt_value: IOValue,
@@ -1575,6 +1662,164 @@ pub fn gate_node_control_live_workflow_bundle(
     })
 }
 
+pub async fn apply_node_control_live_workflow_bundle(
+    input: &NodeControlLiveWorkflowBundleApplyInput<'_>,
+) -> Result<NodeControlLiveWorkflowBundleApply> {
+    validate_live_workflow_bundle_apply_input(input)?;
+    ensure_state_layout(input.state_root)?;
+    let verify_input = live_workflow_bundle_verify_input_from_apply(input);
+    let verified = verify_node_control_live_workflow_bundle(&verify_input)?;
+    let expected = live_workflow_bundle_expected_input_from_verify(&verify_input);
+    let mut diagnostics = verified.diagnostics.clone();
+    let gate_receipt_ref = match input.gate_receipt_value {
+        Some(value) => match parse_node_control_live_workflow_bundle_gate_receipt(value) {
+            Ok(receipt) => {
+                if receipt.decision != "pass" {
+                    diagnostics.push(format!(
+                        "node control live workflow bundle apply gate receipt {} decision {}",
+                        receipt.receipt_ref, receipt.decision
+                    ));
+                }
+                if receipt.bundle_ref != verified.bundle_ref {
+                    diagnostics.push(format!(
+                        "node control live workflow bundle apply gate bundle {} does not match {}",
+                        receipt.bundle_ref, verified.bundle_ref
+                    ));
+                }
+                if receipt.recomputed_verify_receipt_ref != verified.receipt_ref {
+                    diagnostics.push(format!(
+                        "node control live workflow bundle apply gate recomputed verify {} does not match current {}",
+                        receipt.recomputed_verify_receipt_ref, verified.receipt_ref
+                    ));
+                }
+                Some(receipt.receipt_ref)
+            }
+            Err(error) => {
+                let receipt_ref = canonical_hash(value)?;
+                diagnostics.push(format!("node control live workflow bundle apply gate receipt parse failed: {error}"));
+                Some(receipt_ref)
+            }
+        },
+        None => {
+            if input.is_gate_receipt_required {
+                diagnostics.push("node control live workflow bundle apply requires a current gate receipt".to_string());
+            }
+            None
+        }
+    };
+    if input.should_send && input.request_value.is_none() {
+        diagnostics.push("node control live workflow bundle apply send requested without a request".to_string());
+    }
+    let mut import_receipt_ref = None;
+    let mut imported_refs = Vec::new();
+    let mut envelope_ref = None;
+    let mut operation_ref = None;
+    let mut send_receipt_ref = None;
+    let mut send_receipt_value = None;
+    if diagnostics.is_empty() {
+        let imported = import_node_control_live_workflow_bundle(&live_workflow_bundle_import_input_from_apply(input))?;
+        import_receipt_ref = Some(imported.receipt_ref.clone());
+        if imported.decision == "pass" {
+            imported_refs = imported.imported_refs;
+        } else {
+            diagnostics.extend(imported.diagnostics);
+        }
+    }
+    if diagnostics.is_empty()
+        && let Some(request_value) = input.request_value
+    {
+        let bundle = parse_node_control_live_workflow_bundle(input.bundle_value)?;
+        let authority = parse_node_control_authority_grant(&bundle.authority_grant_value)?;
+        let from_peer = input.from_peer.unwrap_or(&authority.peer_id);
+        let peer_bootstrap_refs = if input.peer_bootstrap_refs.is_empty() {
+            vec![bundle.peer_admission_ref.clone()]
+        } else {
+            input.peer_bootstrap_refs.to_vec()
+        };
+        let authority_refs = if input.authority_refs.is_empty() {
+            vec![bundle.authority_grant_ref.clone()]
+        } else {
+            input.authority_refs.to_vec()
+        };
+        let send_input = NodeControlLiveSendInput {
+            state_root: Some(input.state_root),
+            request_value,
+            receiver_ticket_value: &bundle.ticket_value,
+            from_peer,
+            sequence: input.sequence,
+            expected_operation_ref: input.expected_operation_ref,
+            expected_receiver_node: input.expected_node,
+            expected_topic: input.expected_topic,
+            expected_endpoint: input.expected_endpoint,
+            max_attempts: input.max_attempts,
+            peer_bootstrap_refs: &peer_bootstrap_refs,
+            authority_refs: &authority_refs,
+            policy_refs: input.policy_refs,
+            resource_refs: input.resource_refs,
+            evidence_refs: input.evidence_refs,
+            join_timeout_ms: input.join_timeout_ms,
+        };
+        if input.should_send {
+            let sent = send_node_control_live_ingress(&send_input).await?;
+            envelope_ref = Some(sent.envelope_ref.clone());
+            operation_ref = Some(sent.operation_ref.clone());
+            send_receipt_ref = Some(sent.send_receipt_ref.clone());
+            let send_receipt = parse_node_control_live_send_receipt(&sent.send_receipt_value)?;
+            if send_receipt.decision != "pass" {
+                diagnostics.extend(send_receipt.diagnostics);
+            }
+            send_receipt_value = Some(sent.send_receipt_value);
+        } else {
+            let preflight = preflight_node_control_live_send(&send_input)?;
+            envelope_ref = Some(preflight.envelope_ref);
+            operation_ref = Some(preflight.operation_ref);
+            if preflight.decision != "pass" {
+                diagnostics.extend(preflight.diagnostics);
+            }
+        }
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let mode = if input.should_send {
+        "send"
+    } else if input.request_value.is_some() {
+        "dry-run"
+    } else {
+        "import"
+    };
+    let receipt_value = live_workflow_bundle_apply_receipt_value(&LiveWorkflowBundleApplyReceiptValueInput {
+        decision,
+        state_root: input.state_root,
+        bundle_ref: &verified.bundle_ref,
+        gate_receipt_ref: gate_receipt_ref.as_deref(),
+        recomputed_verify_receipt_ref: &verified.receipt_ref,
+        import_receipt_ref: import_receipt_ref.as_deref(),
+        imported_refs: &imported_refs,
+        mode,
+        envelope_ref: envelope_ref.as_deref(),
+        operation_ref: operation_ref.as_deref(),
+        send_receipt_ref: send_receipt_ref.as_deref(),
+        expected: &expected,
+        diagnostics: &diagnostics,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    import_node_artifact(input.state_root, &receipt_value)?;
+    Ok(NodeControlLiveWorkflowBundleApply {
+        bundle_ref: verified.bundle_ref,
+        gate_receipt_ref,
+        recomputed_verify_receipt_ref: verified.receipt_ref,
+        import_receipt_ref,
+        imported_refs,
+        envelope_ref,
+        operation_ref,
+        send_receipt_ref,
+        send_receipt_value,
+        diagnostics,
+        receipt_ref,
+        receipt_value,
+        decision: decision.to_string(),
+    })
+}
+
 pub fn parse_node_control_live_workflow_bundle_verify_receipt(
     value: &IOValue,
 ) -> Result<NodeControlLiveWorkflowBundleVerifyReceipt> {
@@ -1613,6 +1858,51 @@ pub fn parse_node_control_live_workflow_bundle_verify_receipt(
         authority_grant_ref,
         receipt_refs: record_ref_strings(&fields[6], "receipts")?,
         diagnostics: record_strings(&fields[8], "diagnostics")?,
+    })
+}
+
+pub fn parse_node_control_live_workflow_bundle_gate_receipt(
+    value: &IOValue,
+) -> Result<NodeControlLiveWorkflowBundleGateReceipt> {
+    let fields = value
+        .collect_simple_record("node-control-live-workflow-bundle-gate-receipt-v1", Some(12))
+        .ok_or_else(|| {
+            MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-gate-receipt-v1 ...>")
+        })?;
+    require_schema(
+        &fields[0],
+        NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA,
+        "node control live workflow bundle gate receipt",
+    )?;
+    let verify_receipt_ref = record_optional_string(&fields[3], "verify-receipt")?;
+    let ticket_ref = record_optional_string(&fields[5], "ticket")?;
+    let peer_admission_ref = record_optional_string(&fields[6], "peer-admission")?;
+    let authority_grant_ref = record_optional_string(&fields[7], "authority-grant")?;
+    for (reference, label) in [
+        (verify_receipt_ref.as_deref(), "node control live workflow bundle gate verify receipt ref"),
+        (ticket_ref.as_deref(), "node control live workflow bundle gate ticket ref"),
+        (peer_admission_ref.as_deref(), "node control live workflow bundle gate peer admission ref"),
+        (authority_grant_ref.as_deref(), "node control live workflow bundle gate authority grant ref"),
+    ] {
+        if let Some(reference) = reference {
+            validate_ingress_ref(reference, label)?;
+        }
+    }
+    let _expected = record_value(&fields[9], "expected")?;
+    let _checks = record_sequence_len(&fields[11], "checks")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    Ok(NodeControlLiveWorkflowBundleGateReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        bundle_ref: record_ref_string(&fields[2], "bundle")?,
+        verify_receipt_ref,
+        recomputed_verify_receipt_ref: record_ref_string(&fields[4], "recomputed-verify")?,
+        ticket_ref,
+        peer_admission_ref,
+        authority_grant_ref,
+        receipt_refs: record_ref_strings(&fields[8], "receipts")?,
+        diagnostics: record_strings(&fields[10], "diagnostics")?,
     })
 }
 
@@ -1780,6 +2070,27 @@ fn validate_live_workflow_bundle_verify_input(input: &NodeControlLiveWorkflowBun
     Ok(())
 }
 
+fn validate_live_workflow_bundle_apply_input(input: &NodeControlLiveWorkflowBundleApplyInput<'_>) -> Result<()> {
+    validate_state_root(input.state_root)?;
+    validate_live_workflow_bundle_verify_input(&live_workflow_bundle_verify_input_from_apply(input))?;
+    if let Some(from_peer) = input.from_peer {
+        validate_node_id(from_peer)?;
+    }
+    if let Some(operation_ref) = input.expected_operation_ref {
+        validate_ingress_ref(operation_ref, "node control live workflow bundle apply operation id")?;
+    }
+    validate_ingress_refs(input.peer_bootstrap_refs, "node control live workflow bundle apply peer bootstrap ref")?;
+    validate_ingress_refs(input.authority_refs, "node control live workflow bundle apply authority ref")?;
+    validate_ingress_refs(input.policy_refs, "node control live workflow bundle apply policy ref")?;
+    validate_ingress_refs(input.resource_refs, "node control live workflow bundle apply resource ref")?;
+    validate_ingress_refs(input.evidence_refs, "node control live workflow bundle apply evidence ref")?;
+    if input.request_value.is_some() || input.should_send {
+        validate_live_send_timeout(input.join_timeout_ms)?;
+        validate_live_send_attempts(input.max_attempts)?;
+    }
+    Ok(())
+}
+
 fn live_workflow_bundle_expected_input_from_verify<'a>(
     input: &'a NodeControlLiveWorkflowBundleVerifyInput<'a>,
 ) -> LiveWorkflowBundleExpectedInput<'a> {
@@ -1800,6 +2111,41 @@ fn live_workflow_bundle_verify_input_from_gate<'a>(
     input: &'a NodeControlLiveWorkflowBundleGateInput<'a>,
 ) -> NodeControlLiveWorkflowBundleVerifyInput<'a> {
     NodeControlLiveWorkflowBundleVerifyInput {
+        bundle_value: input.bundle_value,
+        expected_node: input.expected_node,
+        expected_topic: input.expected_topic,
+        expected_endpoint: input.expected_endpoint,
+        expected_peer: input.expected_peer,
+        expected_operations: input.expected_operations,
+        expected_target_scope: input.expected_target_scope,
+        expected_resource_scope: input.expected_resource_scope,
+        as_of_sequence: input.as_of_sequence,
+        as_of_epoch: input.as_of_epoch,
+    }
+}
+
+fn live_workflow_bundle_verify_input_from_apply<'a>(
+    input: &'a NodeControlLiveWorkflowBundleApplyInput<'a>,
+) -> NodeControlLiveWorkflowBundleVerifyInput<'a> {
+    NodeControlLiveWorkflowBundleVerifyInput {
+        bundle_value: input.bundle_value,
+        expected_node: input.expected_node,
+        expected_topic: input.expected_topic,
+        expected_endpoint: input.expected_endpoint,
+        expected_peer: input.expected_peer,
+        expected_operations: input.expected_operations,
+        expected_target_scope: input.expected_target_scope,
+        expected_resource_scope: input.expected_resource_scope,
+        as_of_sequence: input.as_of_sequence,
+        as_of_epoch: input.as_of_epoch,
+    }
+}
+
+fn live_workflow_bundle_import_input_from_apply<'a>(
+    input: &'a NodeControlLiveWorkflowBundleApplyInput<'a>,
+) -> NodeControlLiveWorkflowBundleImportInput<'a> {
+    NodeControlLiveWorkflowBundleImportInput {
+        state_root: input.state_root,
         bundle_value: input.bundle_value,
         expected_node: input.expected_node,
         expected_topic: input.expected_topic,
@@ -1963,6 +2309,7 @@ fn is_live_workflow_bundle_receipt_kind(kind: &str) -> bool {
             | "node-control-live-workflow-receipt"
             | "node-control-live-workflow-bundle-verify-receipt"
             | "node-control-live-workflow-bundle-gate-receipt"
+            | "node-control-live-workflow-bundle-apply-receipt"
             | "node-control-live-transport-receipt"
             | "node-control-live-listener-receipt"
             | "node-control-service-run-receipt"
@@ -2262,6 +2609,35 @@ fn live_workflow_bundle_gate_receipt_value(input: &LiveWorkflowBundleGateReceipt
             record("check", vec![string("expected-bindings"), string(gate_status)]),
             record("check", vec![string("gate-receipt-is-not-authority"), string("pass")]),
             record("check", vec![string("bundle-import-still-required"), string("pass")]),
+            record("check", vec![string("provenance-still-required"), string("pass")]),
+        ])]),
+    ]))
+}
+
+fn live_workflow_bundle_apply_receipt_value(input: &LiveWorkflowBundleApplyReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    let apply_status = if input.decision == "pass" { "pass" } else { "fail" };
+    Ok(record("node-control-live-workflow-bundle-apply-receipt-v1", vec![
+        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("state-root", vec![string(input.state_root.display().to_string())]),
+        record("bundle", vec![string(input.bundle_ref)]),
+        record("gate-receipt", vec![optional_string(input.gate_receipt_ref)]),
+        record("recomputed-verify", vec![string(input.recomputed_verify_receipt_ref)]),
+        record("import-receipt", vec![optional_string(input.import_receipt_ref)]),
+        record("imported", vec![sequence(input.imported_refs.iter().map(string).collect())]),
+        record("mode", vec![string(input.mode)]),
+        record("envelope", vec![optional_string(input.envelope_ref)]),
+        record("operation", vec![optional_string(input.operation_ref)]),
+        record("send-receipt", vec![optional_string(input.send_receipt_ref)]),
+        record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("bundle-verification"), string(apply_status)]),
+            record("check", vec![string("gate-receipt-current"), string(apply_status)]),
+            record("check", vec![string("bundle-imported"), string(apply_status)]),
+            record("check", vec![string("send-preflight-or-dispatch"), string(apply_status)]),
+            record("check", vec![string("apply-receipt-is-not-authority"), string("pass")]),
             record("check", vec![string("provenance-still-required"), string("pass")]),
         ])]),
     ]))
@@ -3361,6 +3737,72 @@ pub async fn node_control_live_iroh_loopback(
         receive_receipt_value: received.transport_receipt_value,
         ingress_receipt_ref: received.ingress_receipt_ref,
         has_enqueued: received.has_enqueued,
+    })
+}
+
+pub fn preflight_node_control_live_send(input: &NodeControlLiveSendInput<'_>) -> Result<NodeControlLiveSendPreflight> {
+    if let Some(state_root) = input.state_root {
+        validate_state_root(state_root)?;
+        ensure_state_layout(state_root)?;
+    }
+    validate_node_id(input.from_peer)?;
+    validate_live_send_timeout(input.join_timeout_ms)?;
+    validate_live_send_attempts(input.max_attempts)?;
+    if let Some(operation_ref) = input.expected_operation_ref {
+        validate_ingress_ref(operation_ref, "node control live send operation id")?;
+    }
+    if let Some(node) = input.expected_receiver_node {
+        validate_node_id(node)?;
+    }
+    if let Some(topic) = input.expected_topic {
+        validate_node_id(topic)?;
+    }
+    if let Some(endpoint) = input.expected_endpoint {
+        validate_node_id(endpoint)?;
+    }
+    let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
+    let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+        request_value: input.request_value,
+        from_peer: input.from_peer,
+        to_node: &ticket.node_id,
+        topic: &ticket.topic,
+        sequence: input.sequence,
+        peer_bootstrap_refs: input.peer_bootstrap_refs,
+        authority_refs: input.authority_refs,
+        policy_refs: input.policy_refs,
+        resource_refs: input.resource_refs,
+        evidence_refs: input.evidence_refs,
+    })?;
+    let mut diagnostics = Vec::with_capacity(8);
+    if let Some(operation_ref) = input.expected_operation_ref
+        && operation_ref != envelope.operation_ref
+    {
+        diagnostics.push(format!(
+            "node control live send operation-id {operation_ref} does not match derived {}",
+            envelope.operation_ref
+        ));
+    }
+    diagnostics.extend(live_send_ticket_diagnostics(input, &ticket));
+    if let Some(state_root) = input.state_root {
+        diagnostics.extend(live_send_state_root_evidence_diagnostics(state_root, input, &envelope)?);
+    }
+    if ticket.address_refs.is_empty() {
+        diagnostics.push(
+            "node control live send ticket has no endpoint addresses; import a bound live ticket with live-ticket-import or use serve --live-ticket-out"
+                .to_string(),
+        );
+    } else if let Err(error) = live_ticket_endpoint_addr(&ticket) {
+        diagnostics.push(format!(
+            "node control live send ticket address unsupported or malformed: {error}; import a fresh live ticket with live-ticket-import"
+        ));
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    Ok(NodeControlLiveSendPreflight {
+        decision: decision.to_string(),
+        envelope_ref: envelope.envelope_ref,
+        operation_ref: envelope.operation_ref,
+        receiver_ticket_ref: ticket.ticket_ref,
+        diagnostics,
     })
 }
 
@@ -6018,6 +6460,20 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_optional_string(&fields[3], "verify-receipt")?.unwrap_or_else(|| "none".to_string())
         ));
     }
+    if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15)) {
+        require_schema(
+            &fields[0],
+            NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
+            "node control live workflow bundle apply receipt",
+        )?;
+        return Ok(format!(
+            "node control live workflow bundle apply decision={} bundle={} mode={} send={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[3], "bundle")?,
+            record_string(&fields[8], "mode")?,
+            record_optional_string(&fields[11], "send-receipt")?.unwrap_or_else(|| "none".to_string())
+        ));
+    }
     if let Some(fields) = value.collect_simple_record("node-control-live-send-retry-receipt-v1", Some(14)) {
         require_schema(
             &fields[0],
@@ -7757,6 +8213,137 @@ mod tests {
         .expect("malformed verify gate receipt");
         assert_eq!(malformed_verify_gate.decision, "deny");
         assert!(malformed_verify_gate.diagnostics.iter().any(|value| value.contains("verify receipt parse failed")));
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("apply runtime");
+        let applied = runtime
+            .block_on(apply_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleApplyInput {
+                state_root: &bundle_sender,
+                bundle_value: &exported.bundle.bundle_value,
+                gate_receipt_value: Some(&gated.receipt_value),
+                is_gate_receipt_required: true,
+                request_value: None,
+                should_send: false,
+                from_peer: None,
+                sequence: 1,
+                expected_operation_ref: None,
+                expected_node: Some("node:live-bundle"),
+                expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+                expected_endpoint: Some(&ticket.live_endpoint_id),
+                expected_peer: Some("peer:live-bundle"),
+                expected_operations: &operations,
+                expected_target_scope: Some("*"),
+                expected_resource_scope: Some("*"),
+                as_of_sequence: 2,
+                as_of_epoch: 2,
+                peer_bootstrap_refs: &[],
+                authority_refs: &[],
+                policy_refs: &[],
+                resource_refs: &[],
+                evidence_refs: &[],
+                max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
+                join_timeout_ms: 10_000,
+            }))
+            .expect("apply bundle");
+        assert_eq!(applied.decision, "pass");
+        assert_eq!(ledger::artifact_kind(&applied.receipt_value), "node-control-live-workflow-bundle-apply-receipt");
+        assert!(applied.import_receipt_ref.is_some());
+        assert!(applied.imported_refs.iter().any(|reference| reference == &exported.bundle.bundle_ref));
+        assert!(parse_node_control_authority_grant(&applied.receipt_value).is_err());
+        assert!(
+            to_text(&applied.receipt_value)
+                .expect("apply receipt text")
+                .contains("apply-receipt-is-not-authority")
+        );
+        read_node_ledger_artifact(&bundle_sender, &exported.bundle.bundle_ref).expect("apply imported bundle");
+        let missing_gate_apply_root = temp_dir("node-control-live-workflow-bundle-apply-missing-gate");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &missing_gate_apply_root,
+            node_id: "node:live-bundle-apply-missing-gate",
+        })
+        .expect("init missing gate apply root");
+        let missing_gate_apply = runtime
+            .block_on(apply_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleApplyInput {
+                state_root: &missing_gate_apply_root,
+                bundle_value: &exported.bundle.bundle_value,
+                gate_receipt_value: None,
+                is_gate_receipt_required: true,
+                request_value: None,
+                should_send: false,
+                from_peer: None,
+                sequence: 1,
+                expected_operation_ref: None,
+                expected_node: Some("node:live-bundle"),
+                expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+                expected_endpoint: Some(&ticket.live_endpoint_id),
+                expected_peer: Some("peer:live-bundle"),
+                expected_operations: &operations,
+                expected_target_scope: Some("*"),
+                expected_resource_scope: Some("*"),
+                as_of_sequence: 2,
+                as_of_epoch: 2,
+                peer_bootstrap_refs: &[],
+                authority_refs: &[],
+                policy_refs: &[],
+                resource_refs: &[],
+                evidence_refs: &[],
+                max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
+                join_timeout_ms: 10_000,
+            }))
+            .expect("missing gate apply receipt");
+        assert_eq!(missing_gate_apply.decision, "deny");
+        assert!(missing_gate_apply.imported_refs.is_empty());
+        assert!(missing_gate_apply.diagnostics.iter().any(|value| value.contains("requires a current gate receipt")));
+        assert!(read_node_ledger_artifact(&missing_gate_apply_root, &exported.bundle.bundle_ref).is_err());
+        let apply_send_root = temp_dir("node-control-live-workflow-bundle-apply-send");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &apply_send_root,
+            node_id: "node:live-bundle-apply-send",
+        })
+        .expect("init apply send root");
+        let apply_request_authority_refs = vec![exported.bundle.authority_grant_ref.clone()];
+        let apply_request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "status",
+            target_ref: None,
+            payload_ref: None,
+            authority_refs: &apply_request_authority_refs,
+            policy_refs: &[],
+            resource_refs: &[],
+            evidence_refs: &[],
+        })
+        .expect("apply send request");
+        let apply_send = runtime
+            .block_on(apply_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleApplyInput {
+                state_root: &apply_send_root,
+                bundle_value: &exported.bundle.bundle_value,
+                gate_receipt_value: Some(&gated.receipt_value),
+                is_gate_receipt_required: true,
+                request_value: Some(&apply_request_value),
+                should_send: true,
+                from_peer: None,
+                sequence: 7,
+                expected_operation_ref: None,
+                expected_node: Some("node:live-bundle"),
+                expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+                expected_endpoint: Some(&ticket.live_endpoint_id),
+                expected_peer: Some("peer:live-bundle"),
+                expected_operations: &operations,
+                expected_target_scope: Some("*"),
+                expected_resource_scope: Some("*"),
+                as_of_sequence: 2,
+                as_of_epoch: 2,
+                peer_bootstrap_refs: &[],
+                authority_refs: &[],
+                policy_refs: &[],
+                resource_refs: &[],
+                evidence_refs: &[],
+                max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
+                join_timeout_ms: 10_000,
+            }))
+            .expect("apply send receipt");
+        assert_eq!(apply_send.decision, "deny");
+        assert!(apply_send.import_receipt_ref.is_some());
+        assert!(apply_send.send_receipt_ref.is_some());
+        assert!(apply_send.diagnostics.iter().any(|value| value.contains("no endpoint addresses")));
+        assert!(apply_send.send_receipt_value.is_some());
         let imported = import_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleImportInput {
             state_root: &bundle_sender,
             bundle_value: &exported.bundle.bundle_value,
@@ -7839,6 +8426,45 @@ mod tests {
         .expect("stale verify gate receipt");
         assert_eq!(stale_verify_gate.decision, "deny");
         assert!(stale_verify_gate.diagnostics.iter().any(|value| value.contains("does not match recomputed")));
+        let stale_gate_apply_root = temp_dir("node-control-live-workflow-bundle-apply-stale-gate");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &stale_gate_apply_root,
+            node_id: "node:live-bundle-apply-stale-gate",
+        })
+        .expect("init stale gate apply root");
+        let stale_gate_apply = runtime
+            .block_on(apply_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleApplyInput {
+                state_root: &stale_gate_apply_root,
+                bundle_value: &exported.bundle.bundle_value,
+                gate_receipt_value: Some(&stale_verify_gate.receipt_value),
+                is_gate_receipt_required: true,
+                request_value: None,
+                should_send: false,
+                from_peer: None,
+                sequence: 1,
+                expected_operation_ref: None,
+                expected_node: Some("node:live-bundle"),
+                expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+                expected_endpoint: Some(&ticket.live_endpoint_id),
+                expected_peer: Some("peer:live-bundle"),
+                expected_operations: &operations,
+                expected_target_scope: Some("*"),
+                expected_resource_scope: Some("*"),
+                as_of_sequence: 2,
+                as_of_epoch: 2,
+                peer_bootstrap_refs: &[],
+                authority_refs: &[],
+                policy_refs: &[],
+                resource_refs: &[],
+                evidence_refs: &[],
+                max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
+                join_timeout_ms: 10_000,
+            }))
+            .expect("stale gate apply receipt");
+        assert_eq!(stale_gate_apply.decision, "deny");
+        assert!(stale_gate_apply.imported_refs.is_empty());
+        assert!(stale_gate_apply.diagnostics.iter().any(|value| value.contains("decision deny")));
+        assert!(read_node_ledger_artifact(&stale_gate_apply_root, &exported.bundle.bundle_ref).is_err());
 
         let wrong_peer_root = temp_dir("node-control-live-workflow-bundle-wrong-peer");
         init_local_node(&NodeDaemonInitInput {
@@ -8016,6 +8642,40 @@ mod tests {
         assert!(gate_authority_diagnostics.iter().any(|value| value.contains("is not a grant")));
         assert!(
             gate_authority_diagnostics
+                .iter()
+                .any(|value| value.contains("authority delegation missing admitted grant"))
+        );
+        let apply_authority_refs = vec![applied.receipt_ref.clone()];
+        let apply_authority_request_value =
+            node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &apply_authority_refs,
+                policy_refs: &[],
+                resource_refs: &[],
+                evidence_refs: &[],
+            })
+            .expect("apply authority request");
+        let apply_authority_envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: &apply_authority_request_value,
+            from_peer: "peer:live-bundle",
+            to_node: "node:live-bundle",
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            sequence: 5,
+            peer_bootstrap_refs: &[],
+            authority_refs: &apply_authority_refs,
+            policy_refs: &[],
+            resource_refs: &[],
+            evidence_refs: &[],
+        })
+        .expect("apply authority envelope");
+        let apply_authority_diagnostics =
+            live_send_authority_grant_diagnostics(&bundle_sender, &apply_authority_envelope)
+                .expect("apply authority diagnostics");
+        assert!(apply_authority_diagnostics.iter().any(|value| value.contains("is not a grant")));
+        assert!(
+            apply_authority_diagnostics
                 .iter()
                 .any(|value| value.contains("authority delegation missing admitted grant"))
         );
