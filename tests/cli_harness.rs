@@ -690,6 +690,7 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     let missing_import_send_receipt = dir.join("missing-import-send.preserves");
     let workflow_bundle = dir.join("workflow-bundle.preserves");
     let bundle_export = dir.join("workflow-bundle-export.preserves");
+    let bundle_verify = dir.join("workflow-bundle-verify.preserves");
     let bundle_import = dir.join("workflow-bundle-import.preserves");
     let bundle_import_send_receipt = dir.join("bundle-import-send.preserves");
     let ticket_import = dir.join("ticket-import.preserves");
@@ -843,6 +844,30 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
         molten::ledger::artifact_kind(&read_preserves(&bundle_export)?),
         "node-control-live-workflow-bundle-export-receipt"
     );
+    let bundle_verify_out = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle-verify"])
+        .arg(&workflow_bundle)
+        .args([
+            "--expected-node",
+            "node:cli-live-import",
+            "--expected-topic",
+            "node-control",
+            "--expected-peer",
+            "peer:cli-live-import",
+            "--operation",
+            "status",
+            "--receipt-out",
+        ])
+        .arg(&bundle_verify)
+        .output()?;
+    assert_success(&bundle_verify_out, "live workflow bundle verify");
+    assert!(stdout(&bundle_verify_out).contains("decision=pass"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&bundle_verify)?),
+        "node-control-live-workflow-bundle-verify-receipt"
+    );
+    let bundle_verify_text = to_text(&read_preserves(&bundle_verify)?)?;
+    assert!(bundle_verify_text.contains("verify-receipt-is-not-authority"));
 
     let bundle_import_out = molten_cmd()
         .args(["test", "node", "live-workflow-bundle-import", "--state-root"])

@@ -789,6 +789,29 @@ enum NodeCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    LiveWorkflowBundleVerify {
+        bundle: PathBuf,
+        #[arg(long)]
+        expected_node: Option<String>,
+        #[arg(long)]
+        expected_topic: Option<String>,
+        #[arg(long)]
+        expected_endpoint: Option<String>,
+        #[arg(long)]
+        expected_peer: Option<String>,
+        #[arg(long = "operation")]
+        operations: Vec<String>,
+        #[arg(long)]
+        target_scope: Option<String>,
+        #[arg(long)]
+        resource_scope: Option<String>,
+        #[arg(long, default_value_t = 1)]
+        as_of_sequence: u64,
+        #[arg(long, default_value_t = 1)]
+        as_of_epoch: u64,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     LiveWorkflowBundleImport {
         #[arg(long)]
         state_root: PathBuf,
@@ -5979,6 +6002,50 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 exported.bundle.peer_admission_ref,
                 exported.bundle.authority_grant_ref,
                 exported.diagnostics.len()
+            );
+            Ok(())
+        }
+        NodeCommand::LiveWorkflowBundleVerify {
+            bundle,
+            expected_node,
+            expected_topic,
+            expected_endpoint,
+            expected_peer,
+            operations,
+            target_scope,
+            resource_scope,
+            as_of_sequence,
+            as_of_epoch,
+            receipt_out,
+        } => {
+            let bundle_value = read_preserves_file(&bundle)?;
+            let verified = node_daemon::verify_node_control_live_workflow_bundle(
+                &node_daemon::NodeControlLiveWorkflowBundleVerifyInput {
+                    bundle_value: &bundle_value,
+                    expected_node: expected_node.as_deref(),
+                    expected_topic: expected_topic.as_deref(),
+                    expected_endpoint: expected_endpoint.as_deref(),
+                    expected_peer: expected_peer.as_deref(),
+                    expected_operations: &operations,
+                    expected_target_scope: target_scope.as_deref(),
+                    expected_resource_scope: resource_scope.as_deref(),
+                    as_of_sequence,
+                    as_of_epoch,
+                },
+            )?;
+            emit_named_receipt(
+                receipt_out.as_ref(),
+                "node control live workflow bundle verify receipt",
+                &verified.receipt_value,
+            )?;
+            println!(
+                "node live workflow bundle verify decision={} bundle={} ticket={} admission={} grant={} diagnostics={}",
+                verified.decision,
+                verified.bundle_ref,
+                verified.ticket_ref.as_deref().unwrap_or("none"),
+                verified.peer_admission_ref.as_deref().unwrap_or("none"),
+                verified.authority_grant_ref.as_deref().unwrap_or("none"),
+                verified.diagnostics.len()
             );
             Ok(())
         }

@@ -29,6 +29,7 @@
 | 2026-06-05 | self | Ran `cargo octet check --lib` and hit `unsupported argument before --`. | Pass cargo/test-target flags after the Octet separator, e.g. `cargo octet check --artifact-dir target/octet-lib -- --lib`. |
 
 | 2026-06-05 | self | Ran Nix nextest through a 300s Steel wrapper; the Nix build completed and printed a store path, but Steel timed out before printing the wrapper exit line. | For Nix nextest, prefer a background/poll wrapper or verify timeout cases with `pgrep` plus `nix path-info` on the printed store path before claiming pass. |
+| 2026-06-06 | self | After this compacted handoff I again ran validation before re-reading `.agent/napkin.md`, despite the summary calling it out. | Make `.agent/napkin.md` the literal first tool call after every handoff/resume, before fmt/check/status or any other command. |
 
 ## User Preferences
 - Prefer explicit Nickel and Steel contract boundaries where applicable: Nickel for static declarative policy/config/schema gates, Steel only for reviewed dynamic predicates/trusted callables, both enforced through Basalt before side effects.

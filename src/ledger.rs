@@ -323,6 +323,10 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
         "node-control-live-workflow-bundle-import-receipt-v1",
         "node-control-live-workflow-bundle-import-receipt",
     ),
+    (
+        "node-control-live-workflow-bundle-verify-receipt-v1",
+        "node-control-live-workflow-bundle-verify-receipt",
+    ),
     ("node-control-live-listener-receipt-v1", "node-control-live-listener-receipt"),
     ("node-control-authority-grant-v1", "node-control-authority-grant"),
     ("node-control-authority-receipt-v1", "node-control-authority-receipt"),
