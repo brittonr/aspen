@@ -124,6 +124,11 @@ pub const NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA: &str =
     "molten.node.control-live-workflow-bundle-apply-receipt.v1";
 pub const NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA: &str =
     "molten.node.control-live-workflow-bundle-reconcile-receipt.v1";
+pub const NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA: &str = "molten.node.control-live-workflow-bundle-ack.v1";
+pub const NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_EXPORT_RECEIPT_SCHEMA: &str =
+    "molten.node.control-live-workflow-bundle-ack-export-receipt.v1";
+pub const NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_IMPORT_RECEIPT_SCHEMA: &str =
+    "molten.node.control-live-workflow-bundle-ack-import-receipt.v1";
 pub const NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA: &str = "molten.node.control-live-listener-receipt.v1";
 pub const NODE_CONTROL_AUTHORITY_GRANT_SCHEMA: &str = "molten.node.control-authority-grant.v1";
 pub const NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA: &str = "molten.node.control-authority-receipt.v1";

@@ -913,6 +913,38 @@ enum NodeCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    LiveWorkflowBundleAckExport {
+        apply_receipt: PathBuf,
+        #[arg(long)]
+        send_receipt: Option<PathBuf>,
+        #[arg(long)]
+        ingress_receipt: Option<PathBuf>,
+        #[arg(long)]
+        queue_receipt: Option<PathBuf>,
+        #[arg(long)]
+        control_receipt: Option<PathBuf>,
+        #[arg(long)]
+        reconcile_receipt: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    LiveWorkflowBundleAckImport {
+        #[arg(long)]
+        state_root: PathBuf,
+        ack: PathBuf,
+        #[arg(long)]
+        expected_bundle: Option<String>,
+        #[arg(long)]
+        expected_envelope: Option<String>,
+        #[arg(long)]
+        expected_operation: Option<String>,
+        #[arg(long)]
+        expected_request: Option<String>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     LiveWorkflowBundleImport {
         #[arg(long)]
         state_root: PathBuf,
@@ -6329,6 +6361,86 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             print_live_workflow_bundle_reconcile_next_step(&reconciled);
             Ok(())
         }
+        NodeCommand::LiveWorkflowBundleAckExport {
+            apply_receipt,
+            send_receipt,
+            ingress_receipt,
+            queue_receipt,
+            control_receipt,
+            reconcile_receipt,
+            out,
+            receipt_out,
+        } => {
+            let apply_receipt_value = read_preserves_file(&apply_receipt)?;
+            let send_receipt_value = send_receipt.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let ingress_receipt_value = ingress_receipt.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let queue_receipt_value = queue_receipt.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let control_receipt_value = control_receipt.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let reconcile_receipt_value = read_preserves_file(&reconcile_receipt)?;
+            let exported = node_daemon::export_node_control_live_workflow_bundle_ack(
+                &node_daemon::NodeControlLiveWorkflowBundleAckExportInput {
+                    apply_receipt_value: &apply_receipt_value,
+                    send_receipt_value: send_receipt_value.as_ref(),
+                    ingress_receipt_value: ingress_receipt_value.as_ref(),
+                    queue_receipt_value: queue_receipt_value.as_ref(),
+                    control_receipt_value: control_receipt_value.as_ref(),
+                    reconcile_receipt_value: &reconcile_receipt_value,
+                },
+            )?;
+            write_file(&out, &to_text(&exported.ack.ack_value)?)?;
+            emit_named_receipt(
+                receipt_out.as_ref(),
+                "node control live workflow bundle ack export receipt",
+                &exported.receipt_value,
+            )?;
+            println!(
+                "node live workflow bundle ack export decision={} ack={} bundle={} receiver_decision={} diagnostics={}",
+                exported.decision,
+                exported.ack.ack_ref,
+                exported.ack.bundle_ref,
+                exported.receiver_decision,
+                exported.diagnostics.len()
+            );
+            print_live_workflow_bundle_ack_export_next_step(&exported);
+            Ok(())
+        }
+        NodeCommand::LiveWorkflowBundleAckImport {
+            state_root,
+            ack,
+            expected_bundle,
+            expected_envelope,
+            expected_operation,
+            expected_request,
+            receipt_out,
+        } => {
+            let ack_value = read_preserves_file(&ack)?;
+            let imported = node_daemon::import_node_control_live_workflow_bundle_ack(
+                &node_daemon::NodeControlLiveWorkflowBundleAckImportInput {
+                    state_root: &state_root,
+                    ack_value: &ack_value,
+                    expected_bundle_ref: expected_bundle.as_deref(),
+                    expected_envelope_ref: expected_envelope.as_deref(),
+                    expected_operation_ref: expected_operation.as_deref(),
+                    expected_request_ref: expected_request.as_deref(),
+                },
+            )?;
+            emit_named_receipt(
+                receipt_out.as_ref(),
+                "node control live workflow bundle ack import receipt",
+                &imported.receipt_value,
+            )?;
+            println!(
+                "node live workflow bundle ack import decision={} ack={} bundle={} imported={} receiver_decision={} diagnostics={}",
+                imported.decision,
+                imported.ack_ref,
+                imported.bundle_ref,
+                imported.imported_refs.len(),
+                imported.receiver_decision,
+                imported.diagnostics.len()
+            );
+            print_live_workflow_bundle_ack_import_next_step(&imported);
+            Ok(())
+        }
         NodeCommand::LiveWorkflowBundleImport {
             state_root,
             bundle,
@@ -6471,6 +6583,30 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             println!("node health receipt={}", canonical_hash(&receipt)?);
             Ok(())
         }
+    }
+}
+
+fn print_live_workflow_bundle_ack_export_next_step(exported: &node_daemon::NodeControlLiveWorkflowBundleAckExport) {
+    if exported.decision != "pass" {
+        println!(
+            "next-step=collect-receiver-evidence command=\"molten node live-workflow-bundle-reconcile ... --ingress-receipt <receipt> --queue-receipt <receipt>\""
+        );
+        return;
+    }
+    println!(
+        "next-step=import-ack command=\"molten node live-workflow-bundle-ack-import --state-root <sender> <ack>\""
+    );
+}
+
+fn print_live_workflow_bundle_ack_import_next_step(imported: &node_daemon::NodeControlLiveWorkflowBundleAckImport) {
+    if imported.decision != "pass" {
+        println!("next-step=inspect-ack-diagnostics command=\"molten node show <ack-import-receipt>\"");
+        return;
+    }
+    if imported.receiver_decision == "pass" {
+        println!("next-step=inspect-receiver-control command=\"molten node show <control-receipt>\"");
+    } else {
+        println!("next-step=inspect-receiver-denial command=\"molten node show <reconcile-receipt>\"");
     }
 }
 

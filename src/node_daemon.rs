@@ -30,6 +30,9 @@ use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_EXPORT_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_IMPORT_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA;
@@ -408,6 +411,26 @@ pub struct NodeControlLiveWorkflowBundleReconcileInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveWorkflowBundleAckExportInput<'a> {
+    pub apply_receipt_value: &'a IOValue,
+    pub send_receipt_value: Option<&'a IOValue>,
+    pub ingress_receipt_value: Option<&'a IOValue>,
+    pub queue_receipt_value: Option<&'a IOValue>,
+    pub control_receipt_value: Option<&'a IOValue>,
+    pub reconcile_receipt_value: &'a IOValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveWorkflowBundleAckImportInput<'a> {
+    pub state_root: &'a Path,
+    pub ack_value: &'a IOValue,
+    pub expected_bundle_ref: Option<&'a str>,
+    pub expected_envelope_ref: Option<&'a str>,
+    pub expected_operation_ref: Option<&'a str>,
+    pub expected_request_ref: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleImportInput<'a> {
     pub state_root: &'a Path,
     pub bundle_value: &'a IOValue,
@@ -664,6 +687,45 @@ struct LiveWorkflowBundleReconcileReceiptValueInput<'a> {
     envelope_ref: Option<&'a str>,
     operation_ref: Option<&'a str>,
     request_ref: Option<&'a str>,
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveWorkflowBundleAckValueInput<'a> {
+    apply_receipt_value: &'a IOValue,
+    send_receipt_value: Option<&'a IOValue>,
+    ingress_receipt_value: Option<&'a IOValue>,
+    queue_receipt_value: Option<&'a IOValue>,
+    control_receipt_value: Option<&'a IOValue>,
+    reconcile_receipt_value: &'a IOValue,
+    apply_receipt_ref: &'a str,
+    send_receipt_ref: Option<&'a str>,
+    ingress_receipt_ref: Option<&'a str>,
+    queue_receipt_ref: Option<&'a str>,
+    control_receipt_ref: Option<&'a str>,
+    reconcile_receipt_ref: &'a str,
+    bundle_ref: &'a str,
+    envelope_ref: Option<&'a str>,
+    operation_ref: Option<&'a str>,
+    request_ref: Option<&'a str>,
+    receiver_decision: &'a str,
+    receiver_diagnostics: &'a [String],
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveWorkflowBundleAckExportReceiptValueInput<'a> {
+    decision: &'a str,
+    ack: &'a NodeControlLiveWorkflowBundleAck,
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveWorkflowBundleAckImportReceiptValueInput<'a> {
+    decision: &'a str,
+    state_root: &'a Path,
+    ack: &'a NodeControlLiveWorkflowBundleAck,
+    imported_refs: &'a [String],
     diagnostics: &'a [String],
 }
 
@@ -1157,6 +1219,69 @@ pub struct NodeControlLiveWorkflowBundleReconcile {
     pub envelope_ref: Option<String>,
     pub operation_ref: Option<String>,
     pub request_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+    pub receipt_ref: String,
+    pub receipt_value: IOValue,
+    pub decision: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveWorkflowBundleReconcileReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub apply_receipt_ref: String,
+    pub bundle_ref: String,
+    pub send_receipt_ref: Option<String>,
+    pub ingress_receipt_ref: Option<String>,
+    pub queue_receipt_ref: Option<String>,
+    pub control_receipt_ref: Option<String>,
+    pub envelope_ref: Option<String>,
+    pub operation_ref: Option<String>,
+    pub request_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveWorkflowBundleAck {
+    pub ack_ref: String,
+    pub ack_value: IOValue,
+    pub apply_receipt_ref: String,
+    pub send_receipt_ref: Option<String>,
+    pub ingress_receipt_ref: Option<String>,
+    pub queue_receipt_ref: Option<String>,
+    pub control_receipt_ref: Option<String>,
+    pub reconcile_receipt_ref: String,
+    pub bundle_ref: String,
+    pub envelope_ref: Option<String>,
+    pub operation_ref: Option<String>,
+    pub request_ref: Option<String>,
+    pub receiver_decision: String,
+    pub receiver_diagnostics: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub apply_receipt_value: IOValue,
+    pub send_receipt_value: Option<IOValue>,
+    pub ingress_receipt_value: Option<IOValue>,
+    pub queue_receipt_value: Option<IOValue>,
+    pub control_receipt_value: Option<IOValue>,
+    pub reconcile_receipt_value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveWorkflowBundleAckExport {
+    pub ack: NodeControlLiveWorkflowBundleAck,
+    pub receipt_ref: String,
+    pub receipt_value: IOValue,
+    pub decision: String,
+    pub receiver_decision: String,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveWorkflowBundleAckImport {
+    pub ack_ref: String,
+    pub bundle_ref: String,
+    pub imported_refs: Vec<String>,
+    pub receiver_decision: String,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
     pub receipt_value: IOValue,
@@ -1981,6 +2106,95 @@ pub fn reconcile_node_control_live_workflow_bundle(
     })
 }
 
+pub fn export_node_control_live_workflow_bundle_ack(
+    input: &NodeControlLiveWorkflowBundleAckExportInput<'_>,
+) -> Result<NodeControlLiveWorkflowBundleAckExport> {
+    let reconciled = reconcile_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleReconcileInput {
+        apply_receipt_value: input.apply_receipt_value,
+        send_receipt_value: input.send_receipt_value,
+        ingress_receipt_value: input.ingress_receipt_value,
+        queue_receipt_value: input.queue_receipt_value,
+        control_receipt_value: input.control_receipt_value,
+        expected_envelope_ref: None,
+        expected_operation_ref: None,
+        expected_request_ref: None,
+    })?;
+    let reconcile = parse_node_control_live_workflow_bundle_reconcile_receipt(input.reconcile_receipt_value)?;
+    let mut diagnostics = live_workflow_bundle_ack_export_diagnostics(input, &reconciled, &reconcile)?;
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let ack_value = live_workflow_bundle_ack_value(&LiveWorkflowBundleAckValueInput {
+        apply_receipt_value: input.apply_receipt_value,
+        send_receipt_value: input.send_receipt_value,
+        ingress_receipt_value: input.ingress_receipt_value,
+        queue_receipt_value: input.queue_receipt_value,
+        control_receipt_value: input.control_receipt_value,
+        reconcile_receipt_value: input.reconcile_receipt_value,
+        apply_receipt_ref: &reconcile.apply_receipt_ref,
+        send_receipt_ref: reconcile.send_receipt_ref.as_deref(),
+        ingress_receipt_ref: reconcile.ingress_receipt_ref.as_deref(),
+        queue_receipt_ref: reconcile.queue_receipt_ref.as_deref(),
+        control_receipt_ref: reconcile.control_receipt_ref.as_deref(),
+        reconcile_receipt_ref: &reconcile.receipt_ref,
+        bundle_ref: &reconcile.bundle_ref,
+        envelope_ref: reconcile.envelope_ref.as_deref(),
+        operation_ref: reconcile.operation_ref.as_deref(),
+        request_ref: reconcile.request_ref.as_deref(),
+        receiver_decision: &reconcile.decision,
+        receiver_diagnostics: &reconcile.diagnostics,
+        diagnostics: &diagnostics,
+    })?;
+    let ack = parse_node_control_live_workflow_bundle_ack(&ack_value)?;
+    let receipt_value = live_workflow_bundle_ack_export_receipt_value(&LiveWorkflowBundleAckExportReceiptValueInput {
+        decision,
+        ack: &ack,
+        diagnostics: &diagnostics,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    diagnostics.shrink_to_fit();
+    Ok(NodeControlLiveWorkflowBundleAckExport {
+        receiver_decision: ack.receiver_decision.clone(),
+        ack,
+        receipt_ref,
+        receipt_value,
+        decision: decision.to_string(),
+        diagnostics,
+    })
+}
+
+pub fn import_node_control_live_workflow_bundle_ack(
+    input: &NodeControlLiveWorkflowBundleAckImportInput<'_>,
+) -> Result<NodeControlLiveWorkflowBundleAckImport> {
+    validate_live_workflow_bundle_ack_import_input(input)?;
+    ensure_state_layout(input.state_root)?;
+    let ack = parse_node_control_live_workflow_bundle_ack(input.ack_value)?;
+    let mut diagnostics = live_workflow_bundle_ack_import_diagnostics(input, &ack)?;
+    let mut imported_refs = Vec::with_capacity(8);
+    if diagnostics.is_empty() {
+        imported_refs.extend(import_live_workflow_bundle_ack_members(input.state_root, &ack)?);
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let receipt_value = live_workflow_bundle_ack_import_receipt_value(&LiveWorkflowBundleAckImportReceiptValueInput {
+        decision,
+        state_root: input.state_root,
+        ack: &ack,
+        imported_refs: &imported_refs,
+        diagnostics: &diagnostics,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    import_node_artifact(input.state_root, &receipt_value)?;
+    diagnostics.shrink_to_fit();
+    Ok(NodeControlLiveWorkflowBundleAckImport {
+        ack_ref: ack.ack_ref.clone(),
+        bundle_ref: ack.bundle_ref.clone(),
+        imported_refs,
+        receiver_decision: ack.receiver_decision.clone(),
+        diagnostics,
+        receipt_ref,
+        receipt_value,
+        decision: decision.to_string(),
+    })
+}
+
 fn validate_live_workflow_bundle_reconcile_input(
     input: &NodeControlLiveWorkflowBundleReconcileInput<'_>,
 ) -> Result<()> {
@@ -2222,6 +2436,153 @@ fn live_workflow_bundle_reconcile_bindings<'a>(
     }
 }
 
+fn live_workflow_bundle_ack_export_diagnostics(
+    input: &NodeControlLiveWorkflowBundleAckExportInput<'_>,
+    reconciled: &NodeControlLiveWorkflowBundleReconcile,
+    reconcile: &NodeControlLiveWorkflowBundleReconcileReceipt,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::with_capacity(8);
+    if reconcile.receipt_ref != reconciled.receipt_ref {
+        diagnostics.push(format!(
+            "node control live workflow bundle ack reconcile receipt {} does not match recomputed {}",
+            reconcile.receipt_ref, reconciled.receipt_ref
+        ));
+    }
+    if input.ingress_receipt_value.is_none() {
+        diagnostics.push("node control live workflow bundle ack requires receiver ingress receipt".to_string());
+    }
+    let ingress = input.ingress_receipt_value.map(parse_node_control_ingress_receipt).transpose()?;
+    if let Some(ingress) = ingress.as_ref() {
+        if ingress.decision == "pass" && input.queue_receipt_value.is_none() {
+            diagnostics.push(format!(
+                "node control live workflow bundle ack requires queue receipt {} from receiver ingress",
+                ingress.queue_receipt_ref.as_deref().unwrap_or("none")
+            ));
+        }
+        if let Some(queue_receipt_ref) = ingress.queue_receipt_ref.as_ref()
+            && input.queue_receipt_value.is_none()
+        {
+            diagnostics.push(format!(
+                "node control live workflow bundle ack missing durable queue receipt {queue_receipt_ref}"
+            ));
+        }
+    }
+    Ok(diagnostics)
+}
+
+fn validate_live_workflow_bundle_ack_import_input(
+    input: &NodeControlLiveWorkflowBundleAckImportInput<'_>,
+) -> Result<()> {
+    validate_state_root(input.state_root)?;
+    if let Some(reference) = input.expected_bundle_ref {
+        validate_ingress_ref(reference, "node control live workflow bundle ack import expected bundle ref")?;
+    }
+    if let Some(reference) = input.expected_envelope_ref {
+        validate_ingress_ref(reference, "node control live workflow bundle ack import expected envelope ref")?;
+    }
+    if let Some(reference) = input.expected_operation_ref {
+        validate_ingress_ref(reference, "node control live workflow bundle ack import expected operation ref")?;
+    }
+    if let Some(reference) = input.expected_request_ref {
+        validate_ingress_ref(reference, "node control live workflow bundle ack import expected request ref")?;
+    }
+    Ok(())
+}
+
+fn live_workflow_bundle_ack_import_diagnostics(
+    input: &NodeControlLiveWorkflowBundleAckImportInput<'_>,
+    ack: &NodeControlLiveWorkflowBundleAck,
+) -> Result<Vec<String>> {
+    let recomputed = reconcile_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleReconcileInput {
+        apply_receipt_value: &ack.apply_receipt_value,
+        send_receipt_value: ack.send_receipt_value.as_ref(),
+        ingress_receipt_value: ack.ingress_receipt_value.as_ref(),
+        queue_receipt_value: ack.queue_receipt_value.as_ref(),
+        control_receipt_value: ack.control_receipt_value.as_ref(),
+        expected_envelope_ref: None,
+        expected_operation_ref: None,
+        expected_request_ref: None,
+    })?;
+    let mut diagnostics = ack.diagnostics.clone();
+    if ack.reconcile_receipt_ref != recomputed.receipt_ref {
+        diagnostics.push(format!(
+            "node control live workflow bundle ack import reconcile receipt {} does not match recomputed {}",
+            ack.reconcile_receipt_ref, recomputed.receipt_ref
+        ));
+    }
+    if ack.ingress_receipt_value.is_none() {
+        diagnostics.push("node control live workflow bundle ack import requires receiver ingress receipt".to_string());
+    }
+    if let Some(ingress_value) = ack.ingress_receipt_value.as_ref() {
+        let ingress = parse_node_control_ingress_receipt(ingress_value)?;
+        if ingress.decision == "pass" && ack.queue_receipt_value.is_none() {
+            diagnostics.push(format!(
+                "node control live workflow bundle ack import requires queue receipt {} from receiver ingress",
+                ingress.queue_receipt_ref.as_deref().unwrap_or("none")
+            ));
+        }
+    }
+    if let Some(expected) = input.expected_bundle_ref
+        && ack.bundle_ref != expected
+    {
+        diagnostics.push(format!(
+            "node control live workflow bundle ack import bundle {} does not match expected {}",
+            ack.bundle_ref, expected
+        ));
+    }
+    if let Some(expected) = input.expected_envelope_ref
+        && ack.envelope_ref.as_deref() != Some(expected)
+    {
+        diagnostics.push(format!(
+            "node control live workflow bundle ack import envelope {} does not match expected {}",
+            ack.envelope_ref.as_deref().unwrap_or("none"),
+            expected
+        ));
+    }
+    if let Some(expected) = input.expected_operation_ref
+        && ack.operation_ref.as_deref() != Some(expected)
+    {
+        diagnostics.push(format!(
+            "node control live workflow bundle ack import operation {} does not match expected {}",
+            ack.operation_ref.as_deref().unwrap_or("none"),
+            expected
+        ));
+    }
+    if let Some(expected) = input.expected_request_ref
+        && ack.request_ref.as_deref() != Some(expected)
+    {
+        diagnostics.push(format!(
+            "node control live workflow bundle ack import request {} does not match expected {}",
+            ack.request_ref.as_deref().unwrap_or("none"),
+            expected
+        ));
+    }
+    Ok(diagnostics)
+}
+
+fn import_live_workflow_bundle_ack_members(
+    state_root: &Path,
+    ack: &NodeControlLiveWorkflowBundleAck,
+) -> Result<Vec<String>> {
+    let mut imported_refs = Vec::with_capacity(8);
+    imported_refs.push(import_node_artifact(state_root, &ack.apply_receipt_value)?);
+    if let Some(value) = ack.send_receipt_value.as_ref() {
+        imported_refs.push(import_node_artifact(state_root, value)?);
+    }
+    if let Some(value) = ack.ingress_receipt_value.as_ref() {
+        imported_refs.push(import_node_artifact(state_root, value)?);
+    }
+    if let Some(value) = ack.queue_receipt_value.as_ref() {
+        imported_refs.push(import_node_artifact(state_root, value)?);
+    }
+    if let Some(value) = ack.control_receipt_value.as_ref() {
+        imported_refs.push(import_node_artifact(state_root, value)?);
+    }
+    imported_refs.push(import_node_artifact(state_root, &ack.reconcile_receipt_value)?);
+    imported_refs.push(import_node_artifact(state_root, &ack.ack_value)?);
+    Ok(imported_refs)
+}
+
 pub fn parse_node_control_live_workflow_bundle_apply_receipt(
     value: &IOValue,
 ) -> Result<NodeControlLiveWorkflowBundleApplyReceipt> {
@@ -2257,6 +2618,45 @@ pub fn parse_node_control_live_workflow_bundle_apply_receipt(
         operation_ref,
         send_receipt_ref,
         diagnostics: record_strings(&fields[13], "diagnostics")?,
+    })
+}
+
+pub fn parse_node_control_live_workflow_bundle_reconcile_receipt(
+    value: &IOValue,
+) -> Result<NodeControlLiveWorkflowBundleReconcileReceipt> {
+    let fields = value
+        .collect_simple_record("node-control-live-workflow-bundle-reconcile-receipt-v1", Some(13))
+        .ok_or_else(|| {
+            MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-reconcile-receipt-v1 ...>")
+        })?;
+    require_schema(
+        &fields[0],
+        NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
+        "node control live workflow bundle reconcile receipt",
+    )?;
+    let send_receipt_ref = record_optional_ref_string(&fields[4], "send-receipt")?;
+    let ingress_receipt_ref = record_optional_ref_string(&fields[5], "ingress-receipt")?;
+    let queue_receipt_ref = record_optional_ref_string(&fields[6], "queue-receipt")?;
+    let control_receipt_ref = record_optional_ref_string(&fields[7], "control-receipt")?;
+    let envelope_ref = record_optional_ref_string(&fields[8], "envelope")?;
+    let operation_ref = record_optional_ref_string(&fields[9], "operation")?;
+    let request_ref = record_optional_ref_string(&fields[10], "request")?;
+    let _checks = record_sequence_len(&fields[12], "checks")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    Ok(NodeControlLiveWorkflowBundleReconcileReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        apply_receipt_ref: record_ref_string(&fields[2], "apply-receipt")?,
+        bundle_ref: record_ref_string(&fields[3], "bundle")?,
+        send_receipt_ref,
+        ingress_receipt_ref,
+        queue_receipt_ref,
+        control_receipt_ref,
+        envelope_ref,
+        operation_ref,
+        request_ref,
+        diagnostics: record_strings(&fields[11], "diagnostics")?,
     })
 }
 
@@ -2433,6 +2833,121 @@ pub fn parse_node_control_live_workflow_bundle(value: &IOValue) -> Result<NodeCo
         peer_admission_value,
         authority_grant_value,
         receipt_values,
+    })
+}
+
+pub fn parse_node_control_live_workflow_bundle_ack(value: &IOValue) -> Result<NodeControlLiveWorkflowBundleAck> {
+    let fields = value
+        .collect_simple_record("node-control-live-workflow-bundle-ack-v1", Some(22))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-ack-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA, "node control live workflow bundle ack")?;
+    let apply_receipt_value = record_value(&fields[1], "apply-receipt")?;
+    let send_receipt_value = record_optional_value(&fields[2], "send-receipt")?;
+    let ingress_receipt_value = record_optional_value(&fields[3], "ingress-receipt")?;
+    let queue_receipt_value = record_optional_value(&fields[4], "queue-receipt")?;
+    let control_receipt_value = record_optional_value(&fields[5], "control-receipt")?;
+    let reconcile_receipt_value = record_value(&fields[6], "reconcile-receipt")?;
+    let apply_receipt_ref = record_ref_string(&fields[7], "apply-ref")?;
+    let send_receipt_ref = record_optional_ref_string(&fields[8], "send-ref")?;
+    let ingress_receipt_ref = record_optional_ref_string(&fields[9], "ingress-ref")?;
+    let queue_receipt_ref = record_optional_ref_string(&fields[10], "queue-ref")?;
+    let control_receipt_ref = record_optional_ref_string(&fields[11], "control-ref")?;
+    let reconcile_receipt_ref = record_ref_string(&fields[12], "reconcile-ref")?;
+    let bundle_ref = record_ref_string(&fields[13], "bundle")?;
+    let envelope_ref = record_optional_ref_string(&fields[14], "envelope")?;
+    let operation_ref = record_optional_ref_string(&fields[15], "operation")?;
+    let request_ref = record_optional_ref_string(&fields[16], "request")?;
+    let receiver_decision = record_string(&fields[17], "receiver-decision")?;
+    validate_decision(&receiver_decision)?;
+    let receiver_diagnostics = record_strings(&fields[18], "receiver-diagnostics")?;
+    let diagnostics = record_strings(&fields[19], "diagnostics")?;
+    let _checks = record_sequence_len(&fields[20], "checks")?;
+    let _member_refs = record_sequence_len(&fields[21], "member-refs")?;
+    let apply = parse_node_control_live_workflow_bundle_apply_receipt(&apply_receipt_value)?;
+    let reconcile = parse_node_control_live_workflow_bundle_reconcile_receipt(&reconcile_receipt_value)?;
+    if let Some(value) = send_receipt_value.as_ref() {
+        parse_node_control_live_send_receipt(value)?;
+    }
+    if let Some(value) = ingress_receipt_value.as_ref() {
+        parse_node_control_ingress_receipt(value)?;
+    }
+    if let Some(value) = queue_receipt_value.as_ref() {
+        parse_node_control_queue_receipt(value)?;
+    }
+    if let Some(value) = control_receipt_value.as_ref() {
+        node_runtime::parse_node_control_receipt(value)?;
+    }
+    validate_member_ref(&apply.receipt_ref, &apply_receipt_ref, "ack apply receipt")?;
+    validate_member_ref(&reconcile.receipt_ref, &reconcile_receipt_ref, "ack reconcile receipt")?;
+    validate_optional_member_ref(send_receipt_value.as_ref(), send_receipt_ref.as_deref(), "ack send receipt")?;
+    validate_optional_member_ref(
+        ingress_receipt_value.as_ref(),
+        ingress_receipt_ref.as_deref(),
+        "ack ingress receipt",
+    )?;
+    validate_optional_member_ref(queue_receipt_value.as_ref(), queue_receipt_ref.as_deref(), "ack queue receipt")?;
+    validate_optional_member_ref(
+        control_receipt_value.as_ref(),
+        control_receipt_ref.as_deref(),
+        "ack control receipt",
+    )?;
+    if reconcile.apply_receipt_ref != apply_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack apply ref mismatch"));
+    }
+    if reconcile.bundle_ref != bundle_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack bundle ref mismatch"));
+    }
+    if reconcile.send_receipt_ref != send_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack send ref mismatch"));
+    }
+    if reconcile.ingress_receipt_ref != ingress_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack ingress ref mismatch"));
+    }
+    if reconcile.queue_receipt_ref != queue_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack queue ref mismatch"));
+    }
+    if reconcile.control_receipt_ref != control_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack control ref mismatch"));
+    }
+    if reconcile.envelope_ref != envelope_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack envelope ref mismatch"));
+    }
+    if reconcile.operation_ref != operation_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack operation ref mismatch"));
+    }
+    if reconcile.request_ref != request_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack request ref mismatch"));
+    }
+    if reconcile.decision != receiver_decision {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack receiver decision mismatch"));
+    }
+    if reconcile.diagnostics != receiver_diagnostics {
+        return Err(MoltenError::invalid_harness(
+            "node control live workflow bundle ack receiver diagnostics mismatch",
+        ));
+    }
+    Ok(NodeControlLiveWorkflowBundleAck {
+        ack_ref: canonical_hash(value)?,
+        ack_value: value.clone(),
+        apply_receipt_ref,
+        send_receipt_ref,
+        ingress_receipt_ref,
+        queue_receipt_ref,
+        control_receipt_ref,
+        reconcile_receipt_ref,
+        bundle_ref,
+        envelope_ref,
+        operation_ref,
+        request_ref,
+        receiver_decision,
+        receiver_diagnostics,
+        diagnostics,
+        apply_receipt_value,
+        send_receipt_value,
+        ingress_receipt_value,
+        queue_receipt_value,
+        control_receipt_value,
+        reconcile_receipt_value,
     })
 }
 
@@ -3156,6 +3671,109 @@ fn live_workflow_bundle_reconcile_receipt_value(
             record("check", vec![string("durable-enqueue-or-deny"), string(reconcile_status)]),
             record("check", vec![string("control-dispatch-bound"), string(reconcile_status)]),
             record("check", vec![string("reconcile-receipt-is-not-authority"), string("pass")]),
+            record("check", vec![string("provenance-still-required"), string("pass")]),
+        ])]),
+    ]))
+}
+
+fn live_workflow_bundle_ack_value(input: &LiveWorkflowBundleAckValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.receiver_decision)?;
+    Ok(record("node-control-live-workflow-bundle-ack-v1", vec![
+        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA),
+        record("apply-receipt", vec![input.apply_receipt_value.clone()]),
+        record("send-receipt", vec![optional_value(input.send_receipt_value)]),
+        record("ingress-receipt", vec![optional_value(input.ingress_receipt_value)]),
+        record("queue-receipt", vec![optional_value(input.queue_receipt_value)]),
+        record("control-receipt", vec![optional_value(input.control_receipt_value)]),
+        record("reconcile-receipt", vec![input.reconcile_receipt_value.clone()]),
+        record("apply-ref", vec![string(input.apply_receipt_ref)]),
+        record("send-ref", vec![optional_string(input.send_receipt_ref)]),
+        record("ingress-ref", vec![optional_string(input.ingress_receipt_ref)]),
+        record("queue-ref", vec![optional_string(input.queue_receipt_ref)]),
+        record("control-ref", vec![optional_string(input.control_receipt_ref)]),
+        record("reconcile-ref", vec![string(input.reconcile_receipt_ref)]),
+        record("bundle", vec![string(input.bundle_ref)]),
+        record("envelope", vec![optional_string(input.envelope_ref)]),
+        record("operation", vec![optional_string(input.operation_ref)]),
+        record("request", vec![optional_string(input.request_ref)]),
+        record("receiver-decision", vec![string(input.receiver_decision)]),
+        record("receiver-diagnostics", vec![sequence(input.receiver_diagnostics.iter().map(string).collect())]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("ack-member-refs-bound"), string("pass")]),
+            record("check", vec![string("receiver-outcome-recorded"), string("pass")]),
+            record("check", vec![string("ack-bundle-is-not-authority"), string("pass")]),
+            record("check", vec![string("provenance-still-required"), string("pass")]),
+        ])]),
+        record("member-refs", vec![sequence(
+            [
+                Some(input.apply_receipt_ref),
+                input.send_receipt_ref,
+                input.ingress_receipt_ref,
+                input.queue_receipt_ref,
+                input.control_receipt_ref,
+                Some(input.reconcile_receipt_ref),
+            ]
+            .into_iter()
+            .flatten()
+            .map(string)
+            .collect(),
+        )]),
+    ]))
+}
+
+fn live_workflow_bundle_ack_export_receipt_value(
+    input: &LiveWorkflowBundleAckExportReceiptValueInput<'_>,
+) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    let ack_status = if input.decision == "pass" { "pass" } else { "fail" };
+    Ok(record("node-control-live-workflow-bundle-ack-export-receipt-v1", vec![
+        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_EXPORT_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("ack", vec![string(&input.ack.ack_ref)]),
+        record("bundle", vec![string(&input.ack.bundle_ref)]),
+        record("apply-receipt", vec![string(&input.ack.apply_receipt_ref)]),
+        record("send-receipt", vec![optional_string(input.ack.send_receipt_ref.as_deref())]),
+        record("ingress-receipt", vec![optional_string(input.ack.ingress_receipt_ref.as_deref())]),
+        record("queue-receipt", vec![optional_string(input.ack.queue_receipt_ref.as_deref())]),
+        record("control-receipt", vec![optional_string(input.ack.control_receipt_ref.as_deref())]),
+        record("reconcile-receipt", vec![string(&input.ack.reconcile_receipt_ref)]),
+        record("envelope", vec![optional_string(input.ack.envelope_ref.as_deref())]),
+        record("operation", vec![optional_string(input.ack.operation_ref.as_deref())]),
+        record("request", vec![optional_string(input.ack.request_ref.as_deref())]),
+        record("receiver-decision", vec![string(&input.ack.receiver_decision)]),
+        record("receiver-diagnostics", vec![sequence(input.ack.receiver_diagnostics.iter().map(string).collect())]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("ack-bundle-kind-version"), string("pass")]),
+            record("check", vec![string("receiver-evidence-packaged"), string(ack_status)]),
+            record("check", vec![string("reconcile-receipt-current"), string(ack_status)]),
+            record("check", vec![string("ack-export-is-not-authority"), string("pass")]),
+            record("check", vec![string("provenance-still-required"), string("pass")]),
+        ])]),
+    ]))
+}
+
+fn live_workflow_bundle_ack_import_receipt_value(
+    input: &LiveWorkflowBundleAckImportReceiptValueInput<'_>,
+) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    let ack_status = if input.decision == "pass" { "pass" } else { "fail" };
+    Ok(record("node-control-live-workflow-bundle-ack-import-receipt-v1", vec![
+        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_IMPORT_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("state-root", vec![string(input.state_root.display().to_string())]),
+        record("ack", vec![string(&input.ack.ack_ref)]),
+        record("bundle", vec![string(&input.ack.bundle_ref)]),
+        record("imported", vec![sequence(input.imported_refs.iter().map(string).collect())]),
+        record("receiver-decision", vec![string(&input.ack.receiver_decision)]),
+        record("receiver-diagnostics", vec![sequence(input.ack.receiver_diagnostics.iter().map(string).collect())]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("ack-bundle-kind-version"), string("pass")]),
+            record("check", vec![string("ack-member-bindings"), string(ack_status)]),
+            record("check", vec![string("sender-ledger-imported"), string(ack_status)]),
+            record("check", vec![string("ack-import-is-not-authority"), string("pass")]),
             record("check", vec![string("provenance-still-required"), string("pass")]),
         ])]),
     ]))
@@ -7416,6 +8034,13 @@ fn optional_string(value: Option<&str>) -> IOValue {
     }
 }
 
+fn optional_value(value: Option<&IOValue>) -> IOValue {
+    match value {
+        Some(value) => record("some", vec![value.clone()]),
+        None => record("none", Vec::new()),
+    }
+}
+
 fn diagnostics_include(diagnostics: &[String], needle: &str) -> bool {
     diagnostics.iter().any(|diagnostic| diagnostic.contains(needle))
 }
@@ -7457,6 +8082,21 @@ fn record_optional_string(value: &preserves::Value<preserves::IOValue>, tag: &st
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} <some> must contain a string")))?;
     Ok(Some(value))
+}
+
+fn record_optional_value(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Option<IOValue>> {
+    let record_value = crate::preserves_rail::value_to_iovalue(value);
+    let fields = record_value
+        .collect_simple_record(tag, Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{tag} optional>")))?;
+    let inner = crate::preserves_rail::value_to_iovalue(&fields[0]);
+    if inner.collect_simple_record("none", Some(0)).is_some() {
+        return Ok(None);
+    }
+    let some = inner
+        .collect_simple_record("some", Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} must contain <some value> or <none>")))?;
+    Ok(Some(crate::preserves_rail::value_to_iovalue(&some[0])))
 }
 
 fn record_optional_ref_string(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Option<String>> {
@@ -7637,6 +8277,25 @@ fn validate_ingress_ref(reference: &str, label: &str) -> Result<()> {
         Ok(())
     } else {
         Err(MoltenError::invalid_harness(format!("{label} must be a blake3 ref")))
+    }
+}
+
+fn validate_member_ref(actual: &str, expected: &str, label: &str) -> Result<()> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("{label} ref {actual} does not match {expected}")))
+    }
+}
+
+fn validate_optional_member_ref(value: Option<&IOValue>, expected_ref: Option<&str>, label: &str) -> Result<()> {
+    match (value, expected_ref) {
+        (Some(value), Some(expected)) => validate_member_ref(&canonical_hash(value)?, expected, label),
+        (Some(_), None) => Err(MoltenError::invalid_harness(format!("{label} value present without ref"))),
+        (None, Some(expected)) => {
+            Err(MoltenError::invalid_harness(format!("{label} ref {expected} present without value")))
+        }
+        (None, None) => Ok(()),
     }
 }
 
@@ -8573,6 +9232,111 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.contains("receiver denial propagated"))
         );
+
+        let ack_export = export_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckExportInput {
+            apply_receipt_value: &apply_receipt_value,
+            send_receipt_value: None,
+            ingress_receipt_value: Some(&delivered.ingress_receipt_value),
+            queue_receipt_value: Some(&queue_value),
+            control_receipt_value: Some(&control_value),
+            reconcile_receipt_value: &reconciled.receipt_value,
+        })
+        .expect("ack export");
+        assert_eq!(ack_export.decision, "pass");
+        assert_eq!(ack_export.receiver_decision, "pass");
+        assert_eq!(ledger::artifact_kind(&ack_export.ack.ack_value), "node-control-live-workflow-bundle-ack");
+        assert_eq!(
+            ledger::artifact_kind(&ack_export.receipt_value),
+            "node-control-live-workflow-bundle-ack-export-receipt"
+        );
+        assert!(parse_node_control_authority_grant(&ack_export.ack.ack_value).is_err());
+        assert!(to_text(&ack_export.ack.ack_value).expect("ack text").contains("ack-bundle-is-not-authority"));
+        let ack_import_root = temp_dir("node-control-live-workflow-ack-import");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &ack_import_root,
+            node_id: "node:ack-import",
+        })
+        .expect("init ack import root");
+        let ack_import = import_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckImportInput {
+            state_root: &ack_import_root,
+            ack_value: &ack_export.ack.ack_value,
+            expected_bundle_ref: Some(&bundle_ref),
+            expected_envelope_ref: Some(&envelope.envelope_ref),
+            expected_operation_ref: Some(&envelope.operation_ref),
+            expected_request_ref: Some(&delivered.request_ref),
+        })
+        .expect("ack import");
+        assert_eq!(ack_import.decision, "pass");
+        assert!(ack_import.imported_refs.iter().any(|reference| reference == &ack_export.ack.ack_ref));
+        assert_eq!(
+            ledger::artifact_kind(&ack_import.receipt_value),
+            "node-control-live-workflow-bundle-ack-import-receipt"
+        );
+        assert!(to_text(&ack_import.receipt_value).expect("ack import text").contains("ack-import-is-not-authority"));
+        read_node_ledger_artifact(&ack_import_root, &ack_export.ack.ack_ref).expect("ack imported");
+        read_node_ledger_artifact(&ack_import_root, &reconciled.receipt_ref).expect("reconcile imported");
+        let wrong_ack_import =
+            import_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckImportInput {
+                state_root: &ack_import_root,
+                ack_value: &ack_export.ack.ack_value,
+                expected_bundle_ref: Some(&bundle_ref),
+                expected_envelope_ref: Some(&wrong_envelope),
+                expected_operation_ref: Some(&envelope.operation_ref),
+                expected_request_ref: Some(&delivered.request_ref),
+            })
+            .expect("wrong ack import");
+        assert_eq!(wrong_ack_import.decision, "deny");
+        assert!(wrong_ack_import.diagnostics.iter().any(|value| value.contains("does not match expected")));
+
+        let missing_ack_export =
+            export_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckExportInput {
+                apply_receipt_value: &apply_receipt_value,
+                send_receipt_value: None,
+                ingress_receipt_value: None,
+                queue_receipt_value: None,
+                control_receipt_value: None,
+                reconcile_receipt_value: &missing_receiver.receipt_value,
+            })
+            .expect("missing ack export");
+        assert_eq!(missing_ack_export.decision, "deny");
+        assert!(
+            missing_ack_export
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("requires receiver ingress receipt"))
+        );
+
+        let denied_ack_export =
+            export_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckExportInput {
+                apply_receipt_value: &apply_receipt_value,
+                send_receipt_value: None,
+                ingress_receipt_value: Some(&delivered.ingress_receipt_value),
+                queue_receipt_value: Some(&queue_value),
+                control_receipt_value: Some(&denied_control),
+                reconcile_receipt_value: &denied_reconcile.receipt_value,
+            })
+            .expect("denied ack export");
+        assert_eq!(denied_ack_export.decision, "pass");
+        assert_eq!(denied_ack_export.receiver_decision, "deny");
+        assert!(
+            denied_ack_export
+                .ack
+                .receiver_diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("receiver denial propagated"))
+        );
+        let denied_ack_import =
+            import_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckImportInput {
+                state_root: &ack_import_root,
+                ack_value: &denied_ack_export.ack.ack_value,
+                expected_bundle_ref: Some(&bundle_ref),
+                expected_envelope_ref: Some(&envelope.envelope_ref),
+                expected_operation_ref: Some(&envelope.operation_ref),
+                expected_request_ref: Some(&delivered.request_ref),
+            })
+            .expect("denied ack import");
+        assert_eq!(denied_ack_import.decision, "pass");
+        assert_eq!(denied_ack_import.receiver_decision, "deny");
     }
 
     #[test]

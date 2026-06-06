@@ -695,6 +695,9 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     let bundle_gate = dir.join("workflow-bundle-gate.preserves");
     let bundle_apply = dir.join("workflow-bundle-apply.preserves");
     let bundle_reconcile = dir.join("workflow-bundle-reconcile.preserves");
+    let bundle_ack = dir.join("workflow-bundle-ack.preserves");
+    let bundle_ack_export = dir.join("workflow-bundle-ack-export.preserves");
+    let bundle_ack_import = dir.join("workflow-bundle-ack-import.preserves");
     let bundle_import = dir.join("workflow-bundle-import.preserves");
     let bundle_import_send_receipt = dir.join("bundle-import-send.preserves");
     let ticket_import = dir.join("ticket-import.preserves");
@@ -955,6 +958,46 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     );
     let bundle_reconcile_text = to_text(&read_preserves(&bundle_reconcile)?)?;
     assert!(bundle_reconcile_text.contains("reconcile-receipt-is-not-authority"));
+
+    let bundle_ack_export_out = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle-ack-export"])
+        .arg(&bundle_apply)
+        .args(["--reconcile-receipt"])
+        .arg(&bundle_reconcile)
+        .args(["--out"])
+        .arg(&bundle_ack)
+        .args(["--receipt-out"])
+        .arg(&bundle_ack_export)
+        .output()?;
+    assert_success(&bundle_ack_export_out, "live workflow bundle ack export missing receiver");
+    assert!(stdout(&bundle_ack_export_out).contains("decision=deny"));
+    assert!(stdout(&bundle_ack_export_out).contains("next-step=collect-receiver-evidence"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&bundle_ack)?),
+        "node-control-live-workflow-bundle-ack"
+    );
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&bundle_ack_export)?),
+        "node-control-live-workflow-bundle-ack-export-receipt"
+    );
+    let bundle_ack_text = to_text(&read_preserves(&bundle_ack)?)?;
+    assert!(bundle_ack_text.contains("ack-bundle-is-not-authority"));
+
+    let bundle_ack_import_out = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle-ack-import", "--state-root"])
+        .arg(&bundle_sender_root)
+        .arg(&bundle_ack)
+        .args(["--receipt-out"])
+        .arg(&bundle_ack_import)
+        .output()?;
+    assert_success(&bundle_ack_import_out, "live workflow bundle ack import missing receiver");
+    assert!(stdout(&bundle_ack_import_out).contains("decision=deny"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&bundle_ack_import)?),
+        "node-control-live-workflow-bundle-ack-import-receipt"
+    );
+    let bundle_ack_import_text = to_text(&read_preserves(&bundle_ack_import)?)?;
+    assert!(bundle_ack_import_text.contains("ack-import-is-not-authority"));
 
     let bundle_import_out = molten_cmd()
         .args(["test", "node", "live-workflow-bundle-import", "--state-root"])
