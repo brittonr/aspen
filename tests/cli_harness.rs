@@ -698,6 +698,7 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     let bundle_ack = dir.join("workflow-bundle-ack.preserves");
     let bundle_ack_export = dir.join("workflow-bundle-ack-export.preserves");
     let bundle_ack_import = dir.join("workflow-bundle-ack-import.preserves");
+    let bundle_protocol_gate = dir.join("workflow-bundle-protocol-gate.preserves");
     let bundle_import = dir.join("workflow-bundle-import.preserves");
     let bundle_import_send_receipt = dir.join("bundle-import-send.preserves");
     let ticket_import = dir.join("ticket-import.preserves");
@@ -998,6 +999,30 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     );
     let bundle_ack_import_text = to_text(&read_preserves(&bundle_ack_import)?)?;
     assert!(bundle_ack_import_text.contains("ack-import-is-not-authority"));
+
+    let bundle_protocol_gate_out = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle-protocol-gate"])
+        .arg(&workflow_bundle)
+        .args(["--gate-receipt"])
+        .arg(&bundle_gate)
+        .args(["--apply-receipt"])
+        .arg(&bundle_apply)
+        .args(["--reconcile-receipt"])
+        .arg(&bundle_reconcile)
+        .args(["--ack"])
+        .arg(&bundle_ack)
+        .args(["--receipt-out"])
+        .arg(&bundle_protocol_gate)
+        .output()?;
+    assert_success(&bundle_protocol_gate_out, "live workflow bundle protocol gate missing receiver");
+    assert!(stdout(&bundle_protocol_gate_out).contains("decision=deny"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&bundle_protocol_gate)?),
+        "protocol-session-gate-receipt"
+    );
+    let bundle_protocol_gate_text = to_text(&read_preserves(&bundle_protocol_gate)?)?;
+    assert!(bundle_protocol_gate_text.contains("ack receiver decision deny"));
+    assert!(bundle_protocol_gate_text.contains("protocol-session-gate-is-not-authority"));
 
     let bundle_import_out = molten_cmd()
         .args(["test", "node", "live-workflow-bundle-import", "--state-root"])

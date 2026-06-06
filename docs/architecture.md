@@ -165,7 +165,7 @@ dataspace-backed endpoint interpreter
 protocol-session gate receipt
 ```
 
-Installed protocol manifests emit canonical install receipts, projected endpoint records, session-state records, protocol-message records, and per-operation receipts. Completed lifecycles can be replay-gated with `<protocol-session-gate-receipt-v1 "molten.protocol.session-gate-receipt.v1" ...>` receipts that recompute install/operation evidence and bind terminal state refs. These receipts are operational/replay evidence only; they do not grant authority, policy admission, resource rights, provenance, or transport trust.
+Installed protocol manifests emit canonical install receipts, projected endpoint records, session-state records, protocol-message records, and per-operation receipts. Completed lifecycles can be replay-gated with `<protocol-session-gate-receipt-v1 "molten.protocol.session-gate-receipt.v1" ...>` receipts that recompute install/operation evidence and bind terminal state refs. The node-control live workflow helper uses the same gate receipt to model bundle handoff, apply evidence, and ack/reconcile evidence as a sender/receiver protocol. These receipts are operational/replay evidence only; they do not grant authority, policy admission, resource rights, provenance, or transport trust.
 
 Use choreography for:
 
@@ -405,6 +405,7 @@ Current architectural changes are recorded under `cairn/changes/`:
 - `node-control-live-workflow-bundle-apply` — gated sender-side apply receipts that revalidate bundles/gates, import ticket/admission/grant members, dry-run live-send preflight by default, and perform live Iroh send only with explicit `--send`; apply receipts remain non-authority/non-provenance.
 - `node-control-live-workflow-bundle-reconcile` — receiver evidence reconciliation receipts that bind apply/send refs to receiver ingress, durable queue, and optional control receipts while surfacing missing/wrong/denied receiver outcomes; reconcile receipts remain non-authority/non-provenance.
 - `node-control-live-workflow-bundle-ack` — portable ack bundles and import/export receipts that carry reconcile plus receiver evidence back to the sender ledger after ref/operation/request binding checks; ack artifacts remain non-authority/non-provenance.
+- `node-control-live-trellis-workflow` — finite Trellis sender/receiver workflow gating for live bundle handoff, apply evidence, and ack/reconcile evidence via replay-bound `protocol-session-gate-receipt-v1` receipts; protocol gates remain evidence only and do not replace peer bootstrap, authority, policy/resource, provenance, or transport checks.
 - `sam-service-supervision-runtime` — demand-driven SAM services with readiness/failure assertions, logical supervision, restart policy, resource bounds, cleanup receipts, and replay-bound supervision gate receipts.
 - `trellis-protocol-session-runtime` — Trellis-gated protocol manifests, endpoint projection, protocol-message envelopes, session state, dataspace-backed interpreters, and replay-bound protocol session gate receipts.
 - `raft-control-plane-registry` — first Raft-backed strongly consistent control-plane registry for protocol/artifact/policy/capability pointers and receipt indexes.

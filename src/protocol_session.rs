@@ -814,8 +814,17 @@ pub fn parse_protocol_operation_receipt(value: &IOValue) -> Result<ProtocolOpera
 }
 
 pub fn gate_protocol_session_lifecycle(input: ProtocolSessionGateInput) -> Result<ProtocolSessionGate> {
+    gate_protocol_session_lifecycle_with_diagnostics(input, Vec::new())
+}
+
+pub fn gate_protocol_session_lifecycle_with_diagnostics(
+    input: ProtocolSessionGateInput,
+    extra_diagnostics: Vec<String>,
+) -> Result<ProtocolSessionGate> {
+    ensure_count_at_most(extra_diagnostics.len(), MAX_PROTOCOL_ITEMS, "protocol gate extra diagnostics")?;
     let parsed = parse_protocol_session_gate_input(input)?;
-    let diagnostics = protocol_session_gate_diagnostics(&parsed)?;
+    let mut diagnostics = protocol_session_gate_diagnostics(&parsed)?;
+    diagnostics.extend(extra_diagnostics);
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let initial_state_refs = state_refs(&parsed.initial_states);
     let operation_refs = operation_refs(&parsed.operation_receipts);

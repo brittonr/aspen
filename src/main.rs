@@ -958,6 +958,25 @@ enum NodeCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    LiveWorkflowBundleProtocolGate {
+        bundle: PathBuf,
+        #[arg(long)]
+        gate_receipt: PathBuf,
+        #[arg(long)]
+        apply_receipt: PathBuf,
+        #[arg(long)]
+        reconcile_receipt: PathBuf,
+        #[arg(long)]
+        ack: PathBuf,
+        #[arg(long)]
+        expected_envelope: Option<String>,
+        #[arg(long)]
+        expected_operation: Option<String>,
+        #[arg(long)]
+        expected_request: Option<String>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     LiveWorkflowBundleImport {
         #[arg(long)]
         state_root: PathBuf,
@@ -6510,6 +6529,52 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             print_live_workflow_bundle_ack_import_next_step(&imported);
             Ok(())
         }
+        NodeCommand::LiveWorkflowBundleProtocolGate {
+            bundle,
+            gate_receipt,
+            apply_receipt,
+            reconcile_receipt,
+            ack,
+            expected_envelope,
+            expected_operation,
+            expected_request,
+            receipt_out,
+        } => {
+            let bundle_value = read_preserves_file(&bundle)?;
+            let gate_receipt_value = read_preserves_file(&gate_receipt)?;
+            let apply_receipt_value = read_preserves_file(&apply_receipt)?;
+            let reconcile_receipt_value = read_preserves_file(&reconcile_receipt)?;
+            let ack_value = read_preserves_file(&ack)?;
+            let gated = node_daemon::gate_node_control_live_workflow_protocol(
+                &node_daemon::NodeControlLiveWorkflowProtocolGateInput {
+                    bundle_value: &bundle_value,
+                    gate_receipt_value: &gate_receipt_value,
+                    apply_receipt_value: &apply_receipt_value,
+                    reconcile_receipt_value: &reconcile_receipt_value,
+                    ack_value: &ack_value,
+                    expected_envelope_ref: expected_envelope.as_deref(),
+                    expected_operation_ref: expected_operation.as_deref(),
+                    expected_request_ref: expected_request.as_deref(),
+                },
+            )?;
+            emit_named_receipt(
+                receipt_out.as_ref(),
+                "node control live workflow protocol gate receipt",
+                &gated.receipt_value,
+            )?;
+            println!(
+                "node live workflow protocol gate decision={} receipt={} protocol={} session={} operations={} messages={} diagnostics={}",
+                gated.decision,
+                gated.receipt_ref,
+                gated.protocol_ref,
+                gated.session_id,
+                gated.operation_count,
+                gated.message_count,
+                gated.diagnostics.len()
+            );
+            print_live_workflow_protocol_gate_next_step(&gated);
+            Ok(())
+        }
         NodeCommand::LiveWorkflowBundleImport {
             state_root,
             bundle,
@@ -6676,6 +6741,16 @@ fn print_live_workflow_bundle_ack_import_next_step(imported: &node_daemon::NodeC
         println!("next-step=inspect-receiver-control command=\"molten node show <control-receipt>\"");
     } else {
         println!("next-step=inspect-receiver-denial command=\"molten node show <reconcile-receipt>\"");
+    }
+}
+
+fn print_live_workflow_protocol_gate_next_step(gated: &node_daemon::NodeControlLiveWorkflowProtocolGate) {
+    if gated.decision == "pass" {
+        println!("next-step=archive-workflow-protocol command=\"molten node show <protocol-gate-receipt>\"");
+    } else {
+        println!(
+            "next-step=inspect-workflow-protocol-diagnostics command=\"molten node show <protocol-gate-receipt>\""
+        );
     }
 }
 

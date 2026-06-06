@@ -58,6 +58,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::to_text;
+use crate::protocol_session;
 use crate::provenance;
 
 const CONFIG_FILE: &str = "config.preserves";
@@ -89,6 +90,8 @@ pub const DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS: u64 = 1;
 pub const DEFAULT_CONTROL_SERVICE_TICKS: u64 = 1;
 pub const DEFAULT_CONTROL_LIVE_LISTENER_EVENTS: u64 = 1;
 pub const DEFAULT_CONTROL_LIVE_LISTENER_TIMEOUT_MS: u64 = 250;
+const LIVE_WORKFLOW_PROTOCOL_ID: &str = "proto:molten.node-control.live-workflow-bundle.v1";
+const LIVE_WORKFLOW_PROTOCOL_SESSION_PREFIX: &str = "session:node-control-live-workflow:";
 
 const _: () = assert!(MAX_PENDING_CONTROL_REQUESTS > 0);
 const _: () = assert!(MAX_CONTROL_LOOP_REQUESTS > 0);
@@ -425,6 +428,18 @@ pub struct NodeControlLiveWorkflowBundleAckImportInput<'a> {
     pub state_root: &'a Path,
     pub ack_value: &'a IOValue,
     pub expected_bundle_ref: Option<&'a str>,
+    pub expected_envelope_ref: Option<&'a str>,
+    pub expected_operation_ref: Option<&'a str>,
+    pub expected_request_ref: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveWorkflowProtocolGateInput<'a> {
+    pub bundle_value: &'a IOValue,
+    pub gate_receipt_value: &'a IOValue,
+    pub apply_receipt_value: &'a IOValue,
+    pub reconcile_receipt_value: &'a IOValue,
+    pub ack_value: &'a IOValue,
     pub expected_envelope_ref: Option<&'a str>,
     pub expected_operation_ref: Option<&'a str>,
     pub expected_request_ref: Option<&'a str>,
@@ -1286,6 +1301,25 @@ pub struct NodeControlLiveWorkflowBundleAckImport {
     pub receipt_ref: String,
     pub receipt_value: IOValue,
     pub decision: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveWorkflowProtocolGate {
+    pub session_id: String,
+    pub install_receipt_ref: String,
+    pub protocol_ref: String,
+    pub receipt_ref: String,
+    pub receipt_value: IOValue,
+    pub decision: String,
+    pub operation_count: usize,
+    pub message_count: usize,
+    pub diagnostics: Vec<String>,
+    pub manifest_value: IOValue,
+    pub install_receipt_value: IOValue,
+    pub initial_state_values: Vec<IOValue>,
+    pub operation_receipt_values: Vec<IOValue>,
+    pub message_values: Vec<IOValue>,
+    pub next_state_values: Vec<IOValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2192,6 +2226,406 @@ pub fn import_node_control_live_workflow_bundle_ack(
         receipt_ref,
         receipt_value,
         decision: decision.to_string(),
+    })
+}
+
+pub fn gate_node_control_live_workflow_protocol(
+    input: &NodeControlLiveWorkflowProtocolGateInput<'_>,
+) -> Result<NodeControlLiveWorkflowProtocolGate> {
+    validate_live_workflow_protocol_gate_input(input)?;
+    let (evidence, diagnostics) = live_workflow_protocol_evidence(input)?;
+    let manifest_value = live_workflow_protocol_manifest_value()?;
+    let install = protocol_session::install_protocol_manifest_value(&manifest_value)?;
+    let authority_refs = vec![evidence.authority_ref.clone()];
+    let resource_refs = vec![evidence.resource_ref.clone()];
+    let sender0 = protocol_session::start_protocol_session(
+        &install,
+        "sender",
+        &evidence.session_id,
+        authority_refs.clone(),
+        resource_refs.clone(),
+    )?;
+    let receiver0 = protocol_session::start_protocol_session(
+        &install,
+        "receiver",
+        &evidence.session_id,
+        authority_refs.clone(),
+        resource_refs.clone(),
+    )?;
+    let handoff_send = protocol_session::send_protocol_message(protocol_session::ProtocolSendInput {
+        state: sender0.value.clone(),
+        to_role: "receiver".to_string(),
+        label: "bundle-handoff".to_string(),
+        payload_tag: "workflow-bundle".to_string(),
+        body_or_ref: input.bundle_value.clone(),
+        authority_refs: authority_refs.clone(),
+        resource_refs: resource_refs.clone(),
+        evidence_refs: vec![evidence.gate_receipt_ref.clone()],
+    })?;
+    let handoff_message = protocol_message(&handoff_send, "bundle handoff")?;
+    let handoff_receive = protocol_session::receive_protocol_message(protocol_session::ProtocolReceiveInput {
+        state: receiver0.value.clone(),
+        message: handoff_message.value.clone(),
+        authority_refs: authority_refs.clone(),
+        resource_refs: resource_refs.clone(),
+        carrier_refs: vec![evidence.gate_receipt_ref.clone()],
+    })?;
+    let sender1 = protocol_next_state(&handoff_send, "bundle handoff sender")?;
+    let receiver1 = protocol_next_state(&handoff_receive, "bundle handoff receiver")?;
+    let apply_send = protocol_session::send_protocol_message(protocol_session::ProtocolSendInput {
+        state: sender1.value.clone(),
+        to_role: "receiver".to_string(),
+        label: "apply-evidence".to_string(),
+        payload_tag: "apply-receipt".to_string(),
+        body_or_ref: input.apply_receipt_value.clone(),
+        authority_refs: authority_refs.clone(),
+        resource_refs: resource_refs.clone(),
+        evidence_refs: vec![evidence.apply_receipt_ref.clone(), evidence.gate_receipt_ref.clone()],
+    })?;
+    let apply_message = protocol_message(&apply_send, "apply evidence")?;
+    let apply_receive = protocol_session::receive_protocol_message(protocol_session::ProtocolReceiveInput {
+        state: receiver1.value.clone(),
+        message: apply_message.value.clone(),
+        authority_refs: authority_refs.clone(),
+        resource_refs: resource_refs.clone(),
+        carrier_refs: vec![evidence.apply_receipt_ref.clone()],
+    })?;
+    let sender2 = protocol_next_state(&apply_send, "apply evidence sender")?;
+    let receiver2 = protocol_next_state(&apply_receive, "apply evidence receiver")?;
+    let ack_send = protocol_session::send_protocol_message(protocol_session::ProtocolSendInput {
+        state: receiver2.value.clone(),
+        to_role: "sender".to_string(),
+        label: "ack-evidence".to_string(),
+        payload_tag: "workflow-ack".to_string(),
+        body_or_ref: input.ack_value.clone(),
+        authority_refs: authority_refs.clone(),
+        resource_refs: resource_refs.clone(),
+        evidence_refs: vec![evidence.reconcile_receipt_ref.clone(), evidence.ack_ref.clone()],
+    })?;
+    let ack_message = protocol_message(&ack_send, "workflow ack")?;
+    let ack_receive = protocol_session::receive_protocol_message(protocol_session::ProtocolReceiveInput {
+        state: sender2.value.clone(),
+        message: ack_message.value.clone(),
+        authority_refs,
+        resource_refs,
+        carrier_refs: vec![evidence.ack_ref.clone()],
+    })?;
+    let sender3 = protocol_next_state(&ack_receive, "workflow ack sender")?;
+    let receiver3 = protocol_next_state(&ack_send, "workflow ack receiver")?;
+    let initial_state_values = vec![sender0.value.clone(), receiver0.value.clone()];
+    let operation_receipt_values = vec![
+        handoff_send.receipt.value.clone(),
+        handoff_receive.receipt.value.clone(),
+        apply_send.receipt.value.clone(),
+        apply_receive.receipt.value.clone(),
+        ack_send.receipt.value.clone(),
+        ack_receive.receipt.value.clone(),
+    ];
+    let message_values = vec![handoff_message.value, apply_message.value, ack_message.value];
+    let next_state_values = vec![
+        sender1.value,
+        receiver1.value,
+        sender2.value,
+        receiver2.value,
+        receiver3.value,
+        sender3.value,
+    ];
+    let gate = protocol_session::gate_protocol_session_lifecycle_with_diagnostics(
+        protocol_session::ProtocolSessionGateInput {
+            install_receipt: install.value.clone(),
+            initial_states: initial_state_values.clone(),
+            operation_receipts: operation_receipt_values.clone(),
+            messages: message_values.clone(),
+            next_states: next_state_values.clone(),
+        },
+        diagnostics,
+    )?;
+    Ok(NodeControlLiveWorkflowProtocolGate {
+        session_id: evidence.session_id,
+        install_receipt_ref: gate.install_ref.clone(),
+        protocol_ref: gate.protocol_ref.clone(),
+        receipt_ref: gate.receipt_ref.clone(),
+        receipt_value: gate.value.clone(),
+        decision: gate.decision,
+        operation_count: gate.operation_count,
+        message_count: gate.message_count,
+        diagnostics: gate.diagnostics,
+        manifest_value,
+        install_receipt_value: install.value,
+        initial_state_values,
+        operation_receipt_values,
+        message_values,
+        next_state_values,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LiveWorkflowProtocolEvidence {
+    session_id: String,
+    authority_ref: String,
+    resource_ref: String,
+    gate_receipt_ref: String,
+    apply_receipt_ref: String,
+    reconcile_receipt_ref: String,
+    ack_ref: String,
+}
+
+fn validate_live_workflow_protocol_gate_input(input: &NodeControlLiveWorkflowProtocolGateInput<'_>) -> Result<()> {
+    if let Some(reference) = input.expected_envelope_ref {
+        validate_ingress_ref(reference, "node control live workflow protocol expected envelope ref")?;
+    }
+    if let Some(reference) = input.expected_operation_ref {
+        validate_ingress_ref(reference, "node control live workflow protocol expected operation ref")?;
+    }
+    if let Some(reference) = input.expected_request_ref {
+        validate_ingress_ref(reference, "node control live workflow protocol expected request ref")?;
+    }
+    Ok(())
+}
+
+fn live_workflow_protocol_evidence(
+    input: &NodeControlLiveWorkflowProtocolGateInput<'_>,
+) -> Result<(LiveWorkflowProtocolEvidence, Vec<String>)> {
+    let mut diagnostics = Vec::with_capacity(16);
+    let bundle_ref = canonical_hash(input.bundle_value)?;
+    let gate_receipt_ref = canonical_hash(input.gate_receipt_value)?;
+    let apply_receipt_ref = canonical_hash(input.apply_receipt_value)?;
+    let reconcile_receipt_ref = canonical_hash(input.reconcile_receipt_value)?;
+    let ack_ref = canonical_hash(input.ack_value)?;
+    let bundle = match parse_node_control_live_workflow_bundle(input.bundle_value) {
+        Ok(bundle) => Some(bundle),
+        Err(error) => {
+            diagnostics.push(format!("node control live workflow protocol bundle parse failed: {error}"));
+            None
+        }
+    };
+    let gate = match parse_node_control_live_workflow_bundle_gate_receipt(input.gate_receipt_value) {
+        Ok(gate) => Some(gate),
+        Err(error) => {
+            diagnostics.push(format!("node control live workflow protocol gate receipt parse failed: {error}"));
+            None
+        }
+    };
+    let apply = match parse_node_control_live_workflow_bundle_apply_receipt(input.apply_receipt_value) {
+        Ok(apply) => Some(apply),
+        Err(error) => {
+            diagnostics.push(format!("node control live workflow protocol apply receipt parse failed: {error}"));
+            None
+        }
+    };
+    let reconcile = match parse_node_control_live_workflow_bundle_reconcile_receipt(input.reconcile_receipt_value) {
+        Ok(reconcile) => Some(reconcile),
+        Err(error) => {
+            diagnostics.push(format!("node control live workflow protocol reconcile receipt parse failed: {error}"));
+            None
+        }
+    };
+    let ack = match parse_node_control_live_workflow_bundle_ack(input.ack_value) {
+        Ok(ack) => Some(ack),
+        Err(error) => {
+            diagnostics.push(format!("node control live workflow protocol ack parse failed: {error}"));
+            None
+        }
+    };
+    if let Some(gate) = gate.as_ref() {
+        if gate.decision != "pass" {
+            diagnostics.push(format!(
+                "node control live workflow protocol gate receipt {} decision {}",
+                gate.receipt_ref, gate.decision
+            ));
+            diagnostics.extend(gate.diagnostics.clone());
+        }
+        if gate.bundle_ref != bundle_ref {
+            diagnostics.push(format!(
+                "node control live workflow protocol gate bundle {} does not match {}",
+                gate.bundle_ref, bundle_ref
+            ));
+        }
+    }
+    if let Some(apply) = apply.as_ref() {
+        if apply.decision != "pass" {
+            diagnostics.push(format!(
+                "node control live workflow protocol apply receipt {} decision {}",
+                apply.receipt_ref, apply.decision
+            ));
+            diagnostics.extend(apply.diagnostics.clone());
+        }
+        if apply.bundle_ref != bundle_ref {
+            diagnostics.push(format!(
+                "node control live workflow protocol apply bundle {} does not match {}",
+                apply.bundle_ref, bundle_ref
+            ));
+        }
+        if apply.gate_receipt_ref.as_deref() != Some(gate_receipt_ref.as_str()) {
+            diagnostics.push(format!(
+                "node control live workflow protocol apply gate {} does not match {}",
+                apply.gate_receipt_ref.as_deref().unwrap_or("none"),
+                gate_receipt_ref
+            ));
+        }
+    }
+    if let Some(reconcile) = reconcile.as_ref() {
+        if reconcile.decision != "pass" {
+            diagnostics.push(format!(
+                "node control live workflow protocol reconcile receipt {} decision {}",
+                reconcile.receipt_ref, reconcile.decision
+            ));
+            diagnostics.extend(reconcile.diagnostics.clone());
+        }
+        if reconcile.apply_receipt_ref != apply_receipt_ref {
+            diagnostics.push(format!(
+                "node control live workflow protocol reconcile apply {} does not match {}",
+                reconcile.apply_receipt_ref, apply_receipt_ref
+            ));
+        }
+        if reconcile.bundle_ref != bundle_ref {
+            diagnostics.push(format!(
+                "node control live workflow protocol reconcile bundle {} does not match {}",
+                reconcile.bundle_ref, bundle_ref
+            ));
+        }
+    }
+    if let Some(ack) = ack.as_ref() {
+        if ack.receiver_decision != "pass" {
+            diagnostics
+                .push(format!("node control live workflow protocol ack receiver decision {}", ack.receiver_decision));
+            diagnostics.extend(ack.receiver_diagnostics.clone());
+        }
+        if !ack.diagnostics.is_empty() {
+            diagnostics.extend(ack.diagnostics.clone());
+        }
+        if ack.apply_receipt_ref != apply_receipt_ref {
+            diagnostics.push(format!(
+                "node control live workflow protocol ack apply {} does not match {}",
+                ack.apply_receipt_ref, apply_receipt_ref
+            ));
+        }
+        if ack.reconcile_receipt_ref != reconcile_receipt_ref {
+            diagnostics.push(format!(
+                "node control live workflow protocol ack reconcile {} does not match {}",
+                ack.reconcile_receipt_ref, reconcile_receipt_ref
+            ));
+        }
+        if ack.bundle_ref != bundle_ref {
+            diagnostics.push(format!(
+                "node control live workflow protocol ack bundle {} does not match {}",
+                ack.bundle_ref, bundle_ref
+            ));
+        }
+        if let Some(expected) = input.expected_envelope_ref
+            && ack.envelope_ref.as_deref() != Some(expected)
+        {
+            diagnostics.push(format!(
+                "node control live workflow protocol ack envelope {} does not match expected {}",
+                ack.envelope_ref.as_deref().unwrap_or("none"),
+                expected
+            ));
+        }
+        if let Some(expected) = input.expected_operation_ref
+            && ack.operation_ref.as_deref() != Some(expected)
+        {
+            diagnostics.push(format!(
+                "node control live workflow protocol ack operation {} does not match expected {}",
+                ack.operation_ref.as_deref().unwrap_or("none"),
+                expected
+            ));
+        }
+        if let Some(expected) = input.expected_request_ref
+            && ack.request_ref.as_deref() != Some(expected)
+        {
+            diagnostics.push(format!(
+                "node control live workflow protocol ack request {} does not match expected {}",
+                ack.request_ref.as_deref().unwrap_or("none"),
+                expected
+            ));
+        }
+    }
+    let authority_ref = if let Some(bundle) = bundle.as_ref() {
+        bundle.authority_grant_ref.clone()
+    } else {
+        local_ref("node-control-live-workflow-protocol-authority", &bundle_ref)?
+    };
+    let resource_ref = bundle.as_ref().map(|bundle| bundle.bundle_ref.clone()).unwrap_or(bundle_ref.clone());
+    let session_id = format!("{LIVE_WORKFLOW_PROTOCOL_SESSION_PREFIX}{}", ref_file_stem(&bundle_ref));
+    Ok((
+        LiveWorkflowProtocolEvidence {
+            session_id,
+            authority_ref,
+            resource_ref,
+            gate_receipt_ref,
+            apply_receipt_ref,
+            reconcile_receipt_ref,
+            ack_ref,
+        },
+        diagnostics,
+    ))
+}
+
+fn live_workflow_protocol_manifest_value() -> Result<IOValue> {
+    let global = protocol_session::protocol_global_script_value(&[
+        protocol_session::ProtocolCommInput {
+            from_role: "sender".to_string(),
+            to_role: "receiver".to_string(),
+            label: "bundle-handoff".to_string(),
+            payload_tag: "workflow-bundle".to_string(),
+        },
+        protocol_session::ProtocolCommInput {
+            from_role: "sender".to_string(),
+            to_role: "receiver".to_string(),
+            label: "apply-evidence".to_string(),
+            payload_tag: "apply-receipt".to_string(),
+        },
+        protocol_session::ProtocolCommInput {
+            from_role: "receiver".to_string(),
+            to_role: "sender".to_string(),
+            label: "ack-evidence".to_string(),
+            payload_tag: "workflow-ack".to_string(),
+        },
+    ])?;
+    protocol_session::protocol_manifest_value(&protocol_session::ProtocolManifestInput {
+        protocol_id: LIVE_WORKFLOW_PROTOCOL_ID.to_string(),
+        roles: vec!["sender".to_string(), "receiver".to_string()],
+        labels: vec![
+            "bundle-handoff".to_string(),
+            "apply-evidence".to_string(),
+            "ack-evidence".to_string(),
+        ],
+        payloads: vec![
+            protocol_session::ProtocolPayloadInput {
+                tag: "workflow-bundle".to_string(),
+                schema_ref: local_ref("node-control-live-workflow-protocol-schema", "workflow-bundle")?,
+            },
+            protocol_session::ProtocolPayloadInput {
+                tag: "apply-receipt".to_string(),
+                schema_ref: local_ref("node-control-live-workflow-protocol-schema", "apply-receipt")?,
+            },
+            protocol_session::ProtocolPayloadInput {
+                tag: "workflow-ack".to_string(),
+                schema_ref: local_ref("node-control-live-workflow-protocol-schema", "workflow-ack")?,
+            },
+        ],
+        global,
+        policy_refs: vec![local_ref("node-control-live-workflow-protocol-policy", "v1")?],
+        capability_refs: vec![local_ref("node-control-live-workflow-protocol-capability", "v1")?],
+        resource_refs: vec![local_ref("node-control-live-workflow-protocol-resource", "v1")?],
+    })
+}
+
+fn protocol_message(
+    run: &protocol_session::ProtocolOperationRun,
+    label: &str,
+) -> Result<protocol_session::ProtocolMessage> {
+    run.message.clone().ok_or_else(|| {
+        MoltenError::invalid_harness(format!("node control live workflow protocol missing {label} message"))
+    })
+}
+
+fn protocol_next_state(
+    run: &protocol_session::ProtocolOperationRun,
+    label: &str,
+) -> Result<protocol_session::ProtocolSessionState> {
+    run.next_state.clone().ok_or_else(|| {
+        MoltenError::invalid_harness(format!("node control live workflow protocol missing {label} next state"))
     })
 }
 
@@ -7775,6 +8209,9 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_string(&fields[7], "stopped")?
         ));
     }
+    if let Ok(summary) = protocol_session::protocol_summary(value) {
+        return Ok(summary);
+    }
     if let Ok(summary) = provenance::provenance_summary(value) {
         return Ok(summary);
     }
@@ -9093,13 +9530,83 @@ mod tests {
             as_of_sequence: 1,
             as_of_epoch: 1,
         };
-        let bundle_ref = local_ref("node-control-live-workflow-bundle", "reconcile").expect("bundle ref");
-        let verify_ref = local_ref("node-control-live-workflow-bundle-verify", "reconcile").expect("verify ref");
+        let ticket = export_node_control_live_ticket(&NodeControlLiveTicketExportInput {
+            state_root: &root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            policy_refs: &policy_refs,
+            evidence_refs: &[],
+        })
+        .expect("export reconcile ticket");
+        let admission = admit_node_control_live_peer(&NodeControlLivePeerAdmitInput {
+            state_root: &root,
+            ticket_value: &ticket.value,
+            peer_id: "peer:reconcile",
+            sequence: 1,
+            expires_at: None,
+            policy_refs: &policy_refs,
+            evidence_refs: &[],
+        })
+        .expect("admit reconcile peer");
+        let authority_value = node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
+            peer_id: "peer:reconcile",
+            node_id: "node:reconcile",
+            operations: &expected_operations,
+            target_scope: "*",
+            resource_scope: "*",
+            epoch: 1,
+            expires_at: None,
+            policy_refs: &policy_refs,
+            revocation_refs: &[],
+            evidence_refs: &[],
+        })
+        .expect("reconcile authority value");
+        let receipt_values: Vec<&IOValue> = Vec::new();
+        let exported = export_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleExportInput {
+            receiver_ticket_value: &ticket.value,
+            peer_admission_value: &admission.value,
+            authority_grant_value: &authority_value,
+            receipt_values: &receipt_values,
+        })
+        .expect("export reconcile workflow bundle");
+        assert_eq!(exported.decision, "pass");
+        let verified = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
+            bundle_value: &exported.bundle.bundle_value,
+            expected_node: expected.expected_node,
+            expected_topic: expected.expected_topic,
+            expected_endpoint: expected.expected_endpoint,
+            expected_peer: expected.expected_peer,
+            expected_operations: expected.expected_operations,
+            expected_target_scope: expected.expected_target_scope,
+            expected_resource_scope: expected.expected_resource_scope,
+            as_of_sequence: expected.as_of_sequence,
+            as_of_epoch: expected.as_of_epoch,
+        })
+        .expect("verify reconcile workflow bundle");
+        assert_eq!(verified.decision, "pass");
+        let gated = gate_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleGateInput {
+            bundle_value: &exported.bundle.bundle_value,
+            verify_receipt_value: Some(&verified.receipt_value),
+            require_verify_receipt: true,
+            expected_node: expected.expected_node,
+            expected_topic: expected.expected_topic,
+            expected_endpoint: expected.expected_endpoint,
+            expected_peer: expected.expected_peer,
+            expected_operations: expected.expected_operations,
+            expected_target_scope: expected.expected_target_scope,
+            expected_resource_scope: expected.expected_resource_scope,
+            as_of_sequence: expected.as_of_sequence,
+            as_of_epoch: expected.as_of_epoch,
+        })
+        .expect("gate reconcile workflow bundle");
+        assert_eq!(gated.decision, "pass");
+        let bundle_ref = exported.bundle.bundle_ref.clone();
+        let verify_ref = verified.receipt_ref.clone();
+        let gate_ref = gated.receipt_ref.clone();
         let apply_receipt_value = live_workflow_bundle_apply_receipt_value(&LiveWorkflowBundleApplyReceiptValueInput {
             decision: "pass",
             state_root: &root,
             bundle_ref: &bundle_ref,
-            gate_receipt_ref: None,
+            gate_receipt_ref: Some(&gate_ref),
             recomputed_verify_receipt_ref: &verify_ref,
             import_receipt_ref: None,
             imported_refs: &imported_refs,
@@ -9275,6 +9782,22 @@ mod tests {
         assert!(to_text(&ack_import.receipt_value).expect("ack import text").contains("ack-import-is-not-authority"));
         read_node_ledger_artifact(&ack_import_root, &ack_export.ack.ack_ref).expect("ack imported");
         read_node_ledger_artifact(&ack_import_root, &reconciled.receipt_ref).expect("reconcile imported");
+        let protocol_gate = gate_node_control_live_workflow_protocol(&NodeControlLiveWorkflowProtocolGateInput {
+            bundle_value: &exported.bundle.bundle_value,
+            gate_receipt_value: &gated.receipt_value,
+            apply_receipt_value: &apply_receipt_value,
+            reconcile_receipt_value: &reconciled.receipt_value,
+            ack_value: &ack_export.ack.ack_value,
+            expected_envelope_ref: Some(&envelope.envelope_ref),
+            expected_operation_ref: Some(&envelope.operation_ref),
+            expected_request_ref: Some(&delivered.request_ref),
+        })
+        .expect("workflow protocol gate");
+        assert_eq!(protocol_gate.decision, "pass");
+        assert_eq!(protocol_gate.operation_count, 6);
+        assert_eq!(protocol_gate.message_count, 3);
+        assert_eq!(ledger::artifact_kind(&protocol_gate.receipt_value), "protocol-session-gate-receipt");
+        assert!(parse_node_control_authority_grant(&protocol_gate.receipt_value).is_err());
         let wrong_ack_import =
             import_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckImportInput {
                 state_root: &ack_import_root,
@@ -9337,6 +9860,25 @@ mod tests {
             .expect("denied ack import");
         assert_eq!(denied_ack_import.decision, "pass");
         assert_eq!(denied_ack_import.receiver_decision, "deny");
+        let denied_protocol_gate =
+            gate_node_control_live_workflow_protocol(&NodeControlLiveWorkflowProtocolGateInput {
+                bundle_value: &exported.bundle.bundle_value,
+                gate_receipt_value: &gated.receipt_value,
+                apply_receipt_value: &apply_receipt_value,
+                reconcile_receipt_value: &denied_reconcile.receipt_value,
+                ack_value: &denied_ack_export.ack.ack_value,
+                expected_envelope_ref: Some(&envelope.envelope_ref),
+                expected_operation_ref: Some(&envelope.operation_ref),
+                expected_request_ref: Some(&delivered.request_ref),
+            })
+            .expect("denied workflow protocol gate");
+        assert_eq!(denied_protocol_gate.decision, "deny");
+        assert!(
+            denied_protocol_gate
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("ack receiver decision deny"))
+        );
     }
 
     #[test]
