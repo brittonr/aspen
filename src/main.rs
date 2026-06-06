@@ -703,6 +703,26 @@ enum NodeCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    LiveWorkflowBundle {
+        #[arg(long)]
+        state_root: Option<PathBuf>,
+        #[arg(long)]
+        ticket: PathBuf,
+        #[arg(long)]
+        peer_admission: PathBuf,
+        #[arg(long)]
+        authority_grant: PathBuf,
+        #[arg(long)]
+        send_receipt: PathBuf,
+        #[arg(long = "receive-receipt")]
+        receive_receipts: Vec<PathBuf>,
+        #[arg(long)]
+        listener_receipt: Option<PathBuf>,
+        #[arg(long)]
+        service_receipt: PathBuf,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     ControlIngressPublish {
         #[arg(long)]
         state_root: PathBuf,
@@ -5695,6 +5715,46 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 sent.receiver_endpoint_id,
                 sent.transport_receipt_ref.as_deref().unwrap_or("none"),
                 sent.send_receipt_ref
+            );
+            Ok(())
+        }
+        NodeCommand::LiveWorkflowBundle {
+            state_root,
+            ticket,
+            peer_admission,
+            authority_grant,
+            send_receipt,
+            receive_receipts,
+            listener_receipt,
+            service_receipt,
+            receipt_out,
+        } => {
+            let ticket_value = read_preserves_file(&ticket)?;
+            let peer_admission_value = read_preserves_file(&peer_admission)?;
+            let authority_grant_value = read_preserves_file(&authority_grant)?;
+            let send_receipt_value = read_preserves_file(&send_receipt)?;
+            let receive_values =
+                receive_receipts.iter().map(|path| read_preserves_file(path)).collect::<Result<Vec<_>>>()?;
+            let receive_value_refs = receive_values.iter().collect::<Vec<_>>();
+            let listener_value = listener_receipt.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let service_receipt_value = read_preserves_file(&service_receipt)?;
+            let workflow =
+                node_daemon::node_control_live_workflow_receipt(&node_daemon::NodeControlLiveWorkflowInput {
+                    state_root: state_root.as_deref(),
+                    receiver_ticket_value: &ticket_value,
+                    peer_admission_value: &peer_admission_value,
+                    authority_grant_value: &authority_grant_value,
+                    send_receipt_value: &send_receipt_value,
+                    receive_receipt_values: &receive_value_refs,
+                    listener_receipt_value: listener_value.as_ref(),
+                    service_receipt_value: &service_receipt_value,
+                })?;
+            emit_named_receipt(receipt_out.as_ref(), "node control live workflow receipt", &workflow.receipt_value)?;
+            println!(
+                "node live workflow bundle decision={} receipt={} diagnostics={}",
+                workflow.decision,
+                workflow.receipt_ref,
+                workflow.diagnostics.len()
             );
             Ok(())
         }

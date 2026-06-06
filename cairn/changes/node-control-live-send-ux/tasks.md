@@ -3,11 +3,13 @@
 ## Phase 1: Send evidence
 
 - [x] [serial] r[molten.node_control_live_send_ux.spec.send_receipt] Add canonical live send receipts and ledger classification.
+- [x] [serial] r[molten.node_control_live_send_ux.spec.workflow_receipt] Add canonical live workflow runbook receipts and ledger classification.
 - [x] [serial] r[molten.node_control_live_send_ux.spec.ticket_endpoint_binding] Bind send receipts to receiver ticket endpoint/address evidence.
 
 ## Phase 2: CLI workflow
 
 - [x] [serial] r[molten.node_control_live_send_ux.spec.live_send_cli] Add `molten node control-ingress-live-send` with send/transport receipt outputs.
+- [x] [serial] r[molten.node_control_live_send_ux.spec.workflow_cli] Add `molten node live-workflow-bundle` for operator runbook receipts.
 
 ## Phase 3: Real live path and gates
 

@@ -9,8 +9,9 @@ Live serve/listener support can receive real gossip events, but the operator-fac
 ## Scope
 - CLI `molten node control-ingress-live-send` that consumes a request and bound live ticket.
 - Canonical `node-control-live-send-receipt-v1` artifacts that bind receiver ticket, endpoint/address evidence, envelope ref, transport receipt ref, diagnostics, and non-authority checks.
+- Canonical `node-control-live-workflow-receipt-v1` operator runbook receipts that bind ticket, admission, authority grant, send, receive/listener, and service-run evidence.
 - Live send implementation that joins the receiver's real `iroh-gossip` topic from ticket endpoint/address evidence and publishes canonical envelope bytes.
-- Unit coverage for a bounded real live sender/listener workflow and CLI coverage for fail-closed offline tickets without endpoint addresses.
+- Unit coverage for a bounded real live sender/listener workflow and CLI coverage for fail-closed offline tickets without endpoint addresses and runbook bundle diagnostics.
 
 ## Out of Scope
 - Relay configuration management beyond ticket address evidence.

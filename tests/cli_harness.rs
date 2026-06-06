@@ -685,10 +685,12 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
     let ticket = dir.join("live-ticket.preserves");
     let send_receipt = dir.join("send.preserves");
     let transport_receipt = dir.join("transport.preserves");
-    let authority_ref = test_ref("live-send-authority")?;
+    let authority_grant = dir.join("authority-grant.preserves");
+    let peer_admission = dir.join("peer-admission.preserves");
+    let service_receipt = dir.join("service.preserves");
+    let workflow_receipt = dir.join("workflow.preserves");
     let policy_ref = test_ref("live-send-policy")?;
     let resource_ref = test_ref("live-send-resource")?;
-    let bootstrap_ref = test_ref("live-send-bootstrap")?;
 
     assert_success(
         &molten_cmd()
@@ -698,6 +700,30 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
             .output()?,
         "node live send init",
     );
+    assert_success(
+        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
+        "node live send run",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "authority-grant-fixture", "--state-root"])
+            .arg(&state_root)
+            .args([
+                "--peer",
+                "peer:cli-live-send",
+                "--node",
+                "node:cli-live-send",
+                "--operation",
+                "status",
+                "--policy",
+            ])
+            .arg(&policy_ref)
+            .args(["--out"])
+            .arg(&authority_grant)
+            .output()?,
+        "node live send authority grant",
+    );
+    let authority_ref = molten::preserves_rail::canonical_hash(&read_preserves(&authority_grant)?)?;
     assert_success(
         &molten_cmd()
             .args([
@@ -729,6 +755,19 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
             .output()?,
         "node live send ticket",
     );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "live-peer-admit", "--state-root"])
+            .arg(&state_root)
+            .args(["--peer", "peer:cli-live-send", "--policy"])
+            .arg(&policy_ref)
+            .args(["--receipt-out"])
+            .arg(&peer_admission)
+            .arg(&ticket)
+            .output()?,
+        "node live send peer admit",
+    );
+    let bootstrap_ref = molten::preserves_rail::canonical_hash(&read_preserves(&peer_admission)?)?;
     let sent = molten_cmd()
         .args(["test", "node", "control-ingress-live-send", "--state-root"])
         .arg(&state_root)
@@ -753,6 +792,39 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
     assert!(!transport_receipt.exists());
     let text = to_text(&read_preserves(&send_receipt)?)?;
     assert!(text.contains("ticket has no endpoint addresses"));
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "serve", "--state-root"])
+            .arg(&state_root)
+            .args(["--max-ticks", "1", "--receipt-out"])
+            .arg(&service_receipt)
+            .output()?,
+        "node live send service receipt",
+    );
+    let bundled = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle", "--state-root"])
+        .arg(&state_root)
+        .args(["--ticket"])
+        .arg(&ticket)
+        .args(["--peer-admission"])
+        .arg(&peer_admission)
+        .args(["--authority-grant"])
+        .arg(&authority_grant)
+        .args(["--send-receipt"])
+        .arg(&send_receipt)
+        .args(["--service-receipt"])
+        .arg(&service_receipt)
+        .args(["--receipt-out"])
+        .arg(&workflow_receipt)
+        .output()?;
+    assert_success(&bundled, "node live workflow bundle deny");
+    assert!(stdout(&bundled).contains("decision=deny"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&workflow_receipt)?),
+        "node-control-live-workflow-receipt"
+    );
+    let workflow_text = to_text(&read_preserves(&workflow_receipt)?)?;
+    assert!(workflow_text.contains("missing receive receipt"));
     Ok(())
 }
 

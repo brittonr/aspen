@@ -9,6 +9,15 @@ r[molten.node_control_live_send_ux.spec.send_receipt] Node-control live send att
 - THEN a canonical send receipt is emitted
 - AND the receipt has a stable artifact ref.
 
+### Requirement: Live workflow receipts are canonical
+r[molten.node_control_live_send_ux.spec.workflow_receipt] Node-control live operator workflows MUST be representable by canonical `node-control-live-workflow-receipt-v1` receipts that bind receiver ticket, peer admission, authority grant, send receipt, receive receipts, optional listener receipt, service-run receipt, diagnostics, and consistency checks.
+
+#### Scenario: Workflow receipt binds runbook evidence
+- GIVEN ticket, admission, authority grant, send, receive, listener, and service-run receipts from a live workflow
+- WHEN a workflow bundle is created
+- THEN a canonical workflow receipt is emitted
+- AND it has a stable artifact ref.
+
 ### Requirement: Receiver endpoint evidence is bound
 r[molten.node_control_live_send_ux.spec.ticket_endpoint_binding] Live send receipts MUST bind the receiver ticket endpoint id and endpoint address evidence used to join the live transport.
 
@@ -26,6 +35,15 @@ r[molten.node_control_live_send_ux.spec.live_send_cli] The CLI MUST expose `molt
 - WHEN `control-ingress-live-send --receipt-out` runs
 - THEN the receipt file contains a canonical live send receipt
 - AND optional state-root import records the send evidence in the node ledger.
+
+### Requirement: Live workflow bundle CLI is available
+r[molten.node_control_live_send_ux.spec.workflow_cli] The CLI MUST expose `molten node live-workflow-bundle` to tie ticket, peer admission, authority grant, send, receive/listener, and service-run evidence into a workflow receipt.
+
+#### Scenario: CLI writes workflow receipt
+- GIVEN live workflow evidence files
+- WHEN `live-workflow-bundle --receipt-out` runs
+- THEN the receipt file contains a canonical workflow receipt
+- AND diagnostics explain any missing receive/listener evidence.
 
 ### Requirement: Live send uses real Iroh gossip
 r[molten.node_control_live_send_ux.spec.real_gossip_send] Live send MUST join the receiver's real Iroh gossip topic from ticket endpoint/address evidence and publish canonical live ingress envelope bytes.

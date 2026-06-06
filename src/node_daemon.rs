@@ -26,6 +26,7 @@ use crate::preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LOOP_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_OPERATION_RECEIPT_SCHEMA;
@@ -293,6 +294,18 @@ pub struct NodeControlLiveSendInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveWorkflowInput<'a> {
+    pub state_root: Option<&'a Path>,
+    pub receiver_ticket_value: &'a IOValue,
+    pub peer_admission_value: &'a IOValue,
+    pub authority_grant_value: &'a IOValue,
+    pub send_receipt_value: &'a IOValue,
+    pub receive_receipt_values: &'a [&'a IOValue],
+    pub listener_receipt_value: Option<&'a IOValue>,
+    pub service_receipt_value: &'a IOValue,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct NodeControlAuthorityGrantInput<'a> {
     pub peer_id: &'a str,
     pub node_id: &'a str,
@@ -379,6 +392,19 @@ struct LiveSendReceiptValueInput<'a> {
     ticket: &'a NodeControlLiveTicket,
     envelope: &'a NodeControlIngressEnvelope,
     transport_receipt_ref: Option<&'a str>,
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveWorkflowReceiptValueInput<'a> {
+    decision: &'a str,
+    ticket: &'a NodeControlLiveTicket,
+    admission: &'a NodeControlLivePeerAdmission,
+    authority: &'a NodeControlAuthorityGrant,
+    send: &'a NodeControlLiveSendReceipt,
+    receive_receipt_refs: &'a [String],
+    listener_receipt_ref: Option<&'a str>,
+    service_receipt_ref: &'a str,
     diagnostics: &'a [String],
 }
 
@@ -615,6 +641,30 @@ pub struct NodeControlLiveSend {
     pub transport_receipt_value: Option<IOValue>,
     pub send_receipt_ref: String,
     pub send_receipt_value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveSendReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub from_peer: String,
+    pub to_node: String,
+    pub topic: String,
+    pub receiver_ticket_ref: String,
+    pub receiver_endpoint_id: String,
+    pub receiver_address_refs: Vec<String>,
+    pub envelope_ref: String,
+    pub transport_receipt_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveWorkflowReceipt {
+    pub receipt_ref: String,
+    pub receipt_value: IOValue,
+    pub decision: String,
+    pub diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2044,6 +2094,9 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
         node_id: input.from_peer,
     })
     .await;
+    if published.is_ok() {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
     sender_router
         .shutdown()
         .await
@@ -2132,6 +2185,170 @@ fn denied_node_control_live_send(
         send_receipt_ref,
         send_receipt_value,
     })
+}
+
+pub fn parse_node_control_live_send_receipt(value: &IOValue) -> Result<NodeControlLiveSendReceipt> {
+    let fields = value
+        .collect_simple_record("node-control-live-send-receipt-v1", Some(13))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-send-receipt-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA, "node control live send receipt")?;
+    let transport_receipt_ref = record_optional_string(&fields[10], "transport-receipt")?;
+    if let Some(reference) = transport_receipt_ref.as_ref() {
+        validate_ingress_ref(reference, "node control live send transport receipt ref")?;
+    }
+    Ok(NodeControlLiveSendReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision: record_string(&fields[1], "decision")?,
+        topic: record_string(&fields[3], "topic")?,
+        from_peer: record_string(&fields[4], "from-peer")?,
+        to_node: record_string(&fields[5], "to-node")?,
+        receiver_ticket_ref: record_ref_string(&fields[6], "receiver-ticket")?,
+        receiver_endpoint_id: record_string(&fields[7], "receiver-endpoint")?,
+        receiver_address_refs: record_strings(&fields[8], "receiver-addresses")?,
+        envelope_ref: record_ref_string(&fields[9], "envelope")?,
+        transport_receipt_ref,
+        diagnostics: record_strings(&fields[11], "diagnostics")?,
+        value: value.clone(),
+    })
+}
+
+pub fn node_control_live_workflow_receipt(
+    input: &NodeControlLiveWorkflowInput<'_>,
+) -> Result<NodeControlLiveWorkflowReceipt> {
+    if let Some(state_root) = input.state_root {
+        validate_state_root(state_root)?;
+        ensure_state_layout(state_root)?;
+    }
+    let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
+    let admission = parse_node_control_live_peer_admission(input.peer_admission_value)?;
+    let authority = parse_node_control_authority_grant(input.authority_grant_value)?;
+    let send = parse_node_control_live_send_receipt(input.send_receipt_value)?;
+    let service_receipt_ref = service_run_receipt_ref(input.service_receipt_value)?;
+    let mut diagnostics = Vec::new();
+    if admission.ticket_ref != ticket.ticket_ref {
+        diagnostics.push("node control live workflow admission does not bind receiver ticket".to_string());
+    }
+    if admission.decision != "pass" {
+        diagnostics.push(format!("node control live workflow admission decision {}", admission.decision));
+    }
+    if authority.peer_id != admission.peer_id {
+        diagnostics.push("node control live workflow authority grant peer does not match admission".to_string());
+    }
+    if authority.node_id != ticket.node_id {
+        diagnostics.push("node control live workflow authority grant node does not match ticket".to_string());
+    }
+    if send.receiver_ticket_ref != ticket.ticket_ref {
+        diagnostics.push("node control live workflow send receipt does not bind receiver ticket".to_string());
+    }
+    if send.from_peer != admission.peer_id {
+        diagnostics.push("node control live workflow send peer does not match admission".to_string());
+    }
+    if send.to_node != ticket.node_id || send.topic != ticket.topic {
+        diagnostics.push("node control live workflow send destination does not match ticket".to_string());
+    }
+    if send.decision != "pass" {
+        diagnostics.push(format!("node control live workflow send decision {}", send.decision));
+    }
+    let mut receive_receipt_refs = Vec::with_capacity(input.receive_receipt_values.len());
+    for receive_value in input.receive_receipt_values {
+        let (receipt_ref, operation, envelope_ref) = live_transport_receipt_ref(receive_value)?;
+        if operation != "receive" {
+            diagnostics
+                .push(format!("node control live workflow transport receipt operation {operation} is not receive"));
+        }
+        if envelope_ref != send.envelope_ref {
+            diagnostics.push("node control live workflow receive envelope does not match send envelope".to_string());
+        }
+        receive_receipt_refs.push(receipt_ref);
+    }
+    if receive_receipt_refs.is_empty() {
+        diagnostics.push("node control live workflow missing receive receipt".to_string());
+    }
+    let listener_receipt_ref = if let Some(listener_value) = input.listener_receipt_value {
+        let (listener_ref, listener_transport_refs, listener_service_ref) = live_listener_receipt_refs(listener_value)?;
+        for receive_ref in &receive_receipt_refs {
+            if !listener_transport_refs.iter().any(|reference| reference == receive_ref) {
+                diagnostics.push("node control live workflow listener does not bind receive receipt".to_string());
+            }
+        }
+        if listener_service_ref != service_receipt_ref {
+            diagnostics
+                .push("node control live workflow listener service run does not match service receipt".to_string());
+        }
+        Some(listener_ref)
+    } else {
+        None
+    };
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let receipt_value = live_workflow_receipt_value(&LiveWorkflowReceiptValueInput {
+        decision,
+        ticket: &ticket,
+        admission: &admission,
+        authority: &authority,
+        send: &send,
+        receive_receipt_refs: &receive_receipt_refs,
+        listener_receipt_ref: listener_receipt_ref.as_deref(),
+        service_receipt_ref: &service_receipt_ref,
+        diagnostics: &diagnostics,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    if let Some(state_root) = input.state_root {
+        import_node_artifact(state_root, input.receiver_ticket_value)?;
+        import_node_artifact(state_root, input.peer_admission_value)?;
+        import_node_artifact(state_root, input.authority_grant_value)?;
+        import_node_artifact(state_root, input.send_receipt_value)?;
+        for receive_value in input.receive_receipt_values {
+            import_node_artifact(state_root, receive_value)?;
+        }
+        if let Some(listener_value) = input.listener_receipt_value {
+            import_node_artifact(state_root, listener_value)?;
+        }
+        import_node_artifact(state_root, input.service_receipt_value)?;
+        write_preserves(&control_live_workflow_receipt_path(state_root, &receipt_ref), &receipt_value)?;
+        import_node_artifact(state_root, &receipt_value)?;
+    }
+    Ok(NodeControlLiveWorkflowReceipt {
+        receipt_ref,
+        receipt_value,
+        decision: decision.to_string(),
+        diagnostics,
+    })
+}
+
+fn service_run_receipt_ref(value: &IOValue) -> Result<String> {
+    if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(17)) {
+        require_schema(&fields[0], NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA, "node control service run receipt")?;
+        return canonical_hash(value);
+    }
+    if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(15)) {
+        require_schema(&fields[0], NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA, "node control service run receipt")?;
+        return canonical_hash(value);
+    }
+    Err(MoltenError::invalid_harness("expected <node-control-service-run-receipt-v1 ...>"))
+}
+
+fn live_transport_receipt_ref(value: &IOValue) -> Result<(String, String, String)> {
+    let fields = value
+        .collect_simple_record("node-control-live-transport-receipt-v1", Some(11))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA, "node control live transport receipt")?;
+    Ok((
+        canonical_hash(value)?,
+        record_string(&fields[1], "operation")?,
+        record_ref_string(&fields[7], "envelope")?,
+    ))
+}
+
+fn live_listener_receipt_refs(value: &IOValue) -> Result<(String, Vec<String>, String)> {
+    let fields = value
+        .collect_simple_record("node-control-live-listener-receipt-v1", Some(14))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-listener-receipt-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA, "node control live listener receipt")?;
+    Ok((
+        canonical_hash(value)?,
+        record_ref_strings(&fields[9], "transport-receipts")?,
+        record_ref_string(&fields[11], "service-run")?,
+    ))
 }
 
 pub async fn serve_node_control_live_listener(input: &NodeControlLiveServeInput<'_>) -> Result<NodeControlLiveServe> {
@@ -3548,6 +3765,65 @@ fn live_transport_receipt_value(input: &LiveTransportReceiptValueInput<'_>) -> R
     ]))
 }
 
+fn live_workflow_receipt_value(input: &LiveWorkflowReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    Ok(record("node-control-live-workflow-receipt-v1", vec![
+        string(NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("topic", vec![string(&input.ticket.topic)]),
+        record("peer", vec![string(&input.admission.peer_id)]),
+        record("node", vec![string(&input.ticket.node_id)]),
+        record("receiver-ticket", vec![string(&input.ticket.ticket_ref)]),
+        record("peer-admission", vec![string(&input.admission.admission_ref)]),
+        record("authority-grant", vec![string(&input.authority.grant_ref)]),
+        record("send-receipt", vec![string(&input.send.receipt_ref)]),
+        record("receive-receipts", vec![sequence(input.receive_receipt_refs.iter().map(string).collect())]),
+        record("listener-receipt", vec![optional_string(input.listener_receipt_ref)]),
+        record("service-run", vec![string(input.service_receipt_ref)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![
+                string("ticket-admission-bound"),
+                string(if input.admission.ticket_ref == input.ticket.ticket_ref {
+                    "pass"
+                } else {
+                    "fail"
+                }),
+            ]),
+            record("check", vec![
+                string("authority-grant-bound"),
+                string(
+                    if input.authority.peer_id == input.admission.peer_id
+                        && input.authority.node_id == input.ticket.node_id
+                    {
+                        "pass"
+                    } else {
+                        "fail"
+                    },
+                ),
+            ]),
+            record("check", vec![
+                string("send-ticket-bound"),
+                string(if input.send.receiver_ticket_ref == input.ticket.ticket_ref {
+                    "pass"
+                } else {
+                    "fail"
+                }),
+            ]),
+            record("check", vec![
+                string("receive-before-service"),
+                string(if input.receive_receipt_refs.is_empty() {
+                    "fail"
+                } else {
+                    "pass"
+                }),
+            ]),
+            record("check", vec![string("transport-is-not-authority"), string("pass")]),
+            record("check", vec![string("durable-inbox-boundary"), string("pass")]),
+        ])]),
+    ]))
+}
+
 fn live_send_receipt_value(input: &LiveSendReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let has_addresses = !input.ticket.address_refs.is_empty();
@@ -3936,6 +4212,17 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_string(&fields[11], "service-run")?
         ));
     }
+    if let Some(fields) = value.collect_simple_record("node-control-live-workflow-receipt-v1", Some(14)) {
+        require_schema(&fields[0], NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA, "node control live workflow receipt")?;
+        return Ok(format!(
+            "node control live workflow decision={} peer={} node={} send={} service={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[3], "peer")?,
+            record_string(&fields[4], "node")?,
+            record_string(&fields[8], "send-receipt")?,
+            record_string(&fields[11], "service-run")?
+        ));
+    }
     if let Some(fields) = value.collect_simple_record("node-control-live-send-receipt-v1", Some(13)) {
         require_schema(&fields[0], NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA, "node control live send receipt")?;
         return Ok(format!(
@@ -4271,6 +4558,13 @@ fn control_live_send_receipt_path(state_root: &Path, send_ref: &str) -> PathBuf 
         .join(CONTROL_INGRESS_DIR)
         .join("receipts")
         .join(format!("{}.live-send.receipt.preserves", ref_file_stem(send_ref)))
+}
+
+fn control_live_workflow_receipt_path(state_root: &Path, workflow_ref: &str) -> PathBuf {
+    state_root
+        .join(CONTROL_INGRESS_DIR)
+        .join("receipts")
+        .join(format!("{}.live-workflow.receipt.preserves", ref_file_stem(workflow_ref)))
 }
 
 fn control_live_listener_receipt_path(state_root: &Path, listener_ref: &str) -> PathBuf {
@@ -5364,7 +5658,7 @@ mod tests {
                 evidence_refs: &[],
             })
             .expect("peer admission");
-            let peer_bootstrap_refs = vec![admission.admission_ref];
+            let peer_bootstrap_refs = vec![admission.admission_ref.clone()];
             let authority_refs =
                 test_live_authority_refs(&root, "peer:external-send", "node:live-send", "status", &policy_refs)
                     .expect("authority grant ref");
@@ -5417,6 +5711,26 @@ mod tests {
             assert_eq!(listener.service.processed_request_refs.len(), 1);
             assert_eq!(listener.transport_receipt_refs.len(), 1);
             assert!(listener.observed_events > 0);
+            let authority_value = read_node_ledger_artifact(&root, &authority_refs[0]).expect("authority value");
+            let receive_values = listener
+                .transport_receipt_refs
+                .iter()
+                .map(|reference| read_node_ledger_artifact(&root, reference).expect("receive receipt value"))
+                .collect::<Vec<_>>();
+            let receive_value_refs = receive_values.iter().collect::<Vec<_>>();
+            let workflow = node_control_live_workflow_receipt(&NodeControlLiveWorkflowInput {
+                state_root: Some(&root),
+                receiver_ticket_value: &live_ticket.value,
+                peer_admission_value: &admission.value,
+                authority_grant_value: &authority_value,
+                send_receipt_value: &sent.send_receipt_value,
+                receive_receipt_values: &receive_value_refs,
+                listener_receipt_value: Some(&listener.listener_receipt_value),
+                service_receipt_value: &listener.service.service_receipt_value,
+            })
+            .expect("workflow receipt");
+            assert_eq!(workflow.decision, "pass");
+            assert_eq!(ledger::artifact_kind(&workflow.receipt_value), "node-control-live-workflow-receipt");
         });
     }
 
