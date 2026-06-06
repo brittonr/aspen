@@ -694,6 +694,7 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     let bundle_verify = dir.join("workflow-bundle-verify.preserves");
     let bundle_gate = dir.join("workflow-bundle-gate.preserves");
     let bundle_apply = dir.join("workflow-bundle-apply.preserves");
+    let bundle_reconcile = dir.join("workflow-bundle-reconcile.preserves");
     let bundle_import = dir.join("workflow-bundle-import.preserves");
     let bundle_import_send_receipt = dir.join("bundle-import-send.preserves");
     let ticket_import = dir.join("ticket-import.preserves");
@@ -938,6 +939,22 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     );
     let bundle_apply_text = to_text(&read_preserves(&bundle_apply)?)?;
     assert!(bundle_apply_text.contains("apply-receipt-is-not-authority"));
+
+    let bundle_reconcile_out = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle-reconcile"])
+        .arg(&bundle_apply)
+        .args(["--receipt-out"])
+        .arg(&bundle_reconcile)
+        .output()?;
+    assert_success(&bundle_reconcile_out, "live workflow bundle reconcile missing receiver");
+    assert!(stdout(&bundle_reconcile_out).contains("decision=deny"));
+    assert!(stdout(&bundle_reconcile_out).contains("next-step=wait-or-import-receiver-ingress"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&bundle_reconcile)?),
+        "node-control-live-workflow-bundle-reconcile-receipt"
+    );
+    let bundle_reconcile_text = to_text(&read_preserves(&bundle_reconcile)?)?;
+    assert!(bundle_reconcile_text.contains("reconcile-receipt-is-not-authority"));
 
     let bundle_import_out = molten_cmd()
         .args(["test", "node", "live-workflow-bundle-import", "--state-root"])

@@ -894,6 +894,25 @@ enum NodeCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    LiveWorkflowBundleReconcile {
+        apply_receipt: PathBuf,
+        #[arg(long)]
+        send_receipt: Option<PathBuf>,
+        #[arg(long)]
+        ingress_receipt: Option<PathBuf>,
+        #[arg(long)]
+        queue_receipt: Option<PathBuf>,
+        #[arg(long)]
+        control_receipt: Option<PathBuf>,
+        #[arg(long)]
+        expected_envelope: Option<String>,
+        #[arg(long)]
+        expected_operation: Option<String>,
+        #[arg(long)]
+        expected_request: Option<String>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     LiveWorkflowBundleImport {
         #[arg(long)]
         state_root: PathBuf,
@@ -6264,6 +6283,52 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             print_live_workflow_bundle_apply_next_step(&applied, request_value.is_some(), send);
             Ok(())
         }
+        NodeCommand::LiveWorkflowBundleReconcile {
+            apply_receipt,
+            send_receipt,
+            ingress_receipt,
+            queue_receipt,
+            control_receipt,
+            expected_envelope,
+            expected_operation,
+            expected_request,
+            receipt_out,
+        } => {
+            let apply_receipt_value = read_preserves_file(&apply_receipt)?;
+            let send_receipt_value = send_receipt.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let ingress_receipt_value = ingress_receipt.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let queue_receipt_value = queue_receipt.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let control_receipt_value = control_receipt.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let reconciled = node_daemon::reconcile_node_control_live_workflow_bundle(
+                &node_daemon::NodeControlLiveWorkflowBundleReconcileInput {
+                    apply_receipt_value: &apply_receipt_value,
+                    send_receipt_value: send_receipt_value.as_ref(),
+                    ingress_receipt_value: ingress_receipt_value.as_ref(),
+                    queue_receipt_value: queue_receipt_value.as_ref(),
+                    control_receipt_value: control_receipt_value.as_ref(),
+                    expected_envelope_ref: expected_envelope.as_deref(),
+                    expected_operation_ref: expected_operation.as_deref(),
+                    expected_request_ref: expected_request.as_deref(),
+                },
+            )?;
+            emit_named_receipt(
+                receipt_out.as_ref(),
+                "node control live workflow bundle reconcile receipt",
+                &reconciled.receipt_value,
+            )?;
+            println!(
+                "node live workflow bundle reconcile decision={} bundle={} apply={} ingress={} queue={} control={} diagnostics={}",
+                reconciled.decision,
+                reconciled.bundle_ref,
+                reconciled.apply_receipt_ref,
+                reconciled.ingress_receipt_ref.as_deref().unwrap_or("none"),
+                reconciled.queue_receipt_ref.as_deref().unwrap_or("none"),
+                reconciled.control_receipt_ref.as_deref().unwrap_or("none"),
+                reconciled.diagnostics.len()
+            );
+            print_live_workflow_bundle_reconcile_next_step(&reconciled);
+            Ok(())
+        }
         NodeCommand::LiveWorkflowBundleImport {
             state_root,
             bundle,
@@ -6407,6 +6472,34 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             Ok(())
         }
     }
+}
+
+fn print_live_workflow_bundle_reconcile_next_step(reconciled: &node_daemon::NodeControlLiveWorkflowBundleReconcile) {
+    if reconciled.decision == "pass" {
+        if reconciled.control_receipt_ref.is_some() {
+            println!("next-step=inspect-control-receipt command=\"molten node show <control-receipt>\"");
+        } else {
+            println!("next-step=run-receiver-control-loop command=\"molten node run-loop --state-root <receiver>\"");
+        }
+        return;
+    }
+    let has_missing_ingress = reconciled
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.contains("requires receiver ingress receipt"));
+    if has_missing_ingress {
+        println!(
+            "next-step=wait-or-import-receiver-ingress command=\"molten node live-workflow-bundle-reconcile ... --ingress-receipt <receipt>\""
+        );
+        return;
+    }
+    let has_control_denial =
+        reconciled.diagnostics.iter().any(|diagnostic| diagnostic.contains("receiver control receipt"));
+    if has_control_denial {
+        println!("next-step=inspect-receiver-denial command=\"molten node show <control-receipt>\"");
+        return;
+    }
+    println!("next-step=inspect-reconcile-diagnostics command=\"molten node show <reconcile-receipt>\"");
 }
 
 fn print_live_workflow_bundle_apply_next_step(

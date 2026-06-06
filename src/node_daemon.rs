@@ -34,6 +34,7 @@ use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEM
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA;
@@ -395,6 +396,18 @@ pub struct NodeControlLiveWorkflowBundleApplyInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveWorkflowBundleReconcileInput<'a> {
+    pub apply_receipt_value: &'a IOValue,
+    pub send_receipt_value: Option<&'a IOValue>,
+    pub ingress_receipt_value: Option<&'a IOValue>,
+    pub queue_receipt_value: Option<&'a IOValue>,
+    pub control_receipt_value: Option<&'a IOValue>,
+    pub expected_envelope_ref: Option<&'a str>,
+    pub expected_operation_ref: Option<&'a str>,
+    pub expected_request_ref: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct NodeControlLiveWorkflowBundleImportInput<'a> {
     pub state_root: &'a Path,
     pub bundle_value: &'a IOValue,
@@ -637,6 +650,41 @@ struct LiveWorkflowBundleApplyReceiptValueInput<'a> {
     send_receipt_ref: Option<&'a str>,
     expected: &'a LiveWorkflowBundleExpectedInput<'a>,
     diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveWorkflowBundleReconcileReceiptValueInput<'a> {
+    decision: &'a str,
+    apply_receipt_ref: &'a str,
+    bundle_ref: &'a str,
+    send_receipt_ref: Option<&'a str>,
+    ingress_receipt_ref: Option<&'a str>,
+    queue_receipt_ref: Option<&'a str>,
+    control_receipt_ref: Option<&'a str>,
+    envelope_ref: Option<&'a str>,
+    operation_ref: Option<&'a str>,
+    request_ref: Option<&'a str>,
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ReconcileArtifacts<'a> {
+    apply: &'a NodeControlLiveWorkflowBundleApplyReceipt,
+    send: Option<&'a NodeControlLiveSendReceipt>,
+    ingress: Option<&'a NodeControlIngressReceipt>,
+    queue: Option<&'a NodeControlQueueReceipt>,
+    control: Option<&'a node_runtime::NodeControlReceipt>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveWorkflowBundleReconcileBindings<'a> {
+    send_receipt_ref: Option<&'a str>,
+    ingress_receipt_ref: Option<&'a str>,
+    queue_receipt_ref: Option<&'a str>,
+    control_receipt_ref: Option<&'a str>,
+    envelope_ref: Option<&'a str>,
+    operation_ref: Option<&'a str>,
+    request_ref: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1047,6 +1095,68 @@ pub struct NodeControlLiveWorkflowBundleApply {
     pub operation_ref: Option<String>,
     pub send_receipt_ref: Option<String>,
     pub send_receipt_value: Option<IOValue>,
+    pub diagnostics: Vec<String>,
+    pub receipt_ref: String,
+    pub receipt_value: IOValue,
+    pub decision: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveWorkflowBundleApplyReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub bundle_ref: String,
+    pub gate_receipt_ref: Option<String>,
+    pub recomputed_verify_receipt_ref: String,
+    pub import_receipt_ref: Option<String>,
+    pub imported_refs: Vec<String>,
+    pub mode: String,
+    pub envelope_ref: Option<String>,
+    pub operation_ref: Option<String>,
+    pub send_receipt_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlIngressReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub phase: String,
+    pub transport: String,
+    pub topic: String,
+    pub from_peer: String,
+    pub to_node: String,
+    pub sequence: u64,
+    pub envelope_ref: String,
+    pub operation_ref: String,
+    pub request_ref: String,
+    pub idempotency_receipt_ref: Option<String>,
+    pub queue_receipt_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlQueueReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub phase: String,
+    pub operation: String,
+    pub request_ref: String,
+    pub location_ref: String,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveWorkflowBundleReconcile {
+    pub bundle_ref: String,
+    pub apply_receipt_ref: String,
+    pub send_receipt_ref: Option<String>,
+    pub ingress_receipt_ref: Option<String>,
+    pub queue_receipt_ref: Option<String>,
+    pub control_receipt_ref: Option<String>,
+    pub envelope_ref: Option<String>,
+    pub operation_ref: Option<String>,
+    pub request_ref: Option<String>,
     pub diagnostics: Vec<String>,
     pub receipt_ref: String,
     pub receipt_value: IOValue,
@@ -1820,6 +1930,383 @@ pub async fn apply_node_control_live_workflow_bundle(
     })
 }
 
+pub fn reconcile_node_control_live_workflow_bundle(
+    input: &NodeControlLiveWorkflowBundleReconcileInput<'_>,
+) -> Result<NodeControlLiveWorkflowBundleReconcile> {
+    validate_live_workflow_bundle_reconcile_input(input)?;
+    let apply = parse_node_control_live_workflow_bundle_apply_receipt(input.apply_receipt_value)?;
+    let send = input.send_receipt_value.map(parse_node_control_live_send_receipt).transpose()?;
+    let ingress = input.ingress_receipt_value.map(parse_node_control_ingress_receipt).transpose()?;
+    let queue = input.queue_receipt_value.map(parse_node_control_queue_receipt).transpose()?;
+    let control = input.control_receipt_value.map(node_runtime::parse_node_control_receipt).transpose()?;
+    let artifacts = ReconcileArtifacts {
+        apply: &apply,
+        send: send.as_ref(),
+        ingress: ingress.as_ref(),
+        queue: queue.as_ref(),
+        control: control.as_ref(),
+    };
+    let mut diagnostics = live_workflow_bundle_reconcile_diagnostics(input, &artifacts)?;
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let bindings = live_workflow_bundle_reconcile_bindings(&artifacts);
+    let receipt_value = live_workflow_bundle_reconcile_receipt_value(&LiveWorkflowBundleReconcileReceiptValueInput {
+        decision,
+        apply_receipt_ref: &apply.receipt_ref,
+        bundle_ref: &apply.bundle_ref,
+        send_receipt_ref: bindings.send_receipt_ref,
+        ingress_receipt_ref: bindings.ingress_receipt_ref,
+        queue_receipt_ref: bindings.queue_receipt_ref,
+        control_receipt_ref: bindings.control_receipt_ref,
+        envelope_ref: bindings.envelope_ref,
+        operation_ref: bindings.operation_ref,
+        request_ref: bindings.request_ref,
+        diagnostics: &diagnostics,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    diagnostics.shrink_to_fit();
+    Ok(NodeControlLiveWorkflowBundleReconcile {
+        bundle_ref: apply.bundle_ref.clone(),
+        apply_receipt_ref: apply.receipt_ref.clone(),
+        send_receipt_ref: bindings.send_receipt_ref.map(ToString::to_string),
+        ingress_receipt_ref: bindings.ingress_receipt_ref.map(ToString::to_string),
+        queue_receipt_ref: bindings.queue_receipt_ref.map(ToString::to_string),
+        control_receipt_ref: bindings.control_receipt_ref.map(ToString::to_string),
+        envelope_ref: bindings.envelope_ref.map(ToString::to_string),
+        operation_ref: bindings.operation_ref.map(ToString::to_string),
+        request_ref: bindings.request_ref.map(ToString::to_string),
+        diagnostics,
+        receipt_ref,
+        receipt_value,
+        decision: decision.to_string(),
+    })
+}
+
+fn validate_live_workflow_bundle_reconcile_input(
+    input: &NodeControlLiveWorkflowBundleReconcileInput<'_>,
+) -> Result<()> {
+    if let Some(reference) = input.expected_envelope_ref {
+        validate_ingress_ref(reference, "node control live workflow bundle reconcile expected envelope ref")?;
+    }
+    if let Some(reference) = input.expected_operation_ref {
+        validate_ingress_ref(reference, "node control live workflow bundle reconcile expected operation ref")?;
+    }
+    if let Some(reference) = input.expected_request_ref {
+        validate_ingress_ref(reference, "node control live workflow bundle reconcile expected request ref")?;
+    }
+    Ok(())
+}
+
+fn live_workflow_bundle_reconcile_diagnostics(
+    input: &NodeControlLiveWorkflowBundleReconcileInput<'_>,
+    artifacts: &ReconcileArtifacts<'_>,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::with_capacity(16);
+    if artifacts.apply.decision != "pass" {
+        diagnostics.push(format!(
+            "node control live workflow bundle reconcile apply receipt {} decision {}",
+            artifacts.apply.receipt_ref, artifacts.apply.decision
+        ));
+        diagnostics.extend(artifacts.apply.diagnostics.clone());
+    }
+    if artifacts.apply.envelope_ref.is_none() {
+        diagnostics.push(
+            "node control live workflow bundle reconcile apply receipt has no live envelope; rerun apply with --request"
+                .to_string(),
+        );
+    }
+    diagnostics.extend(live_workflow_bundle_reconcile_send_diagnostics(artifacts));
+    diagnostics.extend(live_workflow_bundle_reconcile_ingress_diagnostics(input, artifacts));
+    diagnostics.extend(live_workflow_bundle_reconcile_queue_diagnostics(artifacts));
+    diagnostics.extend(live_workflow_bundle_reconcile_control_diagnostics(artifacts));
+    Ok(diagnostics)
+}
+
+fn live_workflow_bundle_reconcile_send_diagnostics(artifacts: &ReconcileArtifacts<'_>) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(4);
+    match (&artifacts.apply.send_receipt_ref, artifacts.send) {
+        (Some(expected), Some(send)) => {
+            if send.receipt_ref != *expected {
+                diagnostics.push(format!(
+                    "node control live workflow bundle reconcile send receipt {} does not match apply {}",
+                    send.receipt_ref, expected
+                ));
+            }
+        }
+        (Some(expected), None) => diagnostics.push(format!(
+            "node control live workflow bundle reconcile requires send receipt {expected} from apply receipt"
+        )),
+        (None, Some(_)) => {}
+        (None, None) => {}
+    }
+    if let Some(send) = artifacts.send {
+        if send.decision != "pass" {
+            diagnostics.push(format!(
+                "node control live workflow bundle reconcile send receipt {} decision {}",
+                send.receipt_ref, send.decision
+            ));
+            diagnostics.extend(send.diagnostics.clone());
+        }
+        if let Some(envelope_ref) = artifacts.apply.envelope_ref.as_ref()
+            && send.envelope_ref != *envelope_ref
+        {
+            diagnostics.push(format!(
+                "node control live workflow bundle reconcile send envelope {} does not match apply {}",
+                send.envelope_ref, envelope_ref
+            ));
+        }
+    }
+    diagnostics
+}
+
+fn live_workflow_bundle_reconcile_ingress_diagnostics(
+    input: &NodeControlLiveWorkflowBundleReconcileInput<'_>,
+    artifacts: &ReconcileArtifacts<'_>,
+) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(8);
+    let Some(ingress) = artifacts.ingress else {
+        diagnostics.push(
+            "node control live workflow bundle reconcile requires receiver ingress receipt for the live envelope"
+                .to_string(),
+        );
+        return diagnostics;
+    };
+    if ingress.decision != "pass" {
+        diagnostics.push(format!(
+            "node control live workflow bundle reconcile receiver ingress receipt {} decision {}",
+            ingress.receipt_ref, ingress.decision
+        ));
+        diagnostics.extend(ingress.diagnostics.clone());
+    }
+    if let Some(expected) = input.expected_envelope_ref
+        && ingress.envelope_ref != expected
+    {
+        diagnostics.push(format!(
+            "node control live workflow bundle reconcile receiver envelope {} does not match expected {}",
+            ingress.envelope_ref, expected
+        ));
+    }
+    if let Some(expected) = artifacts.apply.envelope_ref.as_ref()
+        && ingress.envelope_ref != *expected
+    {
+        diagnostics.push(format!(
+            "node control live workflow bundle reconcile receiver envelope {} does not match apply {}",
+            ingress.envelope_ref, expected
+        ));
+    }
+    if let Some(send) = artifacts.send
+        && ingress.envelope_ref != send.envelope_ref
+    {
+        diagnostics.push(format!(
+            "node control live workflow bundle reconcile receiver envelope {} does not match send {}",
+            ingress.envelope_ref, send.envelope_ref
+        ));
+    }
+    if let Some(expected) = input.expected_operation_ref
+        && ingress.operation_ref != expected
+    {
+        diagnostics.push(format!(
+            "node control live workflow bundle reconcile receiver operation {} does not match expected {}",
+            ingress.operation_ref, expected
+        ));
+    }
+    if let Some(expected) = artifacts.apply.operation_ref.as_ref()
+        && ingress.operation_ref != *expected
+    {
+        diagnostics.push(format!(
+            "node control live workflow bundle reconcile receiver operation {} does not match apply {}",
+            ingress.operation_ref, expected
+        ));
+    }
+    if let Some(expected) = input.expected_request_ref
+        && ingress.request_ref != expected
+    {
+        diagnostics.push(format!(
+            "node control live workflow bundle reconcile receiver request {} does not match expected {}",
+            ingress.request_ref, expected
+        ));
+    }
+    if ingress.decision == "pass" && ingress.queue_receipt_ref.is_none() {
+        diagnostics.push(
+            "node control live workflow bundle reconcile receiver ingress passed without durable queue receipt"
+                .to_string(),
+        );
+    }
+    diagnostics
+}
+
+fn live_workflow_bundle_reconcile_queue_diagnostics(artifacts: &ReconcileArtifacts<'_>) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(4);
+    if let Some(queue) = artifacts.queue {
+        if queue.decision != "pass" {
+            diagnostics.push(format!(
+                "node control live workflow bundle reconcile queue receipt {} decision {}",
+                queue.receipt_ref, queue.decision
+            ));
+            diagnostics.extend(queue.diagnostics.clone());
+        }
+        if let Some(ingress) = artifacts.ingress {
+            if let Some(expected) = ingress.queue_receipt_ref.as_ref()
+                && queue.receipt_ref != *expected
+            {
+                diagnostics.push(format!(
+                    "node control live workflow bundle reconcile queue receipt {} does not match ingress {}",
+                    queue.receipt_ref, expected
+                ));
+            }
+            if queue.request_ref != ingress.request_ref {
+                diagnostics.push(format!(
+                    "node control live workflow bundle reconcile queue request {} does not match ingress {}",
+                    queue.request_ref, ingress.request_ref
+                ));
+            }
+        }
+    }
+    diagnostics
+}
+
+fn live_workflow_bundle_reconcile_control_diagnostics(artifacts: &ReconcileArtifacts<'_>) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(4);
+    if let Some(control) = artifacts.control {
+        if control.decision != "pass" {
+            diagnostics.push(format!(
+                "node control live workflow bundle reconcile receiver control receipt {} decision {}",
+                control.receipt_ref, control.decision
+            ));
+            diagnostics.extend(control.diagnostics.clone());
+        }
+        if let Some(ingress) = artifacts.ingress
+            && control.request_ref != ingress.request_ref
+        {
+            diagnostics.push(format!(
+                "node control live workflow bundle reconcile control request {} does not match ingress {}",
+                control.request_ref, ingress.request_ref
+            ));
+        }
+    }
+    diagnostics
+}
+
+fn live_workflow_bundle_reconcile_bindings<'a>(
+    artifacts: &'a ReconcileArtifacts<'a>,
+) -> LiveWorkflowBundleReconcileBindings<'a> {
+    let send_receipt_ref =
+        artifacts.send.map(|send| send.receipt_ref.as_str()).or(artifacts.apply.send_receipt_ref.as_deref());
+    let ingress_receipt_ref = artifacts.ingress.map(|ingress| ingress.receipt_ref.as_str());
+    let queue_receipt_ref = artifacts
+        .queue
+        .map(|queue| queue.receipt_ref.as_str())
+        .or_else(|| artifacts.ingress.and_then(|ingress| ingress.queue_receipt_ref.as_deref()));
+    let control_receipt_ref = artifacts.control.map(|control| control.receipt_ref.as_str());
+    let envelope_ref = artifacts
+        .ingress
+        .map(|ingress| ingress.envelope_ref.as_str())
+        .or_else(|| artifacts.send.map(|send| send.envelope_ref.as_str()))
+        .or(artifacts.apply.envelope_ref.as_deref());
+    let operation_ref = artifacts
+        .ingress
+        .map(|ingress| ingress.operation_ref.as_str())
+        .or(artifacts.apply.operation_ref.as_deref());
+    let request_ref = artifacts
+        .control
+        .map(|control| control.request_ref.as_str())
+        .or_else(|| artifacts.queue.map(|queue| queue.request_ref.as_str()))
+        .or_else(|| artifacts.ingress.map(|ingress| ingress.request_ref.as_str()));
+    LiveWorkflowBundleReconcileBindings {
+        send_receipt_ref,
+        ingress_receipt_ref,
+        queue_receipt_ref,
+        control_receipt_ref,
+        envelope_ref,
+        operation_ref,
+        request_ref,
+    }
+}
+
+pub fn parse_node_control_live_workflow_bundle_apply_receipt(
+    value: &IOValue,
+) -> Result<NodeControlLiveWorkflowBundleApplyReceipt> {
+    let fields = value
+        .collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15))
+        .ok_or_else(|| {
+            MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-apply-receipt-v1 ...>")
+        })?;
+    require_schema(
+        &fields[0],
+        NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
+        "node control live workflow bundle apply receipt",
+    )?;
+    let gate_receipt_ref = record_optional_ref_string(&fields[4], "gate-receipt")?;
+    let import_receipt_ref = record_optional_ref_string(&fields[6], "import-receipt")?;
+    let envelope_ref = record_optional_ref_string(&fields[9], "envelope")?;
+    let operation_ref = record_optional_ref_string(&fields[10], "operation")?;
+    let send_receipt_ref = record_optional_ref_string(&fields[11], "send-receipt")?;
+    let _expected = record_value(&fields[12], "expected")?;
+    let _checks = record_sequence_len(&fields[14], "checks")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    Ok(NodeControlLiveWorkflowBundleApplyReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        bundle_ref: record_ref_string(&fields[3], "bundle")?,
+        gate_receipt_ref,
+        recomputed_verify_receipt_ref: record_ref_string(&fields[5], "recomputed-verify")?,
+        import_receipt_ref,
+        imported_refs: record_ref_strings(&fields[7], "imported")?,
+        mode: record_string(&fields[8], "mode")?,
+        envelope_ref,
+        operation_ref,
+        send_receipt_ref,
+        diagnostics: record_strings(&fields[13], "diagnostics")?,
+    })
+}
+
+pub fn parse_node_control_ingress_receipt(value: &IOValue) -> Result<NodeControlIngressReceipt> {
+    let fields = value
+        .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_INGRESS_RECEIPT_SCHEMA, "node control ingress receipt")?;
+    let idempotency_receipt_ref = record_optional_ref_string(&fields[11], "idempotency")?;
+    let queue_receipt_ref = record_optional_ref_string(&fields[12], "queue")?;
+    let _checks = record_sequence_len(&fields[14], "checks")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    Ok(NodeControlIngressReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        phase: record_string(&fields[2], "phase")?,
+        transport: record_string(&fields[3], "transport")?,
+        topic: record_string(&fields[4], "topic")?,
+        from_peer: record_string(&fields[5], "from-peer")?,
+        to_node: record_string(&fields[6], "to-node")?,
+        sequence: record_u64_string(&fields[7], "sequence")?,
+        envelope_ref: record_ref_string(&fields[8], "envelope")?,
+        operation_ref: record_ref_string(&fields[9], "operation")?,
+        request_ref: record_ref_string(&fields[10], "request")?,
+        idempotency_receipt_ref,
+        queue_receipt_ref,
+        diagnostics: record_strings(&fields[13], "diagnostics")?,
+    })
+}
+
+pub fn parse_node_control_queue_receipt(value: &IOValue) -> Result<NodeControlQueueReceipt> {
+    let fields = value
+        .collect_simple_record("node-control-queue-receipt-v1", Some(9))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-queue-receipt-v1 ...>"))?;
+    require_schema(&fields[0], NODE_CONTROL_QUEUE_RECEIPT_SCHEMA, "node control queue receipt")?;
+    let _checks = record_sequence_len(&fields[8], "checks")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    Ok(NodeControlQueueReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        phase: record_string(&fields[2], "phase")?,
+        operation: record_string(&fields[3], "operation")?,
+        request_ref: record_ref_string(&fields[4], "request")?,
+        location_ref: record_ref_string(&fields[6], "location")?,
+        diagnostics: record_strings(&fields[7], "diagnostics")?,
+    })
+}
+
 pub fn parse_node_control_live_workflow_bundle_verify_receipt(
     value: &IOValue,
 ) -> Result<NodeControlLiveWorkflowBundleVerifyReceipt> {
@@ -2310,6 +2797,7 @@ fn is_live_workflow_bundle_receipt_kind(kind: &str) -> bool {
             | "node-control-live-workflow-bundle-verify-receipt"
             | "node-control-live-workflow-bundle-gate-receipt"
             | "node-control-live-workflow-bundle-apply-receipt"
+            | "node-control-live-workflow-bundle-reconcile-receipt"
             | "node-control-live-transport-receipt"
             | "node-control-live-listener-receipt"
             | "node-control-service-run-receipt"
@@ -2638,6 +3126,36 @@ fn live_workflow_bundle_apply_receipt_value(input: &LiveWorkflowBundleApplyRecei
             record("check", vec![string("bundle-imported"), string(apply_status)]),
             record("check", vec![string("send-preflight-or-dispatch"), string(apply_status)]),
             record("check", vec![string("apply-receipt-is-not-authority"), string("pass")]),
+            record("check", vec![string("provenance-still-required"), string("pass")]),
+        ])]),
+    ]))
+}
+
+fn live_workflow_bundle_reconcile_receipt_value(
+    input: &LiveWorkflowBundleReconcileReceiptValueInput<'_>,
+) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    let reconcile_status = if input.decision == "pass" { "pass" } else { "fail" };
+    Ok(record("node-control-live-workflow-bundle-reconcile-receipt-v1", vec![
+        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("apply-receipt", vec![string(input.apply_receipt_ref)]),
+        record("bundle", vec![string(input.bundle_ref)]),
+        record("send-receipt", vec![optional_string(input.send_receipt_ref)]),
+        record("ingress-receipt", vec![optional_string(input.ingress_receipt_ref)]),
+        record("queue-receipt", vec![optional_string(input.queue_receipt_ref)]),
+        record("control-receipt", vec![optional_string(input.control_receipt_ref)]),
+        record("envelope", vec![optional_string(input.envelope_ref)]),
+        record("operation", vec![optional_string(input.operation_ref)]),
+        record("request", vec![optional_string(input.request_ref)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("apply-receipt-bound"), string(reconcile_status)]),
+            record("check", vec![string("send-receipt-current"), string(reconcile_status)]),
+            record("check", vec![string("receiver-ingress-bound"), string(reconcile_status)]),
+            record("check", vec![string("durable-enqueue-or-deny"), string(reconcile_status)]),
+            record("check", vec![string("control-dispatch-bound"), string(reconcile_status)]),
+            record("check", vec![string("reconcile-receipt-is-not-authority"), string("pass")]),
             record("check", vec![string("provenance-still-required"), string("pass")]),
         ])]),
     ]))
@@ -6474,6 +6992,22 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_optional_string(&fields[11], "send-receipt")?.unwrap_or_else(|| "none".to_string())
         ));
     }
+    if let Some(fields) =
+        value.collect_simple_record("node-control-live-workflow-bundle-reconcile-receipt-v1", Some(13))
+    {
+        require_schema(
+            &fields[0],
+            NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
+            "node control live workflow bundle reconcile receipt",
+        )?;
+        return Ok(format!(
+            "node control live workflow bundle reconcile decision={} bundle={} envelope={} control={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[3], "bundle")?,
+            record_optional_string(&fields[8], "envelope")?.unwrap_or_else(|| "none".to_string()),
+            record_optional_string(&fields[7], "control-receipt")?.unwrap_or_else(|| "none".to_string())
+        ));
+    }
     if let Some(fields) = value.collect_simple_record("node-control-live-send-retry-receipt-v1", Some(14)) {
         require_schema(
             &fields[0],
@@ -6923,6 +7457,14 @@ fn record_optional_string(value: &preserves::Value<preserves::IOValue>, tag: &st
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("{tag} <some> must contain a string")))?;
     Ok(Some(value))
+}
+
+fn record_optional_ref_string(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Option<String>> {
+    let reference = record_optional_string(value, tag)?;
+    if let Some(reference) = reference.as_ref() {
+        validate_ingress_ref(reference, tag)?;
+    }
+    Ok(reference)
 }
 
 fn record_optional_u64_string(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Option<u64>> {
@@ -7809,6 +8351,228 @@ mod tests {
         let control = node_runtime::parse_node_control_receipt(&control_value).expect("parse control receipt");
         assert_eq!(control.decision, "deny");
         assert!(control.diagnostics.iter().any(|diagnostic| diagnostic.contains("provenance evidence refs missing")));
+    }
+
+    #[test]
+    fn node_control_live_workflow_bundle_reconcile_binds_receiver_evidence() {
+        let root = temp_dir("node-control-live-workflow-reconcile");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:reconcile",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let policy_refs = vec![local_ref("node-control-policy", "reconcile").expect("policy ref")];
+        let resource_refs = vec![local_ref("node-control-resource", "reconcile").expect("resource ref")];
+        let peer_bootstrap_refs =
+            test_live_peer_bootstrap_refs(&root, "peer:reconcile", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
+                .expect("peer bootstrap");
+        let authority_refs =
+            test_live_authority_refs(&root, "peer:reconcile", "node:reconcile", "status", &policy_refs)
+                .expect("authority refs");
+        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "status",
+            target_ref: None,
+            payload_ref: None,
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("status request");
+        let request = node_runtime::parse_node_control_request(&request_value).expect("request");
+        let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: &request_value,
+            from_peer: "peer:reconcile",
+            to_node: "node:reconcile",
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            sequence: 1,
+            peer_bootstrap_refs: &peer_bootstrap_refs,
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("live envelope");
+        publish_node_control_ingress(&NodeControlIngressPublishInput {
+            state_root: &root,
+            envelope_value: &envelope.value,
+        })
+        .expect("publish envelope");
+        let delivered = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
+            state_root: &root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            envelope_ref: &envelope.envelope_ref,
+        })
+        .expect("deliver envelope");
+        assert!(
+            delivered.has_enqueued,
+            "{}",
+            to_text(&delivered.ingress_receipt_value).expect("ingress receipt text")
+        );
+        run_control_loop(&NodeControlLoopInput {
+            state_root: &root,
+            max_requests: 1,
+        })
+        .expect("dispatch request");
+        let queue_value = read_preserves(&queue_receipt_path(&root, &delivered.request_ref)).expect("queue receipt");
+        let control_value =
+            read_preserves(&control_outbox_receipt_path(&root, &delivered.request_ref)).expect("control receipt");
+        let control = node_runtime::parse_node_control_receipt(&control_value).expect("parse control");
+        assert_eq!(control.decision, "pass");
+        let imported_refs = Vec::new();
+        let diagnostics = Vec::new();
+        let expected_operations = vec!["status".to_string()];
+        let expected = LiveWorkflowBundleExpectedInput {
+            expected_node: Some("node:reconcile"),
+            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+            expected_endpoint: None,
+            expected_peer: Some("peer:reconcile"),
+            expected_operations: &expected_operations,
+            expected_target_scope: Some("*"),
+            expected_resource_scope: Some("*"),
+            as_of_sequence: 1,
+            as_of_epoch: 1,
+        };
+        let bundle_ref = local_ref("node-control-live-workflow-bundle", "reconcile").expect("bundle ref");
+        let verify_ref = local_ref("node-control-live-workflow-bundle-verify", "reconcile").expect("verify ref");
+        let apply_receipt_value = live_workflow_bundle_apply_receipt_value(&LiveWorkflowBundleApplyReceiptValueInput {
+            decision: "pass",
+            state_root: &root,
+            bundle_ref: &bundle_ref,
+            gate_receipt_ref: None,
+            recomputed_verify_receipt_ref: &verify_ref,
+            import_receipt_ref: None,
+            imported_refs: &imported_refs,
+            mode: "dry-run",
+            envelope_ref: Some(&envelope.envelope_ref),
+            operation_ref: Some(&envelope.operation_ref),
+            send_receipt_ref: None,
+            expected: &expected,
+            diagnostics: &diagnostics,
+        })
+        .expect("apply receipt");
+        let reconciled = reconcile_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleReconcileInput {
+            apply_receipt_value: &apply_receipt_value,
+            send_receipt_value: None,
+            ingress_receipt_value: Some(&delivered.ingress_receipt_value),
+            queue_receipt_value: Some(&queue_value),
+            control_receipt_value: Some(&control_value),
+            expected_envelope_ref: Some(&envelope.envelope_ref),
+            expected_operation_ref: Some(&envelope.operation_ref),
+            expected_request_ref: Some(&delivered.request_ref),
+        })
+        .expect("reconcile");
+        assert_eq!(reconciled.decision, "pass");
+        assert_eq!(
+            ledger::artifact_kind(&reconciled.receipt_value),
+            "node-control-live-workflow-bundle-reconcile-receipt"
+        );
+        assert_eq!(reconciled.ingress_receipt_ref.as_deref(), Some(delivered.ingress_receipt_ref.as_str()));
+        assert_eq!(reconciled.control_receipt_ref.as_deref(), Some(control.receipt_ref.as_str()));
+        assert!(parse_node_control_authority_grant(&reconciled.receipt_value).is_err());
+        assert!(
+            to_text(&reconciled.receipt_value)
+                .expect("reconcile text")
+                .contains("reconcile-receipt-is-not-authority")
+        );
+        import_node_artifact(&root, &reconciled.receipt_value).expect("import reconcile receipt");
+        let reconcile_authority_refs = vec![reconciled.receipt_ref.clone()];
+        let reconcile_authority_request_value =
+            node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+                operation: "status",
+                target_ref: None,
+                payload_ref: None,
+                authority_refs: &reconcile_authority_refs,
+                policy_refs: &[],
+                resource_refs: &[],
+                evidence_refs: &[],
+            })
+            .expect("reconcile authority request");
+        let reconcile_authority_envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: &reconcile_authority_request_value,
+            from_peer: "peer:reconcile",
+            to_node: "node:reconcile",
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            sequence: 2,
+            peer_bootstrap_refs: &[],
+            authority_refs: &reconcile_authority_refs,
+            policy_refs: &[],
+            resource_refs: &[],
+            evidence_refs: &[],
+        })
+        .expect("reconcile authority envelope");
+        let reconcile_authority_diagnostics =
+            live_send_authority_grant_diagnostics(&root, &reconcile_authority_envelope)
+                .expect("reconcile authority diagnostics");
+        assert!(reconcile_authority_diagnostics.iter().any(|value| value.contains("is not a grant")));
+        assert!(
+            reconcile_authority_diagnostics
+                .iter()
+                .any(|value| value.contains("authority delegation missing admitted grant"))
+        );
+
+        let missing_receiver =
+            reconcile_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleReconcileInput {
+                apply_receipt_value: &apply_receipt_value,
+                send_receipt_value: None,
+                ingress_receipt_value: None,
+                queue_receipt_value: None,
+                control_receipt_value: None,
+                expected_envelope_ref: Some(&envelope.envelope_ref),
+                expected_operation_ref: Some(&envelope.operation_ref),
+                expected_request_ref: Some(&delivered.request_ref),
+            })
+            .expect("missing receiver reconcile");
+        assert_eq!(missing_receiver.decision, "deny");
+        assert!(
+            missing_receiver
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("requires receiver ingress receipt"))
+        );
+
+        let wrong_envelope = local_ref("node-control-envelope", "wrong-reconcile").expect("wrong envelope");
+        let wrong_reconcile =
+            reconcile_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleReconcileInput {
+                apply_receipt_value: &apply_receipt_value,
+                send_receipt_value: None,
+                ingress_receipt_value: Some(&delivered.ingress_receipt_value),
+                queue_receipt_value: Some(&queue_value),
+                control_receipt_value: Some(&control_value),
+                expected_envelope_ref: Some(&wrong_envelope),
+                expected_operation_ref: Some(&envelope.operation_ref),
+                expected_request_ref: Some(&delivered.request_ref),
+            })
+            .expect("wrong envelope reconcile");
+        assert_eq!(wrong_reconcile.decision, "deny");
+        assert!(wrong_reconcile.diagnostics.iter().any(|diagnostic| diagnostic.contains("does not match expected")));
+
+        let denied_control = node_runtime::node_control_deny_receipt_value(
+            &request,
+            &local_ref("node-startup", "reconcile-deny").expect("startup ref"),
+            "receiver denial propagated",
+        )
+        .expect("denied control");
+        let denied_reconcile =
+            reconcile_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleReconcileInput {
+                apply_receipt_value: &apply_receipt_value,
+                send_receipt_value: None,
+                ingress_receipt_value: Some(&delivered.ingress_receipt_value),
+                queue_receipt_value: Some(&queue_value),
+                control_receipt_value: Some(&denied_control),
+                expected_envelope_ref: Some(&envelope.envelope_ref),
+                expected_operation_ref: Some(&envelope.operation_ref),
+                expected_request_ref: Some(&delivered.request_ref),
+            })
+            .expect("denied reconcile");
+        assert_eq!(denied_reconcile.decision, "deny");
+        assert!(
+            denied_reconcile
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("receiver denial propagated"))
+        );
     }
 
     #[test]
