@@ -691,6 +691,7 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     let workflow_bundle = dir.join("workflow-bundle.preserves");
     let bundle_export = dir.join("workflow-bundle-export.preserves");
     let bundle_verify = dir.join("workflow-bundle-verify.preserves");
+    let bundle_gate = dir.join("workflow-bundle-gate.preserves");
     let bundle_import = dir.join("workflow-bundle-import.preserves");
     let bundle_import_send_receipt = dir.join("bundle-import-send.preserves");
     let ticket_import = dir.join("ticket-import.preserves");
@@ -868,6 +869,35 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     );
     let bundle_verify_text = to_text(&read_preserves(&bundle_verify)?)?;
     assert!(bundle_verify_text.contains("verify-receipt-is-not-authority"));
+
+    let bundle_gate_out = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle-gate"])
+        .arg(&workflow_bundle)
+        .args(["--verify-receipt"])
+        .arg(&bundle_verify)
+        .args([
+            "--require-verify-receipt",
+            "--expected-node",
+            "node:cli-live-import",
+            "--expected-topic",
+            "node-control",
+            "--expected-peer",
+            "peer:cli-live-import",
+            "--operation",
+            "status",
+            "--receipt-out",
+        ])
+        .arg(&bundle_gate)
+        .output()?;
+    assert_success(&bundle_gate_out, "live workflow bundle gate");
+    assert!(stdout(&bundle_gate_out).contains("decision=pass"));
+    assert!(stdout(&bundle_gate_out).contains("next-step=import-bundle"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&bundle_gate)?),
+        "node-control-live-workflow-bundle-gate-receipt"
+    );
+    let bundle_gate_text = to_text(&read_preserves(&bundle_gate)?)?;
+    assert!(bundle_gate_text.contains("gate-receipt-is-not-authority"));
 
     let bundle_import_out = molten_cmd()
         .args(["test", "node", "live-workflow-bundle-import", "--state-root"])
