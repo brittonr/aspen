@@ -682,11 +682,16 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     let dir = temp_dir("cli-node-live-import")?;
     let receiver_root = dir.join("receiver-node");
     let sender_root = dir.join("sender-node");
+    let bundle_sender_root = dir.join("bundle-sender-node");
     let authority_grant = dir.join("authority-grant.preserves");
     let live_ticket = dir.join("live-ticket.preserves");
     let peer_admission = dir.join("peer-admission.preserves");
     let missing_import_request = dir.join("missing-import-request.preserves");
     let missing_import_send_receipt = dir.join("missing-import-send.preserves");
+    let workflow_bundle = dir.join("workflow-bundle.preserves");
+    let bundle_export = dir.join("workflow-bundle-export.preserves");
+    let bundle_import = dir.join("workflow-bundle-import.preserves");
+    let bundle_import_send_receipt = dir.join("bundle-import-send.preserves");
     let ticket_import = dir.join("ticket-import.preserves");
     let grant_import = dir.join("grant-import.preserves");
     let policy_ref = test_ref("live-import-policy")?;
@@ -711,6 +716,14 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
             .args(["--node-id", "node:cli-live-import-sender"])
             .output()?,
         "sender init",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(&bundle_sender_root)
+            .args(["--node-id", "node:cli-live-bundle-sender"])
+            .output()?,
+        "bundle sender init",
     );
     assert_success(
         &molten_cmd()
@@ -805,6 +818,83 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     assert!(missing_import_text.contains("ticket topic node-control does not match expected wrong-topic"));
     assert!(missing_import_text.contains("receiver-ticket-expected"));
     assert!(missing_import_text.contains("sender-state-root-evidence"));
+
+    let bundle_export_out = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle-export", "--ticket"])
+        .arg(&live_ticket)
+        .args(["--peer-admission"])
+        .arg(&peer_admission)
+        .args(["--authority-grant"])
+        .arg(&authority_grant)
+        .args(["--receipt"])
+        .arg(&missing_import_send_receipt)
+        .args(["--out"])
+        .arg(&workflow_bundle)
+        .args(["--receipt-out"])
+        .arg(&bundle_export)
+        .output()?;
+    assert_success(&bundle_export_out, "live workflow bundle export");
+    assert!(stdout(&bundle_export_out).contains("decision=pass"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&workflow_bundle)?),
+        "node-control-live-workflow-bundle"
+    );
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&bundle_export)?),
+        "node-control-live-workflow-bundle-export-receipt"
+    );
+
+    let bundle_import_out = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle-import", "--state-root"])
+        .arg(&bundle_sender_root)
+        .arg(&workflow_bundle)
+        .args([
+            "--expected-node",
+            "node:cli-live-import",
+            "--expected-topic",
+            "node-control",
+            "--expected-peer",
+            "peer:cli-live-import",
+            "--operation",
+            "status",
+            "--receipt-out",
+        ])
+        .arg(&bundle_import)
+        .output()?;
+    assert_success(&bundle_import_out, "live workflow bundle import");
+    assert!(stdout(&bundle_import_out).contains("decision=pass"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&bundle_import)?),
+        "node-control-live-workflow-bundle-import-receipt"
+    );
+    let bundle_import_send = molten_cmd()
+        .args(["test", "node", "control-ingress-live-send", "--state-root"])
+        .arg(&bundle_sender_root)
+        .arg(&missing_import_request)
+        .arg(&live_ticket)
+        .args([
+            "--from-peer",
+            "peer:cli-live-import",
+            "--expected-topic",
+            "node-control",
+            "--peer-bootstrap",
+        ])
+        .arg(&bootstrap_ref)
+        .args(["--authority"])
+        .arg(&authority_ref)
+        .args(["--policy"])
+        .arg(&policy_ref)
+        .args(["--resource"])
+        .arg(&resource_ref)
+        .args(["--receipt-out"])
+        .arg(&bundle_import_send_receipt)
+        .output()?;
+    assert_success(&bundle_import_send, "live send after workflow bundle import");
+    let bundle_send_text = to_text(&read_preserves(&bundle_import_send_receipt)?)?;
+    assert!(bundle_send_text.contains("ticket has no endpoint addresses"));
+    assert!(!bundle_send_text.contains("authority-grant-import"));
+    assert!(!bundle_send_text.contains("peer admission unavailable in sender state root"));
+    assert!(!bundle_send_text.contains("authority grant unavailable in sender state root"));
 
     let ticket_import_out = molten_cmd()
         .args(["test", "node", "live-ticket-import", "--state-root"])

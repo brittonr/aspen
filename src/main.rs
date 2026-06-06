@@ -775,6 +775,45 @@ enum NodeCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    LiveWorkflowBundleExport {
+        #[arg(long)]
+        ticket: PathBuf,
+        #[arg(long)]
+        peer_admission: PathBuf,
+        #[arg(long)]
+        authority_grant: PathBuf,
+        #[arg(long = "receipt")]
+        receipt_values: Vec<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    LiveWorkflowBundleImport {
+        #[arg(long)]
+        state_root: PathBuf,
+        bundle: PathBuf,
+        #[arg(long)]
+        expected_node: Option<String>,
+        #[arg(long)]
+        expected_topic: Option<String>,
+        #[arg(long)]
+        expected_endpoint: Option<String>,
+        #[arg(long)]
+        expected_peer: Option<String>,
+        #[arg(long = "operation")]
+        operations: Vec<String>,
+        #[arg(long)]
+        target_scope: Option<String>,
+        #[arg(long)]
+        resource_scope: Option<String>,
+        #[arg(long, default_value_t = 1)]
+        as_of_sequence: u64,
+        #[arg(long, default_value_t = 1)]
+        as_of_epoch: u64,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     ControlIngressPublish {
         #[arg(long)]
         state_root: PathBuf,
@@ -5901,6 +5940,91 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 workflow.decision,
                 workflow.receipt_ref,
                 workflow.diagnostics.len()
+            );
+            Ok(())
+        }
+        NodeCommand::LiveWorkflowBundleExport {
+            ticket,
+            peer_admission,
+            authority_grant,
+            receipt_values,
+            out,
+            receipt_out,
+        } => {
+            let ticket_value = read_preserves_file(&ticket)?;
+            let peer_admission_value = read_preserves_file(&peer_admission)?;
+            let authority_grant_value = read_preserves_file(&authority_grant)?;
+            let receipt_values =
+                receipt_values.iter().map(|path| read_preserves_file(path)).collect::<Result<Vec<_>>>()?;
+            let receipt_value_refs = receipt_values.iter().collect::<Vec<_>>();
+            let exported = node_daemon::export_node_control_live_workflow_bundle(
+                &node_daemon::NodeControlLiveWorkflowBundleExportInput {
+                    receiver_ticket_value: &ticket_value,
+                    peer_admission_value: &peer_admission_value,
+                    authority_grant_value: &authority_grant_value,
+                    receipt_values: &receipt_value_refs,
+                },
+            )?;
+            write_file(&out, &to_text(&exported.bundle.bundle_value)?)?;
+            emit_named_receipt(
+                receipt_out.as_ref(),
+                "node control live workflow bundle export receipt",
+                &exported.receipt_value,
+            )?;
+            println!(
+                "node live workflow bundle export decision={} bundle={} ticket={} admission={} grant={} diagnostics={}",
+                exported.decision,
+                exported.bundle.bundle_ref,
+                exported.bundle.ticket_ref,
+                exported.bundle.peer_admission_ref,
+                exported.bundle.authority_grant_ref,
+                exported.diagnostics.len()
+            );
+            Ok(())
+        }
+        NodeCommand::LiveWorkflowBundleImport {
+            state_root,
+            bundle,
+            expected_node,
+            expected_topic,
+            expected_endpoint,
+            expected_peer,
+            operations,
+            target_scope,
+            resource_scope,
+            as_of_sequence,
+            as_of_epoch,
+            receipt_out,
+        } => {
+            let bundle_value = read_preserves_file(&bundle)?;
+            let imported = node_daemon::import_node_control_live_workflow_bundle(
+                &node_daemon::NodeControlLiveWorkflowBundleImportInput {
+                    state_root: &state_root,
+                    bundle_value: &bundle_value,
+                    expected_node: expected_node.as_deref(),
+                    expected_topic: expected_topic.as_deref(),
+                    expected_endpoint: expected_endpoint.as_deref(),
+                    expected_peer: expected_peer.as_deref(),
+                    expected_operations: &operations,
+                    expected_target_scope: target_scope.as_deref(),
+                    expected_resource_scope: resource_scope.as_deref(),
+                    as_of_sequence,
+                    as_of_epoch,
+                },
+            )?;
+            emit_named_receipt(
+                receipt_out.as_ref(),
+                "node control live workflow bundle import receipt",
+                &imported.receipt_value,
+            )?;
+            println!(
+                "node live workflow bundle import decision={} bundle={} ticket_import={} authority_import={} imported={} diagnostics={}",
+                imported.decision,
+                imported.bundle_ref,
+                imported.ticket_import_ref.as_deref().unwrap_or("none"),
+                imported.authority_import_ref.as_deref().unwrap_or("none"),
+                imported.imported_refs.len(),
+                imported.diagnostics.len()
             );
             Ok(())
         }

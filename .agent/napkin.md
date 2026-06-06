@@ -28,6 +28,8 @@
 | 2026-06-05 | self | New live-import helper used `&mut Vec<String>` for diagnostics; Octet/TigerStyle flagged borrowed owned container even though mutation needed. | Prefer returning diagnostic `Vec<String>` from helpers and extending at the call site, or use existing bounded sink wrappers instead of exposing `&mut Vec<T>`. |
 | 2026-06-05 | self | Ran `cargo octet check --lib` and hit `unsupported argument before --`. | Pass cargo/test-target flags after the Octet separator, e.g. `cargo octet check --artifact-dir target/octet-lib -- --lib`. |
 
+| 2026-06-05 | self | Ran Nix nextest through a 300s Steel wrapper; the Nix build completed and printed a store path, but Steel timed out before printing the wrapper exit line. | For Nix nextest, prefer a background/poll wrapper or verify timeout cases with `pgrep` plus `nix path-info` on the printed store path before claiming pass. |
+
 ## User Preferences
 - Prefer explicit Nickel and Steel contract boundaries where applicable: Nickel for static declarative policy/config/schema gates, Steel only for reviewed dynamic predicates/trusted callables, both enforced through Basalt before side effects.
 

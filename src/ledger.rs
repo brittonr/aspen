@@ -314,6 +314,15 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("node-control-live-send-retry-receipt-v1", "node-control-live-send-retry-receipt"),
     ("node-control-live-send-duplicate-receipt-v1", "node-control-live-send-duplicate-receipt"),
     ("node-control-live-workflow-receipt-v1", "node-control-live-workflow-receipt"),
+    ("node-control-live-workflow-bundle-v1", "node-control-live-workflow-bundle"),
+    (
+        "node-control-live-workflow-bundle-export-receipt-v1",
+        "node-control-live-workflow-bundle-export-receipt",
+    ),
+    (
+        "node-control-live-workflow-bundle-import-receipt-v1",
+        "node-control-live-workflow-bundle-import-receipt",
+    ),
     ("node-control-live-listener-receipt-v1", "node-control-live-listener-receipt"),
     ("node-control-authority-grant-v1", "node-control-authority-grant"),
     ("node-control-authority-receipt-v1", "node-control-authority-receipt"),
