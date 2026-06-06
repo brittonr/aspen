@@ -32,6 +32,13 @@ r[molten.sam_service_supervision.spec.supervision] Service links, monitors, rest
 - THEN the runtime emits a deny receipt
 - AND publishes a final failed/stopped assertion instead of restarting indefinitely
 
+#### Scenario: Supervision gate receipt is evidence only
+- GIVEN a canonical service supervision report
+- WHEN an operator gates the report
+- THEN the runtime emits a service supervision gate receipt binding report, suite, restart, monitor, status, and cleanup evidence
+- AND the receipt decision is derived by deterministic replay
+- AND the receipt is not authority, provenance, resource, policy, or transport trust evidence
+
 ### Requirement: Cleanup retracts owned state
 r[molten.sam_service_supervision.spec.cleanup] Service termination, failure, shutdown, or authority revocation MUST retract service-owned assertions, observers, live refs, and pending effect intents.
 

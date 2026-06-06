@@ -197,6 +197,7 @@ pub const SERVICE_LIFECYCLE_RECEIPT_SCHEMA: &str = "molten.service.lifecycle-rec
 pub const SERVICE_CLEANUP_RECEIPT_SCHEMA: &str = "molten.service.cleanup-receipt.v1";
 pub const SERVICE_SUPERVISION_SUITE_SCHEMA: &str = "molten.service.supervision-suite.v1";
 pub const SERVICE_SUPERVISION_REPORT_SCHEMA: &str = "molten.service.supervision-report.v1";
+pub const SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA: &str = "molten.service.supervision-gate-receipt.v1";
 pub const SERVICE_MONITOR_NOTIFICATION_SCHEMA: &str = "molten.service.monitor-notification.v1";
 pub const SERVICE_FAILURE_MARKER_SCHEMA: &str = "molten.service.failure.v1";
 pub const SERVICE_RETRACTION_SCHEMA: &str = "molten.service.retraction.v1";

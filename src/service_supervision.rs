@@ -10,6 +10,7 @@ use crate::preserves_rail::SERVICE_MONITOR_NOTIFICATION_SCHEMA;
 use crate::preserves_rail::SERVICE_OWNED_STATE_SCHEMA;
 use crate::preserves_rail::SERVICE_RETENTION_INPUT_SCHEMA;
 use crate::preserves_rail::SERVICE_RETRACTION_SCHEMA;
+use crate::preserves_rail::SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::SERVICE_SUPERVISION_REPORT_SCHEMA;
 use crate::preserves_rail::SERVICE_SUPERVISION_SUITE_SCHEMA;
 use crate::preserves_rail::canonical_hash;
@@ -117,6 +118,45 @@ pub struct ServiceSupervisionReplay {
     pub expected_report_ref: String,
     pub actual_report_ref: String,
     pub decision: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServiceSupervisionGate {
+    pub receipt_ref: String,
+    pub report_ref: String,
+    pub suite_ref: String,
+    pub decision: String,
+    pub restart_decision: Option<String>,
+    pub status_count: usize,
+    pub monitor_count: usize,
+    pub cleanup_count: usize,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServiceSupervisionGateReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub report_ref: String,
+    pub suite_ref: String,
+    pub restart_decision: Option<String>,
+    pub status_count: u64,
+    pub monitor_count: u64,
+    pub cleanup_count: u64,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct GateReceiptValueInput<'a> {
+    decision: &'a str,
+    report_ref: &'a str,
+    suite_ref: &'a str,
+    restart_decision: Option<&'a str>,
+    status_count: usize,
+    monitor_count: usize,
+    cleanup_count: usize,
+    diagnostics: &'a [String],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -321,6 +361,109 @@ pub fn replay_service_supervision_report(value: &IOValue) -> Result<ServiceSuper
     })
 }
 
+pub fn gate_service_supervision_report(value: &IOValue) -> Result<ServiceSupervisionGate> {
+    let report = parse_service_supervision_report(value)?;
+    let mut diagnostics = service_supervision_gate_diagnostics(&report)?;
+    let restart_decision = report
+        .restart_decisions
+        .first()
+        .map(service_records::parse_service_restart_decision)
+        .transpose()?
+        .map(|decision| decision.decision);
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let receipt_value = service_supervision_gate_receipt_value(&GateReceiptValueInput {
+        decision,
+        report_ref: &report.report_ref,
+        suite_ref: &report.suite_ref,
+        restart_decision: restart_decision.as_deref(),
+        status_count: report.statuses.len(),
+        monitor_count: report.monitor_notifications.len(),
+        cleanup_count: report.cleanup_receipts.len(),
+        diagnostics: &diagnostics,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    diagnostics.shrink_to_fit();
+    Ok(ServiceSupervisionGate {
+        receipt_ref,
+        report_ref: report.report_ref,
+        suite_ref: report.suite_ref,
+        decision: decision.to_string(),
+        restart_decision,
+        status_count: report.statuses.len(),
+        monitor_count: report.monitor_notifications.len(),
+        cleanup_count: report.cleanup_receipts.len(),
+        diagnostics,
+        value: receipt_value,
+    })
+}
+
+pub fn parse_service_supervision_gate_receipt(value: &IOValue) -> Result<ServiceSupervisionGateReceipt> {
+    let fields = value
+        .collect_simple_record("service-supervision-gate-receipt-v1", Some(10))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervision-gate-receipt-v1 ...>"))?;
+    require_schema(&fields[0], SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA, "service supervision gate receipt schema")?;
+    let checks = parse_checks(&fields[9])?;
+    require_check(&checks, "service-supervision-gate-is-not-authority", "service supervision gate receipt")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision, "service supervision gate decision")?;
+    let restart_decision = record_optional_string(&fields[4], "restart-decision")?;
+    if let Some(decision) = &restart_decision {
+        validate_restart_decision(decision, "service supervision restart decision")?;
+    }
+    Ok(ServiceSupervisionGateReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        report_ref: record_ref(&fields[2], "report")?,
+        suite_ref: record_ref(&fields[3], "suite")?,
+        restart_decision,
+        status_count: record_u64(&fields[5], "status-count")?,
+        monitor_count: record_u64(&fields[6], "monitor-count")?,
+        cleanup_count: record_u64(&fields[7], "cleanup-count")?,
+        diagnostics: parse_string_sequence(&fields[8], "diagnostics")?,
+    })
+}
+
+fn service_supervision_gate_diagnostics(report: &ServiceSupervisionRun) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::with_capacity(8);
+    if let Err(error) = replay_service_supervision_report(&report.value) {
+        diagnostics.push(format!("service supervision gate replay failed: {error}"));
+    }
+    if report.failure_markers.is_empty() {
+        diagnostics.push("service supervision gate requires a failure marker".to_string());
+    }
+    if report.statuses.is_empty() {
+        diagnostics.push("service supervision gate requires status evidence".to_string());
+    }
+    if report.lifecycle_receipts.is_empty() {
+        diagnostics.push("service supervision gate requires lifecycle receipt evidence".to_string());
+    }
+    if report.restart_decisions.is_empty() {
+        diagnostics.push("service supervision gate requires restart decision evidence".to_string());
+    }
+    for value in &report.failure_markers {
+        parse_failure_marker_ref(value)?;
+    }
+    for value in &report.statuses {
+        service_records::parse_service_status(value)?;
+    }
+    for value in &report.lifecycle_receipts {
+        service_records::parse_service_lifecycle_receipt(value)?;
+    }
+    for value in &report.restart_decisions {
+        service_records::parse_service_restart_decision(value)?;
+    }
+    for value in &report.monitor_notifications {
+        parse_monitor_notification_ref(value)?;
+    }
+    for value in &report.cleanup_receipts {
+        service_records::parse_service_cleanup_receipt(value)?;
+    }
+    for value in &report.retractions {
+        parse_retraction_ref(value)?;
+    }
+    Ok(diagnostics)
+}
+
 pub fn parse_service_supervision_report(value: &IOValue) -> Result<ServiceSupervisionRun> {
     let fields = value
         .collect_simple_record("service-supervision-report-v1", Some(12))
@@ -385,6 +528,30 @@ pub fn service_supervision_report_value(input: ReportValueInput<'_>) -> Result<I
             "monitor-order-bound",
             "cleanup-retention-bound",
         ]),
+    ]))
+}
+
+fn service_supervision_gate_receipt_value(input: &GateReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision, "service supervision gate receipt decision")?;
+    let gate_status = if input.decision == "pass" { "pass" } else { "fail" };
+    Ok(record("service-supervision-gate-receipt-v1", vec![
+        string(SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("report", vec![string(input.report_ref)]),
+        record("suite", vec![string(input.suite_ref)]),
+        record("restart-decision", vec![optional_string_value(input.restart_decision)]),
+        record("status-count", vec![u64_value(count_as_u64(input.status_count, "service status count")?)]),
+        record("monitor-count", vec![u64_value(count_as_u64(input.monitor_count, "service monitor count")?)]),
+        record("cleanup-count", vec![u64_value(count_as_u64(input.cleanup_count, "service cleanup count")?)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("supervision-report-replay"), string(gate_status)]),
+            record("check", vec![string("failure-status-lifecycle-bound"), string(gate_status)]),
+            record("check", vec![string("restart-decision-bound"), string(gate_status)]),
+            record("check", vec![string("monitor-notifications-bound"), string(gate_status)]),
+            record("check", vec![string("cleanup-evidence-bound"), string(gate_status)]),
+            record("check", vec![string("service-supervision-gate-is-not-authority"), string("pass")]),
+        ])]),
     ]))
 }
 
@@ -487,6 +654,36 @@ fn failure_marker_value(suite: &ServiceSupervisionSuite) -> Result<IOValue> {
         record("effect-log", vec![refs_sequence(&suite.evidence.effect_log_refs)]),
         checks_value(&["canonical-service-failure", "logical-supervision", "replay-bound"]),
     ]))
+}
+
+fn parse_failure_marker_ref(value: &IOValue) -> Result<String> {
+    let fields = value
+        .collect_simple_record("service-failure-v1", Some(6))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <service-failure-v1 ...>"))?;
+    require_schema(&fields[0], SERVICE_FAILURE_MARKER_SCHEMA, "service failure marker schema")?;
+    let checks = parse_checks(&fields[5])?;
+    require_check(&checks, "logical-supervision", "service failure marker")?;
+    canonical_hash(value)
+}
+
+fn parse_monitor_notification_ref(value: &IOValue) -> Result<String> {
+    let fields = value
+        .collect_simple_record("service-monitor-notification-v1", Some(7))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <service-monitor-notification-v1 ...>"))?;
+    require_schema(&fields[0], SERVICE_MONITOR_NOTIFICATION_SCHEMA, "service monitor notification schema")?;
+    let checks = parse_checks(&fields[6])?;
+    require_check(&checks, "failure-bound", "service monitor notification")?;
+    canonical_hash(value)
+}
+
+fn parse_retraction_ref(value: &IOValue) -> Result<String> {
+    let fields = value
+        .collect_simple_record("service-retraction-v1", Some(8))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <service-retraction-v1 ...>"))?;
+    require_schema(&fields[0], SERVICE_RETRACTION_SCHEMA, "service retraction schema")?;
+    let checks = parse_checks(&fields[7])?;
+    require_check(&checks, "service-owned-retraction", "service retraction")?;
+    canonical_hash(value)
 }
 
 fn failure_status_value(
@@ -986,6 +1183,12 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&fields[0], label)
 }
 
+fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+    let reference = record_string(value, label)?;
+    require_ref(&reference, label)?;
+    Ok(reference)
+}
+
 fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let fields = value
@@ -1002,11 +1205,31 @@ fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Str
     Ok(Some(reference))
 }
 
+fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+    let value = value_to_iovalue(value);
+    let fields = value
+        .collect_simple_record(label, Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
+    if fields[0].collect_simple_record("none", Some(0)).is_some() {
+        return Ok(None);
+    }
+    let some = fields[0]
+        .collect_simple_record("some", Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional string for {label}")))?;
+    required_string(&some[0], label).map(Some)
+}
+
 fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     let refs = values.iter().map(|value| required_ref(value, label)).collect::<Result<Vec<_>>>()?;
     validate_refs(&refs, label)?;
     Ok(refs)
+}
+
+fn parse_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+    let values = field_sequence(value, label)?;
+    ensure_count_at_most(values.len(), label)?;
+    values.iter().map(|value| required_string(value, label)).collect()
 }
 
 fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
@@ -1057,6 +1280,10 @@ fn refs_sequence(values: &[String]) -> IOValue {
     sequence(values.iter().map(string).collect())
 }
 
+fn strings_sequence(values: &[String]) -> IOValue {
+    sequence(values.iter().map(string).collect())
+}
+
 fn checks_value(values: &[&str]) -> IOValue {
     record("checks", vec![sequence(
         values.iter().map(|value| record("check", vec![string(value), string("pass")])).collect(),
@@ -1065,6 +1292,30 @@ fn checks_value(values: &[&str]) -> IOValue {
 
 fn optional_ref_value(value: Option<&str>) -> IOValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+}
+
+fn optional_string_value(value: Option<&str>) -> IOValue {
+    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+}
+
+fn count_as_u64(count: usize, label: &str) -> Result<u64> {
+    u64::try_from(count).map_err(|_| MoltenError::invalid_harness(format!("{label} does not fit u64")))
+}
+
+fn validate_decision(decision: &str, label: &str) -> Result<()> {
+    if matches!(decision, "pass" | "deny") {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("unsupported {label} {decision}")))
+    }
+}
+
+fn validate_restart_decision(decision: &str, label: &str) -> Result<()> {
+    if matches!(decision, "pass" | "deny" | "backoff") {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("unsupported {label} {decision}")))
+    }
 }
 
 fn validate_refs(refs: &[String], label: &str) -> Result<()> {
@@ -1176,6 +1427,13 @@ mod tests {
         assert_eq!(lifecycle.operation, "fail");
         assert_eq!(lifecycle.supervision_refs.len(), 5);
         replay_service_supervision_report(&run.value).expect("replay supervision report");
+        let gate = gate_service_supervision_report(&run.value).expect("gate supervision report");
+        assert_eq!(gate.decision, "pass");
+        assert_eq!(gate.monitor_count, 2);
+        assert_eq!(gate.restart_decision.as_deref(), Some("pass"));
+        let receipt = parse_service_supervision_gate_receipt(&gate.value).expect("parse gate receipt");
+        assert_eq!(receipt.decision, "pass");
+        assert_eq!(receipt.report_ref, run.report_ref);
     }
 
     #[test]
@@ -1307,7 +1565,11 @@ mod tests {
 
         let mut cleanup_report = parse_service_supervision_report(&run.value).expect("parse report");
         cleanup_report.retractions.pop();
-        assert!(replay_service_supervision_report(&report_from_parts(&suite_value, &cleanup_report)).is_err());
+        let tampered = report_from_parts(&suite_value, &cleanup_report);
+        assert!(replay_service_supervision_report(&tampered).is_err());
+        let gate = gate_service_supervision_report(&tampered).expect("gate tampered report");
+        assert_eq!(gate.decision, "deny");
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic.contains("replay failed")));
     }
 
     fn report_from_parts(suite_value: &IOValue, report: &ServiceSupervisionRun) -> IOValue {
@@ -1330,8 +1592,10 @@ mod tests {
     fn ledger_catalog_and_mcp_classify_supervision_artifacts() {
         let suite_value = supervision_fixture_suite_value().expect("fixture suite");
         let run = run_service_supervision_suite_value(&suite_value).expect("run supervision");
+        let gate = gate_service_supervision_report(&run.value).expect("gate supervision report");
         assert_eq!(ledger::artifact_kind(&suite_value), "service-supervision-suite");
         assert_eq!(ledger::artifact_kind(&run.value), "service-supervision-report");
+        assert_eq!(ledger::artifact_kind(&gate.value), "service-supervision-gate-receipt");
         assert_eq!(ledger::artifact_kind(&run.failure_markers[0]), "service-failure");
         assert_eq!(ledger::artifact_kind(&run.monitor_notifications[0]), "service-monitor-notification");
 

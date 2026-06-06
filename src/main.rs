@@ -306,6 +306,11 @@ enum ServiceCommand {
     ShowSupervision {
         report: PathBuf,
     },
+    GateSupervision {
+        report: PathBuf,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     Replay {
         report: PathBuf,
     },
@@ -5131,6 +5136,22 @@ fn run_service_command(command: ServiceCommand) -> Result<()> {
             println!("{}", service_supervision::service_supervision_summary(&value)?);
             Ok(())
         }
+        ServiceCommand::GateSupervision { report, receipt_out } => {
+            let value = read_preserves_file(&report)?;
+            let gate = service_supervision::gate_service_supervision_report(&value)?;
+            emit_named_receipt(receipt_out.as_ref(), "service supervision gate receipt", &gate.value)?;
+            println!(
+                "service supervision gate {} report={} suite={} restart={} monitors={} cleanup={} diagnostics={}",
+                gate.decision,
+                gate.report_ref,
+                gate.suite_ref,
+                gate.restart_decision.as_deref().unwrap_or("none"),
+                gate.monitor_count,
+                gate.cleanup_count,
+                gate.diagnostics.len()
+            );
+            Ok(())
+        }
         ServiceCommand::Replay { report } => {
             let value = read_preserves_file(&report)?;
             let replay = service_runtime::replay_service_runtime_report(&value)?;
@@ -7973,6 +7994,17 @@ mod tests {
             .expect("show service supervision report");
         run_service_command(ServiceCommand::ReplaySupervision { report: report.clone() })
             .expect("replay service supervision report");
+        let gate_receipt = dir.join("supervision-gate.preserves");
+        run_service_command(ServiceCommand::GateSupervision {
+            report: report.clone(),
+            receipt_out: Some(gate_receipt.clone()),
+        })
+        .expect("gate service supervision report");
+        let gate = service_supervision::parse_service_supervision_gate_receipt(
+            &read_preserves_file(&gate_receipt).expect("read supervision gate receipt"),
+        )
+        .expect("parse supervision gate receipt");
+        assert_eq!(gate.decision, "pass");
         let rerun = dir.join("supervision-rerun");
         run_service_command(ServiceCommand::Supervise {
             suite: out.join("suite.preserves"),

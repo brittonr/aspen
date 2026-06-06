@@ -9,6 +9,7 @@ Molten's dataspace slice can route local and remote assertions/messages, but it 
 - Start services only when demand assertions and authority/resource gates admit them.
 - Emit service lifecycle receipts and actor-scoped turn-journal context refs.
 - Auto-retract service-owned assertions and references on stop, failure, revocation, or supervisor cleanup.
+- Emit replay-bound service supervision gate receipts for operator review without treating those receipts as authority.
 
 ## Impact
 

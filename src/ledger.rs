@@ -417,6 +417,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("service-cleanup-receipt-v1", "service-cleanup-receipt"),
     ("service-supervision-suite-v1", "service-supervision-suite"),
     ("service-supervision-report-v1", "service-supervision-report"),
+    ("service-supervision-gate-receipt-v1", "service-supervision-gate-receipt"),
     ("service-monitor-notification-v1", "service-monitor-notification"),
     ("service-failure-v1", "service-failure"),
     ("service-retraction-v1", "service-retraction"),
