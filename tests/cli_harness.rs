@@ -678,6 +678,129 @@ fn cli_node_live_ingress_loopback_enqueues_request() -> CliResult<()> {
 }
 
 #[test]
+fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
+    let dir = temp_dir("cli-node-live-import")?;
+    let receiver_root = dir.join("receiver-node");
+    let sender_root = dir.join("sender-node");
+    let authority_grant = dir.join("authority-grant.preserves");
+    let live_ticket = dir.join("live-ticket.preserves");
+    let peer_admission = dir.join("peer-admission.preserves");
+    let ticket_import = dir.join("ticket-import.preserves");
+    let grant_import = dir.join("grant-import.preserves");
+    let policy_ref = test_ref("live-import-policy")?;
+
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(&receiver_root)
+            .args(["--node-id", "node:cli-live-import"])
+            .output()?,
+        "receiver init",
+    );
+    assert_success(
+        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&receiver_root).output()?,
+        "receiver run",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(&sender_root)
+            .args(["--node-id", "node:cli-live-import-sender"])
+            .output()?,
+        "sender init",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "authority-grant-fixture", "--state-root"])
+            .arg(&receiver_root)
+            .args([
+                "--peer",
+                "peer:cli-live-import",
+                "--node",
+                "node:cli-live-import",
+                "--operation",
+                "status",
+                "--policy",
+            ])
+            .arg(&policy_ref)
+            .args(["--out"])
+            .arg(&authority_grant)
+            .output()?,
+        "receiver authority grant",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "live-ticket-export", "--state-root"])
+            .arg(&receiver_root)
+            .args(["--policy"])
+            .arg(&policy_ref)
+            .args(["--out"])
+            .arg(&live_ticket)
+            .output()?,
+        "receiver live ticket",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "live-peer-admit", "--state-root"])
+            .arg(&receiver_root)
+            .args(["--peer", "peer:cli-live-import", "--policy"])
+            .arg(&policy_ref)
+            .args(["--receipt-out"])
+            .arg(&peer_admission)
+            .arg(&live_ticket)
+            .output()?,
+        "receiver peer admit",
+    );
+
+    let ticket_import_out = molten_cmd()
+        .args(["test", "node", "live-ticket-import", "--state-root"])
+        .arg(&sender_root)
+        .arg(&live_ticket)
+        .args(["--peer-admission"])
+        .arg(&peer_admission)
+        .args([
+            "--expected-node",
+            "node:cli-live-import",
+            "--expected-topic",
+            "node-control",
+            "--expected-peer",
+            "peer:cli-live-import",
+            "--receipt-out",
+        ])
+        .arg(&ticket_import)
+        .output()?;
+    assert_success(&ticket_import_out, "sender live ticket import");
+    assert!(stdout(&ticket_import_out).contains("decision=pass"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&ticket_import)?),
+        "node-control-live-ticket-import-receipt"
+    );
+
+    let grant_import_out = molten_cmd()
+        .args(["test", "node", "authority-grant-import", "--state-root"])
+        .arg(&sender_root)
+        .arg(&authority_grant)
+        .args([
+            "--peer",
+            "peer:cli-live-import",
+            "--node",
+            "node:cli-live-import",
+            "--operation",
+            "status",
+            "--receipt-out",
+        ])
+        .arg(&grant_import)
+        .output()?;
+    assert_success(&grant_import_out, "sender authority grant import");
+    assert!(stdout(&grant_import_out).contains("decision=pass"));
+    assert_eq!(
+        molten::ledger::artifact_kind(&read_preserves(&grant_import)?),
+        "node-control-authority-grant-import-receipt"
+    );
+    Ok(())
+}
+
+#[test]
 fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()> {
     let dir = temp_dir("cli-node-live-send")?;
     let state_root = dir.join("node-state");

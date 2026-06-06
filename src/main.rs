@@ -540,6 +540,25 @@ enum NodeCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    AuthorityGrantImport {
+        #[arg(long)]
+        state_root: PathBuf,
+        grant: PathBuf,
+        #[arg(long)]
+        peer: Option<String>,
+        #[arg(long)]
+        node: Option<String>,
+        #[arg(long = "operation")]
+        operations: Vec<String>,
+        #[arg(long)]
+        target_scope: Option<String>,
+        #[arg(long)]
+        resource_scope: Option<String>,
+        #[arg(long, default_value_t = 1)]
+        as_of_epoch: u64,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     SupervisorPolicyFixture {
         #[arg(long)]
         state_root: Option<PathBuf>,
@@ -571,6 +590,25 @@ enum NodeCommand {
         evidence_refs: Vec<String>,
         #[arg(long)]
         out: PathBuf,
+    },
+    LiveTicketImport {
+        #[arg(long)]
+        state_root: PathBuf,
+        ticket: PathBuf,
+        #[arg(long)]
+        peer_admission: Option<PathBuf>,
+        #[arg(long)]
+        expected_node: Option<String>,
+        #[arg(long)]
+        expected_topic: Option<String>,
+        #[arg(long)]
+        expected_endpoint: Option<String>,
+        #[arg(long)]
+        expected_peer: Option<String>,
+        #[arg(long, default_value_t = 1)]
+        as_of_sequence: u64,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
     },
     LivePeerAdmit {
         #[arg(long)]
@@ -5444,6 +5482,40 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             println!("node authority grant {} written to {}", grant_ref, out.display());
             Ok(())
         }
+        NodeCommand::AuthorityGrantImport {
+            state_root,
+            grant,
+            peer,
+            node,
+            operations,
+            target_scope,
+            resource_scope,
+            as_of_epoch,
+            receipt_out,
+        } => {
+            let grant_value = read_preserves_file(&grant)?;
+            let imported = node_daemon::import_node_control_authority_grant_checked(
+                &node_daemon::NodeControlAuthorityGrantImportInput {
+                    state_root: &state_root,
+                    grant_value: &grant_value,
+                    expected_peer: peer.as_deref(),
+                    expected_node: node.as_deref(),
+                    expected_operations: &operations,
+                    expected_target_scope: target_scope.as_deref(),
+                    expected_resource_scope: resource_scope.as_deref(),
+                    as_of_epoch,
+                },
+            )?;
+            emit_named_receipt(receipt_out.as_ref(), "node authority grant import receipt", &imported.receipt_value)?;
+            println!(
+                "node authority grant import decision={} grant={} imported={} diagnostics={}",
+                imported.decision,
+                imported.grant_ref,
+                imported.imported_refs.len(),
+                imported.diagnostics.len()
+            );
+            Ok(())
+        }
         NodeCommand::SupervisorPolicyFixture {
             state_root,
             max_restarts,
@@ -5489,6 +5561,41 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                 })?;
             write_file(&out, &to_text(&ticket.value)?)?;
             println!("node live ticket {} written to {}", ticket.ticket_ref, out.display());
+            Ok(())
+        }
+        NodeCommand::LiveTicketImport {
+            state_root,
+            ticket,
+            peer_admission,
+            expected_node,
+            expected_topic,
+            expected_endpoint,
+            expected_peer,
+            as_of_sequence,
+            receipt_out,
+        } => {
+            let ticket_value = read_preserves_file(&ticket)?;
+            let peer_admission_value = peer_admission.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let imported =
+                node_daemon::import_node_control_live_ticket(&node_daemon::NodeControlLiveTicketImportInput {
+                    state_root: &state_root,
+                    ticket_value: &ticket_value,
+                    peer_admission_value: peer_admission_value.as_ref(),
+                    expected_node: expected_node.as_deref(),
+                    expected_topic: expected_topic.as_deref(),
+                    expected_endpoint: expected_endpoint.as_deref(),
+                    expected_peer: expected_peer.as_deref(),
+                    as_of_sequence,
+                })?;
+            emit_named_receipt(receipt_out.as_ref(), "node live ticket import receipt", &imported.receipt_value)?;
+            println!(
+                "node live ticket import decision={} ticket={} admission={} imported={} diagnostics={}",
+                imported.decision,
+                imported.ticket_ref,
+                imported.peer_admission_ref.as_deref().unwrap_or("none"),
+                imported.imported_refs.len(),
+                imported.diagnostics.len()
+            );
             Ok(())
         }
         NodeCommand::LivePeerAdmit {

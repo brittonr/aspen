@@ -16,6 +16,7 @@ use crate::ledger;
 use crate::node_identity;
 use crate::node_runtime;
 use crate::octet_gate;
+use crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA;
@@ -26,6 +27,7 @@ use crate::preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA;
+use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA;
@@ -351,6 +353,30 @@ pub struct NodeControlLiveTicketExportInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct NodeControlLiveTicketImportInput<'a> {
+    pub state_root: &'a Path,
+    pub ticket_value: &'a IOValue,
+    pub peer_admission_value: Option<&'a IOValue>,
+    pub expected_node: Option<&'a str>,
+    pub expected_topic: Option<&'a str>,
+    pub expected_endpoint: Option<&'a str>,
+    pub expected_peer: Option<&'a str>,
+    pub as_of_sequence: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct NodeControlAuthorityGrantImportInput<'a> {
+    pub state_root: &'a Path,
+    pub grant_value: &'a IOValue,
+    pub expected_peer: Option<&'a str>,
+    pub expected_node: Option<&'a str>,
+    pub expected_operations: &'a [String],
+    pub expected_target_scope: Option<&'a str>,
+    pub expected_resource_scope: Option<&'a str>,
+    pub as_of_epoch: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct NodeControlLivePeerAdmitInput<'a> {
     pub state_root: &'a Path,
     pub ticket_value: &'a IOValue,
@@ -435,6 +461,28 @@ struct LivePeerAdmissionValueInput<'a> {
     expires_at: Option<u64>,
     policy_refs: &'a [String],
     evidence_refs: &'a [String],
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct LiveTicketImportReceiptValueInput<'a> {
+    decision: &'a str,
+    state_root: &'a Path,
+    ticket: &'a NodeControlLiveTicket,
+    peer_admission_ref: Option<&'a str>,
+    peer_id: Option<&'a str>,
+    as_of_sequence: u64,
+    imported_refs: &'a [String],
+    diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AuthorityGrantImportReceiptValueInput<'a> {
+    decision: &'a str,
+    state_root: &'a Path,
+    grant: &'a NodeControlAuthorityGrant,
+    as_of_epoch: u64,
+    imported_refs: &'a [String],
     diagnostics: &'a [String],
 }
 
@@ -791,6 +839,27 @@ pub struct NodeControlLivePeerAdmission {
     pub value: IOValue,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlLiveTicketImport {
+    pub decision: String,
+    pub ticket_ref: String,
+    pub peer_admission_ref: Option<String>,
+    pub imported_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub receipt_ref: String,
+    pub receipt_value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeControlAuthorityGrantImport {
+    pub decision: String,
+    pub grant_ref: String,
+    pub imported_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub receipt_ref: String,
+    pub receipt_value: IOValue,
+}
+
 pub fn node_control_authority_grant_value(input: &NodeControlAuthorityGrantInput<'_>) -> Result<IOValue> {
     validate_node_id(input.peer_id)?;
     validate_node_id(input.node_id)?;
@@ -1035,6 +1104,307 @@ pub fn parse_node_control_live_peer_admission(value: &IOValue) -> Result<NodeCon
         diagnostics: record_strings(&fields[10], "diagnostics")?,
         value: value.clone(),
     })
+}
+
+pub fn import_node_control_live_ticket(
+    input: &NodeControlLiveTicketImportInput<'_>,
+) -> Result<NodeControlLiveTicketImport> {
+    validate_state_root(input.state_root)?;
+    ensure_state_layout(input.state_root)?;
+    if let Some(node) = input.expected_node {
+        validate_node_id(node)?;
+    }
+    if let Some(topic) = input.expected_topic {
+        validate_node_id(topic)?;
+    }
+    if let Some(endpoint) = input.expected_endpoint {
+        validate_node_id(endpoint)?;
+    }
+    if let Some(peer) = input.expected_peer {
+        validate_node_id(peer)?;
+    }
+    let ticket = parse_node_control_live_ticket(input.ticket_value)?;
+    let admission = input.peer_admission_value.map(parse_node_control_live_peer_admission).transpose()?;
+    let mut diagnostics = live_ticket_import_diagnostics(input, &ticket, admission.as_ref());
+    if input.peer_admission_value.is_some() && admission.is_none() {
+        diagnostics.push("node control live ticket import admission was not parsed".to_string());
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let mut imported_refs = Vec::with_capacity(2);
+    if diagnostics.is_empty() {
+        imported_refs.push(import_node_artifact(input.state_root, input.ticket_value)?);
+        if let Some(value) = input.peer_admission_value {
+            imported_refs.push(import_node_artifact(input.state_root, value)?);
+        }
+    }
+    let peer_id = admission.as_ref().map(|value| value.peer_id.as_str()).or(input.expected_peer);
+    let receipt_value = live_ticket_import_receipt_value(&LiveTicketImportReceiptValueInput {
+        decision,
+        state_root: input.state_root,
+        ticket: &ticket,
+        peer_admission_ref: admission.as_ref().map(|value| value.admission_ref.as_str()),
+        peer_id,
+        as_of_sequence: input.as_of_sequence,
+        imported_refs: &imported_refs,
+        diagnostics: &diagnostics,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    import_node_artifact(input.state_root, &receipt_value)?;
+    Ok(NodeControlLiveTicketImport {
+        decision: decision.to_string(),
+        ticket_ref: ticket.ticket_ref,
+        peer_admission_ref: admission.map(|value| value.admission_ref),
+        imported_refs,
+        diagnostics,
+        receipt_ref,
+        receipt_value,
+    })
+}
+
+pub fn import_node_control_authority_grant_checked(
+    input: &NodeControlAuthorityGrantImportInput<'_>,
+) -> Result<NodeControlAuthorityGrantImport> {
+    validate_state_root(input.state_root)?;
+    ensure_state_layout(input.state_root)?;
+    if let Some(peer) = input.expected_peer {
+        validate_node_id(peer)?;
+    }
+    if let Some(node) = input.expected_node {
+        validate_node_id(node)?;
+    }
+    for operation in input.expected_operations {
+        validate_node_id(operation)?;
+    }
+    if let Some(scope) = input.expected_target_scope {
+        validate_node_id(scope)?;
+    }
+    if let Some(scope) = input.expected_resource_scope {
+        validate_node_id(scope)?;
+    }
+    let grant = parse_node_control_authority_grant(input.grant_value)?;
+    let diagnostics = authority_grant_import_diagnostics(input, &grant);
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let mut imported_refs = Vec::with_capacity(1);
+    if diagnostics.is_empty() {
+        imported_refs.push(import_node_artifact(input.state_root, input.grant_value)?);
+    }
+    let receipt_value = authority_grant_import_receipt_value(&AuthorityGrantImportReceiptValueInput {
+        decision,
+        state_root: input.state_root,
+        grant: &grant,
+        as_of_epoch: input.as_of_epoch,
+        imported_refs: &imported_refs,
+        diagnostics: &diagnostics,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    import_node_artifact(input.state_root, &receipt_value)?;
+    Ok(NodeControlAuthorityGrantImport {
+        decision: decision.to_string(),
+        grant_ref: grant.grant_ref,
+        imported_refs,
+        diagnostics,
+        receipt_ref,
+        receipt_value,
+    })
+}
+
+fn live_ticket_import_diagnostics(
+    input: &NodeControlLiveTicketImportInput<'_>,
+    ticket: &NodeControlLiveTicket,
+    admission: Option<&NodeControlLivePeerAdmission>,
+) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(8);
+    if let Some(expected) = input.expected_node
+        && ticket.node_id != expected
+    {
+        diagnostics.push(format!(
+            "node control live ticket import node {} does not match expected {expected}",
+            ticket.node_id
+        ));
+    }
+    if let Some(expected) = input.expected_topic
+        && ticket.topic != expected
+    {
+        diagnostics
+            .push(format!("node control live ticket import topic {} does not match expected {expected}", ticket.topic));
+    }
+    if let Some(expected) = input.expected_endpoint
+        && ticket.live_endpoint_id != expected
+    {
+        diagnostics.push(format!(
+            "node control live ticket import endpoint {} does not match expected {expected}",
+            ticket.live_endpoint_id
+        ));
+    }
+    if let Some(admission) = admission {
+        diagnostics.extend(live_ticket_admission_import_diagnostics(input, ticket, admission));
+    }
+    diagnostics
+}
+
+fn live_ticket_admission_import_diagnostics(
+    input: &NodeControlLiveTicketImportInput<'_>,
+    ticket: &NodeControlLiveTicket,
+    admission: &NodeControlLivePeerAdmission,
+) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(7);
+    if admission.decision != "pass" {
+        diagnostics.push(format!(
+            "node control live peer admission {} decision {}",
+            admission.admission_ref, admission.decision
+        ));
+    }
+    if admission.ticket_ref != ticket.ticket_ref {
+        diagnostics.push(format!(
+            "node control live peer admission {} ticket {} does not match ticket {}",
+            admission.admission_ref, admission.ticket_ref, ticket.ticket_ref
+        ));
+    }
+    if admission.node_id != ticket.node_id {
+        diagnostics.push(format!(
+            "node control live peer admission {} node {} does not match ticket node {}",
+            admission.admission_ref, admission.node_id, ticket.node_id
+        ));
+    }
+    if admission.topic != ticket.topic {
+        diagnostics.push(format!(
+            "node control live peer admission {} topic {} does not match ticket topic {}",
+            admission.admission_ref, admission.topic, ticket.topic
+        ));
+    }
+    if let Some(expected) = input.expected_peer
+        && admission.peer_id != expected
+    {
+        diagnostics.push(format!(
+            "node control live peer admission {} peer {} does not match expected {expected}",
+            admission.admission_ref, admission.peer_id
+        ));
+    }
+    if admission.sequence > input.as_of_sequence {
+        diagnostics.push(format!(
+            "node control live peer admission {} is not valid until sequence {}",
+            admission.admission_ref, admission.sequence
+        ));
+    }
+    if let Some(expires_at) = admission.expires_at
+        && expires_at < input.as_of_sequence
+    {
+        diagnostics.push(format!(
+            "node control live peer admission {} expired at sequence {expires_at}",
+            admission.admission_ref
+        ));
+    }
+    diagnostics
+}
+
+fn authority_grant_import_diagnostics(
+    input: &NodeControlAuthorityGrantImportInput<'_>,
+    grant: &NodeControlAuthorityGrant,
+) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(8);
+    if let Some(expected) = input.expected_peer
+        && grant.peer_id != expected
+    {
+        diagnostics.push(format!(
+            "node control authority grant import peer {} does not match expected {expected}",
+            grant.peer_id
+        ));
+    }
+    if let Some(expected) = input.expected_node
+        && grant.node_id != expected
+    {
+        diagnostics.push(format!(
+            "node control authority grant import node {} does not match expected {expected}",
+            grant.node_id
+        ));
+    }
+    for operation in input.expected_operations {
+        if !grant.operations.iter().any(|candidate| candidate == "*" || candidate == operation) {
+            diagnostics.push(format!("node control authority grant import does not allow operation {operation}"));
+        }
+    }
+    if let Some(expected) = input.expected_target_scope
+        && grant.target_scope != "*"
+        && grant.target_scope != expected
+    {
+        diagnostics.push(format!(
+            "node control authority grant import target scope {} does not cover expected {expected}",
+            grant.target_scope
+        ));
+    }
+    if let Some(expected) = input.expected_resource_scope
+        && grant.resource_scope != "*"
+        && grant.resource_scope != expected
+    {
+        diagnostics.push(format!(
+            "node control authority grant import resource scope {} does not cover expected {expected}",
+            grant.resource_scope
+        ));
+    }
+    if grant.epoch > input.as_of_epoch {
+        diagnostics.push(format!("node control authority grant import is not valid until epoch {}", grant.epoch));
+    }
+    if let Some(expires_at) = grant.expires_at
+        && expires_at < input.as_of_epoch
+    {
+        diagnostics.push(format!("node control authority grant import expired at epoch {expires_at}"));
+    }
+    if !grant.revocation_refs.is_empty() {
+        diagnostics.push("node control authority grant import has revocation refs".to_string());
+    }
+    diagnostics
+}
+
+fn live_ticket_import_receipt_value(input: &LiveTicketImportReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
+    Ok(record("node-control-live-ticket-import-receipt-v1", vec![
+        string(NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("state-root", vec![string(&state_root_profile_ref(input.state_root)?)]),
+        record("ticket", vec![string(&input.ticket.ticket_ref)]),
+        record("node", vec![string(&input.ticket.node_id)]),
+        record("topic", vec![string(&input.ticket.topic)]),
+        record("endpoint", vec![string(&input.ticket.live_endpoint_id)]),
+        record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
+        record("peer", vec![optional_string(input.peer_id)]),
+        record("as-of-sequence", vec![string(input.as_of_sequence.to_string())]),
+        record("imported", vec![sequence(input.imported_refs.iter().map(string).collect())]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("ticket-kind-version"), string("pass")]),
+            record("check", vec![string("ticket-topic-endpoint-bound"), string(binding_status)]),
+            record("check", vec![string("peer-admission-kind-version"), string(binding_status)]),
+            record("check", vec![string("import-receipt-is-not-authority"), string("pass")]),
+            record("check", vec![string("provenance-still-required"), string("pass")]),
+        ])]),
+    ]))
+}
+
+fn authority_grant_import_receipt_value(input: &AuthorityGrantImportReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
+    Ok(record("node-control-authority-grant-import-receipt-v1", vec![
+        string(NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("state-root", vec![string(&state_root_profile_ref(input.state_root)?)]),
+        record("grant", vec![string(&input.grant.grant_ref)]),
+        record("peer", vec![string(&input.grant.peer_id)]),
+        record("node", vec![string(&input.grant.node_id)]),
+        record("operations", vec![sequence(input.grant.operations.iter().map(string).collect())]),
+        record("target-scope", vec![string(&input.grant.target_scope)]),
+        record("resource-scope", vec![string(&input.grant.resource_scope)]),
+        record("as-of-epoch", vec![string(input.as_of_epoch.to_string())]),
+        record("imported", vec![sequence(input.imported_refs.iter().map(string).collect())]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("grant-kind-version"), string("pass")]),
+            record("check", vec![string("peer-node-operation-scope-bound"), string(binding_status)]),
+            record("check", vec![string("grant-fresh-and-unrevoked"), string(binding_status)]),
+            record("check", vec![string("import-receipt-is-not-authority"), string("pass")]),
+            record("check", vec![string("provenance-still-required"), string("pass")]),
+        ])]),
+    ]))
 }
 
 pub fn node_control_supervisor_policy_value(input: &NodeControlSupervisorPolicyInput<'_>) -> Result<IOValue> {
@@ -2139,7 +2509,7 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
             input,
             &ticket,
             envelope,
-            "node control live send ticket has no endpoint addresses",
+            "node control live send ticket has no endpoint addresses; import a bound live ticket with live-ticket-import or use serve --live-ticket-out",
         );
     }
     let receiver_addr = match live_ticket_endpoint_addr(&ticket) {
@@ -4455,6 +4825,32 @@ pub fn node_daemon_summary(value: &IOValue) -> Result<String> {
             record_string(&fields[10], "request")?
         ));
     }
+    if let Some(fields) = value.collect_simple_record("node-control-live-ticket-import-receipt-v1", Some(13)) {
+        require_schema(
+            &fields[0],
+            NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA,
+            "node control live ticket import receipt",
+        )?;
+        return Ok(format!(
+            "node control live ticket import decision={} ticket={} imported={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[3], "ticket")?,
+            record_sequence_len(&fields[10], "imported")?
+        ));
+    }
+    if let Some(fields) = value.collect_simple_record("node-control-authority-grant-import-receipt-v1", Some(13)) {
+        require_schema(
+            &fields[0],
+            NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA,
+            "node control authority grant import receipt",
+        )?;
+        return Ok(format!(
+            "node control authority grant import decision={} grant={} imported={}",
+            record_string(&fields[1], "decision")?,
+            record_string(&fields[3], "grant")?,
+            record_sequence_len(&fields[10], "imported")?
+        ));
+    }
     if let Ok(ticket) = parse_node_control_live_ticket(value) {
         return Ok(format!(
             "node control live ticket ref={} node={} topic={} endpoint={}",
@@ -5951,6 +6347,118 @@ mod tests {
         assert!(!denied_delivery.has_enqueued);
         let receipt_text = to_text(&denied_delivery.ingress_receipt_value).expect("receipt text");
         assert!(receipt_text.contains("peer peer:ticket does not match peer:other-ticket"));
+    }
+
+    #[test]
+    fn node_control_live_ticket_and_authority_import_receipts_gate_bindings() {
+        let receiver = temp_dir("node-control-live-import-receiver");
+        let sender = temp_dir("node-control-live-import-sender");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &receiver,
+            node_id: "node:live-import",
+        })
+        .expect("init receiver");
+        run_local_node(&NodeDaemonRunInput { state_root: &receiver }).expect("run receiver");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &sender,
+            node_id: "node:live-import-sender",
+        })
+        .expect("init sender");
+        let policy_refs = vec![local_ref("node-control-policy", "live-import").expect("policy ref")];
+        let ticket = export_node_control_live_ticket(&NodeControlLiveTicketExportInput {
+            state_root: &receiver,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            policy_refs: &policy_refs,
+            evidence_refs: &[],
+        })
+        .expect("export ticket");
+        let admission = admit_node_control_live_peer(&NodeControlLivePeerAdmitInput {
+            state_root: &receiver,
+            ticket_value: &ticket.value,
+            peer_id: "peer:live-import",
+            sequence: 1,
+            expires_at: Some(4),
+            policy_refs: &policy_refs,
+            evidence_refs: &[],
+        })
+        .expect("admit peer");
+        let imported_ticket = import_node_control_live_ticket(&NodeControlLiveTicketImportInput {
+            state_root: &sender,
+            ticket_value: &ticket.value,
+            peer_admission_value: Some(&admission.value),
+            expected_node: Some("node:live-import"),
+            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_peer: Some("peer:live-import"),
+            as_of_sequence: 2,
+        })
+        .expect("import ticket");
+        assert_eq!(imported_ticket.decision, "pass");
+        assert_eq!(imported_ticket.imported_refs.len(), 2);
+        assert_eq!(ledger::artifact_kind(&imported_ticket.receipt_value), "node-control-live-ticket-import-receipt");
+        read_node_ledger_artifact(&sender, &ticket.ticket_ref).expect("ticket imported");
+        read_node_ledger_artifact(&sender, &admission.admission_ref).expect("admission imported");
+
+        let stale_ticket = import_node_control_live_ticket(&NodeControlLiveTicketImportInput {
+            state_root: &sender,
+            ticket_value: &ticket.value,
+            peer_admission_value: Some(&admission.value),
+            expected_node: Some("node:live-import"),
+            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_peer: Some("peer:live-import"),
+            as_of_sequence: 8,
+        })
+        .expect("stale ticket import receipt");
+        assert_eq!(stale_ticket.decision, "deny");
+        assert!(stale_ticket.imported_refs.is_empty());
+        assert!(stale_ticket.diagnostics.iter().any(|value| value.contains("expired at sequence")));
+
+        let operations = vec!["status".to_string()];
+        let grant_value = node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
+            peer_id: "peer:live-import",
+            node_id: "node:live-import",
+            operations: &operations,
+            target_scope: "*",
+            resource_scope: "*",
+            epoch: 1,
+            expires_at: Some(4),
+            policy_refs: &policy_refs,
+            revocation_refs: &[],
+            evidence_refs: &[],
+        })
+        .expect("grant value");
+        let imported_grant = import_node_control_authority_grant_checked(&NodeControlAuthorityGrantImportInput {
+            state_root: &sender,
+            grant_value: &grant_value,
+            expected_peer: Some("peer:live-import"),
+            expected_node: Some("node:live-import"),
+            expected_operations: &operations,
+            expected_target_scope: Some("*"),
+            expected_resource_scope: Some("*"),
+            as_of_epoch: 2,
+        })
+        .expect("import grant");
+        assert_eq!(imported_grant.decision, "pass");
+        assert_eq!(imported_grant.imported_refs.len(), 1);
+        assert_eq!(ledger::artifact_kind(&imported_grant.receipt_value), "node-control-authority-grant-import-receipt");
+        read_node_ledger_artifact(&sender, &imported_grant.grant_ref).expect("grant imported");
+
+        let bad_operations = vec!["shutdown".to_string()];
+        let denied_grant = import_node_control_authority_grant_checked(&NodeControlAuthorityGrantImportInput {
+            state_root: &sender,
+            grant_value: &grant_value,
+            expected_peer: Some("peer:live-import"),
+            expected_node: Some("node:live-import"),
+            expected_operations: &bad_operations,
+            expected_target_scope: Some("*"),
+            expected_resource_scope: Some("*"),
+            as_of_epoch: 2,
+        })
+        .expect("denied grant import");
+        assert_eq!(denied_grant.decision, "deny");
+        assert!(denied_grant.imported_refs.is_empty());
+        assert!(denied_grant.diagnostics.iter().any(|value| value.contains("operation shutdown")));
     }
 
     #[test]

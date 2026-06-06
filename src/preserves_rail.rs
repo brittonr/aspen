@@ -114,8 +114,11 @@ pub const NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA: &str = "molten.node.control
 pub const NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA: &str = "molten.node.control-live-listener-receipt.v1";
 pub const NODE_CONTROL_AUTHORITY_GRANT_SCHEMA: &str = "molten.node.control-authority-grant.v1";
 pub const NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA: &str = "molten.node.control-authority-receipt.v1";
+pub const NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA: &str =
+    "molten.node.control-authority-grant-import-receipt.v1";
 pub const NODE_CONTROL_LIVE_TICKET_SCHEMA: &str = "molten.node.control-live-ticket.v1";
 pub const NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA: &str = "molten.node.control-live-peer-admission.v1";
+pub const NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA: &str = "molten.node.control-live-ticket-import-receipt.v1";
 pub const NODE_HEALTH_RECEIPT_SCHEMA: &str = "molten.node.health-receipt.v1";
 pub const NODE_SHUTDOWN_RECEIPT_SCHEMA: &str = "molten.node.shutdown-receipt.v1";
 pub const OPERATOR_WORKFLOW_SCHEMA: &str = "molten.operator.workflow.v1";
