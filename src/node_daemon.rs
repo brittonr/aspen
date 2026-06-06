@@ -297,6 +297,9 @@ pub struct NodeControlLiveSendInput<'a> {
     pub from_peer: &'a str,
     pub sequence: u64,
     pub expected_operation_ref: Option<&'a str>,
+    pub expected_receiver_node: Option<&'a str>,
+    pub expected_topic: Option<&'a str>,
+    pub expected_endpoint: Option<&'a str>,
     pub max_attempts: u64,
     pub peer_bootstrap_refs: &'a [String],
     pub authority_refs: &'a [String],
@@ -2475,6 +2478,15 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
     if let Some(operation_ref) = input.expected_operation_ref {
         validate_ingress_ref(operation_ref, "node control live send operation id")?;
     }
+    if let Some(node) = input.expected_receiver_node {
+        validate_node_id(node)?;
+    }
+    if let Some(topic) = input.expected_topic {
+        validate_node_id(topic)?;
+    }
+    if let Some(endpoint) = input.expected_endpoint {
+        validate_node_id(endpoint)?;
+    }
     let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
     let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
         request_value: input.request_value,
@@ -2504,18 +2516,40 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
             retry_receipt_values: Vec::new(),
         });
     }
-    if ticket.address_refs.is_empty() {
-        return denied_node_control_live_send(
-            input,
-            &ticket,
-            envelope,
-            "node control live send ticket has no endpoint addresses; import a bound live ticket with live-ticket-import or use serve --live-ticket-out",
-        );
+    let mut preflight_diagnostics = live_send_ticket_diagnostics(input, &ticket);
+    if let Some(state_root) = input.state_root {
+        preflight_diagnostics.extend(live_send_state_root_evidence_diagnostics(state_root, input, &envelope)?);
     }
-    let receiver_addr = match live_ticket_endpoint_addr(&ticket) {
-        Ok(addr) => addr,
-        Err(error) => return denied_node_control_live_send(input, &ticket, envelope, &error.to_string()),
+    let receiver_addr = if ticket.address_refs.is_empty() {
+        preflight_diagnostics.push(
+            "node control live send ticket has no endpoint addresses; import a bound live ticket with live-ticket-import or use serve --live-ticket-out"
+                .to_string(),
+        );
+        None
+    } else {
+        match live_ticket_endpoint_addr(&ticket) {
+            Ok(addr) => Some(addr),
+            Err(error) => {
+                preflight_diagnostics.push(format!(
+                    "node control live send ticket address unsupported or malformed: {error}; import a fresh live ticket with live-ticket-import"
+                ));
+                None
+            }
+        }
     };
+    if !preflight_diagnostics.is_empty() {
+        return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
+            input,
+            ticket: &ticket,
+            envelope,
+            diagnostics: preflight_diagnostics,
+            retry_receipt_refs: Vec::new(),
+            retry_receipt_values: Vec::new(),
+        });
+    }
+    let receiver_addr = receiver_addr.ok_or_else(|| {
+        MoltenError::invalid_harness("node control live send receiver address missing after preflight")
+    })?;
     if let Some(state_root) = input.state_root
         && let Some(duplicate) = duplicate_node_control_live_send(input, state_root, &ticket, &envelope)?
     {
@@ -2731,22 +2765,6 @@ fn duplicate_node_control_live_send(
         send_receipt_ref,
         send_receipt_value: prior_send_value,
     }))
-}
-
-fn denied_node_control_live_send(
-    input: &NodeControlLiveSendInput<'_>,
-    ticket: &NodeControlLiveTicket,
-    envelope: NodeControlIngressEnvelope,
-    diagnostic: &str,
-) -> Result<NodeControlLiveSend> {
-    denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
-        input,
-        ticket,
-        envelope,
-        diagnostics: vec![diagnostic.to_string()],
-        retry_receipt_refs: Vec::new(),
-        retry_receipt_values: Vec::new(),
-    })
 }
 
 fn denied_node_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_>) -> Result<NodeControlLiveSend> {
@@ -3215,6 +3233,112 @@ fn live_ticket_for_bound_endpoint(
     let ticket = parse_node_control_live_ticket(&value)?;
     import_node_artifact(state_root, &value)?;
     Ok(ticket)
+}
+
+fn live_send_ticket_diagnostics(input: &NodeControlLiveSendInput<'_>, ticket: &NodeControlLiveTicket) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(3);
+    if let Some(expected) = input.expected_receiver_node
+        && ticket.node_id != expected
+    {
+        diagnostics
+            .push(format!("node control live send ticket node {} does not match expected {expected}", ticket.node_id));
+    }
+    if let Some(expected) = input.expected_topic
+        && ticket.topic != expected
+    {
+        diagnostics
+            .push(format!("node control live send ticket topic {} does not match expected {expected}", ticket.topic));
+    }
+    if let Some(expected) = input.expected_endpoint
+        && ticket.live_endpoint_id != expected
+    {
+        diagnostics.push(format!(
+            "node control live send ticket endpoint {} does not match expected {expected}",
+            ticket.live_endpoint_id
+        ));
+    }
+    diagnostics
+}
+
+fn live_send_state_root_evidence_diagnostics(
+    state_root: &Path,
+    input: &NodeControlLiveSendInput<'_>,
+    envelope: &NodeControlIngressEnvelope,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::with_capacity(
+        input.peer_bootstrap_refs.len().saturating_add(input.authority_refs.len()).saturating_add(4),
+    );
+    if input.peer_bootstrap_refs.is_empty() {
+        diagnostics.push(
+            "node control live send peer admission refs missing; run live-ticket-import --peer-admission before live send"
+                .to_string(),
+        );
+    } else {
+        let peer_diagnostics = evaluate_live_peer_bootstrap(state_root, envelope)?;
+        if !peer_diagnostics.is_empty() {
+            diagnostics.extend(peer_diagnostics);
+            diagnostics.push(
+                "node control live send peer admission unavailable in sender state root; run live-ticket-import --peer-admission before live send"
+                    .to_string(),
+            );
+        }
+    }
+    if input.authority_refs.is_empty() || envelope.request.authority_refs.is_empty() {
+        diagnostics.push(
+            "node control live send authority grant refs missing; run authority-grant-import before live send"
+                .to_string(),
+        );
+    } else {
+        let authority_diagnostics = live_send_authority_grant_diagnostics(state_root, envelope)?;
+        if !authority_diagnostics.is_empty() {
+            diagnostics.extend(authority_diagnostics);
+            diagnostics.push(
+                "node control live send authority grant unavailable in sender state root; run authority-grant-import before live send"
+                    .to_string(),
+            );
+        }
+    }
+    Ok(diagnostics)
+}
+
+fn live_send_authority_grant_diagnostics(
+    state_root: &Path,
+    envelope: &NodeControlIngressEnvelope,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::with_capacity(envelope.authority_refs.len().saturating_add(2));
+    let mut has_candidate_authority = false;
+    let mut has_admitted_grant = false;
+    for authority_ref in envelope
+        .authority_refs
+        .iter()
+        .filter(|authority_ref| envelope.request.authority_refs.contains(*authority_ref))
+    {
+        has_candidate_authority = true;
+        match read_node_ledger_artifact(state_root, authority_ref) {
+            Ok(value) => match parse_node_control_authority_grant(&value) {
+                Ok(grant) => {
+                    let grant_diagnostics = authority_grant_diagnostics(envelope, &grant);
+                    if grant_diagnostics.is_empty() {
+                        has_admitted_grant = true;
+                        break;
+                    }
+                    diagnostics.extend(grant_diagnostics);
+                }
+                Err(error) => diagnostics
+                    .push(format!("node control live send authority ref {authority_ref} is not a grant: {error}")),
+            },
+            Err(error) => diagnostics.push(format!(
+                "node control live send authority grant {authority_ref} not found in sender state root: {error}"
+            )),
+        }
+    }
+    if !has_candidate_authority {
+        diagnostics.push("node control live send authority refs are not bound to the request".to_string());
+    }
+    if !has_admitted_grant {
+        diagnostics.push("node control live send authority delegation missing admitted grant".to_string());
+    }
+    Ok(diagnostics)
 }
 
 fn live_ticket_endpoint_addr(ticket: &NodeControlLiveTicket) -> Result<iroh::EndpointAddr> {
@@ -4433,6 +4557,18 @@ fn live_workflow_receipt_value(input: &LiveWorkflowReceiptValueInput<'_>) -> Res
 fn live_send_receipt_value(input: &LiveSendReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let has_addresses = !input.ticket.address_refs.is_empty();
+    let has_operation_mismatch = diagnostics_include(input.diagnostics, "operation-id");
+    let has_supported_addresses = has_addresses
+        && !diagnostics_include(input.diagnostics, "unsupported transport address")
+        && !diagnostics_include(input.diagnostics, "address unsupported or malformed")
+        && !diagnostics_include(input.diagnostics, "address parse failed")
+        && !diagnostics_include(input.diagnostics, "endpoint parse failed");
+    let has_expected_ticket_binding = !diagnostics_include(input.diagnostics, "ticket node")
+        && !diagnostics_include(input.diagnostics, "ticket topic")
+        && !diagnostics_include(input.diagnostics, "ticket endpoint");
+    let has_state_root_evidence = !diagnostics_include(input.diagnostics, "live-ticket-import")
+        && !diagnostics_include(input.diagnostics, "authority-grant-import");
+    let has_transport_success = input.transport_receipt_ref.is_some();
     Ok(record("node-control-live-send-receipt-v1", vec![
         string(NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
@@ -4452,7 +4588,26 @@ fn live_send_receipt_value(input: &LiveSendReceiptValueInput<'_>) -> Result<IOVa
                 string("receiver-address-bound"),
                 string(if has_addresses { "pass" } else { "fail" }),
             ]),
-            record("check", vec![string("operation-id-bound"), string("pass")]),
+            record("check", vec![
+                string("receiver-address-supported"),
+                string(if has_supported_addresses { "pass" } else { "fail" }),
+            ]),
+            record("check", vec![
+                string("receiver-ticket-expected"),
+                string(if has_expected_ticket_binding { "pass" } else { "fail" }),
+            ]),
+            record("check", vec![
+                string("operation-id-bound"),
+                string(if has_operation_mismatch { "fail" } else { "pass" }),
+            ]),
+            record("check", vec![
+                string("sender-state-root-evidence"),
+                string(if has_state_root_evidence { "pass" } else { "fail" }),
+            ]),
+            record("check", vec![
+                string("join-or-publish-succeeded"),
+                string(if has_transport_success { "pass" } else { "fail" }),
+            ]),
             record("check", vec![string("canonical-envelope-ref"), string("pass")]),
             record("check", vec![string("live-iroh-gossip"), string("pass")]),
             record("check", vec![string("transport-is-not-authority"), string("pass")]),
@@ -5309,6 +5464,10 @@ fn optional_string(value: Option<&str>) -> IOValue {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
     }
+}
+
+fn diagnostics_include(diagnostics: &[String], needle: &str) -> bool {
+    diagnostics.iter().any(|diagnostic| diagnostic.contains(needle))
 }
 
 fn record_strings(value: &preserves::Value<preserves::IOValue>, tag: &str) -> Result<Vec<String>> {
@@ -6525,6 +6684,9 @@ mod tests {
                 from_peer: "peer:external-send",
                 sequence: 1,
                 expected_operation_ref: None,
+                expected_receiver_node: None,
+                expected_topic: None,
+                expected_endpoint: None,
                 max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
                 peer_bootstrap_refs: &peer_bootstrap_refs,
                 authority_refs: &authority_refs,

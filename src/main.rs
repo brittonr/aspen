@@ -726,6 +726,12 @@ enum NodeCommand {
         sequence: u64,
         #[arg(long = "operation-id")]
         operation_id: Option<String>,
+        #[arg(long = "expected-node")]
+        expected_node: Option<String>,
+        #[arg(long = "expected-topic")]
+        expected_topic: Option<String>,
+        #[arg(long = "expected-endpoint")]
+        expected_endpoint: Option<String>,
         #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS)]
         max_attempts: u64,
         #[arg(long = "peer-bootstrap")]
@@ -5792,6 +5798,9 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
             from_peer,
             sequence,
             operation_id,
+            expected_node,
+            expected_topic,
+            expected_endpoint,
             max_attempts,
             peer_bootstrap_refs,
             authority_refs,
@@ -5816,6 +5825,9 @@ fn run_node_command(command: NodeCommand) -> Result<()> {
                     from_peer: &from_peer,
                     sequence,
                     expected_operation_ref: operation_id.as_deref(),
+                    expected_receiver_node: expected_node.as_deref(),
+                    expected_topic: expected_topic.as_deref(),
+                    expected_endpoint: expected_endpoint.as_deref(),
                     max_attempts,
                     peer_bootstrap_refs: &peer_bootstrap_refs,
                     authority_refs: &authority_refs,

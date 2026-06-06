@@ -685,9 +685,12 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
     let authority_grant = dir.join("authority-grant.preserves");
     let live_ticket = dir.join("live-ticket.preserves");
     let peer_admission = dir.join("peer-admission.preserves");
+    let missing_import_request = dir.join("missing-import-request.preserves");
+    let missing_import_send_receipt = dir.join("missing-import-send.preserves");
     let ticket_import = dir.join("ticket-import.preserves");
     let grant_import = dir.join("grant-import.preserves");
     let policy_ref = test_ref("live-import-policy")?;
+    let resource_ref = test_ref("live-import-resource")?;
 
     assert_success(
         &molten_cmd()
@@ -751,6 +754,57 @@ fn cli_node_live_ticket_and_authority_import_receipts_work() -> CliResult<()> {
             .output()?,
         "receiver peer admit",
     );
+    let authority_ref = molten::preserves_rail::canonical_hash(&read_preserves(&authority_grant)?)?;
+    let bootstrap_ref = molten::preserves_rail::canonical_hash(&read_preserves(&peer_admission)?)?;
+    assert_success(
+        &molten_cmd()
+            .args([
+                "test",
+                "node",
+                "control-request",
+                "--operation",
+                "status",
+                "--authority",
+            ])
+            .arg(&authority_ref)
+            .args(["--policy"])
+            .arg(&policy_ref)
+            .args(["--resource"])
+            .arg(&resource_ref)
+            .args(["--out"])
+            .arg(&missing_import_request)
+            .output()?,
+        "missing import request",
+    );
+    let missing_import_send = molten_cmd()
+        .args(["test", "node", "control-ingress-live-send", "--state-root"])
+        .arg(&sender_root)
+        .arg(&missing_import_request)
+        .arg(&live_ticket)
+        .args([
+            "--from-peer",
+            "peer:cli-live-import",
+            "--expected-topic",
+            "wrong-topic",
+            "--peer-bootstrap",
+        ])
+        .arg(&bootstrap_ref)
+        .args(["--authority"])
+        .arg(&authority_ref)
+        .args(["--policy"])
+        .arg(&policy_ref)
+        .args(["--resource"])
+        .arg(&resource_ref)
+        .args(["--receipt-out"])
+        .arg(&missing_import_send_receipt)
+        .output()?;
+    assert_success(&missing_import_send, "live send missing imports deny receipt");
+    let missing_import_text = to_text(&read_preserves(&missing_import_send_receipt)?)?;
+    assert!(missing_import_text.contains("live-ticket-import"));
+    assert!(missing_import_text.contains("authority-grant-import"));
+    assert!(missing_import_text.contains("ticket topic node-control does not match expected wrong-topic"));
+    assert!(missing_import_text.contains("receiver-ticket-expected"));
+    assert!(missing_import_text.contains("sender-state-root-evidence"));
 
     let ticket_import_out = molten_cmd()
         .args(["test", "node", "live-ticket-import", "--state-root"])
