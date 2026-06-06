@@ -678,6 +678,85 @@ fn cli_node_live_ingress_loopback_enqueues_request() -> CliResult<()> {
 }
 
 #[test]
+fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()> {
+    let dir = temp_dir("cli-node-live-send")?;
+    let state_root = dir.join("node-state");
+    let request = dir.join("status.preserves");
+    let ticket = dir.join("live-ticket.preserves");
+    let send_receipt = dir.join("send.preserves");
+    let transport_receipt = dir.join("transport.preserves");
+    let authority_ref = test_ref("live-send-authority")?;
+    let policy_ref = test_ref("live-send-policy")?;
+    let resource_ref = test_ref("live-send-resource")?;
+    let bootstrap_ref = test_ref("live-send-bootstrap")?;
+
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(&state_root)
+            .args(["--node-id", "node:cli-live-send"])
+            .output()?,
+        "node live send init",
+    );
+    assert_success(
+        &molten_cmd()
+            .args([
+                "test",
+                "node",
+                "control-request",
+                "--operation",
+                "status",
+                "--authority",
+            ])
+            .arg(&authority_ref)
+            .args(["--policy"])
+            .arg(&policy_ref)
+            .args(["--resource"])
+            .arg(&resource_ref)
+            .args(["--out"])
+            .arg(&request)
+            .output()?,
+        "node live send request",
+    );
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "live-ticket-export", "--state-root"])
+            .arg(&state_root)
+            .args(["--policy"])
+            .arg(&policy_ref)
+            .args(["--out"])
+            .arg(&ticket)
+            .output()?,
+        "node live send ticket",
+    );
+    let sent = molten_cmd()
+        .args(["test", "node", "control-ingress-live-send", "--state-root"])
+        .arg(&state_root)
+        .arg(&request)
+        .arg(&ticket)
+        .args(["--from-peer", "peer:cli-live-send", "--peer-bootstrap"])
+        .arg(&bootstrap_ref)
+        .args(["--authority"])
+        .arg(&authority_ref)
+        .args(["--policy"])
+        .arg(&policy_ref)
+        .args(["--resource"])
+        .arg(&resource_ref)
+        .args(["--transport-receipt-out"])
+        .arg(&transport_receipt)
+        .args(["--receipt-out"])
+        .arg(&send_receipt)
+        .output()?;
+    assert_success(&sent, "node live send deny no address");
+    assert!(stdout(&sent).contains("transport_receipt=none"));
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&send_receipt)?), "node-control-live-send-receipt");
+    assert!(!transport_receipt.exists());
+    let text = to_text(&read_preserves(&send_receipt)?)?;
+    assert!(text.contains("ticket has no endpoint addresses"));
+    Ok(())
+}
+
+#[test]
 fn cli_node_serve_live_iroh_empty_listener_receipt() -> CliResult<()> {
     let dir = temp_dir("cli-node-serve-live")?;
     let state_root = dir.join("node-state");

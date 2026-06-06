@@ -107,6 +107,7 @@ pub const NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA: &str = "molten.node.control-su
 pub const NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA: &str = "molten.node.control-ingress-envelope.v1";
 pub const NODE_CONTROL_INGRESS_RECEIPT_SCHEMA: &str = "molten.node.control-ingress-receipt.v1";
 pub const NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA: &str = "molten.node.control-live-transport-receipt.v1";
+pub const NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA: &str = "molten.node.control-live-send-receipt.v1";
 pub const NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA: &str = "molten.node.control-live-listener-receipt.v1";
 pub const NODE_CONTROL_AUTHORITY_GRANT_SCHEMA: &str = "molten.node.control-authority-grant.v1";
 pub const NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA: &str = "molten.node.control-authority-receipt.v1";

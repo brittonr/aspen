@@ -22,6 +22,7 @@
 | 2026-06-04 | self | During node-control authority delegation, I edited before actually re-reading `.agent/napkin.md` in the retained post-compaction turn and only noticed later. | The very first retained tool call after compaction/resume must be `read .agent/napkin.md`; summaries saying it happened earlier are not enough. |
 | 2026-06-04 | self | While validating live peer tickets, I hand-wrote a deeply nested Steel `let`/`spawn-process` command and introduced a mismatched parenthesis. | For long commands, bind the argument list and child in separate top-level `define`s instead of nesting everything in one expression. |
 | 2026-06-04 | self | On the supervisor-policy continuation, I again began editing before re-reading `.agent/napkin.md`, then had to stop and correct the process. | After every compacted-summary handoff, make the napkin read the first retained tool call before any inspection or edits. |
+| 2026-06-04 | self | While adding live-send endpoint parsing, an exact replacement dropped the `(` from `async fn live_gossip_endpoint(...)`, causing an unexpected closing delimiter. | After edits that join new helpers to existing function signatures, inspect the boundary lines before compiling. |
 
 ## User Preferences
 - Prefer explicit Nickel and Steel contract boundaries where applicable: Nickel for static declarative policy/config/schema gates, Steel only for reviewed dynamic predicates/trusted callables, both enforced through Basalt before side effects.
