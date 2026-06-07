@@ -137,6 +137,7 @@ pub struct RedactionMarker {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RevealReceiptInput {
     pub secret_ref: String,
+    pub encrypted_ref: Option<String>,
     pub requester_ref: String,
     pub purpose: String,
     pub plaintext_ref: Option<String>,
@@ -153,6 +154,7 @@ pub struct RevealReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub secret_ref: String,
+    pub encrypted_ref: Option<String>,
     pub requester_ref: String,
     pub purpose: String,
     pub plaintext_ref: Option<String>,
@@ -497,6 +499,7 @@ pub fn parse_redaction_marker(value: &IOValue) -> Result<RedactionMarker> {
 
 pub fn reveal_receipt_value(input: &RevealReceiptInput) -> Result<IOValue> {
     validate_ref(&input.secret_ref, "reveal secret ref")?;
+    validate_optional_ref(input.encrypted_ref.as_deref(), "reveal encrypted ref")?;
     validate_ref(&input.requester_ref, "reveal requester ref")?;
     validate_purpose(&input.purpose)?;
     validate_optional_ref(input.plaintext_ref.as_deref(), "reveal plaintext ref")?;
@@ -528,26 +531,46 @@ pub fn reveal_receipt_value(input: &RevealReceiptInput) -> Result<IOValue> {
         string(SECRET_REVEAL_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
         record("secret", vec![string(&input.secret_ref)]),
+        record("encrypted-ref", vec![optional_ref_value(input.encrypted_ref.as_deref())]),
         record("requester", vec![string(&input.requester_ref)]),
         record("purpose", vec![string(&input.purpose)]),
         record("plaintext-ref", vec![optional_ref_value(plaintext_ref)]),
         record("commitment", vec![string(&input.commitment_ref)]),
         diagnostics_value(&diagnostics),
-        checks_value(&reveal_checks(decision)),
+        checks_value(&reveal_checks(decision, input.encrypted_ref.is_some())),
     ]))
 }
 
 pub fn parse_reveal_receipt(value: &IOValue) -> Result<RevealReceipt> {
-    let fields = simple_record(value, "reveal-receipt-v1", 9)?;
+    let fields =
+        simple_record(value, "reveal-receipt-v1", 10).or_else(|_| simple_record(value, "reveal-receipt-v1", 9))?;
+    let arity = fields.fields_iter().count();
     require_schema(&fields[0], SECRET_REVEAL_RECEIPT_SCHEMA, "reveal receipt")?;
     let decision = record_decision(&fields[1])?;
     let secret_ref = record_ref(&fields[2], "secret", "reveal secret ref")?;
-    let requester_ref = record_ref(&fields[3], "requester", "reveal requester ref")?;
-    let purpose = record_string(&fields[4], "purpose", "reveal purpose")?;
+    let (encrypted_ref, requester_ref, purpose, plaintext_ref, commitment_ref, diagnostics, checks_index) =
+        if arity == 10 {
+            (
+                record_optional_ref(&fields[3], "encrypted-ref", "reveal encrypted ref")?,
+                record_ref(&fields[4], "requester", "reveal requester ref")?,
+                record_string(&fields[5], "purpose", "reveal purpose")?,
+                record_optional_ref(&fields[6], "plaintext-ref", "reveal plaintext ref")?,
+                record_ref(&fields[7], "commitment", "reveal commitment")?,
+                parse_diagnostics(&fields[8])?,
+                9usize,
+            )
+        } else {
+            (
+                None,
+                record_ref(&fields[3], "requester", "reveal requester ref")?,
+                record_string(&fields[4], "purpose", "reveal purpose")?,
+                record_optional_ref(&fields[5], "plaintext-ref", "reveal plaintext ref")?,
+                record_ref(&fields[6], "commitment", "reveal commitment")?,
+                parse_diagnostics(&fields[7])?,
+                8usize,
+            )
+        };
     validate_purpose(&purpose)?;
-    let plaintext_ref = record_optional_ref(&fields[5], "plaintext-ref", "reveal plaintext ref")?;
-    let commitment_ref = record_ref(&fields[6], "commitment", "reveal commitment")?;
-    let diagnostics = parse_diagnostics(&fields[7])?;
     let required = if decision == "pass" {
         [
             "authorized-reveal",
@@ -563,11 +586,15 @@ pub fn parse_reveal_receipt(value: &IOValue) -> Result<RevealReceipt> {
             "audit-receipt",
         ]
     };
-    require_checks(&fields[8], &required)?;
+    require_checks(&fields[checks_index], &required)?;
+    if encrypted_ref.is_some() {
+        require_checks(&fields[checks_index], &["encrypted-ref-bound"])?;
+    }
     Ok(RevealReceipt {
         receipt_ref: canonical_hash(value)?,
         decision,
         secret_ref,
+        encrypted_ref,
         requester_ref,
         purpose,
         plaintext_ref,
@@ -1018,9 +1045,10 @@ pub fn secrets_summary(value: &IOValue) -> Result<String> {
         }
         "reveal-receipt" => {
             let receipt = parse_reveal_receipt(value)?;
+            let encrypted_ref = receipt.encrypted_ref.as_deref().unwrap_or("none");
             Ok(format!(
-                "reveal-receipt decision={} purpose={} secret={} ref={}",
-                receipt.decision, receipt.purpose, receipt.secret_ref, receipt.receipt_ref
+                "reveal-receipt decision={} purpose={} secret={} encrypted={} ref={}",
+                receipt.decision, receipt.purpose, receipt.secret_ref, encrypted_ref, receipt.receipt_ref
             ))
         }
         "decrypt-receipt" => {
@@ -1142,6 +1170,7 @@ pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
         .ok_or_else(|| MoltenError::invalid_harness("secrets fixture expected transform receipt"))?;
     let reveal_denied_value = reveal_receipt_value(&RevealReceiptInput {
         secret_ref: secret.secret_ref.clone(),
+        encrypted_ref: Some(encrypted.encrypted_ref.clone()),
         requester_ref: fixture_ref("requester"),
         purpose: "debug".to_string(),
         plaintext_ref: Some(fixture_ref("plaintext")),
@@ -1155,6 +1184,7 @@ pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
     let reveal_denied = parse_reveal_receipt(&reveal_denied_value)?;
     let reveal_pass_value = reveal_receipt_value(&RevealReceiptInput {
         secret_ref: secret.secret_ref.clone(),
+        encrypted_ref: Some(encrypted.encrypted_ref.clone()),
         requester_ref: fixture_ref("requester"),
         purpose: "debug".to_string(),
         plaintext_ref: Some(fixture_ref("plaintext")),
@@ -1337,22 +1367,26 @@ fn collect_gate_diagnostics(input: AccessGateInput<'_>, diagnostics: &mut impl P
     Ok(())
 }
 
-fn reveal_checks(decision: &str) -> [(&'static str, &'static str); 4] {
-    if decision == "pass" {
-        [
+fn reveal_checks(decision: &str, has_encrypted_ref: bool) -> Vec<(&'static str, &'static str)> {
+    let mut checks = if decision == "pass" {
+        vec![
             ("authorized-reveal", "pass"),
             ("policy-bound", "pass"),
             ("resource-bound", "pass"),
             ("effect-handle-bound", "pass"),
         ]
     } else {
-        [
+        vec![
             ("deny-without-authority", "pass"),
             ("no-plaintext-on-deny", "pass"),
             ("ciphertext-not-authority", "pass"),
             ("audit-receipt", "pass"),
         ]
+    };
+    if has_encrypted_ref {
+        checks.push(("encrypted-ref-bound", "pass"));
     }
+    checks
 }
 
 fn decrypt_checks(decision: &str) -> [(&'static str, &'static str); 4] {
@@ -1832,6 +1866,7 @@ mod tests {
         let denied = parse_reveal_receipt(
             &reveal_receipt_value(&RevealReceiptInput {
                 secret_ref: secret_ref.clone(),
+                encrypted_ref: None,
                 requester_ref: fixture_ref("requester"),
                 purpose: "debug".to_string(),
                 plaintext_ref: Some(fixture_ref("plain")),
@@ -1848,6 +1883,7 @@ mod tests {
         let admitted = parse_reveal_receipt(
             &reveal_receipt_value(&RevealReceiptInput {
                 secret_ref,
+                encrypted_ref: None,
                 requester_ref: fixture_ref("requester"),
                 purpose: "debug".to_string(),
                 plaintext_ref: Some(fixture_ref("plain")),

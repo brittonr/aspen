@@ -193,10 +193,64 @@ fn cli_repro_export_profiles_fail_closed_and_unpack_diagnostics() -> CliResult<(
     if parsed_encrypted.encrypted_refs.is_empty() {
         return Err(test_error("encrypted profile did not expose encrypted refs"));
     }
+    let legacy_reveal = reveal_receipt_value(&RevealReceiptInput {
+        secret_ref: parsed_encrypted.encrypted_refs[0].clone(),
+        encrypted_ref: None,
+        requester_ref: canonical_hash(&string("cli-requester"))?,
+        purpose: "export".to_string(),
+        plaintext_ref: Some(canonical_hash(&string("authorized-private-material-legacy"))?),
+        commitment_ref: parsed_encrypted.encrypted_refs[0].clone(),
+        authority_refs: vec![canonical_hash(&string("reveal-authority"))?],
+        policy_refs: vec![canonical_hash(&string("reveal-policy"))?],
+        resource_refs: vec![canonical_hash(&string("reveal-resource"))?],
+        effect_handle_refs: vec![canonical_hash(&string("reveal-effect-handle"))?],
+        revocation_refs: Vec::new(),
+    })?;
+    let legacy_reveal_path = dir.join("legacy-reveal.preserves");
+    fs::write(&legacy_reveal_path, to_text(&legacy_reveal)?)?;
+    let legacy_unpack = molten_cmd()
+        .args(["test", "repro", "unpack"])
+        .arg(encrypted_out.join("refs.preserves"))
+        .args(["--out"])
+        .arg(dir.join("encrypted-unpack-legacy-reveal"))
+        .args(["--reveal-receipt"])
+        .arg(&legacy_reveal_path)
+        .output()?;
+    assert_failure(&legacy_unpack, "encrypted unpack with legacy reveal ref");
+    assert!(stderr(&legacy_unpack).contains("does not bind an encrypted repro reference"));
+
+    let wrong_reveal_ref = canonical_hash(&string("wrong-encrypted-ref"))?;
+    let stale_reveal = reveal_receipt_value(&RevealReceiptInput {
+        secret_ref: parsed_encrypted.encrypted_refs[0].clone(),
+        encrypted_ref: Some(wrong_reveal_ref),
+        requester_ref: canonical_hash(&string("cli-requester"))?,
+        purpose: "export".to_string(),
+        plaintext_ref: Some(canonical_hash(&string("authorized-private-material-stale"))?),
+        commitment_ref: parsed_encrypted.encrypted_refs[0].clone(),
+        authority_refs: vec![canonical_hash(&string("reveal-authority"))?],
+        policy_refs: vec![canonical_hash(&string("reveal-policy"))?],
+        resource_refs: vec![canonical_hash(&string("reveal-resource"))?],
+        effect_handle_refs: vec![canonical_hash(&string("reveal-effect-handle"))?],
+        revocation_refs: Vec::new(),
+    })?;
+    let stale_reveal_path = dir.join("stale-reveal.preserves");
+    fs::write(&stale_reveal_path, to_text(&stale_reveal)?)?;
+    let stale_unpack = molten_cmd()
+        .args(["test", "repro", "unpack"])
+        .arg(encrypted_out.join("refs.preserves"))
+        .args(["--out"])
+        .arg(dir.join("encrypted-unpack-stale-reveal"))
+        .args(["--reveal-receipt"])
+        .arg(&stale_reveal_path)
+        .output()?;
+    assert_failure(&stale_unpack, "encrypted unpack with stale reveal ref");
+    assert!(stderr(&stale_unpack).contains("not part of this repro bundle"));
+
     let mut reveal_paths = Vec::with_capacity(parsed_encrypted.encrypted_refs.len());
     for (index, encrypted_ref) in parsed_encrypted.encrypted_refs.iter().enumerate() {
         let reveal = reveal_receipt_value(&RevealReceiptInput {
             secret_ref: encrypted_ref.clone(),
+            encrypted_ref: Some(encrypted_ref.clone()),
             requester_ref: canonical_hash(&string("cli-requester"))?,
             purpose: "export".to_string(),
             plaintext_ref: Some(canonical_hash(&string(format!("authorized-private-material-{index}")))?),

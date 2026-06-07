@@ -8989,6 +8989,7 @@ fn validate_repro_reveal_receipts(encrypted_refs: &[String], receipt_values: &[p
             "encrypted-private repro unpack requires at least one passing reveal receipt",
         ));
     }
+    let expected_refs = encrypted_refs.iter().cloned().collect::<std::collections::BTreeSet<_>>();
     let mut authorized_refs = std::collections::BTreeSet::new();
     for receipt_value in receipt_values {
         let receipt = secrets::parse_reveal_receipt(receipt_value)?;
@@ -8997,8 +8998,14 @@ fn validate_repro_reveal_receipts(encrypted_refs: &[String], receipt_values: &[p
                 "unauthorized reveal receipt cannot unpack private repro material",
             ));
         }
-        authorized_refs.insert(receipt.secret_ref);
-        authorized_refs.insert(receipt.commitment_ref);
+        let encrypted_ref = receipt
+            .encrypted_ref
+            .as_ref()
+            .ok_or_else(|| MoltenError::invalid_harness("reveal receipt does not bind an encrypted repro reference"))?;
+        if !expected_refs.contains(encrypted_ref) {
+            return Err(MoltenError::invalid_harness("reveal receipt encrypted ref is not part of this repro bundle"));
+        }
+        authorized_refs.insert(encrypted_ref.clone());
     }
     for encrypted_ref in encrypted_refs {
         if !authorized_refs.contains(encrypted_ref) {
