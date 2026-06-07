@@ -391,6 +391,67 @@ pub fn parse_dedup_entry(value: &IOValue) -> Result<DedupEntry> {
     })
 }
 
+pub fn delivery_summary(value: &IOValue) -> Result<String> {
+    if let Ok(operation) = parse_operation_id(value) {
+        return Ok(format!(
+            "delivery operation ref={} scope={} producer={} consumer={} sequence={} intent={} payload={}",
+            operation.operation_ref,
+            operation.scope_ref,
+            operation.producer,
+            operation.consumer,
+            operation.sequence,
+            operation.intent,
+            operation.payload_ref
+        ));
+    }
+    if let Ok(window) = parse_delivery_window(value) {
+        return Ok(format!(
+            "delivery window ref={} scope={} profile={} next_sequence={} lowest_retained={} retention_refs={}",
+            window.window_ref,
+            window.scope_ref,
+            window.scope_profile,
+            window.next_sequence,
+            window.lowest_retained,
+            window.retention_refs.len()
+        ));
+    }
+    if let Ok(entry) = parse_dedup_entry(value) {
+        return Ok(format!(
+            "delivery dedup entry ref={} operation={} scope={} sequence={} first_receipt={} evidence_refs={}",
+            entry.entry_ref,
+            entry.operation_ref,
+            entry.scope_ref,
+            entry.sequence,
+            entry.first_receipt_ref,
+            entry.evidence_refs.len()
+        ));
+    }
+    if let Ok(receipt) = parse_idempotency_receipt(value) {
+        return Ok(format!(
+            "delivery idempotency receipt ref={} decision={} operation={} scope={} side_effect={} diagnostics={}",
+            receipt.receipt_ref,
+            receipt.decision,
+            receipt.operation_ref,
+            receipt.scope_ref,
+            receipt.side_effect,
+            receipt.diagnostics.len()
+        ));
+    }
+    if let Some(fields) = value.collect_simple_record("retry-receipt-v1", Some(7)) {
+        require_schema(&fields[0], DELIVERY_RETRY_RECEIPT_SCHEMA, "delivery retry receipt schema")?;
+        require_check(&parse_checks(&fields[6])?, "retry-before-side-effects", "delivery retry receipt")?;
+        return Ok(format!(
+            "delivery retry receipt ref={} operation={} scope={} retry_after_sequence={} diagnostics={}",
+            canonical_hash(value)?,
+            record_ref(&fields[1], "operation")?,
+            record_ref(&fields[2], "scope")?,
+            record_u64(&fields[4], "retry-after-sequence")?,
+            record_string_sequence(&fields[5], "diagnostics")?.len()
+        ));
+    }
+    Err(MoltenError::invalid_harness("unsupported delivery artifact"))
+}
+
 fn first_decision(
     input: DeliveryCheckInput<'_>,
     db: &Database,

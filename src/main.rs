@@ -10,6 +10,7 @@ use molten::catalog_mcp;
 use molten::chunk_store;
 use molten::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 use molten::coordination;
+use molten::delivery_idempotency;
 use molten::error::MoltenError;
 use molten::error::Result;
 use molten::eval_cache;
@@ -175,6 +176,10 @@ enum TestCommand {
     Remote {
         #[command(subcommand)]
         command: RemoteCommand,
+    },
+    Delivery {
+        #[command(subcommand)]
+        command: DeliveryCommand,
     },
     Protocol {
         #[command(subcommand)]
@@ -2244,6 +2249,80 @@ enum RemoteCommand {
 }
 
 #[derive(Debug, Subcommand)]
+enum DeliveryCommand {
+    Scope {
+        #[arg(long)]
+        scope_profile: String,
+        #[arg(long)]
+        scope_name: String,
+        #[arg(long = "retention-ref")]
+        retention_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    OperationId {
+        #[arg(long)]
+        scope_profile: String,
+        #[arg(long)]
+        scope_name: Option<String>,
+        #[arg(long)]
+        scope_ref: Option<String>,
+        #[arg(long)]
+        producer: String,
+        #[arg(long)]
+        consumer: String,
+        #[arg(long)]
+        sequence: u64,
+        #[arg(long)]
+        intent: String,
+        #[arg(long)]
+        payload_ref: String,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    Check {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        scope_profile: String,
+        #[arg(long)]
+        scope_name: Option<String>,
+        #[arg(long)]
+        scope_ref: Option<String>,
+        #[arg(long)]
+        producer: String,
+        #[arg(long)]
+        consumer: String,
+        #[arg(long)]
+        sequence: u64,
+        #[arg(long)]
+        intent: String,
+        #[arg(long)]
+        payload_ref: String,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long)]
+        semantic_result_ref: Option<String>,
+        #[arg(long, default_value = "deny")]
+        gap_policy: String,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    ReceiptShow {
+        receipt_ref: String,
+        #[arg(long)]
+        root: PathBuf,
+    },
+    Show {
+        artifact: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum RemoteEnvelopeCommand {
     Build {
         #[arg(long)]
@@ -2408,6 +2487,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Catalog { command } => run_catalog_command(command),
         TestCommand::Job { command } => run_job_command(command),
         TestCommand::Remote { command } => run_remote_command(command),
+        TestCommand::Delivery { command } => run_delivery_command(command),
         TestCommand::Protocol { command } => run_protocol_command(command),
         TestCommand::Raft { command } => run_raft_command(command),
         TestCommand::Plugin { command } => run_plugin_command(command),
@@ -4850,6 +4930,155 @@ fn read_transcript_input(path: &Path) -> Result<transcripts::TranscriptArtifact>
         seed_ref: None,
         expected_refs: Vec::new(),
     })
+}
+
+fn write_optional_preserves(out: Option<&PathBuf>, value: &preserves::IOValue) -> Result<bool> {
+    if let Some(path) = out {
+        write_file(path, &to_text(value)?)?;
+        Ok(true)
+    } else {
+        println!("{}", to_text(value)?);
+        Ok(false)
+    }
+}
+
+fn print_or_log_summary(is_written_to_file: bool, summary: &str) {
+    if is_written_to_file {
+        println!("{summary}");
+    } else {
+        eprintln!("{summary}");
+    }
+}
+
+fn run_delivery_command(command: DeliveryCommand) -> Result<()> {
+    match command {
+        DeliveryCommand::Scope {
+            scope_profile,
+            scope_name,
+            retention_refs,
+            out,
+        } => {
+            let value = delivery_idempotency::scope_profile_value(&scope_profile, &scope_name, &retention_refs)?;
+            let reference = canonical_hash(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!("delivery scope ref={reference} profile={scope_profile} name={scope_name}"),
+            );
+            Ok(())
+        }
+        DeliveryCommand::OperationId {
+            scope_profile,
+            scope_name,
+            scope_ref,
+            producer,
+            consumer,
+            sequence,
+            intent,
+            payload_ref,
+            policy_refs,
+            out,
+        } => {
+            let resolved_scope_ref =
+                resolve_delivery_scope_ref(&scope_profile, scope_name.as_deref(), scope_ref.as_deref())?;
+            let operation = delivery_idempotency::derive_operation_id(delivery_idempotency::OperationIdInput {
+                scope_ref: resolved_scope_ref,
+                producer,
+                consumer,
+                sequence,
+                intent,
+                payload_ref,
+                policy_refs,
+            })?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &operation.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "delivery operation ref={} scope={} sequence={} intent={}",
+                    operation.operation_ref, operation.scope_ref, operation.sequence, operation.intent
+                ),
+            );
+            Ok(())
+        }
+        DeliveryCommand::Check {
+            root,
+            scope_profile,
+            scope_name,
+            scope_ref,
+            producer,
+            consumer,
+            sequence,
+            intent,
+            payload_ref,
+            policy_refs,
+            evidence_refs,
+            semantic_result_ref,
+            gap_policy,
+            receipt_out,
+        } => {
+            let resolved_scope_ref =
+                resolve_delivery_scope_ref(&scope_profile, scope_name.as_deref(), scope_ref.as_deref())?;
+            let delivery = delivery_idempotency::check_delivery(delivery_idempotency::DeliveryCheckInput {
+                root: &root,
+                scope_profile: &scope_profile,
+                scope_ref: &resolved_scope_ref,
+                producer: &producer,
+                consumer: &consumer,
+                sequence,
+                intent: &intent,
+                payload_ref: &payload_ref,
+                policy_refs: &policy_refs,
+                evidence_refs: &evidence_refs,
+                semantic_result_ref: semantic_result_ref.as_deref(),
+                gap_policy: parse_delivery_gap_policy(&gap_policy)?,
+            })?;
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &delivery.receipt.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "delivery idempotency decision={} operation={} receipt={} side_effect={} prior={}",
+                    delivery.receipt.decision,
+                    delivery.operation.operation_ref,
+                    delivery.receipt.receipt_ref,
+                    delivery.receipt.side_effect,
+                    delivery.prior_semantic_result_ref.as_deref().unwrap_or("none")
+                ),
+            );
+            Ok(())
+        }
+        DeliveryCommand::ReceiptShow { receipt_ref, root } => {
+            let value = delivery_idempotency::read_idempotency_receipt(&root, &receipt_ref)?;
+            println!("{}", delivery_idempotency::delivery_summary(&value)?);
+            Ok(())
+        }
+        DeliveryCommand::Show { artifact } => {
+            let value = read_preserves_file(&artifact)?;
+            println!("{}", delivery_idempotency::delivery_summary(&value)?);
+            Ok(())
+        }
+    }
+}
+
+fn resolve_delivery_scope_ref(
+    scope_profile: &str,
+    scope_name: Option<&str>,
+    scope_ref: Option<&str>,
+) -> Result<String> {
+    match (scope_name, scope_ref) {
+        (_, Some(reference)) => Ok(reference.to_string()),
+        (Some(name), None) => delivery_idempotency::scope_ref(scope_profile, name),
+        (None, None) => Err(MoltenError::invalid_harness("delivery command requires --scope-ref or --scope-name")),
+    }
+}
+
+fn parse_delivery_gap_policy(value: &str) -> Result<delivery_idempotency::GapPolicy> {
+    match value {
+        "deny" => Ok(delivery_idempotency::GapPolicy::Deny),
+        "retry" => Ok(delivery_idempotency::GapPolicy::Retry),
+        other => Err(MoltenError::invalid_harness(format!(
+            "unsupported delivery gap policy {other}; expected deny or retry"
+        ))),
+    }
 }
 
 fn run_protocol_command(command: ProtocolCommand) -> Result<()> {
@@ -8095,6 +8324,95 @@ mod tests {
             artifact: out.join("state.preserves"),
         })
         .expect("show raft state");
+    }
+
+    #[test]
+    fn cli_delivery_idempotency_commands_work() {
+        let dir = temp_dir("delivery-cli");
+        let root = dir.join("store");
+        let scope_out = dir.join("scope.preserves");
+        let policy_ref = cli_synthetic_ref("delivery-policy").expect("policy ref");
+        let evidence_ref = cli_synthetic_ref("delivery-evidence").expect("evidence ref");
+        let payload_ref = cli_synthetic_ref("delivery-payload").expect("payload ref");
+        let result_ref = cli_synthetic_ref("delivery-result").expect("result ref");
+        run_delivery_command(DeliveryCommand::Scope {
+            scope_profile: delivery_idempotency::SCOPE_REMOTE_TOPIC.to_string(),
+            scope_name: "peer:b:services".to_string(),
+            retention_refs: vec![policy_ref.clone()],
+            out: Some(scope_out.clone()),
+        })
+        .expect("write delivery scope");
+        assert!(scope_out.exists());
+        let operation_out = dir.join("operation.preserves");
+        run_delivery_command(DeliveryCommand::OperationId {
+            scope_profile: delivery_idempotency::SCOPE_REMOTE_TOPIC.to_string(),
+            scope_name: Some("peer:b:services".to_string()),
+            scope_ref: None,
+            producer: "peer:a/producer".to_string(),
+            consumer: "peer:b".to_string(),
+            sequence: 1,
+            intent: "remote-dataspace-assert".to_string(),
+            payload_ref: payload_ref.clone(),
+            policy_refs: vec![policy_ref.clone()],
+            out: Some(operation_out.clone()),
+        })
+        .expect("write operation id");
+        run_delivery_command(DeliveryCommand::Show {
+            artifact: operation_out.clone(),
+        })
+        .expect("show operation id");
+        let first_receipt = dir.join("first.preserves");
+        run_delivery_command(DeliveryCommand::Check {
+            root: root.clone(),
+            scope_profile: delivery_idempotency::SCOPE_REMOTE_TOPIC.to_string(),
+            scope_name: Some("peer:b:services".to_string()),
+            scope_ref: None,
+            producer: "peer:a/producer".to_string(),
+            consumer: "peer:b".to_string(),
+            sequence: 1,
+            intent: "remote-dataspace-assert".to_string(),
+            payload_ref: payload_ref.clone(),
+            policy_refs: vec![policy_ref.clone()],
+            evidence_refs: vec![evidence_ref.clone()],
+            semantic_result_ref: Some(result_ref.clone()),
+            gap_policy: "deny".to_string(),
+            receipt_out: Some(first_receipt.clone()),
+        })
+        .expect("first delivery check");
+        let first = delivery_idempotency::parse_idempotency_receipt(
+            &read_preserves_file(&first_receipt).expect("read first receipt"),
+        )
+        .expect("parse first receipt");
+        assert_eq!(first.decision, "first");
+        run_delivery_command(DeliveryCommand::ReceiptShow {
+            receipt_ref: first.receipt_ref.clone(),
+            root: root.clone(),
+        })
+        .expect("show stored receipt");
+        let duplicate_receipt = dir.join("duplicate.preserves");
+        run_delivery_command(DeliveryCommand::Check {
+            root: root.clone(),
+            scope_profile: delivery_idempotency::SCOPE_REMOTE_TOPIC.to_string(),
+            scope_name: Some("peer:b:services".to_string()),
+            scope_ref: None,
+            producer: "peer:a/producer".to_string(),
+            consumer: "peer:b".to_string(),
+            sequence: 1,
+            intent: "remote-dataspace-assert".to_string(),
+            payload_ref: payload_ref.clone(),
+            policy_refs: vec![policy_ref.clone()],
+            evidence_refs: vec![evidence_ref.clone()],
+            semantic_result_ref: Some(result_ref),
+            gap_policy: "deny".to_string(),
+            receipt_out: Some(duplicate_receipt.clone()),
+        })
+        .expect("duplicate delivery check");
+        let duplicate = delivery_idempotency::parse_idempotency_receipt(
+            &read_preserves_file(&duplicate_receipt).expect("read duplicate receipt"),
+        )
+        .expect("parse duplicate receipt");
+        assert_eq!(duplicate.decision, "duplicate");
+        assert_eq!(duplicate.prior_receipt_ref.as_deref(), Some(first.receipt_ref.as_str()));
     }
 
     #[test]
