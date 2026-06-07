@@ -382,6 +382,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("coordination-state-snapshot-v1", "coordination-state-snapshot"),
     ("coordination-status-assertion-v1", "coordination-status-assertion"),
     ("coordination-fixture-report-v1", "coordination-fixture-report"),
+    ("coordination-apply-report-v1", "coordination-apply-report"),
     ("confidential-label-v1", "confidential-label"),
     ("secret-ref-v1", "secret-ref"),
     ("encrypted-ref-v1", "encrypted-ref"),

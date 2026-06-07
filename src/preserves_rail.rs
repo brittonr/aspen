@@ -160,6 +160,7 @@ pub const COORDINATION_RECEIPT_SCHEMA: &str = "molten.coordination.receipt.v1";
 pub const COORDINATION_FENCING_TOKEN_SCHEMA: &str = "molten.coordination.fencing-token.v1";
 pub const COORDINATION_STATE_SNAPSHOT_SCHEMA: &str = "molten.coordination.state-snapshot.v1";
 pub const COORDINATION_STATUS_ASSERTION_SCHEMA: &str = "molten.coordination.status-assertion.v1";
+pub const COORDINATION_APPLY_REPORT_SCHEMA: &str = "molten.coordination.apply-report.v1";
 pub const CONFIDENTIAL_LABEL_SCHEMA: &str = "molten.secrets.confidential-label.v1";
 pub const SECRET_REF_SCHEMA: &str = "molten.secrets.secret-ref.v1";
 pub const ENCRYPTED_REF_SCHEMA: &str = "molten.secrets.encrypted-ref.v1";

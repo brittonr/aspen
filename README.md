@@ -110,6 +110,7 @@ Current Cairn roadmap changes live under `cairn/changes/`:
 - `secrets-redaction-encrypted-refs`
 - `plugin-host-lifecycle-runtime`
 - `coordination-services-control-plane`
+- `coordination-control-plane-ux`
 - `operator-dogfood-node-workflow`
 
 ## Node runtime daemon
@@ -276,6 +277,27 @@ molten test job status --ledger target/ledger --job job:echo
 ```
 
 `job-ref-submission-v1` is content-ref-only and rejects inline executable/input bytes. The local deterministic worker reads and verifies chunk manifests before running the `local-echo-v1` handler, pins executable/input/output refs while active, emits fetch/verify/status/cleanup evidence, stores outputs as chunk manifests, and records `job-ref-receipt-v1` in the ledger. These receipts are execution evidence only; authority, provenance, policy, effect admission, transport, and resource trust remain explicit inputs.
+
+## Coordination control-plane UX
+
+Coordination manifests and requests can be generated and applied without bypassing the control-plane state machine:
+
+```sh
+molten test coordination manifest --service queue \
+  --policy-ref blake3:policy --resource-ref blake3:resource \
+  --out target/coordination.manifest.preserves
+printf '<item "job-1">' > target/coordination.item.preserves
+molten test coordination request --service queue --operation enqueue \
+  --key queue:jobs --client-session worker-a \
+  --operation-id-ref blake3:operation --payload target/coordination.item.preserves \
+  --authority-ref blake3:authority --policy-ref blake3:policy \
+  --resource-ref blake3:resource --out target/coordination.request.preserves
+molten test coordination apply --manifest target/coordination.manifest.preserves \
+  --request target/coordination.request.preserves --out target/coordination-apply
+molten test coordination show target/coordination-apply/report.preserves
+```
+
+`apply` writes `coordination-apply-report-v1` plus indexed request/receipt/state/assertion evidence. Duplicate operation ids replay the prior receipt instead of advancing state twice. Coordination receipts and reports are evidence only; they do not grant authority, policy, resource, transport, provenance, or source-gate trust.
 
 ## Development
 

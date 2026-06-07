@@ -16,6 +16,7 @@ use crate::bounded::VecSink;
 use crate::delivery_idempotency;
 use crate::error::MoltenError;
 use crate::error::Result;
+use crate::preserves_rail::COORDINATION_APPLY_REPORT_SCHEMA;
 use crate::preserves_rail::COORDINATION_FENCING_TOKEN_SCHEMA;
 use crate::preserves_rail::COORDINATION_RECEIPT_SCHEMA;
 use crate::preserves_rail::COORDINATION_REQUEST_SCHEMA;
@@ -51,11 +52,11 @@ pub const OP_UNREGISTER: &str = "unregister";
 pub const OP_READ: &str = "read";
 
 const COORDINATION_NAMESPACE_PREFIX: &str = "coordination";
-const DEFAULT_SERVICE_ID: &str = "coordination:local";
-const DEFAULT_QUEUE_CAPACITY: u64 = 4;
-const DEFAULT_SEMAPHORE_CAPACITY: u64 = 2;
-const DEFAULT_RATE_LIMIT: u64 = 2;
-const DEFAULT_BARRIER_PARTIES: u64 = 2;
+pub const DEFAULT_COORDINATION_SERVICE_ID: &str = "coordination:local";
+pub const DEFAULT_COORDINATION_QUEUE_CAPACITY: u64 = 4;
+pub const DEFAULT_COORDINATION_SEMAPHORE_CAPACITY: u64 = 2;
+pub const DEFAULT_COORDINATION_RATE_LIMIT: u64 = 2;
+pub const DEFAULT_COORDINATION_BARRIER_PARTIES: u64 = 2;
 
 const MAX_COORDINATION_REFS: usize = 4096;
 const MAX_COORDINATION_ITEMS: usize = 4096;
@@ -193,6 +194,18 @@ pub struct CoordinationFixtureRun {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CoordinationApplyReport {
+    pub report_ref: String,
+    pub decision: String,
+    pub manifest_ref: String,
+    pub final_state_ref: String,
+    pub receipt_refs: Vec<String>,
+    pub assertion_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoordinationRuntime {
     pub manifest: CoordinationServiceManifest,
     pub raft: ControlRegistryRuntime,
@@ -273,6 +286,16 @@ pub struct StatusAssertionInput<'a> {
     pub fact: &'a IOValue,
     pub state_ref: &'a str,
     pub receipt_ref: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ApplyReportValueInput<'a> {
+    pub decision: &'a str,
+    pub manifest_ref: &'a str,
+    pub final_state_ref: &'a str,
+    pub receipt_refs: &'a [String],
+    pub assertion_refs: &'a [String],
+    pub evidence_refs: &'a [String],
 }
 
 pub fn coordination_service_manifest_value(input: &CoordinationServiceManifestInput) -> Result<IOValue> {
@@ -670,13 +693,13 @@ pub fn apply_coordination_request(
 pub fn coordination_fixture_manifest_value() -> Result<IOValue> {
     let group_ref = canonical_hash(&raft_control_plane::control_registry_fixture_manifest_value()?)?;
     coordination_service_manifest_value(&CoordinationServiceManifestInput {
-        service_id: DEFAULT_SERVICE_ID.to_string(),
+        service_id: DEFAULT_COORDINATION_SERVICE_ID.to_string(),
         services: supported_services(),
         control_group_ref: group_ref,
-        queue_capacity: DEFAULT_QUEUE_CAPACITY,
-        semaphore_capacity: DEFAULT_SEMAPHORE_CAPACITY,
-        rate_limit: DEFAULT_RATE_LIMIT,
-        barrier_parties: DEFAULT_BARRIER_PARTIES,
+        queue_capacity: DEFAULT_COORDINATION_QUEUE_CAPACITY,
+        semaphore_capacity: DEFAULT_COORDINATION_SEMAPHORE_CAPACITY,
+        rate_limit: DEFAULT_COORDINATION_RATE_LIMIT,
+        barrier_parties: DEFAULT_COORDINATION_BARRIER_PARTIES,
         policy_refs: vec![fixture_ref("coordination-policy")],
         resource_refs: vec![fixture_ref("coordination-resource")],
     })
@@ -803,7 +826,68 @@ pub fn run_coordination_fixture() -> Result<CoordinationFixtureRun> {
     })
 }
 
+pub fn coordination_apply_report_value(input: ApplyReportValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    validate_ref(input.manifest_ref, "coordination apply report manifest ref")?;
+    validate_ref(input.final_state_ref, "coordination apply report state ref")?;
+    validate_refs(input.receipt_refs, "coordination apply report receipt ref")?;
+    validate_refs(input.assertion_refs, "coordination apply report assertion ref")?;
+    validate_refs(input.evidence_refs, "coordination apply report evidence ref")?;
+    Ok(record("coordination-apply-report-v1", vec![
+        string(COORDINATION_APPLY_REPORT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("manifest", vec![string(input.manifest_ref)]),
+        record("state", vec![string(input.final_state_ref)]),
+        record("receipts", vec![strings_sequence(input.receipt_refs)]),
+        record("assertions", vec![strings_sequence(input.assertion_refs)]),
+        record("evidence", vec![strings_sequence(input.evidence_refs)]),
+        checks_value(&[
+            ("control-plane-apply-batch", "pass"),
+            ("evidence-index-bound", "pass"),
+            ("dataspace-observation-only", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_coordination_apply_report(value: &IOValue) -> Result<CoordinationApplyReport> {
+    let fields = simple_record(value, "coordination-apply-report-v1", 8)?;
+    require_schema(&fields[0], COORDINATION_APPLY_REPORT_SCHEMA, "coordination apply report schema")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    let manifest_ref = record_ref(&fields[2], "manifest")?;
+    let final_state_ref = record_ref(&fields[3], "state")?;
+    let receipt_refs = record_ref_sequence(&fields[4], "receipts")?;
+    let assertion_refs = record_ref_sequence(&fields[5], "assertions")?;
+    let evidence_refs = record_ref_sequence(&fields[6], "evidence")?;
+    require_check(&parse_checks(&fields[7])?, "control-plane-apply-batch", "coordination apply report")?;
+    Ok(CoordinationApplyReport {
+        report_ref: canonical_hash(value)?,
+        decision,
+        manifest_ref,
+        final_state_ref,
+        receipt_refs,
+        assertion_refs,
+        evidence_refs,
+        value: value.clone(),
+    })
+}
+
+pub fn coordination_supported_services() -> Vec<String> {
+    supported_services()
+}
+
 pub fn coordination_summary(value: &IOValue) -> Result<String> {
+    if let Ok(report) = parse_coordination_apply_report(value) {
+        return Ok(format!(
+            "coordination apply report decision={} manifest={} state={} receipts={} assertions={} evidence={}",
+            report.decision,
+            report.manifest_ref,
+            report.final_state_ref,
+            report.receipt_refs.len(),
+            report.assertion_refs.len(),
+            report.evidence_refs.len()
+        ));
+    }
     if let Ok(receipt) = parse_coordination_receipt(value) {
         return Ok(format!(
             "coordination receipt decision={} service={} operation={} request={} state={} diagnostics={}",
@@ -813,6 +897,18 @@ pub fn coordination_summary(value: &IOValue) -> Result<String> {
             receipt.request_ref,
             receipt.state_ref,
             receipt.diagnostics.join(";")
+        ));
+    }
+    if let Ok(request) = parse_coordination_request(value) {
+        return Ok(format!(
+            "coordination request service={} operation={} key={} session={} operation_id={}",
+            request.service, request.operation, request.key, request.client_session, request.operation_id_ref
+        ));
+    }
+    if let Ok(token) = parse_fencing_token(value) {
+        return Ok(format!(
+            "coordination fencing token key={} owner={} token={} commit={}",
+            token.key, token.owner, token.token, token.commit_receipt_ref
         ));
     }
     if let Ok(manifest) = parse_coordination_service_manifest(value) {
@@ -2214,6 +2310,23 @@ mod tests {
         assert_eq!(ledger::artifact_kind(&result.receipt.value), "coordination-receipt");
         assert_eq!(ledger::artifact_kind(&result.assertions[0].value), "coordination-status-assertion");
         assert_eq!(ledger::artifact_kind(&result.token.as_ref().expect("token").value), "coordination-fencing-token");
+        let report_evidence_refs = result
+            .evidence_values
+            .iter()
+            .map(canonical_hash)
+            .collect::<Result<Vec<_>>>()
+            .expect("evidence refs");
+        let manifest_ref = canonical_hash(&manifest).expect("manifest ref");
+        let apply_report = coordination_apply_report_value(ApplyReportValueInput {
+            decision: "pass",
+            manifest_ref: &manifest_ref,
+            final_state_ref: &result.state_snapshot.state_ref,
+            receipt_refs: std::slice::from_ref(&result.receipt.receipt_ref),
+            assertion_refs: std::slice::from_ref(&result.assertions[0].assertion_ref),
+            evidence_refs: &report_evidence_refs,
+        })
+        .expect("apply report");
+        assert_eq!(ledger::artifact_kind(&apply_report), "coordination-apply-report");
         let root = temp_root("coordination-ledger-catalog");
         let registry_root = root.join("registry");
         let ledger_root = root.join("ledger");

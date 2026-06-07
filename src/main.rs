@@ -74,7 +74,11 @@ use molten::typed_storage;
 use molten::upgrades;
 
 const PROTOCOL_LIFECYCLE_INDEX_LIMIT: usize = 256;
+const COORDINATION_CLI_BATCH_REF_LIMIT: usize = 4096;
+const COORDINATION_CLI_BATCH_EVIDENCE_LIMIT: usize = 16384;
 const _: () = assert!(PROTOCOL_LIFECYCLE_INDEX_LIMIT > 0);
+const _: () = assert!(COORDINATION_CLI_BATCH_REF_LIMIT <= 100_000);
+const _: () = assert!(COORDINATION_CLI_BATCH_EVIDENCE_LIMIT <= 100_000);
 
 #[derive(Debug, Parser)]
 #[command(name = "molten", version, about = "Molten runtime prototype")]
@@ -253,6 +257,58 @@ enum RaftCommand {
 
 #[derive(Debug, Subcommand)]
 enum CoordinationCommand {
+    Manifest {
+        #[arg(long, default_value = "coordination:local")]
+        service_id: String,
+        #[arg(long = "service")]
+        services: Vec<String>,
+        #[arg(long)]
+        control_group_ref: Option<String>,
+        #[arg(long, default_value_t = coordination::DEFAULT_COORDINATION_QUEUE_CAPACITY)]
+        queue_capacity: u64,
+        #[arg(long, default_value_t = coordination::DEFAULT_COORDINATION_SEMAPHORE_CAPACITY)]
+        semaphore_capacity: u64,
+        #[arg(long, default_value_t = coordination::DEFAULT_COORDINATION_RATE_LIMIT)]
+        rate_limit: u64,
+        #[arg(long, default_value_t = coordination::DEFAULT_COORDINATION_BARRIER_PARTIES)]
+        barrier_parties: u64,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long = "resource-ref")]
+        resource_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    Request {
+        #[arg(long)]
+        service: String,
+        #[arg(long)]
+        operation: String,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        client_session: String,
+        #[arg(long)]
+        operation_id_ref: String,
+        #[arg(long)]
+        payload: Option<PathBuf>,
+        #[arg(long = "authority-ref")]
+        authority_refs: Vec<String>,
+        #[arg(long = "resource-ref")]
+        resource_refs: Vec<String>,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    Apply {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long = "request")]
+        requests: Vec<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+    },
     RunFixture {
         #[arg(long)]
         out: PathBuf,
@@ -5372,8 +5428,166 @@ fn raft_artifact_summary(value: &preserves::IOValue) -> Result<String> {
     }
 }
 
+struct CoordinationCliItems<T> {
+    values: Vec<T>,
+    maximum: usize,
+    label: &'static str,
+}
+
+impl<T> CoordinationCliItems<T> {
+    fn new(maximum: usize, label: &'static str) -> Self {
+        Self {
+            values: Vec::new(),
+            maximum,
+            label,
+        }
+    }
+
+    fn push(&mut self, value: T) -> Result<()> {
+        if self.values.len() >= self.maximum {
+            return Err(MoltenError::invalid_harness(format!("{} count exceeds {}", self.label, self.maximum)));
+        }
+        self.values.push(value);
+        Ok(())
+    }
+
+    fn into_vec(self) -> Vec<T> {
+        self.values
+    }
+}
+
 fn run_coordination_command(command: CoordinationCommand) -> Result<()> {
     match command {
+        CoordinationCommand::Manifest {
+            service_id,
+            services,
+            control_group_ref,
+            queue_capacity,
+            semaphore_capacity,
+            rate_limit,
+            barrier_parties,
+            policy_refs,
+            resource_refs,
+            out,
+        } => {
+            let control_group_ref = match control_group_ref {
+                Some(reference) => reference,
+                None => canonical_hash(&raft_control_plane::control_registry_fixture_manifest_value()?)?,
+            };
+            let services = if services.is_empty() {
+                coordination::coordination_supported_services()
+            } else {
+                services
+            };
+            let value =
+                coordination::coordination_service_manifest_value(&coordination::CoordinationServiceManifestInput {
+                    service_id,
+                    services,
+                    control_group_ref,
+                    queue_capacity,
+                    semaphore_capacity,
+                    rate_limit,
+                    barrier_parties,
+                    policy_refs,
+                    resource_refs,
+                })?;
+            let reference = canonical_hash(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(is_written_to_file, &format!("coordination manifest ref={reference}"));
+            Ok(())
+        }
+        CoordinationCommand::Request {
+            service,
+            operation,
+            key,
+            client_session,
+            operation_id_ref,
+            payload,
+            authority_refs,
+            resource_refs,
+            policy_refs,
+            out,
+        } => {
+            let payload = payload.as_ref().map(|path| read_preserves_file(path)).transpose()?;
+            let value = coordination::coordination_request_value(&coordination::CoordinationRequestInput {
+                service,
+                operation,
+                key,
+                client_session,
+                operation_id_ref,
+                payload,
+                authority_refs,
+                resource_refs,
+                policy_refs,
+            })?;
+            let reference = canonical_hash(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(is_written_to_file, &format!("coordination request ref={reference}"));
+            Ok(())
+        }
+        CoordinationCommand::Apply {
+            manifest,
+            requests,
+            out,
+        } => {
+            if requests.is_empty() {
+                return Err(MoltenError::invalid_harness("coordination apply requires at least one --request file"));
+            }
+            let manifest_value = read_preserves_file(&manifest)?;
+            let mut runtime = coordination::new_coordination_runtime(&manifest_value)?;
+            let manifest_ref = runtime.manifest.manifest_ref.clone();
+            let mut decision = "pass";
+            let mut evidence_values =
+                CoordinationCliItems::new(COORDINATION_CLI_BATCH_EVIDENCE_LIMIT, "coordination apply evidence");
+            evidence_values.push(manifest_value)?;
+            let mut receipt_refs =
+                CoordinationCliItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "coordination apply receipts");
+            let mut assertion_refs =
+                CoordinationCliItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "coordination apply assertions");
+            for request in requests {
+                let request_value = read_preserves_file(&request)?;
+                let result = coordination::apply_coordination_request(&mut runtime, &request_value)?;
+                if result.receipt.decision != "pass" {
+                    decision = "deny";
+                }
+                receipt_refs.push(result.receipt.receipt_ref.clone())?;
+                for assertion in &result.assertions {
+                    assertion_refs.push(assertion.assertion_ref.clone())?;
+                }
+                for value in &result.evidence_values {
+                    evidence_values.push(value.clone())?;
+                }
+            }
+            let final_state_value = coordination::coordination_state_snapshot_value(&runtime.state)?;
+            let final_state_ref = canonical_hash(&final_state_value)?;
+            evidence_values.push(final_state_value)?;
+            let evidence_values = evidence_values.into_vec();
+            let receipt_refs = receipt_refs.into_vec();
+            let assertion_refs = assertion_refs.into_vec();
+            let evidence_refs = evidence_values.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
+            let report_value = coordination::coordination_apply_report_value(coordination::ApplyReportValueInput {
+                decision,
+                manifest_ref: &manifest_ref,
+                final_state_ref: &final_state_ref,
+                receipt_refs: &receipt_refs,
+                assertion_refs: &assertion_refs,
+                evidence_refs: &evidence_refs,
+            })?;
+            fs::create_dir_all(&out).map_err(MoltenError::from)?;
+            write_file(&out.join("report.preserves"), &to_text(&report_value)?)?;
+            write_indexed_values(&out, "evidence", &evidence_values)?;
+            println!(
+                "coordination apply decision={} manifest={} state={} receipts={} assertions={} evidence={} out={}",
+                decision,
+                manifest_ref,
+                final_state_ref,
+                receipt_refs.len(),
+                assertion_refs.len(),
+                evidence_refs.len(),
+                out.display()
+            );
+            Ok(())
+        }
         CoordinationCommand::RunFixture { out } => {
             let run = coordination::run_coordination_fixture()?;
             fs::create_dir_all(&out).map_err(MoltenError::from)?;
@@ -9082,6 +9296,69 @@ mod tests {
             coordination::parse_coordination_service_manifest(&manifest_value).expect("parse coordination manifest");
         assert_eq!(parsed.service_id, "coordination:local");
         run_coordination_command(CoordinationCommand::Show { artifact: manifest }).expect("coordination show manifest");
+
+        let policy_ref = cli_synthetic_ref("coordination-cli-policy").expect("policy ref");
+        let resource_ref = cli_synthetic_ref("coordination-cli-resource").expect("resource ref");
+        let authority_ref = cli_synthetic_ref("coordination-cli-authority").expect("authority ref");
+        let operation_id_ref = cli_synthetic_ref("coordination-cli-operation").expect("operation ref");
+        let generated_manifest = dir.join("coordination.manifest.preserves");
+        run_coordination_command(CoordinationCommand::Manifest {
+            service_id: "coordination:local".to_string(),
+            services: vec![coordination::SERVICE_QUEUE.to_string()],
+            control_group_ref: None,
+            queue_capacity: 2,
+            semaphore_capacity: coordination::DEFAULT_COORDINATION_SEMAPHORE_CAPACITY,
+            rate_limit: coordination::DEFAULT_COORDINATION_RATE_LIMIT,
+            barrier_parties: coordination::DEFAULT_COORDINATION_BARRIER_PARTIES,
+            policy_refs: vec![policy_ref.clone()],
+            resource_refs: vec![resource_ref.clone()],
+            out: Some(generated_manifest.clone()),
+        })
+        .expect("coordination manifest");
+        let generated_manifest_value = read_preserves_file(&generated_manifest).expect("read generated manifest");
+        let generated_manifest_parsed = coordination::parse_coordination_service_manifest(&generated_manifest_value)
+            .expect("parse generated coordination manifest");
+        assert_eq!(generated_manifest_parsed.services, vec![coordination::SERVICE_QUEUE.to_string()]);
+
+        let payload = dir.join("queue-item.preserves");
+        write_file(&payload, r#"<item "cli-one">"#).expect("write queue payload");
+        let request = dir.join("coordination.request.preserves");
+        run_coordination_command(CoordinationCommand::Request {
+            service: coordination::SERVICE_QUEUE.to_string(),
+            operation: coordination::OP_ENQUEUE.to_string(),
+            key: "queue:cli".to_string(),
+            client_session: "client-cli".to_string(),
+            operation_id_ref,
+            payload: Some(payload),
+            authority_refs: vec![authority_ref],
+            resource_refs: vec![resource_ref],
+            policy_refs: vec![policy_ref],
+            out: Some(request.clone()),
+        })
+        .expect("coordination request");
+        run_coordination_command(CoordinationCommand::Show {
+            artifact: request.clone(),
+        })
+        .expect("show request");
+
+        let apply_out = dir.join("coordination-apply");
+        run_coordination_command(CoordinationCommand::Apply {
+            manifest: generated_manifest,
+            requests: vec![request.clone(), request],
+            out: apply_out.clone(),
+        })
+        .expect("coordination apply");
+        let apply_report = read_preserves_file(&apply_out.join("report.preserves")).expect("read apply report");
+        let parsed_report = coordination::parse_coordination_apply_report(&apply_report).expect("parse apply report");
+        assert_eq!(parsed_report.decision, "pass");
+        assert_eq!(parsed_report.receipt_refs.len(), 2);
+        assert_eq!(parsed_report.receipt_refs[0], parsed_report.receipt_refs[1]);
+        assert_eq!(parsed_report.assertion_refs.len(), 2);
+        assert_eq!(parsed_report.assertion_refs[0], parsed_report.assertion_refs[1]);
+        run_coordination_command(CoordinationCommand::Show {
+            artifact: apply_out.join("report.preserves"),
+        })
+        .expect("coordination show apply report");
     }
 
     #[test]
