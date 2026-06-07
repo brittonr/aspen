@@ -193,7 +193,7 @@ fn cli_repro_export_profiles_fail_closed_and_unpack_diagnostics() -> CliResult<(
     if parsed_encrypted.encrypted_refs.is_empty() {
         return Err(test_error("encrypted profile did not expose encrypted refs"));
     }
-    let mut reveal_paths = Vec::new();
+    let mut reveal_paths = Vec::with_capacity(parsed_encrypted.encrypted_refs.len());
     for (index, encrypted_ref) in parsed_encrypted.encrypted_refs.iter().enumerate() {
         let reveal = reveal_receipt_value(&RevealReceiptInput {
             secret_ref: encrypted_ref.clone(),

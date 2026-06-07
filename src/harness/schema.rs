@@ -105,9 +105,17 @@ use crate::secrets::redaction_marker_value;
 const WASM_ABI_MAX_OUTPUT_BYTES_FOR_VALIDATION: u64 = 8 * 1024;
 const MAX_WASM_IMPORT_EVIDENCE: usize = 1024;
 const MAX_HARNESS_EFFECT_LOG_ENTRIES: usize = 100_000;
+const MAX_REDACTION_TRANSFORM_NODES: usize = 100_000;
+const MAX_REDACTION_CONTAINER_ITEMS: usize = 100_000;
+const MAX_REDACTION_MARKER_REFS: usize = 100_000;
+const MAX_REDACTION_ENCRYPTED_REFS: usize = 100_000;
 
 const _: () = assert!(MAX_WASM_IMPORT_EVIDENCE <= 16_384);
 const _: () = assert!(MAX_HARNESS_EFFECT_LOG_ENTRIES <= 1_000_000);
+const _: () = assert!(MAX_REDACTION_TRANSFORM_NODES <= 1_000_000);
+const _: () = assert!(MAX_REDACTION_CONTAINER_ITEMS <= 1_000_000);
+const _: () = assert!(MAX_REDACTION_MARKER_REFS <= 1_000_000);
+const _: () = assert!(MAX_REDACTION_ENCRYPTED_REFS <= 1_000_000);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessSuite {
@@ -2436,7 +2444,8 @@ fn rebind_report_suite_ref(report_value: &IOValue) -> Result<IOValue> {
         .or_else(|_| simple_record(report_value, "harness-report-v1", 13))?;
     let suite_value = value_to_iovalue(&report[8]);
     let suite_ref = canonical_hash(&suite_value)?;
-    let mut fields = Vec::new();
+    let field_count = report.fields_iter().count();
+    let mut fields = Vec::with_capacity(field_count);
     for (index, field) in report.fields_iter().enumerate() {
         if index == 5 {
             fields.push(string(&suite_ref));
@@ -2447,47 +2456,185 @@ fn rebind_report_suite_ref(report_value: &IOValue) -> Result<IOValue> {
     Ok(record("harness-report-v1", fields))
 }
 
+enum RedactionTraversalFrame {
+    Enter {
+        value: IOValue,
+        path: String,
+    },
+    ExitRecord {
+        original: IOValue,
+        label: IOValue,
+        field_count: usize,
+    },
+    ExitSequence {
+        original: IOValue,
+        item_count: usize,
+    },
+}
+
+fn ensure_redaction_bound(count: usize, limit: usize, context: &str) -> Result<()> {
+    if count > limit {
+        return Err(MoltenError::invalid_harness(format!("{context} exceeds redaction transform bound {limit}")));
+    }
+    Ok(())
+}
+
+struct RedactionFrameStack {
+    frames: Vec<RedactionTraversalFrame>,
+}
+
+impl RedactionFrameStack {
+    fn new() -> Self {
+        Self {
+            frames: Vec::with_capacity(1),
+        }
+    }
+
+    fn push(&mut self, frame: RedactionTraversalFrame) -> Result<()> {
+        ensure_redaction_bound(self.frames.len() + 1, MAX_REDACTION_TRANSFORM_NODES, "redaction traversal stack")?;
+        self.frames.push(frame);
+        Ok(())
+    }
+
+    fn pop(&mut self) -> Option<RedactionTraversalFrame> {
+        self.frames.pop()
+    }
+
+    fn push_children(&mut self, child_entries: Vec<(IOValue, String)>) -> Result<()> {
+        ensure_redaction_bound(
+            self.frames.len() + child_entries.len(),
+            MAX_REDACTION_TRANSFORM_NODES,
+            "redaction traversal stack",
+        )?;
+        for (child_value, child_path) in child_entries.into_iter().rev() {
+            self.push(RedactionTraversalFrame::Enter {
+                value: child_value,
+                path: child_path,
+            })?;
+        }
+        Ok(())
+    }
+}
+
+struct RedactionOutputStack {
+    values: Vec<IOValue>,
+}
+
+impl RedactionOutputStack {
+    fn new() -> Self {
+        Self {
+            values: Vec::with_capacity(1),
+        }
+    }
+
+    fn push(&mut self, value: IOValue) -> Result<()> {
+        ensure_redaction_bound(self.values.len() + 1, MAX_REDACTION_TRANSFORM_NODES, "redaction traversal outputs")?;
+        self.values.push(value);
+        Ok(())
+    }
+
+    fn take(&mut self, count: usize) -> Result<Vec<IOValue>> {
+        if self.values.len() < count {
+            return Err(MoltenError::invalid_harness("redaction traversal stack underflow"));
+        }
+        Ok(self.values.split_off(self.values.len() - count))
+    }
+
+    fn finish(mut self) -> Result<IOValue> {
+        if self.values.len() != 1 {
+            return Err(MoltenError::invalid_harness("redaction traversal produced invalid output"));
+        }
+        self.values
+            .pop()
+            .ok_or_else(|| MoltenError::invalid_harness("redaction traversal produced no output"))
+    }
+}
+
+fn bounded_redaction_child_count(value: &IOValue, context: &str) -> Result<usize> {
+    let count = value.iter().count();
+    ensure_redaction_bound(count, MAX_REDACTION_CONTAINER_ITEMS, context)?;
+    Ok(count)
+}
+
+fn redaction_child_entries(value: &IOValue, path: &str, context: &str) -> Result<Vec<(IOValue, String)>> {
+    let child_count = bounded_redaction_child_count(value, context)?;
+    let mut entries = Vec::with_capacity(child_count);
+    for (index, child) in value.iter().enumerate() {
+        entries.push((value_to_iovalue(&child), format!("{path}/{index}")));
+    }
+    Ok(entries)
+}
+
 fn transform_sensitive_value(value: &IOValue, path: &str, state: &mut RedactionTransformState) -> Result<IOValue> {
-    if let Some(label) = record_label_string(value)
-        && is_sensitive_record_label(&label)
-    {
-        return transform_sensitive_record(value, &label, path, state);
-    }
-    match value.value_class() {
-        ValueClass::Atomic(_) | ValueClass::Embedded => Ok(value.clone()),
-        ValueClass::Compound(CompoundClass::Record) => {
-            let label = value_to_iovalue(&value.label());
-            let mut changed = false;
-            let mut fields = Vec::new();
-            for (index, child) in value.iter().enumerate() {
-                let child_value = value_to_iovalue(&child);
-                let redacted = transform_sensitive_value(&child_value, &format!("{path}/{index}"), state)?;
-                changed |= redacted != child_value;
-                fields.push(redacted);
+    let mut stack = RedactionFrameStack::new();
+    let mut outputs = RedactionOutputStack::new();
+    stack.push(RedactionTraversalFrame::Enter {
+        value: value.clone(),
+        path: path.to_string(),
+    })?;
+    let mut visited_nodes = 0usize;
+    while let Some(frame) = stack.pop() {
+        visited_nodes += 1;
+        ensure_redaction_bound(visited_nodes, MAX_REDACTION_TRANSFORM_NODES, "redaction traversal visited nodes")?;
+        match frame {
+            RedactionTraversalFrame::Enter { value, path } => {
+                if let Some(label) = record_label_string(&value)
+                    && is_sensitive_record_label(&label)
+                {
+                    let redacted = transform_sensitive_record(&value, &label, &path, state)?;
+                    outputs.push(redacted)?;
+                    continue;
+                }
+                match value.value_class() {
+                    ValueClass::Atomic(_) | ValueClass::Embedded => outputs.push(value)?,
+                    ValueClass::Compound(CompoundClass::Record) => {
+                        let label = value_to_iovalue(&value.label());
+                        let child_entries = redaction_child_entries(&value, &path, "redaction record fields")?;
+                        stack.push(RedactionTraversalFrame::ExitRecord {
+                            original: value,
+                            label,
+                            field_count: child_entries.len(),
+                        })?;
+                        stack.push_children(child_entries)?;
+                    }
+                    ValueClass::Compound(CompoundClass::Sequence) => {
+                        let child_entries = redaction_child_entries(&value, &path, "redaction sequence items")?;
+                        stack.push(RedactionTraversalFrame::ExitSequence {
+                            original: value,
+                            item_count: child_entries.len(),
+                        })?;
+                        stack.push_children(child_entries)?;
+                    }
+                    ValueClass::Compound(CompoundClass::Set) | ValueClass::Compound(CompoundClass::Dictionary) => {
+                        outputs.push(value)?;
+                    }
+                }
             }
-            if changed {
-                Ok(IOValue::record(label, fields))
-            } else {
-                Ok(value.clone())
+            RedactionTraversalFrame::ExitRecord {
+                original,
+                label,
+                field_count,
+            } => {
+                let fields = outputs.take(field_count)?;
+                let rebuilt = IOValue::record(label, fields);
+                if rebuilt == original {
+                    outputs.push(original)?;
+                } else {
+                    outputs.push(rebuilt)?;
+                }
+            }
+            RedactionTraversalFrame::ExitSequence { original, item_count } => {
+                let values = outputs.take(item_count)?;
+                let rebuilt = sequence(values);
+                if rebuilt == original {
+                    outputs.push(original)?;
+                } else {
+                    outputs.push(rebuilt)?;
+                }
             }
         }
-        ValueClass::Compound(CompoundClass::Sequence) => {
-            let mut changed = false;
-            let mut values = Vec::new();
-            for (index, child) in value.iter().enumerate() {
-                let child_value = value_to_iovalue(&child);
-                let redacted = transform_sensitive_value(&child_value, &format!("{path}/{index}"), state)?;
-                changed |= redacted != child_value;
-                values.push(redacted);
-            }
-            if changed {
-                Ok(sequence(values))
-            } else {
-                Ok(value.clone())
-            }
-        }
-        ValueClass::Compound(CompoundClass::Set) | ValueClass::Compound(CompoundClass::Dictionary) => Ok(value.clone()),
     }
+    outputs.finish()
 }
 
 fn transform_sensitive_record(
@@ -5618,10 +5765,11 @@ fn validate_redaction_transform_manifest(
 }
 
 fn collect_redaction_marker_refs(value: &IOValue) -> Result<Vec<String>> {
-    let mut refs = Vec::new();
+    let mut refs = Vec::with_capacity(8);
     let mut stack = vec![value.clone()];
     while let Some(current) = stack.pop() {
         if current.collect_simple_record("redaction-marker-v1", None).is_some() {
+            ensure_redaction_bound(refs.len() + 1, MAX_REDACTION_MARKER_REFS, "redaction marker refs")?;
             refs.push(parse_redaction_marker(&current)?.marker_ref);
             continue;
         }
@@ -5998,8 +6146,8 @@ fn parse_repro_export_profile(value: &IOValue) -> Result<ReproExportProfileEvide
     if is_gate_preserving != profile.is_gate_preserving() {
         return Err(MoltenError::invalid_harness("repro export gate-preserving flag is not canonical"));
     }
-    let requires_reveal = required_record_bool(&profile_value[4], "requires-reveal", "repro export reveal flag")?;
-    if requires_reveal != profile.requires_reveal() {
+    let is_requires_reveal = required_record_bool(&profile_value[4], "requires-reveal", "repro export reveal flag")?;
+    if is_requires_reveal != profile.requires_reveal() {
         return Err(MoltenError::invalid_harness("repro export reveal flag is not canonical"));
     }
     let checks = parse_redaction_gate_checks(&profile_value[5])?;
@@ -6012,7 +6160,7 @@ fn parse_repro_export_profile(value: &IOValue) -> Result<ReproExportProfileEvide
         profile_ref: canonical_hash(value)?,
         loss_classification,
         is_gate_preserving,
-        requires_reveal,
+        requires_reveal: is_requires_reveal,
     })
 }
 
@@ -6341,7 +6489,7 @@ fn is_sensitive_record_label(label: &str) -> bool {
 }
 
 fn validate_profiled_output(value: &IOValue, profile: ReproExportProfile) -> Result<Vec<String>> {
-    let mut encrypted_refs = Vec::new();
+    let mut encrypted_refs = Vec::with_capacity(8);
     let mut stack = vec![value.clone()];
     while let Some(current) = stack.pop() {
         if current.is_record() {
@@ -6364,6 +6512,11 @@ fn validate_profiled_output(value: &IOValue, profile: ReproExportProfile) -> Res
                         ));
                     }
                     let encrypted = parse_encrypted_ref(&current)?;
+                    ensure_redaction_bound(
+                        encrypted_refs.len() + 1,
+                        MAX_REDACTION_ENCRYPTED_REFS,
+                        "redaction encrypted refs",
+                    )?;
                     encrypted_refs.push(encrypted.encrypted_ref);
                     continue;
                 }

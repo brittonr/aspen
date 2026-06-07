@@ -9289,7 +9289,11 @@ mod tests {
         })
         .expect_err("failure repro unpack should fail");
         let unpack_error_message = unpack_error.to_string();
-        assert!(unpack_error_message.contains("diagnostic-only") || unpack_error_message.contains("embedded report"));
+        let expected_unpack_messages = ["diagnostic-only", "embedded report"];
+        assert!(
+            expected_unpack_messages.iter().any(|message| unpack_error_message.contains(message)),
+            "unexpected unpack error: {unpack_error_message}"
+        );
         let unpack_failure_value = read_preserves_file(&unpack_failure).expect("read unpack failure");
         let unpack_failure = parse_failure(&unpack_failure_value).expect("parse unpack failure");
         assert_eq!(unpack_failure.phase, "unpack");
