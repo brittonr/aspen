@@ -78,10 +78,12 @@ const PROTOCOL_LIFECYCLE_INDEX_LIMIT: usize = 256;
 const COORDINATION_CLI_BATCH_REF_LIMIT: usize = 4096;
 const COORDINATION_CLI_BATCH_EVIDENCE_LIMIT: usize = 16384;
 const JOB_WORKER_CLI_REF_LIMIT: usize = 4096;
+const PROVENANCE_CLI_EVIDENCE_LIMIT: usize = 64;
 const _: () = assert!(PROTOCOL_LIFECYCLE_INDEX_LIMIT > 0);
 const _: () = assert!(COORDINATION_CLI_BATCH_REF_LIMIT <= 100_000);
 const _: () = assert!(COORDINATION_CLI_BATCH_EVIDENCE_LIMIT <= 100_000);
 const _: () = assert!(JOB_WORKER_CLI_REF_LIMIT <= 100_000);
+const _: () = assert!(PROVENANCE_CLI_EVIDENCE_LIMIT <= 100_000);
 
 #[derive(Debug, Parser)]
 #[command(name = "molten", version, about = "Molten runtime prototype")]
@@ -187,6 +189,10 @@ enum TestCommand {
     Delivery {
         #[command(subcommand)]
         command: DeliveryCommand,
+    },
+    Provenance {
+        #[command(subcommand)]
+        command: ProvenanceCommand,
     },
     Protocol {
         #[command(subcommand)]
@@ -2515,6 +2521,92 @@ enum DeliveryCommand {
 }
 
 #[derive(Debug, Subcommand)]
+enum ProvenanceCommand {
+    BuildRecord {
+        #[arg(long)]
+        expected_artifact_ref: String,
+        #[arg(long = "source-ref")]
+        source_refs: Vec<String>,
+        #[arg(long)]
+        dependency_closure_ref: String,
+        #[arg(long = "toolchain-ref")]
+        toolchain_refs: Vec<String>,
+        #[arg(long = "build-param")]
+        build_params: Vec<String>,
+        #[arg(long)]
+        builder_ref: String,
+        #[arg(long = "nix-derivation-ref")]
+        nix_derivation_refs: Vec<String>,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    VerifyBuild {
+        build_record: PathBuf,
+        #[arg(long)]
+        actual_artifact_ref: String,
+        #[arg(long = "diagnostic")]
+        prior_diagnostics: Vec<String>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    Record {
+        #[arg(long)]
+        artifact_ref: String,
+        #[arg(long)]
+        trust_state: String,
+        #[arg(long = "source-ref")]
+        source_refs: Vec<String>,
+        #[arg(long)]
+        dependency_closure_ref: String,
+        #[arg(long = "toolchain-ref")]
+        toolchain_refs: Vec<String>,
+        #[arg(long)]
+        builder_ref: String,
+        #[arg(long = "review-ref")]
+        review_refs: Vec<String>,
+        #[arg(long = "test-ref")]
+        test_refs: Vec<String>,
+        #[arg(long = "source-gate-ref")]
+        source_gate_refs: Vec<String>,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long = "build-record-ref")]
+        build_record_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    Fixture {
+        #[arg(long)]
+        artifact_ref: String,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    Evaluate {
+        #[arg(long)]
+        operation: String,
+        #[arg(long, default_value = "node-control")]
+        profile: String,
+        #[arg(long)]
+        artifact_ref: String,
+        #[arg(long = "provenance")]
+        provenance_paths: Vec<PathBuf>,
+        #[arg(long = "build-verification")]
+        build_verification_paths: Vec<PathBuf>,
+        #[arg(long = "diagnostic")]
+        prior_diagnostics: Vec<String>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    Show {
+        artifact: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum RemoteEnvelopeCommand {
     Build {
         #[arg(long)]
@@ -2680,6 +2772,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Job { command } => run_job_command(command),
         TestCommand::Remote { command } => run_remote_command(command),
         TestCommand::Delivery { command } => run_delivery_command(command),
+        TestCommand::Provenance { command } => run_provenance_command(command),
         TestCommand::Protocol { command } => run_protocol_command(command),
         TestCommand::Raft { command } => run_raft_command(command),
         TestCommand::Plugin { command } => run_plugin_command(command),
@@ -6074,6 +6167,175 @@ fn parse_delivery_gap_policy(value: &str) -> Result<delivery_idempotency::GapPol
         other => Err(MoltenError::invalid_harness(format!(
             "unsupported delivery gap policy {other}; expected deny or retry"
         ))),
+    }
+}
+
+fn parse_provenance_build_params(values: &[String]) -> Result<Vec<provenance::BuildParam>> {
+    let mut params = CliBoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "provenance build params");
+    for value in values {
+        let Some((key, param_value)) = value.split_once('=') else {
+            return Err(MoltenError::invalid_harness(format!("provenance build param `{value}` must use key=value")));
+        };
+        params.push(provenance::BuildParam {
+            key: key.to_string(),
+            value: param_value.to_string(),
+        })?;
+    }
+    Ok(params.into_vec())
+}
+
+fn run_provenance_command(command: ProvenanceCommand) -> Result<()> {
+    match command {
+        ProvenanceCommand::BuildRecord {
+            expected_artifact_ref,
+            source_refs,
+            dependency_closure_ref,
+            toolchain_refs,
+            build_params,
+            builder_ref,
+            nix_derivation_refs,
+            policy_refs,
+            evidence_refs,
+            out,
+        } => {
+            let build_params = parse_provenance_build_params(&build_params)?;
+            let value = provenance::provenance_build_record_value(&provenance::ProvenanceBuildRecordInput {
+                expected_artifact_ref: &expected_artifact_ref,
+                source_refs: &source_refs,
+                dependency_closure_ref: &dependency_closure_ref,
+                toolchain_refs: &toolchain_refs,
+                build_params: &build_params,
+                builder_ref: &builder_ref,
+                nix_derivation_refs: &nix_derivation_refs,
+                policy_refs: &policy_refs,
+                evidence_refs: &evidence_refs,
+            })?;
+            let reference = canonical_hash(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!("provenance build record ref={reference} expected_artifact={expected_artifact_ref}"),
+            );
+            Ok(())
+        }
+        ProvenanceCommand::VerifyBuild {
+            build_record,
+            actual_artifact_ref,
+            prior_diagnostics,
+            receipt_out,
+        } => {
+            let build_record_value = read_preserves_file(&build_record)?;
+            let verification = provenance::verify_provenance_build(&provenance::ProvenanceBuildVerificationInput {
+                build_record_value: &build_record_value,
+                actual_artifact_ref: &actual_artifact_ref,
+                prior_diagnostics: &prior_diagnostics,
+            })?;
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &verification.receipt_value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "provenance build verification decision={} expected={} actual={} receipt={} record={}",
+                    verification.decision,
+                    verification.expected_artifact_ref,
+                    verification.actual_artifact_ref,
+                    verification.receipt_ref,
+                    verification.build_record_ref
+                ),
+            );
+            Ok(())
+        }
+        ProvenanceCommand::Record {
+            artifact_ref,
+            trust_state,
+            source_refs,
+            dependency_closure_ref,
+            toolchain_refs,
+            builder_ref,
+            review_refs,
+            test_refs,
+            source_gate_refs,
+            policy_refs,
+            build_record_refs,
+            out,
+        } => {
+            let value = provenance::provenance_record_value(&provenance::ProvenanceRecordInput {
+                artifact_ref: &artifact_ref,
+                trust_state: &trust_state,
+                source_refs: &source_refs,
+                dependency_closure_ref: &dependency_closure_ref,
+                toolchain_refs: &toolchain_refs,
+                builder_ref: &builder_ref,
+                review_refs: &review_refs,
+                test_refs: &test_refs,
+                source_gate_refs: &source_gate_refs,
+                policy_refs: &policy_refs,
+                build_record_refs: &build_record_refs,
+            })?;
+            let reference = canonical_hash(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!("provenance record ref={reference} artifact={artifact_ref} trust_state={trust_state}"),
+            );
+            Ok(())
+        }
+        ProvenanceCommand::Fixture { artifact_ref, out } => {
+            let value = provenance::synthetic_reviewed_provenance_record(&artifact_ref)?;
+            let reference = canonical_hash(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!("provenance fixture ref={reference} artifact={artifact_ref} trust_state=reviewed"),
+            );
+            Ok(())
+        }
+        ProvenanceCommand::Evaluate {
+            operation,
+            profile,
+            artifact_ref,
+            provenance_paths,
+            build_verification_paths,
+            prior_diagnostics,
+            receipt_out,
+        } => {
+            let mut provenance_values = CliBoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "provenance evidence");
+            for path in provenance_paths {
+                provenance_values.push(read_preserves_file(&path)?)?;
+            }
+            let provenance_values = provenance_values.into_vec();
+            let mut build_verification_values =
+                CliBoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "provenance build verification evidence");
+            for path in build_verification_paths {
+                build_verification_values.push(read_preserves_file(&path)?)?;
+            }
+            let build_verification_values = build_verification_values.into_vec();
+            let evaluation = provenance::evaluate_provenance(&provenance::ProvenanceEvaluationInput {
+                operation: &operation,
+                profile: &profile,
+                artifact_ref: &artifact_ref,
+                provenance_values: &provenance_values,
+                build_verification_values: &build_verification_values,
+                prior_diagnostics: &prior_diagnostics,
+            })?;
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &evaluation.receipt_value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "provenance decision={} operation={} artifact={} receipt={} matched={}",
+                    evaluation.decision,
+                    operation,
+                    artifact_ref,
+                    evaluation.receipt_ref,
+                    evaluation.matched_record_ref.as_deref().unwrap_or("none")
+                ),
+            );
+            Ok(())
+        }
+        ProvenanceCommand::Show { artifact } => {
+            let value = read_preserves_file(&artifact)?;
+            println!("{}", provenance::provenance_summary(&value)?);
+            Ok(())
+        }
     }
 }
 
@@ -9577,6 +9839,150 @@ mod tests {
         .expect("parse duplicate receipt");
         assert_eq!(duplicate.decision, "duplicate");
         assert_eq!(duplicate.prior_receipt_ref.as_deref(), Some(first.receipt_ref.as_str()));
+    }
+
+    #[test]
+    fn cli_provenance_commands_work() {
+        let dir = temp_dir("provenance-cli");
+        let artifact_ref = cli_synthetic_ref("provenance-artifact").expect("artifact ref");
+        let fixture_out = dir.join("reviewed.preserves");
+        run_provenance_command(ProvenanceCommand::Fixture {
+            artifact_ref: artifact_ref.clone(),
+            out: Some(fixture_out.clone()),
+        })
+        .expect("write reviewed provenance fixture");
+        run_provenance_command(ProvenanceCommand::Show {
+            artifact: fixture_out.clone(),
+        })
+        .expect("show provenance fixture");
+        let pass_receipt = dir.join("provenance-pass.preserves");
+        run_provenance_command(ProvenanceCommand::Evaluate {
+            operation: "install".to_string(),
+            profile: "node-control".to_string(),
+            artifact_ref: artifact_ref.clone(),
+            provenance_paths: vec![fixture_out.clone()],
+            build_verification_paths: Vec::new(),
+            prior_diagnostics: Vec::new(),
+            receipt_out: Some(pass_receipt.clone()),
+        })
+        .expect("evaluate passing provenance");
+        let pass_summary =
+            provenance::provenance_summary(&read_preserves_file(&pass_receipt).expect("read provenance pass receipt"))
+                .expect("summarize provenance pass receipt");
+        assert!(pass_summary.contains("decision=pass"));
+
+        let sandbox_ref = cli_synthetic_ref("provenance-sandbox-artifact").expect("sandbox ref");
+        let sandbox_out = dir.join("sandbox.preserves");
+        run_provenance_command(ProvenanceCommand::Record {
+            artifact_ref: sandbox_ref.clone(),
+            trust_state: provenance::TRUST_STATE_SANDBOX_ONLY.to_string(),
+            source_refs: vec![cli_synthetic_ref("provenance-source").expect("source ref")],
+            dependency_closure_ref: cli_synthetic_ref("provenance-deps").expect("deps ref"),
+            toolchain_refs: vec![cli_synthetic_ref("provenance-toolchain").expect("toolchain ref")],
+            builder_ref: cli_synthetic_ref("provenance-builder").expect("builder ref"),
+            review_refs: Vec::new(),
+            test_refs: Vec::new(),
+            source_gate_refs: Vec::new(),
+            policy_refs: vec![cli_synthetic_ref("provenance-policy").expect("policy ref")],
+            build_record_refs: Vec::new(),
+            out: Some(sandbox_out.clone()),
+        })
+        .expect("write sandbox provenance record");
+        let deny_receipt = dir.join("provenance-deny.preserves");
+        run_provenance_command(ProvenanceCommand::Evaluate {
+            operation: "run".to_string(),
+            profile: "node-control".to_string(),
+            artifact_ref: sandbox_ref,
+            provenance_paths: vec![sandbox_out],
+            build_verification_paths: Vec::new(),
+            prior_diagnostics: Vec::new(),
+            receipt_out: Some(deny_receipt.clone()),
+        })
+        .expect("evaluate denied provenance");
+        let deny_summary =
+            provenance::provenance_summary(&read_preserves_file(&deny_receipt).expect("read provenance deny receipt"))
+                .expect("summarize provenance deny receipt");
+        assert!(deny_summary.contains("decision=deny"));
+
+        let build_record = dir.join("build-record.preserves");
+        let actual_ref = cli_synthetic_ref("provenance-actual-artifact").expect("actual ref");
+        run_provenance_command(ProvenanceCommand::BuildRecord {
+            expected_artifact_ref: artifact_ref.clone(),
+            source_refs: vec![cli_synthetic_ref("provenance-build-source").expect("build source ref")],
+            dependency_closure_ref: cli_synthetic_ref("provenance-build-deps").expect("build deps ref"),
+            toolchain_refs: vec![cli_synthetic_ref("provenance-build-toolchain").expect("build toolchain ref")],
+            build_params: vec!["target=x86_64-linux".to_string()],
+            builder_ref: cli_synthetic_ref("provenance-build-builder").expect("build builder ref"),
+            nix_derivation_refs: vec![cli_synthetic_ref("provenance-build-derivation").expect("build derivation ref")],
+            policy_refs: vec![cli_synthetic_ref("provenance-build-policy").expect("build policy ref")],
+            evidence_refs: vec![cli_synthetic_ref("provenance-build-evidence").expect("build evidence ref")],
+            out: Some(build_record.clone()),
+        })
+        .expect("write provenance build record");
+        run_provenance_command(ProvenanceCommand::Show {
+            artifact: build_record.clone(),
+        })
+        .expect("show provenance build record");
+        let build_pass = dir.join("build-pass.preserves");
+        run_provenance_command(ProvenanceCommand::VerifyBuild {
+            build_record: build_record.clone(),
+            actual_artifact_ref: artifact_ref.clone(),
+            prior_diagnostics: Vec::new(),
+            receipt_out: Some(build_pass.clone()),
+        })
+        .expect("verify provenance build pass");
+        let build_pass_summary = provenance::provenance_summary(
+            &read_preserves_file(&build_pass).expect("read provenance build pass receipt"),
+        )
+        .expect("summarize provenance build pass");
+        assert!(build_pass_summary.contains("decision=pass"));
+        let build_record_ref =
+            canonical_hash(&read_preserves_file(&build_record).expect("read build record")).expect("build record ref");
+        let reproducible_record = dir.join("reproducible.preserves");
+        run_provenance_command(ProvenanceCommand::Record {
+            artifact_ref: artifact_ref.clone(),
+            trust_state: provenance::TRUST_STATE_REPRODUCIBLE_VERIFIED.to_string(),
+            source_refs: vec![cli_synthetic_ref("provenance-repro-source").expect("repro source ref")],
+            dependency_closure_ref: cli_synthetic_ref("provenance-repro-deps").expect("repro deps ref"),
+            toolchain_refs: vec![cli_synthetic_ref("provenance-repro-toolchain").expect("repro toolchain ref")],
+            builder_ref: cli_synthetic_ref("provenance-repro-builder").expect("repro builder ref"),
+            review_refs: Vec::new(),
+            test_refs: Vec::new(),
+            source_gate_refs: Vec::new(),
+            policy_refs: Vec::new(),
+            build_record_refs: vec![build_record_ref],
+            out: Some(reproducible_record.clone()),
+        })
+        .expect("write reproducible provenance record");
+        let reproducible_receipt = dir.join("provenance-reproducible-pass.preserves");
+        run_provenance_command(ProvenanceCommand::Evaluate {
+            operation: "install".to_string(),
+            profile: "node-control".to_string(),
+            artifact_ref: artifact_ref.clone(),
+            provenance_paths: vec![reproducible_record],
+            build_verification_paths: vec![build_pass.clone()],
+            prior_diagnostics: Vec::new(),
+            receipt_out: Some(reproducible_receipt.clone()),
+        })
+        .expect("evaluate reproducible provenance");
+        let reproducible_summary = provenance::provenance_summary(
+            &read_preserves_file(&reproducible_receipt).expect("read reproducible receipt"),
+        )
+        .expect("summarize reproducible receipt");
+        assert!(reproducible_summary.contains("decision=pass"));
+        let build_deny = dir.join("build-deny.preserves");
+        run_provenance_command(ProvenanceCommand::VerifyBuild {
+            build_record,
+            actual_artifact_ref: actual_ref,
+            prior_diagnostics: Vec::new(),
+            receipt_out: Some(build_deny.clone()),
+        })
+        .expect("verify provenance build deny");
+        let build_deny_summary = provenance::provenance_summary(
+            &read_preserves_file(&build_deny).expect("read provenance build deny receipt"),
+        )
+        .expect("summarize provenance build deny");
+        assert!(build_deny_summary.contains("decision=deny"));
     }
 
     #[test]

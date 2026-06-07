@@ -67,6 +67,7 @@ Current Cairn roadmap changes live under `cairn/changes/`:
 - `retention-gc-pinning`
 - `secrets-redaction-confidentiality`
 - `supply-chain-provenance-builds`
+- `supply-chain-provenance-ux`
 - `peer-bootstrap-negotiation`
 - `content-addressed-chunk-store`
 - `persistent-node-identity`
@@ -261,6 +262,45 @@ molten test delivery check --root target/delivery-store \
 
 `first` receipts permit the caller to commit its side effect; exact duplicates emit `duplicate` receipts with side effect `suppress` and a prior receipt ref; conflicts, stale sequences, and gaps deny or retry before side effects. These receipts are replay/dedup evidence only and do not grant transport, authority, provenance, policy, resource, or execution trust.
 
+## Supply-chain provenance diagnostics
+
+The provenance UX exposes canonical trust-state records and evaluation receipts without running a full node-control dispatch:
+
+```sh
+molten test provenance fixture --artifact-ref blake3:artifact \
+  --out target/provenance.reviewed.preserves
+molten test provenance record --artifact-ref blake3:artifact --trust-state reviewed \
+  --source-ref blake3:source --dependency-closure-ref blake3:deps \
+  --toolchain-ref blake3:toolchain --builder-ref blake3:builder \
+  --review-ref blake3:review --test-ref blake3:tests \
+  --source-gate-ref blake3:octet --policy-ref blake3:policy \
+  --out target/provenance.record.preserves
+molten test provenance evaluate --operation install --profile node-control \
+  --artifact-ref blake3:artifact --provenance target/provenance.record.preserves \
+  --receipt-out target/provenance.receipt.preserves
+molten test provenance show target/provenance.receipt.preserves
+molten test provenance build-record --expected-artifact-ref blake3:artifact \
+  --source-ref blake3:source --dependency-closure-ref blake3:deps \
+  --toolchain-ref blake3:toolchain --build-param target=x86_64-linux \
+  --builder-ref blake3:builder --nix-derivation-ref blake3:drv \
+  --policy-ref blake3:policy --evidence-ref blake3:octet \
+  --out target/provenance.build-record.preserves
+molten test provenance verify-build target/provenance.build-record.preserves \
+  --actual-artifact-ref blake3:artifact \
+  --receipt-out target/provenance.build-verify.preserves
+molten test provenance record --artifact-ref blake3:artifact \
+  --trust-state reproducible-verified --source-ref blake3:source \
+  --dependency-closure-ref blake3:deps --toolchain-ref blake3:toolchain \
+  --builder-ref blake3:builder --build-record-ref blake3:build-record \
+  --out target/provenance.reproducible.preserves
+molten test provenance evaluate --operation install --profile node-control \
+  --artifact-ref blake3:artifact --provenance target/provenance.reproducible.preserves \
+  --build-verification target/provenance.build-verify.preserves \
+  --receipt-out target/provenance.reproducible.receipt.preserves
+```
+
+Provenance receipts explain whether an artifact's explicit provenance is admitted for a profile; build verification receipts explain whether a reproducible build record's expected artifact matches the actual artifact. A `reproducible-verified` provenance record is denied unless a matching passing build verification receipt references a build record ref bound by that provenance record. They remain evidence only: authority, policy, resource, transport, execution, and source-gate checks must still be supplied independently.
+
 ## Blob-ref job submission
 
 Ref-backed jobs are exposed under `molten test job` so executable, input, output, and receipt identity is content-addressed before worker execution:
@@ -357,7 +397,7 @@ nix build .#checks.x86_64-linux.nextest
 nix build .#checks.x86_64-linux.nextest-config
 ```
 
-For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false` -> `/nix/store/aynszzxz4adrblsp18hlg4bmsyfgl18g-molten-nextest`.
+For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` -> `/nix/store/rqdp2lb325rds149f8jq7300v5k7lch8-molten-nextest`.
 
 Strict Octet source-gate sequence:
 
@@ -393,7 +433,7 @@ cargo run --manifest-path /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615
   --strict
 ```
 
-The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 1843 objects (`b3:aa5c3666a4532c81986f94ecd7fb1eb1cd746470d429300496aa1e840323fe01`); latest artifact import receipt is `blake3:b87efd5c32a1ea93376fa22d48f2a5d62a37465647772b7a87511ff6224b8716`, latest strict pass receipt is `blake3:b7fa1fae20ba1578a477d15545cea9e68bb5fd578ffd3abf662fce2301978bdd`, and latest remediation plan receipt is `blake3:a2447a10a7ccf348209c234a93a3890ce21d0352bcf7231aa91f7d9291c91dce`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
+The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 1882 objects (`b3:a720bc13e9b97f46476f863be924cb84e3f4e5e160640a8695406b58f9227c33`); latest artifact import receipt is `blake3:911c54614efd88a0b30b9c8c1b0bbea14666fb52106f21f42141a1ae9a6b3e3e`, latest strict pass receipt is `blake3:ff518347c3607e3e9b43c0e65eda3d129e0108a559f32267078989a858e2f379`, and latest remediation plan receipt is `blake3:ce36126202930c7b25b47b2acafa877f109ecf35891db3df9946444c9eb81b48`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
 
 ```sh
 cargo run -- test octet baseline write \

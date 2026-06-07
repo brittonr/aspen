@@ -376,7 +376,9 @@ Current architectural changes are recorded under `cairn/changes/`:
 - `failure-supervision-lifecycle` — lifecycle states, links/monitors, supervisors, restart policy, service assertions, failure rollback, and cleanup.
 - `retention-gc-pinning` — retention classes, pin sources, reference indexes, tombstones, redaction hooks, and safe GC eligibility.
 - `secrets-redaction-confidentiality` — secret refs, confidential field labels, redaction markers, encrypted refs, reveal receipts, and safe replay/catalog output.
-- `supply-chain-provenance-builds` — provenance records, trust states, reproducible build evidence, artifact install gates, and review/attestation receipts.
+- `supply-chain-provenance-builds` — provenance records, trust states, reproducible build records, Nix derivation evidence refs, build verification receipts, artifact install gates, and review/attestation receipts.
+- `supply-chain-provenance-ux` — direct CLI diagnostics for canonical provenance records, reviewed fixtures, trust-state evaluation receipts, and read-only summaries without granting authority, policy, resource, transport, execution, or source-gate trust.
+- `supply-chain-provenance-admission-binding` — fail-closed binding between `reproducible-verified` provenance records and matching passing build verification receipts, with build record refs and receipt refs captured as provenance evidence only.
 - `peer-bootstrap-negotiation` — peer bootstrap inputs, handshake records, feature negotiation, capability offers, resource limits, and join admission.
 - `content-addressed-chunk-store` — deterministic chunk manifests/Merkle roots, chunk-level dedup, streaming verification, resumable fetch, range reads, and chunk-aware retention/GC.
 - `persistent-node-identity` — stable Iroh/node identity across restarts, drift detection, key-source receipts, and bootstrap/replay integration.

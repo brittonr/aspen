@@ -6887,9 +6887,16 @@ fn evaluate_node_control_provenance(
         provenance_diagnostics.push("node control provenance evidence refs missing".to_string());
     }
     let mut provenance_values = Vec::with_capacity(input.request.evidence_refs.len());
+    let mut build_verification_values = Vec::with_capacity(input.request.evidence_refs.len());
     for evidence_ref in &input.request.evidence_refs {
         match read_node_ledger_artifact(input.state_root, evidence_ref) {
-            Ok(value) => provenance_values.push(value),
+            Ok(value) => {
+                if provenance::parse_provenance_build_verification_receipt(&value).is_ok() {
+                    build_verification_values.push(value);
+                } else {
+                    provenance_values.push(value);
+                }
+            }
             Err(error) => provenance_diagnostics
                 .push(format!("node control provenance evidence {evidence_ref} not found in node ledger: {error}")),
         }
@@ -6899,6 +6906,7 @@ fn evaluate_node_control_provenance(
         profile: "node-control",
         artifact_ref: input.artifact_ref,
         provenance_values: &provenance_values,
+        build_verification_values: &build_verification_values,
         prior_diagnostics: &provenance_diagnostics,
     })?;
     write_preserves(
@@ -9369,6 +9377,93 @@ mod tests {
         assert!(
             artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
                 .expect("list registry after tampered")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn node_control_reproducible_provenance_requires_build_verification_binding() {
+        let root = temp_dir("node-control-reproducible-provenance");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:reproducible-provenance",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let authority_refs = vec![local_ref("node-control-authority", "reproducible").expect("authority ref")];
+        let policy_refs = vec![local_ref("node-control-policy", "reproducible").expect("policy ref")];
+        let resource_refs = vec![local_ref("node-control-resource", "reproducible").expect("resource ref")];
+        let payload_value = record("node-control-install-payload", vec![string("reproducible-provenance")]);
+        let payload_ref = import_node_artifact(&root, &payload_value).expect("import payload");
+        let source_refs = vec![local_ref("node-control-source", "reproducible").expect("source ref")];
+        let toolchain_refs = vec![local_ref("node-control-toolchain", "reproducible").expect("toolchain ref")];
+        let dependency_ref = local_ref("node-control-deps", "reproducible").expect("deps ref");
+        let builder_ref = local_ref("node-control-builder", "reproducible").expect("builder ref");
+        let build_record = provenance::provenance_build_record_value(&provenance::ProvenanceBuildRecordInput {
+            expected_artifact_ref: &payload_ref,
+            source_refs: &source_refs,
+            dependency_closure_ref: &dependency_ref,
+            toolchain_refs: &toolchain_refs,
+            build_params: &[],
+            builder_ref: &builder_ref,
+            nix_derivation_refs: &[],
+            policy_refs: &policy_refs,
+            evidence_refs: &[],
+        })
+        .expect("build record");
+        let build_record_ref = import_node_artifact(&root, &build_record).expect("import build record");
+        let build_verification = provenance::verify_provenance_build(&provenance::ProvenanceBuildVerificationInput {
+            build_record_value: &build_record,
+            actual_artifact_ref: &payload_ref,
+            prior_diagnostics: &[],
+        })
+        .expect("verify build");
+        let build_verification_ref =
+            import_node_artifact(&root, &build_verification.receipt_value).expect("import build verification");
+        let build_record_refs = vec![build_record_ref];
+        let provenance_record = provenance::provenance_record_value(&provenance::ProvenanceRecordInput {
+            artifact_ref: &payload_ref,
+            trust_state: provenance::TRUST_STATE_REPRODUCIBLE_VERIFIED,
+            source_refs: &source_refs,
+            dependency_closure_ref: &dependency_ref,
+            toolchain_refs: &toolchain_refs,
+            builder_ref: &builder_ref,
+            review_refs: &[],
+            test_refs: &[],
+            source_gate_refs: &[],
+            policy_refs: &policy_refs,
+            build_record_refs: &build_record_refs,
+        })
+        .expect("reproducible provenance");
+        let provenance_ref = import_node_artifact(&root, &provenance_record).expect("import provenance");
+        let evidence_refs = vec![provenance_ref, build_verification_ref];
+        let request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "install",
+            target_ref: None,
+            payload_ref: Some(&payload_ref),
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &evidence_refs,
+        })
+        .expect("reproducible install request");
+        let submitted = submit_control_request(&NodeControlSubmitInput {
+            state_root: &root,
+            request_value: &request,
+        })
+        .expect("submit reproducible request");
+        let dispatch = dispatch_control_request(&NodeControlDispatchInput {
+            state_root: &root,
+            request_path: Some(&submitted.inbox_path),
+        })
+        .expect("dispatch reproducible request");
+        let receipt = node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value)
+            .expect("reproducible control receipt");
+        assert_eq!(receipt.decision, "pass");
+        assert!(receipt.diagnostics.is_empty());
+        assert!(
+            !artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
+                .expect("list registry")
                 .is_empty()
         );
     }

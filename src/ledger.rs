@@ -401,6 +401,8 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("peer-bootstrap-receipt-v1", "peer-bootstrap-receipt"),
     ("provenance-record-v1", "provenance-record"),
     ("provenance-receipt-v1", "provenance-receipt"),
+    ("provenance-build-record-v1", "provenance-build-record"),
+    ("provenance-build-verify-receipt-v1", "provenance-build-verify-receipt"),
     ("authority-identity-v1", "authority-identity"),
     ("authority-context-v1", "authority-context"),
     ("authority-revocation-v1", "authority-revocation"),

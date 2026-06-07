@@ -14,14 +14,14 @@
 
 ## Phase 3: Reproducible builds
 
-- [ ] [serial] r[molten.provenance.build_record] Define reproducible build records with source, dependency closure, toolchain, build params, and expected artifact id.
-- [ ] [parallel] r[molten.provenance.nix_refs] Represent Nix derivation/toolchain refs where available for Rust/Wasm artifacts.
-- [ ] [parallel] r[molten.provenance.verify_build] Add verification receipts for matching or mismatching reproducible builds.
-- [ ] [parallel] r[molten.provenance.mismatch_diagnostics] Report expected/actual artifact ids and differing provenance inputs on mismatch.
+- [x] [serial] r[molten.provenance.build_record] Define reproducible build records with source, dependency closure, toolchain, build params, and expected artifact id.
+- [x] [parallel] r[molten.provenance.nix_refs] Represent Nix derivation/toolchain refs where available for Rust/Wasm artifacts.
+- [x] [parallel] r[molten.provenance.verify_build] Add verification receipts for matching or mismatching reproducible builds.
+- [x] [parallel] r[molten.provenance.mismatch_diagnostics] Report expected/actual artifact ids and differing provenance inputs on mismatch.
 
 ## Phase 4: Tests
 
 - [ ] [serial] r[molten.provenance.install_tests] Add tests that artifacts missing required provenance are denied in production policy.
 - [ ] [serial] r[molten.provenance.sandbox_tests] Add tests that low-trust artifacts may run only under restricted sandbox/test profiles when policy admits.
-- [ ] [parallel] r[molten.provenance.repro_tests] Add tests for reproducible build record verification and mismatch diagnostics.
+- [x] [parallel] r[molten.provenance.repro_tests] Add tests for reproducible build record verification and mismatch diagnostics.
 - [ ] [parallel] r[molten.provenance.property_tests] Add Hegel property tests for provenance-context monotonicity and no-trust-from-hash invariants.
