@@ -291,6 +291,7 @@ pub const JOB_WORKER_ASSIGNMENT_SCHEMA: &str = "molten.job-dag.worker-assignment
 pub const JOB_WORKER_STATUS_SCHEMA: &str = "molten.job-dag.worker-status.v1";
 pub const JOB_WORKER_RESULT_SCHEMA: &str = "molten.job-dag.worker-result.v1";
 pub const JOB_WORKER_RECEIPT_SCHEMA: &str = "molten.job-dag.worker-receipt.v1";
+pub const JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA: &str = "molten.job-dag.worker-schedule-receipt.v1";
 pub const UPGRADE_PLAN_SCHEMA: &str = "molten.upgrade.plan.v1";
 pub const UPGRADE_RECEIPT_SCHEMA: &str = "molten.upgrade.receipt.v1";
 pub const UPGRADE_NAME_POINTER_SCHEMA: &str = "molten.upgrade.name-pointer.v1";

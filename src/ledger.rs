@@ -241,6 +241,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("job-worker-status-v1", "job-worker-status"),
     ("job-worker-result-v1", "job-worker-result"),
     ("job-worker-receipt-v1", "job-worker-receipt"),
+    ("job-worker-schedule-receipt-v1", "job-worker-schedule-receipt"),
     ("artifact-v1", "artifact-registry-artifact"),
     ("artifact-name-pointer-v1", "artifact-registry-name-pointer"),
     ("artifact-receipt-v1", "artifact-registry-receipt"),

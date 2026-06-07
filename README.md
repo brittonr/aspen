@@ -107,6 +107,7 @@ Current Cairn roadmap changes live under `cairn/changes/`:
 - `raft-control-plane-registry`
 - `job-dag-iroh-worker-execution`
 - `job-dag-iroh-worker-cli-ux`
+- `job-worker-coordination-scheduling-ux`
 - `dataspace-delivery-idempotency`
 - `secrets-redaction-encrypted-refs`
 - `plugin-host-lifecycle-runtime`
@@ -297,9 +298,19 @@ molten test job worker-run-local target/job-worker.request.preserves \
   --execution-request target/job-execution.request.preserves \
   --transport-root target/job-worker-transport --ledger target/ledger \
   --out target/job-worker-run
+molten test job worker-schedule-local target/job-worker.request.preserves \
+  --target-registry target/job-target-registry \
+  --storage target/job-scheduled-storage --cache target/job-scheduled-cache \
+  --admission-receipt target/job-admission.receipt.preserves \
+  --execution-request target/job-execution.request.preserves \
+  --transport-root target/job-scheduled-transport \
+  --coordination-authority-ref blake3:authority \
+  --coordination-resource-ref blake3:resource \
+  --coordination-policy-ref blake3:policy \
+  --ledger target/ledger --out target/job-worker-scheduled
 ```
 
-`worker-run-local` writes the worker request, remote dataspace envelope, publish/delivery receipts, replayable delivery log, assignment, status records, result, worker receipt, execution receipt, and output evidence. Worker transport and CLI receipts are evidence only; peer identity or message delivery does not grant authority, policy, resource, provenance, source-gate, or execution trust.
+`worker-run-local` writes the worker request, remote dataspace envelope, publish/delivery receipts, replayable delivery log, assignment, status records, result, worker receipt, execution receipt, and output evidence. `worker-schedule-local` wraps that path with a coordination queue enqueue/dequeue, duplicate enqueue operation replay, lock/fencing-token lease acquisition, stale-token denial before worker execution, release, and a `job-worker-schedule-receipt-v1`. Worker transport, queue claims, lease tokens, and CLI receipts are evidence only; peer identity or message delivery does not grant authority, policy, resource, provenance, source-gate, or execution trust.
 
 ## Coordination control-plane UX
 

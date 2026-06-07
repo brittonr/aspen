@@ -60,6 +60,7 @@ use molten::preserves_rail::parse_text;
 use molten::preserves_rail::record;
 use molten::preserves_rail::string;
 use molten::preserves_rail::to_text;
+use molten::preserves_rail::u64_value;
 use molten::protocol_session;
 use molten::provenance;
 use molten::raft_control_plane;
@@ -2291,6 +2292,49 @@ enum JobCommand {
         from_actor: String,
         #[arg(long, default_value = "molten.job.worker")]
         topic: String,
+        #[arg(long)]
+        ledger: Option<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    WorkerScheduleLocal {
+        request: PathBuf,
+        #[arg(long)]
+        target_registry: PathBuf,
+        #[arg(long)]
+        storage: PathBuf,
+        #[arg(long)]
+        cache: PathBuf,
+        #[arg(long)]
+        chunks: Option<PathBuf>,
+        #[arg(long)]
+        admission_receipt: PathBuf,
+        #[arg(long)]
+        execution_request: PathBuf,
+        #[arg(long)]
+        transport_root: PathBuf,
+        #[arg(long, default_value = "queue:job-worker")]
+        queue_key: String,
+        #[arg(long)]
+        lease_key: Option<String>,
+        #[arg(long, default_value = "scheduler")]
+        scheduler_session: String,
+        #[arg(long, default_value = "worker")]
+        worker_session: String,
+        #[arg(long)]
+        lease_token: Option<u64>,
+        #[arg(long, default_value = "peer:source")]
+        from_peer: String,
+        #[arg(long, default_value = "source-worker")]
+        from_actor: String,
+        #[arg(long, default_value = "molten.job.worker")]
+        topic: String,
+        #[arg(long = "coordination-authority-ref")]
+        coordination_authority_refs: Vec<String>,
+        #[arg(long = "coordination-resource-ref")]
+        coordination_resource_refs: Vec<String>,
+        #[arg(long = "coordination-policy-ref")]
+        coordination_policy_refs: Vec<String>,
         #[arg(long)]
         ledger: Option<PathBuf>,
         #[arg(long)]
@@ -4967,6 +5011,72 @@ fn run_job_command(command: JobCommand) -> Result<()> {
                 )))
             }
         }
+        JobCommand::WorkerScheduleLocal {
+            request,
+            target_registry,
+            storage,
+            cache,
+            chunks,
+            admission_receipt,
+            execution_request,
+            transport_root,
+            queue_key,
+            lease_key,
+            scheduler_session,
+            worker_session,
+            lease_token,
+            from_peer,
+            from_actor,
+            topic,
+            coordination_authority_refs,
+            coordination_resource_refs,
+            coordination_policy_refs,
+            ledger,
+            out,
+        } => {
+            let request_value = read_preserves_file(&request)?;
+            let admission_value = read_preserves_file(&admission_receipt)?;
+            let execution_request_value = read_preserves_file(&execution_request)?;
+            let chunk_root = chunks.unwrap_or_else(|| target_registry.join("job-chunks"));
+            let scheduled = job_worker_schedule_local(JobWorkerScheduleLocalInput {
+                request_value: &request_value,
+                target_registry: &target_registry,
+                storage_root: &storage,
+                cache_root: &cache,
+                chunk_root: &chunk_root,
+                admission_value: &admission_value,
+                execution_request_value: &execution_request_value,
+                transport_root: &transport_root,
+                queue_key: &queue_key,
+                lease_key: lease_key.as_deref(),
+                scheduler_session: &scheduler_session,
+                worker_session: &worker_session,
+                lease_token,
+                from_peer: &from_peer,
+                from_actor: &from_actor,
+                topic: &topic,
+                coordination_authority_refs,
+                coordination_resource_refs,
+                coordination_policy_refs,
+                ledger_root: ledger.as_deref(),
+                out: &out,
+            })?;
+            eprintln!(
+                "job worker-schedule-local {} receipt={} worker={} out={}",
+                scheduled.decision,
+                scheduled.receipt_ref,
+                scheduled.worker.as_ref().map(|worker| worker.receipt_ref.as_str()).unwrap_or("-"),
+                out.display()
+            );
+            if scheduled.decision == "pass" {
+                Ok(())
+            } else {
+                Err(MoltenError::invalid_harness(format!(
+                    "job worker-schedule-local denied: {}",
+                    job_dag::parse_job_worker_schedule_receipt_value(&scheduled.receipt_value)?.diagnostics.join("; ")
+                )))
+            }
+        }
         JobCommand::RefSubmit {
             job_id,
             operation_id,
@@ -5043,11 +5153,23 @@ fn run_job_command(command: JobCommand) -> Result<()> {
         JobCommand::Status { ledger, job } => {
             for entry in ledger::list_artifacts(&ledger)? {
                 let value = match entry.artifact_kind.as_str() {
-                    "job-dag-receipt" | "job-ref-receipt" | "job-worker-receipt" => {
+                    "job-dag-receipt" | "job-ref-receipt" | "job-worker-receipt" | "job-worker-schedule-receipt" => {
                         ledger::read_artifact(&ledger, &entry.artifact_ref)?
                     }
                     _ => continue,
                 };
+                if let Ok(schedule) = job_dag::parse_job_worker_schedule_receipt_value(&value) {
+                    if job.as_ref().is_none_or(|job_ref| schedule.job_ref == *job_ref) {
+                        println!(
+                            "{} worker-schedule {} {} {}",
+                            entry.artifact_ref,
+                            schedule.decision,
+                            schedule.job_ref,
+                            schedule.result_ref.unwrap_or_else(|| "-".to_string())
+                        );
+                    }
+                    continue;
+                }
                 if let Ok(worker) = job_dag::parse_job_worker_receipt_value(&value) {
                     if job.as_ref().is_none_or(|job_ref| worker.job_ref.as_ref() == Some(job_ref)) {
                         println!(
@@ -5164,6 +5286,37 @@ struct JobWorkerRunLocalInput<'a> {
     out: &'a Path,
 }
 
+struct JobWorkerScheduleLocalInput<'a> {
+    request_value: &'a preserves::IOValue,
+    target_registry: &'a Path,
+    storage_root: &'a Path,
+    cache_root: &'a Path,
+    chunk_root: &'a Path,
+    admission_value: &'a preserves::IOValue,
+    execution_request_value: &'a preserves::IOValue,
+    transport_root: &'a Path,
+    queue_key: &'a str,
+    lease_key: Option<&'a str>,
+    scheduler_session: &'a str,
+    worker_session: &'a str,
+    lease_token: Option<u64>,
+    from_peer: &'a str,
+    from_actor: &'a str,
+    topic: &'a str,
+    coordination_authority_refs: Vec<String>,
+    coordination_resource_refs: Vec<String>,
+    coordination_policy_refs: Vec<String>,
+    ledger_root: Option<&'a Path>,
+    out: &'a Path,
+}
+
+struct JobWorkerScheduleLocalResult {
+    decision: String,
+    receipt_ref: String,
+    receipt_value: preserves::IOValue,
+    worker: Option<job_dag::JobWorkerExecution>,
+}
+
 fn job_worker_cli_request(input: JobWorkerRequestCliInput<'_>) -> Result<preserves::IOValue> {
     let admission = job_dag::parse_job_admission_receipt_value(input.admission_value)?;
     let execution_request = job_dag::parse_job_execution_request_value(input.execution_request_value)?;
@@ -5264,6 +5417,370 @@ fn job_worker_run_local(input: JobWorkerRunLocalInput<'_>) -> Result<job_dag::Jo
         }
     }
     Ok(executed)
+}
+
+struct ScheduleCoordinationRefs {
+    authority_refs: Vec<String>,
+    resource_refs: Vec<String>,
+    policy_refs: Vec<String>,
+}
+
+struct ScheduleCoordinationRequestInput<'a> {
+    service: &'a str,
+    operation: &'a str,
+    key: &'a str,
+    client_session: &'a str,
+    operation_label: &'a str,
+    request_ref: &'a str,
+    payload: Option<preserves::IOValue>,
+    refs: &'a ScheduleCoordinationRefs,
+}
+
+fn job_schedule_coordination_request(input: ScheduleCoordinationRequestInput<'_>) -> Result<preserves::IOValue> {
+    coordination::coordination_request_value(&coordination::CoordinationRequestInput {
+        service: input.service.to_string(),
+        operation: input.operation.to_string(),
+        key: input.key.to_string(),
+        client_session: input.client_session.to_string(),
+        operation_id_ref: cli_job_ref(input.operation_label, input.request_ref)?,
+        payload: input.payload,
+        authority_refs: input.refs.authority_refs.clone(),
+        resource_refs: input.refs.resource_refs.clone(),
+        policy_refs: input.refs.policy_refs.clone(),
+    })
+}
+
+fn push_schedule_coordination_result(
+    result: &coordination::CoordinationApplyResult,
+    evidence_values: &mut CliBoundedItems<preserves::IOValue>,
+    receipt_refs: &mut CliBoundedItems<String>,
+    assertion_refs: &mut CliBoundedItems<String>,
+) -> Result<()> {
+    receipt_refs.push(result.receipt.receipt_ref.clone())?;
+    for assertion in &result.assertions {
+        assertion_refs.push(assertion.assertion_ref.clone())?;
+    }
+    for value in &result.evidence_values {
+        evidence_values.push(value.clone())?;
+    }
+    Ok(())
+}
+
+fn job_worker_schedule_local(input: JobWorkerScheduleLocalInput<'_>) -> Result<JobWorkerScheduleLocalResult> {
+    let request = job_dag::parse_job_worker_request_value(input.request_value)?;
+    let request_ref = request.request_ref.clone();
+    let lease_key = input
+        .lease_key
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("lock:job-worker:{}", request.request_ref));
+    let coordination_refs = ScheduleCoordinationRefs {
+        authority_refs: if input.coordination_authority_refs.is_empty() {
+            request.authority_refs.clone()
+        } else {
+            input.coordination_authority_refs.clone()
+        },
+        resource_refs: if input.coordination_resource_refs.is_empty() {
+            request.resource_refs.clone()
+        } else {
+            input.coordination_resource_refs.clone()
+        },
+        policy_refs: if input.coordination_policy_refs.is_empty() {
+            vec![cli_job_ref("worker-schedule-policy", &request_ref)?]
+        } else {
+            input.coordination_policy_refs.clone()
+        },
+    };
+    let manifest_value = coordination::coordination_fixture_manifest_value()?;
+    let mut runtime = coordination::new_coordination_runtime(&manifest_value)?;
+    let manifest_ref = runtime.manifest.manifest_ref.clone();
+    let mut evidence_values =
+        CliBoundedItems::new(COORDINATION_CLI_BATCH_EVIDENCE_LIMIT, "job worker schedule evidence");
+    let mut receipt_refs = CliBoundedItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "job worker schedule receipts");
+    let mut assertion_refs = CliBoundedItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "job worker schedule assertions");
+    evidence_values.push(manifest_value.clone())?;
+
+    let enqueue_request = job_schedule_coordination_request(ScheduleCoordinationRequestInput {
+        service: coordination::SERVICE_QUEUE,
+        operation: coordination::OP_ENQUEUE,
+        key: input.queue_key,
+        client_session: input.scheduler_session,
+        operation_label: "worker-schedule-enqueue",
+        request_ref: &request_ref,
+        payload: Some(record("item", vec![string(&request_ref)])),
+        refs: &coordination_refs,
+    })?;
+    let enqueue = coordination::apply_coordination_request(&mut runtime, &enqueue_request)?;
+    push_schedule_coordination_result(&enqueue, &mut evidence_values, &mut receipt_refs, &mut assertion_refs)?;
+    let enqueue_duplicate = coordination::apply_coordination_request(&mut runtime, &enqueue_request)?;
+    push_schedule_coordination_result(
+        &enqueue_duplicate,
+        &mut evidence_values,
+        &mut receipt_refs,
+        &mut assertion_refs,
+    )?;
+
+    let mut diagnostics = Vec::new();
+    let mut dequeue: Option<coordination::CoordinationApplyResult> = None;
+    let mut lease: Option<coordination::CoordinationApplyResult> = None;
+    let mut release: Option<coordination::CoordinationApplyResult> = None;
+    let mut worker: Option<job_dag::JobWorkerExecution> = None;
+    if enqueue.receipt.decision != "pass" {
+        diagnostics.extend(enqueue.receipt.diagnostics.clone());
+    } else if enqueue_duplicate.receipt.receipt_ref != enqueue.receipt.receipt_ref {
+        diagnostics.push("coordination duplicate enqueue did not replay prior receipt".to_string());
+    } else {
+        let dequeue_request = job_schedule_coordination_request(ScheduleCoordinationRequestInput {
+            service: coordination::SERVICE_QUEUE,
+            operation: coordination::OP_DEQUEUE,
+            key: input.queue_key,
+            client_session: input.worker_session,
+            operation_label: "worker-schedule-dequeue",
+            request_ref: &request_ref,
+            payload: None,
+            refs: &coordination_refs,
+        })?;
+        let result = coordination::apply_coordination_request(&mut runtime, &dequeue_request)?;
+        push_schedule_coordination_result(&result, &mut evidence_values, &mut receipt_refs, &mut assertion_refs)?;
+        if result.receipt.decision != "pass" {
+            diagnostics.extend(result.receipt.diagnostics.clone());
+        }
+        dequeue = Some(result);
+    }
+    if diagnostics.is_empty() {
+        let lease_request = job_schedule_coordination_request(ScheduleCoordinationRequestInput {
+            service: coordination::SERVICE_LOCK,
+            operation: coordination::OP_ACQUIRE,
+            key: &lease_key,
+            client_session: input.worker_session,
+            operation_label: "worker-schedule-lease",
+            request_ref: &request_ref,
+            payload: None,
+            refs: &coordination_refs,
+        })?;
+        let result = coordination::apply_coordination_request(&mut runtime, &lease_request)?;
+        push_schedule_coordination_result(&result, &mut evidence_values, &mut receipt_refs, &mut assertion_refs)?;
+        if result.receipt.decision != "pass" {
+            diagnostics.extend(result.receipt.diagnostics.clone());
+        }
+        lease = Some(result);
+    }
+    let token = lease.as_ref().and_then(|result| result.token.as_ref());
+    if diagnostics.is_empty() {
+        let Some(token) = token else {
+            diagnostics.push("coordination lease did not emit fencing token".to_string());
+            return job_worker_schedule_finalize(JobWorkerScheduleFinalizeInput {
+                input,
+                request: &request,
+                manifest_ref: &manifest_ref,
+                runtime: &runtime,
+                evidence_values,
+                receipt_refs,
+                assertion_refs,
+                enqueue: Some(&enqueue),
+                enqueue_duplicate: Some(&enqueue_duplicate),
+                dequeue: dequeue.as_ref(),
+                lease: lease.as_ref(),
+                release: None,
+                worker: None,
+                diagnostics,
+                lease_key: &lease_key,
+            });
+        };
+        let effective_token = input.lease_token.unwrap_or(token.token);
+        if effective_token != token.token {
+            let release_request = job_schedule_coordination_request(ScheduleCoordinationRequestInput {
+                service: coordination::SERVICE_LOCK,
+                operation: coordination::OP_RELEASE,
+                key: &lease_key,
+                client_session: input.worker_session,
+                operation_label: "worker-schedule-release",
+                request_ref: &request_ref,
+                payload: Some(record("token", vec![u64_value(effective_token)])),
+                refs: &coordination_refs,
+            })?;
+            let result = coordination::apply_coordination_request(&mut runtime, &release_request)?;
+            push_schedule_coordination_result(&result, &mut evidence_values, &mut receipt_refs, &mut assertion_refs)?;
+            diagnostics.extend(result.receipt.diagnostics.clone());
+            if diagnostics.is_empty() {
+                diagnostics.push(format!("stale fencing token {effective_token}; current token is {}", token.token));
+            }
+            release = Some(result);
+        } else {
+            let worker_out = input.out.join("worker");
+            let executed = job_worker_run_local(JobWorkerRunLocalInput {
+                request_value: input.request_value,
+                target_registry: input.target_registry,
+                storage_root: input.storage_root,
+                cache_root: input.cache_root,
+                chunk_root: input.chunk_root,
+                admission_value: input.admission_value,
+                execution_request_value: input.execution_request_value,
+                transport_root: input.transport_root,
+                from_peer: input.from_peer,
+                from_actor: input.from_actor,
+                topic: input.topic,
+                ledger_root: input.ledger_root,
+                out: &worker_out,
+            })?;
+            if executed.result.decision != "pass" {
+                diagnostics.extend(executed.result.diagnostics.clone());
+            }
+            worker = Some(executed);
+            let release_request = job_schedule_coordination_request(ScheduleCoordinationRequestInput {
+                service: coordination::SERVICE_LOCK,
+                operation: coordination::OP_RELEASE,
+                key: &lease_key,
+                client_session: input.worker_session,
+                operation_label: "worker-schedule-release",
+                request_ref: &request_ref,
+                payload: Some(record("token", vec![u64_value(effective_token)])),
+                refs: &coordination_refs,
+            })?;
+            let result = coordination::apply_coordination_request(&mut runtime, &release_request)?;
+            push_schedule_coordination_result(&result, &mut evidence_values, &mut receipt_refs, &mut assertion_refs)?;
+            if result.receipt.decision != "pass" {
+                diagnostics.extend(result.receipt.diagnostics.clone());
+            }
+            release = Some(result);
+        }
+    }
+    job_worker_schedule_finalize(JobWorkerScheduleFinalizeInput {
+        input,
+        request: &request,
+        manifest_ref: &manifest_ref,
+        runtime: &runtime,
+        evidence_values,
+        receipt_refs,
+        assertion_refs,
+        enqueue: Some(&enqueue),
+        enqueue_duplicate: Some(&enqueue_duplicate),
+        dequeue: dequeue.as_ref(),
+        lease: lease.as_ref(),
+        release: release.as_ref(),
+        worker: worker.as_ref(),
+        diagnostics,
+        lease_key: &lease_key,
+    })
+}
+
+struct JobWorkerScheduleFinalizeInput<'a> {
+    input: JobWorkerScheduleLocalInput<'a>,
+    request: &'a job_dag::JobWorkerRequest,
+    manifest_ref: &'a str,
+    runtime: &'a coordination::CoordinationRuntime,
+    evidence_values: CliBoundedItems<preserves::IOValue>,
+    receipt_refs: CliBoundedItems<String>,
+    assertion_refs: CliBoundedItems<String>,
+    enqueue: Option<&'a coordination::CoordinationApplyResult>,
+    enqueue_duplicate: Option<&'a coordination::CoordinationApplyResult>,
+    dequeue: Option<&'a coordination::CoordinationApplyResult>,
+    lease: Option<&'a coordination::CoordinationApplyResult>,
+    release: Option<&'a coordination::CoordinationApplyResult>,
+    worker: Option<&'a job_dag::JobWorkerExecution>,
+    diagnostics: Vec<String>,
+    lease_key: &'a str,
+}
+
+fn pass_fail(value: bool) -> &'static str {
+    if value { "pass" } else { "fail" }
+}
+
+fn job_worker_schedule_finalize(input: JobWorkerScheduleFinalizeInput<'_>) -> Result<JobWorkerScheduleLocalResult> {
+    let mut evidence_values = input.evidence_values;
+    let receipt_refs = input.receipt_refs.into_vec();
+    let assertion_refs = input.assertion_refs.into_vec();
+    let final_state_value = coordination::coordination_state_snapshot_value(&input.runtime.state)?;
+    let final_state_ref = canonical_hash(&final_state_value)?;
+    evidence_values.push(final_state_value)?;
+    let evidence_values = evidence_values.into_vec();
+    let evidence_refs = evidence_values.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
+    let decision = if input.diagnostics.is_empty() { "pass" } else { "deny" };
+    let report_value = coordination::coordination_apply_report_value(coordination::ApplyReportValueInput {
+        decision,
+        manifest_ref: input.manifest_ref,
+        final_state_ref: &final_state_ref,
+        receipt_refs: &receipt_refs,
+        assertion_refs: &assertion_refs,
+        evidence_refs: &evidence_refs,
+    })?;
+    let report_ref = canonical_hash(&report_value)?;
+    let worker_receipt_ref = input.worker.map(|worker| worker.receipt_ref.as_str());
+    let result_ref = input.worker.map(|worker| worker.result.result_ref.as_str());
+    let token_ref = input.lease.and_then(|lease| lease.token.as_ref()).map(|token| token.token_ref.as_str());
+    let mut refs = evidence_refs.clone();
+    if let Some(worker) = input.worker {
+        refs.push(worker.receipt_ref.clone());
+        refs.push(worker.result.result_ref.clone());
+    }
+    let receipt_value = job_dag::job_worker_schedule_receipt_value(job_dag::JobWorkerScheduleReceiptValueInput {
+        operation: "worker-schedule-local",
+        decision,
+        job_ref: &input.request.job_ref,
+        request_ref: &input.request.request_ref,
+        queue_key: input.input.queue_key,
+        lease_key: input.lease_key,
+        worker_session: input.input.worker_session,
+        coordination_report_ref: &report_ref,
+        enqueue_receipt_ref: input.enqueue.map(|result| result.receipt.receipt_ref.as_str()),
+        enqueue_duplicate_receipt_ref: input.enqueue_duplicate.map(|result| result.receipt.receipt_ref.as_str()),
+        dequeue_receipt_ref: input.dequeue.map(|result| result.receipt.receipt_ref.as_str()),
+        lease_receipt_ref: input.lease.map(|result| result.receipt.receipt_ref.as_str()),
+        release_receipt_ref: input.release.map(|result| result.receipt.receipt_ref.as_str()),
+        token_ref,
+        worker_receipt_ref,
+        result_ref,
+        diagnostics: &input.diagnostics,
+        refs: &refs,
+        checks: &[
+            (
+                "duplicate-operation-replay",
+                pass_fail(input.enqueue_duplicate.is_some_and(|duplicate| {
+                    input.enqueue.is_some_and(|enqueue| duplicate.receipt.receipt_ref == enqueue.receipt.receipt_ref)
+                })),
+            ),
+            ("lease-checked-before-worker", pass_fail(input.worker.is_some() || !input.diagnostics.is_empty())),
+            (
+                "worker-result-bound",
+                pass_fail(input.worker.is_some_and(|worker| worker.result.decision == "pass")),
+            ),
+        ],
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    fs::create_dir_all(input.input.out).map_err(MoltenError::from)?;
+    write_file(&input.input.out.join("schedule-receipt.preserves"), &to_text(&receipt_value)?)?;
+    let coordination_out = input.input.out.join("coordination");
+    fs::create_dir_all(&coordination_out).map_err(MoltenError::from)?;
+    write_file(&coordination_out.join("manifest.preserves"), &to_text(&evidence_values[0])?)?;
+    write_file(&coordination_out.join("report.preserves"), &to_text(&report_value)?)?;
+    write_indexed_values(&coordination_out, "evidence", &evidence_values)?;
+    if let Some(result) = input.enqueue {
+        write_file(&coordination_out.join("enqueue-receipt.preserves"), &to_text(&result.receipt.value)?)?;
+    }
+    if let Some(result) = input.enqueue_duplicate {
+        write_file(&coordination_out.join("enqueue-duplicate-receipt.preserves"), &to_text(&result.receipt.value)?)?;
+    }
+    if let Some(result) = input.dequeue {
+        write_file(&coordination_out.join("dequeue-receipt.preserves"), &to_text(&result.receipt.value)?)?;
+    }
+    if let Some(result) = input.lease {
+        write_file(&coordination_out.join("lease-receipt.preserves"), &to_text(&result.receipt.value)?)?;
+        if let Some(token) = &result.token {
+            write_file(&coordination_out.join("fencing-token.preserves"), &to_text(&token.value)?)?;
+        }
+    }
+    if let Some(result) = input.release {
+        write_file(&coordination_out.join("release-receipt.preserves"), &to_text(&result.receipt.value)?)?;
+    }
+    if let Some(ledger_root) = input.input.ledger_root {
+        ledger::import_artifact(ledger_root, &report_value)?;
+        ledger::import_artifact(ledger_root, &receipt_value)?;
+    }
+    Ok(JobWorkerScheduleLocalResult {
+        decision: decision.to_string(),
+        receipt_ref,
+        receipt_value,
+        worker: input.worker.cloned(),
+    })
 }
 
 fn job_admission_cli_request(input: JobAdmissionCliInput<'_>) -> Result<preserves::IOValue> {
@@ -9430,8 +9947,8 @@ mod tests {
             sync_ref: Some(sync_ref),
             target_peer: "peer:loopback".to_string(),
             stages: Vec::new(),
-            authority_refs: vec![authority_context_ref],
-            resource_refs: worker_resource_refs,
+            authority_refs: vec![authority_context_ref.clone()],
+            resource_refs: worker_resource_refs.clone(),
             peer_bootstrap_refs: vec![peer_bootstrap_ref],
             node_identity_refs: vec![node_identity_ref],
             evidence_refs: Vec::new(),
@@ -9440,13 +9957,13 @@ mod tests {
         .expect("job worker request");
         let worker_out = dir.join("job-worker-local");
         run_job_command(JobCommand::WorkerRunLocal {
-            request: worker_request,
+            request: worker_request.clone(),
             target_registry: target_registry.clone(),
             storage: dir.join("worker-storage"),
             cache: dir.join("worker-cache"),
             chunks: Some(dir.join("worker-chunks")),
-            admission_receipt: admit_loopback_receipt,
-            execution_request: worker_execution_request,
+            admission_receipt: admit_loopback_receipt.clone(),
+            execution_request: worker_execution_request.clone(),
             transport_root: dir.join("worker-transport"),
             from_peer: "peer:source".to_string(),
             from_actor: "source-worker".to_string(),
@@ -9464,6 +9981,88 @@ mod tests {
             ledger: ledger_root.clone(),
         })
         .expect("job worker receipt show");
+        let schedule_out = dir.join("job-worker-scheduled");
+        run_job_command(JobCommand::WorkerScheduleLocal {
+            request: worker_request.clone(),
+            target_registry: target_registry.clone(),
+            storage: dir.join("scheduled-worker-storage"),
+            cache: dir.join("scheduled-worker-cache"),
+            chunks: Some(dir.join("scheduled-worker-chunks")),
+            admission_receipt: admit_loopback_receipt.clone(),
+            execution_request: worker_execution_request.clone(),
+            transport_root: dir.join("scheduled-worker-transport"),
+            queue_key: "queue:job-worker".to_string(),
+            lease_key: None,
+            scheduler_session: "scheduler".to_string(),
+            worker_session: "worker-a".to_string(),
+            lease_token: None,
+            from_peer: "peer:source".to_string(),
+            from_actor: "source-worker".to_string(),
+            topic: "molten.job.worker".to_string(),
+            coordination_authority_refs: vec![authority_context_ref.clone()],
+            coordination_resource_refs: worker_resource_refs.clone(),
+            coordination_policy_refs: vec![cli_synthetic_ref("job-worker-schedule-policy").expect("schedule policy")],
+            ledger: Some(ledger_root.clone()),
+            out: schedule_out.clone(),
+        })
+        .expect("job worker scheduled local run");
+        let schedule_receipt =
+            read_preserves_file(&schedule_out.join("schedule-receipt.preserves")).expect("schedule receipt");
+        assert_eq!(ledger::artifact_kind(&schedule_receipt), "job-worker-schedule-receipt");
+        assert!(
+            fs::read_to_string(schedule_out.join("worker").join("output.preserves"))
+                .expect("scheduled worker output")
+                .contains("3")
+        );
+        let enqueue_ref = canonical_hash(
+            &read_preserves_file(&schedule_out.join("coordination").join("enqueue-receipt.preserves"))
+                .expect("enqueue receipt"),
+        )
+        .expect("enqueue ref");
+        let duplicate_enqueue_ref = canonical_hash(
+            &read_preserves_file(&schedule_out.join("coordination").join("enqueue-duplicate-receipt.preserves"))
+                .expect("duplicate enqueue receipt"),
+        )
+        .expect("duplicate enqueue ref");
+        assert_eq!(enqueue_ref, duplicate_enqueue_ref);
+        let schedule_receipt_ref = canonical_hash(&schedule_receipt).expect("schedule receipt ref");
+        run_job_command(JobCommand::ReceiptShow {
+            receipt_ref: schedule_receipt_ref,
+            ledger: ledger_root.clone(),
+        })
+        .expect("job worker schedule receipt show");
+        let stale_schedule_out = dir.join("job-worker-stale-schedule");
+        run_job_command(JobCommand::WorkerScheduleLocal {
+            request: worker_request,
+            target_registry: target_registry.clone(),
+            storage: dir.join("stale-worker-storage"),
+            cache: dir.join("stale-worker-cache"),
+            chunks: Some(dir.join("stale-worker-chunks")),
+            admission_receipt: admit_loopback_receipt,
+            execution_request: worker_execution_request,
+            transport_root: dir.join("stale-worker-transport"),
+            queue_key: "queue:job-worker".to_string(),
+            lease_key: None,
+            scheduler_session: "scheduler".to_string(),
+            worker_session: "worker-a".to_string(),
+            lease_token: Some(0),
+            from_peer: "peer:source".to_string(),
+            from_actor: "source-worker".to_string(),
+            topic: "molten.job.worker".to_string(),
+            coordination_authority_refs: vec![authority_context_ref],
+            coordination_resource_refs: worker_resource_refs,
+            coordination_policy_refs: vec![cli_synthetic_ref("job-worker-stale-policy").expect("stale policy")],
+            ledger: None,
+            out: stale_schedule_out.clone(),
+        })
+        .expect_err("stale schedule token denies before worker");
+        let stale_receipt = job_dag::parse_job_worker_schedule_receipt_value(
+            &read_preserves_file(&stale_schedule_out.join("schedule-receipt.preserves")).expect("stale receipt"),
+        )
+        .expect("parse stale schedule receipt");
+        assert_eq!(stale_receipt.decision, "deny");
+        assert!(stale_receipt.diagnostics.join(";").contains("stale fencing token"));
+        assert!(!stale_schedule_out.join("worker").join("worker-receipt.preserves").exists());
         run_job_command(JobCommand::Run {
             job: dag.job_ref.clone(),
             registry: registry.clone(),

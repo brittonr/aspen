@@ -43,6 +43,7 @@ use crate::preserves_rail::JOB_WORKER_ASSIGNMENT_SCHEMA;
 use crate::preserves_rail::JOB_WORKER_RECEIPT_SCHEMA;
 use crate::preserves_rail::JOB_WORKER_REQUEST_SCHEMA;
 use crate::preserves_rail::JOB_WORKER_RESULT_SCHEMA;
+use crate::preserves_rail::JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA;
 use crate::preserves_rail::JOB_WORKER_STATUS_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
@@ -452,6 +453,25 @@ pub struct JobWorkerReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JobWorkerScheduleReceipt {
+    pub receipt_ref: String,
+    pub operation: String,
+    pub decision: String,
+    pub job_ref: String,
+    pub request_ref: String,
+    pub queue_key: String,
+    pub lease_key: String,
+    pub worker_session: String,
+    pub coordination_report_ref: String,
+    pub token_ref: Option<String>,
+    pub worker_receipt_ref: Option<String>,
+    pub result_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+    pub refs: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobWorkerExecution {
     pub request: Option<JobWorkerRequest>,
     pub assignment_value: IOValue,
@@ -475,6 +495,29 @@ pub struct JobWorkerRequestValueInput<'a> {
     pub peer_bootstrap_refs: &'a [String],
     pub node_identity_refs: &'a [String],
     pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct JobWorkerScheduleReceiptValueInput<'a> {
+    pub operation: &'a str,
+    pub decision: &'a str,
+    pub job_ref: &'a str,
+    pub request_ref: &'a str,
+    pub queue_key: &'a str,
+    pub lease_key: &'a str,
+    pub worker_session: &'a str,
+    pub coordination_report_ref: &'a str,
+    pub enqueue_receipt_ref: Option<&'a str>,
+    pub enqueue_duplicate_receipt_ref: Option<&'a str>,
+    pub dequeue_receipt_ref: Option<&'a str>,
+    pub lease_receipt_ref: Option<&'a str>,
+    pub release_receipt_ref: Option<&'a str>,
+    pub token_ref: Option<&'a str>,
+    pub worker_receipt_ref: Option<&'a str>,
+    pub result_ref: Option<&'a str>,
+    pub diagnostics: &'a [String],
+    pub refs: &'a [String],
+    pub checks: &'a [(&'a str, &'a str)],
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1577,6 +1620,37 @@ pub fn parse_job_worker_receipt_value(value: &IOValue) -> Result<JobWorkerReceip
         execution_receipt_ref: record_optional_ref(&fields[8], "execution-receipt")?,
         delivery_log_ref: record_optional_ref(&fields[9], "delivery-log")?,
         diagnostics: record_string_sequence(&fields[10], "diagnostics")?,
+        value: value.clone(),
+    })
+}
+
+pub fn parse_job_worker_schedule_receipt_value(value: &IOValue) -> Result<JobWorkerScheduleReceipt> {
+    let fields = value
+        .collect_simple_record("job-worker-schedule-receipt-v1", Some(20))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-schedule-receipt-v1 ...>"))?;
+    require_schema(&fields[0], JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA, "job worker schedule receipt")?;
+    let operation = record_string(&fields[1], "operation")?;
+    if operation != "worker-schedule-local" {
+        return Err(MoltenError::invalid_harness(format!("unsupported job worker schedule operation {operation}")));
+    }
+    let decision = record_string(&fields[2], "decision")?;
+    validate_decision(&decision)?;
+    require_check(&parse_checks(&fields[19])?, "canonical-receipt", "job worker schedule receipt")?;
+    Ok(JobWorkerScheduleReceipt {
+        receipt_ref: canonical_hash(value)?,
+        operation,
+        decision,
+        job_ref: record_ref(&fields[3], "job")?,
+        request_ref: record_ref(&fields[4], "request")?,
+        queue_key: record_string(&fields[5], "queue-key")?,
+        lease_key: record_string(&fields[6], "lease-key")?,
+        worker_session: record_string(&fields[7], "worker-session")?,
+        coordination_report_ref: record_ref(&fields[8], "coordination-report")?,
+        token_ref: record_optional_ref(&fields[14], "token")?,
+        worker_receipt_ref: record_optional_ref(&fields[15], "worker-receipt")?,
+        result_ref: record_optional_ref(&fields[16], "result")?,
+        diagnostics: record_string_sequence(&fields[17], "diagnostics")?,
+        refs: record_ref_sequence(&fields[18], "refs")?,
         value: value.clone(),
     })
 }
@@ -3334,6 +3408,81 @@ fn job_worker_receipt_value(input: WorkerReceiptValueInput<'_>) -> Result<IOValu
     ]))
 }
 
+pub fn job_worker_schedule_receipt_value(input: JobWorkerScheduleReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_non_empty(input.operation, "job worker schedule operation")?;
+    validate_decision(input.decision)?;
+    validate_ref(input.job_ref, "job worker schedule job ref")?;
+    validate_ref(input.request_ref, "job worker schedule request ref")?;
+    validate_non_empty(input.queue_key, "job worker schedule queue key")?;
+    validate_non_empty(input.lease_key, "job worker schedule lease key")?;
+    validate_non_empty(input.worker_session, "job worker schedule worker session")?;
+    validate_ref(input.coordination_report_ref, "job worker schedule coordination report ref")?;
+    for (label, reference) in [
+        ("enqueue receipt", input.enqueue_receipt_ref),
+        ("enqueue duplicate receipt", input.enqueue_duplicate_receipt_ref),
+        ("dequeue receipt", input.dequeue_receipt_ref),
+        ("lease receipt", input.lease_receipt_ref),
+        ("release receipt", input.release_receipt_ref),
+        ("token", input.token_ref),
+        ("worker receipt", input.worker_receipt_ref),
+        ("result", input.result_ref),
+    ] {
+        if let Some(reference) = reference {
+            validate_ref(reference, &format!("job worker schedule {label} ref"))?;
+        }
+    }
+    validate_refs(input.refs, "job worker schedule refs")?;
+    ensure_count_at_most(input.diagnostics.len(), MAX_JOB_REFS, "job worker schedule diagnostics")?;
+    let mut refs = vec![
+        input.job_ref.to_string(),
+        input.request_ref.to_string(),
+        input.coordination_report_ref.to_string(),
+    ];
+    for reference in [
+        input.enqueue_receipt_ref,
+        input.enqueue_duplicate_receipt_ref,
+        input.dequeue_receipt_ref,
+        input.lease_receipt_ref,
+        input.release_receipt_ref,
+        input.token_ref,
+        input.worker_receipt_ref,
+        input.result_ref,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        push_bounded(&mut refs, reference.to_string(), MAX_JOB_REFS, "job worker schedule refs")?;
+    }
+    extend_cloned_bounded(&mut refs, input.refs, MAX_JOB_REFS, "job worker schedule refs")?;
+    let mut checks = input.checks.to_vec();
+    checks.push(("coordination-queue-bound", "pass"));
+    checks.push(("coordination-lease-bound", status(input.token_ref.is_some())));
+    checks.push(("transport-is-not-authority", "pass"));
+    checks.push(("canonical-receipt", "pass"));
+    Ok(record("job-worker-schedule-receipt-v1", vec![
+        string(JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA),
+        record("operation", vec![string(input.operation)]),
+        record("decision", vec![string(input.decision)]),
+        record("job", vec![string(input.job_ref)]),
+        record("request", vec![string(input.request_ref)]),
+        record("queue-key", vec![string(input.queue_key)]),
+        record("lease-key", vec![string(input.lease_key)]),
+        record("worker-session", vec![string(input.worker_session)]),
+        record("coordination-report", vec![string(input.coordination_report_ref)]),
+        record("enqueue", vec![optional_ref_value(input.enqueue_receipt_ref)]),
+        record("enqueue-duplicate", vec![optional_ref_value(input.enqueue_duplicate_receipt_ref)]),
+        record("dequeue", vec![optional_ref_value(input.dequeue_receipt_ref)]),
+        record("lease", vec![optional_ref_value(input.lease_receipt_ref)]),
+        record("release", vec![optional_ref_value(input.release_receipt_ref)]),
+        record("token", vec![optional_ref_value(input.token_ref)]),
+        record("worker-receipt", vec![optional_ref_value(input.worker_receipt_ref)]),
+        record("result", vec![optional_ref_value(input.result_ref)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        checks_value_from_pairs(&checks),
+    ]))
+}
+
 fn blob_ref_job_status_value(
     submission: &BlobRefJobSubmission,
     state: &str,
@@ -3624,6 +3773,20 @@ fn analysis_receipt_value(input: AnalysisReceiptValueInput<'_>) -> Result<IOValu
 }
 
 pub fn receipt_summary(value: &IOValue) -> Result<String> {
+    if let Ok(receipt) = parse_job_worker_schedule_receipt_value(value) {
+        return Ok(format!(
+            "job worker schedule decision={} job={} request={} queue={} lease={} token={} worker={} result={} diagnostics={}",
+            receipt.decision,
+            receipt.job_ref,
+            receipt.request_ref,
+            receipt.queue_key,
+            receipt.lease_key,
+            receipt.token_ref.unwrap_or_else(|| "-".to_string()),
+            receipt.worker_receipt_ref.unwrap_or_else(|| "-".to_string()),
+            receipt.result_ref.unwrap_or_else(|| "-".to_string()),
+            receipt.diagnostics.join(";")
+        ));
+    }
     if let Ok(receipt) = parse_job_worker_receipt_value(value) {
         return Ok(format!(
             "job worker receipt decision={} job={} request={} result={} status={} diagnostics={}",
