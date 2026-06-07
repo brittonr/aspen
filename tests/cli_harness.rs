@@ -191,6 +191,93 @@ fn cli_failure_paths_write_canonical_failure_artifacts_to_files() -> CliResult<(
 }
 
 #[test]
+fn cli_blob_ref_job_submit_execute_status_and_receipt_show() -> CliResult<()> {
+    let dir = temp_dir("cli-job-ref")?;
+    let chunks = dir.join("chunks");
+    let ledger = dir.join("ledger");
+    let submission = dir.join("submission.preserves");
+    let receipt_path = dir.join("receipt.preserves");
+    let executable = molten::chunk_store::put_bytes(
+        &chunks,
+        "job-executable",
+        b"echo",
+        molten::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
+    )?;
+    let input = molten::chunk_store::put_bytes(
+        &chunks,
+        "job-input",
+        b"cli-output",
+        molten::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
+    )?;
+    let operation_id = test_ref("cli-job-ref-operation")?;
+    let authority_ref = test_ref("cli-job-ref-authority")?;
+    let policy_ref = test_ref("cli-job-ref-policy")?;
+    let provenance_ref = test_ref("cli-job-ref-provenance")?;
+    let effect_ref = test_ref("cli-job-ref-effect")?;
+    let executable_arg = format!("{}@{}@elf-executable", executable.manifest_ref, executable.total_len);
+    let input_arg = format!("{}@{}@bytes", input.manifest_ref, input.total_len);
+
+    let submit = molten_cmd()
+        .args(["test", "job", "ref-submit", "--job-id", "cli-job-ref", "--operation-id"])
+        .arg(&operation_id)
+        .args(["--executable"])
+        .arg(&executable_arg)
+        .args(["--input"])
+        .arg(&input_arg)
+        .args(["--authority-context-ref"])
+        .arg(&authority_ref)
+        .args(["--policy-ref"])
+        .arg(&policy_ref)
+        .args(["--provenance-ref"])
+        .arg(&provenance_ref)
+        .args(["--effect-ref"])
+        .arg(&effect_ref)
+        .args(["--out"])
+        .arg(&submission)
+        .output()?;
+    assert_success(&submit, "job ref-submit");
+    let submission_value = read_preserves(&submission)?;
+    assert_eq!(molten::job_dag::parse_job_ref_submission_value(&submission_value)?.job_id, "cli-job-ref");
+
+    let execute = molten_cmd()
+        .args(["test", "job", "ref-execute"])
+        .arg(&submission)
+        .args(["--chunks"])
+        .arg(&chunks)
+        .args(["--ledger"])
+        .arg(&ledger)
+        .args(["--receipt-out"])
+        .arg(&receipt_path)
+        .output()?;
+    assert_success(&execute, "job ref-execute");
+    assert!(stdout(&execute).contains("job ref receipt blake3:"));
+    let receipt_value = read_preserves(&receipt_path)?;
+    let receipt = molten::job_dag::parse_blob_ref_job_receipt_value(&receipt_value)?;
+    assert_eq!(receipt.decision, "pass");
+    assert_eq!(receipt.output_refs.len(), 1);
+    assert!(molten::job_dag::receipt_summary(&receipt_value)?.contains("decision=pass"));
+
+    let status = molten_cmd()
+        .args(["test", "job", "status", "--ledger"])
+        .arg(&ledger)
+        .args(["--job", "cli-job-ref"])
+        .output()?;
+    assert_success(&status, "job status");
+    assert!(stdout(&status).contains("blob-ref-worker-execute"));
+
+    let receipt_ref = molten::preserves_rail::canonical_hash(&receipt_value)?;
+    let show = molten_cmd()
+        .args(["test", "job", "receipt-show"])
+        .arg(&receipt_ref)
+        .args(["--ledger"])
+        .arg(&ledger)
+        .output()?;
+    assert_success(&show, "job receipt-show");
+    assert!(stdout(&show).contains("blob-ref-worker-execute"));
+    Ok(())
+}
+
+#[test]
 fn cli_gate_rejection_emits_canonical_failure_to_stdout_without_failure_out() -> CliResult<()> {
     let dir = temp_dir("cli-failure-stdout")?;
     let failure_artifact = dir.join("diagnostic.failure.preserves");

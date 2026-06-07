@@ -47,6 +47,8 @@ Large outputs should also be stored by content ref with receipts.
 8. Store output as inline value or content ref.
 9. Emit result and cleanup receipts.
 
+The first implementation exposes this flow as `molten test job ref-submit` and `molten test job ref-execute` over the local chunk store. `job-ref-submission-v1` is content-ref-only and carries job id, operation id, executable/input refs with size and format hints, schema/effect/policy/provenance/evidence refs, handler profile, authority context, and output mode. The deterministic local worker currently supports `local-echo-v1`, verifies every executable/input chunk manifest before running, pins executable/input/output manifests while active, stores output as a chunk manifest, imports status and receipt artifacts into the ledger when requested, and emits denial receipts if required refs are missing or verification fails.
+
 ## Integration with SAM actors
 
 Actors submit jobs by asserting demand or sending an admitted job request to a job service. Workers assert status: queued, fetching, running, complete, failed, cancelled, or result-ready. The job service may use stronger coordination primitives internally, but ordinary actor interaction remains dataspace-based.

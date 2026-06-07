@@ -2187,6 +2187,45 @@ enum JobCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    RefSubmit {
+        #[arg(long)]
+        job_id: String,
+        #[arg(long)]
+        operation_id: String,
+        #[arg(long)]
+        executable: String,
+        #[arg(long = "input")]
+        inputs: Vec<String>,
+        #[arg(long, default_value = "chunk-manifest")]
+        output_mode: String,
+        #[arg(long = "input-schema-ref")]
+        input_schema_refs: Vec<String>,
+        #[arg(long = "output-schema-ref")]
+        output_schema_refs: Vec<String>,
+        #[arg(long = "effect-ref")]
+        effect_manifest_refs: Vec<String>,
+        #[arg(long, default_value = "local-echo-v1")]
+        handler_profile: String,
+        #[arg(long)]
+        authority_context_ref: String,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long = "provenance-ref")]
+        provenance_refs: Vec<String>,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    RefExecute {
+        submission: PathBuf,
+        #[arg(long)]
+        chunks: PathBuf,
+        #[arg(long)]
+        ledger: Option<PathBuf>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     Status {
         #[arg(long)]
         ledger: PathBuf,
@@ -4730,13 +4769,87 @@ fn run_job_command(command: JobCommand) -> Result<()> {
                 )))
             }
         }
+        JobCommand::RefSubmit {
+            job_id,
+            operation_id,
+            executable,
+            inputs,
+            output_mode,
+            input_schema_refs,
+            output_schema_refs,
+            effect_manifest_refs,
+            handler_profile,
+            authority_context_ref,
+            policy_refs,
+            provenance_refs,
+            evidence_refs,
+            out,
+        } => {
+            let executable = parse_job_content_arg(&executable, "executable")?;
+            let inputs =
+                inputs.iter().map(|input| parse_job_content_arg(input, "input")).collect::<Result<Vec<_>>>()?;
+            let value = job_dag::job_ref_submission_value(job_dag::BlobRefJobSubmissionValueInput {
+                job_id: &job_id,
+                operation_id: &operation_id,
+                executable,
+                inputs,
+                output_mode: &output_mode,
+                input_schema_refs: &input_schema_refs,
+                output_schema_refs: &output_schema_refs,
+                effect_manifest_refs: &effect_manifest_refs,
+                handler_profile: &handler_profile,
+                authority_context_ref: &authority_context_ref,
+                policy_refs: &policy_refs,
+                provenance_refs: &provenance_refs,
+                evidence_refs: &evidence_refs,
+            })?;
+            let submission = job_dag::parse_job_ref_submission_value(&value)?;
+            emit_job_analysis(&value, out.as_ref())?;
+            eprintln!(
+                "job ref-submit ok job={} submission={} inputs={}",
+                submission.job_id,
+                submission.submission_ref,
+                submission.inputs.len()
+            );
+            Ok(())
+        }
+        JobCommand::RefExecute {
+            submission,
+            chunks,
+            ledger,
+            receipt_out,
+        } => {
+            let submission_value = read_preserves_file(&submission)?;
+            let executed = job_dag::execute_blob_ref_job(job_dag::BlobRefJobExecuteInput {
+                chunk_root: &chunks,
+                submission_value: &submission_value,
+                ledger_root: ledger.as_deref(),
+            })?;
+            emit_named_receipt(receipt_out.as_ref(), "job ref receipt", &executed.receipt_value)?;
+            eprintln!(
+                "job ref-execute {} job={} receipt={} output={}",
+                executed.decision,
+                executed.submission.job_id,
+                executed.receipt_ref,
+                executed.output_manifest_ref.as_deref().unwrap_or("none")
+            );
+            if executed.decision == "pass" {
+                Ok(())
+            } else {
+                Err(MoltenError::invalid_harness(format!(
+                    "job ref-execute denied: {}",
+                    executed.diagnostics.join("; ")
+                )))
+            }
+        }
         JobCommand::Status { ledger, job } => {
             for entry in ledger::list_artifacts(&ledger)? {
-                if entry.artifact_kind != "job-dag-receipt" {
+                if entry.artifact_kind != "job-dag-receipt" && entry.artifact_kind != "job-ref-receipt" {
                     continue;
                 }
                 let value = ledger::read_artifact(&ledger, &entry.artifact_ref)?;
-                let receipt = job_dag::parse_job_receipt(&value)?;
+                let receipt = job_dag::parse_job_receipt(&value)
+                    .or_else(|_| job_dag::parse_blob_ref_job_receipt_value(&value))?;
                 if job.as_ref().is_none_or(|job_ref| receipt.job_ref.as_ref() == Some(job_ref)) {
                     println!(
                         "{} {} {} {} {}",
@@ -4896,6 +5009,29 @@ fn job_execution_cli_request_from_admission_ref(
         policy_refs: &input.policy_refs,
         capability_refs: &input.capability_refs,
         resource_refs: &input.resource_refs,
+    })
+}
+
+fn parse_job_content_arg(value: &str, label: &str) -> Result<job_dag::JobContentRef> {
+    let parts = value.split('@').collect::<Vec<_>>();
+    if parts.len() < 3 || parts.len() > 4 {
+        return Err(MoltenError::invalid_harness(format!(
+            "job {label} must be formatted as <content-ref>@<size>@<format>[@<schema-ref>]"
+        )));
+    }
+    let size = parts[1]
+        .parse::<u64>()
+        .map_err(|error| MoltenError::invalid_harness(format!("job {label} size is invalid: {error}")))?;
+    let schema_ref = if parts.len() == 4 {
+        Some(parts[3].to_string())
+    } else {
+        None
+    };
+    Ok(job_dag::JobContentRef {
+        content_ref: parts[0].to_string(),
+        size,
+        format: parts[2].to_string(),
+        schema_ref,
     })
 }
 

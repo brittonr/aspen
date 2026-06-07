@@ -257,6 +257,8 @@ WASI is deny-by-default. Filesystem, network, clocks, environment, and sockets r
 
 Steel is trusted orchestration and experimentation glue, but only through admitted runtime APIs. The local harness now executes reviewed Steel hostcall actors in a Steel VM when explicit source/callable fixtures, source refs, review receipts, forbidden ambient-token checks, and allowed-hostcall contracts validate; ambient APIs remain disabled and each admitted step records a Steel execution receipt.
 
+Ref-backed job execution uses the same content/evidence boundary. `job-ref-submission-v1` names the job id, operation id, executable content ref, input content refs, schema/effect/policy/provenance/evidence refs, handler profile, and authority context without inline large bytes. The deterministic local worker verifies executable and input chunk manifests before running, pins executable/input/output refs while active, emits status/fetch/verify/cleanup evidence, stores result bytes as chunk manifests, and records `job-ref-receipt-v1` in the ledger. These receipts provide replay and delivery evidence only; they do not grant authority, provenance, policy, resource, or transport trust.
+
 ## Debugging, tracing, and persistence
 
 Trace records are data, not just logs. Deterministic test and playback depend on trace records being canonical, hashable, and tied to state snapshots.
@@ -381,7 +383,7 @@ Current architectural changes are recorded under `cairn/changes/`:
 - `operator-receipts-dogfood` — operator confidence rail with local dogfood workflow, durable receipts, receipt CLI, and replay/transcript evidence.
 - `plugin-host-abi` — versioned host ABI discipline for sandboxed artifacts, lifecycle callbacks, Preserves result encoding, and hostcall/effect mapping.
 - `federated-pull-sync` — Aspen-inspired sovereign pull-sync for artifacts, chunks, docs, catalogs, receipts, and app resources with signed verification and local admission.
-- `blob-ref-job-submission` — job envelopes by artifact/blob/chunk refs, verified fetch, content-addressed caching, worker status assertions, and result refs.
+- `blob-ref-job-submission` — content-ref-only job submissions, deterministic local worker fetch/verify/pin execution, worker status assertions, ledger receipts, and result chunk manifests.
 - `coordination-primitives` — strongly consistent control-plane services for locks, fencing tokens, queues, semaphores, rate limits, elections, barriers, and service registry, exposed via dataspace assertions.
 - `remote-dataspace-harness-cli` — operator CLI for canonical remote dataspace envelopes, local publish/deliver, two-peer replayable harness runs, and remote gate receipts.
 - `molten-node-runtime-daemon` — durable node process with explicit config/state roots, adapter lifecycle, local Preserves control surface, health, shutdown, and startup receipts.

@@ -258,6 +258,25 @@ molten test delivery check --root target/delivery-store \
 
 `first` receipts permit the caller to commit its side effect; exact duplicates emit `duplicate` receipts with side effect `suppress` and a prior receipt ref; conflicts, stale sequences, and gaps deny or retry before side effects. These receipts are replay/dedup evidence only and do not grant transport, authority, provenance, policy, resource, or execution trust.
 
+## Blob-ref job submission
+
+Ref-backed jobs are exposed under `molten test job` so executable, input, output, and receipt identity is content-addressed before worker execution:
+
+```sh
+molten test job ref-submit --job-id job:echo --operation-id blake3:operation \
+  --executable blake3:executable-manifest@12@elf-executable \
+  --input blake3:input-manifest@1024@bytes \
+  --authority-context-ref blake3:authority --policy-ref blake3:policy \
+  --provenance-ref blake3:provenance --effect-ref blake3:effects \
+  --out target/job-ref.submission.preserves
+molten test job ref-execute target/job-ref.submission.preserves \
+  --chunks target/chunks --ledger target/ledger \
+  --receipt-out target/job-ref.receipt.preserves
+molten test job status --ledger target/ledger --job job:echo
+```
+
+`job-ref-submission-v1` is content-ref-only and rejects inline executable/input bytes. The local deterministic worker reads and verifies chunk manifests before running the `local-echo-v1` handler, pins executable/input/output refs while active, emits fetch/verify/status/cleanup evidence, stores outputs as chunk manifests, and records `job-ref-receipt-v1` in the ledger. These receipts are execution evidence only; authority, provenance, policy, effect admission, transport, and resource trust remain explicit inputs.
+
 ## Development
 
 ```sh
@@ -282,7 +301,7 @@ nix build .#checks.x86_64-linux.nextest
 nix build .#checks.x86_64-linux.nextest-config
 ```
 
-For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false` -> `/nix/store/mq3i8n14z8gjdw520cd16yqmv8rc1jz0-molten-nextest`.
+For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false` -> `/nix/store/aynszzxz4adrblsp18hlg4bmsyfgl18g-molten-nextest`.
 
 Strict Octet source-gate sequence:
 
@@ -318,7 +337,7 @@ cargo run --manifest-path /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615
   --strict
 ```
 
-The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 1818 objects (`b3:d9264b82cf4a324fe32b9d22310c81b05ef6d9765144efc9bff128b03bd131a5`); latest artifact import receipt is `blake3:240bcc06a9d98d8a1ed1b20a028a4d5e32a6cfc6c542eb3e825835ed4d3cc7dc`, latest strict pass receipt is `blake3:56aafe9d68fc31eece883d830d58df67d731ba63fe693549472c9544c76f0125`, and latest remediation plan receipt is `blake3:b5f031fe5586c52495985e7f4c9656037816dde231b8f24b4f36a7193b3afb9f`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
+The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 1843 objects (`b3:aa5c3666a4532c81986f94ecd7fb1eb1cd746470d429300496aa1e840323fe01`); latest artifact import receipt is `blake3:b87efd5c32a1ea93376fa22d48f2a5d62a37465647772b7a87511ff6224b8716`, latest strict pass receipt is `blake3:b7fa1fae20ba1578a477d15545cea9e68bb5fd578ffd3abf662fce2301978bdd`, and latest remediation plan receipt is `blake3:a2447a10a7ccf348209c234a93a3890ce21d0352bcf7231aa91f7d9291c91dce`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
 
 ```sh
 cargo run -- test octet baseline write \

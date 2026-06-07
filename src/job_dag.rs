@@ -32,6 +32,9 @@ use crate::preserves_rail::JOB_PLAN_RECEIPT_SCHEMA;
 use crate::preserves_rail::JOB_PLAN_SCHEMA;
 use crate::preserves_rail::JOB_PROFILE_RECEIPT_SCHEMA;
 use crate::preserves_rail::JOB_PROFILE_SCHEMA;
+use crate::preserves_rail::JOB_REF_RECEIPT_SCHEMA;
+use crate::preserves_rail::JOB_REF_STATUS_SCHEMA;
+use crate::preserves_rail::JOB_REF_SUBMISSION_SCHEMA;
 use crate::preserves_rail::JOB_STAGE_OPERATION_SCHEMA;
 use crate::preserves_rail::JOB_SYNC_PLAN_SCHEMA;
 use crate::preserves_rail::JOB_SYNC_RECEIPT_SCHEMA;
@@ -65,6 +68,7 @@ const MAX_JOB_REFS: usize = 4_096;
 const MAX_JOB_PORTS: usize = 64;
 const MAX_JOB_CHECKS: usize = 256;
 const MAX_JOB_STAGE_VALUES: usize = 4_096;
+const MAX_JOB_INLINE_BYTES: u64 = 4_096;
 
 const _: () = assert!(MAX_JOB_NODES > 0);
 const _: () = assert!(MAX_JOB_ROOTS <= MAX_JOB_NODES);
@@ -338,6 +342,68 @@ pub struct JobExecutionLoopback {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JobContentRef {
+    pub content_ref: String,
+    pub size: u64,
+    pub format: String,
+    pub schema_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlobRefJobSubmission {
+    pub submission_ref: String,
+    pub job_id: String,
+    pub operation_id: String,
+    pub executable: JobContentRef,
+    pub inputs: Vec<JobContentRef>,
+    pub output_mode: String,
+    pub input_schema_refs: Vec<String>,
+    pub output_schema_refs: Vec<String>,
+    pub effect_manifest_refs: Vec<String>,
+    pub handler_profile: String,
+    pub authority_context_ref: String,
+    pub policy_refs: Vec<String>,
+    pub provenance_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlobRefJobExecution {
+    pub submission: BlobRefJobSubmission,
+    pub decision: String,
+    pub status_values: Vec<IOValue>,
+    pub output_manifest_ref: Option<String>,
+    pub receipt_ref: String,
+    pub receipt_value: IOValue,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BlobRefJobSubmissionValueInput<'a> {
+    pub job_id: &'a str,
+    pub operation_id: &'a str,
+    pub executable: JobContentRef,
+    pub inputs: Vec<JobContentRef>,
+    pub output_mode: &'a str,
+    pub input_schema_refs: &'a [String],
+    pub output_schema_refs: &'a [String],
+    pub effect_manifest_refs: &'a [String],
+    pub handler_profile: &'a str,
+    pub authority_context_ref: &'a str,
+    pub policy_refs: &'a [String],
+    pub provenance_refs: &'a [String],
+    pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BlobRefJobExecuteInput<'a> {
+    pub chunk_root: &'a Path,
+    pub submission_value: &'a IOValue,
+    pub ledger_root: Option<&'a Path>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobWorkerRequest {
     pub request_ref: String,
     pub job_ref: String,
@@ -516,6 +582,20 @@ struct ExecutionReceiptValueInput<'a> {
     stage_receipt_refs: &'a [String],
     output_refs: &'a [String],
     run_receipt_refs: &'a [String],
+    diagnostics: &'a [String],
+    checks: &'a [(&'a str, &'a str)],
+}
+
+struct BlobRefReceiptValueInput<'a> {
+    decision: &'a str,
+    submission: &'a BlobRefJobSubmission,
+    status_refs: &'a [String],
+    verify_refs: &'a [String],
+    fetch_refs: &'a [String],
+    pin_refs: &'a [String],
+    cleanup_refs: &'a [String],
+    output_manifest_ref: Option<&'a str>,
+    output_put_ref: Option<&'a str>,
     diagnostics: &'a [String],
     checks: &'a [(&'a str, &'a str)],
 }
@@ -818,6 +898,267 @@ pub fn parse_job_execution_request_value(value: &IOValue) -> Result<JobExecution
         capability_refs: record_ref_sequence(&fields[9], "capability")?,
         resource_refs: record_ref_sequence(&fields[10], "resource")?,
         value: value.clone(),
+    })
+}
+
+pub fn job_content_ref_value(content: &JobContentRef) -> Result<IOValue> {
+    validate_job_content_ref(content, "job content ref")?;
+    Ok(record("job-content-ref", vec![
+        record("content-ref", vec![string(&content.content_ref)]),
+        record("size", vec![u64_value(content.size)]),
+        record("format", vec![string(&content.format)]),
+        record("schema", vec![optional_ref_value(content.schema_ref.as_deref())]),
+    ]))
+}
+
+pub fn job_ref_submission_value(input: BlobRefJobSubmissionValueInput<'_>) -> Result<IOValue> {
+    validate_blob_ref_submission_input(&input)?;
+    let input_values = input.inputs.iter().map(job_content_ref_value).collect::<Result<Vec<_>>>()?;
+    Ok(record("job-ref-submission-v1", vec![
+        string(JOB_REF_SUBMISSION_SCHEMA),
+        record("job-id", vec![string(input.job_id)]),
+        record("operation-id", vec![string(input.operation_id)]),
+        record("executable", vec![job_content_ref_value(&input.executable)?]),
+        record("inputs", vec![sequence(input_values)]),
+        record("output-mode", vec![string(input.output_mode)]),
+        record("input-schemas", vec![refs_sequence(&sorted_unique(input.input_schema_refs))]),
+        record("output-schemas", vec![refs_sequence(&sorted_unique(input.output_schema_refs))]),
+        record("effects", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
+        record("handler-profile", vec![string(input.handler_profile)]),
+        record("authority", vec![string(input.authority_context_ref)]),
+        record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        record("provenance", vec![refs_sequence(&sorted_unique(input.provenance_refs))]),
+        record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+        checks_value(&[
+            "content-refs-only",
+            "no-inline-large-bytes",
+            "handler-profile-declared",
+            "authority-context-declared",
+            "full-ref-identity",
+        ]),
+    ]))
+}
+
+pub fn parse_job_ref_submission_value(value: &IOValue) -> Result<BlobRefJobSubmission> {
+    reject_blob_ref_job_inline_tokens(value)?;
+    let fields = value
+        .collect_simple_record("job-ref-submission-v1", Some(15))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <job-ref-submission-v1 ...>"))?;
+    require_schema(&fields[0], JOB_REF_SUBMISSION_SCHEMA, "job ref submission")?;
+    let checks = parse_checks(&fields[14])?;
+    require_check(&checks, "content-refs-only", "job ref submission")?;
+    require_check(&checks, "no-inline-large-bytes", "job ref submission")?;
+    let executable = parse_job_content_ref_record(&fields[3], "executable")?;
+    let input_values = record_sequence_values(&fields[4], "inputs")?;
+    let mut inputs = Vec::with_capacity(input_values.len());
+    for input_value in &input_values {
+        push_bounded(
+            &mut inputs,
+            parse_job_content_ref_value(input_value)?,
+            MAX_JOB_REFS,
+            "job ref submission inputs",
+        )?;
+    }
+    let submission = BlobRefJobSubmission {
+        submission_ref: canonical_hash(value)?,
+        job_id: record_string(&fields[1], "job-id")?,
+        operation_id: record_ref(&fields[2], "operation-id")?,
+        executable,
+        inputs,
+        output_mode: record_string(&fields[5], "output-mode")?,
+        input_schema_refs: record_ref_sequence(&fields[6], "input-schemas")?,
+        output_schema_refs: record_ref_sequence(&fields[7], "output-schemas")?,
+        effect_manifest_refs: record_ref_sequence(&fields[8], "effects")?,
+        handler_profile: record_string(&fields[9], "handler-profile")?,
+        authority_context_ref: record_ref(&fields[10], "authority")?,
+        policy_refs: record_ref_sequence(&fields[11], "policy")?,
+        provenance_refs: record_ref_sequence(&fields[12], "provenance")?,
+        evidence_refs: record_ref_sequence(&fields[13], "evidence")?,
+        value: value.clone(),
+    };
+    validate_blob_ref_submission(&submission)?;
+    Ok(submission)
+}
+
+pub fn execute_blob_ref_job(input: BlobRefJobExecuteInput<'_>) -> Result<BlobRefJobExecution> {
+    let submission = parse_job_ref_submission_value(input.submission_value)?;
+    let mut diagnostics = Vec::new();
+    let mut verify_refs = Vec::new();
+    let mut fetch_refs = Vec::new();
+    let mut pin_refs = Vec::new();
+    let mut cleanup_refs = Vec::new();
+    let mut status_values = vec![blob_ref_job_status_value(&submission, "queued", &[], &[(
+        "submission-valid",
+        "pass",
+    )])?];
+    let has_policy = !submission.policy_refs.is_empty();
+    let has_provenance = !submission.provenance_refs.is_empty();
+    let has_effect_manifest = !submission.effect_manifest_refs.is_empty();
+    let has_supported_output_mode = submission.output_mode == "chunk-manifest";
+    let has_supported_handler = submission.handler_profile == "local-echo-v1";
+    if !has_policy {
+        push_bounded(
+            &mut diagnostics,
+            "job ref submission missing policy refs".to_string(),
+            MAX_JOB_REFS,
+            "job ref diagnostics",
+        )?;
+    }
+    if !has_provenance {
+        push_bounded(
+            &mut diagnostics,
+            "job ref submission missing executable provenance refs".to_string(),
+            MAX_JOB_REFS,
+            "job ref diagnostics",
+        )?;
+    }
+    if !has_effect_manifest {
+        push_bounded(
+            &mut diagnostics,
+            "job ref submission missing effect manifest refs".to_string(),
+            MAX_JOB_REFS,
+            "job ref diagnostics",
+        )?;
+    }
+    if !has_supported_output_mode {
+        push_bounded(
+            &mut diagnostics,
+            format!("unsupported job ref output mode {}", submission.output_mode),
+            MAX_JOB_REFS,
+            "job ref diagnostics",
+        )?;
+    }
+    if !has_supported_handler {
+        push_bounded(
+            &mut diagnostics,
+            format!("unsupported job ref handler profile {}", submission.handler_profile),
+            MAX_JOB_REFS,
+            "job ref diagnostics",
+        )?;
+    }
+    let mut content_refs = vec![submission.executable.clone()];
+    extend_cloned_bounded(&mut content_refs, &submission.inputs, MAX_JOB_REFS, "job ref content refs")?;
+    let mut input_bytes = Vec::new();
+    let mut is_content_verified = true;
+    push_bounded(
+        &mut status_values,
+        blob_ref_job_status_value(&submission, "fetching", &[], &[("content-fetch-started", "pass")])?,
+        MAX_JOB_REFS,
+        "job ref status values",
+    )?;
+    for (content_index, content) in content_refs.iter().enumerate() {
+        let fetched =
+            fetch_blob_ref_job_content(input.chunk_root, content, &mut verify_refs, &mut fetch_refs, &mut pin_refs);
+        match fetched {
+            Ok(bytes) => {
+                if content_index > 0 {
+                    push_bounded(&mut input_bytes, bytes, MAX_JOB_REFS, "job ref input byte sets")?;
+                }
+            }
+            Err(error) => {
+                is_content_verified = false;
+                push_bounded(&mut diagnostics, error.to_string(), MAX_JOB_REFS, "job ref diagnostics")?;
+            }
+        }
+    }
+    let has_preliminary_pass = has_policy
+        && has_provenance
+        && has_effect_manifest
+        && has_supported_output_mode
+        && has_supported_handler
+        && is_content_verified;
+    let mut output_manifest_ref = None;
+    let mut output_put_ref = None;
+    if has_preliminary_pass {
+        push_bounded(
+            &mut status_values,
+            blob_ref_job_status_value(&submission, "running", &[], &[("content-verified-before-run", "pass")])?,
+            MAX_JOB_REFS,
+            "job ref status values",
+        )?;
+        let output_bytes = run_blob_ref_job_handler(&submission, &input_bytes)?;
+        let put =
+            chunk_store::put_bytes(input.chunk_root, "job-ref-result", &output_bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
+        output_put_ref = Some(canonical_hash(&put.receipt_value)?);
+        let output_verify = chunk_store::verify_manifest(input.chunk_root, &put.manifest_ref)?;
+        push_bounded(
+            &mut verify_refs,
+            canonical_hash(&output_verify.receipt_value)?,
+            MAX_JOB_REFS,
+            "job ref verify refs",
+        )?;
+        let output_pin = chunk_store::pin_manifest(input.chunk_root, &put.manifest_ref)?;
+        push_bounded(&mut pin_refs, canonical_hash(&output_pin.receipt_value)?, MAX_JOB_REFS, "job ref pin refs")?;
+        output_manifest_ref = Some(put.manifest_ref.clone());
+        push_bounded(
+            &mut status_values,
+            blob_ref_job_status_value(&submission, "result-ready", std::slice::from_ref(&put.manifest_ref), &[(
+                "output-content-ref",
+                "pass",
+            )])?,
+            MAX_JOB_REFS,
+            "job ref status values",
+        )?;
+    }
+    for content in &content_refs {
+        if let Ok(unpin) = chunk_store::unpin_manifest(input.chunk_root, &content.content_ref) {
+            push_bounded(
+                &mut cleanup_refs,
+                canonical_hash(&unpin.receipt_value)?,
+                MAX_JOB_REFS,
+                "job ref cleanup refs",
+            )?;
+        }
+    }
+    let final_decision = if has_preliminary_pass { "pass" } else { "deny" };
+    let final_state = if has_preliminary_pass { "complete" } else { "failed" };
+    push_bounded(
+        &mut status_values,
+        blob_ref_job_status_value(&submission, final_state, output_manifest_ref.as_slice(), &[(
+            "terminal-status",
+            "pass",
+        )])?,
+        MAX_JOB_REFS,
+        "job ref status values",
+    )?;
+    let status_refs = status_values.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
+    let receipt_checks = [
+        ("content-refs-only", "pass"),
+        ("no-inline-large-bytes", "pass"),
+        ("content-verification-before-run", status(is_content_verified)),
+        ("provenance-policy", status(has_policy && has_provenance)),
+        ("effect-admission-policy", status(has_effect_manifest)),
+        ("local-worker-handler", status(has_supported_handler)),
+        ("output-content-ref", status(output_manifest_ref.is_some())),
+        ("retention-pins", status(!pin_refs.is_empty())),
+        ("cleanup-receipts", status(!cleanup_refs.is_empty())),
+        ("job-dag-ref-integration", "pass"),
+    ];
+    let receipt_value = blob_ref_job_receipt_value(BlobRefReceiptValueInput {
+        decision: final_decision,
+        submission: &submission,
+        status_refs: &status_refs,
+        verify_refs: &verify_refs,
+        fetch_refs: &fetch_refs,
+        pin_refs: &pin_refs,
+        cleanup_refs: &cleanup_refs,
+        output_manifest_ref: output_manifest_ref.as_deref(),
+        output_put_ref: output_put_ref.as_deref(),
+        diagnostics: &diagnostics,
+        checks: &receipt_checks,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    if let Some(ledger_root) = input.ledger_root {
+        import_blob_ref_job_artifacts(ledger_root, &status_values, &receipt_value)?;
+    }
+    Ok(BlobRefJobExecution {
+        submission,
+        decision: final_decision.to_string(),
+        status_values,
+        output_manifest_ref,
+        receipt_ref,
+        receipt_value,
+        diagnostics,
     })
 }
 
@@ -1193,6 +1534,29 @@ pub fn parse_job_worker_result_value(value: &IOValue) -> Result<JobWorkerResult>
         resource_receipt_refs: record_ref_sequence(&fields[7], "resource")?,
         delivery_log_ref: record_optional_ref(&fields[8], "delivery-log")?,
         diagnostics: record_string_sequence(&fields[9], "diagnostics")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
+pub fn parse_blob_ref_job_receipt_value(value: &IOValue) -> Result<JobReceipt> {
+    let fields = value
+        .collect_simple_record("job-ref-receipt-v1", Some(18))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <job-ref-receipt-v1 ...>"))?;
+    require_schema(&fields[0], JOB_REF_RECEIPT_SCHEMA, "job ref receipt")?;
+    let checks = parse_checks(&fields[17])?;
+    require_check(&checks, "content-refs-only", "job ref receipt")?;
+    require_check(&checks, "no-inline-large-bytes", "job ref receipt")?;
+    Ok(JobReceipt {
+        receipt_ref: canonical_hash(value)?,
+        operation: record_string(&fields[1], "operation")?,
+        decision: record_string(&fields[2], "decision")?,
+        job_ref: Some(record_string(&fields[4], "job-id")?),
+        request_ref: Some(record_ref(&fields[3], "submission")?),
+        stage_id: None,
+        input_refs: record_ref_sequence(&fields[7], "inputs")?,
+        output_refs: record_optional_ref(&fields[13], "output")?.into_iter().collect(),
+        cache_ref: record_optional_ref(&fields[14], "output-put")?,
         checks,
         value: value.clone(),
     })
@@ -2928,6 +3292,140 @@ fn job_worker_receipt_value(input: WorkerReceiptValueInput<'_>) -> Result<IOValu
     ]))
 }
 
+fn blob_ref_job_status_value(
+    submission: &BlobRefJobSubmission,
+    state: &str,
+    output_refs: &[String],
+    checks: &[(&str, &str)],
+) -> Result<IOValue> {
+    validate_blob_ref_state(state)?;
+    validate_refs(output_refs, "job ref status output ref")?;
+    let mut refs = vec![submission.submission_ref.clone(), submission.operation_id.clone()];
+    push_bounded(&mut refs, submission.executable.content_ref.clone(), MAX_JOB_REFS, "job ref status refs")?;
+    extend_cloned_bounded(&mut refs, output_refs, MAX_JOB_REFS, "job ref status refs")?;
+    let mut status_checks = checks.to_vec();
+    status_checks.push(("canonical-status", "pass"));
+    Ok(record("job-ref-status-v1", vec![
+        string(JOB_REF_STATUS_SCHEMA),
+        record("submission", vec![string(&submission.submission_ref)]),
+        record("job-id", vec![string(&submission.job_id)]),
+        record("operation-id", vec![string(&submission.operation_id)]),
+        record("state", vec![string(state)]),
+        record("outputs", vec![refs_sequence(output_refs)]),
+        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        checks_value_from_pairs(&status_checks),
+    ]))
+}
+
+fn blob_ref_job_receipt_value(input: BlobRefReceiptValueInput<'_>) -> Result<IOValue> {
+    validate_worker_decision(input.decision)?;
+    validate_refs(input.status_refs, "job ref receipt status ref")?;
+    validate_refs(input.verify_refs, "job ref receipt verify ref")?;
+    validate_refs(input.fetch_refs, "job ref receipt fetch ref")?;
+    validate_refs(input.pin_refs, "job ref receipt pin ref")?;
+    validate_refs(input.cleanup_refs, "job ref receipt cleanup ref")?;
+    if let Some(output_manifest_ref) = input.output_manifest_ref {
+        validate_ref(output_manifest_ref, "job ref receipt output manifest ref")?;
+    }
+    if let Some(output_put_ref) = input.output_put_ref {
+        validate_ref(output_put_ref, "job ref receipt output put ref")?;
+    }
+    let mut refs = vec![
+        input.submission.submission_ref.clone(),
+        input.submission.operation_id.clone(),
+        input.submission.executable.content_ref.clone(),
+        input.submission.authority_context_ref.clone(),
+    ];
+    for content in &input.submission.inputs {
+        push_bounded(&mut refs, content.content_ref.clone(), MAX_JOB_REFS, "job ref receipt refs")?;
+    }
+    extend_cloned_bounded(&mut refs, input.status_refs, MAX_JOB_REFS, "job ref receipt refs")?;
+    extend_cloned_bounded(&mut refs, input.verify_refs, MAX_JOB_REFS, "job ref receipt refs")?;
+    extend_cloned_bounded(&mut refs, input.fetch_refs, MAX_JOB_REFS, "job ref receipt refs")?;
+    extend_cloned_bounded(&mut refs, input.pin_refs, MAX_JOB_REFS, "job ref receipt refs")?;
+    extend_cloned_bounded(&mut refs, input.cleanup_refs, MAX_JOB_REFS, "job ref receipt refs")?;
+    extend_cloned_bounded(&mut refs, &input.submission.policy_refs, MAX_JOB_REFS, "job ref receipt refs")?;
+    extend_cloned_bounded(&mut refs, &input.submission.provenance_refs, MAX_JOB_REFS, "job ref receipt refs")?;
+    extend_cloned_bounded(&mut refs, &input.submission.evidence_refs, MAX_JOB_REFS, "job ref receipt refs")?;
+    if let Some(output_manifest_ref) = input.output_manifest_ref {
+        push_bounded(&mut refs, output_manifest_ref.to_string(), MAX_JOB_REFS, "job ref receipt refs")?;
+    }
+    if let Some(output_put_ref) = input.output_put_ref {
+        push_bounded(&mut refs, output_put_ref.to_string(), MAX_JOB_REFS, "job ref receipt refs")?;
+    }
+    let mut checks = input.checks.to_vec();
+    checks.push(("canonical-receipt", "pass"));
+    Ok(record("job-ref-receipt-v1", vec![
+        string(JOB_REF_RECEIPT_SCHEMA),
+        record("operation", vec![string("blob-ref-worker-execute")]),
+        record("decision", vec![string(input.decision)]),
+        record("submission", vec![string(&input.submission.submission_ref)]),
+        record("job-id", vec![string(&input.submission.job_id)]),
+        record("operation-id", vec![string(&input.submission.operation_id)]),
+        record("executable", vec![string(&input.submission.executable.content_ref)]),
+        record("inputs", vec![refs_sequence(
+            &input.submission.inputs.iter().map(|content| content.content_ref.clone()).collect::<Vec<_>>(),
+        )]),
+        record("status", vec![refs_sequence(input.status_refs)]),
+        record("verify", vec![refs_sequence(input.verify_refs)]),
+        record("fetch", vec![refs_sequence(input.fetch_refs)]),
+        record("pins", vec![refs_sequence(input.pin_refs)]),
+        record("cleanup", vec![refs_sequence(input.cleanup_refs)]),
+        record("output", vec![optional_ref_value(input.output_manifest_ref)]),
+        record("output-put", vec![optional_ref_value(input.output_put_ref)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        checks_value_from_pairs(&checks),
+    ]))
+}
+
+fn fetch_blob_ref_job_content(
+    chunk_root: &Path,
+    content: &JobContentRef,
+    verify_refs: &mut impl crate::bounded::VecSink<String>,
+    fetch_refs: &mut impl crate::bounded::VecSink<String>,
+    pin_refs: &mut impl crate::bounded::VecSink<String>,
+) -> Result<Vec<u8>> {
+    let manifest = chunk_store::read_manifest(chunk_root, &content.content_ref)?;
+    if manifest.total_len != content.size {
+        return Err(MoltenError::invalid_harness(format!(
+            "job content {} size hint {} does not match manifest length {}",
+            content.content_ref, content.size, manifest.total_len
+        )));
+    }
+    let verify = chunk_store::verify_manifest(chunk_root, &content.content_ref)?;
+    push_bounded(verify_refs, canonical_hash(&verify.receipt_value)?, MAX_JOB_REFS, "job ref verify refs")?;
+    let read = chunk_store::read_object(chunk_root, &content.content_ref)?;
+    push_bounded(fetch_refs, canonical_hash(&read.receipt_value)?, MAX_JOB_REFS, "job ref fetch refs")?;
+    let pin = chunk_store::pin_manifest(chunk_root, &content.content_ref)?;
+    push_bounded(pin_refs, canonical_hash(&pin.receipt_value)?, MAX_JOB_REFS, "job ref pin refs")?;
+    Ok(read.bytes)
+}
+
+fn run_blob_ref_job_handler(submission: &BlobRefJobSubmission, input_bytes: &[Vec<u8>]) -> Result<Vec<u8>> {
+    match submission.handler_profile.as_str() {
+        "local-echo-v1" => {
+            let total_len = input_bytes.iter().try_fold(0usize, |sum, bytes| {
+                checked_count_sum(sum, bytes.len(), MAX_JOB_STAGE_VALUES * MAX_JOB_STAGE_VALUES, "job ref output bytes")
+            })?;
+            let mut output = Vec::with_capacity(total_len);
+            for bytes in input_bytes {
+                output.extend_from_slice(bytes);
+            }
+            Ok(output)
+        }
+        other => Err(MoltenError::invalid_harness(format!("unsupported job ref handler profile {other}"))),
+    }
+}
+
+fn import_blob_ref_job_artifacts(ledger_root: &Path, statuses: &[IOValue], receipt_value: &IOValue) -> Result<()> {
+    for status_value in statuses {
+        ledger::import_artifact(ledger_root, status_value)?;
+    }
+    ledger::import_artifact(ledger_root, receipt_value)?;
+    Ok(())
+}
+
 fn push_check(checks: &mut impl crate::bounded::VecSink<(&'static str, &'static str)>, name: &'static str, ok: bool) {
     checks.push_item((name, status(ok)));
 }
@@ -3084,7 +3582,7 @@ fn analysis_receipt_value(input: AnalysisReceiptValueInput<'_>) -> Result<IOValu
 }
 
 pub fn receipt_summary(value: &IOValue) -> Result<String> {
-    let receipt = parse_job_receipt(value)?;
+    let receipt = parse_job_receipt(value).or_else(|_| parse_blob_ref_job_receipt_value(value))?;
     Ok(format!(
         "job receipt operation={} decision={} job={} request={} stage={} outputs={}",
         receipt.operation,
@@ -4200,6 +4698,123 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
     }
 }
 
+fn record_sequence_values(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, label, 1)?;
+    let items = required_sequence(&record[0], label)?;
+    ensure_count_at_most(items.len(), MAX_JOB_REFS, label)?;
+    let mut values = Vec::with_capacity(items.len());
+    for item in items.iter() {
+        push_bounded(&mut values, value_to_iovalue(item), MAX_JOB_REFS, label)?;
+    }
+    Ok(values)
+}
+
+fn parse_job_content_ref_record(value: &Value<IOValue>, label: &str) -> Result<JobContentRef> {
+    parse_job_content_ref_value(&record_iovalue(value, label)?)
+}
+
+fn parse_job_content_ref_value(value: &IOValue) -> Result<JobContentRef> {
+    let fields = simple_record(value, "job-content-ref", 4)?;
+    let size_value = record_iovalue(&fields[1], "size")?;
+    let content = JobContentRef {
+        content_ref: record_ref(&fields[0], "content-ref")?,
+        size: required_u64_value(&size_value, "job content size")?,
+        format: record_string(&fields[2], "format")?,
+        schema_ref: record_optional_ref(&fields[3], "schema")?,
+    };
+    validate_job_content_ref(&content, "job content ref")?;
+    Ok(content)
+}
+
+fn validate_blob_ref_submission_input(input: &BlobRefJobSubmissionValueInput<'_>) -> Result<()> {
+    validate_non_empty(input.job_id, "job ref submission job id")?;
+    validate_ref(input.operation_id, "job ref submission operation id")?;
+    validate_job_content_ref(&input.executable, "job ref executable")?;
+    ensure_count_at_most(input.inputs.len(), MAX_JOB_REFS, "job ref submission inputs")?;
+    for content in &input.inputs {
+        validate_job_content_ref(content, "job ref input")?;
+    }
+    validate_output_mode(input.output_mode)?;
+    validate_blob_ref_handler_profile(input.handler_profile)?;
+    validate_ref(input.authority_context_ref, "job ref authority context ref")?;
+    validate_refs(input.input_schema_refs, "job ref input schema ref")?;
+    validate_refs(input.output_schema_refs, "job ref output schema ref")?;
+    validate_refs(input.effect_manifest_refs, "job ref effect manifest ref")?;
+    validate_refs(input.policy_refs, "job ref policy ref")?;
+    validate_refs(input.provenance_refs, "job ref provenance ref")?;
+    validate_refs(input.evidence_refs, "job ref evidence ref")?;
+    Ok(())
+}
+
+fn validate_blob_ref_submission(submission: &BlobRefJobSubmission) -> Result<()> {
+    validate_non_empty(&submission.job_id, "job ref submission job id")?;
+    validate_ref(&submission.operation_id, "job ref submission operation id")?;
+    validate_job_content_ref(&submission.executable, "job ref executable")?;
+    ensure_count_at_most(submission.inputs.len(), MAX_JOB_REFS, "job ref submission inputs")?;
+    for content in &submission.inputs {
+        validate_job_content_ref(content, "job ref input")?;
+    }
+    validate_output_mode(&submission.output_mode)?;
+    validate_blob_ref_handler_profile(&submission.handler_profile)?;
+    validate_ref(&submission.authority_context_ref, "job ref authority context ref")?;
+    validate_refs(&submission.input_schema_refs, "job ref input schema ref")?;
+    validate_refs(&submission.output_schema_refs, "job ref output schema ref")?;
+    validate_refs(&submission.effect_manifest_refs, "job ref effect manifest ref")?;
+    validate_refs(&submission.policy_refs, "job ref policy ref")?;
+    validate_refs(&submission.provenance_refs, "job ref provenance ref")?;
+    validate_refs(&submission.evidence_refs, "job ref evidence ref")?;
+    Ok(())
+}
+
+fn validate_job_content_ref(content: &JobContentRef, field: &str) -> Result<()> {
+    if content.size > MAX_JOB_INLINE_BYTES && content.content_ref.is_empty() {
+        return Err(MoltenError::invalid_harness("large job content must use a content ref"));
+    }
+    validate_ref(&content.content_ref, field)?;
+    validate_non_empty(&content.format, "job content format")?;
+    if let Some(schema_ref) = content.schema_ref.as_ref() {
+        validate_ref(schema_ref, "job content schema ref")?;
+    }
+    Ok(())
+}
+
+fn validate_output_mode(output_mode: &str) -> Result<()> {
+    if output_mode == "chunk-manifest" {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("unsupported job ref output mode {output_mode}")))
+    }
+}
+
+fn validate_blob_ref_handler_profile(handler_profile: &str) -> Result<()> {
+    if handler_profile == "local-echo-v1" {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("unsupported job ref handler profile {handler_profile}")))
+    }
+}
+
+fn validate_blob_ref_state(state: &str) -> Result<()> {
+    if matches!(state, "queued" | "fetching" | "running" | "result-ready" | "complete" | "failed" | "cancelled") {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("unsupported job ref status state {state}")))
+    }
+}
+
+fn reject_blob_ref_job_inline_tokens(value: &IOValue) -> Result<()> {
+    let text = to_text(value)?;
+    for token in ["inline-bytes", "inline-executable", "inline-dataset"] {
+        if text.contains(token) {
+            return Err(MoltenError::invalid_harness(format!(
+                "job ref submission must use content refs, found inline token {token}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn validate_stage_kind(kind: &str) -> Result<()> {
     if matches!(kind, "source" | "map" | "filter" | "reduce" | "materialize") {
         Ok(())
@@ -4524,6 +5139,149 @@ mod tests {
         assert!(["memo-hit", "stage-receipts-bound"].iter().any(|needle| second_text.contains(needle)));
         let output_text = to_text(&second.output_value).expect("output text");
         assert!(output_text.contains("wrapped"));
+    }
+
+    #[test]
+    fn blob_ref_job_submission_worker_verifies_and_outputs_manifest() {
+        let root = temp_dir("job-ref-worker");
+        let chunks = root.join("chunks");
+        let ledger = root.join("ledger");
+        let executable = chunk_store::put_bytes(&chunks, "job-executable", b"echo", DEFAULT_FIXED_V1_CHUNK_SIZE)
+            .expect("put executable");
+        let input =
+            chunk_store::put_bytes(&chunks, "job-input", b"hello", DEFAULT_FIXED_V1_CHUNK_SIZE).expect("put input");
+        let operation_id = local_ref("job-ref-operation", "one").expect("operation id");
+        let policy_ref = local_ref("job-ref-policy", "one").expect("policy ref");
+        let provenance_ref = local_ref("job-ref-provenance", "one").expect("provenance ref");
+        let effect_ref = local_ref("job-ref-effect", "one").expect("effect ref");
+        let authority_ref = local_ref("job-ref-authority", "one").expect("authority ref");
+        let submission_value = job_ref_submission_value(BlobRefJobSubmissionValueInput {
+            job_id: "job-ref-worker",
+            operation_id: &operation_id,
+            executable: JobContentRef {
+                content_ref: executable.manifest_ref.clone(),
+                size: executable.total_len,
+                format: "elf-executable".to_string(),
+                schema_ref: None,
+            },
+            inputs: vec![JobContentRef {
+                content_ref: input.manifest_ref.clone(),
+                size: input.total_len,
+                format: "bytes".to_string(),
+                schema_ref: None,
+            }],
+            output_mode: "chunk-manifest",
+            input_schema_refs: &[],
+            output_schema_refs: &[],
+            effect_manifest_refs: std::slice::from_ref(&effect_ref),
+            handler_profile: "local-echo-v1",
+            authority_context_ref: &authority_ref,
+            policy_refs: std::slice::from_ref(&policy_ref),
+            provenance_refs: std::slice::from_ref(&provenance_ref),
+            evidence_refs: &[],
+        })
+        .expect("submission value");
+        let parsed_submission = parse_job_ref_submission_value(&submission_value).expect("parse submission");
+        assert_eq!(parsed_submission.inputs.len(), 1);
+        let executed = execute_blob_ref_job(BlobRefJobExecuteInput {
+            chunk_root: &chunks,
+            submission_value: &submission_value,
+            ledger_root: Some(&ledger),
+        })
+        .expect("execute blob ref job");
+        assert_eq!(executed.decision, "pass");
+        let output_ref = executed.output_manifest_ref.as_deref().expect("output ref");
+        let output = chunk_store::read_object(&chunks, output_ref).expect("read output");
+        assert_eq!(output.bytes, b"hello");
+        let receipt = parse_blob_ref_job_receipt_value(&executed.receipt_value).expect("parse receipt");
+        assert_eq!(receipt.decision, "pass");
+        assert_eq!(receipt.output_refs, vec![output_ref.to_string()]);
+        assert!(
+            crate::ledger::list_artifacts(&ledger)
+                .expect("ledger artifacts")
+                .iter()
+                .any(|artifact| artifact.artifact_kind == "job-ref-receipt")
+        );
+    }
+
+    #[test]
+    fn blob_ref_job_submission_denies_missing_ref_before_run() {
+        let root = temp_dir("job-ref-missing");
+        let chunks = root.join("chunks");
+        let executable = chunk_store::put_bytes(&chunks, "job-executable", b"echo", DEFAULT_FIXED_V1_CHUNK_SIZE)
+            .expect("put executable");
+        let operation_id = local_ref("job-ref-operation", "missing").expect("operation id");
+        let policy_ref = local_ref("job-ref-policy", "missing").expect("policy ref");
+        let provenance_ref = local_ref("job-ref-provenance", "missing").expect("provenance ref");
+        let effect_ref = local_ref("job-ref-effect", "missing").expect("effect ref");
+        let authority_ref = local_ref("job-ref-authority", "missing").expect("authority ref");
+        let missing_ref = local_ref("job-ref-missing-input", "missing").expect("missing input ref");
+        let submission_value = job_ref_submission_value(BlobRefJobSubmissionValueInput {
+            job_id: "job-ref-missing",
+            operation_id: &operation_id,
+            executable: JobContentRef {
+                content_ref: executable.manifest_ref.clone(),
+                size: executable.total_len,
+                format: "elf-executable".to_string(),
+                schema_ref: None,
+            },
+            inputs: vec![JobContentRef {
+                content_ref: missing_ref,
+                size: 5,
+                format: "bytes".to_string(),
+                schema_ref: None,
+            }],
+            output_mode: "chunk-manifest",
+            input_schema_refs: &[],
+            output_schema_refs: &[],
+            effect_manifest_refs: std::slice::from_ref(&effect_ref),
+            handler_profile: "local-echo-v1",
+            authority_context_ref: &authority_ref,
+            policy_refs: std::slice::from_ref(&policy_ref),
+            provenance_refs: std::slice::from_ref(&provenance_ref),
+            evidence_refs: &[],
+        })
+        .expect("submission value");
+        let executed = execute_blob_ref_job(BlobRefJobExecuteInput {
+            chunk_root: &chunks,
+            submission_value: &submission_value,
+            ledger_root: None,
+        })
+        .expect("deny execution still emits receipt");
+        assert_eq!(executed.decision, "deny");
+        assert!(executed.output_manifest_ref.is_none());
+        assert!(!executed.diagnostics.is_empty());
+        let receipt = parse_blob_ref_job_receipt_value(&executed.receipt_value).expect("parse deny receipt");
+        assert_eq!(receipt.decision, "deny");
+    }
+
+    #[test]
+    fn blob_ref_job_submission_rejects_inline_large_bytes() {
+        let operation_id = local_ref("job-ref-operation", "inline").expect("operation id");
+        let authority_ref = local_ref("job-ref-authority", "inline").expect("authority ref");
+        let value = record("job-ref-submission-v1", vec![
+            string(JOB_REF_SUBMISSION_SCHEMA),
+            record("job-id", vec![string("job-ref-inline")]),
+            record("operation-id", vec![string(&operation_id)]),
+            record("executable", vec![record("inline-bytes", vec![string("not-a-content-ref")])]),
+            record("inputs", vec![sequence(vec![])]),
+            record("output-mode", vec![string("chunk-manifest")]),
+            record("input-schemas", vec![refs_sequence(&[])]),
+            record("output-schemas", vec![refs_sequence(&[])]),
+            record("effects", vec![refs_sequence(&[])]),
+            record("handler-profile", vec![string("local-echo-v1")]),
+            record("authority", vec![string(&authority_ref)]),
+            record("policy", vec![refs_sequence(&[])]),
+            record("provenance", vec![refs_sequence(&[])]),
+            record("evidence", vec![refs_sequence(&[])]),
+            checks_value(&["content-refs-only", "no-inline-large-bytes"]),
+        ]);
+        assert!(
+            parse_job_ref_submission_value(&value)
+                .expect_err("inline bytes rejected")
+                .to_string()
+                .contains("inline")
+        );
     }
 
     #[test]
@@ -5266,6 +6024,85 @@ mod tests {
         assert!(!request_text.contains("source-registry"));
         assert!(request_text.contains("target-state-only"));
         assert!(request_text.contains(&sync_ref));
+    }
+
+    #[hegel::test(test_cases = 4)]
+    fn hegel_blob_ref_submission_rejects_inline_tokens_and_records_pin_lifecycle(tc: TestCase) {
+        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(10_000));
+        let token_selector = tc.draw(generators::integers::<u64>().min_value(0).max_value(2));
+        let token = match token_selector {
+            0 => "inline-bytes",
+            1 => "inline-executable",
+            _ => "inline-dataset",
+        };
+        let operation_id = test_ref(&format!("job-ref-hegel-operation-{salt}"));
+        let authority_ref = test_ref(&format!("job-ref-hegel-authority-{salt}"));
+        let inline_value = record("job-ref-submission-v1", vec![
+            string(JOB_REF_SUBMISSION_SCHEMA),
+            record("job-id", vec![string(format!("job-ref-hegel-{salt}"))]),
+            record("operation-id", vec![string(&operation_id)]),
+            record("executable", vec![record(token, vec![string("bytes")])]),
+            record("inputs", vec![sequence(vec![])]),
+            record("output-mode", vec![string("chunk-manifest")]),
+            record("input-schemas", vec![refs_sequence(&[])]),
+            record("output-schemas", vec![refs_sequence(&[])]),
+            record("effects", vec![refs_sequence(&[])]),
+            record("handler-profile", vec![string("local-echo-v1")]),
+            record("authority", vec![string(&authority_ref)]),
+            record("policy", vec![refs_sequence(&[])]),
+            record("provenance", vec![refs_sequence(&[])]),
+            record("evidence", vec![refs_sequence(&[])]),
+            checks_value(&["content-refs-only", "no-inline-large-bytes"]),
+        ]);
+        assert!(parse_job_ref_submission_value(&inline_value).is_err());
+
+        let root = temp_dir(&format!("job-ref-hegel-{salt}"));
+        let chunks = root.join("chunks");
+        let executable = chunk_store::put_bytes(&chunks, "job-executable", b"echo", DEFAULT_FIXED_V1_CHUNK_SIZE)
+            .expect("put executable");
+        let input_bytes = format!("input-{salt}");
+        let input = chunk_store::put_bytes(&chunks, "job-input", input_bytes.as_bytes(), DEFAULT_FIXED_V1_CHUNK_SIZE)
+            .expect("put input");
+        let policy_ref = test_ref(&format!("job-ref-hegel-policy-{salt}"));
+        let provenance_ref = test_ref(&format!("job-ref-hegel-provenance-{salt}"));
+        let effect_ref = test_ref(&format!("job-ref-hegel-effect-{salt}"));
+        let submission_value = job_ref_submission_value(BlobRefJobSubmissionValueInput {
+            job_id: &format!("job-ref-hegel-{salt}"),
+            operation_id: &operation_id,
+            executable: JobContentRef {
+                content_ref: executable.manifest_ref.clone(),
+                size: executable.total_len,
+                format: "elf-executable".to_string(),
+                schema_ref: None,
+            },
+            inputs: vec![JobContentRef {
+                content_ref: input.manifest_ref.clone(),
+                size: input.total_len,
+                format: "bytes".to_string(),
+                schema_ref: None,
+            }],
+            output_mode: "chunk-manifest",
+            input_schema_refs: &[],
+            output_schema_refs: &[],
+            effect_manifest_refs: std::slice::from_ref(&effect_ref),
+            handler_profile: "local-echo-v1",
+            authority_context_ref: &authority_ref,
+            policy_refs: std::slice::from_ref(&policy_ref),
+            provenance_refs: std::slice::from_ref(&provenance_ref),
+            evidence_refs: &[],
+        })
+        .expect("submission");
+        let executed = execute_blob_ref_job(BlobRefJobExecuteInput {
+            chunk_root: &chunks,
+            submission_value: &submission_value,
+            ledger_root: None,
+        })
+        .expect("execute");
+        assert_eq!(executed.decision, "pass");
+        let receipt_text = to_text(&executed.receipt_value).expect("receipt text");
+        assert!(receipt_text.contains("content-verification-before-run"));
+        assert!(receipt_text.contains("retention-pins"));
+        assert!(receipt_text.contains("cleanup-receipts"));
     }
 
     #[test]
