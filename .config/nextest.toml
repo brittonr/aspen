@@ -7,6 +7,7 @@ slow-timeout = { period = "30s", terminate-after = 2 }
 [profile.ci]
 fail-fast = false
 retries = 0
+test-threads = 8
 status-level = "fail"
 final-status-level = "slow"
 slow-timeout = { period = "30s", terminate-after = 2 }

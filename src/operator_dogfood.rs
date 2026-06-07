@@ -1025,6 +1025,19 @@ fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
         evidence_refs: std::slice::from_ref(&base.artifact_ref),
     })?;
     let installed_job = job_dag::install_job_dag(source, &dag)?;
+    let mut sync_provenance = Vec::with_capacity(4);
+    for artifact_ref in [
+        base.artifact_ref.clone(),
+        source_stage.artifact_ref.clone(),
+        map_stage.artifact_ref.clone(),
+        installed_job.artifact_ref.clone(),
+    ] {
+        sync_provenance.push_limited_value(
+            crate::provenance::synthetic_reviewed_provenance_record(&artifact_ref)?,
+            MAX_OPERATOR_REFS,
+            "dogfood sync provenance",
+        )?;
+    }
     let sync_request = job_dag::job_sync_request_value(job_dag::SyncRequestValueInput {
         job_ref: &installed_job.job_ref,
         stage_ids: &[],
@@ -1033,7 +1046,13 @@ fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
         capability_refs,
         evidence_refs: &[dogfood_ref("job-sync-evidence")?],
     })?;
-    let sync = job_dag::sync_loopback(source, target, &sync_request)?;
+    let sync = job_dag::sync_loopback(job_dag::SyncLoopbackInput {
+        source_registry: source,
+        target_registry: target,
+        request_value: &sync_request,
+        provenance_values: &sync_provenance,
+        build_verification_values: &[],
+    })?;
     let sync_ref = canonical_hash(&sync.receipt_value)?;
     let authority_context_ref =
         install_job_execute_authority_context(target, &installed_job.job_ref, policy_refs, capability_refs)?;

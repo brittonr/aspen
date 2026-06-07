@@ -51,6 +51,9 @@ use crate::preserves_rail::HARNESS_POLICY_NICKEL_STATIC_SCHEMA;
 use crate::preserves_rail::HARNESS_POLICY_SCHEMA;
 use crate::preserves_rail::HARNESS_REDACTION_GATE_SCHEMA;
 use crate::preserves_rail::HARNESS_REDACTION_POLICY_SCHEMA;
+use crate::preserves_rail::HARNESS_REDACTION_PROFILE_SCHEMA;
+use crate::preserves_rail::HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA;
+use crate::preserves_rail::HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA;
 use crate::preserves_rail::HARNESS_REPORT_SCHEMA;
 use crate::preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA;
 use crate::preserves_rail::HARNESS_REPRO_SEAL_SCHEMA;
@@ -89,6 +92,15 @@ use crate::runtime::AdmissionDenyRule;
 use crate::runtime::AdmissionPolicy;
 use crate::runtime::CapabilityContext;
 use crate::runtime::CapabilityGrant;
+use crate::secrets::EncryptedRefInput;
+use crate::secrets::PrivateBundleProfileInput;
+use crate::secrets::RedactionMarkerInput;
+use crate::secrets::encrypted_ref_value;
+use crate::secrets::parse_encrypted_ref;
+use crate::secrets::parse_private_bundle_profile;
+use crate::secrets::parse_redaction_marker;
+use crate::secrets::private_bundle_profile_value;
+use crate::secrets::redaction_marker_value;
 
 const WASM_ABI_MAX_OUTPUT_BYTES_FOR_VALIDATION: u64 = 8 * 1024;
 const MAX_WASM_IMPORT_EVIDENCE: usize = 1024;
@@ -142,6 +154,50 @@ pub struct HarnessFailure {
     pub diagnostics: Vec<IOValue>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReproExportProfile {
+    DenySensitive,
+    RedactedDiagnostic,
+    EncryptedPrivate,
+}
+
+impl ReproExportProfile {
+    pub fn parse(name: &str) -> Result<Self> {
+        match name {
+            "deny-sensitive" => Ok(Self::DenySensitive),
+            "redacted-diagnostic" => Ok(Self::RedactedDiagnostic),
+            "encrypted-private" => Ok(Self::EncryptedPrivate),
+            _ => Err(MoltenError::invalid_harness(format!(
+                "unsupported repro export profile {name}; expected deny-sensitive, redacted-diagnostic, or encrypted-private"
+            ))),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::DenySensitive => "deny-sensitive",
+            Self::RedactedDiagnostic => "redacted-diagnostic",
+            Self::EncryptedPrivate => "encrypted-private",
+        }
+    }
+
+    pub fn loss_classification(self) -> &'static str {
+        match self {
+            Self::DenySensitive => "gate-preserving",
+            Self::RedactedDiagnostic => "diagnostic-only",
+            Self::EncryptedPrivate => "requires-reveal",
+        }
+    }
+
+    pub fn is_gate_preserving(self) -> bool {
+        matches!(self, Self::DenySensitive)
+    }
+
+    pub fn requires_reveal(self) -> bool {
+        matches!(self, Self::EncryptedPrivate)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HarnessReproBundleKind {
     Report,
@@ -159,6 +215,19 @@ pub struct HarnessReproBundle {
     pub gate_receipt_value: Option<IOValue>,
     pub redaction_policy_ref: Option<String>,
     pub redaction_gate_ref: Option<String>,
+    pub export_profile: Option<String>,
+    pub export_profile_ref: Option<String>,
+    pub export_profile_value: Option<IOValue>,
+    pub source_report_ref: Option<String>,
+    pub source_suite_ref: Option<String>,
+    pub redaction_transform_manifest_ref: Option<String>,
+    pub redaction_transform_manifest_value: Option<IOValue>,
+    pub redaction_transform_receipt_ref: Option<String>,
+    pub redaction_transform_receipt_value: Option<IOValue>,
+    pub private_bundle_profile_ref: Option<String>,
+    pub private_bundle_profile_value: Option<IOValue>,
+    pub loss_classification: Option<String>,
+    pub encrypted_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2213,6 +2282,311 @@ pub fn sealed_repro_bundle_value_with_command_and_receipt(
     ]))
 }
 
+pub fn profiled_repro_bundle_value_with_command(
+    report_value: &IOValue,
+    command: &[String],
+    profile: ReproExportProfile,
+) -> Result<IOValue> {
+    if profile == ReproExportProfile::DenySensitive {
+        return Err(MoltenError::invalid_harness(
+            "deny-sensitive repro export must use sealed pass bundle construction",
+        ));
+    }
+    let source_report = parse_report(report_value)?;
+    let policy_value = redaction_policy_value();
+    let policy_ref = canonical_hash(&policy_value)?;
+    let transform = redacted_report_for_profile(report_value, &source_report, profile, &policy_ref)?;
+    let output_report = parse_report(&transform.report_value)?;
+    let export_profile_value = repro_export_profile_value(profile);
+    let export_profile_ref = canonical_hash(&export_profile_value)?;
+    let mut artifact_refs = report_artifact_refs(&output_report, None, None)?;
+    artifact_refs.push(("source-report".to_string(), source_report.report_ref.clone()));
+    artifact_refs.push(("source-suite".to_string(), source_report.suite_ref.clone()));
+    artifact_refs.push(("redaction-policy".to_string(), policy_ref.clone()));
+    artifact_refs.push(("export-profile".to_string(), export_profile_ref));
+    artifact_refs.push(("redaction-transform-manifest".to_string(), transform.manifest_ref.clone()));
+    artifact_refs.push(("redaction-transform".to_string(), transform.receipt_ref.clone()));
+    let private_profile_value = if profile == ReproExportProfile::EncryptedPrivate {
+        let value = private_bundle_profile_value(&PrivateBundleProfileInput {
+            profile_ref: canonical_hash(&export_profile_value)?,
+            encrypted_refs: transform.encrypted_refs.clone(),
+            reveal_receipt_refs: Vec::new(),
+            transform_receipt_ref: transform.receipt_ref.clone(),
+            is_gate_preserving: false,
+        })?;
+        artifact_refs.push(("private-bundle-profile".to_string(), canonical_hash(&value)?));
+        Some(value)
+    } else {
+        None
+    };
+    let mut fields = vec![
+        string(HARNESS_REPRO_BUNDLE_SCHEMA),
+        record("bundle-kind", vec![string("report")]),
+        tool_value(),
+        command_value(command),
+        replay_instructions_value(&[
+            &["molten", "test", "report", "show", "report.preserves"][..],
+            &["molten", "test", "repro", "unpack", "refs.preserves"][..],
+            &["molten", "test", "repro", "verify", "refs.preserves"][..],
+        ]),
+        artifact_refs_owned_value(&artifact_refs),
+        string(&source_report.report_ref),
+        string(&source_report.suite_ref),
+        string(&output_report.report_ref),
+        string(&output_report.suite_ref),
+        string(&output_report.initial_state_hash),
+        string(&output_report.final_state_hash),
+        string(&output_report.replay_status),
+        string(&output_report.profile),
+        export_profile_value,
+        actor_registry_value(&output_report.actors),
+        effect_log_value(&output_report.effect_log),
+        output_report.suite_value,
+        transform.report_value,
+        policy_value,
+        transform.manifest_value,
+        transform.receipt_value,
+    ];
+    if let Some(private_profile_value) = private_profile_value {
+        fields.push(private_profile_value);
+    }
+    fields.push(profiled_repro_checks_value(profile));
+    Ok(record("harness-repro-bundle-v1", fields))
+}
+
+struct ProfiledTransformOutput {
+    report_value: IOValue,
+    manifest_ref: String,
+    manifest_value: IOValue,
+    receipt_ref: String,
+    receipt_value: IOValue,
+    encrypted_refs: Vec<String>,
+}
+
+struct RedactionTransformState {
+    profile: ReproExportProfile,
+    policy_ref: String,
+    marker_refs: Vec<String>,
+    marker_entries: Vec<RedactionManifestEntry>,
+    encrypted_refs: Vec<String>,
+}
+
+struct RedactionManifestEntry {
+    path: String,
+    reason: String,
+    commitment_ref: String,
+    marker_ref: Option<String>,
+    encrypted_ref: Option<String>,
+}
+
+fn redacted_report_for_profile(
+    report_value: &IOValue,
+    report: &HarnessReport,
+    profile: ReproExportProfile,
+    policy_ref: &str,
+) -> Result<ProfiledTransformOutput> {
+    let mut state = RedactionTransformState {
+        profile,
+        policy_ref: policy_ref.to_string(),
+        marker_refs: Vec::new(),
+        marker_entries: Vec::new(),
+        encrypted_refs: Vec::new(),
+    };
+    let redacted_report_value = rebind_report_suite_ref(&transform_sensitive_value(report_value, "/", &mut state)?)?;
+    state.marker_refs.sort();
+    state.marker_refs.dedup();
+    state.encrypted_refs.sort();
+    state.encrypted_refs.dedup();
+    let redacted_report = parse_report(&redacted_report_value)?;
+    validate_profiled_output(&redacted_report_value, profile)?;
+    let manifest_value = redaction_transform_manifest_value(
+        report,
+        &redacted_report,
+        profile,
+        &state.marker_entries,
+        &state.encrypted_refs,
+    );
+    let manifest_ref = canonical_hash(&manifest_value)?;
+    let receipt_value = redaction_transform_receipt_value(&RedactionTransformReceiptInput {
+        source_report_ref: &report.report_ref,
+        source_suite_ref: &report.suite_ref,
+        policy_ref,
+        profile,
+        manifest_ref: &manifest_ref,
+        output_bundle_ref: &redacted_report.report_ref,
+        marker_refs: &state.marker_refs,
+        encrypted_refs: &state.encrypted_refs,
+    })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    Ok(ProfiledTransformOutput {
+        report_value: redacted_report_value,
+        manifest_ref,
+        manifest_value,
+        receipt_ref,
+        receipt_value,
+        encrypted_refs: state.encrypted_refs,
+    })
+}
+
+fn rebind_report_suite_ref(report_value: &IOValue) -> Result<IOValue> {
+    let report = simple_record(report_value, "harness-report-v1", 17)
+        .or_else(|_| simple_record(report_value, "harness-report-v1", 16))
+        .or_else(|_| simple_record(report_value, "harness-report-v1", 15))
+        .or_else(|_| simple_record(report_value, "harness-report-v1", 14))
+        .or_else(|_| simple_record(report_value, "harness-report-v1", 13))?;
+    let suite_value = value_to_iovalue(&report[8]);
+    let suite_ref = canonical_hash(&suite_value)?;
+    let mut fields = Vec::new();
+    for (index, field) in report.fields_iter().enumerate() {
+        if index == 5 {
+            fields.push(string(&suite_ref));
+        } else {
+            fields.push(value_to_iovalue(field));
+        }
+    }
+    Ok(record("harness-report-v1", fields))
+}
+
+fn transform_sensitive_value(value: &IOValue, path: &str, state: &mut RedactionTransformState) -> Result<IOValue> {
+    if let Some(label) = record_label_string(value)
+        && is_sensitive_record_label(&label)
+    {
+        return transform_sensitive_record(value, &label, path, state);
+    }
+    match value.value_class() {
+        ValueClass::Atomic(_) | ValueClass::Embedded => Ok(value.clone()),
+        ValueClass::Compound(CompoundClass::Record) => {
+            let label = value_to_iovalue(&value.label());
+            let mut changed = false;
+            let mut fields = Vec::new();
+            for (index, child) in value.iter().enumerate() {
+                let child_value = value_to_iovalue(&child);
+                let redacted = transform_sensitive_value(&child_value, &format!("{path}/{index}"), state)?;
+                changed |= redacted != child_value;
+                fields.push(redacted);
+            }
+            if changed {
+                Ok(IOValue::record(label, fields))
+            } else {
+                Ok(value.clone())
+            }
+        }
+        ValueClass::Compound(CompoundClass::Sequence) => {
+            let mut changed = false;
+            let mut values = Vec::new();
+            for (index, child) in value.iter().enumerate() {
+                let child_value = value_to_iovalue(&child);
+                let redacted = transform_sensitive_value(&child_value, &format!("{path}/{index}"), state)?;
+                changed |= redacted != child_value;
+                values.push(redacted);
+            }
+            if changed {
+                Ok(sequence(values))
+            } else {
+                Ok(value.clone())
+            }
+        }
+        ValueClass::Compound(CompoundClass::Set) | ValueClass::Compound(CompoundClass::Dictionary) => Ok(value.clone()),
+    }
+}
+
+fn transform_sensitive_record(
+    value: &IOValue,
+    label: &str,
+    path: &str,
+    state: &mut RedactionTransformState,
+) -> Result<IOValue> {
+    if label == "encrypted-ref" {
+        return Err(MoltenError::invalid_harness(
+            "malformed encrypted-ref marker cannot be accepted into a repro export profile",
+        ));
+    }
+    if label == "encrypted-ref-v1" {
+        let encrypted = parse_encrypted_ref(value)?;
+        if state.profile != ReproExportProfile::EncryptedPrivate {
+            return redaction_marker_for_value(value, label, path, state);
+        }
+        state.encrypted_refs.push(encrypted.encrypted_ref);
+        return Ok(value.clone());
+    }
+    match state.profile {
+        ReproExportProfile::DenySensitive => Err(MoltenError::invalid_harness(format!(
+            "redaction preflight found sensitive marker {label}; sealed pass repro bundles require explicit redaction before export"
+        ))),
+        ReproExportProfile::RedactedDiagnostic => redaction_marker_for_value(value, label, path, state),
+        ReproExportProfile::EncryptedPrivate => encrypted_ref_for_value(value, label, path, state),
+    }
+}
+
+fn redaction_marker_for_value(
+    value: &IOValue,
+    label: &str,
+    path: &str,
+    state: &mut RedactionTransformState,
+) -> Result<IOValue> {
+    let commitment_ref = canonical_hash(value)?;
+    let path_ref = canonical_hash(&string(path))?;
+    let receipt_ref = canonical_hash(&record("redaction-marker-seed", vec![
+        string(&commitment_ref),
+        string(&path_ref),
+        string(&state.policy_ref),
+    ]))?;
+    let marker_value = redaction_marker_value(&RedactionMarkerInput {
+        reason: label.to_string(),
+        commitment_ref: commitment_ref.clone(),
+        schema_ref: canonical_hash(&string(label))?,
+        path_ref,
+        policy_refs: vec![state.policy_ref.clone()],
+        receipt_ref,
+    })?;
+    let marker = parse_redaction_marker(&marker_value)?;
+    state.marker_refs.push(marker.marker_ref.clone());
+    state.marker_entries.push(RedactionManifestEntry {
+        path: path.to_string(),
+        reason: label.to_string(),
+        commitment_ref,
+        marker_ref: Some(marker.marker_ref),
+        encrypted_ref: None,
+    });
+    Ok(marker_value)
+}
+
+fn encrypted_ref_for_value(
+    value: &IOValue,
+    label: &str,
+    path: &str,
+    state: &mut RedactionTransformState,
+) -> Result<IOValue> {
+    let commitment_ref = canonical_hash(value)?;
+    let ciphertext_ref =
+        canonical_hash(&record("encrypted-redaction-ciphertext", vec![string(&commitment_ref), string(path)]))?;
+    let encrypted_value = encrypted_ref_value(&EncryptedRefInput {
+        ciphertext_ref,
+        commitment_ref: commitment_ref.clone(),
+        encryption_ref: canonical_hash(&repro_export_profile_value(state.profile))?,
+        schema_ref: canonical_hash(&string(label))?,
+        policy_refs: vec![state.policy_ref.clone()],
+        evidence_refs: vec![canonical_hash(&string(path))?],
+    })?;
+    let encrypted = parse_encrypted_ref(&encrypted_value)?;
+    state.encrypted_refs.push(encrypted.encrypted_ref.clone());
+    state.marker_entries.push(RedactionManifestEntry {
+        path: path.to_string(),
+        reason: label.to_string(),
+        commitment_ref,
+        marker_ref: None,
+        encrypted_ref: Some(encrypted.encrypted_ref),
+    });
+    Ok(encrypted_value)
+}
+
+fn record_label_string(value: &IOValue) -> Option<String> {
+    if !value.is_record() {
+        return None;
+    }
+    value.label().as_symbol().map(Cow::into_owned)
+}
+
 pub fn failure_repro_bundle_value(failure_value: &IOValue) -> Result<IOValue> {
     failure_repro_bundle_value_with_command(failure_value, &default_failure_bundle_command())
 }
@@ -2255,11 +2629,14 @@ pub fn parse_repro_bundle(value: &IOValue) -> Result<HarnessReproBundle> {
     if arity == 19 || arity == 21 {
         return parse_sealed_report_repro_bundle(value, &bundle);
     }
+    if arity == 23 || arity == 24 {
+        return parse_profiled_report_repro_bundle(value, &bundle);
+    }
     if arity == 8 {
         return parse_failure_repro_bundle(value, &bundle);
     }
     Err(MoltenError::invalid_harness(format!(
-        "expected <harness-repro-bundle-v1 ...> with arity 8, 11, 16, 19, or 21, got {arity}"
+        "expected <harness-repro-bundle-v1 ...> with arity 8, 11, 16, 19, 21, 23, or 24, got {arity}"
     )))
 }
 
@@ -2280,15 +2657,19 @@ pub fn repro_bundle_report_value(bundle_value: &IOValue) -> Result<IOValue> {
 pub fn repro_bundle_summary(bundle_value: &IOValue) -> Result<String> {
     let bundle = parse_repro_bundle(bundle_value)?;
     let gate_receipt = bundle.gate_receipt_ref.as_deref().unwrap_or("none");
+    let export_profile = bundle.export_profile.as_deref().unwrap_or("legacy");
+    let loss_classification = bundle.loss_classification.as_deref().unwrap_or("unknown");
     Ok(format!(
-        "repro bundle {}\nkind={}\nartifact={}\ngate_receipt={}",
+        "repro bundle {}\nkind={}\nartifact={}\ngate_receipt={}\nprofile={}\nloss_classification={}",
         bundle.bundle_ref,
         match bundle.kind {
             HarnessReproBundleKind::Report => "report",
             HarnessReproBundleKind::Failure => "failure",
         },
         bundle.artifact_ref,
-        gate_receipt
+        gate_receipt,
+        export_profile,
+        loss_classification
     ))
 }
 
@@ -4858,6 +5239,19 @@ fn parse_legacy_report_repro_bundle(
         gate_receipt_value: None,
         redaction_policy_ref: None,
         redaction_gate_ref: None,
+        export_profile: None,
+        export_profile_ref: None,
+        export_profile_value: None,
+        source_report_ref: None,
+        source_suite_ref: None,
+        redaction_transform_manifest_ref: None,
+        redaction_transform_manifest_value: None,
+        redaction_transform_receipt_ref: None,
+        redaction_transform_receipt_value: None,
+        private_bundle_profile_ref: None,
+        private_bundle_profile_value: None,
+        loss_classification: None,
+        encrypted_refs: Vec::new(),
     })
 }
 
@@ -4905,6 +5299,19 @@ fn parse_report_repro_bundle(bundle_value: &IOValue, bundle: &Record<Value<IOVal
         gate_receipt_value: None,
         redaction_policy_ref: None,
         redaction_gate_ref: None,
+        export_profile: None,
+        export_profile_ref: None,
+        export_profile_value: None,
+        source_report_ref: None,
+        source_suite_ref: None,
+        redaction_transform_manifest_ref: None,
+        redaction_transform_manifest_value: None,
+        redaction_transform_receipt_ref: None,
+        redaction_transform_receipt_value: None,
+        private_bundle_profile_ref: None,
+        private_bundle_profile_value: None,
+        loss_classification: None,
+        encrypted_refs: Vec::new(),
     })
 }
 
@@ -4994,7 +5401,250 @@ fn parse_sealed_report_repro_bundle(
         gate_receipt_value: Some(gate_receipt_value),
         redaction_policy_ref,
         redaction_gate_ref,
+        export_profile: Some(ReproExportProfile::DenySensitive.as_str().to_string()),
+        export_profile_ref: None,
+        export_profile_value: None,
+        source_report_ref: None,
+        source_suite_ref: None,
+        redaction_transform_manifest_ref: None,
+        redaction_transform_manifest_value: None,
+        redaction_transform_receipt_ref: None,
+        redaction_transform_receipt_value: None,
+        private_bundle_profile_ref: None,
+        private_bundle_profile_value: None,
+        loss_classification: Some(ReproExportProfile::DenySensitive.loss_classification().to_string()),
+        encrypted_refs: Vec::new(),
     })
+}
+
+fn parse_profiled_report_repro_bundle(
+    bundle_value: &IOValue,
+    bundle: &Record<Value<IOValue>>,
+) -> Result<HarnessReproBundle> {
+    let arity = bundle.fields_iter().count();
+    let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
+    if kind != "report" {
+        return Err(MoltenError::invalid_harness(format!("expected report repro bundle kind, got {kind}")));
+    }
+    validate_tool_record(&bundle[2])?;
+    validate_sequence_record(&bundle[3], "command", "repro bundle command")?;
+    validate_sequence_record(&bundle[4], "replay-instructions", "repro bundle replay instructions")?;
+    let artifact_refs = parse_artifact_refs(&bundle[5])?;
+    let source_report_ref = required_hash(&bundle[6], "profiled repro source report ref")?;
+    let source_suite_ref = required_hash(&bundle[7], "profiled repro source suite ref")?;
+    let output_report_ref = required_hash(&bundle[8], "profiled repro output report ref")?;
+    let output_suite_ref = required_hash(&bundle[9], "profiled repro output suite ref")?;
+    require_artifact_ref(&artifact_refs, "source-report", &source_report_ref)?;
+    require_artifact_ref(&artifact_refs, "source-suite", &source_suite_ref)?;
+    require_artifact_ref(&artifact_refs, "report", &output_report_ref)?;
+    require_artifact_ref(&artifact_refs, "suite", &output_suite_ref)?;
+    let initial_state_hash = required_hash(&bundle[10], "profiled repro initial state hash")?;
+    let final_state_hash = required_hash(&bundle[11], "profiled repro final state hash")?;
+    let replay_status = required_string(&bundle[12], "profiled repro replay status")?;
+    let run_profile = required_string(&bundle[13], "profiled repro harness profile")?;
+    let export_profile_value = value_to_iovalue(&bundle[14]);
+    let export_profile = parse_repro_export_profile(&export_profile_value)?;
+    require_artifact_ref(&artifact_refs, "export-profile", &export_profile.profile_ref)?;
+    let actors = parse_actor_registry(&value_to_iovalue(&bundle[15]))?;
+    let effect_log = parse_effect_log(&value_to_iovalue(&bundle[16]))?;
+    let suite_value = value_to_iovalue(&bundle[17]);
+    let report_value = value_to_iovalue(&bundle[18]);
+    let report = parse_report(&report_value)?;
+    require_repro_report_matches(&ReproReportMatchInput {
+        report: &report,
+        report_ref: &output_report_ref,
+        suite_ref: &output_suite_ref,
+        initial_state_hash: &initial_state_hash,
+        final_state_hash: &final_state_hash,
+        replay_status: &replay_status,
+        profile: &run_profile,
+        actors: &actors,
+        effect_log: &effect_log,
+        suite_value: &suite_value,
+    })?;
+    require_report_artifact_refs(&artifact_refs, &report)?;
+    let policy_value = value_to_iovalue(&bundle[19]);
+    parse_redaction_policy(&policy_value)?;
+    let policy_ref = canonical_hash(&policy_value)?;
+    require_artifact_ref(&artifact_refs, "redaction-policy", &policy_ref)?;
+    let manifest_value = value_to_iovalue(&bundle[20]);
+    let manifest_ref = canonical_hash(&manifest_value)?;
+    require_artifact_ref(&artifact_refs, "redaction-transform-manifest", &manifest_ref)?;
+    let transform_receipt_value = value_to_iovalue(&bundle[21]);
+    let transform_receipt = parse_redaction_transform_receipt(&transform_receipt_value)?;
+    require_artifact_ref(&artifact_refs, "redaction-transform", &transform_receipt.receipt_ref)?;
+    if transform_receipt.source_report_ref != source_report_ref
+        || transform_receipt.source_suite_ref != source_suite_ref
+        || transform_receipt.policy_ref != policy_ref
+        || transform_receipt.profile != export_profile.profile
+        || transform_receipt.manifest_ref != manifest_ref
+        || transform_receipt.output_bundle_ref != output_report_ref
+        || transform_receipt.loss_classification != export_profile.loss_classification
+        || export_profile.is_gate_preserving
+        || export_profile.requires_reveal != export_profile.profile.requires_reveal()
+    {
+        return Err(MoltenError::invalid_harness(
+            "redaction transform receipt binding does not match profiled repro bundle",
+        ));
+    }
+    validate_redaction_transform_manifest(
+        &manifest_value,
+        &source_report_ref,
+        &source_suite_ref,
+        &report,
+        export_profile.profile,
+    )?;
+    let output_encrypted_refs = validate_profiled_output(&report_value, export_profile.profile)?;
+    if output_encrypted_refs != transform_receipt.encrypted_refs {
+        return Err(MoltenError::invalid_harness(
+            "redaction transform encrypted-ref inventory does not match output bundle",
+        ));
+    }
+    let output_marker_refs = collect_redaction_marker_refs(&report_value)?;
+    if output_marker_refs != transform_receipt.marker_refs {
+        return Err(MoltenError::invalid_harness(
+            "redaction transform marker manifest does not cover output bundle markers",
+        ));
+    }
+    let (private_bundle_profile_ref, private_bundle_profile_value, checks_index) = if arity == 24 {
+        let private_value = value_to_iovalue(&bundle[22]);
+        let private = parse_private_bundle_profile(&private_value)?;
+        require_artifact_ref(&artifact_refs, "private-bundle-profile", &canonical_hash(&private_value)?)?;
+        if export_profile.profile != ReproExportProfile::EncryptedPrivate {
+            return Err(MoltenError::invalid_harness(
+                "private bundle profile is only valid for encrypted-private repro exports",
+            ));
+        }
+        if private.transform_receipt_ref != transform_receipt.receipt_ref
+            || private.encrypted_refs != transform_receipt.encrypted_refs
+            || private.is_gate_preserving
+        {
+            return Err(MoltenError::invalid_harness(
+                "private bundle profile does not bind encrypted refs and diagnostic-only transform receipt",
+            ));
+        }
+        (Some(canonical_hash(&private_value)?), Some(private_value), 23)
+    } else {
+        if export_profile.profile == ReproExportProfile::EncryptedPrivate {
+            return Err(MoltenError::invalid_harness(
+                "encrypted-private repro bundle missing private bundle profile evidence",
+            ));
+        }
+        (None, None, 22)
+    };
+    let checks = parse_seal_checks(&bundle[checks_index])?;
+    require_seal_check(&checks, "profile-schema")?;
+    require_seal_check(&checks, "redaction-transform-receipt")?;
+    require_seal_check(&checks, "transform-manifest-bound")?;
+    require_seal_check(&checks, "source-report-ref-binding")?;
+    require_seal_check(&checks, "output-report-ref-binding")?;
+    require_seal_check(&checks, "no-forbidden-cleartext")?;
+    match export_profile.profile {
+        ReproExportProfile::DenySensitive => require_seal_check(&checks, "gate-preserving")?,
+        ReproExportProfile::RedactedDiagnostic => require_seal_check(&checks, "diagnostic-only")?,
+        ReproExportProfile::EncryptedPrivate => {
+            require_seal_check(&checks, "requires-reveal")?;
+            require_seal_check(&checks, "encrypted-ref-validation")?;
+        }
+    }
+    Ok(HarnessReproBundle {
+        bundle_ref: canonical_hash(bundle_value)?,
+        kind: HarnessReproBundleKind::Report,
+        artifact_ref: output_report_ref,
+        report_value: Some(report_value),
+        failure_value: None,
+        gate_receipt_ref: None,
+        gate_receipt_value: None,
+        redaction_policy_ref: Some(policy_ref),
+        redaction_gate_ref: None,
+        export_profile: Some(export_profile.profile.as_str().to_string()),
+        export_profile_ref: Some(export_profile.profile_ref),
+        export_profile_value: Some(export_profile_value),
+        source_report_ref: Some(source_report_ref),
+        source_suite_ref: Some(source_suite_ref),
+        redaction_transform_manifest_ref: Some(manifest_ref),
+        redaction_transform_manifest_value: Some(manifest_value),
+        redaction_transform_receipt_ref: Some(transform_receipt.receipt_ref.clone()),
+        redaction_transform_receipt_value: Some(transform_receipt.value.clone()),
+        private_bundle_profile_ref,
+        private_bundle_profile_value,
+        loss_classification: Some(transform_receipt.loss_classification.clone()),
+        encrypted_refs: transform_receipt.encrypted_refs.clone(),
+    })
+}
+
+fn validate_redaction_transform_manifest(
+    value: &IOValue,
+    source_report_ref: &str,
+    source_suite_ref: &str,
+    report: &HarnessReport,
+    profile: ReproExportProfile,
+) -> Result<()> {
+    let manifest = simple_record(value, "redaction-transform-manifest-v1", 9)?;
+    let schema = required_string(&manifest[0], "redaction transform manifest schema")?;
+    if schema != HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported redaction transform manifest schema {schema}; expected {HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA}"
+        )));
+    }
+    let manifest_source_report = required_record_hash(&manifest[1], "source-report", "manifest source report")?;
+    let manifest_source_suite = required_record_hash(&manifest[2], "source-suite", "manifest source suite")?;
+    let manifest_output_report = required_record_hash(&manifest[3], "output-report", "manifest output report")?;
+    let manifest_output_suite = required_record_hash(&manifest[4], "output-suite", "manifest output suite")?;
+    let manifest_profile = required_record_string(&manifest[5], "profile", "manifest profile")?;
+    if manifest_source_report != source_report_ref
+        || manifest_source_suite != source_suite_ref
+        || manifest_output_report != report.report_ref
+        || manifest_output_suite != report.suite_ref
+        || manifest_profile != profile.as_str()
+    {
+        return Err(MoltenError::invalid_harness("redaction transform manifest binding mismatch"));
+    }
+    validate_sequence_record(&manifest[6], "markers", "redaction transform manifest markers")?;
+    let manifest_encrypted_refs =
+        required_record_hash_sequence(&manifest[7], "encrypted-refs", "manifest encrypted refs")?;
+    if profile == ReproExportProfile::EncryptedPrivate && manifest_encrypted_refs.is_empty() {
+        return Err(MoltenError::invalid_harness(
+            "encrypted-private repro bundle transform manifest missing encrypted refs",
+        ));
+    }
+    let checks = parse_redaction_gate_checks(&manifest[8])?;
+    require_redaction_check(&checks, "source-report-bound")?;
+    require_redaction_check(&checks, "output-report-bound")?;
+    require_redaction_check(&checks, "deterministic-traversal-order")?;
+    require_redaction_check(&checks, "marker-coverage-manifest")?;
+    require_redaction_check(&checks, "encrypted-ref-inventory")?;
+    Ok(())
+}
+
+fn collect_redaction_marker_refs(value: &IOValue) -> Result<Vec<String>> {
+    let mut refs = Vec::new();
+    let mut stack = vec![value.clone()];
+    while let Some(current) = stack.pop() {
+        if current.collect_simple_record("redaction-marker-v1", None).is_some() {
+            refs.push(parse_redaction_marker(&current)?.marker_ref);
+            continue;
+        }
+        match current.value_class() {
+            ValueClass::Atomic(_) | ValueClass::Embedded => {}
+            ValueClass::Compound(CompoundClass::Record)
+            | ValueClass::Compound(CompoundClass::Sequence)
+            | ValueClass::Compound(CompoundClass::Set) => {
+                for child in current.iter() {
+                    stack.push(value_to_iovalue(&child));
+                }
+            }
+            ValueClass::Compound(CompoundClass::Dictionary) => {
+                for (key, value) in current.entries() {
+                    stack.push(value_to_iovalue(&key));
+                    stack.push(value_to_iovalue(&value));
+                }
+            }
+        }
+    }
+    refs.sort();
+    refs.dedup();
+    Ok(refs)
 }
 
 fn parse_failure_repro_bundle(bundle_value: &IOValue, bundle: &Record<Value<IOValue>>) -> Result<HarnessReproBundle> {
@@ -5026,6 +5676,19 @@ fn parse_failure_repro_bundle(bundle_value: &IOValue, bundle: &Record<Value<IOVa
         gate_receipt_value: None,
         redaction_policy_ref: None,
         redaction_gate_ref: None,
+        export_profile: None,
+        export_profile_ref: None,
+        export_profile_value: None,
+        source_report_ref: None,
+        source_suite_ref: None,
+        redaction_transform_manifest_ref: None,
+        redaction_transform_manifest_value: None,
+        redaction_transform_receipt_ref: None,
+        redaction_transform_receipt_value: None,
+        private_bundle_profile_ref: None,
+        private_bundle_profile_value: None,
+        loss_classification: Some("diagnostic-only".to_string()),
+        encrypted_refs: Vec::new(),
     })
 }
 
@@ -5246,7 +5909,48 @@ fn report_artifact_refs(
     Ok(refs)
 }
 
-const FORBIDDEN_REDACTION_MARKERS: &[&str] = &["secret", "confidential", "credential", "private", "encrypted-ref"];
+const FORBIDDEN_REDACTION_MARKERS: &[&str] = &[
+    "secret",
+    "confidential",
+    "credential",
+    "private",
+    "encrypted-ref",
+    "encrypted-ref-v1",
+    "secret-ref-v1",
+];
+
+struct ReproExportProfileEvidence {
+    profile: ReproExportProfile,
+    profile_ref: String,
+    loss_classification: String,
+    is_gate_preserving: bool,
+    requires_reveal: bool,
+}
+
+struct RedactionTransformReceiptInput<'a> {
+    source_report_ref: &'a str,
+    source_suite_ref: &'a str,
+    policy_ref: &'a str,
+    profile: ReproExportProfile,
+    manifest_ref: &'a str,
+    output_bundle_ref: &'a str,
+    marker_refs: &'a [String],
+    encrypted_refs: &'a [String],
+}
+
+struct RedactionTransformReceiptEvidence {
+    receipt_ref: String,
+    source_report_ref: String,
+    source_suite_ref: String,
+    policy_ref: String,
+    profile: ReproExportProfile,
+    manifest_ref: String,
+    output_bundle_ref: String,
+    loss_classification: String,
+    marker_refs: Vec<String>,
+    encrypted_refs: Vec<String>,
+    value: IOValue,
+}
 
 fn redaction_policy_value() -> IOValue {
     record("redaction-policy-v1", vec![
@@ -5256,6 +5960,161 @@ fn redaction_policy_value() -> IOValue {
             FORBIDDEN_REDACTION_MARKERS.iter().map(|marker| string(*marker)).collect(),
         )]),
     ])
+}
+
+fn repro_export_profile_value(profile: ReproExportProfile) -> IOValue {
+    record("repro-export-profile-v1", vec![
+        string(HARNESS_REDACTION_PROFILE_SCHEMA),
+        record("name", vec![string(profile.as_str())]),
+        record("loss-classification", vec![string(profile.loss_classification())]),
+        record("gate-preserving", vec![bool_value(profile.is_gate_preserving())]),
+        record("requires-reveal", vec![bool_value(profile.requires_reveal())]),
+        checks_value_for_names(&[
+            "explicit-export-profile",
+            "loss-classification-bound",
+            "gate-preserving-bound",
+            "reveal-requirement-bound",
+        ]),
+    ])
+}
+
+fn parse_repro_export_profile(value: &IOValue) -> Result<ReproExportProfileEvidence> {
+    let profile_value = simple_record(value, "repro-export-profile-v1", 6)?;
+    let schema = required_string(&profile_value[0], "repro export profile schema")?;
+    if schema != HARNESS_REDACTION_PROFILE_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported repro export profile schema {schema}; expected {HARNESS_REDACTION_PROFILE_SCHEMA}"
+        )));
+    }
+    let name = required_record_string(&profile_value[1], "name", "repro export profile name")?;
+    let profile = ReproExportProfile::parse(&name)?;
+    let loss_classification =
+        required_record_string(&profile_value[2], "loss-classification", "repro export loss classification")?;
+    if loss_classification != profile.loss_classification() {
+        return Err(MoltenError::invalid_harness("repro export profile loss classification is not canonical"));
+    }
+    let is_gate_preserving =
+        required_record_bool(&profile_value[3], "gate-preserving", "repro export gate preserving flag")?;
+    if is_gate_preserving != profile.is_gate_preserving() {
+        return Err(MoltenError::invalid_harness("repro export gate-preserving flag is not canonical"));
+    }
+    let requires_reveal = required_record_bool(&profile_value[4], "requires-reveal", "repro export reveal flag")?;
+    if requires_reveal != profile.requires_reveal() {
+        return Err(MoltenError::invalid_harness("repro export reveal flag is not canonical"));
+    }
+    let checks = parse_redaction_gate_checks(&profile_value[5])?;
+    require_redaction_check(&checks, "explicit-export-profile")?;
+    require_redaction_check(&checks, "loss-classification-bound")?;
+    require_redaction_check(&checks, "gate-preserving-bound")?;
+    require_redaction_check(&checks, "reveal-requirement-bound")?;
+    Ok(ReproExportProfileEvidence {
+        profile,
+        profile_ref: canonical_hash(value)?,
+        loss_classification,
+        is_gate_preserving,
+        requires_reveal,
+    })
+}
+
+fn redaction_transform_manifest_value(
+    source_report: &HarnessReport,
+    output_report: &HarnessReport,
+    profile: ReproExportProfile,
+    entries: &[RedactionManifestEntry],
+    encrypted_refs: &[String],
+) -> IOValue {
+    record("redaction-transform-manifest-v1", vec![
+        string(HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA),
+        record("source-report", vec![string(&source_report.report_ref)]),
+        record("source-suite", vec![string(&source_report.suite_ref)]),
+        record("output-report", vec![string(&output_report.report_ref)]),
+        record("output-suite", vec![string(&output_report.suite_ref)]),
+        record("profile", vec![string(profile.as_str())]),
+        record("markers", vec![sequence(
+            entries
+                .iter()
+                .map(|entry| {
+                    record("redaction", vec![
+                        string(&entry.path),
+                        string(&entry.reason),
+                        string(&entry.commitment_ref),
+                        optional_ref_value(entry.marker_ref.as_deref()),
+                        optional_ref_value(entry.encrypted_ref.as_deref()),
+                    ])
+                })
+                .collect(),
+        )]),
+        record("encrypted-refs", vec![refs_sequence(encrypted_refs)]),
+        checks_value_for_names(&[
+            "source-report-bound",
+            "output-report-bound",
+            "deterministic-traversal-order",
+            "marker-coverage-manifest",
+            "encrypted-ref-inventory",
+        ]),
+    ])
+}
+
+fn redaction_transform_receipt_value(input: &RedactionTransformReceiptInput<'_>) -> Result<IOValue> {
+    Ok(record("redaction-transform-receipt-v1", vec![
+        string(HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA),
+        record("decision", vec![string("pass")]),
+        record("source-report", vec![string(input.source_report_ref)]),
+        record("source-suite", vec![string(input.source_suite_ref)]),
+        record("policy", vec![string(input.policy_ref)]),
+        record("profile", vec![string(input.profile.as_str())]),
+        record("transform-manifest", vec![string(input.manifest_ref)]),
+        record("output-bundle", vec![string(input.output_bundle_ref)]),
+        record("loss-classification", vec![string(input.profile.loss_classification())]),
+        record("markers", vec![refs_sequence(input.marker_refs)]),
+        record("encrypted-refs", vec![refs_sequence(input.encrypted_refs)]),
+        checks_value_for_names(&redaction_transform_check_names(input.profile)),
+    ]))
+}
+
+fn parse_redaction_transform_receipt(value: &IOValue) -> Result<RedactionTransformReceiptEvidence> {
+    let receipt = simple_record(value, "redaction-transform-receipt-v1", 12)?;
+    let schema = required_string(&receipt[0], "redaction transform schema")?;
+    if schema != HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported redaction transform schema {schema}; expected {HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA}"
+        )));
+    }
+    let decision = required_record_string(&receipt[1], "decision", "redaction transform decision")?;
+    if decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!("unsupported redaction transform decision {decision}")));
+    }
+    let source_report_ref = required_record_hash(&receipt[2], "source-report", "redaction source report")?;
+    let source_suite_ref = required_record_hash(&receipt[3], "source-suite", "redaction source suite")?;
+    let policy_ref = required_record_hash(&receipt[4], "policy", "redaction policy")?;
+    let profile_name = required_record_string(&receipt[5], "profile", "redaction profile")?;
+    let profile = ReproExportProfile::parse(&profile_name)?;
+    let manifest_ref = required_record_hash(&receipt[6], "transform-manifest", "redaction transform manifest")?;
+    let output_bundle_ref = required_record_hash(&receipt[7], "output-bundle", "redaction output bundle")?;
+    let loss_classification =
+        required_record_string(&receipt[8], "loss-classification", "redaction loss classification")?;
+    if loss_classification != profile.loss_classification() {
+        return Err(MoltenError::invalid_harness("redaction transform loss classification is not canonical"));
+    }
+    let marker_refs = required_record_hash_sequence(&receipt[9], "markers", "redaction marker refs")?;
+    let encrypted_refs = required_record_hash_sequence(&receipt[10], "encrypted-refs", "redaction encrypted refs")?;
+    let checks = parse_redaction_gate_checks(&receipt[11])?;
+    for check in redaction_transform_check_names(profile) {
+        require_redaction_check(&checks, check)?;
+    }
+    Ok(RedactionTransformReceiptEvidence {
+        receipt_ref: canonical_hash(value)?,
+        source_report_ref,
+        source_suite_ref,
+        policy_ref,
+        profile,
+        manifest_ref,
+        output_bundle_ref,
+        loss_classification,
+        marker_refs,
+        encrypted_refs,
+        value: value.clone(),
+    })
 }
 
 fn redaction_gate_value(report_value: &IOValue, report: &HarnessReport) -> Result<IOValue> {
@@ -5275,6 +6134,68 @@ fn redaction_gate_value(report_value: &IOValue, report: &HarnessReport) -> Resul
         record("scan-root-ref", vec![string(canonical_hash(report_value)?)]),
         redaction_gate_checks_value(),
     ]))
+}
+
+fn refs_sequence(refs: &[String]) -> IOValue {
+    sequence(refs.iter().map(string).collect())
+}
+
+fn optional_ref_value(reference: Option<&str>) -> IOValue {
+    match reference {
+        Some(reference) => record("some", vec![string(reference)]),
+        None => record("none", Vec::new()),
+    }
+}
+
+fn checks_value_for_names(names: &[&str]) -> IOValue {
+    record("checks", vec![sequence(
+        names.iter().map(|name| record("check", vec![string(*name), string("pass")])).collect(),
+    )])
+}
+
+fn redaction_transform_check_names(profile: ReproExportProfile) -> Vec<&'static str> {
+    let mut checks = vec![
+        "source-report-ref-bound",
+        "source-suite-ref-bound",
+        "policy-ref-bound",
+        "profile-ref-bound",
+        "transform-manifest-bound",
+        "output-bundle-ref-bound",
+        "marker-coverage",
+        "deterministic-traversal-order",
+        "forbidden-cleartext-absent",
+    ];
+    match profile {
+        ReproExportProfile::DenySensitive => checks.push("gate-preserving"),
+        ReproExportProfile::RedactedDiagnostic => checks.push("diagnostic-only"),
+        ReproExportProfile::EncryptedPrivate => {
+            checks.push("requires-reveal");
+            checks.push("encrypted-ref-validation");
+        }
+    }
+    checks
+}
+
+fn profiled_repro_checks_value(profile: ReproExportProfile) -> IOValue {
+    let mut checks = vec![
+        "profile-schema",
+        "redaction-transform-receipt",
+        "transform-manifest-bound",
+        "source-report-ref-binding",
+        "output-report-ref-binding",
+        "no-forbidden-cleartext",
+    ];
+    match profile {
+        ReproExportProfile::DenySensitive => checks.push("gate-preserving"),
+        ReproExportProfile::RedactedDiagnostic => checks.push("diagnostic-only"),
+        ReproExportProfile::EncryptedPrivate => {
+            checks.push("requires-reveal");
+            checks.push("encrypted-ref-validation");
+        }
+    }
+    record("seal-checks", vec![sequence(
+        checks.as_slice().iter().map(|name| record("check", vec![string(*name), string("pass")])).collect(),
+    )])
 }
 
 fn redaction_gate_checks_value() -> IOValue {
@@ -5413,6 +6334,62 @@ fn require_redaction_check(checks: &[String], expected: &str) -> Result<()> {
     } else {
         Err(MoltenError::invalid_harness(format!("redaction gate missing {expected} check")))
     }
+}
+
+fn is_sensitive_record_label(label: &str) -> bool {
+    FORBIDDEN_REDACTION_MARKERS.iter().any(|marker| marker == &label)
+}
+
+fn validate_profiled_output(value: &IOValue, profile: ReproExportProfile) -> Result<Vec<String>> {
+    let mut encrypted_refs = Vec::new();
+    let mut stack = vec![value.clone()];
+    while let Some(current) = stack.pop() {
+        if current.is_record() {
+            if let Some(label) = current.label().as_symbol() {
+                let label = label.as_ref();
+                if matches!(label, "secret" | "confidential" | "credential" | "private" | "secret-ref-v1") {
+                    return Err(MoltenError::invalid_harness(format!(
+                        "redaction transform missed sensitive marker {label}"
+                    )));
+                }
+                if label == "encrypted-ref" {
+                    return Err(MoltenError::invalid_harness(
+                        "malformed encrypted-ref marker in redacted repro bundle",
+                    ));
+                }
+                if label == "encrypted-ref-v1" {
+                    if profile != ReproExportProfile::EncryptedPrivate {
+                        return Err(MoltenError::invalid_harness(
+                            "encrypted refs are allowed only in encrypted-private repro bundles",
+                        ));
+                    }
+                    let encrypted = parse_encrypted_ref(&current)?;
+                    encrypted_refs.push(encrypted.encrypted_ref);
+                    continue;
+                }
+            }
+            stack.push(value_to_iovalue(&current.label()));
+        }
+        match current.value_class() {
+            ValueClass::Atomic(_) | ValueClass::Embedded => {}
+            ValueClass::Compound(CompoundClass::Record)
+            | ValueClass::Compound(CompoundClass::Sequence)
+            | ValueClass::Compound(CompoundClass::Set) => {
+                for child in current.iter() {
+                    stack.push(value_to_iovalue(&child));
+                }
+            }
+            ValueClass::Compound(CompoundClass::Dictionary) => {
+                for (key, value) in current.entries() {
+                    stack.push(value_to_iovalue(&key));
+                    stack.push(value_to_iovalue(&value));
+                }
+            }
+        }
+    }
+    encrypted_refs.sort();
+    encrypted_refs.dedup();
+    Ok(encrypted_refs)
 }
 
 fn first_sensitive_marker(value: &IOValue) -> Option<String> {

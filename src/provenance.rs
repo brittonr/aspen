@@ -342,6 +342,9 @@ pub fn evaluate_provenance(input: &ProvenanceEvaluationInput<'_>) -> Result<Prov
     if trust_admission == TrustAdmission::Denied {
         diagnostics.push(format!("provenance trust state {trust_state} is not admitted for profile {}", input.profile));
     }
+    if let Some(record) = matched.as_ref() {
+        diagnostics.extend(stronger_provenance_diagnostics(record, input.operation, input.profile));
+    }
     if let Some(record) = matched.as_ref().filter(|record| record.trust_state == TRUST_STATE_REPRODUCIBLE_VERIFIED) {
         diagnostics.extend(reproducible_build_binding_diagnostics(record, input.artifact_ref, &build_verifications));
     }
@@ -602,6 +605,36 @@ fn is_trust_state_admitted(trust_state: &str, profile: &str) -> bool {
         || (trust_state == TRUST_STATE_SANDBOX_ONLY && profile == PROFILE_LOCAL_TEST)
 }
 
+fn stronger_provenance_diagnostics(record: &ProvenanceRecord, operation: &str, profile: &str) -> Vec<String> {
+    let has_strong_trust = is_strong_trust_state(&record.trust_state);
+    if operation_requires_strong_provenance(operation) {
+        if has_strong_trust {
+            Vec::new()
+        } else {
+            vec![format!(
+                "operation {operation} under profile {profile} requires stronger provenance than {} for artifact {}",
+                record.trust_state, record.artifact_ref
+            )]
+        }
+    } else {
+        Vec::new()
+    }
+}
+
+fn operation_requires_strong_provenance(operation: &str) -> bool {
+    matches!(
+        operation,
+        "install-policy-artifact"
+            | "install-migration-recipe"
+            | "install-production-executable"
+            | "remote-sync-execute"
+    )
+}
+
+fn is_strong_trust_state(trust_state: &str) -> bool {
+    matches!(trust_state, TRUST_STATE_REPRODUCIBLE_VERIFIED | TRUST_STATE_POLICY_TRUSTED)
+}
+
 fn validate_trust_state(trust_state: &str) -> Result<()> {
     if matches!(
         trust_state,
@@ -812,6 +845,9 @@ fn synthetic_ref(kind: &str, label: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    use hegel::TestCase;
+    use hegel::generators;
+
     use super::*;
 
     #[test]
@@ -1042,6 +1078,98 @@ mod tests {
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic.contains("is not bound by provenance record"))
+        );
+    }
+
+    #[test]
+    fn sensitive_operations_require_stronger_provenance_than_reviewed() {
+        let artifact_ref = synthetic_ref("artifact", "sensitive").expect("artifact ref");
+        let reviewed = synthetic_reviewed_provenance_record(&artifact_ref).expect("reviewed record");
+        let denied = evaluate_provenance(&ProvenanceEvaluationInput {
+            operation: "install-policy-artifact",
+            profile: "node-control",
+            artifact_ref: &artifact_ref,
+            provenance_values: std::slice::from_ref(&reviewed),
+            build_verification_values: &[],
+            prior_diagnostics: &[],
+        })
+        .expect("reviewed sensitive evaluation");
+        assert_eq!(denied.decision, "deny");
+        assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("requires stronger provenance")));
+
+        let source_refs = vec![synthetic_ref("source", "policy-trusted").expect("source ref")];
+        let toolchain_refs = vec![synthetic_ref("toolchain", "policy-trusted").expect("toolchain ref")];
+        let dependency_ref = synthetic_ref("deps", "policy-trusted").expect("deps ref");
+        let builder_ref = synthetic_ref("builder", "policy-trusted").expect("builder ref");
+        let policy = provenance_record_value(&ProvenanceRecordInput {
+            artifact_ref: &artifact_ref,
+            trust_state: TRUST_STATE_POLICY_TRUSTED,
+            source_refs: &source_refs,
+            dependency_closure_ref: &dependency_ref,
+            toolchain_refs: &toolchain_refs,
+            builder_ref: &builder_ref,
+            review_refs: &[],
+            test_refs: &[],
+            source_gate_refs: &[],
+            policy_refs: &[],
+            build_record_refs: &[],
+        })
+        .expect("policy trusted record");
+        let admitted = evaluate_provenance(&ProvenanceEvaluationInput {
+            operation: "install-policy-artifact",
+            profile: "node-control",
+            artifact_ref: &artifact_ref,
+            provenance_values: &[policy],
+            build_verification_values: &[],
+            prior_diagnostics: &[],
+        })
+        .expect("policy trusted sensitive evaluation");
+        assert_eq!(admitted.decision, "pass");
+    }
+
+    #[hegel::test(test_cases = 16)]
+    fn hegel_provenance_hash_only_denied_and_trust_monotonicity(tc: TestCase) {
+        let salt = tc.draw(generators::integers::<u64>().min_value(1).max_value(1_000_000));
+        let artifact_ref = synthetic_ref("artifact", &format!("hegel-{salt}")).expect("artifact ref");
+        let hash_only = evaluate_provenance(&ProvenanceEvaluationInput {
+            operation: "install",
+            profile: "node-control",
+            artifact_ref: &artifact_ref,
+            provenance_values: &[],
+            build_verification_values: &[],
+            prior_diagnostics: &[],
+        })
+        .expect("hash-only evaluation");
+        assert_eq!(hash_only.decision, "deny");
+        assert!(hash_only.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing provenance")));
+
+        let reviewed = synthetic_reviewed_provenance_record(&artifact_ref).expect("reviewed record");
+        let reviewed_eval = evaluate_provenance(&ProvenanceEvaluationInput {
+            operation: "install",
+            profile: "node-control",
+            artifact_ref: &artifact_ref,
+            provenance_values: std::slice::from_ref(&reviewed),
+            build_verification_values: &[],
+            prior_diagnostics: &[],
+        })
+        .expect("reviewed evaluation");
+        assert_eq!(reviewed_eval.decision, "pass");
+
+        let sensitive_eval = evaluate_provenance(&ProvenanceEvaluationInput {
+            operation: "remote-sync-execute",
+            profile: "node-control",
+            artifact_ref: &artifact_ref,
+            provenance_values: &[reviewed],
+            build_verification_values: &[],
+            prior_diagnostics: &[],
+        })
+        .expect("sensitive reviewed evaluation");
+        assert_eq!(sensitive_eval.decision, "deny");
+        assert!(
+            sensitive_eval
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("requires stronger provenance"))
         );
     }
 }

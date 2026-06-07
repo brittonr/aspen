@@ -241,12 +241,24 @@ pub struct JobSyncPlan {
     pub receipt_value: IOValue,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct SyncLoopbackInput<'a> {
+    pub source_registry: &'a Path,
+    pub target_registry: &'a Path,
+    pub request_value: &'a IOValue,
+    pub provenance_values: &'a [IOValue],
+    pub build_verification_values: &'a [IOValue],
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobSyncLoopback {
     pub receipt_ref: String,
     pub plan: JobSyncPlan,
+    pub decision: String,
     pub installed_refs: Vec<String>,
     pub already_present_refs: Vec<String>,
+    pub provenance_receipt_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
     pub receipt_value: IOValue,
 }
 
@@ -2268,81 +2280,135 @@ pub fn sync_plan_value(source_registry: &Path, target_registry: &Path, request_v
     })
 }
 
-pub fn sync_loopback(
-    source_registry: &Path,
-    target_registry: &Path,
-    request_value: &IOValue,
-) -> Result<JobSyncLoopback> {
-    let plan = sync_plan_value(source_registry, target_registry, request_value)?;
-    let ordered_refs = sync_install_order(source_registry, &plan.root_refs)?;
+struct SyncInstallCandidate {
+    artifact_ref: String,
+    source: artifacts::ArtifactRecord,
+    payload: IOValue,
+}
+
+pub fn sync_loopback(input: SyncLoopbackInput<'_>) -> Result<JobSyncLoopback> {
+    let plan = sync_plan_value(input.source_registry, input.target_registry, input.request_value)?;
+    let ordered_refs = sync_install_order(input.source_registry, &plan.root_refs)?;
     let missing = plan.missing_refs.iter().cloned().collect::<BTreeSet<_>>();
+    let mut install_candidates = Vec::new();
     let mut installed_refs = Vec::new();
     let mut already_present_refs = Vec::new();
+    let mut provenance_receipt_refs = Vec::new();
+    let mut diagnostics = Vec::new();
     for artifact_ref in ordered_refs {
         if !missing.contains(&artifact_ref) {
             push_bounded(&mut already_present_refs, artifact_ref, MAX_JOB_REFS, "job sync already-present refs")?;
             continue;
         }
-        let source = artifacts::read_artifact(source_registry, &artifact_ref)?;
-        let payload = artifacts::read_payload(source_registry, &artifact_ref)?;
-        let installed = artifacts::install_artifact(target_registry, &artifacts::ArtifactInstallInput {
-            kind: source.kind.clone(),
-            payload,
-            schema_refs: source.schema_refs.clone(),
-            dependency_refs: source.dependency_refs.clone(),
-            effect_manifest_ref: source.effect_manifest_ref.clone(),
-            policy_refs: source.policy_refs.clone(),
-            evidence_refs: source.evidence_refs.clone(),
-            installer_ref: local_ref("job-sync-installer", &plan.request.request_ref)?,
-            capability_refs: if plan.request.capability_refs.is_empty() {
-                vec![local_ref("job-sync-capability", &plan.request.request_ref)?]
-            } else {
-                plan.request.capability_refs.clone()
-            },
+        let source = artifacts::read_artifact(input.source_registry, &artifact_ref)?;
+        let payload = artifacts::read_payload(input.source_registry, &artifact_ref)?;
+        let provenance = crate::provenance::evaluate_provenance(&crate::provenance::ProvenanceEvaluationInput {
+            operation: "remote-sync-install",
+            profile: "node-control",
+            artifact_ref: &artifact_ref,
+            provenance_values: input.provenance_values,
+            build_verification_values: input.build_verification_values,
+            prior_diagnostics: &[],
         })?;
-        if installed.decision != "pass" || installed.artifact_ref != artifact_ref {
-            return Err(MoltenError::invalid_harness(format!(
-                "job sync install mismatch for {artifact_ref}: decision={} installed={}",
-                installed.decision, installed.artifact_ref
-            )));
+        push_bounded(
+            &mut provenance_receipt_refs,
+            provenance.receipt_ref.clone(),
+            MAX_JOB_REFS,
+            "job sync provenance receipt refs",
+        )?;
+        if provenance.decision == "pass" {
+            push_bounded(
+                &mut install_candidates,
+                SyncInstallCandidate {
+                    artifact_ref,
+                    source,
+                    payload,
+                },
+                MAX_JOB_REFS,
+                "job sync install candidates",
+            )?;
+        } else {
+            push_bounded(
+                &mut diagnostics,
+                format!("job sync provenance denied artifact {} with receipt {}", artifact_ref, provenance.receipt_ref),
+                MAX_JOB_REFS,
+                "job sync diagnostics",
+            )?;
+            for diagnostic in provenance.diagnostics {
+                push_bounded(&mut diagnostics, diagnostic, MAX_JOB_REFS, "job sync diagnostics")?;
+            }
         }
-        let target = artifacts::read_artifact(target_registry, &artifact_ref)?;
-        if target.value != source.value {
-            return Err(MoltenError::invalid_harness(format!(
-                "job sync target artifact {artifact_ref} differs from source"
-            )));
-        }
-        push_bounded(&mut installed_refs, artifact_ref, MAX_JOB_REFS, "job sync installed refs")?;
     }
+    if diagnostics.is_empty() {
+        for candidate in install_candidates {
+            let installed = artifacts::install_artifact(input.target_registry, &artifacts::ArtifactInstallInput {
+                kind: candidate.source.kind.clone(),
+                payload: candidate.payload,
+                schema_refs: candidate.source.schema_refs.clone(),
+                dependency_refs: candidate.source.dependency_refs.clone(),
+                effect_manifest_ref: candidate.source.effect_manifest_ref.clone(),
+                policy_refs: candidate.source.policy_refs.clone(),
+                evidence_refs: candidate.source.evidence_refs.clone(),
+                installer_ref: local_ref("job-sync-installer", &plan.request.request_ref)?,
+                capability_refs: if plan.request.capability_refs.is_empty() {
+                    vec![local_ref("job-sync-capability", &plan.request.request_ref)?]
+                } else {
+                    plan.request.capability_refs.clone()
+                },
+            })?;
+            if installed.decision != "pass" || installed.artifact_ref != candidate.artifact_ref {
+                return Err(MoltenError::invalid_harness(format!(
+                    "job sync install mismatch for {}: decision={} installed={}",
+                    candidate.artifact_ref, installed.decision, installed.artifact_ref
+                )));
+            }
+            let target = artifacts::read_artifact(input.target_registry, &candidate.artifact_ref)?;
+            if target.value != candidate.source.value {
+                return Err(MoltenError::invalid_harness(format!(
+                    "job sync target artifact {} differs from source",
+                    candidate.artifact_ref
+                )));
+            }
+            push_bounded(&mut installed_refs, candidate.artifact_ref, MAX_JOB_REFS, "job sync installed refs")?;
+        }
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let mut refs = plan.closure_refs.clone();
     extend_cloned_bounded(&mut refs, &installed_refs, MAX_JOB_REFS, "job sync refs")?;
     extend_cloned_bounded(&mut refs, &already_present_refs, MAX_JOB_REFS, "job sync refs")?;
+    extend_cloned_bounded(&mut refs, &provenance_receipt_refs, MAX_JOB_REFS, "job sync refs")?;
     push_bounded(&mut refs, plan.plan_ref.clone(), MAX_JOB_REFS, "job sync refs")?;
     let receipt_value = record("job-sync-receipt-v1", vec![
         string(JOB_SYNC_RECEIPT_SCHEMA),
         record("operation", vec![string("sync-loopback")]),
-        record("decision", vec![string("pass")]),
+        record("decision", vec![string(decision)]),
         record("job", vec![string(&plan.request.job_ref)]),
         record("request", vec![string(&plan.request.request_ref)]),
         record("artifact", vec![string(&plan.plan_ref)]),
         record("installed", vec![refs_sequence(&installed_refs)]),
         record("already-present", vec![refs_sequence(&already_present_refs)]),
+        record("provenance", vec![refs_sequence(&provenance_receipt_refs)]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
         record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
-        checks_value(&[
-            "hash-verify-before-install",
-            "dependency-closure",
-            "loopback-transfer",
-            "no-execution",
-            "no-mobile-closures",
-            "canonical-receipt",
+        checks_value_from_pairs(&[
+            ("hash-verify-before-install", status(diagnostics.is_empty())),
+            ("provenance-before-install", status(diagnostics.is_empty())),
+            ("dependency-closure", "pass"),
+            ("loopback-transfer", status(diagnostics.is_empty())),
+            ("no-execution", "pass"),
+            ("no-mobile-closures", "pass"),
+            ("canonical-receipt", "pass"),
         ]),
     ]);
     let receipt_ref = canonical_hash(&receipt_value)?;
     Ok(JobSyncLoopback {
         receipt_ref,
         plan,
+        decision: decision.to_string(),
         installed_refs,
         already_present_refs,
+        provenance_receipt_refs,
+        diagnostics,
         receipt_value,
     })
 }
@@ -5661,7 +5727,32 @@ mod tests {
         let plan = sync_plan_value(&source, &target, &request).expect("sync plan");
         assert!(plan.missing_refs.contains(&base.artifact_ref));
         assert!(plan.missing_refs.contains(&stage.artifact_ref));
-        let synced = sync_loopback(&source, &target, &request).expect("sync loopback");
+        let denied = sync_loopback(SyncLoopbackInput {
+            source_registry: &source,
+            target_registry: &target,
+            request_value: &request,
+            provenance_values: &[],
+            build_verification_values: &[],
+        })
+        .expect("sync without provenance emits deny receipt");
+        assert_eq!(denied.decision, "deny");
+        assert!(denied.installed_refs.is_empty());
+        assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing provenance")));
+        assert!(artifacts::list_artifacts(&target, None).expect("target artifacts").is_empty());
+        let sync_provenance = reviewed_provenance_values(&[
+            base.artifact_ref.clone(),
+            source_stage.artifact_ref.clone(),
+            stage.artifact_ref.clone(),
+            installed_job.artifact_ref.clone(),
+        ]);
+        let synced = sync_loopback(SyncLoopbackInput {
+            source_registry: &source,
+            target_registry: &target,
+            request_value: &request,
+            provenance_values: &sync_provenance,
+            build_verification_values: &[],
+        })
+        .expect("sync loopback");
         assert!(synced.installed_refs.contains(&base.artifact_ref));
         assert!(synced.installed_refs.contains(&source_stage.artifact_ref));
         assert!(synced.installed_refs.contains(&stage.artifact_ref));
@@ -5669,7 +5760,14 @@ mod tests {
             artifacts::read_artifact(&target, &base.artifact_ref).expect("target base").value,
             base.artifact.value
         );
-        let second = sync_loopback(&source, &target, &request).expect("sync no-op");
+        let second = sync_loopback(SyncLoopbackInput {
+            source_registry: &source,
+            target_registry: &target,
+            request_value: &request,
+            provenance_values: &sync_provenance,
+            build_verification_values: &[],
+        })
+        .expect("sync no-op");
         assert!(second.installed_refs.is_empty());
         assert!(second.already_present_refs.contains(&base.artifact_ref));
         assert!(to_text(&second.receipt_value).expect("receipt text").contains("no-execution"));
@@ -6520,6 +6618,15 @@ mod tests {
         canonical_hash(&record("job-dag-test-ref", vec![string(label)])).expect("test ref")
     }
 
+    fn reviewed_provenance_values(artifact_refs: &[String]) -> Vec<IOValue> {
+        artifact_refs
+            .iter()
+            .map(|artifact_ref| {
+                crate::provenance::synthetic_reviewed_provenance_record(artifact_ref).expect("reviewed provenance")
+            })
+            .collect()
+    }
+
     fn install_clean_octet_gate(registry: &Path) -> String {
         let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean octet gate fixture");
         let gate_ref = canonical_hash(&gate_value).expect("octet gate ref");
@@ -6673,7 +6780,20 @@ mod tests {
             evidence_refs: &[test_ref("worker-sync-evidence")],
         })
         .expect("worker sync request");
-        let synced = sync_loopback(&source, &target, &sync_request).expect("worker sync loopback");
+        let sync_provenance = reviewed_provenance_values(&[
+            base.artifact_ref.clone(),
+            source_stage.artifact_ref.clone(),
+            map_stage.artifact_ref.clone(),
+            installed_job.artifact_ref.clone(),
+        ]);
+        let synced = sync_loopback(SyncLoopbackInput {
+            source_registry: &source,
+            target_registry: &target,
+            request_value: &sync_request,
+            provenance_values: &sync_provenance,
+            build_verification_values: &[],
+        })
+        .expect("worker sync loopback");
         let sync_ref = canonical_hash(&synced.receipt_value).expect("worker sync ref");
         let authority_context_ref = install_job_execute_authority_context(&target, &installed_job.job_ref);
         let source_gate_ref = install_clean_octet_gate(&target);

@@ -14,6 +14,7 @@ use super::schema::HarnessObservation;
 use super::schema::HarnessReport;
 use super::schema::HarnessReproBundle;
 use super::schema::HarnessReproBundleKind;
+use super::schema::ReproExportProfile;
 use super::schema::actor_registry_value;
 use super::schema::budget_value;
 use super::schema::event_boundary;
@@ -23,6 +24,7 @@ use super::schema::parse_failure;
 use super::schema::parse_report;
 use super::schema::parse_repro_bundle;
 use super::schema::parse_suite;
+use super::schema::profiled_repro_bundle_value_with_command;
 use super::schema::sealed_repro_bundle_value_with_command_and_receipt;
 use super::schema::step_value;
 use crate::error::MoltenError;
@@ -173,6 +175,15 @@ pub fn gate_check_value(value: &IOValue) -> Result<GateCheck> {
         let bundle = parse_repro_bundle(value)?;
         return match bundle.kind {
             HarnessReproBundleKind::Report => {
+                if let Some(loss_classification) = bundle.loss_classification.as_deref()
+                    && loss_classification != "gate-preserving"
+                {
+                    return Err(MoltenError::invalid_harness(format!(
+                        "{} repro bundle {} is {loss_classification} and cannot satisfy pass evidence gates without an explicit gate-preserving policy",
+                        bundle.export_profile.as_deref().unwrap_or("profiled"),
+                        bundle.bundle_ref
+                    )));
+                }
                 let report_value = bundle
                     .report_value
                     .clone()
@@ -201,12 +212,34 @@ pub fn sealed_repro_bundle_value_with_command(report_value: &IOValue, command: &
     sealed_repro_bundle_value_with_command_and_receipt(report_value, command, &report_receipt_value)
 }
 
+pub fn repro_bundle_value_with_export_profile(
+    report_value: &IOValue,
+    command: &[String],
+    profile: ReproExportProfile,
+) -> Result<IOValue> {
+    match profile {
+        ReproExportProfile::DenySensitive => sealed_repro_bundle_value_with_command(report_value, command),
+        ReproExportProfile::RedactedDiagnostic | ReproExportProfile::EncryptedPrivate => {
+            profiled_repro_bundle_value_with_command(report_value, command, profile)
+        }
+    }
+}
+
 pub fn repro_verify_receipt_value(bundle_value: &IOValue) -> Result<IOValue> {
     let bundle = parse_repro_bundle(bundle_value)?;
     if bundle.kind == HarnessReproBundleKind::Failure {
         return Err(MoltenError::invalid_harness(format!(
             "failure repro bundle {} wrapping {} is diagnostic-only and cannot be verified as pass evidence",
             bundle.bundle_ref, bundle.artifact_ref
+        )));
+    }
+    if let Some(loss_classification) = bundle.loss_classification.as_deref()
+        && loss_classification != "gate-preserving"
+    {
+        return Err(MoltenError::invalid_harness(format!(
+            "{} repro bundle {} is {loss_classification} and cannot be verified as pass evidence",
+            bundle.export_profile.as_deref().unwrap_or("profiled"),
+            bundle.bundle_ref
         )));
     }
     let embedded_receipt_value = bundle.gate_receipt_value.as_ref().ok_or_else(|| {

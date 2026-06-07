@@ -35,6 +35,8 @@ pub const READ_ONLY_TOOLS: &[&str] = &[
     "view_receipts",
     "view_transcript",
     "list_upgrade_sessions",
+    "list_provenance",
+    "search_provenance",
     "short_id_resolve",
 ];
 
@@ -302,6 +304,39 @@ fn dispatch_read_only(
                 push_bounded(
                     &mut filters,
                     CatalogFilter::UpgradeStatus("planned".to_string()),
+                    MAX_CATALOG_MCP_FILTERS,
+                    "catalog MCP filters",
+                )?;
+            }
+            catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
+                root_refs: arg_strings(&request.args, "root")?,
+                include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
+                include_dependents: arg_bool(&request.args, "include-dependents", true)?,
+                filters,
+                visibility: request.visibility.clone(),
+            })
+            .map(CoreResult::Query)
+        }
+        "list_provenance" | "search_provenance" => {
+            let mut filters = filters_from_args(&request.args)?;
+            push_bounded(
+                &mut filters,
+                CatalogFilter::Text("provenance:".to_string()),
+                MAX_CATALOG_MCP_FILTERS,
+                "catalog MCP filters",
+            )?;
+            if let Some(trust_state) = optional_arg_string(&request.args, "trust-state") {
+                push_bounded(
+                    &mut filters,
+                    CatalogFilter::Text(format!("provenance-trust-state:{trust_state}")),
+                    MAX_CATALOG_MCP_FILTERS,
+                    "catalog MCP filters",
+                )?;
+            }
+            if let Some(decision) = optional_arg_string(&request.args, "decision") {
+                push_bounded(
+                    &mut filters,
+                    CatalogFilter::Text(format!("provenance-decision:{decision}")),
                     MAX_CATALOG_MCP_FILTERS,
                     "catalog MCP filters",
                 )?;
@@ -802,6 +837,7 @@ mod tests {
 
     use super::*;
     use crate::artifacts;
+    use crate::ledger;
     use crate::preserves_rail::parse_text;
     use crate::preserves_rail::to_text;
 
@@ -874,6 +910,39 @@ mod tests {
                 .expect("short request");
         let short_call = call(&registry, None, &short_request).expect("short call");
         assert_eq!(short_call.decision, "pass");
+    }
+
+    #[test]
+    fn provenance_named_tools_search_trust_state_and_decision() {
+        let root = temp_dir("catalog-mcp-provenance");
+        let registry = root.join("registry");
+        let ledger_root = root.join("ledger");
+        let artifact_ref = test_ref("provenance-artifact");
+        let provenance_record = crate::provenance::synthetic_reviewed_provenance_record(&artifact_ref).expect("record");
+        let evaluation = crate::provenance::evaluate_provenance(&crate::provenance::ProvenanceEvaluationInput {
+            operation: "install",
+            profile: "node-control",
+            artifact_ref: &artifact_ref,
+            provenance_values: std::slice::from_ref(&provenance_record),
+            build_verification_values: &[],
+            prior_diagnostics: &[],
+        })
+        .expect("evaluate provenance");
+        ledger::import_artifact(&ledger_root, &provenance_record).expect("import provenance record");
+        ledger::import_artifact(&ledger_root, &evaluation.receipt_value).expect("import provenance receipt");
+        let record_request =
+            mcp_request_value("list_provenance", vec![record("trust-state", vec![string("reviewed")])])
+                .expect("provenance record request");
+        let record_call = call(&registry, Some(&ledger_root), &record_request).expect("provenance record call");
+        assert_eq!(record_call.decision, "pass");
+        let record_text = to_text(&record_call.response_value).expect("provenance record response");
+        assert!(record_text.contains("provenance:record"));
+        let receipt_request = mcp_request_value("search_provenance", vec![record("decision", vec![string("pass")])])
+            .expect("provenance receipt request");
+        let receipt_call = call(&registry, Some(&ledger_root), &receipt_request).expect("provenance receipt call");
+        assert_eq!(receipt_call.decision, "pass");
+        let receipt_text = to_text(&receipt_call.response_value).expect("provenance receipt response");
+        assert!(receipt_text.contains("provenance:receipt"));
     }
 
     #[test]

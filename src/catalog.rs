@@ -16,6 +16,7 @@ use crate::preserves_rail::CATALOG_RESULT_SCHEMA;
 use crate::preserves_rail::CATALOG_SHORT_ID_SCHEMA;
 use crate::preserves_rail::CATALOG_SUMMARY_SCHEMA;
 use crate::preserves_rail::CATALOG_VIEW_SCHEMA;
+use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -722,6 +723,65 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
         return Ok(vec![
             "upgrade:receipt".to_string(),
             format!("upgrade-status:{decision}"),
+            format!("receipt-decision:{decision}"),
+        ]);
+    }
+    if let Ok(record) = crate::provenance::parse_provenance_record(value) {
+        return Ok(vec![
+            "provenance:record".to_string(),
+            format!("provenance-trust-state:{}", record.trust_state),
+            format!("provenance-artifact:{}", record.artifact_ref),
+            format!("provenance-build-records:{}", record.build_record_refs.len()),
+        ]);
+    }
+    if let Ok(record) = crate::provenance::parse_provenance_build_record(value) {
+        return Ok(vec![
+            "provenance:build-record".to_string(),
+            format!("provenance-expected-artifact:{}", record.expected_artifact_ref),
+            format!("provenance-build-sources:{}", record.source_refs.len()),
+            format!("provenance-build-toolchains:{}", record.toolchain_refs.len()),
+        ]);
+    }
+    if let Ok(receipt) = crate::provenance::parse_provenance_build_verification_receipt(value) {
+        return Ok(vec![
+            "provenance:build-verify-receipt".to_string(),
+            format!("provenance-build-decision:{}", receipt.decision),
+            format!("provenance-expected-artifact:{}", receipt.expected_artifact_ref),
+            format!("provenance-actual-artifact:{}", receipt.actual_artifact_ref),
+            format!("receipt-decision:{}", receipt.decision),
+        ]);
+    }
+    if let Some(fields) = value.collect_simple_record("provenance-receipt-v1", Some(10)) {
+        require_schema(&fields[0], PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
+        let decision = record_string(&fields[1], "decision")?;
+        let operation = record_string(&fields[2], "operation")?;
+        let profile = record_string(&fields[3], "profile")?;
+        let trust_state = record_string(&fields[5], "trust-state")?;
+        let build_verification_count = record_sequence_len(&fields[9], "build-verifications")?;
+        return Ok(vec![
+            "provenance:receipt".to_string(),
+            format!("provenance-decision:{decision}"),
+            format!("provenance-operation:{operation}"),
+            format!("provenance-profile:{profile}"),
+            format!("provenance-trust-state:{trust_state}"),
+            format!("provenance-build-verifications:{build_verification_count}"),
+            format!("receipt-operation:{operation}"),
+            format!("receipt-decision:{decision}"),
+        ]);
+    }
+    if let Some(fields) = value.collect_simple_record("provenance-receipt-v1", Some(9)) {
+        require_schema(&fields[0], PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
+        let decision = record_string(&fields[1], "decision")?;
+        let operation = record_string(&fields[2], "operation")?;
+        let profile = record_string(&fields[3], "profile")?;
+        let trust_state = record_string(&fields[5], "trust-state")?;
+        return Ok(vec![
+            "provenance:receipt".to_string(),
+            format!("provenance-decision:{decision}"),
+            format!("provenance-operation:{operation}"),
+            format!("provenance-profile:{profile}"),
+            format!("provenance-trust-state:{trust_state}"),
+            format!("receipt-operation:{operation}"),
             format!("receipt-decision:{decision}"),
         ]);
     }
@@ -1751,6 +1811,38 @@ mod tests {
         })
         .expect("receipt view");
         assert!(!receipt_view.items.is_empty());
+    }
+
+    #[test]
+    fn catalog_classifies_provenance_records_receipts_and_build_evidence() {
+        let dir = temp_dir("catalog-provenance");
+        let registry = dir.join("registry");
+        let ledger_root = dir.join("ledger");
+        let artifact_ref = test_ref("provenance-artifact");
+        let record = crate::provenance::synthetic_reviewed_provenance_record(&artifact_ref).expect("record");
+        let evaluation = crate::provenance::evaluate_provenance(&crate::provenance::ProvenanceEvaluationInput {
+            operation: "install",
+            profile: "node-control",
+            artifact_ref: &artifact_ref,
+            provenance_values: std::slice::from_ref(&record),
+            build_verification_values: &[],
+            prior_diagnostics: &[],
+        })
+        .expect("evaluate provenance");
+        ledger::import_artifact(&ledger_root, &record).expect("import record");
+        ledger::import_artifact(&ledger_root, &evaluation.receipt_value).expect("import receipt");
+        let found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
+            root_refs: Vec::new(),
+            include_dependencies: true,
+            include_dependents: true,
+            filters: vec![CatalogFilter::Text("provenance-trust-state:reviewed".to_string())],
+            visibility: CatalogVisibilityInput::default(),
+        })
+        .expect("provenance search");
+        assert!(!found.items.is_empty());
+        let text = to_text(&found.value).expect("provenance result text");
+        assert!(text.contains("provenance:record"));
+        assert!(text.contains("provenance:receipt"));
     }
 
     #[test]

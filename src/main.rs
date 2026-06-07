@@ -21,6 +21,7 @@ use molten::evidence::signed_receipt_summary;
 use molten::evidence::verify_signed_receipt;
 use molten::evidence_chain::ChainForkPolicy;
 use molten::evidence_chain::ChainScope;
+use molten::harness::ReproExportProfile;
 use molten::harness::failure_repro_bundle_value_with_command;
 use molten::harness::failure_summary;
 use molten::harness::failure_value;
@@ -34,10 +35,10 @@ use molten::harness::report_failure_value;
 use molten::harness::report_suite_value;
 use molten::harness::report_summary;
 use molten::harness::repro_bundle_summary;
+use molten::harness::repro_bundle_value_with_export_profile;
 use molten::harness::repro_verify_receipt_summary;
 use molten::harness::repro_verify_receipt_value;
 use molten::harness::run_suite_value;
-use molten::harness::sealed_repro_bundle_value_with_command;
 use molten::harness::suite_failure_value;
 use molten::harness::validate_report_value;
 use molten::iroh_exchange::FetchBundleInput;
@@ -2172,6 +2173,10 @@ enum JobCommand {
         target_peer: String,
         #[arg(long = "stage")]
         stages: Vec<String>,
+        #[arg(long = "provenance")]
+        provenance_paths: Vec<PathBuf>,
+        #[arg(long = "build-verification")]
+        build_verification_paths: Vec<PathBuf>,
         #[arg(long)]
         plan_out: Option<PathBuf>,
         #[arg(long)]
@@ -2638,6 +2643,8 @@ enum ReproCommand {
         report: PathBuf,
         #[arg(long)]
         out: PathBuf,
+        #[arg(long, default_value = "deny-sensitive")]
+        profile: String,
         #[arg(long)]
         failure_out: Option<PathBuf>,
     },
@@ -2652,6 +2659,8 @@ enum ReproCommand {
         bundle: PathBuf,
         #[arg(long)]
         out: PathBuf,
+        #[arg(long = "reveal-receipt")]
+        reveal_receipts: Vec<PathBuf>,
         #[arg(long)]
         failure_out: Option<PathBuf>,
     },
@@ -4827,7 +4836,7 @@ fn run_job_command(command: JobCommand) -> Result<()> {
             out,
             receipt_out,
         } => {
-            let request = job_sync_cli_request(&source_registry, &job, &stages, &target_peer)?;
+            let request = job_sync_cli_request(&source_registry, &job, &stages, &target_peer, &[])?;
             let plan = job_dag::sync_plan_value(&source_registry, &target_registry, &request)?;
             emit_job_analysis(&plan.value, out.as_ref())?;
             emit_named_receipt(receipt_out.as_ref(), "job sync receipt", &plan.receipt_value)?;
@@ -4845,15 +4854,28 @@ fn run_job_command(command: JobCommand) -> Result<()> {
             target_registry,
             target_peer,
             stages,
+            provenance_paths,
+            build_verification_paths,
             plan_out,
             receipt_out,
         } => {
-            let request = job_sync_cli_request(&source_registry, &job, &stages, &target_peer)?;
-            let synced = job_dag::sync_loopback(&source_registry, &target_registry, &request)?;
+            let provenance_values = read_preserves_files(&provenance_paths)?;
+            let build_verification_values = read_preserves_files(&build_verification_paths)?;
+            let mut evidence_refs = values_canonical_refs(&provenance_values)?;
+            evidence_refs.extend(values_canonical_refs(&build_verification_values)?);
+            let request = job_sync_cli_request(&source_registry, &job, &stages, &target_peer, &evidence_refs)?;
+            let synced = job_dag::sync_loopback(job_dag::SyncLoopbackInput {
+                source_registry: &source_registry,
+                target_registry: &target_registry,
+                request_value: &request,
+                provenance_values: &provenance_values,
+                build_verification_values: &build_verification_values,
+            })?;
             emit_job_analysis(&synced.plan.value, plan_out.as_ref())?;
             emit_named_receipt(receipt_out.as_ref(), "job sync receipt", &synced.receipt_value)?;
             eprintln!(
-                "job sync-loopback ok job={} installed={} already_present={}",
+                "job sync-loopback decision={} job={} installed={} already_present={}",
+                synced.decision,
                 synced.plan.request.job_ref,
                 synced.installed_refs.len(),
                 synced.already_present_refs.len()
@@ -5304,15 +5326,18 @@ fn job_sync_cli_request(
     job: &str,
     stages: &[String],
     target_peer: &str,
+    extra_evidence_refs: &[String],
 ) -> Result<preserves::IOValue> {
     let dag = job_dag::read_job_dag_file_or_registry(source_registry, job)?;
+    let mut evidence_refs = vec![cli_job_ref("sync-evidence", &dag.job_ref)?];
+    evidence_refs.extend(extra_evidence_refs.iter().cloned());
     job_dag::job_sync_request_value(job_dag::SyncRequestValueInput {
         job_ref: &dag.job_ref,
         stage_ids: stages,
         target_peer,
         policy_refs: &[cli_job_ref("sync-policy", &dag.job_ref)?],
         capability_refs: &[cli_job_ref("sync-capability", &dag.job_ref)?],
-        evidence_refs: &[cli_job_ref("sync-evidence", &dag.job_ref)?],
+        evidence_refs: &evidence_refs,
     })
 }
 
@@ -8704,9 +8729,17 @@ fn run_repro_command(command: ReproCommand) -> Result<()> {
         ReproCommand::Export {
             report,
             out,
+            profile,
             failure_out,
         } => {
             let artifact_value = read_preserves_file_with_failure(&report, failure_out.as_ref(), "export")?;
+            let export_profile = match ReproExportProfile::parse(&profile) {
+                Ok(profile) => profile,
+                Err(error) => {
+                    write_optional_artifact_failure(failure_out.as_ref(), "export", &error, &artifact_value)?;
+                    return Err(error);
+                }
+            };
             let command = vec![
                 "molten".to_string(),
                 "test".to_string(),
@@ -8715,11 +8748,13 @@ fn run_repro_command(command: ReproCommand) -> Result<()> {
                 report.display().to_string(),
                 "--out".to_string(),
                 out.display().to_string(),
+                "--profile".to_string(),
+                profile,
             ];
             if parse_failure(&artifact_value).is_ok() {
                 export_failure_repro(&artifact_value, &out, &command, failure_out.as_ref())
             } else {
-                export_report_repro(&artifact_value, &out, &command, failure_out.as_ref())
+                export_report_repro(&artifact_value, &out, &command, export_profile, failure_out.as_ref())
             }
         }
         ReproCommand::Verify {
@@ -8744,10 +8779,13 @@ fn run_repro_command(command: ReproCommand) -> Result<()> {
         ReproCommand::Unpack {
             bundle,
             out,
+            reveal_receipts,
             failure_out,
         } => {
             let bundle_value = read_preserves_file_with_failure(&bundle, failure_out.as_ref(), "unpack")?;
-            unpack_report_repro(&bundle_value, &out, failure_out.as_ref())
+            let reveal_receipt_values =
+                reveal_receipts.iter().map(|path| read_preserves_file(path)).collect::<Result<Vec<_>>>()?;
+            unpack_report_repro(&bundle_value, &out, &reveal_receipt_values, failure_out.as_ref())
         }
         ReproCommand::Publish {
             bundle,
@@ -8803,40 +8841,52 @@ fn export_report_repro(
     report_value: &preserves::IOValue,
     out: &Path,
     command: &[String],
+    profile: ReproExportProfile,
     failure_out: Option<&PathBuf>,
 ) -> Result<()> {
-    let bundle_value = match sealed_repro_bundle_value_with_command(report_value, command) {
+    let bundle_value = match repro_bundle_value_with_export_profile(report_value, command, profile) {
         Ok(bundle_value) => bundle_value,
         Err(error) => {
             write_optional_artifact_failure(failure_out, "export", &error, report_value)?;
             return Err(error);
         }
     };
-    let gate_receipt_value = match parse_repro_bundle(&bundle_value).and_then(|bundle| {
-        bundle
-            .gate_receipt_value
-            .ok_or_else(|| MoltenError::invalid_harness("sealed repro bundle missing embedded gate receipt"))
-    }) {
-        Ok(gate_receipt_value) => gate_receipt_value,
+    let bundle = match parse_repro_bundle(&bundle_value) {
+        Ok(bundle) => bundle,
         Err(error) => {
             write_optional_artifact_failure(failure_out, "export", &error, report_value)?;
             return Err(error);
         }
     };
-    let suite_value = match report_suite_value(report_value) {
+    let exported_report_value = bundle.report_value.as_ref().unwrap_or(report_value);
+    let suite_value = match report_suite_value(exported_report_value) {
         Ok(suite_value) => suite_value,
         Err(error) => {
-            write_optional_artifact_failure(failure_out, "export", &error, report_value)?;
+            write_optional_artifact_failure(failure_out, "export", &error, exported_report_value)?;
             return Err(error);
         }
     };
     let export = (|| -> Result<()> {
         fs::create_dir_all(out).map_err(MoltenError::from)?;
-        write_file(&out.join("report.preserves"), &to_text(report_value)?)?;
+        write_file(&out.join("report.preserves"), &to_text(exported_report_value)?)?;
         write_file(&out.join("suite.preserves"), &to_text(&suite_value)?)?;
-        write_file(&out.join("summary.txt"), &report_summary(report_value)?)?;
+        write_file(&out.join("summary.txt"), &report_summary(exported_report_value)?)?;
         write_file(&out.join("commands.txt"), REPORT_REPRO_COMMANDS)?;
-        write_file(&out.join("gate-receipt.preserves"), &to_text(&gate_receipt_value)?)?;
+        if let Some(gate_receipt_value) = bundle.gate_receipt_value.as_ref() {
+            write_file(&out.join("gate-receipt.preserves"), &to_text(gate_receipt_value)?)?;
+        }
+        if let Some(value) = bundle.export_profile_value.as_ref() {
+            write_file(&out.join("export-profile.preserves"), &to_text(value)?)?;
+        }
+        if let Some(value) = bundle.redaction_transform_manifest_value.as_ref() {
+            write_file(&out.join("redaction-transform-manifest.preserves"), &to_text(value)?)?;
+        }
+        if let Some(value) = bundle.redaction_transform_receipt_value.as_ref() {
+            write_file(&out.join("redaction-transform-receipt.preserves"), &to_text(value)?)?;
+        }
+        if let Some(value) = bundle.private_bundle_profile_value.as_ref() {
+            write_file(&out.join("private-bundle-profile.preserves"), &to_text(value)?)?;
+        }
         write_file(&out.join("refs.preserves"), &to_text(&bundle_value)?)?;
         Ok(())
     })();
@@ -8848,14 +8898,12 @@ fn export_report_repro(
     Ok(())
 }
 
-fn unpack_report_repro(bundle_value: &preserves::IOValue, out: &Path, failure_out: Option<&PathBuf>) -> Result<()> {
-    let verify_receipt = match repro_verify_receipt_value(bundle_value) {
-        Ok(receipt) => receipt,
-        Err(error) => {
-            write_optional_artifact_failure(failure_out, "unpack", &error, bundle_value)?;
-            return Err(error);
-        }
-    };
+fn unpack_report_repro(
+    bundle_value: &preserves::IOValue,
+    out: &Path,
+    reveal_receipt_values: &[preserves::IOValue],
+    failure_out: Option<&PathBuf>,
+) -> Result<()> {
     let bundle = match parse_repro_bundle(bundle_value) {
         Ok(bundle) => bundle,
         Err(error) => {
@@ -8863,25 +8911,39 @@ fn unpack_report_repro(bundle_value: &preserves::IOValue, out: &Path, failure_ou
             return Err(error);
         }
     };
-    let report_value = match bundle.report_value {
+    if bundle.loss_classification.as_deref() == Some("requires-reveal") {
+        if let Err(error) = validate_repro_reveal_receipts(&bundle.encrypted_refs, reveal_receipt_values) {
+            write_optional_artifact_failure(failure_out, "unpack", &error, bundle_value)?;
+            return Err(error);
+        }
+    } else if !reveal_receipt_values.is_empty() {
+        let error =
+            MoltenError::invalid_harness("reveal receipts are only accepted for encrypted-private repro bundles");
+        write_optional_artifact_failure(failure_out, "unpack", &error, bundle_value)?;
+        return Err(error);
+    }
+    let verify_receipt = if bundle.loss_classification.as_deref().unwrap_or("gate-preserving") == "gate-preserving" {
+        match repro_verify_receipt_value(bundle_value) {
+            Ok(receipt) => Some(receipt),
+            Err(error) => {
+                write_optional_artifact_failure(failure_out, "unpack", &error, bundle_value)?;
+                return Err(error);
+            }
+        }
+    } else {
+        None
+    };
+    let report_value = match bundle.report_value.as_ref() {
         Some(report_value) => report_value,
         None => {
-            let error = MoltenError::invalid_harness("sealed repro unpack requires an embedded report");
+            let error = MoltenError::invalid_harness("repro unpack requires an embedded report");
             write_optional_artifact_failure(failure_out, "unpack", &error, bundle_value)?;
             return Err(error);
         }
     };
-    let suite_value = match report_suite_value(&report_value) {
+    let suite_value = match report_suite_value(report_value) {
         Ok(suite_value) => suite_value,
         Err(error) => {
-            write_optional_artifact_failure(failure_out, "unpack", &error, bundle_value)?;
-            return Err(error);
-        }
-    };
-    let gate_receipt_value = match bundle.gate_receipt_value {
-        Some(gate_receipt_value) => gate_receipt_value,
-        None => {
-            let error = MoltenError::invalid_harness("sealed repro unpack requires an embedded gate receipt");
             write_optional_artifact_failure(failure_out, "unpack", &error, bundle_value)?;
             return Err(error);
         }
@@ -8889,10 +8951,23 @@ fn unpack_report_repro(bundle_value: &preserves::IOValue, out: &Path, failure_ou
     let export = (|| -> Result<()> {
         fs::create_dir_all(out).map_err(MoltenError::from)?;
         write_file(&out.join("refs.preserves"), &to_text(bundle_value)?)?;
-        write_file(&out.join("report.preserves"), &to_text(&report_value)?)?;
+        write_file(&out.join("report.preserves"), &to_text(report_value)?)?;
         write_file(&out.join("suite.preserves"), &to_text(&suite_value)?)?;
-        write_file(&out.join("gate-receipt.preserves"), &to_text(&gate_receipt_value)?)?;
-        write_file(&out.join("verify-receipt.preserves"), &to_text(&verify_receipt)?)?;
+        if let Some(gate_receipt_value) = bundle.gate_receipt_value.as_ref() {
+            write_file(&out.join("gate-receipt.preserves"), &to_text(gate_receipt_value)?)?;
+        }
+        if let Some(verify_receipt) = verify_receipt.as_ref() {
+            write_file(&out.join("verify-receipt.preserves"), &to_text(verify_receipt)?)?;
+        }
+        if let Some(value) = bundle.redaction_transform_receipt_value.as_ref() {
+            write_file(&out.join("redaction-transform-receipt.preserves"), &to_text(value)?)?;
+        }
+        if let Some(value) = bundle.redaction_transform_manifest_value.as_ref() {
+            write_file(&out.join("redaction-transform-manifest.preserves"), &to_text(value)?)?;
+        }
+        for (index, receipt) in reveal_receipt_values.iter().enumerate() {
+            write_file(&out.join(format!("reveal-receipt-{index}.preserves")), &to_text(receipt)?)?;
+        }
         write_file(&out.join("summary.txt"), &repro_bundle_summary(bundle_value)?)?;
         write_file(&out.join("commands.txt"), REPORT_REPRO_COMMANDS)?;
         Ok(())
@@ -8902,6 +8977,36 @@ fn unpack_report_repro(bundle_value: &preserves::IOValue, out: &Path, failure_ou
         return Err(error);
     }
     println!("repro bundle unpacked to {}", out.display());
+    Ok(())
+}
+
+fn validate_repro_reveal_receipts(encrypted_refs: &[String], receipt_values: &[preserves::IOValue]) -> Result<()> {
+    if encrypted_refs.is_empty() {
+        return Err(MoltenError::invalid_harness("encrypted-private repro bundle has no encrypted refs to reveal"));
+    }
+    if receipt_values.is_empty() {
+        return Err(MoltenError::invalid_harness(
+            "encrypted-private repro unpack requires at least one passing reveal receipt",
+        ));
+    }
+    let mut authorized_refs = std::collections::BTreeSet::new();
+    for receipt_value in receipt_values {
+        let receipt = secrets::parse_reveal_receipt(receipt_value)?;
+        if receipt.decision != "pass" {
+            return Err(MoltenError::invalid_harness(
+                "unauthorized reveal receipt cannot unpack private repro material",
+            ));
+        }
+        authorized_refs.insert(receipt.secret_ref);
+        authorized_refs.insert(receipt.commitment_ref);
+    }
+    for encrypted_ref in encrypted_refs {
+        if !authorized_refs.contains(encrypted_ref) {
+            return Err(MoltenError::invalid_harness(
+                "reveal receipts do not authorize every encrypted repro reference",
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -8941,6 +9046,22 @@ const FAILURE_REPRO_COMMANDS: &str =
 fn read_preserves_file(path: &Path) -> Result<preserves::IOValue> {
     let text = fs::read_to_string(path).map_err(MoltenError::from)?;
     parse_text(&text)
+}
+
+fn read_preserves_files(paths: &[PathBuf]) -> Result<Vec<preserves::IOValue>> {
+    let mut values = CliBoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "Preserves input files");
+    for path in paths {
+        values.push(read_preserves_file(path)?)?;
+    }
+    Ok(values.into_vec())
+}
+
+fn values_canonical_refs(values: &[preserves::IOValue]) -> Result<Vec<String>> {
+    let mut refs = CliBoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "Preserves input refs");
+    for value in values {
+        refs.push(canonical_hash(value)?)?;
+    }
+    Ok(refs.into_vec())
 }
 
 fn read_preserves_file_with_failure(
@@ -9137,6 +9258,7 @@ mod tests {
         run_repro_command(ReproCommand::Export {
             report: failure_artifact,
             out: out.clone(),
+            profile: "deny-sensitive".to_string(),
             failure_out: None,
         })
         .expect("export failure repro");
@@ -9162,10 +9284,12 @@ mod tests {
         let unpack_error = run_repro_command(ReproCommand::Unpack {
             bundle: out.join("refs.preserves"),
             out: dir.join("unpacked-failure"),
+            reveal_receipts: Vec::new(),
             failure_out: Some(unpack_failure.clone()),
         })
         .expect_err("failure repro unpack should fail");
-        assert!(unpack_error.to_string().contains("diagnostic-only"));
+        let unpack_error_message = unpack_error.to_string();
+        assert!(unpack_error_message.contains("diagnostic-only") || unpack_error_message.contains("embedded report"));
         let unpack_failure_value = read_preserves_file(&unpack_failure).expect("read unpack failure");
         let unpack_failure = parse_failure(&unpack_failure_value).expect("parse unpack failure");
         assert_eq!(unpack_failure.phase, "unpack");
@@ -10209,6 +10333,16 @@ mod tests {
         let target_registry = dir.join("target-registry");
         let sync_plan_out = dir.join("job-sync-plan.preserves");
         let sync_loopback_receipt = dir.join("job-sync-loopback-receipt.preserves");
+        let source_artifacts = artifacts::list_artifacts(&registry, None).expect("list source artifacts");
+        let mut provenance_paths = Vec::with_capacity(source_artifacts.len());
+        for artifact in source_artifacts {
+            let provenance_path = dir.join(format!("job-provenance-{}.preserves", provenance_paths.len()));
+            let provenance_value =
+                provenance::synthetic_reviewed_provenance_record(&artifact.artifact_ref).expect("provenance");
+            write_file(&provenance_path, &to_text(&provenance_value).expect("provenance text"))
+                .expect("write provenance");
+            provenance_paths.push(provenance_path);
+        }
         let admit_plan_out = dir.join("job-admit-plan.preserves");
         let admit_loopback_receipt = dir.join("job-admit-loopback-receipt.preserves");
         run_job_command(JobCommand::Plan {
@@ -10255,6 +10389,8 @@ mod tests {
             target_registry: target_registry.clone(),
             target_peer: "peer:loopback".to_string(),
             stages: Vec::new(),
+            provenance_paths,
+            build_verification_paths: Vec::new(),
             plan_out: Some(dir.join("job-sync-loopback-plan.preserves")),
             receipt_out: Some(sync_loopback_receipt.clone()),
         })
@@ -11071,6 +11207,7 @@ mod tests {
         run_repro_command(ReproCommand::Export {
             report: report.clone(),
             out: repro.clone(),
+            profile: "deny-sensitive".to_string(),
             failure_out: None,
         })
         .expect("export repro");

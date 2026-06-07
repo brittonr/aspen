@@ -20,6 +20,7 @@ pub use gate::gate_receipt_summary;
 pub use gate::gate_receipt_value;
 pub use gate::parse_gate_receipt;
 pub use gate::parse_repro_verify_receipt;
+pub use gate::repro_bundle_value_with_export_profile;
 pub use gate::repro_verify_receipt_summary;
 pub use gate::repro_verify_receipt_value;
 pub use gate::sealed_repro_bundle_value_with_command;
@@ -42,6 +43,7 @@ pub use schema::HarnessReproBundle;
 pub use schema::HarnessReproBundleKind;
 pub use schema::HarnessSuite;
 pub use schema::RemoteProxyExecutorConfig;
+pub use schema::ReproExportProfile;
 pub use schema::SteelExecutorConfig;
 pub use schema::WasmExecutorConfig;
 pub use schema::actor_registry_value;
@@ -75,6 +77,7 @@ pub use schema::suite_failure_value;
 
 #[cfg(test)]
 mod tests {
+    use super::ReproExportProfile;
     use super::actor_executor_registry;
     use super::core::CoreStep;
     use super::core::RuntimeState;
@@ -91,6 +94,7 @@ mod tests {
     use super::parse_suite;
     use super::replay_report_value;
     use super::repro_bundle_value;
+    use super::repro_bundle_value_with_export_profile;
     use super::repro_verify_receipt_value;
     use super::run_suite_value;
     use super::schema::parse_report;
@@ -1162,6 +1166,115 @@ mod tests {
         let error = sealed_repro_bundle_value_with_command(&run.report_value, &["molten".into(), "test".into()])
             .expect_err("secret marker fails redaction preflight");
         assert!(error.to_string().contains("sensitive marker secret"));
+    }
+
+    #[test]
+    fn redacted_diagnostic_profile_emits_transform_and_stays_diagnostic_only() {
+        let suite = parse_text(
+            r#"<harness-suite-v1 "molten.harness.suite.v1" "secret-diagnostic" 1
+              <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
+              <actor-registry-v1 "molten.harness.actor-registry.v1" [<actor "a" "native"> <actor "b" "native">]>
+              <capabilities-v1 "molten.harness.capabilities.v1" [<grant "a" "send" "b" #f>]>
+              [<send "a" "b" <secret "token">>]>"#,
+        )
+        .expect("parse secret suite");
+        let run = run_suite_value(&suite).expect("run secret suite");
+        let bundle = repro_bundle_value_with_export_profile(
+            &run.report_value,
+            &["molten".into(), "test".into(), "repro".into(), "export".into()],
+            ReproExportProfile::RedactedDiagnostic,
+        )
+        .expect("redacted diagnostic bundle");
+        let parsed = parse_repro_bundle(&bundle).expect("parse redacted diagnostic bundle");
+        assert_eq!(parsed.export_profile.as_deref(), Some("redacted-diagnostic"));
+        assert_eq!(parsed.loss_classification.as_deref(), Some("diagnostic-only"));
+        assert!(parsed.redaction_transform_receipt_ref.is_some());
+        assert!(
+            to_text(parsed.report_value.as_ref().expect("redacted report"))
+                .expect("redacted report text")
+                .contains("redaction-marker-v1")
+        );
+        let gate_error = gate_check_value(&bundle).expect_err("diagnostic bundle cannot satisfy pass gate");
+        assert!(gate_error.to_string().contains("diagnostic-only"));
+        let verify_error = repro_verify_receipt_value(&bundle).expect_err("diagnostic bundle cannot verify as pass");
+        assert!(verify_error.to_string().contains("diagnostic-only"));
+    }
+
+    #[test]
+    fn encrypted_private_profile_rejects_malformed_encrypted_ref_marker() {
+        let suite = parse_text(
+            r#"<harness-suite-v1 "molten.harness.suite.v1" "bad-encrypted" 1
+              <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
+              <actor-registry-v1 "molten.harness.actor-registry.v1" [<actor "a" "native"> <actor "b" "native">]>
+              <capabilities-v1 "molten.harness.capabilities.v1" [<grant "a" "send" "b" #f>]>
+              [<send "a" "b" <encrypted-ref "bad">>]>"#,
+        )
+        .expect("parse malformed encrypted suite");
+        let run = run_suite_value(&suite).expect("run malformed encrypted suite");
+        let error = repro_bundle_value_with_export_profile(
+            &run.report_value,
+            &["molten".into(), "test".into(), "repro".into(), "export".into()],
+            ReproExportProfile::EncryptedPrivate,
+        )
+        .expect_err("malformed encrypted refs fail closed");
+        assert!(error.to_string().contains("malformed encrypted-ref"));
+    }
+
+    #[test]
+    fn redacted_profile_rejects_stale_transform_receipt() {
+        let suite = parse_text(
+            r#"<harness-suite-v1 "molten.harness.suite.v1" "stale-transform" 1
+              <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
+              <actor-registry-v1 "molten.harness.actor-registry.v1" [<actor "a" "native"> <actor "b" "native">]>
+              <capabilities-v1 "molten.harness.capabilities.v1" [<grant "a" "send" "b" #f>]>
+              [<send "a" "b" <secret "token">>]>"#,
+        )
+        .expect("parse stale transform suite");
+        let run = run_suite_value(&suite).expect("run stale transform suite");
+        let bundle = repro_bundle_value_with_export_profile(
+            &run.report_value,
+            &["molten".into(), "test".into(), "repro".into(), "export".into()],
+            ReproExportProfile::RedactedDiagnostic,
+        )
+        .expect("redacted diagnostic bundle");
+        let text = to_text(&bundle).expect("bundle text");
+        let tampered = parse_text(&text.replacen("output-bundle", "output-bundle-stale", 1))
+            .expect("parse stale transform bundle");
+        let error = parse_repro_bundle(&tampered).expect_err("stale transform receipt is rejected");
+        assert!(error_contains_any(&error, &["output-bundle", "redaction", "expected"]));
+    }
+
+    #[test]
+    fn redacted_profile_rejects_missed_sensitive_marker() {
+        let suite = parse_text(
+            r#"<harness-suite-v1 "molten.harness.suite.v1" "missed-marker" 1
+              <budget-v1 "molten.harness.budget.v1" <limits 64 16 256 65536>>
+              <actor-registry-v1 "molten.harness.actor-registry.v1" [<actor "a" "native"> <actor "b" "native">]>
+              <capabilities-v1 "molten.harness.capabilities.v1" [<grant "a" "send" "b" #f>]>
+              [<send "a" "b" <secret "token">>]>"#,
+        )
+        .expect("parse missed marker suite");
+        let run = run_suite_value(&suite).expect("run missed marker suite");
+        let bundle = repro_bundle_value_with_export_profile(
+            &run.report_value,
+            &["molten".into(), "test".into(), "repro".into(), "export".into()],
+            ReproExportProfile::RedactedDiagnostic,
+        )
+        .expect("redacted diagnostic bundle");
+        let text = to_text(&bundle).expect("bundle text");
+        let tampered =
+            parse_text(&text.replacen("redaction-marker-v1", "secret", 1)).expect("parse missed-marker bundle");
+        let error = parse_repro_bundle(&tampered).expect_err("missed marker is rejected");
+        assert!(
+            error_contains_any(&error, &[
+                "missed sensitive marker",
+                "redaction",
+                "secret",
+                "schema",
+                "suite value"
+            ]),
+            "unexpected missed marker error: {error}"
+        );
     }
 
     #[test]
