@@ -76,9 +76,11 @@ use molten::upgrades;
 const PROTOCOL_LIFECYCLE_INDEX_LIMIT: usize = 256;
 const COORDINATION_CLI_BATCH_REF_LIMIT: usize = 4096;
 const COORDINATION_CLI_BATCH_EVIDENCE_LIMIT: usize = 16384;
+const JOB_WORKER_CLI_REF_LIMIT: usize = 4096;
 const _: () = assert!(PROTOCOL_LIFECYCLE_INDEX_LIMIT > 0);
 const _: () = assert!(COORDINATION_CLI_BATCH_REF_LIMIT <= 100_000);
 const _: () = assert!(COORDINATION_CLI_BATCH_EVIDENCE_LIMIT <= 100_000);
+const _: () = assert!(JOB_WORKER_CLI_REF_LIMIT <= 100_000);
 
 #[derive(Debug, Parser)]
 #[command(name = "molten", version, about = "Molten runtime prototype")]
@@ -2242,6 +2244,57 @@ enum JobCommand {
         out: Option<PathBuf>,
         #[arg(long)]
         receipt_out: Option<PathBuf>,
+    },
+    WorkerRequest {
+        #[arg(long)]
+        admission_receipt: PathBuf,
+        #[arg(long)]
+        execution_request: PathBuf,
+        #[arg(long)]
+        sync_ref: Option<String>,
+        #[arg(long, default_value = "peer:loopback")]
+        target_peer: String,
+        #[arg(long = "stage")]
+        stages: Vec<String>,
+        #[arg(long = "authority-ref")]
+        authority_refs: Vec<String>,
+        #[arg(long = "resource-ref")]
+        resource_refs: Vec<String>,
+        #[arg(long = "peer-bootstrap-ref")]
+        peer_bootstrap_refs: Vec<String>,
+        #[arg(long = "node-identity-ref")]
+        node_identity_refs: Vec<String>,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    WorkerRunLocal {
+        request: PathBuf,
+        #[arg(long)]
+        target_registry: PathBuf,
+        #[arg(long)]
+        storage: PathBuf,
+        #[arg(long)]
+        cache: PathBuf,
+        #[arg(long)]
+        chunks: Option<PathBuf>,
+        #[arg(long)]
+        admission_receipt: PathBuf,
+        #[arg(long)]
+        execution_request: PathBuf,
+        #[arg(long)]
+        transport_root: PathBuf,
+        #[arg(long, default_value = "peer:source")]
+        from_peer: String,
+        #[arg(long, default_value = "source-worker")]
+        from_actor: String,
+        #[arg(long, default_value = "molten.job.worker")]
+        topic: String,
+        #[arg(long)]
+        ledger: Option<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
     },
     RefSubmit {
         #[arg(long)]
@@ -4825,6 +4878,95 @@ fn run_job_command(command: JobCommand) -> Result<()> {
                 )))
             }
         }
+        JobCommand::WorkerRequest {
+            admission_receipt,
+            execution_request,
+            sync_ref,
+            target_peer,
+            stages,
+            authority_refs,
+            resource_refs,
+            peer_bootstrap_refs,
+            node_identity_refs,
+            evidence_refs,
+            out,
+        } => {
+            let admission_value = read_preserves_file(&admission_receipt)?;
+            let execution_request_value = read_preserves_file(&execution_request)?;
+            let request_value = job_worker_cli_request(JobWorkerRequestCliInput {
+                admission_value: &admission_value,
+                execution_request_value: &execution_request_value,
+                sync_ref: sync_ref.as_deref(),
+                target_peer: &target_peer,
+                stages: &stages,
+                authority_refs,
+                resource_refs,
+                peer_bootstrap_refs,
+                node_identity_refs,
+                evidence_refs,
+            })?;
+            let parsed = job_dag::parse_job_worker_request_value(&request_value)?;
+            emit_job_analysis(&request_value, out.as_ref())?;
+            eprintln!(
+                "job worker-request ok job={} request={} target={} stages={}",
+                parsed.job_ref,
+                parsed.request_ref,
+                parsed.target_peer,
+                parsed.stage_ids.len()
+            );
+            Ok(())
+        }
+        JobCommand::WorkerRunLocal {
+            request,
+            target_registry,
+            storage,
+            cache,
+            chunks,
+            admission_receipt,
+            execution_request,
+            transport_root,
+            from_peer,
+            from_actor,
+            topic,
+            ledger,
+            out,
+        } => {
+            let request_value = read_preserves_file(&request)?;
+            let admission_value = read_preserves_file(&admission_receipt)?;
+            let execution_request_value = read_preserves_file(&execution_request)?;
+            let chunk_root = chunks.unwrap_or_else(|| target_registry.join("job-chunks"));
+            let executed = job_worker_run_local(JobWorkerRunLocalInput {
+                request_value: &request_value,
+                target_registry: &target_registry,
+                storage_root: &storage,
+                cache_root: &cache,
+                chunk_root: &chunk_root,
+                admission_value: &admission_value,
+                execution_request_value: &execution_request_value,
+                transport_root: &transport_root,
+                from_peer: &from_peer,
+                from_actor: &from_actor,
+                topic: &topic,
+                ledger_root: ledger.as_deref(),
+                out: &out,
+            })?;
+            eprintln!(
+                "job worker-run-local {} job={} receipt={} result={} out={}",
+                executed.result.decision,
+                executed.result.job_ref,
+                executed.receipt_ref,
+                executed.result.result_ref,
+                out.display()
+            );
+            if executed.result.decision == "pass" {
+                Ok(())
+            } else {
+                Err(MoltenError::invalid_harness(format!(
+                    "job worker-run-local denied: {}",
+                    executed.result.diagnostics.join("; ")
+                )))
+            }
+        }
         JobCommand::RefSubmit {
             job_id,
             operation_id,
@@ -4900,10 +5042,24 @@ fn run_job_command(command: JobCommand) -> Result<()> {
         }
         JobCommand::Status { ledger, job } => {
             for entry in ledger::list_artifacts(&ledger)? {
-                if entry.artifact_kind != "job-dag-receipt" && entry.artifact_kind != "job-ref-receipt" {
+                let value = match entry.artifact_kind.as_str() {
+                    "job-dag-receipt" | "job-ref-receipt" | "job-worker-receipt" => {
+                        ledger::read_artifact(&ledger, &entry.artifact_ref)?
+                    }
+                    _ => continue,
+                };
+                if let Ok(worker) = job_dag::parse_job_worker_receipt_value(&value) {
+                    if job.as_ref().is_none_or(|job_ref| worker.job_ref.as_ref() == Some(job_ref)) {
+                        println!(
+                            "{} worker-execute {} {} {}",
+                            entry.artifact_ref,
+                            worker.decision,
+                            worker.job_ref.unwrap_or_else(|| "-".to_string()),
+                            worker.result_ref
+                        );
+                    }
                     continue;
                 }
-                let value = ledger::read_artifact(&ledger, &entry.artifact_ref)?;
                 let receipt = job_dag::parse_job_receipt(&value)
                     .or_else(|_| job_dag::parse_blob_ref_job_receipt_value(&value))?;
                 if job.as_ref().is_none_or(|job_ref| receipt.job_ref.as_ref() == Some(job_ref)) {
@@ -4977,6 +5133,137 @@ struct JobExecutionFromAdmissionCliInput<'a> {
     policy_refs: Vec<String>,
     capability_refs: Vec<String>,
     resource_refs: Vec<String>,
+}
+
+struct JobWorkerRequestCliInput<'a> {
+    admission_value: &'a preserves::IOValue,
+    execution_request_value: &'a preserves::IOValue,
+    sync_ref: Option<&'a str>,
+    target_peer: &'a str,
+    stages: &'a [String],
+    authority_refs: Vec<String>,
+    resource_refs: Vec<String>,
+    peer_bootstrap_refs: Vec<String>,
+    node_identity_refs: Vec<String>,
+    evidence_refs: Vec<String>,
+}
+
+struct JobWorkerRunLocalInput<'a> {
+    request_value: &'a preserves::IOValue,
+    target_registry: &'a Path,
+    storage_root: &'a Path,
+    cache_root: &'a Path,
+    chunk_root: &'a Path,
+    admission_value: &'a preserves::IOValue,
+    execution_request_value: &'a preserves::IOValue,
+    transport_root: &'a Path,
+    from_peer: &'a str,
+    from_actor: &'a str,
+    topic: &'a str,
+    ledger_root: Option<&'a Path>,
+    out: &'a Path,
+}
+
+fn job_worker_cli_request(input: JobWorkerRequestCliInput<'_>) -> Result<preserves::IOValue> {
+    let admission = job_dag::parse_job_admission_receipt_value(input.admission_value)?;
+    let execution_request = job_dag::parse_job_execution_request_value(input.execution_request_value)?;
+    let admission_ref = canonical_hash(input.admission_value)?;
+    let execution_request_ref = canonical_hash(input.execution_request_value)?;
+    if execution_request.admission_ref != admission_ref {
+        return Err(MoltenError::invalid_harness("job worker execution request does not bind admission receipt"));
+    }
+    if execution_request.job_ref != admission.job_ref {
+        return Err(MoltenError::invalid_harness("job worker execution request job ref mismatches admission"));
+    }
+    let sync_ref = input.sync_ref.map(str::to_string).unwrap_or_else(|| admission.sync_ref.clone());
+    let stage_ids = if input.stages.is_empty() {
+        execution_request.stage_ids.clone()
+    } else {
+        input.stages.to_vec()
+    };
+    let authority_refs = if input.authority_refs.is_empty() {
+        admission.authority_receipt_refs.clone()
+    } else {
+        input.authority_refs
+    };
+    let resource_refs = if input.resource_refs.is_empty() {
+        execution_request.resource_refs.clone()
+    } else {
+        input.resource_refs
+    };
+    let mut evidence_refs = CliBoundedItems::new(JOB_WORKER_CLI_REF_LIMIT, "job worker evidence refs");
+    for reference in input.evidence_refs {
+        evidence_refs.push_unique(reference)?;
+    }
+    for reference in [sync_ref.clone(), admission_ref.clone(), execution_request_ref.clone()] {
+        evidence_refs.push_unique(reference)?;
+    }
+    for reference in &input.peer_bootstrap_refs {
+        evidence_refs.push_unique(reference.clone())?;
+    }
+    for reference in &input.node_identity_refs {
+        evidence_refs.push_unique(reference.clone())?;
+    }
+    job_dag::job_worker_request_value(job_dag::JobWorkerRequestValueInput {
+        job_ref: &admission.job_ref,
+        target_peer: input.target_peer,
+        stage_ids: &stage_ids,
+        sync_ref: &sync_ref,
+        admission_ref: &admission_ref,
+        execution_request_ref: &execution_request_ref,
+        authority_refs: &authority_refs,
+        resource_refs: &resource_refs,
+        peer_bootstrap_refs: &input.peer_bootstrap_refs,
+        node_identity_refs: &input.node_identity_refs,
+        evidence_refs: &evidence_refs.into_vec(),
+    })
+}
+
+fn job_worker_run_local(input: JobWorkerRunLocalInput<'_>) -> Result<job_dag::JobWorkerExecution> {
+    let request = job_dag::parse_job_worker_request_value(input.request_value)?;
+    let envelope = job_dag::job_worker_envelope(job_dag::JobWorkerEnvelopeInput {
+        from_peer: input.from_peer,
+        from_actor: input.from_actor,
+        to_peer: &request.target_peer,
+        topic: input.topic,
+        request_value: input.request_value,
+    })?;
+    let published = remote_dataspace::publish_local_gossip(input.transport_root, &envelope, input.from_peer)?;
+    let delivery = remote_dataspace::deliver_local_gossip(
+        input.transport_root,
+        input.topic,
+        &envelope.envelope_ref,
+        &request.target_peer,
+    )?;
+    let delivery_log = remote_dataspace::delivery_log(std::slice::from_ref(&delivery), true)?;
+    let executed = job_dag::execute_worker_delivery(job_dag::JobWorkerExecuteInput {
+        target_registry: input.target_registry,
+        storage_root: input.storage_root,
+        cache_root: input.cache_root,
+        chunk_root: input.chunk_root,
+        delivery: &delivery,
+        delivery_log: Some(&delivery_log),
+        admission_receipt_value: input.admission_value,
+        execution_request_value: input.execution_request_value,
+        ledger_root: input.ledger_root,
+    })?;
+    fs::create_dir_all(input.out).map_err(MoltenError::from)?;
+    write_file(&input.out.join("request.preserves"), &to_text(input.request_value)?)?;
+    write_file(&input.out.join("envelope.preserves"), &to_text(&envelope.value)?)?;
+    write_file(&input.out.join("publish-receipt.preserves"), &to_text(&published.receipt_value)?)?;
+    write_file(&input.out.join("delivery-receipt.preserves"), &to_text(&delivery.receipt_value)?)?;
+    write_file(&input.out.join("delivery-log.preserves"), &to_text(&delivery_log.value)?)?;
+    write_file(&input.out.join("assignment.preserves"), &to_text(&executed.assignment_value)?)?;
+    write_indexed_values(input.out, "status", &executed.status_values)?;
+    write_file(&input.out.join("result.preserves"), &to_text(&executed.result.value)?)?;
+    write_file(&input.out.join("worker-receipt.preserves"), &to_text(&executed.receipt_value)?)?;
+    if let Some(execution) = executed.execution.as_ref() {
+        write_file(&input.out.join("execution-receipt.preserves"), &to_text(&execution.receipt_value)?)?;
+        if let Some(run) = execution.run.as_ref() {
+            write_file(&input.out.join("output.preserves"), &to_text(&run.output_value)?)?;
+        }
+    }
+    Ok(executed)
 }
 
 fn job_admission_cli_request(input: JobAdmissionCliInput<'_>) -> Result<preserves::IOValue> {
@@ -5428,13 +5715,13 @@ fn raft_artifact_summary(value: &preserves::IOValue) -> Result<String> {
     }
 }
 
-struct CoordinationCliItems<T> {
+struct CliBoundedItems<T> {
     values: Vec<T>,
     maximum: usize,
     label: &'static str,
 }
 
-impl<T> CoordinationCliItems<T> {
+impl<T> CliBoundedItems<T> {
     fn new(maximum: usize, label: &'static str) -> Self {
         Self {
             values: Vec::new(),
@@ -5453,6 +5740,15 @@ impl<T> CoordinationCliItems<T> {
 
     fn into_vec(self) -> Vec<T> {
         self.values
+    }
+}
+
+impl<T: PartialEq> CliBoundedItems<T> {
+    fn push_unique(&mut self, value: T) -> Result<()> {
+        if !self.values.contains(&value) {
+            self.push(value)?;
+        }
+        Ok(())
     }
 }
 
@@ -5538,12 +5834,12 @@ fn run_coordination_command(command: CoordinationCommand) -> Result<()> {
             let manifest_ref = runtime.manifest.manifest_ref.clone();
             let mut decision = "pass";
             let mut evidence_values =
-                CoordinationCliItems::new(COORDINATION_CLI_BATCH_EVIDENCE_LIMIT, "coordination apply evidence");
+                CliBoundedItems::new(COORDINATION_CLI_BATCH_EVIDENCE_LIMIT, "coordination apply evidence");
             evidence_values.push(manifest_value)?;
             let mut receipt_refs =
-                CoordinationCliItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "coordination apply receipts");
+                CliBoundedItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "coordination apply receipts");
             let mut assertion_refs =
-                CoordinationCliItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "coordination apply assertions");
+                CliBoundedItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "coordination apply assertions");
             for request in requests {
                 let request_value = read_preserves_file(&request)?;
                 let result = coordination::apply_coordination_request(&mut runtime, &request_value)?;
@@ -7999,6 +8295,7 @@ mod tests {
     use std::sync::atomic::AtomicU64;
     use std::sync::atomic::Ordering;
 
+    use molten::authority;
     use molten::harness::parse_repro_bundle;
 
     use super::*;
@@ -8897,10 +9194,13 @@ mod tests {
         let dag_file = dir.join("job.preserves");
         let output = dir.join("job-output.preserves");
         let run_receipt = dir.join("job-run-receipt.preserves");
+        let source_stage = install_cli_stage_artifact(&registry, "source");
+        let reduce_stage = install_cli_stage_artifact(&registry, "sum-u64");
+        let materialize_stage = install_cli_stage_artifact(&registry, "materialize");
         let source = job_dag::job_node_value(job_dag::NodeValueInput {
             id: "source",
             kind: "source",
-            stage_artifact_ref: None,
+            stage_artifact_ref: Some(&source_stage),
             input_ports: &[],
             output_ports: &["out".to_string()],
             config: record("source", vec![record("values", vec![molten::preserves_rail::sequence(vec![
@@ -8915,7 +9215,7 @@ mod tests {
         let reduce = job_dag::job_node_value(job_dag::NodeValueInput {
             id: "sum",
             kind: "reduce",
-            stage_artifact_ref: None,
+            stage_artifact_ref: Some(&reduce_stage),
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
             config: record("op", vec![string("sum-u64")]),
@@ -8927,7 +9227,7 @@ mod tests {
         let materialize = job_dag::job_node_value(job_dag::NodeValueInput {
             id: "out",
             kind: "materialize",
-            stage_artifact_ref: None,
+            stage_artifact_ref: Some(&materialize_stage),
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
             config: record("materialize", vec![string("inline")]),
@@ -8985,7 +9285,9 @@ mod tests {
         let fusion_out = dir.join("job-fusion.preserves");
         let target_registry = dir.join("target-registry");
         let sync_plan_out = dir.join("job-sync-plan.preserves");
+        let sync_loopback_receipt = dir.join("job-sync-loopback-receipt.preserves");
         let admit_plan_out = dir.join("job-admit-plan.preserves");
+        let admit_loopback_receipt = dir.join("job-admit-loopback-receipt.preserves");
         run_job_command(JobCommand::Plan {
             job: dag.job_ref.clone(),
             registry: registry.clone(),
@@ -9031,7 +9333,7 @@ mod tests {
             target_peer: "peer:loopback".to_string(),
             stages: Vec::new(),
             plan_out: Some(dir.join("job-sync-loopback-plan.preserves")),
-            receipt_out: Some(dir.join("job-sync-loopback-receipt.preserves")),
+            receipt_out: Some(sync_loopback_receipt.clone()),
         })
         .expect("job sync loopback");
         assert!(fs::read_to_string(&sync_plan_out).expect("read sync plan").contains("job-sync-plan-v1"));
@@ -9040,16 +9342,26 @@ mod tests {
                 .expect("target jobs")
                 .is_empty()
         );
+        let sync_ref =
+            canonical_hash(&read_preserves_file(&sync_loopback_receipt).expect("read sync receipt")).expect("sync ref");
+        let authority_context_ref = install_cli_job_execute_authority_context(&target_registry, &dag.job_ref);
+        let source_gate_ref = install_cli_clean_octet_gate(&target_registry);
+        let admission_policy_ref = cli_synthetic_ref("job-worker-admission-policy").expect("policy ref");
+        let worker_resource_refs = vec![
+            cli_synthetic_ref("job-worker-resource-a").expect("resource a"),
+            cli_synthetic_ref("job-worker-resource-b").expect("resource b"),
+            cli_synthetic_ref("job-worker-resource-c").expect("resource c"),
+        ];
         run_job_command(JobCommand::AdmitPlan {
             job: dag.job_ref.clone(),
             target_registry: target_registry.clone(),
-            sync_ref: None,
+            sync_ref: Some(sync_ref.clone()),
             target_peer: "peer:loopback".to_string(),
             stages: Vec::new(),
-            policy_refs: Vec::new(),
-            capability_refs: Vec::new(),
-            evidence_refs: Vec::new(),
-            resource_refs: Vec::new(),
+            policy_refs: vec![admission_policy_ref.clone()],
+            capability_refs: vec![authority_context_ref.clone()],
+            evidence_refs: vec![sync_ref.clone(), source_gate_ref.clone()],
+            resource_refs: worker_resource_refs.clone(),
             out: Some(admit_plan_out.clone()),
             receipt_out: Some(dir.join("job-admit-plan-receipt.preserves")),
         })
@@ -9057,15 +9369,15 @@ mod tests {
         run_job_command(JobCommand::AdmitLoopback {
             job: dag.job_ref.clone(),
             target_registry: target_registry.clone(),
-            sync_ref: None,
+            sync_ref: Some(sync_ref.clone()),
             target_peer: "peer:loopback".to_string(),
             stages: Vec::new(),
-            policy_refs: Vec::new(),
-            capability_refs: Vec::new(),
-            evidence_refs: Vec::new(),
-            resource_refs: Vec::new(),
+            policy_refs: vec![admission_policy_ref.clone()],
+            capability_refs: vec![authority_context_ref.clone()],
+            evidence_refs: vec![sync_ref.clone(), source_gate_ref],
+            resource_refs: worker_resource_refs.clone(),
             plan_out: Some(dir.join("job-admit-loopback-plan.preserves")),
-            receipt_out: Some(dir.join("job-admit-loopback-receipt.preserves")),
+            receipt_out: Some(admit_loopback_receipt.clone()),
         })
         .expect("job admit loopback");
         assert!(fs::read_to_string(&admit_plan_out).expect("read admit plan").contains("job-admission-plan-v1"));
@@ -9091,6 +9403,67 @@ mod tests {
             ledger::artifact_kind(&read_preserves_file(&missing_execution_receipt).expect("missing execution receipt")),
             "job-execution-receipt"
         );
+        let worker_execution_request = dir.join("job-worker-execution-request.preserves");
+        run_job_command(JobCommand::ExecuteLoopback {
+            job: dag.job_ref.clone(),
+            target_registry: target_registry.clone(),
+            storage: storage.clone(),
+            cache: cache.clone(),
+            chunks: Some(chunks.clone()),
+            admission_receipt: admit_loopback_receipt.clone(),
+            target_peer: "peer:loopback".to_string(),
+            stages: Vec::new(),
+            policy_refs: vec![admission_policy_ref],
+            capability_refs: vec![authority_context_ref.clone()],
+            resource_refs: worker_resource_refs.clone(),
+            request_out: Some(worker_execution_request.clone()),
+            out: Some(dir.join("job-execute-loopback-output.preserves")),
+            receipt_out: Some(dir.join("job-execute-loopback-receipt.preserves")),
+        })
+        .expect("job execute loopback pass");
+        let worker_request = dir.join("job-worker-request.preserves");
+        let peer_bootstrap_ref = cli_synthetic_ref("job-worker-peer-bootstrap").expect("peer bootstrap");
+        let node_identity_ref = cli_synthetic_ref("job-worker-node-identity").expect("node identity");
+        run_job_command(JobCommand::WorkerRequest {
+            admission_receipt: admit_loopback_receipt.clone(),
+            execution_request: worker_execution_request.clone(),
+            sync_ref: Some(sync_ref),
+            target_peer: "peer:loopback".to_string(),
+            stages: Vec::new(),
+            authority_refs: vec![authority_context_ref],
+            resource_refs: worker_resource_refs,
+            peer_bootstrap_refs: vec![peer_bootstrap_ref],
+            node_identity_refs: vec![node_identity_ref],
+            evidence_refs: Vec::new(),
+            out: Some(worker_request.clone()),
+        })
+        .expect("job worker request");
+        let worker_out = dir.join("job-worker-local");
+        run_job_command(JobCommand::WorkerRunLocal {
+            request: worker_request,
+            target_registry: target_registry.clone(),
+            storage: dir.join("worker-storage"),
+            cache: dir.join("worker-cache"),
+            chunks: Some(dir.join("worker-chunks")),
+            admission_receipt: admit_loopback_receipt,
+            execution_request: worker_execution_request,
+            transport_root: dir.join("worker-transport"),
+            from_peer: "peer:source".to_string(),
+            from_actor: "source-worker".to_string(),
+            topic: "molten.job.worker".to_string(),
+            ledger: Some(ledger_root.clone()),
+            out: worker_out.clone(),
+        })
+        .expect("job worker local run");
+        let worker_receipt = read_preserves_file(&worker_out.join("worker-receipt.preserves")).expect("worker receipt");
+        assert_eq!(ledger::artifact_kind(&worker_receipt), "job-worker-receipt");
+        assert!(fs::read_to_string(worker_out.join("output.preserves")).expect("worker output").contains("3"));
+        let worker_receipt_ref = canonical_hash(&worker_receipt).expect("worker receipt ref");
+        run_job_command(JobCommand::ReceiptShow {
+            receipt_ref: worker_receipt_ref,
+            ledger: ledger_root.clone(),
+        })
+        .expect("job worker receipt show");
         run_job_command(JobCommand::Run {
             job: dag.job_ref.clone(),
             registry: registry.clone(),
@@ -9785,6 +10158,78 @@ mod tests {
             .filter_map(|token| token.parse::<u64>().ok())
             .filter(|pid| *pid == current_pid || std::path::Path::new("/proc").join(pid.to_string()).exists())
             .count()
+    }
+
+    fn install_cli_stage_artifact(registry: &Path, operation: &str) -> String {
+        let payload = job_dag::builtin_stage_operation_value(operation).expect("stage operation");
+        let installed = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+            kind: "stage".to_string(),
+            payload,
+            schema_refs: vec![cli_synthetic_ref("job-worker-stage-schema").expect("schema")],
+            dependency_refs: Vec::new(),
+            effect_manifest_ref: None,
+            policy_refs: vec![cli_synthetic_ref("job-worker-stage-policy").expect("policy")],
+            evidence_refs: vec![cli_synthetic_ref("job-worker-stage-evidence").expect("evidence")],
+            installer_ref: cli_synthetic_ref("job-worker-stage-installer").expect("installer"),
+            capability_refs: vec![cli_synthetic_ref("job-worker-stage-capability").expect("capability")],
+        })
+        .expect("install stage artifact");
+        assert_eq!(installed.decision, "pass");
+        installed.artifact_ref
+    }
+
+    fn install_cli_clean_octet_gate(registry: &Path) -> String {
+        let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean octet gate");
+        let gate_ref = canonical_hash(&gate_value).expect("gate ref");
+        let installed = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+            kind: "octet-gate-receipt".to_string(),
+            payload: gate_value,
+            schema_refs: Vec::new(),
+            dependency_refs: Vec::new(),
+            effect_manifest_ref: None,
+            policy_refs: vec![cli_synthetic_ref("job-worker-octet-policy").expect("policy")],
+            evidence_refs: vec![cli_synthetic_ref("job-worker-octet-evidence").expect("evidence")],
+            installer_ref: cli_synthetic_ref("job-worker-octet-installer").expect("installer"),
+            capability_refs: vec![cli_synthetic_ref("job-worker-octet-capability").expect("capability")],
+        })
+        .expect("install octet gate");
+        assert_eq!(installed.decision, "pass");
+        gate_ref
+    }
+
+    fn install_cli_job_execute_authority_context(registry: &Path, job_ref: &str) -> String {
+        let subject_ref = cli_synthetic_ref("job-worker-target-subject").expect("subject");
+        let context_value = authority::authority_context_value(authority::ContextValueInput {
+            subject_ref: &subject_ref,
+            capabilities: &[authority::AuthorityCapability {
+                capability: "job:execute".to_string(),
+                scope: job_ref.to_string(),
+                attenuation: "scoped".to_string(),
+            }],
+            delegation_refs: &[],
+            not_before: None,
+            expires_at: None,
+            revocation_refs: &[],
+            key_refs: &[],
+            policy_refs: &[cli_synthetic_ref("job-worker-authority-policy").expect("policy")],
+            evidence_refs: &[cli_synthetic_ref("job-worker-authority-evidence").expect("evidence")],
+        })
+        .expect("authority context");
+        let context_ref = canonical_hash(&context_value).expect("authority context ref");
+        let installed = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+            kind: "authority-context".to_string(),
+            payload: context_value,
+            schema_refs: Vec::new(),
+            dependency_refs: Vec::new(),
+            effect_manifest_ref: None,
+            policy_refs: vec![cli_synthetic_ref("job-worker-authority-install-policy").expect("policy")],
+            evidence_refs: vec![cli_synthetic_ref("job-worker-authority-install-evidence").expect("evidence")],
+            installer_ref: cli_synthetic_ref("job-worker-authority-installer").expect("installer"),
+            capability_refs: vec![cli_synthetic_ref("job-worker-authority-install-capability").expect("capability")],
+        })
+        .expect("install authority context");
+        assert_eq!(installed.decision, "pass");
+        context_ref
     }
 
     fn temp_dir(label: &str) -> PathBuf {

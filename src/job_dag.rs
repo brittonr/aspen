@@ -437,6 +437,21 @@ pub struct JobWorkerResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JobWorkerReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub job_ref: Option<String>,
+    pub request_ref: Option<String>,
+    pub assignment_ref: String,
+    pub status_refs: Vec<String>,
+    pub result_ref: String,
+    pub execution_receipt_ref: Option<String>,
+    pub delivery_log_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobWorkerExecution {
     pub request: Option<JobWorkerRequest>,
     pub assignment_value: IOValue,
@@ -1535,6 +1550,33 @@ pub fn parse_job_worker_result_value(value: &IOValue) -> Result<JobWorkerResult>
         delivery_log_ref: record_optional_ref(&fields[8], "delivery-log")?,
         diagnostics: record_string_sequence(&fields[9], "diagnostics")?,
         checks,
+        value: value.clone(),
+    })
+}
+
+pub fn parse_job_worker_receipt_value(value: &IOValue) -> Result<JobWorkerReceipt> {
+    let fields = value
+        .collect_simple_record("job-worker-receipt-v1", Some(13))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-receipt-v1 ...>"))?;
+    require_schema(&fields[0], JOB_WORKER_RECEIPT_SCHEMA, "job worker receipt")?;
+    let operation = record_string(&fields[1], "operation")?;
+    if operation != "worker-execute" {
+        return Err(MoltenError::invalid_harness(format!("unsupported job worker receipt operation {operation}")));
+    }
+    let decision = record_string(&fields[2], "decision")?;
+    validate_worker_decision(&decision)?;
+    require_check(&parse_checks(&fields[12])?, "canonical-receipt", "job worker receipt")?;
+    Ok(JobWorkerReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        job_ref: record_optional_ref(&fields[3], "job")?,
+        request_ref: record_optional_ref(&fields[4], "request")?,
+        assignment_ref: record_ref(&fields[5], "assignment")?,
+        status_refs: record_ref_sequence(&fields[6], "status")?,
+        result_ref: record_ref(&fields[7], "result")?,
+        execution_receipt_ref: record_optional_ref(&fields[8], "execution-receipt")?,
+        delivery_log_ref: record_optional_ref(&fields[9], "delivery-log")?,
+        diagnostics: record_string_sequence(&fields[10], "diagnostics")?,
         value: value.clone(),
     })
 }
@@ -3582,6 +3624,28 @@ fn analysis_receipt_value(input: AnalysisReceiptValueInput<'_>) -> Result<IOValu
 }
 
 pub fn receipt_summary(value: &IOValue) -> Result<String> {
+    if let Ok(receipt) = parse_job_worker_receipt_value(value) {
+        return Ok(format!(
+            "job worker receipt decision={} job={} request={} result={} status={} diagnostics={}",
+            receipt.decision,
+            receipt.job_ref.unwrap_or_else(|| "-".to_string()),
+            receipt.request_ref.unwrap_or_else(|| "-".to_string()),
+            receipt.result_ref,
+            receipt.status_refs.len(),
+            receipt.diagnostics.join(";")
+        ));
+    }
+    if let Ok(result) = parse_job_worker_result_value(value) {
+        return Ok(format!(
+            "job worker result decision={} job={} target={} execution={} outputs={} diagnostics={}",
+            result.decision,
+            result.job_ref,
+            result.target_peer,
+            result.execution_receipt_ref.unwrap_or_else(|| "-".to_string()),
+            result.output_refs.len(),
+            result.diagnostics.join(";")
+        ));
+    }
     let receipt = parse_job_receipt(value).or_else(|_| parse_blob_ref_job_receipt_value(value))?;
     Ok(format!(
         "job receipt operation={} decision={} job={} request={} stage={} outputs={}",

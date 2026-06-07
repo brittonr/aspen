@@ -412,6 +412,7 @@ Current architectural changes are recorded under `cairn/changes/`:
 - `trellis-protocol-session-runtime` — Trellis-gated protocol manifests, endpoint projection, protocol-message envelopes, session state, dataspace-backed interpreters, and replay-bound protocol session gate receipts.
 - `raft-control-plane-registry` — first Raft-backed strongly consistent control-plane registry for protocol/artifact/policy/capability pointers and receipt indexes.
 - `job-dag-iroh-worker-execution` — remote-shaped job worker requests/results over remote dataspace/Iroh using target sync, admission, execution receipts, and recorded replay logs.
+- `job-dag-iroh-worker-cli-ux` — operator CLI for worker request generation, recorded local-gossip worker execution, worker evidence directories, ledger import, and read-only worker receipt summaries.
 - `dataspace-delivery-idempotency` — scoped operation ids, dedup windows, retry receipts, and replay protection for remote/local dataspace, services, protocols, and job workers.
 - `delivery-idempotency-ux` — direct CLI diagnostics for canonical delivery scope refs, operation ids, idempotency checks, stored receipt lookup, and duplicate-suppression evidence without granting transport, authority, provenance, policy, resource, or execution trust.
 - `secrets-redaction-encrypted-refs` — usable confidentiality rail with secret refs, redaction markers, encrypted refs, reveal/decrypt receipts, and commitment-based replay.

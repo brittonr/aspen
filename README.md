@@ -106,6 +106,7 @@ Current Cairn roadmap changes live under `cairn/changes/`:
 - `trellis-protocol-session-runtime`
 - `raft-control-plane-registry`
 - `job-dag-iroh-worker-execution`
+- `job-dag-iroh-worker-cli-ux`
 - `dataspace-delivery-idempotency`
 - `secrets-redaction-encrypted-refs`
 - `plugin-host-lifecycle-runtime`
@@ -277,6 +278,28 @@ molten test job status --ledger target/ledger --job job:echo
 ```
 
 `job-ref-submission-v1` is content-ref-only and rejects inline executable/input bytes. The local deterministic worker reads and verifies chunk manifests before running the `local-echo-v1` handler, pins executable/input/output refs while active, emits fetch/verify/status/cleanup evidence, stores outputs as chunk manifests, and records `job-ref-receipt-v1` in the ledger. These receipts are execution evidence only; authority, provenance, policy, effect admission, transport, and resource trust remain explicit inputs.
+
+## Job DAG Iroh worker UX
+
+Recorded local-gossip worker execution is exposed after sync, target admission, and execution request construction:
+
+```sh
+molten test job worker-request \
+  --admission-receipt target/job-admission.receipt.preserves \
+  --execution-request target/job-execution.request.preserves \
+  --authority-ref blake3:authority --resource-ref blake3:resource \
+  --peer-bootstrap-ref blake3:peer-bootstrap --node-identity-ref blake3:node \
+  --out target/job-worker.request.preserves
+molten test job worker-run-local target/job-worker.request.preserves \
+  --target-registry target/job-target-registry \
+  --storage target/job-worker-storage --cache target/job-worker-cache \
+  --admission-receipt target/job-admission.receipt.preserves \
+  --execution-request target/job-execution.request.preserves \
+  --transport-root target/job-worker-transport --ledger target/ledger \
+  --out target/job-worker-run
+```
+
+`worker-run-local` writes the worker request, remote dataspace envelope, publish/delivery receipts, replayable delivery log, assignment, status records, result, worker receipt, execution receipt, and output evidence. Worker transport and CLI receipts are evidence only; peer identity or message delivery does not grant authority, policy, resource, provenance, source-gate, or execution trust.
 
 ## Coordination control-plane UX
 
