@@ -262,6 +262,33 @@ molten test delivery check --root target/delivery-store \
 
 `first` receipts permit the caller to commit its side effect; exact duplicates emit `duplicate` receipts with side effect `suppress` and a prior receipt ref; conflicts, stale sequences, and gaps deny or retry before side effects. These receipts are replay/dedup evidence only and do not grant transport, authority, provenance, policy, resource, or execution trust.
 
+## Retention and GC pinning diagnostics
+
+Retention diagnostics make deletion eligibility explicit before any object is removed, redacted, tombstoned, or compacted:
+
+```sh
+molten test retention class --class-name private-secret-ref \
+  --deletion-authority-ref blake3:authority --policy-ref blake3:policy \
+  --secret-redaction-hook true --remote-gc-plan true \
+  --out target/retention.class.preserves
+molten test retention pin --root target/retention-store \
+  --object-ref blake3:object --object-kind encrypted-ref \
+  --retention-class private-secret-ref --source secret-redaction \
+  --reason repro-reveal-pending --owner-ref blake3:owner \
+  --policy-ref blake3:policy --evidence-ref blake3:evidence \
+  --pin-out target/retention.pin.preserves \
+  --receipt-out target/retention.pin-receipt.preserves
+molten test retention check --root target/retention-store \
+  --object-ref blake3:object --object-kind encrypted-ref \
+  --retention-class private-secret-ref --action delete \
+  --requester-ref blake3:owner --reference-index-complete true \
+  --policy-ref blake3:policy --evidence-ref blake3:evidence \
+  --has-delete-authority true \
+  --receipt-out target/retention.delete.preserves
+```
+
+Pinned objects, legal holds, retained receipt dependencies, incomplete reference indexes, and missing policy/authority all deny before destructive side effects. Passing destructive actions emit retention receipts and tombstone/redaction metadata that preserve audit context without leaking private content. Retention receipts are deletion-safety evidence only and do not grant authority, provenance, transport, policy, resource, or execution trust.
+
 ## Supply-chain provenance diagnostics
 
 The provenance UX exposes canonical trust-state records and evaluation receipts without running a full node-control dispatch:

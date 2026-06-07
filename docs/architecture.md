@@ -244,6 +244,8 @@ Redb is the first local durable metadata store for:
 - content-reference bookkeeping,
 - later object/vat snapshot indexes.
 
+Retention and GC are explicit evidence boundaries. `<retention-class-v1 "molten.retention.class.v1" ...>` records declare retention classes such as ephemeral cache, debug trace, replay snapshot, audit receipt, durable value, public artifact, private secret ref, upgrade rollback, and legal hold. `<retention-pin-v1 "molten.retention.pin.v1" ...>` binds object refs to sources, owners, reasons, expiry refs, policy refs, and evidence refs; mutable names or absent aliases never prove deletion eligibility. Before a destructive action, Molten builds a bounded `<retention-reference-index-v1 "molten.retention.reference-index.v1" ...>` over active pins, retained receipt dependencies, tombstones, remote cache refs, and evaluation cache refs. `<retention-receipt-v1 "molten.retention.receipt.v1" ...>` denies when pins, legal holds, retained refs, missing policy/authority, remote uncertainty, or incomplete proof remain; passing destructive actions emit tombstone/redaction evidence through `<retention-tombstone-v1 "molten.retention.tombstone.v1" ...>` without leaking private content. Retention receipts are deletion-safety evidence only and do not grant authority, provenance, transport, policy, resource, or execution trust.
+
 ## Execution adapters
 
 Wasmtime actors are sandboxed actors. They receive narrow hostcalls such as:

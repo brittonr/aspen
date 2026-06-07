@@ -31,6 +31,7 @@ pub mod provenance;
 pub mod raft_control_plane;
 pub mod remote_dataspace;
 pub mod resources;
+pub mod retention;
 pub mod rewrites;
 pub mod runtime;
 pub mod schema_identity;

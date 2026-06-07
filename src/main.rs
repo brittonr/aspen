@@ -66,6 +66,7 @@ use molten::protocol_session;
 use molten::provenance;
 use molten::raft_control_plane;
 use molten::remote_dataspace;
+use molten::retention;
 use molten::rewrites;
 use molten::schema_identity;
 use molten::secrets;
@@ -190,6 +191,10 @@ enum TestCommand {
     Delivery {
         #[command(subcommand)]
         command: DeliveryCommand,
+    },
+    Retention {
+        #[command(subcommand)]
+        command: RetentionCommand,
     },
     Provenance {
         #[command(subcommand)]
@@ -2526,6 +2531,109 @@ enum DeliveryCommand {
 }
 
 #[derive(Debug, Subcommand)]
+enum RetentionCommand {
+    Class {
+        #[arg(long)]
+        class_name: String,
+        #[arg(long, default_value_t = 0)]
+        minimum_age_seconds: u64,
+        #[arg(long)]
+        maximum_age_seconds: Option<u64>,
+        #[arg(long)]
+        deletion_authority_ref: String,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long = "secret-redaction-hook", default_value = "false")]
+        has_secret_redaction_hook: bool,
+        #[arg(long = "remote-gc-plan", default_value = "false")]
+        has_remote_gc_plan: bool,
+        #[arg(long = "compaction", default_value = "false")]
+        has_compaction: bool,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    Pin {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        object_ref: String,
+        #[arg(long)]
+        object_kind: String,
+        #[arg(long)]
+        retention_class: String,
+        #[arg(long)]
+        source: String,
+        #[arg(long)]
+        reason: String,
+        #[arg(long)]
+        owner_ref: String,
+        #[arg(long)]
+        expiry_ref: Option<String>,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long, default_value = "true")]
+        has_authority: bool,
+        #[arg(long)]
+        pin_out: Option<PathBuf>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    Unpin {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        pin_ref: String,
+        #[arg(long)]
+        requester_ref: String,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long, default_value = "true")]
+        has_authority: bool,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    Check {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        object_ref: String,
+        #[arg(long)]
+        object_kind: String,
+        #[arg(long)]
+        retention_class: String,
+        #[arg(long, default_value = "eligibility")]
+        action: String,
+        #[arg(long)]
+        requester_ref: String,
+        #[arg(long = "reference-index-complete", default_value = "true")]
+        is_reference_index_complete: bool,
+        #[arg(long = "retained-ref")]
+        retained_refs: Vec<String>,
+        #[arg(long = "remote-ref")]
+        remote_refs: Vec<String>,
+        #[arg(long = "policy-ref")]
+        policy_refs: Vec<String>,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long, default_value = "false")]
+        has_delete_authority: bool,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    RunFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
+    Show {
+        artifact: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum ProvenanceCommand {
     BuildRecord {
         #[arg(long)]
@@ -2781,6 +2889,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Job { command } => run_job_command(command),
         TestCommand::Remote { command } => run_remote_command(command),
         TestCommand::Delivery { command } => run_delivery_command(command),
+        TestCommand::Retention { command } => run_retention_command(command),
         TestCommand::Provenance { command } => run_provenance_command(command),
         TestCommand::Protocol { command } => run_protocol_command(command),
         TestCommand::Raft { command } => run_raft_command(command),
@@ -6168,6 +6277,158 @@ fn run_delivery_command(command: DeliveryCommand) -> Result<()> {
         DeliveryCommand::Show { artifact } => {
             let value = read_preserves_file(&artifact)?;
             println!("{}", delivery_idempotency::delivery_summary(&value)?);
+            Ok(())
+        }
+    }
+}
+
+fn run_retention_command(command: RetentionCommand) -> Result<()> {
+    match command {
+        RetentionCommand::Class {
+            class_name,
+            minimum_age_seconds,
+            maximum_age_seconds,
+            deletion_authority_ref,
+            policy_refs,
+            has_secret_redaction_hook,
+            has_remote_gc_plan,
+            has_compaction,
+            out,
+        } => {
+            let value = retention::retention_class_profile_value(&retention::RetentionClassProfileInput {
+                class_name: class_name.clone(),
+                minimum_age_seconds,
+                maximum_age_seconds,
+                deletion_authority_ref,
+                policy_refs,
+                has_secret_redaction_hook,
+                has_remote_gc_plan,
+                can_compact: has_compaction,
+            })?;
+            let profile = retention::parse_retention_class_profile(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!("retention class ref={} class={}", profile.profile_ref, profile.class_name),
+            );
+            Ok(())
+        }
+        RetentionCommand::Pin {
+            root,
+            object_ref,
+            object_kind,
+            retention_class,
+            source,
+            reason,
+            owner_ref,
+            expiry_ref,
+            policy_refs,
+            evidence_refs,
+            has_authority,
+            pin_out,
+            receipt_out,
+        } => {
+            let operation = retention::pin_object(&root, retention::RetentionPinInput {
+                object_ref,
+                object_kind,
+                retention_class,
+                source,
+                reason,
+                owner_ref,
+                expiry_ref,
+                policy_refs,
+                evidence_refs,
+                has_authority,
+            })?;
+            write_optional_preserves(pin_out.as_ref(), &operation.pin.value)?;
+            let is_receipt_written = write_optional_preserves(receipt_out.as_ref(), &operation.receipt.value)?;
+            print_or_log_summary(
+                is_receipt_written,
+                &format!(
+                    "retention pin decision={} pin={} receipt={}",
+                    operation.receipt.decision, operation.pin.pin_ref, operation.receipt.receipt_ref
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::Unpin {
+            root,
+            pin_ref,
+            requester_ref,
+            policy_refs,
+            evidence_refs,
+            has_authority,
+            receipt_out,
+        } => {
+            let receipt = retention::unpin_object(retention::UnpinObjectInput {
+                root: &root,
+                pin_ref: &pin_ref,
+                requester_ref: &requester_ref,
+                policy_refs: &policy_refs,
+                evidence_refs: &evidence_refs,
+                has_authority,
+            })?;
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &receipt.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention unpin decision={} pin={} receipt={}",
+                    receipt.decision, pin_ref, receipt.receipt_ref
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::Check {
+            root,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            requester_ref,
+            is_reference_index_complete,
+            retained_refs,
+            remote_refs,
+            policy_refs,
+            evidence_refs,
+            has_delete_authority,
+            receipt_out,
+        } => {
+            let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
+                root: &root,
+                object_ref: &object_ref,
+                object_kind: &object_kind,
+                retention_class: &retention_class,
+                action: &action,
+                requester_ref: &requester_ref,
+                is_reference_index_complete,
+                retained_refs: &retained_refs,
+                remote_refs: &remote_refs,
+                policy_refs: &policy_refs,
+                evidence_refs: &evidence_refs,
+                has_delete_authority,
+            })?;
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &evaluation.receipt.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention decision={} action={} object={} receipt={} tombstone={}",
+                    evaluation.receipt.decision,
+                    evaluation.receipt.action,
+                    evaluation.receipt.object_ref,
+                    evaluation.receipt.receipt_ref,
+                    evaluation.receipt.tombstone_ref.as_deref().unwrap_or("none")
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::RunFixture { out } => {
+            let artifacts = retention::run_fixture(&out)?;
+            println!("retention fixture artifacts={} out={}", artifacts.len(), out.display());
+            Ok(())
+        }
+        RetentionCommand::Show { artifact } => {
+            let value = read_preserves_file(&artifact)?;
+            println!("{}", retention::retention_summary(&value)?);
             Ok(())
         }
     }
@@ -9974,6 +10235,114 @@ mod tests {
         .expect("parse duplicate receipt");
         assert_eq!(duplicate.decision, "duplicate");
         assert_eq!(duplicate.prior_receipt_ref.as_deref(), Some(first.receipt_ref.as_str()));
+    }
+
+    #[test]
+    fn cli_retention_commands_work() {
+        let dir = temp_dir("retention-cli");
+        let root = dir.join("store");
+        let policy_ref = cli_synthetic_ref("retention-policy").expect("policy ref");
+        let evidence_ref = cli_synthetic_ref("retention-evidence").expect("evidence ref");
+        let authority_ref = cli_synthetic_ref("retention-authority").expect("authority ref");
+        let owner_ref = cli_synthetic_ref("retention-owner").expect("owner ref");
+        let object_ref = cli_synthetic_ref("retention-object").expect("object ref");
+        let class_out = dir.join("class.preserves");
+        run_retention_command(RetentionCommand::Class {
+            class_name: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+            minimum_age_seconds: 0,
+            maximum_age_seconds: Some(3600),
+            deletion_authority_ref: authority_ref.clone(),
+            policy_refs: vec![policy_ref.clone()],
+            has_secret_redaction_hook: true,
+            has_remote_gc_plan: true,
+            has_compaction: false,
+            out: Some(class_out.clone()),
+        })
+        .expect("retention class");
+        run_retention_command(RetentionCommand::Show {
+            artifact: class_out.clone(),
+        })
+        .expect("show retention class");
+        let pin_out = dir.join("pin.preserves");
+        let pin_receipt_out = dir.join("pin-receipt.preserves");
+        run_retention_command(RetentionCommand::Pin {
+            root: root.clone(),
+            object_ref: object_ref.clone(),
+            object_kind: "encrypted-ref".to_string(),
+            retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+            source: retention::SOURCE_SECRET_REDACTION.to_string(),
+            reason: "reveal audit pending".to_string(),
+            owner_ref: owner_ref.clone(),
+            expiry_ref: None,
+            policy_refs: vec![policy_ref.clone()],
+            evidence_refs: vec![evidence_ref.clone()],
+            has_authority: true,
+            pin_out: Some(pin_out.clone()),
+            receipt_out: Some(pin_receipt_out.clone()),
+        })
+        .expect("pin retention object");
+        let pin = retention::parse_retention_pin(&read_preserves_file(&pin_out).expect("read pin")).expect("parse pin");
+        let denied_receipt = dir.join("delete-denied.preserves");
+        run_retention_command(RetentionCommand::Check {
+            root: root.clone(),
+            object_ref: object_ref.clone(),
+            object_kind: "encrypted-ref".to_string(),
+            retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+            action: retention::ACTION_DELETE.to_string(),
+            requester_ref: owner_ref.clone(),
+            is_reference_index_complete: true,
+            retained_refs: Vec::new(),
+            remote_refs: Vec::new(),
+            policy_refs: vec![policy_ref.clone()],
+            evidence_refs: vec![evidence_ref.clone()],
+            has_delete_authority: true,
+            receipt_out: Some(denied_receipt.clone()),
+        })
+        .expect("deny pinned delete");
+        let denied =
+            retention::parse_retention_receipt(&read_preserves_file(&denied_receipt).expect("read denied receipt"))
+                .expect("parse denied receipt");
+        assert_eq!(denied.decision, "deny");
+        let unpin_receipt = dir.join("unpin-receipt.preserves");
+        run_retention_command(RetentionCommand::Unpin {
+            root: root.clone(),
+            pin_ref: pin.pin_ref,
+            requester_ref: owner_ref.clone(),
+            policy_refs: vec![policy_ref.clone()],
+            evidence_refs: vec![evidence_ref.clone()],
+            has_authority: true,
+            receipt_out: Some(unpin_receipt),
+        })
+        .expect("unpin retention object");
+        let tombstone_receipt = dir.join("tombstone-receipt.preserves");
+        run_retention_command(RetentionCommand::Check {
+            root: root.clone(),
+            object_ref: object_ref.clone(),
+            object_kind: "encrypted-ref".to_string(),
+            retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+            action: retention::ACTION_TOMBSTONE.to_string(),
+            requester_ref: owner_ref,
+            is_reference_index_complete: true,
+            retained_refs: Vec::new(),
+            remote_refs: Vec::new(),
+            policy_refs: vec![policy_ref],
+            evidence_refs: vec![evidence_ref],
+            has_delete_authority: true,
+            receipt_out: Some(tombstone_receipt.clone()),
+        })
+        .expect("tombstone retention object");
+        let tombstone = retention::parse_retention_receipt(
+            &read_preserves_file(&tombstone_receipt).expect("read tombstone receipt"),
+        )
+        .expect("parse tombstone receipt");
+        assert_eq!(tombstone.decision, "pass");
+        assert!(tombstone.tombstone_ref.is_some());
+        let fixture_out = dir.join("fixture");
+        run_retention_command(RetentionCommand::RunFixture {
+            out: fixture_out.clone(),
+        })
+        .expect("retention fixture");
+        assert!(fixture_out.join("tombstone.preserves").exists());
     }
 
     #[test]

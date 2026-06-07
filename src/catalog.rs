@@ -705,6 +705,46 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
             format!("transcript-mode:{}", receipt.mode),
         ]);
     }
+    if let Ok(profile) = crate::retention::parse_retention_class_profile(value) {
+        return Ok(vec![
+            "retention:class".to_string(),
+            format!("retention-class:{}", profile.class_name),
+            format!("retention-policies:{}", profile.policy_refs.len()),
+        ]);
+    }
+    if let Ok(pin) = crate::retention::parse_retention_pin(value) {
+        return Ok(vec![
+            "retention:pin".to_string(),
+            format!("retention-object:{}", pin.object_ref),
+            format!("retention-class:{}", pin.retention_class),
+            format!("retention-source:{}", pin.source),
+        ]);
+    }
+    if let Ok(index) = crate::retention::parse_reference_index(value) {
+        return Ok(vec![
+            "retention:index".to_string(),
+            format!("retention-object:{}", index.object_ref),
+            format!("retention-pins:{}", index.pin_refs.len()),
+            format!("retention-complete:{}", index.is_complete),
+        ]);
+    }
+    if let Ok(receipt) = crate::retention::parse_retention_receipt(value) {
+        return Ok(vec![
+            "retention:receipt".to_string(),
+            format!("retention-decision:{}", receipt.decision),
+            format!("retention-action:{}", receipt.action),
+            format!("retention-object:{}", receipt.object_ref),
+            format!("retention-pins:{}", receipt.pin_refs.len()),
+        ]);
+    }
+    if let Ok(tombstone) = crate::retention::parse_tombstone(value) {
+        return Ok(vec![
+            "retention:tombstone".to_string(),
+            format!("retention-action:{}", tombstone.action),
+            format!("retention-object:{}", tombstone.object_ref),
+            format!("retention-class:{}", tombstone.retention_class),
+        ]);
+    }
     if crate::transcripts::parse_transcript_artifact(value).is_ok() {
         return Ok(vec![
             "transcript:artifact".to_string(),
