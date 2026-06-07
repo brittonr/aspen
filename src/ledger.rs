@@ -15,6 +15,7 @@ use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::retention;
 
 const MAX_LEDGER_SCAN_ENTRIES: usize = 100_000;
 const _: () = assert!(MAX_LEDGER_SCAN_ENTRIES > 0);
@@ -42,7 +43,9 @@ pub struct LedgerExport {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LedgerGc {
     pub dry_run: bool,
+    pub decision: String,
     pub removed_refs: Vec<String>,
+    pub retention_receipt_refs: Vec<String>,
     pub receipt_value: IOValue,
 }
 
@@ -147,31 +150,108 @@ pub fn pin_artifact(root: &Path, artifact_ref: &str) -> Result<()> {
 pub fn gc(root: &Path, dry_run: bool) -> Result<LedgerGc> {
     ensure_dirs(root)?;
     let pins = pinned_refs(root)?;
-    let mut removed_refs = Vec::new();
+    let mut candidates = Vec::new();
     for entry in list_artifacts(root)? {
         if pins.iter().any(|pin| pin == &entry.artifact_ref) {
             continue;
         }
-        push_bounded(&mut removed_refs, entry.artifact_ref.clone(), MAX_LEDGER_SCAN_ENTRIES, "ledger removed refs")?;
-        if !dry_run {
-            fs::remove_file(content_path(root, &entry.artifact_ref)?).map_err(MoltenError::from)?;
+        push_bounded(&mut candidates, entry, MAX_LEDGER_SCAN_ENTRIES, "ledger gc candidates")?;
+    }
+    let requester_ref = ledger_retention_ref("requester")?;
+    let policy_refs = vec![ledger_retention_ref("policy")?];
+    let evidence_refs = vec![ledger_retention_ref("evidence")?];
+    let action = if dry_run {
+        retention::ACTION_ELIGIBILITY
+    } else {
+        retention::ACTION_DELETE
+    };
+    let mut retention_receipt_refs = Vec::new();
+    let mut retention_denials = Vec::new();
+    for entry in &candidates {
+        let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
+            root,
+            object_ref: &entry.artifact_ref,
+            object_kind: &entry.artifact_kind,
+            retention_class: ledger_retention_class(&entry.artifact_kind),
+            action,
+            requester_ref: &requester_ref,
+            is_reference_index_complete: true,
+            retained_refs: &[],
+            remote_refs: &[],
+            policy_refs: &policy_refs,
+            evidence_refs: &evidence_refs,
+            has_delete_authority: true,
+        })?;
+        push_bounded(
+            &mut retention_receipt_refs,
+            evaluation.receipt.receipt_ref.clone(),
+            MAX_LEDGER_SCAN_ENTRIES,
+            "ledger retention receipt refs",
+        )?;
+        if evaluation.receipt.decision != "pass" {
+            push_bounded(
+                &mut retention_denials,
+                entry.artifact_ref.clone(),
+                MAX_LEDGER_SCAN_ENTRIES,
+                "ledger retention denials",
+            )?;
+        }
+    }
+    let decision = if retention_denials.is_empty() { "pass" } else { "deny" };
+    let mut removed_refs = Vec::new();
+    if decision == "pass" {
+        for entry in &candidates {
+            push_bounded(
+                &mut removed_refs,
+                entry.artifact_ref.clone(),
+                MAX_LEDGER_SCAN_ENTRIES,
+                "ledger removed refs",
+            )?;
+            if !dry_run {
+                fs::remove_file(content_path(root, &entry.artifact_ref)?).map_err(MoltenError::from)?;
+            }
         }
     }
     let receipt_value = record("ledger-gc-receipt-v1", vec![
         string(EVIDENCE_LEDGER_GC_RECEIPT_SCHEMA),
-        record("decision", vec![string("pass")]),
+        record("decision", vec![string(decision)]),
         record("mode", vec![string(if dry_run { "dry-run" } else { "apply" })]),
         record("removed", vec![sequence(removed_refs.iter().map(string).collect())]),
+        record("retention", vec![sequence(retention_receipt_refs.iter().map(string).collect())]),
+        record("denied", vec![sequence(retention_denials.iter().map(string).collect())]),
         record("checks", vec![sequence(vec![
             record("check", vec![string("pin-preservation"), string("pass")]),
             record("check", vec![string("derived-index-scan"), string("pass")]),
+            record("check", vec![string("retention-receipt-bound"), string("pass")]),
+            record("check", vec![
+                string("deny-before-removal"),
+                string(if decision == "pass" { "pass" } else { "fail" }),
+            ]),
         ])]),
     ]);
     Ok(LedgerGc {
         dry_run,
+        decision: decision.to_string(),
         removed_refs,
+        retention_receipt_refs,
         receipt_value,
     })
+}
+
+fn ledger_retention_ref(kind: &str) -> Result<String> {
+    canonical_hash(&record("ledger-gc-retention-ref-v1", vec![string(kind)]))
+}
+
+fn ledger_retention_class(artifact_kind: &str) -> &'static str {
+    if artifact_kind.contains("secret") || artifact_kind.contains("encrypted") || artifact_kind.contains("redaction") {
+        retention::CLASS_PRIVATE_SECRET_REF
+    } else if artifact_kind.contains("cache") {
+        retention::CLASS_EPHEMERAL_CACHE
+    } else if artifact_kind.contains("artifact") || artifact_kind.contains("manifest") {
+        retention::CLASS_PUBLIC_ARTIFACT
+    } else {
+        retention::CLASS_AUDIT_RECEIPT
+    }
 }
 
 pub fn ledger_import_receipt_value(artifact_ref: &str, artifact_kind: &str) -> IOValue {
@@ -558,6 +638,35 @@ mod tests {
         pin_artifact(&root, &imported.artifact_ref).expect("pin artifact");
         let gc = gc(&root, false).expect("gc ledger");
         assert!(gc.removed_refs.is_empty());
+        assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
+    }
+
+    #[test]
+    fn ledger_gc_requires_retention_pass_before_removal() {
+        let root = temp_dir("ledger-retention");
+        let artifact = parse_text("<example \"retained\">").expect("parse artifact");
+        let imported = import_artifact(&root, &artifact).expect("import artifact");
+        let owner_ref = canonical_hash(&record("ledger-test-ref", vec![string("owner")])).expect("owner ref");
+        let policy_refs = vec![canonical_hash(&record("ledger-test-ref", vec![string("policy")])).expect("policy ref")];
+        let evidence_refs =
+            vec![canonical_hash(&record("ledger-test-ref", vec![string("evidence")])).expect("evidence ref")];
+        crate::retention::pin_object(&root, crate::retention::RetentionPinInput {
+            object_ref: imported.artifact_ref.clone(),
+            object_kind: imported.artifact_kind.clone(),
+            retention_class: crate::retention::CLASS_AUDIT_RECEIPT.to_string(),
+            source: crate::retention::SOURCE_OPERATOR_HOLD.to_string(),
+            reason: "operator hold".to_string(),
+            owner_ref,
+            expiry_ref: None,
+            policy_refs,
+            evidence_refs,
+            has_authority: true,
+        })
+        .expect("retention pin");
+        let gc = gc(&root, false).expect("gc ledger");
+        assert_eq!(gc.decision, "deny");
+        assert!(gc.removed_refs.is_empty());
+        assert!(!gc.retention_receipt_refs.is_empty());
         assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
     }
 

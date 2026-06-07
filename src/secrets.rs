@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
+use std::path::PathBuf;
 
 use preserves::IOValue;
 use preserves::Record;
@@ -24,6 +25,7 @@ use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::to_text;
 use crate::preserves_rail::value_to_iovalue;
+use crate::retention;
 
 const MAX_SECRET_REFS: usize = 32;
 const MAX_SECRET_USES: usize = 16;
@@ -241,6 +243,7 @@ pub struct SecretCleanupInput {
     pub revocation_ref: String,
     pub tombstone_ref: String,
     pub retention_refs: Vec<String>,
+    pub retention_receipts: Vec<IOValue>,
     pub authority_refs: Vec<String>,
     pub policy_refs: Vec<String>,
 }
@@ -830,7 +833,8 @@ pub fn secret_cleanup_receipt_value(input: &SecretCleanupInput) -> Result<IOValu
     validate_refs(&input.retention_refs, "cleanup retention ref")?;
     validate_refs(&input.authority_refs, "cleanup authority ref")?;
     validate_refs(&input.policy_refs, "cleanup policy ref")?;
-    let mut diagnostics = Vec::new();
+    ensure_count_at_most(input.retention_receipts.len(), MAX_SECRET_REFS, "cleanup retention receipts")?;
+    let mut diagnostics = cleanup_retention_diagnostics(input)?;
     if input.authority_refs.is_empty() {
         diagnostics.push_limited(
             "secret cleanup requires authority evidence".to_string(),
@@ -856,6 +860,68 @@ pub fn secret_cleanup_receipt_value(input: &SecretCleanupInput) -> Result<IOValu
         diagnostics_value(&diagnostics),
         checks_value(&secret_cleanup_checks(decision)),
     ]))
+}
+
+fn cleanup_retention_diagnostics(input: &SecretCleanupInput) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    let expected_refs = input.retention_refs.iter().cloned().collect::<BTreeSet<_>>();
+    let mut actual_refs = BTreeSet::new();
+    let mut has_matching_pass = false;
+    let mut has_matching_tombstone = false;
+    for receipt_value in &input.retention_receipts {
+        match retention::parse_retention_receipt(receipt_value) {
+            Ok(receipt) => {
+                actual_refs.insert(receipt.receipt_ref.clone());
+                let is_cleanup_action = matches!(
+                    receipt.action.as_str(),
+                    retention::ACTION_DELETE | retention::ACTION_TOMBSTONE | retention::ACTION_REDACT
+                );
+                if receipt.decision == "pass"
+                    && receipt.object_ref == input.secret_ref
+                    && receipt.retention_class == retention::CLASS_PRIVATE_SECRET_REF
+                    && is_cleanup_action
+                {
+                    has_matching_pass = true;
+                    if receipt.tombstone_ref.as_deref() == Some(input.tombstone_ref.as_str()) {
+                        has_matching_tombstone = true;
+                    }
+                }
+            }
+            Err(_) => diagnostics.push_limited(
+                "secret cleanup retention receipt invalid".to_string(),
+                MAX_SECRET_DIAGNOSTICS,
+                "secret cleanup diagnostics",
+            )?,
+        }
+    }
+    if input.retention_receipts.is_empty() {
+        diagnostics.push_limited(
+            "secret cleanup requires retention receipt evidence".to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret cleanup diagnostics",
+        )?;
+    }
+    if expected_refs != actual_refs {
+        diagnostics.push_limited(
+            "secret cleanup retention receipt refs mismatch".to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret cleanup diagnostics",
+        )?;
+    }
+    if !has_matching_pass {
+        diagnostics.push_limited(
+            "secret cleanup requires passing private-secret retention receipt".to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret cleanup diagnostics",
+        )?;
+    } else if !has_matching_tombstone {
+        diagnostics.push_limited(
+            "secret cleanup retention tombstone mismatch".to_string(),
+            MAX_SECRET_DIAGNOSTICS,
+            "secret cleanup diagnostics",
+        )?;
+    }
+    Ok(diagnostics)
 }
 
 pub fn parse_secret_cleanup_receipt(value: &IOValue) -> Result<SecretCleanupReceipt> {
@@ -1123,6 +1189,14 @@ pub fn fixture_field_labels() -> Result<Vec<ConfidentialLabel>> {
     Ok(labels)
 }
 
+fn secrets_fixture_retention_root(secret_ref: &str) -> Result<PathBuf> {
+    let root_ref = canonical_hash(&record("secrets-fixture-retention-root-v1", vec![
+        string(secret_ref),
+        string(std::process::id().to_string()),
+    ]))?;
+    Ok(std::env::temp_dir().join("molten-secrets-retention").join(root_ref))
+}
+
 pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
     let labels = fixture_field_labels()?;
     let primary_label =
@@ -1233,11 +1307,32 @@ pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
         is_plaintext_required: false,
     })?;
     let replay = parse_commitment_replay_receipt(&replay_value)?;
+    let retention_root = secrets_fixture_retention_root(&secret.secret_ref)?;
+    let cleanup_retention = retention::evaluate_retention(retention::RetentionEvaluationInput {
+        root: &retention_root,
+        object_ref: &secret.secret_ref,
+        object_kind: "secret-ref",
+        retention_class: retention::CLASS_PRIVATE_SECRET_REF,
+        action: retention::ACTION_REDACT,
+        requester_ref: &fixture_ref("requester"),
+        is_reference_index_complete: true,
+        retained_refs: &[],
+        remote_refs: &[],
+        policy_refs: &policy_refs,
+        evidence_refs: &evidence_refs,
+        has_delete_authority: true,
+    })?;
+    let cleanup_tombstone_ref = cleanup_retention
+        .receipt
+        .tombstone_ref
+        .clone()
+        .ok_or_else(|| MoltenError::invalid_harness("secrets cleanup retention receipt missing tombstone"))?;
     let cleanup_value = secret_cleanup_receipt_value(&SecretCleanupInput {
         secret_ref: secret.secret_ref.clone(),
         revocation_ref: fixture_ref("secret-revocation"),
-        tombstone_ref: fixture_ref("secret-tombstone"),
-        retention_refs: vec![marker.marker_ref.clone(), encrypted.encrypted_ref.clone()],
+        tombstone_ref: cleanup_tombstone_ref,
+        retention_refs: vec![cleanup_retention.receipt.receipt_ref.clone()],
+        retention_receipts: vec![cleanup_retention.receipt.value.clone()],
         authority_refs,
         policy_refs: policy_refs.clone(),
     })?;
@@ -1264,10 +1359,14 @@ pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
         decrypt_denied.value.clone(),
         decrypt_pass.value.clone(),
         replay.value.clone(),
+        cleanup_retention.receipt.value.clone(),
         cleanup.value.clone(),
         private_bundle.value.clone(),
     ] {
         evidence_values.push_limited(value, MAX_SECRET_MARKERS, "secrets fixture evidence")?;
+    }
+    if let Some(tombstone) = cleanup_retention.tombstone.as_ref() {
+        evidence_values.push_limited(tombstone.value.clone(), MAX_SECRET_MARKERS, "secrets fixture evidence")?;
     }
     let report_value = record("secrets-fixture-report-v1", vec![
         string("molten.secrets.fixture-report.v1"),
@@ -1751,6 +1850,8 @@ mod tests {
         assert_eq!(run.decrypt_denied.decision, "deny");
         assert_eq!(run.decrypt_pass.decision, "pass");
         assert_eq!(run.replay.decision, "pass");
+        assert_eq!(run.cleanup.decision, "pass");
+        assert_eq!(run.cleanup.retention_refs.len(), 1);
         assert!(run.reveal_denied.plaintext_ref.is_none());
         assert!(fixture_report_summary(&run.value).expect("fixture summary").contains("plaintext=redacted"));
         assert_eq!(parse_secret_ref(&run.secret.value).expect("secret").secret_ref, run.secret.secret_ref);
@@ -1759,6 +1860,23 @@ mod tests {
             run.encrypted.encrypted_ref
         );
         assert_eq!(parse_redaction_marker(&run.marker.value).expect("marker").marker_ref, run.marker.marker_ref);
+    }
+
+    #[test]
+    fn secret_cleanup_requires_actual_retention_receipt_evidence() {
+        let denied_value = secret_cleanup_receipt_value(&SecretCleanupInput {
+            secret_ref: fixture_ref("secret"),
+            revocation_ref: fixture_ref("revocation"),
+            tombstone_ref: fixture_ref("tombstone"),
+            retention_refs: Vec::new(),
+            retention_receipts: Vec::new(),
+            authority_refs: vec![fixture_ref("authority")],
+            policy_refs: vec![fixture_ref("policy")],
+        })
+        .expect("cleanup receipt");
+        let denied = parse_secret_cleanup_receipt(&denied_value).expect("parse cleanup deny");
+        assert_eq!(denied.decision, "deny");
+        assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("retention receipt")));
     }
 
     #[test]

@@ -51,6 +51,7 @@ use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
 use crate::preserves_rail::value_to_iovalue;
+use crate::retention;
 
 pub const FIXED_V1_CHUNKER: &str = "fixed_v1";
 pub const DEFAULT_FIXED_V1_CHUNK_SIZE: u64 = 64 * 1024;
@@ -198,8 +199,10 @@ struct IrohChunkTicket {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChunkStoreGc {
     pub dry_run: bool,
+    pub decision: String,
     pub removed_manifests: Vec<String>,
     pub removed_chunks: Vec<String>,
+    pub retention_receipt_refs: Vec<String>,
     pub receipt_value: IOValue,
 }
 
@@ -1471,12 +1474,16 @@ pub fn unpin_chunk(root: &Path, chunk_ref: &str) -> Result<ChunkStorePin> {
     })
 }
 
+fn chunk_retention_ref(kind: &str) -> Result<String> {
+    canonical_hash(&record("chunk-store-retention-ref-v1", vec![string(kind)]))
+}
+
 pub fn gc(root: &Path, dry_run: bool) -> Result<ChunkStoreGc> {
     ensure_dirs(root)?;
     let pinned_manifests = pinned_refs(&root.join("pins").join("manifests"))?;
     let pinned_chunks = pinned_refs(&root.join("pins").join("chunks"))?;
     let mut reachable_chunks = pinned_chunks.clone();
-    let mut removed_manifests = Vec::new();
+    let mut candidate_manifests = Vec::new();
     for manifest_ref in list_manifest_refs(root)? {
         if pinned_manifests.iter().any(|pinned| pinned == &manifest_ref) {
             let manifest = read_manifest(root, &manifest_ref)?;
@@ -1492,61 +1499,146 @@ pub fn gc(root: &Path, dry_run: bool) -> Result<ChunkStoreGc> {
             }
         } else {
             push_bounded(
-                &mut removed_manifests,
+                &mut candidate_manifests,
                 manifest_ref.clone(),
                 MAX_CHUNK_STORE_MANIFESTS,
                 "chunk store removed manifests",
             )?;
-            if !dry_run {
-                fs::remove_file(manifest_path(root, &manifest_ref)?).map_err(MoltenError::from)?;
-            }
         }
     }
-    let mut removed_chunks = Vec::new();
+    let mut candidate_chunks = Vec::new();
     for chunk_ref in list_chunk_refs(root)? {
         if reachable_chunks.iter().any(|reachable| reachable == &chunk_ref) {
             continue;
         }
-        push_bounded(&mut removed_chunks, chunk_ref.clone(), MAX_CHUNK_STORE_CHUNKS, "chunk store removed chunks")?;
+        push_bounded(&mut candidate_chunks, chunk_ref.clone(), MAX_CHUNK_STORE_CHUNKS, "chunk store removed chunks")?;
+    }
+    let requester_ref = chunk_retention_ref("requester")?;
+    let policy_refs = vec![chunk_retention_ref("policy")?];
+    let evidence_refs = vec![chunk_retention_ref("evidence")?];
+    let action = if dry_run {
+        retention::ACTION_ELIGIBILITY
+    } else {
+        retention::ACTION_DELETE
+    };
+    let mut retention_receipt_refs = Vec::new();
+    let mut retention_denials = Vec::new();
+    for manifest_ref in &candidate_manifests {
+        let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
+            root,
+            object_ref: manifest_ref,
+            object_kind: "chunk-manifest",
+            retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+            action,
+            requester_ref: &requester_ref,
+            is_reference_index_complete: true,
+            retained_refs: &[],
+            remote_refs: &[],
+            policy_refs: &policy_refs,
+            evidence_refs: &evidence_refs,
+            has_delete_authority: true,
+        })?;
+        push_bounded(
+            &mut retention_receipt_refs,
+            evaluation.receipt.receipt_ref.clone(),
+            MAX_CHUNK_STORE_RECEIPTS,
+            "chunk store retention receipt refs",
+        )?;
+        if evaluation.receipt.decision != "pass" {
+            push_bounded(
+                &mut retention_denials,
+                manifest_ref.clone(),
+                MAX_CHUNK_STORE_REFS,
+                "chunk store retention denials",
+            )?;
+        }
+    }
+    for chunk_ref in &candidate_chunks {
+        let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
+            root,
+            object_ref: chunk_ref,
+            object_kind: "chunk",
+            retention_class: retention::CLASS_DURABLE_VALUE,
+            action,
+            requester_ref: &requester_ref,
+            is_reference_index_complete: true,
+            retained_refs: &[],
+            remote_refs: &[],
+            policy_refs: &policy_refs,
+            evidence_refs: &evidence_refs,
+            has_delete_authority: true,
+        })?;
+        push_bounded(
+            &mut retention_receipt_refs,
+            evaluation.receipt.receipt_ref.clone(),
+            MAX_CHUNK_STORE_RECEIPTS,
+            "chunk store retention receipt refs",
+        )?;
+        if evaluation.receipt.decision != "pass" {
+            push_bounded(
+                &mut retention_denials,
+                chunk_ref.clone(),
+                MAX_CHUNK_STORE_REFS,
+                "chunk store retention denials",
+            )?;
+        }
+    }
+    let decision = if retention_denials.is_empty() { "pass" } else { "deny" };
+    let mut removed_manifests = Vec::new();
+    let mut removed_chunks = Vec::new();
+    if decision == "pass" {
+        removed_manifests = candidate_manifests;
+        removed_chunks = candidate_chunks;
         if !dry_run {
-            fs::remove_file(chunk_path(root, &chunk_ref)?).map_err(MoltenError::from)?;
+            for manifest_ref in &removed_manifests {
+                fs::remove_file(manifest_path(root, manifest_ref)?).map_err(MoltenError::from)?;
+            }
+            for chunk_ref in &removed_chunks {
+                fs::remove_file(chunk_path(root, chunk_ref)?).map_err(MoltenError::from)?;
+            }
         }
     }
     let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
         operation: "gc",
-        decision: "pass",
+        decision,
         manifest_ref: None,
         chunk_refs: &removed_chunks,
         checks: vec![
             ("pin-reachability", "pass"),
             ("deny-incomplete-reachability-proof", "pass"),
-            ("chunk-tombstone-eligibility", "pass"),
-            ("redb-index-update", "pass"),
+            ("chunk-tombstone-eligibility", if decision == "pass" { "pass" } else { "fail" }),
+            ("retention-receipt-bound", "pass"),
+            ("redb-index-update", if decision == "pass" { "pass" } else { "fail" }),
         ],
         details: vec![
             record("mode", vec![string(if dry_run { "dry-run" } else { "apply" })]),
             record("removed-manifests", vec![sequence(removed_manifests.iter().map(string).collect())]),
+            record("retention", vec![sequence(retention_receipt_refs.iter().map(string).collect())]),
+            record("denied", vec![sequence(retention_denials.iter().map(string).collect())]),
         ],
     });
-    let tombstone_receipt = if removed_manifests.is_empty() && removed_chunks.is_empty() {
-        None
-    } else {
-        Some(self::receipt_value(ChunkStoreReceiptValueInput {
-            operation: "tombstone",
-            decision: "pass",
-            manifest_ref: None,
-            chunk_refs: &removed_chunks,
-            checks: vec![
-                ("pin-reachability", "pass"),
-                ("tombstone-eligibility", "pass"),
-                ("gc-mode-binding", "pass"),
-            ],
-            details: vec![
-                record("mode", vec![string(if dry_run { "dry-run" } else { "apply" })]),
-                record("removed-manifests", vec![sequence(removed_manifests.iter().map(string).collect())]),
-            ],
-        }))
-    };
+    let tombstone_receipt =
+        if !dry_run && decision == "pass" && (!removed_manifests.is_empty() || !removed_chunks.is_empty()) {
+            Some(self::receipt_value(ChunkStoreReceiptValueInput {
+                operation: "tombstone",
+                decision: "pass",
+                manifest_ref: None,
+                chunk_refs: &removed_chunks,
+                checks: vec![
+                    ("pin-reachability", "pass"),
+                    ("tombstone-eligibility", "pass"),
+                    ("gc-mode-binding", "pass"),
+                    ("retention-receipt-bound", "pass"),
+                ],
+                details: vec![
+                    record("mode", vec![string(if dry_run { "dry-run" } else { "apply" })]),
+                    record("removed-manifests", vec![sequence(removed_manifests.iter().map(string).collect())]),
+                    record("retention", vec![sequence(retention_receipt_refs.iter().map(string).collect())]),
+                ],
+            }))
+        } else {
+            None
+        };
     index_apply_gc(&IndexApplyGcInput {
         root,
         dry_run,
@@ -1557,8 +1649,10 @@ pub fn gc(root: &Path, dry_run: bool) -> Result<ChunkStoreGc> {
     })?;
     Ok(ChunkStoreGc {
         dry_run,
+        decision: decision.to_string(),
         removed_manifests,
         removed_chunks,
+        retention_receipt_refs,
         receipt_value,
     })
 }
@@ -3586,6 +3680,35 @@ mod tests {
         assert!(gc.removed_chunks.contains(&unpinned.chunk_refs[0]));
         read_object(&root, &pinned.manifest_ref).expect("pinned object remains readable");
         assert!(read_manifest(&root, &unpinned.manifest_ref).is_err());
+    }
+
+    #[test]
+    fn chunk_gc_requires_retention_pass_before_removal() {
+        let root = temp_dir("chunk-retention-gc");
+        let put = put_bytes(&root, "artifact", b"retained", 4).expect("put retained");
+        let owner_ref = canonical_hash(&record("chunk-test-ref", vec![string("owner")])).expect("owner ref");
+        let policy_refs = vec![canonical_hash(&record("chunk-test-ref", vec![string("policy")])).expect("policy ref")];
+        let evidence_refs =
+            vec![canonical_hash(&record("chunk-test-ref", vec![string("evidence")])).expect("evidence ref")];
+        retention::pin_object(&root, retention::RetentionPinInput {
+            object_ref: put.manifest_ref.clone(),
+            object_kind: "chunk-manifest".to_string(),
+            retention_class: retention::CLASS_PUBLIC_ARTIFACT.to_string(),
+            source: retention::SOURCE_OPERATOR_HOLD.to_string(),
+            reason: "operator hold".to_string(),
+            owner_ref,
+            expiry_ref: None,
+            policy_refs,
+            evidence_refs,
+            has_authority: true,
+        })
+        .expect("retention pin");
+        let gc = gc(&root, false).expect("gc");
+        assert_eq!(gc.decision, "deny");
+        assert!(gc.removed_manifests.is_empty());
+        assert!(gc.removed_chunks.is_empty());
+        assert!(!gc.retention_receipt_refs.is_empty());
+        read_object(&root, &put.manifest_ref).expect("retained object remains readable");
     }
 
     #[test]

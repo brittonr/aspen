@@ -287,7 +287,7 @@ molten test retention check --root target/retention-store \
   --receipt-out target/retention.delete.preserves
 ```
 
-Pinned objects, legal holds, retained receipt dependencies, incomplete reference indexes, and missing policy/authority all deny before destructive side effects. Passing destructive actions emit retention receipts and tombstone/redaction metadata that preserve audit context without leaking private content. Retention receipts are deletion-safety evidence only and do not grant authority, provenance, transport, policy, resource, or execution trust.
+Pinned objects, legal holds, retained receipt dependencies, incomplete reference indexes, and missing policy/authority all deny before destructive side effects. Evidence-ledger GC, chunk-store GC, evaluation-cache invalidation, and secret cleanup now bind retention receipts before removing content or writing tombstones; denial leaves content intact and emits auditable subsystem receipts. Passing destructive actions emit retention receipts and tombstone/redaction metadata that preserve audit context without leaking private content. Retention receipts are deletion-safety evidence only and do not grant authority, provenance, transport, policy, resource, or execution trust.
 
 ## Supply-chain provenance diagnostics
 

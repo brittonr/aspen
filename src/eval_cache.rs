@@ -27,6 +27,7 @@ use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
 use crate::preserves_rail::value_to_iovalue;
+use crate::retention;
 
 pub const INLINE_OUTPUT_LIMIT: usize = 4096;
 
@@ -226,7 +227,9 @@ pub struct EvalCacheInvalidateInput {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvalCacheInvalidate {
+    pub decision: String,
     pub invalidated_key_refs: Vec<String>,
+    pub retention_receipt_refs: Vec<String>,
     pub receipt_value: IOValue,
 }
 
@@ -533,31 +536,91 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
     } else {
         input.reason.clone()
     };
-    let invalidated_key_refs = keys.into_iter().collect::<Vec<_>>();
+    let selected_key_refs = keys.into_iter().collect::<Vec<_>>();
+    let requester_ref = eval_cache_retention_ref("requester")?;
+    let policy_refs = vec![eval_cache_retention_ref("policy")?];
+    let evidence_refs = vec![eval_cache_retention_ref("evidence")?];
+    let mut retention_receipt_refs = Vec::new();
+    let mut retention_denials = Vec::new();
+    for key_ref in &selected_key_refs {
+        let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
+            root,
+            object_ref: key_ref,
+            object_kind: "eval-cache-key",
+            retention_class: retention::CLASS_EPHEMERAL_CACHE,
+            action: retention::ACTION_TOMBSTONE,
+            requester_ref: &requester_ref,
+            is_reference_index_complete: true,
+            retained_refs: &[],
+            remote_refs: &[],
+            policy_refs: &policy_refs,
+            evidence_refs: &evidence_refs,
+            has_delete_authority: true,
+        })?;
+        push_bounded(
+            &mut retention_receipt_refs,
+            evaluation.receipt.receipt_ref.clone(),
+            MAX_EVAL_CACHE_SCAN_ENTRIES,
+            "eval cache retention receipt refs",
+        )?;
+        if evaluation.receipt.decision != "pass" {
+            push_bounded(
+                &mut retention_denials,
+                key_ref.clone(),
+                MAX_EVAL_CACHE_SCAN_ENTRIES,
+                "eval cache retention denials",
+            )?;
+        }
+    }
+    let decision = if retention_denials.is_empty() { "pass" } else { "deny" };
+    let invalidated_key_refs = if decision == "pass" {
+        selected_key_refs
+    } else {
+        Vec::new()
+    };
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
-    {
+    if decision == "pass" {
         let mut tombstones = write_txn.open_table(INDEX_TOMBSTONES).map_err(index_error)?;
         for key_ref in &invalidated_key_refs {
             tombstones.insert(key_ref.as_str(), reason.as_str()).map_err(index_error)?;
         }
     }
-    let refs = invalidated_key_refs.clone();
+    let mut refs = invalidated_key_refs.clone();
+    for receipt_ref in &retention_receipt_refs {
+        push_bounded(&mut refs, receipt_ref.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
+    let diagnostics = if decision == "pass" {
+        vec![format!("invalidated {} keys", invalidated_key_refs.len())]
+    } else {
+        vec![format!("retention denied {} keys", retention_denials.len())]
+    };
     let receipt = receipt_value(&EvalCacheReceiptValueInput {
         operation: "invalidate",
-        decision: "pass",
+        decision,
         key_ref: None,
         value_ref: None,
         refs: &refs,
-        diagnostics: &[format!("invalidated {} keys", invalidated_key_refs.len())],
-        checks: &[("cache-invalidation", "pass"), ("tombstone", "pass")],
+        diagnostics: &diagnostics,
+        checks: &[
+            ("cache-invalidation", if decision == "pass" { "pass" } else { "fail" }),
+            ("tombstone", if decision == "pass" { "pass" } else { "fail" }),
+            ("retention-receipt-bound", "pass"),
+            ("deny-before-tombstone", if decision == "pass" { "pass" } else { "fail" }),
+        ],
     })?;
     store_receipt_in_tx(&write_txn, &receipt)?;
     write_txn.commit().map_err(index_error)?;
     Ok(EvalCacheInvalidate {
+        decision: decision.to_string(),
         invalidated_key_refs,
+        retention_receipt_refs,
         receipt_value: receipt,
     })
+}
+
+fn eval_cache_retention_ref(kind: &str) -> Result<String> {
+    canonical_hash(&record("eval-cache-retention-ref-v1", vec![string(kind)]))
 }
 
 pub fn status(root: &Path) -> Result<EvalCacheStatus> {
@@ -1606,6 +1669,39 @@ mod tests {
         })
         .expect_err("tombstone miss");
         assert!(miss.to_string().contains("tombstoned"), "{miss}");
+    }
+
+    #[test]
+    fn invalidation_requires_retention_pass_before_tombstone() {
+        let root = temp_dir("eval-cache-retention");
+        let key = key_input("schema-fingerprint", "retained-input", &[]);
+        let output = record("fingerprint", vec![string("retained")]);
+        let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output.clone()), &key, &[]))
+            .expect("put retained cache value");
+        retention::pin_object(&root, retention::RetentionPinInput {
+            object_ref: put.key.key_ref.clone(),
+            object_kind: "eval-cache-key".to_string(),
+            retention_class: retention::CLASS_EPHEMERAL_CACHE.to_string(),
+            source: retention::SOURCE_EVALUATION_CACHE.to_string(),
+            reason: "cache hold".to_string(),
+            owner_ref: test_ref("retention-owner"),
+            expiry_ref: None,
+            policy_refs: vec![test_ref("retention-policy")],
+            evidence_refs: vec![test_ref("retention-evidence")],
+            has_authority: true,
+        })
+        .expect("retention pin");
+        let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
+            key_ref: Some(put.key.key_ref.clone()),
+            reason: "retained".to_string(),
+            ..EvalCacheInvalidateInput::default()
+        })
+        .expect("invalidate retained key");
+        assert_eq!(invalidated.decision, "deny");
+        assert!(invalidated.invalidated_key_refs.is_empty());
+        assert!(!invalidated.retention_receipt_refs.is_empty());
+        let hit = get(&root, &put.key.key_ref, &EvalCacheGetInput::default()).expect("retained cache hit");
+        assert_eq!(hit.output, Some(output));
     }
 
     #[test]

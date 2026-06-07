@@ -3089,7 +3089,13 @@ fn run_ledger_command(command: LedgerCommand) -> Result<()> {
         } => {
             let gc = ledger::gc(&ledger, dry_run)?;
             emit_named_receipt(receipt_out.as_ref(), "ledger gc receipt", &gc.receipt_value)?;
-            println!("ledger gc ok dry_run={} removed={}", gc.dry_run, gc.removed_refs.len());
+            println!(
+                "ledger gc ok decision={} dry_run={} removed={} retention_receipts={}",
+                gc.decision,
+                gc.dry_run,
+                gc.removed_refs.len(),
+                gc.retention_receipt_refs.len()
+            );
             Ok(())
         }
     }
@@ -3417,10 +3423,12 @@ fn run_chunk_command(command: ChunkCommand) -> Result<()> {
             let gc = chunk_store::gc(&store, dry_run)?;
             emit_named_receipt(receipt_out.as_ref(), "chunk store receipt", &gc.receipt_value)?;
             println!(
-                "chunk gc ok dry_run={} removed_manifests={} removed_chunks={}",
+                "chunk gc ok decision={} dry_run={} removed_manifests={} removed_chunks={} retention_receipts={}",
+                gc.decision,
                 gc.dry_run,
                 gc.removed_manifests.len(),
-                gc.removed_chunks.len()
+                gc.removed_chunks.len(),
+                gc.retention_receipt_refs.len()
             );
             Ok(())
         }
@@ -3796,7 +3804,13 @@ fn run_cache_command(command: CacheCommand) -> Result<()> {
             for key_ref in &invalidated.invalidated_key_refs {
                 println!("{key_ref}");
             }
-            eprintln!("cache invalidate ok keys={} cache={}", invalidated.invalidated_key_refs.len(), cache.display());
+            eprintln!(
+                "cache invalidate ok decision={} keys={} retention_receipts={} cache={}",
+                invalidated.decision,
+                invalidated.invalidated_key_refs.len(),
+                invalidated.retention_receipt_refs.len(),
+                cache.display()
+            );
             Ok(())
         }
         CacheCommand::IndexRebuild { cache, receipt_out } => {
