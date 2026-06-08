@@ -2718,6 +2718,63 @@ enum RetentionCommand {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    RemoteClearanceRequest {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        requester_ref: String,
+        #[arg(long)]
+        peer_ref: String,
+        #[arg(long)]
+        object_ref: String,
+        #[arg(long)]
+        object_kind: String,
+        #[arg(long)]
+        retention_class: String,
+        #[arg(long)]
+        action: String,
+        #[arg(long)]
+        remote_ref: String,
+        #[arg(long)]
+        policy_ref: String,
+        #[arg(long)]
+        authority_ref: String,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    RemoteClearanceRespond {
+        #[arg(long)]
+        root: PathBuf,
+        request: PathBuf,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long = "retained-ref")]
+        retained_refs: Vec<String>,
+        #[arg(long = "stale")]
+        is_stale: bool,
+        #[arg(long = "revoked-ref")]
+        revoked_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    RemoteClearanceImport {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        response: PathBuf,
+        #[arg(long)]
+        expected_peer_ref: Option<String>,
+        #[arg(long)]
+        expected_remote_ref: Option<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     Check {
         #[arg(long)]
         root: PathBuf,
@@ -6616,6 +6673,108 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
                 &format!(
                     "retention remote clearance ref={} peer={} remote={} decision={}",
                     clearance.clearance_ref, clearance.peer_ref, clearance.remote_ref, clearance.decision
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::RemoteClearanceRequest {
+            root,
+            requester_ref,
+            peer_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            remote_ref,
+            policy_ref,
+            authority_ref,
+            evidence_refs,
+            out,
+        } => {
+            let request = retention::store_retention_remote_gc_clearance_request(
+                &root,
+                &retention::RetentionRemoteGcClearanceRequestInput {
+                    requester_ref: &requester_ref,
+                    peer_ref: &peer_ref,
+                    object_ref: &object_ref,
+                    object_kind: &object_kind,
+                    retention_class: &retention_class,
+                    action: &action,
+                    remote_ref: &remote_ref,
+                    policy_ref: &policy_ref,
+                    authority_ref: &authority_ref,
+                    evidence_refs: &evidence_refs,
+                },
+            )?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &request.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention remote clearance request ref={} peer={} remote={} object={}",
+                    request.request_ref, request.peer_ref, request.remote_ref, request.object_ref
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::RemoteClearanceRespond {
+            root,
+            request,
+            evidence_refs,
+            retained_refs,
+            is_stale,
+            revoked_refs,
+            diagnostics,
+            out,
+        } => {
+            let request_value = read_preserves_file(&request)?;
+            let response = retention::store_retention_remote_gc_clearance_response(
+                retention::RetentionRemoteGcClearanceResponseInput {
+                    root: &root,
+                    request_value: &request_value,
+                    evidence_refs: &evidence_refs,
+                    retained_refs: &retained_refs,
+                    is_current: !is_stale,
+                    revoked_refs: &revoked_refs,
+                    diagnostics: &diagnostics,
+                },
+            )?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &response.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention remote clearance response ref={} decision={} request={} clearance={}",
+                    response.response_ref, response.decision, response.request_ref, response.clearance_ref
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::RemoteClearanceImport {
+            root,
+            request,
+            response,
+            expected_peer_ref,
+            expected_remote_ref,
+            out,
+        } => {
+            let request_value = read_preserves_file(&request)?;
+            let response_value = read_preserves_file(&response)?;
+            let import = retention::import_retention_remote_gc_clearance_response(
+                retention::RetentionRemoteGcClearanceImportInput {
+                    root: &root,
+                    request_value: &request_value,
+                    response_value: &response_value,
+                    expected_peer_ref: expected_peer_ref.as_deref(),
+                    expected_remote_ref: expected_remote_ref.as_deref(),
+                },
+            )?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &import.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention remote clearance import ref={} decision={} clearance={}",
+                    import.import_ref,
+                    import.decision,
+                    import.clearance_ref.as_deref().unwrap_or("none")
                 ),
             );
             Ok(())
@@ -10542,16 +10701,17 @@ mod tests {
         .expect("show retention admission");
         let clearance_out = dir.join("remote-clearance.preserves");
         let remote_ref = cli_synthetic_ref("retention-remote").expect("remote ref");
+        let peer_ref = cli_synthetic_ref("retention-peer").expect("peer ref");
         run_retention_command(RetentionCommand::RemoteClearance {
             root: root.clone(),
             decision: "pass".to_string(),
             requester_ref: owner_ref.clone(),
-            peer_ref: cli_synthetic_ref("retention-peer").expect("peer ref"),
+            peer_ref: peer_ref.clone(),
             object_ref: object_ref.clone(),
             object_kind: "encrypted-ref".to_string(),
             retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
             action: retention::ACTION_DELETE.to_string(),
-            remote_ref,
+            remote_ref: remote_ref.clone(),
             policy_ref: policy_ref.clone(),
             authority_ref: authority_ref.clone(),
             evidence_refs: vec![evidence_ref.clone()],
@@ -10566,6 +10726,91 @@ mod tests {
             artifact: clearance_out,
         })
         .expect("show retention remote clearance");
+        let request_out = dir.join("remote-clearance-request.preserves");
+        run_retention_command(RetentionCommand::RemoteClearanceRequest {
+            root: root.clone(),
+            requester_ref: owner_ref.clone(),
+            peer_ref: peer_ref.clone(),
+            object_ref: object_ref.clone(),
+            object_kind: "encrypted-ref".to_string(),
+            retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+            action: retention::ACTION_DELETE.to_string(),
+            remote_ref: remote_ref.clone(),
+            policy_ref: policy_ref.clone(),
+            authority_ref: authority_ref.clone(),
+            evidence_refs: vec![evidence_ref.clone()],
+            out: Some(request_out.clone()),
+        })
+        .expect("retention remote clearance request");
+        run_retention_command(RetentionCommand::Show {
+            artifact: request_out.clone(),
+        })
+        .expect("show retention remote clearance request");
+        let response_out = dir.join("remote-clearance-response.preserves");
+        run_retention_command(RetentionCommand::RemoteClearanceRespond {
+            root: root.clone(),
+            request: request_out.clone(),
+            evidence_refs: vec![cli_synthetic_ref("retention-peer-evidence").expect("peer evidence ref")],
+            retained_refs: Vec::new(),
+            is_stale: false,
+            revoked_refs: Vec::new(),
+            diagnostics: Vec::new(),
+            out: Some(response_out.clone()),
+        })
+        .expect("retention remote clearance response");
+        run_retention_command(RetentionCommand::Show {
+            artifact: response_out.clone(),
+        })
+        .expect("show retention remote clearance response");
+        let import_out = dir.join("remote-clearance-import.preserves");
+        run_retention_command(RetentionCommand::RemoteClearanceImport {
+            root: root.clone(),
+            request: request_out.clone(),
+            response: response_out.clone(),
+            expected_peer_ref: Some(peer_ref.clone()),
+            expected_remote_ref: Some(remote_ref.clone()),
+            out: Some(import_out.clone()),
+        })
+        .expect("retention remote clearance import");
+        run_retention_command(RetentionCommand::Show {
+            artifact: import_out.clone(),
+        })
+        .expect("show retention remote clearance import");
+        let import = retention::parse_retention_remote_gc_clearance_import(
+            &read_preserves_file(&import_out).expect("read clearance import"),
+        )
+        .expect("parse clearance import");
+        assert_eq!(import.decision, "pass");
+        assert!(import.clearance_ref.is_some());
+        let retained_response_out = dir.join("remote-clearance-retained-response.preserves");
+        run_retention_command(RetentionCommand::RemoteClearanceRespond {
+            root: root.clone(),
+            request: request_out.clone(),
+            evidence_refs: Vec::new(),
+            retained_refs: vec![cli_synthetic_ref("retention-remote-retained").expect("remote retained ref")],
+            is_stale: false,
+            revoked_refs: Vec::new(),
+            diagnostics: Vec::new(),
+            out: Some(retained_response_out.clone()),
+        })
+        .expect("retention retained remote clearance response");
+        let retained_import_out = dir.join("remote-clearance-retained-import.preserves");
+        run_retention_command(RetentionCommand::RemoteClearanceImport {
+            root: root.clone(),
+            request: request_out,
+            response: retained_response_out,
+            expected_peer_ref: Some(peer_ref),
+            expected_remote_ref: Some(remote_ref),
+            out: Some(retained_import_out.clone()),
+        })
+        .expect("retention retained remote clearance import");
+        let retained_import = retention::parse_retention_remote_gc_clearance_import(
+            &read_preserves_file(&retained_import_out).expect("read retained clearance import"),
+        )
+        .expect("parse retained clearance import");
+        assert_eq!(retained_import.decision, "deny");
+        assert!(retained_import.clearance_ref.is_none());
+        assert!(retained_import.diagnostics.iter().any(|diagnostic| diagnostic.contains("retained")));
         let pin_out = dir.join("pin.preserves");
         let pin_receipt_out = dir.join("pin-receipt.preserves");
         run_retention_command(RetentionCommand::Pin {

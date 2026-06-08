@@ -291,6 +291,22 @@ molten test retention remote-clearance --root target/retention-store \
   --remote-ref blake3:remote-cache --policy-ref blake3:policy \
   --authority-ref blake3:authority-grant --evidence-ref blake3:evidence \
   --out target/retention.remote-clearance.preserves
+molten test retention remote-clearance-request --root target/retention-store \
+  --requester-ref blake3:owner --peer-ref blake3:peer \
+  --object-ref blake3:object --object-kind encrypted-ref \
+  --retention-class private-secret-ref --action delete \
+  --remote-ref blake3:remote-cache --policy-ref blake3:policy \
+  --authority-ref blake3:authority-grant --evidence-ref blake3:evidence \
+  --out target/retention.remote-clearance-request.preserves
+molten test retention remote-clearance-respond --root target/peer-retention-store \
+  target/retention.remote-clearance-request.preserves \
+  --evidence-ref blake3:peer-reference-index \
+  --out target/retention.remote-clearance-response.preserves
+molten test retention remote-clearance-import --root target/retention-store \
+  --request target/retention.remote-clearance-request.preserves \
+  --response target/retention.remote-clearance-response.preserves \
+  --expected-peer-ref blake3:peer --expected-remote-ref blake3:remote-cache \
+  --out target/retention.remote-clearance-import.preserves
 molten test retention check --root target/retention-store \
   --object-ref blake3:object --object-kind encrypted-ref \
   --retention-class private-secret-ref --action delete \
@@ -300,7 +316,7 @@ molten test retention check --root target/retention-store \
   --receipt-out target/retention.delete.preserves
 ```
 
-Pinned objects, legal holds, retained receipt dependencies, remote/cache uncertainty, incomplete reference indexes, and missing requester/policy/authority/supporting evidence all deny before destructive side effects. Evidence-ledger GC, chunk-store GC, evaluation-cache invalidation, and secret cleanup bind retention receipts before removing content or writing tombstones; denial leaves content intact and emits auditable subsystem receipts. Ledger GC, chunk GC, and cache invalidation accept explicit `--retention-requester`, `--retention-policy-ref`, `--retention-authority-ref`, `--retention-evidence-ref`, `--retention-retained-ref`, `--retention-remote-peer-ref`, `--retention-remote-ref`, `--retention-reference-index-ref`, `--retention-remote-gc-ref`, `--retention-remote-clearance-ref`, and `--retention-reference-index-complete` inputs; apply-mode candidates without matching local `retention-evidence-admission-v1` receipts and per-remote `retention-remote-gc-clearance-v1` receipts fail closed. Admission receipts bind requester, object, class, action, evidence kind, current/revoked state, reference-index proof, local remote-GC plan, and per-peer remote clearance before mutation. Passing destructive actions emit retention receipts and tombstone/redaction metadata that preserve audit context without leaking private content. Retention and remote-clearance receipts are deletion-safety evidence only and do not grant authority, provenance, transport, policy, resource, or execution trust.
+Pinned objects, legal holds, retained receipt dependencies, remote/cache uncertainty, incomplete reference indexes, and missing requester/policy/authority/supporting evidence all deny before destructive side effects. Evidence-ledger GC, chunk-store GC, evaluation-cache invalidation, and secret cleanup bind retention receipts before removing content or writing tombstones; denial leaves content intact and emits auditable subsystem receipts. Ledger GC, chunk GC, and cache invalidation accept explicit `--retention-requester`, `--retention-policy-ref`, `--retention-authority-ref`, `--retention-evidence-ref`, `--retention-retained-ref`, `--retention-remote-peer-ref`, `--retention-remote-ref`, `--retention-reference-index-ref`, `--retention-remote-gc-ref`, `--retention-remote-clearance-ref`, and `--retention-reference-index-complete` inputs; apply-mode candidates without matching local `retention-evidence-admission-v1` receipts and per-remote `retention-remote-gc-clearance-v1` receipts fail closed. The remote-clearance request/respond/import commands let a requester send a canonical request to a peer, let that peer embed its locally evaluated `retention-remote-gc-clearance-v1` value in a response, and import only passing scope-matching peer clearance into the local retention store. Admission receipts bind requester, object, class, action, evidence kind, current/revoked state, reference-index proof, local remote-GC plan, and per-peer remote clearance before mutation. Passing destructive actions emit retention receipts and tombstone/redaction metadata that preserve audit context without leaking private content. Retention and remote-clearance receipts are deletion-safety evidence only and do not grant authority, provenance, transport, policy, resource, or execution trust.
 
 ## Supply-chain provenance diagnostics
 

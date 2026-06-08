@@ -13,6 +13,9 @@ use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
 use crate::preserves_rail::RETENTION_PIN_SCHEMA;
 use crate::preserves_rail::RETENTION_RECEIPT_SCHEMA;
 use crate::preserves_rail::RETENTION_REFERENCE_INDEX_SCHEMA;
+use crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_IMPORT_SCHEMA;
+use crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_REQUEST_SCHEMA;
+use crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_RESPONSE_SCHEMA;
 use crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_SCHEMA;
 use crate::preserves_rail::RETENTION_TOMBSTONE_SCHEMA;
 use crate::preserves_rail::canonical_hash;
@@ -69,6 +72,9 @@ const STORE_DIR: &str = "retention";
 const PIN_DIR: &str = "pins";
 const ADMISSION_DIR: &str = "admissions";
 const REMOTE_CLEARANCE_DIR: &str = "remote-clearances";
+const REMOTE_CLEARANCE_REQUEST_DIR: &str = "remote-clearance-requests";
+const REMOTE_CLEARANCE_RESPONSE_DIR: &str = "remote-clearance-responses";
+const REMOTE_CLEARANCE_IMPORT_DIR: &str = "remote-clearance-imports";
 const RECEIPT_DIR: &str = "receipts";
 const TOMBSTONE_DIR: &str = "tombstones";
 const MAX_RETENTION_REFS: usize = 4096;
@@ -282,6 +288,92 @@ pub struct RetentionRemoteGcClearance {
     pub retained_refs: Vec<String>,
     pub is_current: bool,
     pub revoked_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionRemoteGcClearanceRequestInput<'a> {
+    pub requester_ref: &'a str,
+    pub peer_ref: &'a str,
+    pub object_ref: &'a str,
+    pub object_kind: &'a str,
+    pub retention_class: &'a str,
+    pub action: &'a str,
+    pub remote_ref: &'a str,
+    pub policy_ref: &'a str,
+    pub authority_ref: &'a str,
+    pub evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionRemoteGcClearanceRequest {
+    pub request_ref: String,
+    pub requester_ref: String,
+    pub peer_ref: String,
+    pub object_ref: String,
+    pub object_kind: String,
+    pub retention_class: String,
+    pub action: String,
+    pub remote_ref: String,
+    pub policy_ref: String,
+    pub authority_ref: String,
+    pub evidence_refs: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionRemoteGcClearanceResponseInput<'a> {
+    pub root: &'a Path,
+    pub request_value: &'a IOValue,
+    pub evidence_refs: &'a [String],
+    pub retained_refs: &'a [String],
+    pub is_current: bool,
+    pub revoked_refs: &'a [String],
+    pub diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionRemoteGcClearanceResponse {
+    pub response_ref: String,
+    pub decision: String,
+    pub request_ref: String,
+    pub request: RetentionRemoteGcClearanceRequest,
+    pub clearance_ref: String,
+    pub clearance: RetentionRemoteGcClearance,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionRemoteGcClearanceImportInput<'a> {
+    pub root: &'a Path,
+    pub request_value: &'a IOValue,
+    pub response_value: &'a IOValue,
+    pub expected_peer_ref: Option<&'a str>,
+    pub expected_remote_ref: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionRemoteGcClearanceImportValueInput<'a> {
+    pub decision: &'a str,
+    pub request_ref: &'a str,
+    pub response_ref: &'a str,
+    pub clearance_ref: Option<&'a str>,
+    pub peer_ref: &'a str,
+    pub remote_ref: &'a str,
+    pub diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionRemoteGcClearanceImport {
+    pub import_ref: String,
+    pub decision: String,
+    pub request_ref: String,
+    pub response_ref: String,
+    pub clearance_ref: Option<String>,
+    pub peer_ref: String,
+    pub remote_ref: String,
     pub diagnostics: Vec<String>,
     pub value: IOValue,
 }
@@ -832,6 +924,284 @@ pub fn store_retention_remote_gc_clearance(
     let clearance = parse_retention_remote_gc_clearance(&value)?;
     write_store_value(&remote_clearance_path(root, &clearance.clearance_ref)?, &clearance.value)?;
     Ok(clearance)
+}
+
+pub fn retention_remote_gc_clearance_request_value(
+    input: &RetentionRemoteGcClearanceRequestInput<'_>,
+) -> Result<IOValue> {
+    validate_remote_gc_clearance_request_input(input)?;
+    Ok(record("retention-remote-gc-clearance-request-v1", vec![
+        string(RETENTION_REMOTE_GC_CLEARANCE_REQUEST_SCHEMA),
+        record("requester", vec![string(input.requester_ref)]),
+        record("peer", vec![string(input.peer_ref)]),
+        object_value(input.object_ref, input.object_kind),
+        record("class", vec![string(input.retention_class)]),
+        record("action", vec![string(input.action)]),
+        record("remote", vec![string(input.remote_ref)]),
+        record("policy", vec![string(input.policy_ref)]),
+        record("authority", vec![string(input.authority_ref)]),
+        record("evidence", vec![strings_sequence(input.evidence_refs)]),
+        checks_value(&[("request-scope-bound", "pass"), ("peer-bound", "pass")]),
+    ]))
+}
+
+pub fn parse_retention_remote_gc_clearance_request(value: &IOValue) -> Result<RetentionRemoteGcClearanceRequest> {
+    let fields = value
+        .collect_simple_record("retention-remote-gc-clearance-request-v1", Some(11))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-request-v1 ...>"))?;
+    require_schema(
+        &fields[0],
+        RETENTION_REMOTE_GC_CLEARANCE_REQUEST_SCHEMA,
+        "retention remote clearance request schema",
+    )?;
+    require_check(&parse_checks(&fields[10])?, "request-scope-bound", "retention remote clearance request")?;
+    let (object_ref, object_kind) = parse_object_value(&fields[3])?;
+    let request = RetentionRemoteGcClearanceRequest {
+        request_ref: canonical_hash(value)?,
+        requester_ref: record_ref(&fields[1], "requester")?,
+        peer_ref: record_ref(&fields[2], "peer")?,
+        object_ref,
+        object_kind,
+        retention_class: record_string(&fields[4], "class")?,
+        action: record_string(&fields[5], "action")?,
+        remote_ref: record_ref(&fields[6], "remote")?,
+        policy_ref: record_ref(&fields[7], "policy")?,
+        authority_ref: record_ref(&fields[8], "authority")?,
+        evidence_refs: record_ref_sequence(&fields[9], "evidence")?,
+        value: value.clone(),
+    };
+    validate_remote_gc_clearance_request(&request)?;
+    Ok(request)
+}
+
+pub fn store_retention_remote_gc_clearance_request(
+    root: &Path,
+    input: &RetentionRemoteGcClearanceRequestInput<'_>,
+) -> Result<RetentionRemoteGcClearanceRequest> {
+    ensure_store(root)?;
+    let value = retention_remote_gc_clearance_request_value(input)?;
+    let request = parse_retention_remote_gc_clearance_request(&value)?;
+    write_store_value(&remote_clearance_request_path(root, &request.request_ref)?, &request.value)?;
+    Ok(request)
+}
+
+pub fn store_retention_remote_gc_clearance_response(
+    input: RetentionRemoteGcClearanceResponseInput<'_>,
+) -> Result<RetentionRemoteGcClearanceResponse> {
+    ensure_store(input.root)?;
+    let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
+    let diagnostics = remote_clearance_response_diagnostics(input)?;
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let mut clearance_evidence_refs = request.evidence_refs.clone();
+    for reference in input.evidence_refs {
+        push_bounded(
+            &mut clearance_evidence_refs,
+            reference.clone(),
+            MAX_RETENTION_REFS,
+            "retention remote clearance response evidence refs",
+        )?;
+    }
+    let clearance_value = retention_remote_gc_clearance_value(&RetentionRemoteGcClearanceInput {
+        decision,
+        requester_ref: &request.requester_ref,
+        peer_ref: &request.peer_ref,
+        object_ref: &request.object_ref,
+        object_kind: &request.object_kind,
+        retention_class: &request.retention_class,
+        action: &request.action,
+        remote_ref: &request.remote_ref,
+        policy_ref: &request.policy_ref,
+        authority_ref: &request.authority_ref,
+        evidence_refs: &clearance_evidence_refs,
+        retained_refs: input.retained_refs,
+        is_current: input.is_current,
+        revoked_refs: input.revoked_refs,
+        diagnostics: &diagnostics,
+    })?;
+    let clearance = parse_retention_remote_gc_clearance(&clearance_value)?;
+    let value = retention_remote_gc_clearance_response_value(&request, &clearance, decision, &diagnostics)?;
+    let response = parse_retention_remote_gc_clearance_response(&value)?;
+    write_store_value(&remote_clearance_response_path(input.root, &response.response_ref)?, &response.value)?;
+    Ok(response)
+}
+
+pub fn retention_remote_gc_clearance_response_value(
+    request: &RetentionRemoteGcClearanceRequest,
+    clearance: &RetentionRemoteGcClearance,
+    decision: &str,
+    diagnostics: &[String],
+) -> Result<IOValue> {
+    validate_decision(decision)?;
+    ensure_count_at_most(
+        diagnostics.len(),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention remote clearance response diagnostics",
+    )?;
+    validate_remote_gc_clearance_workflow_scope(request, clearance)?;
+    Ok(record("retention-remote-gc-clearance-response-v1", vec![
+        string(RETENTION_REMOTE_GC_CLEARANCE_RESPONSE_SCHEMA),
+        record("request", vec![string(&request.request_ref), request.value.clone()]),
+        record("decision", vec![string(decision)]),
+        record("clearance", vec![string(&clearance.clearance_ref), clearance.value.clone()]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        checks_value(&[
+            ("request-ref-verified", "pass"),
+            ("clearance-ref-verified", "pass"),
+            ("clearance-scope-bound", pass_or_deny(decision == clearance.decision)),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_remote_gc_clearance_response(value: &IOValue) -> Result<RetentionRemoteGcClearanceResponse> {
+    let fields = value
+        .collect_simple_record("retention-remote-gc-clearance-response-v1", Some(6))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-response-v1 ...>"))?;
+    require_schema(
+        &fields[0],
+        RETENTION_REMOTE_GC_CLEARANCE_RESPONSE_SCHEMA,
+        "retention remote clearance response schema",
+    )?;
+    let request = parse_embedded_remote_clearance_request(&fields[1])?;
+    let decision = record_string(&fields[2], "decision")?;
+    validate_decision(&decision)?;
+    let clearance = parse_embedded_remote_clearance(&fields[3])?;
+    let diagnostics = record_string_sequence(&fields[4], "diagnostics")?;
+    let checks = parse_checks(&fields[5])?;
+    require_check(&checks, "request-ref-verified", "retention remote clearance response")?;
+    require_check(&checks, "clearance-ref-verified", "retention remote clearance response")?;
+    if decision != clearance.decision {
+        return Err(MoltenError::invalid_harness("remote clearance response decision does not match clearance"));
+    }
+    validate_remote_gc_clearance_workflow_scope(&request, &clearance)?;
+    Ok(RetentionRemoteGcClearanceResponse {
+        response_ref: canonical_hash(value)?,
+        decision,
+        request_ref: request.request_ref.clone(),
+        request,
+        clearance_ref: clearance.clearance_ref.clone(),
+        clearance,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
+pub fn import_retention_remote_gc_clearance_response(
+    input: RetentionRemoteGcClearanceImportInput<'_>,
+) -> Result<RetentionRemoteGcClearanceImport> {
+    ensure_store(input.root)?;
+    if let Some(peer_ref) = input.expected_peer_ref {
+        require_ref(peer_ref, "retention remote clearance import expected peer ref")?;
+    }
+    if let Some(remote_ref) = input.expected_remote_ref {
+        require_ref(remote_ref, "retention remote clearance import expected remote ref")?;
+    }
+    let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
+    let response = match parse_retention_remote_gc_clearance_response(input.response_value) {
+        Ok(response) => response,
+        Err(error) => {
+            let diagnostics = vec![format!("remote-clearance-tampered-response:{error}")];
+            let response_ref = canonical_hash(input.response_value)?;
+            let value = retention_remote_gc_clearance_import_value(&RetentionRemoteGcClearanceImportValueInput {
+                decision: "deny",
+                request_ref: &request.request_ref,
+                response_ref: &response_ref,
+                clearance_ref: None,
+                peer_ref: &request.peer_ref,
+                remote_ref: &request.remote_ref,
+                diagnostics: &diagnostics,
+            })?;
+            let import = parse_retention_remote_gc_clearance_import(&value)?;
+            write_store_value(&remote_clearance_import_path(input.root, &import.import_ref)?, &import.value)?;
+            return Ok(import);
+        }
+    };
+    let mut diagnostics = Vec::new();
+    push_remote_clearance_import_diagnostics(&mut diagnostics, &request, &response, input)?;
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let clearance_ref = if decision == "pass" {
+        write_store_value(
+            &remote_clearance_path(input.root, &response.clearance.clearance_ref)?,
+            &response.clearance.value,
+        )?;
+        Some(response.clearance.clearance_ref.clone())
+    } else {
+        None
+    };
+    let value = retention_remote_gc_clearance_import_value(&RetentionRemoteGcClearanceImportValueInput {
+        decision,
+        request_ref: &request.request_ref,
+        response_ref: &response.response_ref,
+        clearance_ref: clearance_ref.as_deref(),
+        peer_ref: &request.peer_ref,
+        remote_ref: &request.remote_ref,
+        diagnostics: &diagnostics,
+    })?;
+    let import = parse_retention_remote_gc_clearance_import(&value)?;
+    write_store_value(&remote_clearance_import_path(input.root, &import.import_ref)?, &import.value)?;
+    Ok(import)
+}
+
+pub fn retention_remote_gc_clearance_import_value(
+    input: &RetentionRemoteGcClearanceImportValueInput<'_>,
+) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    require_ref(input.request_ref, "retention remote clearance import request ref")?;
+    require_ref(input.response_ref, "retention remote clearance import response ref")?;
+    if let Some(reference) = input.clearance_ref {
+        require_ref(reference, "retention remote clearance import clearance ref")?;
+    }
+    require_ref(input.peer_ref, "retention remote clearance import peer ref")?;
+    require_ref(input.remote_ref, "retention remote clearance import remote ref")?;
+    ensure_count_at_most(
+        input.diagnostics.len(),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention remote clearance import diagnostics",
+    )?;
+    Ok(record("retention-remote-gc-clearance-import-v1", vec![
+        string(RETENTION_REMOTE_GC_CLEARANCE_IMPORT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("request", vec![string(input.request_ref)]),
+        record("response", vec![string(input.response_ref)]),
+        record("clearance", vec![optional_ref_value(input.clearance_ref)]),
+        record("peer", vec![string(input.peer_ref)]),
+        record("remote", vec![string(input.remote_ref)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        checks_value(&[
+            ("evidence-only", "pass"),
+            ("local-clearance-stored", pass_or_deny(input.clearance_ref.is_some())),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_remote_gc_clearance_import(value: &IOValue) -> Result<RetentionRemoteGcClearanceImport> {
+    let fields = value
+        .collect_simple_record("retention-remote-gc-clearance-import-v1", Some(9))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-import-v1 ...>"))?;
+    require_schema(
+        &fields[0],
+        RETENTION_REMOTE_GC_CLEARANCE_IMPORT_SCHEMA,
+        "retention remote clearance import schema",
+    )?;
+    require_check(&parse_checks(&fields[8])?, "evidence-only", "retention remote clearance import")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    let request_ref = record_ref(&fields[2], "request")?;
+    let response_ref = record_ref(&fields[3], "response")?;
+    let clearance_ref = record_optional_ref(&fields[4], "clearance")?;
+    let peer_ref = record_ref(&fields[5], "peer")?;
+    let remote_ref = record_ref(&fields[6], "remote")?;
+    let diagnostics = record_string_sequence(&fields[7], "diagnostics")?;
+    Ok(RetentionRemoteGcClearanceImport {
+        import_ref: canonical_hash(value)?,
+        decision,
+        request_ref,
+        response_ref,
+        clearance_ref,
+        peer_ref,
+        remote_ref,
+        diagnostics,
+        value: value.clone(),
+    })
 }
 
 struct AdmissionScope<'a> {
@@ -1561,6 +1931,44 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             admission.diagnostics.join(",")
         ));
     }
+    if let Ok(request) = parse_retention_remote_gc_clearance_request(value) {
+        return Ok(format!(
+            "retention remote clearance request ref={} requester={} peer={} remote={} object={} class={} action={} evidence={}",
+            request.request_ref,
+            request.requester_ref,
+            request.peer_ref,
+            request.remote_ref,
+            request.object_ref,
+            request.retention_class,
+            request.action,
+            request.evidence_refs.len()
+        ));
+    }
+    if let Ok(response) = parse_retention_remote_gc_clearance_response(value) {
+        return Ok(format!(
+            "retention remote clearance response ref={} decision={} request={} clearance={} peer={} remote={} diagnostics={}",
+            response.response_ref,
+            response.decision,
+            response.request_ref,
+            response.clearance_ref,
+            response.request.peer_ref,
+            response.request.remote_ref,
+            response.diagnostics.join(",")
+        ));
+    }
+    if let Ok(import) = parse_retention_remote_gc_clearance_import(value) {
+        return Ok(format!(
+            "retention remote clearance import ref={} decision={} request={} response={} clearance={} peer={} remote={} diagnostics={}",
+            import.import_ref,
+            import.decision,
+            import.request_ref,
+            import.response_ref,
+            import.clearance_ref.as_deref().unwrap_or("none"),
+            import.peer_ref,
+            import.remote_ref,
+            import.diagnostics.join(",")
+        ));
+    }
     if let Ok(clearance) = parse_retention_remote_gc_clearance(value) {
         return Ok(format!(
             "retention remote clearance ref={} decision={} peer={} remote={} object={} class={} action={} current={} retained={} revoked={} diagnostics={}",
@@ -2005,10 +2413,232 @@ fn validate_remote_gc_clearance_input(input: &RetentionRemoteGcClearanceInput<'_
     ensure_count_at_most(input.diagnostics.len(), MAX_RETENTION_DIAGNOSTICS, "retention remote clearance diagnostics")
 }
 
+fn validate_remote_gc_clearance_request_input(input: &RetentionRemoteGcClearanceRequestInput<'_>) -> Result<()> {
+    require_ref(input.requester_ref, "retention remote clearance request requester ref")?;
+    require_ref(input.peer_ref, "retention remote clearance request peer ref")?;
+    require_ref(input.object_ref, "retention remote clearance request object ref")?;
+    validate_name(input.object_kind, "retention remote clearance request object kind")?;
+    validate_retention_class(input.retention_class)?;
+    validate_action(input.action)?;
+    require_ref(input.remote_ref, "retention remote clearance request remote ref")?;
+    require_ref(input.policy_ref, "retention remote clearance request policy ref")?;
+    require_ref(input.authority_ref, "retention remote clearance request authority ref")?;
+    validate_refs(input.evidence_refs, "retention remote clearance request evidence ref")
+}
+
+fn validate_remote_gc_clearance_request(request: &RetentionRemoteGcClearanceRequest) -> Result<()> {
+    validate_remote_gc_clearance_request_input(&RetentionRemoteGcClearanceRequestInput {
+        requester_ref: &request.requester_ref,
+        peer_ref: &request.peer_ref,
+        object_ref: &request.object_ref,
+        object_kind: &request.object_kind,
+        retention_class: &request.retention_class,
+        action: &request.action,
+        remote_ref: &request.remote_ref,
+        policy_ref: &request.policy_ref,
+        authority_ref: &request.authority_ref,
+        evidence_refs: &request.evidence_refs,
+    })
+}
+
+fn remote_clearance_response_diagnostics(input: RetentionRemoteGcClearanceResponseInput<'_>) -> Result<Vec<String>> {
+    validate_refs(input.evidence_refs, "retention remote clearance response evidence ref")?;
+    validate_refs(input.retained_refs, "retention remote clearance response retained ref")?;
+    validate_refs(input.revoked_refs, "retention remote clearance response revoked ref")?;
+    ensure_count_at_most(
+        input.diagnostics.len(),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention remote clearance response diagnostics",
+    )?;
+    let mut diagnostics = input.diagnostics.to_vec();
+    if !input.is_current {
+        push_bounded(
+            &mut diagnostics,
+            "remote-clearance-stale".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance response diagnostics",
+        )?;
+    }
+    if !input.revoked_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "remote-clearance-revoked".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance response diagnostics",
+        )?;
+    }
+    if !input.retained_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "remote-clearance-retained".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance response diagnostics",
+        )?;
+    }
+    Ok(diagnostics)
+}
+
+fn validate_remote_gc_clearance_workflow_scope(
+    request: &RetentionRemoteGcClearanceRequest,
+    clearance: &RetentionRemoteGcClearance,
+) -> Result<()> {
+    if clearance.requester_ref != request.requester_ref
+        || clearance.peer_ref != request.peer_ref
+        || clearance.object_ref != request.object_ref
+        || clearance.object_kind != request.object_kind
+        || clearance.retention_class != request.retention_class
+        || clearance.action != request.action
+        || clearance.remote_ref != request.remote_ref
+        || clearance.policy_ref != request.policy_ref
+        || clearance.authority_ref != request.authority_ref
+    {
+        return Err(MoltenError::invalid_harness("remote clearance workflow scope mismatch"));
+    }
+    Ok(())
+}
+
+fn parse_embedded_remote_clearance_request(value: &Value<IOValue>) -> Result<RetentionRemoteGcClearanceRequest> {
+    let value = value_to_iovalue(value);
+    let fields = value
+        .collect_simple_record("request", Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness("expected embedded remote clearance request"))?;
+    let request_ref = required_string(&fields[0], "remote clearance request ref")?;
+    require_ref(&request_ref, "remote clearance request ref")?;
+    let request_value = value_to_iovalue(&fields[1]);
+    let request = parse_retention_remote_gc_clearance_request(&request_value)?;
+    if request.request_ref != request_ref {
+        return Err(MoltenError::invalid_harness("embedded remote clearance request ref mismatch"));
+    }
+    Ok(request)
+}
+
+fn parse_embedded_remote_clearance(value: &Value<IOValue>) -> Result<RetentionRemoteGcClearance> {
+    let value = value_to_iovalue(value);
+    let fields = value
+        .collect_simple_record("clearance", Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness("expected embedded remote clearance"))?;
+    let clearance_ref = required_string(&fields[0], "remote clearance ref")?;
+    require_ref(&clearance_ref, "remote clearance ref")?;
+    let clearance_value = value_to_iovalue(&fields[1]);
+    let clearance = parse_retention_remote_gc_clearance(&clearance_value)?;
+    if clearance.clearance_ref != clearance_ref {
+        return Err(MoltenError::invalid_harness("embedded remote clearance ref mismatch"));
+    }
+    Ok(clearance)
+}
+
+fn push_remote_clearance_import_diagnostics<S>(
+    diagnostics: &mut S,
+    request: &RetentionRemoteGcClearanceRequest,
+    response: &RetentionRemoteGcClearanceResponse,
+    input: RetentionRemoteGcClearanceImportInput<'_>,
+) -> Result<()>
+where
+    S: VecSink<String>,
+{
+    if response.request_ref != request.request_ref {
+        push_bounded(
+            diagnostics,
+            "remote-clearance-wrong-request".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    if response.decision != "pass" {
+        push_bounded(
+            diagnostics,
+            "remote-clearance-response-not-pass".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    let clearance = &response.clearance;
+    if clearance.decision != "pass" {
+        push_bounded(
+            diagnostics,
+            "remote-clearance-not-pass".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    if !clearance.is_current {
+        push_bounded(
+            diagnostics,
+            "remote-clearance-stale".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    if !clearance.revoked_refs.is_empty() {
+        push_bounded(
+            diagnostics,
+            "remote-clearance-revoked".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    if !clearance.retained_refs.is_empty() {
+        push_bounded(
+            diagnostics,
+            "remote-clearance-retained".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    if clearance.peer_ref != request.peer_ref {
+        push_bounded(
+            diagnostics,
+            "remote-clearance-wrong-peer".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    if clearance.remote_ref != request.remote_ref {
+        push_bounded(
+            diagnostics,
+            "remote-clearance-wrong-remote".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    if let Some(expected_peer_ref) = input.expected_peer_ref
+        && expected_peer_ref != request.peer_ref
+    {
+        push_bounded(
+            diagnostics,
+            "remote-clearance-expected-peer-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    if let Some(expected_remote_ref) = input.expected_remote_ref
+        && expected_remote_ref != request.remote_ref
+    {
+        push_bounded(
+            diagnostics,
+            "remote-clearance-expected-remote-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    for diagnostic in &response.diagnostics {
+        push_bounded(
+            diagnostics,
+            diagnostic.clone(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance import diagnostics",
+        )?;
+    }
+    Ok(())
+}
+
 fn ensure_store(root: &Path) -> Result<()> {
     fs::create_dir_all(pins_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(admissions_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(remote_clearances_dir(root)).map_err(MoltenError::from)?;
+    fs::create_dir_all(remote_clearance_requests_dir(root)).map_err(MoltenError::from)?;
+    fs::create_dir_all(remote_clearance_responses_dir(root)).map_err(MoltenError::from)?;
+    fs::create_dir_all(remote_clearance_imports_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(receipts_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(tombstones_dir(root)).map_err(MoltenError::from)
 }
@@ -2071,6 +2701,18 @@ fn remote_clearances_dir(root: &Path) -> PathBuf {
     store_dir(root).join(REMOTE_CLEARANCE_DIR)
 }
 
+fn remote_clearance_requests_dir(root: &Path) -> PathBuf {
+    store_dir(root).join(REMOTE_CLEARANCE_REQUEST_DIR)
+}
+
+fn remote_clearance_responses_dir(root: &Path) -> PathBuf {
+    store_dir(root).join(REMOTE_CLEARANCE_RESPONSE_DIR)
+}
+
+fn remote_clearance_imports_dir(root: &Path) -> PathBuf {
+    store_dir(root).join(REMOTE_CLEARANCE_IMPORT_DIR)
+}
+
 fn receipts_dir(root: &Path) -> PathBuf {
     store_dir(root).join(RECEIPT_DIR)
 }
@@ -2089,6 +2731,18 @@ fn admission_path(root: &Path, admission_ref: &str) -> Result<PathBuf> {
 
 fn remote_clearance_path(root: &Path, clearance_ref: &str) -> Result<PathBuf> {
     Ok(remote_clearances_dir(root).join(format!("{}.preserves", ref_file_name(clearance_ref)?)))
+}
+
+fn remote_clearance_request_path(root: &Path, request_ref: &str) -> Result<PathBuf> {
+    Ok(remote_clearance_requests_dir(root).join(format!("{}.preserves", ref_file_name(request_ref)?)))
+}
+
+fn remote_clearance_response_path(root: &Path, response_ref: &str) -> Result<PathBuf> {
+    Ok(remote_clearance_responses_dir(root).join(format!("{}.preserves", ref_file_name(response_ref)?)))
+}
+
+fn remote_clearance_import_path(root: &Path, import_ref: &str) -> Result<PathBuf> {
+    Ok(remote_clearance_imports_dir(root).join(format!("{}.preserves", ref_file_name(import_ref)?)))
 }
 
 fn receipt_path(root: &Path, receipt_ref: &str) -> Result<PathBuf> {
@@ -3108,6 +3762,184 @@ mod tests {
         .expect("forged remote denial");
         assert_eq!(forged_admission.decision, "deny");
         assert!(forged_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("unreadable")));
+    }
+
+    #[test]
+    fn remote_clearance_workflow_imports_peer_clearance_and_denies_wrong_request() {
+        let root = temp_dir("retention-remote-clearance-workflow");
+        let requester_ref = fake_ref("workflow-requester");
+        let peer_ref = fake_ref("workflow-peer");
+        let object_ref = fake_ref("workflow-object");
+        let remote_ref = fake_ref("workflow-remote");
+        let policy = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_POLICY,
+            label: "workflow-policy",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let authority = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_AUTHORITY,
+            label: "workflow-authority",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let support = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label: "workflow-support",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let index = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REFERENCE_INDEX,
+            label: "workflow-index",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let remote_gc = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REMOTE_GC,
+            label: "workflow-remote-gc",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: std::slice::from_ref(&remote_ref),
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let request = store_retention_remote_gc_clearance_request(&root, &RetentionRemoteGcClearanceRequestInput {
+            requester_ref: &requester_ref,
+            peer_ref: &peer_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &remote_ref,
+            policy_ref: &policy,
+            authority_ref: &authority,
+            evidence_refs: std::slice::from_ref(&support),
+        })
+        .expect("store request");
+        let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
+            root: &root,
+            request_value: &request.value,
+            evidence_refs: &[fake_ref("workflow-peer-evidence")],
+            retained_refs: &[],
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("store response");
+        let import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+            root: &root,
+            request_value: &request.value,
+            response_value: &response.value,
+            expected_peer_ref: Some(&peer_ref),
+            expected_remote_ref: Some(&remote_ref),
+        })
+        .expect("import clearance");
+        assert_eq!(import.decision, "pass");
+        let clearance_ref = import.clearance_ref.clone().expect("clearance imported");
+        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &DestructiveRetentionEvidence {
+                requester_ref: Some(requester_ref.clone()),
+                policy_refs: vec![policy],
+                authority_refs: vec![authority],
+                evidence_refs: vec![support],
+                retained_refs: Vec::new(),
+                remote_peer_refs: vec![peer_ref.clone()],
+                remote_refs: vec![remote_ref.clone()],
+                reference_index_refs: vec![index],
+                remote_gc_refs: vec![remote_gc],
+                remote_clearance_refs: vec![clearance_ref],
+                is_reference_index_complete: true,
+            },
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("admit imported clearance");
+        assert_eq!(admission.decision, "pass");
+        assert!(admission.has_remote_gc_clearance);
+
+        let wrong_request =
+            store_retention_remote_gc_clearance_request(&root, &RetentionRemoteGcClearanceRequestInput {
+                requester_ref: &requester_ref,
+                peer_ref: &peer_ref,
+                object_ref: &fake_ref("workflow-wrong-object"),
+                object_kind: "chunk",
+                retention_class: CLASS_DURABLE_VALUE,
+                action: ACTION_DELETE,
+                remote_ref: &remote_ref,
+                policy_ref: &fake_ref("workflow-wrong-policy"),
+                authority_ref: &fake_ref("workflow-wrong-authority"),
+                evidence_refs: &[],
+            })
+            .expect("store wrong request");
+        let wrong_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+            root: &root,
+            request_value: &wrong_request.value,
+            response_value: &response.value,
+            expected_peer_ref: Some(&peer_ref),
+            expected_remote_ref: Some(&remote_ref),
+        })
+        .expect("deny wrong request import");
+        assert_eq!(wrong_import.decision, "deny");
+        assert!(wrong_import.clearance_ref.is_none());
+        assert!(wrong_import.diagnostics.iter().any(|diagnostic| diagnostic == "remote-clearance-wrong-request"));
+
+        let tampered_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+            root: &root,
+            request_value: &request.value,
+            response_value: &record("not-a-remote-clearance-response", vec![string("tampered")]),
+            expected_peer_ref: Some(&peer_ref),
+            expected_remote_ref: Some(&remote_ref),
+        })
+        .expect("deny tampered response import");
+        assert_eq!(tampered_import.decision, "deny");
+        assert!(tampered_import.clearance_ref.is_none());
+        assert!(
+            tampered_import
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.starts_with("remote-clearance-tampered-response"))
+        );
     }
 
     struct TestRemoteClearanceInput<'a> {
