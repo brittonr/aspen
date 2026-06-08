@@ -2991,6 +2991,24 @@ enum RetentionCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    GcPlan {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long, default_value = "generic")]
+        subsystem: String,
+        #[arg(long)]
+        object_ref: String,
+        #[arg(long)]
+        object_kind: String,
+        #[arg(long)]
+        retention_class: String,
+        #[arg(long, default_value = "delete")]
+        action: String,
+        #[command(flatten)]
+        retention: RetentionEvidenceArgs,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     Check {
         #[arg(long)]
         root: PathBuf,
@@ -7310,6 +7328,42 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
                     live.import.import_ref,
                     live.import.clearance_ref.as_deref().unwrap_or("none"),
                     live.workflow.diagnostics.len()
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::GcPlan {
+            root,
+            subsystem,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            retention,
+            out,
+        } => {
+            let evidence = retention.into_retention_evidence();
+            let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+                root: &root,
+                subsystem: &subsystem,
+                object_ref: &object_ref,
+                object_kind: &object_kind,
+                retention_class: &retention_class,
+                action: &action,
+                evidence: &evidence,
+            })?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &plan.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention gc plan ref={} decision={} subsystem={} action={} object={} gates={} diagnostics={}",
+                    plan.plan_ref,
+                    plan.decision,
+                    plan.subsystem,
+                    plan.action,
+                    plan.object_ref,
+                    plan.gates.len(),
+                    plan.diagnostics.len()
                 ),
             );
             Ok(())

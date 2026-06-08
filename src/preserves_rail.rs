@@ -74,6 +74,7 @@ pub const RETENTION_REMOTE_GC_CLEARANCE_RESPONSE_SCHEMA: &str = "molten.retentio
 pub const RETENTION_REMOTE_GC_CLEARANCE_IMPORT_SCHEMA: &str = "molten.retention.remote-gc-clearance-import.v1";
 pub const RETENTION_REMOTE_GC_CLEARANCE_LIVE_WORKFLOW_SCHEMA: &str =
     "molten.retention.remote-gc-clearance-live-workflow.v1";
+pub const RETENTION_GC_PLAN_SCHEMA: &str = "molten.retention.gc-plan.v1";
 pub const RETENTION_RECEIPT_SCHEMA: &str = "molten.retention.receipt.v1";
 pub const RETENTION_TOMBSTONE_SCHEMA: &str = "molten.retention.tombstone.v1";
 pub const EVIDENCE_CHAIN_LINK_SCHEMA: &str = "molten.evidence.chain-link.v1";

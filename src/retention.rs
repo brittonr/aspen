@@ -13,6 +13,7 @@ use crate::node_runtime;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::RETENTION_CLASS_SCHEMA;
 use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
+use crate::preserves_rail::RETENTION_GC_PLAN_SCHEMA;
 use crate::preserves_rail::RETENTION_PIN_SCHEMA;
 use crate::preserves_rail::RETENTION_RECEIPT_SCHEMA;
 use crate::preserves_rail::RETENTION_REFERENCE_INDEX_SCHEMA;
@@ -80,6 +81,7 @@ const REMOTE_CLEARANCE_REQUEST_DIR: &str = "remote-clearance-requests";
 const REMOTE_CLEARANCE_RESPONSE_DIR: &str = "remote-clearance-responses";
 const REMOTE_CLEARANCE_IMPORT_DIR: &str = "remote-clearance-imports";
 const REMOTE_CLEARANCE_LIVE_WORKFLOW_DIR: &str = "remote-clearance-live-workflows";
+const GC_PLAN_DIR: &str = "gc-plans";
 const RECEIPT_DIR: &str = "receipts";
 const TOMBSTONE_DIR: &str = "tombstones";
 const MAX_RETENTION_REFS: usize = 4096;
@@ -217,6 +219,42 @@ pub struct DestructiveRetentionEvidence {
     pub remote_gc_refs: Vec<String>,
     pub remote_clearance_refs: Vec<String>,
     pub is_reference_index_complete: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionGcPlanInput<'a> {
+    pub root: &'a Path,
+    pub subsystem: &'a str,
+    pub object_ref: &'a str,
+    pub object_kind: &'a str,
+    pub retention_class: &'a str,
+    pub action: &'a str,
+    pub evidence: &'a DestructiveRetentionEvidence,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionPlanGate {
+    pub name: String,
+    pub decision: String,
+    pub required_refs: Vec<String>,
+    pub admitted_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionGcPlan {
+    pub plan_ref: String,
+    pub decision: String,
+    pub subsystem: String,
+    pub action: String,
+    pub object_ref: String,
+    pub object_kind: String,
+    pub retention_class: String,
+    pub requester_ref: Option<String>,
+    pub index_ref: String,
+    pub gates: Vec<RetentionPlanGate>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1979,6 +2017,59 @@ struct RemoteClearanceRefsResult {
     peer_refs: Vec<String>,
 }
 
+pub struct RetentionGcPlanValueInput<'a> {
+    decision: &'a str,
+    subsystem: &'a str,
+    action: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+    requester_ref: Option<&'a str>,
+    index: &'a RetentionReferenceIndex,
+    evidence_value: &'a IOValue,
+    gates: &'a [RetentionPlanGate],
+    diagnostics: &'a [String],
+}
+
+struct RetentionGateInputs<'a> {
+    input: &'a RetentionGcPlanInput<'a>,
+    policy: AdmissionRefsResult,
+    authority: AdmissionRefsResult,
+    supporting: AdmissionRefsResult,
+    reference_index: AdmissionRefsResult,
+    remote_gc: AdmissionRefsResult,
+    remote_clearance: RemoteClearanceRefsResult,
+    has_delete_authority: bool,
+    has_remote_gc_clearance: bool,
+}
+
+struct PlanGateBuildInput<'a> {
+    name: &'a str,
+    is_required: bool,
+    required_refs: &'a [String],
+    admitted_refs: &'a [String],
+    diagnostics: Vec<String>,
+}
+
+struct LocalRetentionGateInput<'a> {
+    input: &'a RetentionGcPlanInput<'a>,
+    index: &'a RetentionReferenceIndex,
+    has_delete_authority: bool,
+    has_remote_gc_clearance: bool,
+}
+
+struct MissingDiagnosticInput<'a> {
+    diagnostics: &'a [String],
+    is_missing: bool,
+    missing_diagnostic: &'a str,
+}
+
+struct RemoteClearanceGateInput<'a> {
+    diagnostics: &'a [String],
+    has_missing_refs: bool,
+    has_missing_peers: bool,
+}
+
 struct LiveControlRequestInput<'a> {
     target_ref: &'a str,
     payload_ref: Option<&'a str>,
@@ -2000,6 +2091,456 @@ fn remote_clearance_live_control_request_value(input: &LiveControlRequestInput<'
     })?;
     let reference = canonical_hash(&value)?;
     Ok((reference, value))
+}
+
+fn retention_gate_inputs<'a>(input: &'a RetentionGcPlanInput<'a>) -> Result<RetentionGateInputs<'a>> {
+    let scope = AdmissionScope {
+        requester_ref: input.evidence.requester_ref.as_deref(),
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+    };
+    let policy = admit_evidence_refs(AdmissionRefsInput {
+        root: input.root,
+        refs: &input.evidence.policy_refs,
+        expected_kind: ADMISSION_KIND_POLICY,
+        scope: &scope,
+        required_remote_refs: &[],
+    })?;
+    let authority = admit_evidence_refs(AdmissionRefsInput {
+        root: input.root,
+        refs: &input.evidence.authority_refs,
+        expected_kind: ADMISSION_KIND_AUTHORITY,
+        scope: &scope,
+        required_remote_refs: &[],
+    })?;
+    let supporting = admit_evidence_refs(AdmissionRefsInput {
+        root: input.root,
+        refs: &input.evidence.evidence_refs,
+        expected_kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+        scope: &scope,
+        required_remote_refs: &[],
+    })?;
+    let reference_index = admit_evidence_refs(AdmissionRefsInput {
+        root: input.root,
+        refs: &input.evidence.reference_index_refs,
+        expected_kind: ADMISSION_KIND_REFERENCE_INDEX,
+        scope: &scope,
+        required_remote_refs: &[],
+    })?;
+    let remote_gc = admit_evidence_refs(AdmissionRefsInput {
+        root: input.root,
+        refs: &input.evidence.remote_gc_refs,
+        expected_kind: ADMISSION_KIND_REMOTE_GC,
+        scope: &scope,
+        required_remote_refs: &input.evidence.remote_refs,
+    })?;
+    let remote_clearance = admit_remote_clearance_refs(RemoteClearanceRefsInput {
+        root: input.root,
+        refs: &input.evidence.remote_clearance_refs,
+        scope: &scope,
+        required_remote_refs: &input.evidence.remote_refs,
+        required_peer_refs: &input.evidence.remote_peer_refs,
+        policy_refs: &input.evidence.policy_refs,
+        authority_refs: &input.evidence.authority_refs,
+    })?;
+    let has_local_remote_gc_plan = input.evidence.remote_refs.is_empty()
+        || input
+            .evidence
+            .remote_refs
+            .iter()
+            .all(|reference| remote_gc.remote_refs.iter().any(|remote| remote == reference));
+    let has_remote_ref_clearance = input.evidence.remote_refs.is_empty()
+        || input
+            .evidence
+            .remote_refs
+            .iter()
+            .all(|reference| remote_clearance.remote_refs.iter().any(|remote| remote == reference));
+    let has_remote_peer_clearance = input.evidence.remote_peer_refs.is_empty()
+        || input
+            .evidence
+            .remote_peer_refs
+            .iter()
+            .all(|peer| remote_clearance.peer_refs.iter().any(|cleared_peer| cleared_peer == peer));
+    let has_remote_gc_clearance = has_local_remote_gc_plan && has_remote_ref_clearance && has_remote_peer_clearance;
+    let has_delete_authority = is_destructive_action(input.action)
+        && !authority.admitted_refs.is_empty()
+        && !policy.admitted_refs.is_empty()
+        && !supporting.admitted_refs.is_empty()
+        && (!input.evidence.is_reference_index_complete || !reference_index.admitted_refs.is_empty())
+        && has_remote_gc_clearance;
+    Ok(RetentionGateInputs {
+        input,
+        policy,
+        authority,
+        supporting,
+        reference_index,
+        remote_gc,
+        remote_clearance,
+        has_delete_authority,
+        has_remote_gc_clearance,
+    })
+}
+
+fn retention_plan_gates(
+    input: &RetentionGateInputs<'_>,
+    index: &RetentionReferenceIndex,
+) -> Result<Vec<RetentionPlanGate>> {
+    let mut gates = Vec::new();
+    push_bounded(
+        &mut gates,
+        requester_gate(input.input.evidence.requester_ref.as_deref())?,
+        MAX_RETENTION_REFS,
+        "retention GC plan gates",
+    )?;
+    push_bounded(
+        &mut gates,
+        retention_plan_gate(PlanGateBuildInput {
+            name: "policy",
+            is_required: true,
+            required_refs: &input.input.evidence.policy_refs,
+            admitted_refs: &input.policy.admitted_refs,
+            diagnostics: diagnostics_with_missing(MissingDiagnosticInput {
+                diagnostics: &input.policy.diagnostics,
+                is_missing: input.input.evidence.policy_refs.is_empty(),
+                missing_diagnostic: "retention-policy-missing",
+            })?,
+        })?,
+        MAX_RETENTION_REFS,
+        "retention GC plan gates",
+    )?;
+    push_bounded(
+        &mut gates,
+        retention_plan_gate(PlanGateBuildInput {
+            name: "authority",
+            is_required: is_destructive_action(input.input.action),
+            required_refs: &input.input.evidence.authority_refs,
+            admitted_refs: &input.authority.admitted_refs,
+            diagnostics: diagnostics_with_missing(MissingDiagnosticInput {
+                diagnostics: &input.authority.diagnostics,
+                is_missing: is_destructive_action(input.input.action) && input.input.evidence.authority_refs.is_empty(),
+                missing_diagnostic: "delete-authority-missing",
+            })?,
+        })?,
+        MAX_RETENTION_REFS,
+        "retention GC plan gates",
+    )?;
+    push_bounded(
+        &mut gates,
+        retention_plan_gate(PlanGateBuildInput {
+            name: "supporting-evidence",
+            is_required: is_destructive_action(input.input.action),
+            required_refs: &input.input.evidence.evidence_refs,
+            admitted_refs: &input.supporting.admitted_refs,
+            diagnostics: diagnostics_with_missing(MissingDiagnosticInput {
+                diagnostics: &input.supporting.diagnostics,
+                is_missing: is_destructive_action(input.input.action) && input.input.evidence.evidence_refs.is_empty(),
+                missing_diagnostic: "retention-evidence-missing",
+            })?,
+        })?,
+        MAX_RETENTION_REFS,
+        "retention GC plan gates",
+    )?;
+    push_bounded(
+        &mut gates,
+        retention_plan_gate(PlanGateBuildInput {
+            name: "reference-index",
+            is_required: input.input.evidence.is_reference_index_complete,
+            required_refs: &input.input.evidence.reference_index_refs,
+            admitted_refs: &input.reference_index.admitted_refs,
+            diagnostics: reference_index_gate_diagnostics(input)?,
+        })?,
+        MAX_RETENTION_REFS,
+        "retention GC plan gates",
+    )?;
+    push_bounded(
+        &mut gates,
+        local_retention_gate(LocalRetentionGateInput {
+            input: input.input,
+            index,
+            has_delete_authority: input.has_delete_authority,
+            has_remote_gc_clearance: input.has_remote_gc_clearance,
+        })?,
+        MAX_RETENTION_REFS,
+        "retention GC plan gates",
+    )?;
+    push_bounded(
+        &mut gates,
+        retention_plan_gate(PlanGateBuildInput {
+            name: "remote-gc",
+            is_required: is_destructive_action(input.input.action) && !input.input.evidence.remote_refs.is_empty(),
+            required_refs: &input.input.evidence.remote_gc_refs,
+            admitted_refs: &input.remote_gc.admitted_refs,
+            diagnostics: diagnostics_with_missing(MissingDiagnosticInput {
+                diagnostics: &input.remote_gc.diagnostics,
+                is_missing: is_destructive_action(input.input.action)
+                    && !input.input.evidence.remote_refs.is_empty()
+                    && input.input.evidence.remote_gc_refs.is_empty(),
+                missing_diagnostic: "remote-gc-evidence-missing",
+            })?,
+        })?,
+        MAX_RETENTION_REFS,
+        "retention GC plan gates",
+    )?;
+    push_bounded(
+        &mut gates,
+        retention_plan_gate(PlanGateBuildInput {
+            name: "remote-clearance",
+            is_required: is_destructive_action(input.input.action)
+                && (!input.input.evidence.remote_refs.is_empty() || !input.input.evidence.remote_peer_refs.is_empty()),
+            required_refs: &input.input.evidence.remote_clearance_refs,
+            admitted_refs: &input.remote_clearance.admitted_refs,
+            diagnostics: remote_clearance_gate_diagnostics(RemoteClearanceGateInput {
+                diagnostics: &input.remote_clearance.diagnostics,
+                has_missing_refs: is_destructive_action(input.input.action)
+                    && !input.input.evidence.remote_refs.is_empty()
+                    && input.input.evidence.remote_clearance_refs.is_empty(),
+                has_missing_peers: is_destructive_action(input.input.action)
+                    && !input.input.evidence.remote_peer_refs.is_empty()
+                    && input.input.evidence.remote_clearance_refs.is_empty(),
+            })?,
+        })?,
+        MAX_RETENTION_REFS,
+        "retention GC plan gates",
+    )?;
+    let empty_refs = Vec::new();
+    push_bounded(
+        &mut gates,
+        retention_plan_gate(PlanGateBuildInput {
+            name: "evidence-only-boundary",
+            is_required: false,
+            required_refs: &empty_refs,
+            admitted_refs: &empty_refs,
+            diagnostics: Vec::new(),
+        })?,
+        MAX_RETENTION_REFS,
+        "retention GC plan gates",
+    )?;
+    Ok(gates)
+}
+
+fn requester_gate(requester_ref: Option<&str>) -> Result<RetentionPlanGate> {
+    let required_refs = requester_ref.map(|reference| vec![reference.to_string()]).unwrap_or_default();
+    let diagnostics = if requester_ref.is_some() {
+        Vec::new()
+    } else {
+        vec!["retention-requester-missing".to_string()]
+    };
+    retention_plan_gate(PlanGateBuildInput {
+        name: "requester",
+        is_required: true,
+        required_refs: &required_refs,
+        admitted_refs: &required_refs,
+        diagnostics,
+    })
+}
+
+fn local_retention_gate(input: LocalRetentionGateInput<'_>) -> Result<RetentionPlanGate> {
+    let requester_ref = match input.input.evidence.requester_ref.as_ref() {
+        Some(reference) => reference.clone(),
+        None => synthetic_ref("retention-gc-plan-missing-requester")?,
+    };
+    let local_input = RetentionEvaluationInput {
+        root: input.input.root,
+        object_ref: input.input.object_ref,
+        object_kind: input.input.object_kind,
+        retention_class: input.input.retention_class,
+        action: input.input.action,
+        requester_ref: &requester_ref,
+        is_reference_index_complete: input.input.evidence.is_reference_index_complete,
+        retained_refs: &input.input.evidence.retained_refs,
+        remote_refs: &input.input.evidence.remote_refs,
+        policy_refs: &input.input.evidence.policy_refs,
+        evidence_refs: &input.input.evidence.evidence_refs,
+        has_delete_authority: input.has_delete_authority,
+        has_remote_gc_clearance: input.has_remote_gc_clearance,
+    };
+    let diagnostics = retention_diagnostics(&local_input, input.index)?;
+    let required_refs = vec![input.index.index_ref.clone()];
+    let admitted_refs = if diagnostics.is_empty() {
+        required_refs.clone()
+    } else {
+        Vec::new()
+    };
+    retention_plan_gate(PlanGateBuildInput {
+        name: "local-retention",
+        is_required: true,
+        required_refs: &required_refs,
+        admitted_refs: &admitted_refs,
+        diagnostics,
+    })
+}
+
+fn diagnostics_with_missing(input: MissingDiagnosticInput<'_>) -> Result<Vec<String>> {
+    let mut diagnostics = input.diagnostics.to_vec();
+    if input.is_missing {
+        push_bounded(
+            &mut diagnostics,
+            input.missing_diagnostic.to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC plan gate diagnostics",
+        )?;
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    Ok(diagnostics)
+}
+
+fn reference_index_gate_diagnostics(input: &RetentionGateInputs<'_>) -> Result<Vec<String>> {
+    let mut diagnostics = input.reference_index.diagnostics.clone();
+    if !input.input.evidence.is_reference_index_complete {
+        push_bounded(
+            &mut diagnostics,
+            "incomplete-reference-proof".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC plan reference-index diagnostics",
+        )?;
+    }
+    if input.input.evidence.is_reference_index_complete && input.input.evidence.reference_index_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "reference-index-evidence-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC plan reference-index diagnostics",
+        )?;
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    Ok(diagnostics)
+}
+
+fn remote_clearance_gate_diagnostics(input: RemoteClearanceGateInput<'_>) -> Result<Vec<String>> {
+    let mut diagnostics = input.diagnostics.to_vec();
+    if input.has_missing_refs || input.has_missing_peers {
+        push_bounded(
+            &mut diagnostics,
+            "remote-clearance-evidence-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC plan remote-clearance diagnostics",
+        )?;
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    Ok(diagnostics)
+}
+
+fn retention_plan_gate(input: PlanGateBuildInput<'_>) -> Result<RetentionPlanGate> {
+    validate_name(input.name, "retention GC plan gate name")?;
+    validate_refs(input.required_refs, "retention GC plan required ref")?;
+    validate_refs(input.admitted_refs, "retention GC plan admitted ref")?;
+    let is_pass = input.diagnostics.is_empty() && (!input.is_required || !input.admitted_refs.is_empty());
+    Ok(RetentionPlanGate {
+        name: input.name.to_string(),
+        decision: pass_or_deny(is_pass).to_string(),
+        required_refs: input.required_refs.to_vec(),
+        admitted_refs: input.admitted_refs.to_vec(),
+        diagnostics: input.diagnostics,
+    })
+}
+
+fn retention_plan_gate_value(input: &RetentionPlanGate) -> Result<IOValue> {
+    validate_name(&input.name, "retention GC plan gate name")?;
+    validate_decision(&input.decision)?;
+    validate_refs(&input.required_refs, "retention GC plan gate required ref")?;
+    validate_refs(&input.admitted_refs, "retention GC plan gate admitted ref")?;
+    Ok(record("gate", vec![
+        record("name", vec![string(&input.name)]),
+        record("decision", vec![string(&input.decision)]),
+        record("required", vec![strings_sequence(&input.required_refs)]),
+        record("admitted", vec![strings_sequence(&input.admitted_refs)]),
+        record("diagnostics", vec![strings_sequence(&input.diagnostics)]),
+    ]))
+}
+
+fn parse_retention_plan_gates(value: &Value<IOValue>) -> Result<Vec<RetentionPlanGate>> {
+    let value = value_to_iovalue(value);
+    let fields = value
+        .collect_simple_record("gates", Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention GC plan gates"))?;
+    let entries = fields[0]
+        .collect_sequence()
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention GC plan gate sequence"))?;
+    let mut gates = Vec::with_capacity(entries.len());
+    for entry in entries.iter() {
+        let gate_value = value_to_iovalue(entry);
+        push_bounded(
+            &mut gates,
+            parse_retention_plan_gate(&gate_value)?,
+            MAX_RETENTION_REFS,
+            "retention GC plan gates",
+        )?;
+    }
+    Ok(gates)
+}
+
+fn parse_retention_plan_gate(value: &IOValue) -> Result<RetentionPlanGate> {
+    let fields = value
+        .collect_simple_record("gate", Some(5))
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention GC plan gate"))?;
+    let name = record_string(&fields[0], "name")?;
+    validate_name(&name, "retention GC plan gate name")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    let required_refs = record_ref_sequence(&fields[2], "required")?;
+    let admitted_refs = record_ref_sequence(&fields[3], "admitted")?;
+    let diagnostics = record_string_sequence(&fields[4], "diagnostics")?;
+    Ok(RetentionPlanGate {
+        name,
+        decision,
+        required_refs,
+        admitted_refs,
+        diagnostics,
+    })
+}
+
+fn parse_embedded_reference_index(value: &Value<IOValue>) -> Result<(String, RetentionReferenceIndex)> {
+    let value = value_to_iovalue(value);
+    let fields = value
+        .collect_simple_record("index", Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness("expected embedded retention index"))?;
+    let index_ref = required_string(&fields[0], "embedded retention index ref")?;
+    require_ref(&index_ref, "embedded retention index ref")?;
+    let index_value = value_to_iovalue(&fields[1]);
+    let index = parse_reference_index(&index_value)?;
+    if index.index_ref != index_ref {
+        return Err(MoltenError::invalid_harness("embedded retention index ref mismatch"));
+    }
+    Ok((index_ref, index))
+}
+
+fn parse_embedded_destructive_retention_evidence_summary(value: &Value<IOValue>) -> Result<IOValue> {
+    let value = value_to_iovalue(value);
+    let fields = value
+        .collect_simple_record("retention-evidence", Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness("expected embedded retention evidence summary"))?;
+    parse_destructive_retention_evidence_summary(&value_to_iovalue(&fields[0]))
+}
+
+fn parse_destructive_retention_evidence_summary(value: &IOValue) -> Result<IOValue> {
+    let fields = value
+        .collect_simple_record("retention-evidence-summary-v1", Some(12))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-evidence-summary-v1 ...>"))?;
+    let requester_fields = fields[0]
+        .collect_simple_record("requester", Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention evidence requester"))?;
+    let requester_value = value_to_iovalue(&requester_fields[0]);
+    if requester_value.collect_simple_record("none", Some(0)).is_none() {
+        let requester_ref = required_string(&requester_fields[0], "retention evidence requester")?;
+        require_ref(&requester_ref, "retention evidence requester")?;
+    }
+    record_ref_sequence(&fields[1], "policy")?;
+    record_ref_sequence(&fields[2], "authority")?;
+    record_ref_sequence(&fields[3], "evidence")?;
+    record_ref_sequence(&fields[4], "retained")?;
+    record_ref_sequence(&fields[5], "remote-peer")?;
+    record_ref_sequence(&fields[6], "remote")?;
+    record_ref_sequence(&fields[7], "reference-index")?;
+    record_ref_sequence(&fields[8], "remote-gc")?;
+    record_ref_sequence(&fields[9], "remote-clearance")?;
+    record_pass_bool(&fields[10], "reference-index-complete")?;
+    parse_checks(&fields[11])?;
+    Ok(value.clone())
 }
 
 fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsResult> {
@@ -2457,6 +2998,15 @@ pub fn validate_destructive_retention_evidence(input: &DestructiveRetentionEvide
     validate_refs(&input.remote_clearance_refs, "retention remote clearance ref")
 }
 
+fn validate_retention_gc_plan_input(input: &RetentionGcPlanInput<'_>) -> Result<()> {
+    validate_name(input.subsystem, "retention GC plan subsystem")?;
+    require_ref(input.object_ref, "retention GC plan object ref")?;
+    validate_name(input.object_kind, "retention GC plan object kind")?;
+    validate_retention_class(input.retention_class)?;
+    validate_action(input.action)?;
+    validate_destructive_retention_evidence(input.evidence)
+}
+
 pub fn destructive_retention_evidence_diagnostics(
     input: &DestructiveRetentionEvidence,
     action: &str,
@@ -2573,6 +3123,138 @@ pub fn destructive_retention_evidence_value(input: &DestructiveRetentionEvidence
             ),
         ]),
     ]))
+}
+
+pub fn store_retention_gc_plan(input: RetentionGcPlanInput<'_>) -> Result<RetentionGcPlan> {
+    ensure_store(input.root)?;
+    validate_retention_gc_plan_input(&input)?;
+    let index = reference_index_for_object(ReferenceIndexForObjectInput {
+        root: input.root,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retained_refs: input.evidence.retained_refs.as_slice(),
+        remote_refs: input.evidence.remote_refs.as_slice(),
+        is_complete: input.evidence.is_reference_index_complete,
+    })?;
+    let gate_inputs = retention_gate_inputs(&input)?;
+    let gates = retention_plan_gates(&gate_inputs, &index)?;
+    let mut diagnostics = Vec::new();
+    for gate in &gates {
+        extend_bounded(
+            &mut diagnostics,
+            gate.diagnostics.iter().cloned(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC plan diagnostics",
+        )?;
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if gates.iter().all(|gate| gate.decision == "pass") && diagnostics.is_empty() {
+        "pass"
+    } else {
+        "deny"
+    };
+    let evidence_value = destructive_retention_evidence_value(input.evidence)?;
+    let value = retention_gc_plan_value(&RetentionGcPlanValueInput {
+        decision,
+        subsystem: input.subsystem,
+        action: input.action,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        requester_ref: input.evidence.requester_ref.as_deref(),
+        index: &index,
+        evidence_value: &evidence_value,
+        gates: &gates,
+        diagnostics: &diagnostics,
+    })?;
+    let plan = parse_retention_gc_plan(&value)?;
+    write_store_value(&gc_plan_path(input.root, &plan.plan_ref)?, &plan.value)?;
+    Ok(plan)
+}
+
+pub fn retention_gc_plan_value(input: &RetentionGcPlanValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    validate_name(input.subsystem, "retention GC plan subsystem")?;
+    validate_action(input.action)?;
+    require_ref(input.object_ref, "retention GC plan object ref")?;
+    validate_name(input.object_kind, "retention GC plan object kind")?;
+    validate_retention_class(input.retention_class)?;
+    if let Some(requester_ref) = input.requester_ref {
+        require_ref(requester_ref, "retention GC plan requester ref")?;
+    }
+    parse_destructive_retention_evidence_summary(input.evidence_value)?;
+    let gate_values = input.gates.iter().map(retention_plan_gate_value).collect::<Result<Vec<_>>>()?;
+    Ok(record("retention-gc-plan-v1", vec![
+        string(RETENTION_GC_PLAN_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("mode", vec![string("dry-run")]),
+        record("subsystem", vec![string(input.subsystem)]),
+        record("action", vec![string(input.action)]),
+        object_value(input.object_ref, input.object_kind),
+        record("class", vec![string(input.retention_class)]),
+        record("requester", vec![optional_ref_value(input.requester_ref)]),
+        record("index", vec![string(&input.index.index_ref), input.index.value.clone()]),
+        record("retention-evidence", vec![input.evidence_value.clone()]),
+        record("gates", vec![sequence(gate_values)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        checks_value(&[
+            ("canonical-ref-binding", "pass"),
+            ("dry-run-only", "pass"),
+            ("no-retention-receipt-written", "pass"),
+            ("no-tombstone-written", "pass"),
+            ("plan-is-not-authority", "pass"),
+            ("remote-clearance-import-still-required", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_gc_plan(value: &IOValue) -> Result<RetentionGcPlan> {
+    let fields = value
+        .collect_simple_record("retention-gc-plan-v1", Some(13))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-plan-v1 ...>"))?;
+    require_schema(&fields[0], RETENTION_GC_PLAN_SCHEMA, "retention GC plan schema")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    let mode = record_string(&fields[2], "mode")?;
+    if mode != "dry-run" {
+        return Err(MoltenError::invalid_harness("retention GC plan mode must be dry-run"));
+    }
+    let subsystem = record_string(&fields[3], "subsystem")?;
+    validate_name(&subsystem, "retention GC plan subsystem")?;
+    let action = record_string(&fields[4], "action")?;
+    validate_action(&action)?;
+    let (object_ref, object_kind) = parse_object_value(&fields[5])?;
+    let retention_class = record_string(&fields[6], "class")?;
+    validate_retention_class(&retention_class)?;
+    let requester_ref = record_optional_ref(&fields[7], "requester")?;
+    let (index_ref, index) = parse_embedded_reference_index(&fields[8])?;
+    if index.object_ref != object_ref || index.object_kind != object_kind {
+        return Err(MoltenError::invalid_harness("retention GC plan index scope mismatch"));
+    }
+    let evidence_value = parse_embedded_destructive_retention_evidence_summary(&fields[9])?;
+    let gates = parse_retention_plan_gates(&fields[10])?;
+    let diagnostics = record_string_sequence(&fields[11], "diagnostics")?;
+    let checks = parse_checks(&fields[12])?;
+    require_check(&checks, "dry-run-only", "retention GC plan")?;
+    require_check(&checks, "plan-is-not-authority", "retention GC plan")?;
+    require_check(&checks, "remote-clearance-import-still-required", "retention GC plan")?;
+    let evidence_ref = canonical_hash(&evidence_value)?;
+    require_ref(&evidence_ref, "retention GC plan evidence summary ref")?;
+    Ok(RetentionGcPlan {
+        plan_ref: canonical_hash(value)?,
+        decision,
+        subsystem,
+        action,
+        object_ref,
+        object_kind,
+        retention_class,
+        requester_ref,
+        index_ref,
+        gates,
+        diagnostics,
+        value: value.clone(),
+    })
 }
 
 pub fn parse_retention_receipt(value: &IOValue) -> Result<RetentionReceipt> {
@@ -2756,6 +3438,21 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             clearance.retained_refs.len(),
             clearance.revoked_refs.len(),
             clearance.diagnostics.join(",")
+        ));
+    }
+    if let Ok(plan) = parse_retention_gc_plan(value) {
+        return Ok(format!(
+            "retention gc plan ref={} decision={} subsystem={} action={} object={} class={} requester={} index={} gates={} diagnostics={}",
+            plan.plan_ref,
+            plan.decision,
+            plan.subsystem,
+            plan.action,
+            plan.object_ref,
+            plan.retention_class,
+            plan.requester_ref.as_deref().unwrap_or("none"),
+            plan.index_ref,
+            plan.gates.len(),
+            plan.diagnostics.join(",")
         ));
     }
     if let Ok(receipt) = parse_retention_receipt(value) {
@@ -3560,6 +4257,7 @@ fn ensure_store(root: &Path) -> Result<()> {
     fs::create_dir_all(remote_clearance_responses_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(remote_clearance_imports_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(remote_clearance_live_workflows_dir(root)).map_err(MoltenError::from)?;
+    fs::create_dir_all(gc_plans_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(receipts_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(tombstones_dir(root)).map_err(MoltenError::from)
 }
@@ -3638,6 +4336,10 @@ fn remote_clearance_live_workflows_dir(root: &Path) -> PathBuf {
     store_dir(root).join(REMOTE_CLEARANCE_LIVE_WORKFLOW_DIR)
 }
 
+fn gc_plans_dir(root: &Path) -> PathBuf {
+    store_dir(root).join(GC_PLAN_DIR)
+}
+
 fn receipts_dir(root: &Path) -> PathBuf {
     store_dir(root).join(RECEIPT_DIR)
 }
@@ -3672,6 +4374,10 @@ fn remote_clearance_import_path(root: &Path, import_ref: &str) -> Result<PathBuf
 
 fn remote_clearance_live_workflow_path(root: &Path, workflow_ref: &str) -> Result<PathBuf> {
     Ok(remote_clearance_live_workflows_dir(root).join(format!("{}.preserves", ref_file_name(workflow_ref)?)))
+}
+
+fn gc_plan_path(root: &Path, plan_ref: &str) -> Result<PathBuf> {
+    Ok(gc_plans_dir(root).join(format!("{}.preserves", ref_file_name(plan_ref)?)))
 }
 
 fn receipt_path(root: &Path, receipt_ref: &str) -> Result<PathBuf> {
@@ -4601,6 +5307,253 @@ mod tests {
         })
         .expect("evaluate remote clearance");
         assert_eq!(evaluation.receipt.decision, "pass");
+    }
+
+    #[test]
+    fn gc_plan_lists_gates_and_avoids_receipts_or_tombstones() {
+        let root = temp_dir("retention-gc-plan-pass");
+        let requester_ref = fake_ref("plan-requester");
+        let object_ref = fake_ref("plan-object");
+        let peer_ref = fake_ref("plan-peer");
+        let remote_ref = fake_ref("plan-remote");
+        let policy = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_POLICY,
+            label: "plan-policy",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let authority = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_AUTHORITY,
+            label: "plan-authority",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let support = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label: "plan-support",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let index = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REFERENCE_INDEX,
+            label: "plan-index",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let remote_gc = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REMOTE_GC,
+            label: "plan-remote-gc",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: std::slice::from_ref(&remote_ref),
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let remote_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
+            root: &root,
+            label: "plan-clearance",
+            requester_ref: &requester_ref,
+            peer_ref: &peer_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &remote_ref,
+            policy_ref: &policy,
+            authority_ref: &authority,
+            is_current: true,
+            revoked_refs: &[],
+            retained_refs: &[],
+        });
+        let evidence = DestructiveRetentionEvidence {
+            requester_ref: Some(requester_ref),
+            policy_refs: vec![policy],
+            authority_refs: vec![authority],
+            evidence_refs: vec![support],
+            retained_refs: Vec::new(),
+            remote_peer_refs: vec![peer_ref],
+            remote_refs: vec![remote_ref],
+            reference_index_refs: vec![index],
+            remote_gc_refs: vec![remote_gc],
+            remote_clearance_refs: vec![remote_clearance],
+            is_reference_index_complete: true,
+        };
+        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+            root: &root,
+            subsystem: "chunk-gc",
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &evidence,
+        })
+        .expect("store plan");
+        assert_eq!(plan.decision, "pass");
+        assert_eq!(store_file_count(&receipts_dir(&root)), 0);
+        assert_eq!(store_file_count(&tombstones_dir(&root)), 0);
+        assert_eq!(store_file_count(&gc_plans_dir(&root)), 1);
+        let gate_names = plan.gates.iter().map(|gate| gate.name.as_str()).collect::<Vec<_>>();
+        assert!(gate_names.contains(&"policy"));
+        assert!(gate_names.contains(&"authority"));
+        assert!(gate_names.contains(&"reference-index"));
+        assert!(gate_names.contains(&"remote-gc"));
+        assert!(gate_names.contains(&"remote-clearance"));
+        let parsed = parse_retention_gc_plan(&plan.value).expect("parse plan");
+        assert_eq!(parsed.plan_ref, plan.plan_ref);
+    }
+
+    #[test]
+    fn gc_plan_denies_missing_clearance_and_is_not_clearance() {
+        let root = temp_dir("retention-gc-plan-deny");
+        let requester_ref = fake_ref("plan-deny-requester");
+        let object_ref = fake_ref("plan-deny-object");
+        let peer_ref = fake_ref("plan-deny-peer");
+        let remote_ref = fake_ref("plan-deny-remote");
+        let policy = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_POLICY,
+            label: "plan-deny-policy",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let authority = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_AUTHORITY,
+            label: "plan-deny-authority",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let support = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label: "plan-deny-support",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let index = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REFERENCE_INDEX,
+            label: "plan-deny-index",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let remote_gc = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REMOTE_GC,
+            label: "plan-deny-remote-gc",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: std::slice::from_ref(&remote_ref),
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let evidence = DestructiveRetentionEvidence {
+            requester_ref: Some(requester_ref),
+            policy_refs: vec![policy],
+            authority_refs: vec![authority],
+            evidence_refs: vec![support],
+            retained_refs: Vec::new(),
+            remote_peer_refs: vec![peer_ref],
+            remote_refs: vec![remote_ref],
+            reference_index_refs: vec![index],
+            remote_gc_refs: vec![remote_gc],
+            remote_clearance_refs: Vec::new(),
+            is_reference_index_complete: true,
+        };
+        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &evidence,
+        })
+        .expect("store denied plan");
+        assert_eq!(plan.decision, "deny");
+        assert!(plan.diagnostics.iter().any(|diagnostic| diagnostic == "remote-clearance-evidence-missing"));
+        let mut plan_as_clearance = evidence;
+        plan_as_clearance.remote_clearance_refs = vec![plan.plan_ref];
+        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &plan_as_clearance,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("plan ref is not clearance");
+        assert_eq!(admission.decision, "deny");
+        assert!(admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("remote-clearance-unreadable")));
     }
 
     #[test]
@@ -6230,6 +7183,13 @@ mod tests {
 
     fn fake_ref(label: &str) -> String {
         canonical_hash(&record("retention-test-ref", vec![string(label)])).expect("fake ref")
+    }
+
+    fn store_file_count(dir: &Path) -> usize {
+        if !dir.exists() {
+            return 0;
+        }
+        fs::read_dir(dir).expect("read store dir").filter_map(std::result::Result::ok).count()
     }
 
     fn temp_dir(name: &str) -> PathBuf {
