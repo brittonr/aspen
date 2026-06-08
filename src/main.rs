@@ -2776,6 +2776,145 @@ enum RetentionCommand {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    RemoteClearanceLiveRequestSend {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        requester_node_root: Option<PathBuf>,
+        #[arg(long)]
+        peer_ticket: PathBuf,
+        #[arg(long)]
+        requester_node_id: String,
+        #[arg(long)]
+        peer_node_id: String,
+        #[arg(long, default_value = node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+        topic: String,
+        #[arg(long, default_value_t = 1)]
+        sequence: u64,
+        #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS)]
+        max_attempts: u64,
+        #[arg(long, default_value_t = 10_000)]
+        join_timeout_ms: u64,
+        #[arg(long)]
+        requester_ref: String,
+        #[arg(long)]
+        peer_ref: String,
+        #[arg(long)]
+        object_ref: String,
+        #[arg(long)]
+        object_kind: String,
+        #[arg(long)]
+        retention_class: String,
+        #[arg(long)]
+        action: String,
+        #[arg(long)]
+        remote_ref: String,
+        #[arg(long)]
+        policy_ref: String,
+        #[arg(long)]
+        authority_ref: String,
+        #[arg(long = "retention-evidence-ref")]
+        retention_evidence_refs: Vec<String>,
+        #[arg(long = "peer-bootstrap-ref")]
+        peer_bootstrap_refs: Vec<String>,
+        #[arg(long = "authority")]
+        authority_refs: Vec<String>,
+        #[arg(long = "policy")]
+        policy_refs: Vec<String>,
+        #[arg(long = "resource")]
+        resource_refs: Vec<String>,
+        #[arg(long = "transport-evidence-ref")]
+        transport_evidence_refs: Vec<String>,
+        #[arg(long)]
+        request_out: Option<PathBuf>,
+        #[arg(long)]
+        control_out: Option<PathBuf>,
+        #[arg(long)]
+        transport_receipt_out: Option<PathBuf>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    RemoteClearanceLiveResponseSend {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        peer_node_root: Option<PathBuf>,
+        #[arg(long)]
+        requester_ticket: PathBuf,
+        request: PathBuf,
+        #[arg(long)]
+        peer_node_id: String,
+        #[arg(long)]
+        requester_node_id: String,
+        #[arg(long, default_value = node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+        topic: String,
+        #[arg(long, default_value_t = 1)]
+        sequence: u64,
+        #[arg(long, default_value_t = node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS)]
+        max_attempts: u64,
+        #[arg(long, default_value_t = 10_000)]
+        join_timeout_ms: u64,
+        #[arg(long = "response-evidence-ref")]
+        response_evidence_refs: Vec<String>,
+        #[arg(long = "retained-ref")]
+        retained_refs: Vec<String>,
+        #[arg(long = "stale")]
+        is_stale: bool,
+        #[arg(long = "revoked-ref")]
+        revoked_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long = "peer-bootstrap-ref")]
+        peer_bootstrap_refs: Vec<String>,
+        #[arg(long = "authority")]
+        authority_refs: Vec<String>,
+        #[arg(long = "policy")]
+        policy_refs: Vec<String>,
+        #[arg(long = "resource")]
+        resource_refs: Vec<String>,
+        #[arg(long = "transport-evidence-ref")]
+        transport_evidence_refs: Vec<String>,
+        #[arg(long)]
+        response_out: Option<PathBuf>,
+        #[arg(long)]
+        control_out: Option<PathBuf>,
+        #[arg(long)]
+        transport_receipt_out: Option<PathBuf>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    RemoteClearanceLiveImportWorkflow {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        request: PathBuf,
+        #[arg(long)]
+        response: PathBuf,
+        #[arg(long)]
+        request_control: PathBuf,
+        #[arg(long)]
+        request_send_receipt: PathBuf,
+        #[arg(long)]
+        request_receive_receipt: PathBuf,
+        #[arg(long)]
+        request_ingress_ref: String,
+        #[arg(long)]
+        response_control: PathBuf,
+        #[arg(long)]
+        response_send_receipt: PathBuf,
+        #[arg(long)]
+        response_receive_receipt: PathBuf,
+        #[arg(long)]
+        response_ingress_ref: String,
+        #[arg(long)]
+        expected_peer_ref: Option<String>,
+        #[arg(long)]
+        expected_remote_ref: Option<String>,
+        #[arg(long)]
+        import_out: Option<PathBuf>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     RemoteClearanceLiveLoopback {
         #[arg(long)]
         root: PathBuf,
@@ -6852,6 +6991,222 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
                     import.import_ref,
                     import.decision,
                     import.clearance_ref.as_deref().unwrap_or("none")
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::RemoteClearanceLiveRequestSend {
+            root,
+            requester_node_root,
+            peer_ticket,
+            requester_node_id,
+            peer_node_id,
+            topic,
+            sequence,
+            max_attempts,
+            join_timeout_ms,
+            requester_ref,
+            peer_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            remote_ref,
+            policy_ref,
+            authority_ref,
+            retention_evidence_refs,
+            peer_bootstrap_refs,
+            authority_refs,
+            policy_refs,
+            resource_refs,
+            transport_evidence_refs,
+            request_out,
+            control_out,
+            transport_receipt_out,
+            receipt_out,
+        } => {
+            let ticket_value = read_preserves_file(&peer_ticket)?;
+            let runtime =
+                tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(MoltenError::from)?;
+            let sent = runtime.block_on(retention::send_retention_remote_gc_clearance_live_request(
+                retention::RetentionRemoteGcClearanceLiveRequestSendInput {
+                    root: &root,
+                    requester_node_root: requester_node_root.as_deref(),
+                    peer_ticket_value: &ticket_value,
+                    requester_node_id: &requester_node_id,
+                    peer_node_id: &peer_node_id,
+                    topic: &topic,
+                    sequence,
+                    max_attempts,
+                    join_timeout_ms,
+                    requester_ref: &requester_ref,
+                    peer_ref: &peer_ref,
+                    object_ref: &object_ref,
+                    object_kind: &object_kind,
+                    retention_class: &retention_class,
+                    action: &action,
+                    remote_ref: &remote_ref,
+                    policy_ref: &policy_ref,
+                    authority_ref: &authority_ref,
+                    retention_evidence_refs: &retention_evidence_refs,
+                    peer_bootstrap_refs: &peer_bootstrap_refs,
+                    authority_refs: &authority_refs,
+                    policy_refs: &policy_refs,
+                    resource_refs: &resource_refs,
+                    transport_evidence_refs: &transport_evidence_refs,
+                },
+            ))?;
+            write_optional_preserves(request_out.as_ref(), &sent.request.value)?;
+            write_optional_preserves(control_out.as_ref(), &sent.control_value)?;
+            if let Some(path) = transport_receipt_out.as_ref()
+                && let Some(value) = sent.send.transport_receipt_value.as_ref()
+            {
+                write_file(path, &to_text(value)?)?;
+            }
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &sent.send.send_receipt_value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention remote clearance live request-send request={} control={} send={} transport={} diagnostics={}",
+                    sent.request.request_ref,
+                    sent.control_ref,
+                    sent.send.send_receipt_ref,
+                    sent.send.transport_receipt_ref.as_deref().unwrap_or("none"),
+                    node_daemon::parse_node_control_live_send_receipt(&sent.send.send_receipt_value)?.diagnostics.len()
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::RemoteClearanceLiveResponseSend {
+            root,
+            peer_node_root,
+            requester_ticket,
+            request,
+            peer_node_id,
+            requester_node_id,
+            topic,
+            sequence,
+            max_attempts,
+            join_timeout_ms,
+            response_evidence_refs,
+            retained_refs,
+            is_stale,
+            revoked_refs,
+            diagnostics,
+            peer_bootstrap_refs,
+            authority_refs,
+            policy_refs,
+            resource_refs,
+            transport_evidence_refs,
+            response_out,
+            control_out,
+            transport_receipt_out,
+            receipt_out,
+        } => {
+            let ticket_value = read_preserves_file(&requester_ticket)?;
+            let request_value = read_preserves_file(&request)?;
+            let runtime =
+                tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(MoltenError::from)?;
+            let sent = runtime.block_on(retention::send_retention_remote_gc_clearance_live_response(
+                retention::RetentionRemoteGcClearanceLiveResponseSendInput {
+                    root: &root,
+                    peer_node_root: peer_node_root.as_deref(),
+                    requester_ticket_value: &ticket_value,
+                    request_value: &request_value,
+                    peer_node_id: &peer_node_id,
+                    requester_node_id: &requester_node_id,
+                    topic: &topic,
+                    sequence,
+                    max_attempts,
+                    join_timeout_ms,
+                    response_evidence_refs: &response_evidence_refs,
+                    retained_refs: &retained_refs,
+                    is_current: !is_stale,
+                    revoked_refs: &revoked_refs,
+                    response_diagnostics: &diagnostics,
+                    peer_bootstrap_refs: &peer_bootstrap_refs,
+                    authority_refs: &authority_refs,
+                    policy_refs: &policy_refs,
+                    resource_refs: &resource_refs,
+                    transport_evidence_refs: &transport_evidence_refs,
+                },
+            ))?;
+            write_optional_preserves(response_out.as_ref(), &sent.response.value)?;
+            write_optional_preserves(control_out.as_ref(), &sent.control_value)?;
+            if let Some(path) = transport_receipt_out.as_ref()
+                && let Some(value) = sent.send.transport_receipt_value.as_ref()
+            {
+                write_file(path, &to_text(value)?)?;
+            }
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &sent.send.send_receipt_value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention remote clearance live response-send response={} control={} send={} transport={} diagnostics={}",
+                    sent.response.response_ref,
+                    sent.control_ref,
+                    sent.send.send_receipt_ref,
+                    sent.send.transport_receipt_ref.as_deref().unwrap_or("none"),
+                    node_daemon::parse_node_control_live_send_receipt(&sent.send.send_receipt_value)?.diagnostics.len()
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::RemoteClearanceLiveImportWorkflow {
+            root,
+            request,
+            response,
+            request_control,
+            request_send_receipt,
+            request_receive_receipt,
+            request_ingress_ref,
+            response_control,
+            response_send_receipt,
+            response_receive_receipt,
+            response_ingress_ref,
+            expected_peer_ref,
+            expected_remote_ref,
+            import_out,
+            receipt_out,
+        } => {
+            let request_value = read_preserves_file(&request)?;
+            let response_value = read_preserves_file(&response)?;
+            let request_control_value = read_preserves_file(&request_control)?;
+            let request_send_receipt_value = read_preserves_file(&request_send_receipt)?;
+            let request_receive_receipt_value = read_preserves_file(&request_receive_receipt)?;
+            let response_control_value = read_preserves_file(&response_control)?;
+            let response_send_receipt_value = read_preserves_file(&response_send_receipt)?;
+            let response_receive_receipt_value = read_preserves_file(&response_receive_receipt)?;
+            let imported = retention::import_retention_remote_gc_clearance_live_workflow(
+                retention::RetentionRemoteGcClearanceLiveImportWorkflowInput {
+                    root: &root,
+                    request_value: &request_value,
+                    response_value: &response_value,
+                    request_control_value: &request_control_value,
+                    request_send_receipt_value: &request_send_receipt_value,
+                    request_receive_receipt_value: &request_receive_receipt_value,
+                    request_ingress_ref: &request_ingress_ref,
+                    response_control_value: &response_control_value,
+                    response_send_receipt_value: &response_send_receipt_value,
+                    response_receive_receipt_value: &response_receive_receipt_value,
+                    response_ingress_ref: &response_ingress_ref,
+                    expected_peer_ref: expected_peer_ref.as_deref(),
+                    expected_remote_ref: expected_remote_ref.as_deref(),
+                },
+            )?;
+            write_optional_preserves(import_out.as_ref(), &imported.import.value)?;
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &imported.workflow.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention remote clearance live import-workflow ref={} decision={} import={} clearance={} request-send={} response-send={} diagnostics={}",
+                    imported.workflow.workflow_ref,
+                    imported.workflow.decision,
+                    imported.import.import_ref,
+                    imported.import.clearance_ref.as_deref().unwrap_or("none"),
+                    imported.request_send_receipt_ref,
+                    imported.response_send_receipt_ref,
+                    imported.workflow.diagnostics.len()
                 ),
             );
             Ok(())

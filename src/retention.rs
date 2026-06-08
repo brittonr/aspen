@@ -421,6 +421,75 @@ pub struct RetentionRemoteGcClearanceLiveLoopbackInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct RetentionRemoteGcClearanceLiveRequestSendInput<'a> {
+    pub root: &'a Path,
+    pub requester_node_root: Option<&'a Path>,
+    pub peer_ticket_value: &'a IOValue,
+    pub requester_node_id: &'a str,
+    pub peer_node_id: &'a str,
+    pub topic: &'a str,
+    pub sequence: u64,
+    pub max_attempts: u64,
+    pub join_timeout_ms: u64,
+    pub requester_ref: &'a str,
+    pub peer_ref: &'a str,
+    pub object_ref: &'a str,
+    pub object_kind: &'a str,
+    pub retention_class: &'a str,
+    pub action: &'a str,
+    pub remote_ref: &'a str,
+    pub policy_ref: &'a str,
+    pub authority_ref: &'a str,
+    pub retention_evidence_refs: &'a [String],
+    pub peer_bootstrap_refs: &'a [String],
+    pub authority_refs: &'a [String],
+    pub policy_refs: &'a [String],
+    pub resource_refs: &'a [String],
+    pub transport_evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionRemoteGcClearanceLiveResponseSendInput<'a> {
+    pub root: &'a Path,
+    pub peer_node_root: Option<&'a Path>,
+    pub requester_ticket_value: &'a IOValue,
+    pub request_value: &'a IOValue,
+    pub peer_node_id: &'a str,
+    pub requester_node_id: &'a str,
+    pub topic: &'a str,
+    pub sequence: u64,
+    pub max_attempts: u64,
+    pub join_timeout_ms: u64,
+    pub response_evidence_refs: &'a [String],
+    pub retained_refs: &'a [String],
+    pub is_current: bool,
+    pub revoked_refs: &'a [String],
+    pub response_diagnostics: &'a [String],
+    pub peer_bootstrap_refs: &'a [String],
+    pub authority_refs: &'a [String],
+    pub policy_refs: &'a [String],
+    pub resource_refs: &'a [String],
+    pub transport_evidence_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionRemoteGcClearanceLiveImportWorkflowInput<'a> {
+    pub root: &'a Path,
+    pub request_value: &'a IOValue,
+    pub response_value: &'a IOValue,
+    pub request_control_value: &'a IOValue,
+    pub request_send_receipt_value: &'a IOValue,
+    pub request_receive_receipt_value: &'a IOValue,
+    pub request_ingress_ref: &'a str,
+    pub response_control_value: &'a IOValue,
+    pub response_send_receipt_value: &'a IOValue,
+    pub response_receive_receipt_value: &'a IOValue,
+    pub response_ingress_ref: &'a str,
+    pub expected_peer_ref: Option<&'a str>,
+    pub expected_remote_ref: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct RetentionRemoteGcClearanceLiveWorkflowValueInput<'a> {
     pub request_value: &'a IOValue,
     pub response_value: &'a IOValue,
@@ -462,6 +531,30 @@ pub struct RetentionRemoteGcClearanceLiveLoopback {
     pub request_receive_receipt_value: IOValue,
     pub response_publish_receipt_value: IOValue,
     pub response_receive_receipt_value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionRemoteGcClearanceLiveRequestSend {
+    pub request: RetentionRemoteGcClearanceRequest,
+    pub control_ref: String,
+    pub control_value: IOValue,
+    pub send: node_daemon::NodeControlLiveSend,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionRemoteGcClearanceLiveResponseSend {
+    pub response: RetentionRemoteGcClearanceResponse,
+    pub control_ref: String,
+    pub control_value: IOValue,
+    pub send: node_daemon::NodeControlLiveSend,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionRemoteGcClearanceLiveImportWorkflow {
+    pub import: RetentionRemoteGcClearanceImport,
+    pub workflow: RetentionRemoteGcClearanceLiveWorkflow,
+    pub request_send_receipt_ref: String,
+    pub response_send_receipt_ref: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1434,6 +1527,227 @@ pub async fn run_retention_remote_gc_clearance_live_loopback(
     })
 }
 
+pub async fn send_retention_remote_gc_clearance_live_request(
+    input: RetentionRemoteGcClearanceLiveRequestSendInput<'_>,
+) -> Result<RetentionRemoteGcClearanceLiveRequestSend> {
+    ensure_store(input.root)?;
+    validate_remote_gc_clearance_live_request_send_input(&input)?;
+    let request = store_retention_remote_gc_clearance_request(input.root, &RetentionRemoteGcClearanceRequestInput {
+        requester_ref: input.requester_ref,
+        peer_ref: input.peer_ref,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        remote_ref: input.remote_ref,
+        policy_ref: input.policy_ref,
+        authority_ref: input.authority_ref,
+        evidence_refs: input.retention_evidence_refs,
+    })?;
+    let control_evidence = refs_with_extra(
+        input.transport_evidence_refs,
+        std::slice::from_ref(&request.request_ref),
+        "retention live request transport evidence ref",
+    )?;
+    let (control_ref, control_value) = remote_clearance_live_control_request_value(&LiveControlRequestInput {
+        target_ref: &request.request_ref,
+        payload_ref: None,
+        authority_refs: input.authority_refs,
+        policy_refs: input.policy_refs,
+        resource_refs: input.resource_refs,
+        evidence_refs: &control_evidence,
+    })?;
+    let send = node_daemon::send_node_control_live_ingress(&node_daemon::NodeControlLiveSendInput {
+        state_root: input.requester_node_root,
+        request_value: &control_value,
+        receiver_ticket_value: input.peer_ticket_value,
+        from_peer: input.requester_node_id,
+        sequence: input.sequence,
+        expected_operation_ref: None,
+        expected_receiver_node: Some(input.peer_node_id),
+        expected_topic: Some(input.topic),
+        expected_endpoint: None,
+        max_attempts: input.max_attempts,
+        peer_bootstrap_refs: input.peer_bootstrap_refs,
+        authority_refs: input.authority_refs,
+        policy_refs: input.policy_refs,
+        resource_refs: input.resource_refs,
+        evidence_refs: &control_evidence,
+        join_timeout_ms: input.join_timeout_ms,
+    })
+    .await?;
+    Ok(RetentionRemoteGcClearanceLiveRequestSend {
+        request,
+        control_ref,
+        control_value,
+        send,
+    })
+}
+
+pub async fn send_retention_remote_gc_clearance_live_response(
+    input: RetentionRemoteGcClearanceLiveResponseSendInput<'_>,
+) -> Result<RetentionRemoteGcClearanceLiveResponseSend> {
+    ensure_store(input.root)?;
+    validate_remote_gc_clearance_live_response_send_input(&input)?;
+    let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
+    let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
+        root: input.root,
+        request_value: input.request_value,
+        evidence_refs: input.response_evidence_refs,
+        retained_refs: input.retained_refs,
+        is_current: input.is_current,
+        revoked_refs: input.revoked_refs,
+        diagnostics: input.response_diagnostics,
+    })?;
+    let control_evidence = refs_with_extra(
+        input.transport_evidence_refs,
+        &[request.request_ref.clone(), response.response_ref.clone()],
+        "retention live response transport evidence ref",
+    )?;
+    let (control_ref, control_value) = remote_clearance_live_control_request_value(&LiveControlRequestInput {
+        target_ref: &response.response_ref,
+        payload_ref: Some(&request.request_ref),
+        authority_refs: input.authority_refs,
+        policy_refs: input.policy_refs,
+        resource_refs: input.resource_refs,
+        evidence_refs: &control_evidence,
+    })?;
+    let send = node_daemon::send_node_control_live_ingress(&node_daemon::NodeControlLiveSendInput {
+        state_root: input.peer_node_root,
+        request_value: &control_value,
+        receiver_ticket_value: input.requester_ticket_value,
+        from_peer: input.peer_node_id,
+        sequence: input.sequence,
+        expected_operation_ref: None,
+        expected_receiver_node: Some(input.requester_node_id),
+        expected_topic: Some(input.topic),
+        expected_endpoint: None,
+        max_attempts: input.max_attempts,
+        peer_bootstrap_refs: input.peer_bootstrap_refs,
+        authority_refs: input.authority_refs,
+        policy_refs: input.policy_refs,
+        resource_refs: input.resource_refs,
+        evidence_refs: &control_evidence,
+        join_timeout_ms: input.join_timeout_ms,
+    })
+    .await?;
+    Ok(RetentionRemoteGcClearanceLiveResponseSend {
+        response,
+        control_ref,
+        control_value,
+        send,
+    })
+}
+
+pub fn import_retention_remote_gc_clearance_live_workflow(
+    input: RetentionRemoteGcClearanceLiveImportWorkflowInput<'_>,
+) -> Result<RetentionRemoteGcClearanceLiveImportWorkflow> {
+    ensure_store(input.root)?;
+    validate_remote_gc_clearance_live_import_workflow_input(&input)?;
+    let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
+    let response_ref = canonical_hash(input.response_value)?;
+    let import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
+        root: input.root,
+        request_value: input.request_value,
+        response_value: input.response_value,
+        expected_peer_ref: input.expected_peer_ref,
+        expected_remote_ref: input.expected_remote_ref,
+    })?;
+    let request_control = node_runtime::parse_node_control_request(input.request_control_value)?;
+    let response_control = node_runtime::parse_node_control_request(input.response_control_value)?;
+    let request_control_ref = canonical_hash(input.request_control_value)?;
+    let response_control_ref = canonical_hash(input.response_control_value)?;
+    let request_send = node_daemon::parse_node_control_live_send_receipt(input.request_send_receipt_value)?;
+    let response_send = node_daemon::parse_node_control_live_send_receipt(input.response_send_receipt_value)?;
+    let request_receive = parse_node_live_transport_receipt(input.request_receive_receipt_value)?;
+    let response_receive = parse_node_live_transport_receipt(input.response_receive_receipt_value)?;
+    let mut diagnostics = Vec::new();
+    extend_bounded(
+        &mut diagnostics,
+        node_live_control_diagnostics("request-control", &request_control, &request.request_ref, None),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_send_diagnostics("request-send", &request_send),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_transport_diagnostics_from("request-receive", &request_receive)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_receive_binding_diagnostics(
+            "request-receive",
+            &request_send,
+            &request_receive,
+            input.request_ingress_ref,
+        ),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_control_diagnostics("response-control", &response_control, &response_ref, Some(&request.request_ref)),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_send_diagnostics("response-send", &response_send),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_transport_diagnostics_from("response-receive", &response_receive)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_receive_binding_diagnostics(
+            "response-receive",
+            &response_send,
+            &response_receive,
+            input.response_ingress_ref,
+        ),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    let request_publish_ref = live_send_publish_ref(&request_send);
+    let response_publish_ref = live_send_publish_ref(&response_send);
+    let request_receive_ref = request_receive.receipt_ref.clone();
+    let response_receive_ref = response_receive.receipt_ref.clone();
+    let workflow_value =
+        retention_remote_gc_clearance_live_workflow_value(&RetentionRemoteGcClearanceLiveWorkflowValueInput {
+            request_value: input.request_value,
+            response_value: input.response_value,
+            import_value: &import.value,
+            request_control_ref: &request_control_ref,
+            request_publish_ref: &request_publish_ref,
+            request_receive_ref: &request_receive_ref,
+            request_ingress_ref: input.request_ingress_ref,
+            response_control_ref: &response_control_ref,
+            response_publish_ref: &response_publish_ref,
+            response_receive_ref: &response_receive_ref,
+            response_ingress_ref: input.response_ingress_ref,
+            transport_diagnostics: &diagnostics,
+        })?;
+    let workflow = store_retention_remote_gc_clearance_live_workflow(input.root, &workflow_value)?;
+    Ok(RetentionRemoteGcClearanceLiveImportWorkflow {
+        import,
+        workflow,
+        request_send_receipt_ref: request_send.receipt_ref,
+        response_send_receipt_ref: response_send.receipt_ref,
+    })
+}
+
 pub fn retention_remote_gc_clearance_live_workflow_value(
     input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>,
 ) -> Result<IOValue> {
@@ -1663,6 +1977,29 @@ struct RemoteClearanceRefsResult {
     admitted_refs: Vec<String>,
     remote_refs: Vec<String>,
     peer_refs: Vec<String>,
+}
+
+struct LiveControlRequestInput<'a> {
+    target_ref: &'a str,
+    payload_ref: Option<&'a str>,
+    authority_refs: &'a [String],
+    policy_refs: &'a [String],
+    resource_refs: &'a [String],
+    evidence_refs: &'a [String],
+}
+
+fn remote_clearance_live_control_request_value(input: &LiveControlRequestInput<'_>) -> Result<(String, IOValue)> {
+    let value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+        operation: "gate",
+        target_ref: Some(input.target_ref),
+        payload_ref: input.payload_ref,
+        authority_refs: input.authority_refs,
+        policy_refs: input.policy_refs,
+        resource_refs: input.resource_refs,
+        evidence_refs: input.evidence_refs,
+    })?;
+    let reference = canonical_hash(&value)?;
+    Ok((reference, value))
 }
 
 fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsResult> {
@@ -2916,6 +3253,67 @@ fn validate_remote_gc_clearance_live_loopback_input(
     Ok(())
 }
 
+fn validate_remote_gc_clearance_live_request_send_input(
+    input: &RetentionRemoteGcClearanceLiveRequestSendInput<'_>,
+) -> Result<()> {
+    validate_remote_gc_clearance_request_input(&RetentionRemoteGcClearanceRequestInput {
+        requester_ref: input.requester_ref,
+        peer_ref: input.peer_ref,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        remote_ref: input.remote_ref,
+        policy_ref: input.policy_ref,
+        authority_ref: input.authority_ref,
+        evidence_refs: input.retention_evidence_refs,
+    })?;
+    validate_name(input.requester_node_id, "retention live requester node id")?;
+    validate_name(input.peer_node_id, "retention live peer node id")?;
+    validate_name(input.topic, "retention live topic")?;
+    validate_refs(input.peer_bootstrap_refs, "retention live peer bootstrap ref")?;
+    validate_refs(input.authority_refs, "retention live authority ref")?;
+    validate_refs(input.policy_refs, "retention live policy ref")?;
+    validate_refs(input.resource_refs, "retention live resource ref")?;
+    validate_refs(input.transport_evidence_refs, "retention live transport evidence ref")
+}
+
+fn validate_remote_gc_clearance_live_response_send_input(
+    input: &RetentionRemoteGcClearanceLiveResponseSendInput<'_>,
+) -> Result<()> {
+    parse_retention_remote_gc_clearance_request(input.request_value)?;
+    validate_refs(input.response_evidence_refs, "retention live response evidence ref")?;
+    validate_refs(input.retained_refs, "retention live retained ref")?;
+    validate_refs(input.revoked_refs, "retention live revoked ref")?;
+    ensure_count_at_most(
+        input.response_diagnostics.len(),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live response diagnostics",
+    )?;
+    validate_name(input.peer_node_id, "retention live peer node id")?;
+    validate_name(input.requester_node_id, "retention live requester node id")?;
+    validate_name(input.topic, "retention live topic")?;
+    validate_refs(input.peer_bootstrap_refs, "retention live response peer bootstrap ref")?;
+    validate_refs(input.authority_refs, "retention live response authority ref")?;
+    validate_refs(input.policy_refs, "retention live response policy ref")?;
+    validate_refs(input.resource_refs, "retention live response resource ref")?;
+    validate_refs(input.transport_evidence_refs, "retention live response transport evidence ref")
+}
+
+fn validate_remote_gc_clearance_live_import_workflow_input(
+    input: &RetentionRemoteGcClearanceLiveImportWorkflowInput<'_>,
+) -> Result<()> {
+    require_ref(input.request_ingress_ref, "retention live request ingress ref")?;
+    require_ref(input.response_ingress_ref, "retention live response ingress ref")?;
+    if let Some(peer_ref) = input.expected_peer_ref {
+        require_ref(peer_ref, "retention live expected peer ref")?;
+    }
+    if let Some(remote_ref) = input.expected_remote_ref {
+        require_ref(remote_ref, "retention live expected remote ref")?;
+    }
+    Ok(())
+}
+
 fn validate_remote_gc_clearance_live_workflow_value_input(
     input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>,
 ) -> Result<()> {
@@ -3369,17 +3767,81 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
     }
 }
 
-fn node_live_transport_diagnostics(phase: &str, value: &IOValue) -> Result<Vec<String>> {
+fn live_send_publish_ref(send: &node_daemon::NodeControlLiveSendReceipt) -> String {
+    send.transport_receipt_ref.clone().unwrap_or_else(|| send.receipt_ref.clone())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NodeLiveTransportReceipt {
+    receipt_ref: String,
+    operation: String,
+    decision: String,
+    node_id: String,
+    envelope_ref: String,
+    ingress_receipt_ref: Option<String>,
+    diagnostics: Vec<String>,
+}
+
+fn parse_node_live_transport_receipt(value: &IOValue) -> Result<NodeLiveTransportReceipt> {
     let fields = value
         .collect_simple_record("node-control-live-transport-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
     require_schema(&fields[0], NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA, "node control live transport receipt")?;
     require_check(&parse_checks(&fields[10])?, "transport-is-not-authority", "node control live transport")?;
-    let operation = record_string(&fields[1], "operation")?;
     let decision = record_string(&fields[2], "decision")?;
     validate_decision(&decision)?;
+    Ok(NodeLiveTransportReceipt {
+        receipt_ref: canonical_hash(value)?,
+        operation: record_string(&fields[1], "operation")?,
+        decision,
+        node_id: record_string(&fields[5], "node")?,
+        envelope_ref: record_ref(&fields[7], "envelope")?,
+        ingress_receipt_ref: record_optional_ref(&fields[8], "ingress-receipt")?,
+        diagnostics: record_string_sequence(&fields[9], "diagnostics")?,
+    })
+}
+
+fn node_live_control_diagnostics(
+    phase: &str,
+    control: &node_runtime::NodeControlRequest,
+    expected_target_ref: &str,
+    expected_payload_ref: Option<&str>,
+) -> Vec<String> {
     let mut diagnostics = Vec::new();
-    for diagnostic in record_string_sequence(&fields[9], "diagnostics")? {
+    if control.operation != "gate" {
+        diagnostics.push(format!("remote-clearance-live-{phase}-wrong-operation:{}", control.operation));
+    }
+    if control.target_ref.as_deref() != Some(expected_target_ref) {
+        diagnostics.push(format!("remote-clearance-live-{phase}-wrong-target"));
+    }
+    if control.payload_ref.as_deref() != expected_payload_ref {
+        diagnostics.push(format!("remote-clearance-live-{phase}-wrong-payload"));
+    }
+    diagnostics
+}
+
+fn node_live_send_diagnostics(phase: &str, send: &node_daemon::NodeControlLiveSendReceipt) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(send.diagnostics.len().saturating_add(2));
+    for diagnostic in &send.diagnostics {
+        diagnostics.push(format!("remote-clearance-live-{phase}:{diagnostic}"));
+    }
+    if send.decision != "pass" {
+        diagnostics.push(format!("remote-clearance-live-{phase}-send-deny:{}", send.decision));
+    }
+    if send.transport_receipt_ref.is_none() {
+        diagnostics.push(format!("remote-clearance-live-{phase}-missing-transport-receipt"));
+    }
+    diagnostics
+}
+
+fn node_live_transport_diagnostics(phase: &str, value: &IOValue) -> Result<Vec<String>> {
+    let receipt = parse_node_live_transport_receipt(value)?;
+    node_live_transport_diagnostics_from(phase, &receipt)
+}
+
+fn node_live_transport_diagnostics_from(phase: &str, receipt: &NodeLiveTransportReceipt) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    for diagnostic in &receipt.diagnostics {
         push_bounded(
             &mut diagnostics,
             format!("remote-clearance-live-{phase}:{diagnostic}"),
@@ -3387,15 +3849,37 @@ fn node_live_transport_diagnostics(phase: &str, value: &IOValue) -> Result<Vec<S
             "retention live transport diagnostics",
         )?;
     }
-    if decision != "pass" {
+    if receipt.decision != "pass" {
         push_bounded(
             &mut diagnostics,
-            format!("remote-clearance-live-{phase}-transport-deny:{operation}:{decision}"),
+            format!("remote-clearance-live-{phase}-transport-deny:{}:{}", receipt.operation, receipt.decision),
             MAX_RETENTION_DIAGNOSTICS,
             "retention live transport diagnostics",
         )?;
     }
     Ok(diagnostics)
+}
+
+fn node_live_receive_binding_diagnostics(
+    phase: &str,
+    send: &node_daemon::NodeControlLiveSendReceipt,
+    receive: &NodeLiveTransportReceipt,
+    expected_ingress_ref: &str,
+) -> Vec<String> {
+    let mut diagnostics = Vec::new();
+    if receive.operation != "receive" {
+        diagnostics.push(format!("remote-clearance-live-{phase}-not-receive:{}", receive.operation));
+    }
+    if receive.envelope_ref != send.envelope_ref {
+        diagnostics.push(format!("remote-clearance-live-{phase}-wrong-envelope"));
+    }
+    if receive.node_id != send.to_node {
+        diagnostics.push(format!("remote-clearance-live-{phase}-wrong-node"));
+    }
+    if receive.ingress_receipt_ref.as_deref() != Some(expected_ingress_ref) {
+        diagnostics.push(format!("remote-clearance-live-{phase}-wrong-ingress"));
+    }
+    diagnostics
 }
 
 fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
@@ -4683,6 +5167,354 @@ mod tests {
     }
 
     #[test]
+    fn remote_clearance_live_multihost_request_and_response_send_write_artifacts_on_denied_transport() {
+        let root = temp_dir("retention-remote-clearance-live-multihost-send");
+        let requester_node_root = temp_dir("retention-remote-clearance-live-multihost-requester");
+        let peer_node_root = temp_dir("retention-remote-clearance-live-multihost-peer");
+        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+            state_root: &requester_node_root,
+            node_id: "requester-node",
+        })
+        .expect("init requester node");
+        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+            state_root: &peer_node_root,
+            node_id: "peer-node",
+        })
+        .expect("init peer node");
+        let ticket_policy = vec![fake_ref("multihost-ticket-policy")];
+        let ticket_evidence = vec![fake_ref("multihost-ticket-evidence")];
+        let peer_ticket = crate::node_daemon::export_node_control_live_ticket(
+            &crate::node_daemon::NodeControlLiveTicketExportInput {
+                state_root: &peer_node_root,
+                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                policy_refs: &ticket_policy,
+                evidence_refs: &ticket_evidence,
+            },
+        )
+        .expect("peer ticket");
+        let requester_ticket = crate::node_daemon::export_node_control_live_ticket(
+            &crate::node_daemon::NodeControlLiveTicketExportInput {
+                state_root: &requester_node_root,
+                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                policy_refs: &ticket_policy,
+                evidence_refs: &ticket_evidence,
+            },
+        )
+        .expect("requester ticket");
+        let requester_ref = fake_ref("multihost-send-requester");
+        let peer_ref = fake_ref("multihost-send-peer");
+        let object_ref = fake_ref("multihost-send-object");
+        let remote_ref = fake_ref("multihost-send-remote");
+        let policy_ref = fake_ref("multihost-send-policy");
+        let authority_ref = fake_ref("multihost-send-authority");
+        let evidence_ref = fake_ref("multihost-send-evidence");
+        let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
+        let request_send = runtime
+            .block_on(send_retention_remote_gc_clearance_live_request(RetentionRemoteGcClearanceLiveRequestSendInput {
+                root: &root,
+                requester_node_root: Some(&requester_node_root),
+                peer_ticket_value: &peer_ticket.value,
+                requester_node_id: "requester-node",
+                peer_node_id: "peer-node",
+                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                sequence: 1,
+                max_attempts: 1,
+                join_timeout_ms: 1,
+                requester_ref: &requester_ref,
+                peer_ref: &peer_ref,
+                object_ref: &object_ref,
+                object_kind: "chunk",
+                retention_class: CLASS_DURABLE_VALUE,
+                action: ACTION_DELETE,
+                remote_ref: &remote_ref,
+                policy_ref: &policy_ref,
+                authority_ref: &authority_ref,
+                retention_evidence_refs: std::slice::from_ref(&evidence_ref),
+                peer_bootstrap_refs: &[],
+                authority_refs: &[],
+                policy_refs: &[],
+                resource_refs: &[],
+                transport_evidence_refs: &[],
+            }))
+            .expect("request send");
+        assert_eq!(request_send.request.peer_ref, peer_ref);
+        let request_send_receipt =
+            crate::node_daemon::parse_node_control_live_send_receipt(&request_send.send.send_receipt_value)
+                .expect("request send receipt");
+        assert_eq!(request_send_receipt.decision, "deny");
+        assert!(
+            request_send_receipt
+                .diagnostics
+                .iter()
+                .any(|value| value.contains("ticket has no endpoint addresses"))
+        );
+        let response_send = runtime
+            .block_on(send_retention_remote_gc_clearance_live_response(
+                RetentionRemoteGcClearanceLiveResponseSendInput {
+                    root: &root,
+                    peer_node_root: Some(&peer_node_root),
+                    requester_ticket_value: &requester_ticket.value,
+                    request_value: &request_send.request.value,
+                    peer_node_id: "peer-node",
+                    requester_node_id: "requester-node",
+                    topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                    sequence: 1,
+                    max_attempts: 1,
+                    join_timeout_ms: 1,
+                    response_evidence_refs: std::slice::from_ref(&evidence_ref),
+                    retained_refs: &[],
+                    is_current: true,
+                    revoked_refs: &[],
+                    response_diagnostics: &[],
+                    peer_bootstrap_refs: &[],
+                    authority_refs: &[],
+                    policy_refs: &[],
+                    resource_refs: &[],
+                    transport_evidence_refs: &[],
+                },
+            ))
+            .expect("response send");
+        assert_eq!(response_send.response.request_ref, request_send.request.request_ref);
+        let response_send_receipt =
+            crate::node_daemon::parse_node_control_live_send_receipt(&response_send.send.send_receipt_value)
+                .expect("response send receipt");
+        assert_eq!(response_send_receipt.decision, "deny");
+    }
+
+    #[test]
+    fn remote_clearance_live_multihost_import_workflow_binds_explicit_send_receive_evidence() {
+        let root = temp_dir("retention-remote-clearance-live-multihost");
+        let requester_ref = fake_ref("multihost-requester");
+        let peer_ref = fake_ref("multihost-peer");
+        let object_ref = fake_ref("multihost-object");
+        let remote_ref = fake_ref("multihost-remote");
+        let policy = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_POLICY,
+            label: "multihost-policy",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let authority = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_AUTHORITY,
+            label: "multihost-authority",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let support = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label: "multihost-support",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let index = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REFERENCE_INDEX,
+            label: "multihost-index",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let remote_gc = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REMOTE_GC,
+            label: "multihost-remote-gc",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: std::slice::from_ref(&remote_ref),
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let request = store_retention_remote_gc_clearance_request(&root, &RetentionRemoteGcClearanceRequestInput {
+            requester_ref: &requester_ref,
+            peer_ref: &peer_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &remote_ref,
+            policy_ref: &policy,
+            authority_ref: &authority,
+            evidence_refs: std::slice::from_ref(&support),
+        })
+        .expect("request");
+        let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
+            root: &root,
+            request_value: &request.value,
+            evidence_refs: &[fake_ref("multihost-peer-evidence")],
+            retained_refs: &[],
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("response");
+        let request_control = remote_clearance_live_control_request_value(&LiveControlRequestInput {
+            target_ref: &request.request_ref,
+            payload_ref: None,
+            authority_refs: &[],
+            policy_refs: &[],
+            resource_refs: &[],
+            evidence_refs: std::slice::from_ref(&request.request_ref),
+        })
+        .expect("request control")
+        .1;
+        let response_control = remote_clearance_live_control_request_value(&LiveControlRequestInput {
+            target_ref: &response.response_ref,
+            payload_ref: Some(&request.request_ref),
+            authority_refs: &[],
+            policy_refs: &[],
+            resource_refs: &[],
+            evidence_refs: &[request.request_ref.clone(), response.response_ref.clone()],
+        })
+        .expect("response control")
+        .1;
+        let request_ingress_ref = fake_ref("multihost-request-ingress");
+        let response_ingress_ref = fake_ref("multihost-response-ingress");
+        let request_publish_ref = fake_ref("multihost-request-publish");
+        let response_publish_ref = fake_ref("multihost-response-publish");
+        let request_receive =
+            fake_live_transport_receipt("receive", "peer-node", "request-envelope", &request_ingress_ref);
+        let response_receive =
+            fake_live_transport_receipt("receive", "requester-node", "response-envelope", &response_ingress_ref);
+        let request_send = fake_live_send_receipt(
+            "requester-node",
+            "peer-node",
+            "request-envelope",
+            &request_publish_ref,
+            "request-ticket",
+        );
+        let response_send = fake_live_send_receipt(
+            "peer-node",
+            "requester-node",
+            "response-envelope",
+            &response_publish_ref,
+            "response-ticket",
+        );
+        let imported =
+            import_retention_remote_gc_clearance_live_workflow(RetentionRemoteGcClearanceLiveImportWorkflowInput {
+                root: &root,
+                request_value: &request.value,
+                response_value: &response.value,
+                request_control_value: &request_control,
+                request_send_receipt_value: &request_send,
+                request_receive_receipt_value: &request_receive,
+                request_ingress_ref: &request_ingress_ref,
+                response_control_value: &response_control,
+                response_send_receipt_value: &response_send,
+                response_receive_receipt_value: &response_receive,
+                response_ingress_ref: &response_ingress_ref,
+                expected_peer_ref: Some(&peer_ref),
+                expected_remote_ref: Some(&remote_ref),
+            })
+            .expect("live workflow import");
+        assert_eq!(imported.import.decision, "pass");
+        assert_eq!(imported.workflow.decision, "pass");
+        assert_eq!(imported.workflow.request_live_refs.len(), 4);
+        let wrong_request_receive = fake_live_transport_receipt(
+            "publish",
+            "wrong-peer-node",
+            "wrong-request-envelope",
+            &fake_ref("wrong-request-ingress"),
+        );
+        let wrong_receive_workflow =
+            import_retention_remote_gc_clearance_live_workflow(RetentionRemoteGcClearanceLiveImportWorkflowInput {
+                root: &root,
+                request_value: &request.value,
+                response_value: &response.value,
+                request_control_value: &request_control,
+                request_send_receipt_value: &request_send,
+                request_receive_receipt_value: &wrong_request_receive,
+                request_ingress_ref: &request_ingress_ref,
+                response_control_value: &response_control,
+                response_send_receipt_value: &response_send,
+                response_receive_receipt_value: &response_receive,
+                response_ingress_ref: &response_ingress_ref,
+                expected_peer_ref: Some(&peer_ref),
+                expected_remote_ref: Some(&remote_ref),
+            })
+            .expect("wrong receive workflow");
+        assert_eq!(wrong_receive_workflow.import.decision, "pass");
+        assert_eq!(wrong_receive_workflow.workflow.decision, "deny");
+        assert!(
+            wrong_receive_workflow
+                .workflow
+                .diagnostics
+                .iter()
+                .any(|value| value.contains("remote-clearance-live-request-receive-not-receive"))
+        );
+        assert!(
+            wrong_receive_workflow
+                .workflow
+                .diagnostics
+                .iter()
+                .any(|value| value == "remote-clearance-live-request-receive-wrong-envelope")
+        );
+        assert!(
+            wrong_receive_workflow
+                .workflow
+                .diagnostics
+                .iter()
+                .any(|value| value == "remote-clearance-live-request-receive-wrong-ingress")
+        );
+        let clearance_ref = imported.import.clearance_ref.clone().expect("clearance stored");
+        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &DestructiveRetentionEvidence {
+                requester_ref: Some(requester_ref.clone()),
+                policy_refs: vec![policy],
+                authority_refs: vec![authority],
+                evidence_refs: vec![support],
+                retained_refs: Vec::new(),
+                remote_peer_refs: vec![peer_ref],
+                remote_refs: vec![remote_ref],
+                reference_index_refs: vec![index],
+                remote_gc_refs: vec![remote_gc],
+                remote_clearance_refs: vec![clearance_ref],
+                is_reference_index_complete: true,
+            },
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("destructive admission");
+        assert_eq!(admission.decision, "pass");
+    }
+
+    #[test]
     fn remote_clearance_live_workflow_denies_retained_wrong_peer_and_tampered_response() {
         let root = temp_dir("retention-remote-clearance-live-deny");
         let requester_ref = fake_ref("live-deny-requester");
@@ -4882,6 +5714,64 @@ mod tests {
 
     fn fake_live_refs(label: &str) -> Vec<String> {
         (0..8).map(|index| fake_ref(&format!("{label}-live-ref-{index}"))).collect()
+    }
+
+    fn fake_live_transport_receipt(operation: &str, node_id: &str, envelope_label: &str, ingress_ref: &str) -> IOValue {
+        record("node-control-live-transport-receipt-v1", vec![
+            string(crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA),
+            record("operation", vec![string(operation)]),
+            record("decision", vec![string("pass")]),
+            record("transport", vec![string("iroh-gossip")]),
+            record("topic", vec![string(crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]),
+            record("node", vec![string(node_id)]),
+            record("delivered-from", vec![optional_ref_value(Some(&fake_ref(&format!("{envelope_label}-peer"))))]),
+            record("envelope", vec![string(fake_ref(envelope_label))]),
+            record("ingress-receipt", vec![optional_ref_value(Some(ingress_ref))]),
+            record("diagnostics", vec![sequence(Vec::new())]),
+            checks_value(&[
+                ("canonical-envelope-ref", "pass"),
+                ("live-iroh-gossip", "pass"),
+                ("peer-bootstrap-before-enqueue", "pass"),
+                ("transport-is-not-authority", "pass"),
+                ("durable-inbox-boundary", "pass"),
+            ]),
+        ])
+    }
+
+    fn fake_live_send_receipt(
+        from_peer: &str,
+        to_node: &str,
+        envelope_label: &str,
+        transport_ref: &str,
+        ticket_label: &str,
+    ) -> IOValue {
+        record("node-control-live-send-receipt-v1", vec![
+            string(crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA),
+            record("decision", vec![string("pass")]),
+            record("transport", vec![string("iroh-gossip")]),
+            record("topic", vec![string(crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]),
+            record("from-peer", vec![string(from_peer)]),
+            record("to-node", vec![string(to_node)]),
+            record("receiver-ticket", vec![string(fake_ref(ticket_label))]),
+            record("receiver-endpoint", vec![string(to_node)]),
+            record("receiver-addresses", vec![sequence(vec![string(fake_ref(&format!("{ticket_label}-address")))])]),
+            record("envelope", vec![string(fake_ref(envelope_label))]),
+            record("transport-receipt", vec![optional_ref_value(Some(transport_ref))]),
+            record("diagnostics", vec![sequence(Vec::new())]),
+            checks_value(&[
+                ("receiver-ticket-bound", "pass"),
+                ("receiver-address-bound", "pass"),
+                ("receiver-address-supported", "pass"),
+                ("receiver-ticket-expected", "pass"),
+                ("operation-id-bound", "pass"),
+                ("sender-state-root-evidence", "pass"),
+                ("join-or-publish-succeeded", "pass"),
+                ("canonical-envelope-ref", "pass"),
+                ("live-iroh-gossip", "pass"),
+                ("transport-is-not-authority", "pass"),
+                ("durable-inbox-boundary", "pass"),
+            ]),
+        ])
     }
 
     fn store_test_remote_clearance(input: TestRemoteClearanceInput<'_>) -> String {
