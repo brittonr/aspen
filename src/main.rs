@@ -2582,6 +2582,7 @@ enum DeliveryCommand {
     },
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Subcommand)]
 enum RetentionCommand {
     Class {
@@ -2774,6 +2775,82 @@ enum RetentionCommand {
         expected_remote_ref: Option<String>,
         #[arg(long)]
         out: Option<PathBuf>,
+    },
+    RemoteClearanceLiveLoopback {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        requester_node_root: PathBuf,
+        #[arg(long)]
+        peer_node_root: PathBuf,
+        #[arg(long)]
+        requester_node_id: String,
+        #[arg(long)]
+        peer_node_id: String,
+        #[arg(long, default_value = node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]
+        topic: String,
+        #[arg(long, default_value_t = 1)]
+        request_sequence: u64,
+        #[arg(long, default_value_t = 1)]
+        response_sequence: u64,
+        #[arg(long)]
+        requester_ref: String,
+        #[arg(long)]
+        peer_ref: String,
+        #[arg(long)]
+        object_ref: String,
+        #[arg(long)]
+        object_kind: String,
+        #[arg(long)]
+        retention_class: String,
+        #[arg(long)]
+        action: String,
+        #[arg(long)]
+        remote_ref: String,
+        #[arg(long)]
+        policy_ref: String,
+        #[arg(long)]
+        authority_ref: String,
+        #[arg(long = "retention-evidence-ref")]
+        retention_evidence_refs: Vec<String>,
+        #[arg(long = "response-evidence-ref")]
+        response_evidence_refs: Vec<String>,
+        #[arg(long = "retained-ref")]
+        retained_refs: Vec<String>,
+        #[arg(long = "stale")]
+        is_stale: bool,
+        #[arg(long = "revoked-ref")]
+        revoked_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long = "request-peer-bootstrap-ref")]
+        request_peer_bootstrap_refs: Vec<String>,
+        #[arg(long = "request-authority-ref")]
+        request_authority_refs: Vec<String>,
+        #[arg(long = "request-policy-ref")]
+        request_policy_refs: Vec<String>,
+        #[arg(long = "request-resource-ref")]
+        request_resource_refs: Vec<String>,
+        #[arg(long = "request-transport-evidence-ref")]
+        request_transport_evidence_refs: Vec<String>,
+        #[arg(long = "response-peer-bootstrap-ref")]
+        response_peer_bootstrap_refs: Vec<String>,
+        #[arg(long = "response-authority-ref")]
+        response_authority_refs: Vec<String>,
+        #[arg(long = "response-policy-ref")]
+        response_policy_refs: Vec<String>,
+        #[arg(long = "response-resource-ref")]
+        response_resource_refs: Vec<String>,
+        #[arg(long = "response-transport-evidence-ref")]
+        response_transport_evidence_refs: Vec<String>,
+        #[arg(long)]
+        request_out: Option<PathBuf>,
+        #[arg(long)]
+        response_out: Option<PathBuf>,
+        #[arg(long)]
+        import_out: Option<PathBuf>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
     },
     Check {
         #[arg(long)]
@@ -6775,6 +6852,109 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
                     import.import_ref,
                     import.decision,
                     import.clearance_ref.as_deref().unwrap_or("none")
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::RemoteClearanceLiveLoopback {
+            root,
+            requester_node_root,
+            peer_node_root,
+            requester_node_id,
+            peer_node_id,
+            topic,
+            request_sequence,
+            response_sequence,
+            requester_ref,
+            peer_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            remote_ref,
+            policy_ref,
+            authority_ref,
+            retention_evidence_refs,
+            response_evidence_refs,
+            retained_refs,
+            is_stale,
+            revoked_refs,
+            diagnostics,
+            request_peer_bootstrap_refs,
+            request_authority_refs,
+            request_policy_refs,
+            request_resource_refs,
+            request_transport_evidence_refs,
+            response_peer_bootstrap_refs,
+            response_authority_refs,
+            response_policy_refs,
+            response_resource_refs,
+            response_transport_evidence_refs,
+            request_out,
+            response_out,
+            import_out,
+            receipt_out,
+        } => {
+            let runtime =
+                tokio::runtime::Builder::new_multi_thread().enable_all().build().map_err(MoltenError::from)?;
+            let live = runtime.block_on(retention::run_retention_remote_gc_clearance_live_loopback(
+                retention::RetentionRemoteGcClearanceLiveLoopbackInput {
+                    root: &root,
+                    requester_node_root: &requester_node_root,
+                    peer_node_root: &peer_node_root,
+                    requester_node_id: &requester_node_id,
+                    peer_node_id: &peer_node_id,
+                    topic: &topic,
+                    request_sequence,
+                    response_sequence,
+                    requester_ref: &requester_ref,
+                    peer_ref: &peer_ref,
+                    object_ref: &object_ref,
+                    object_kind: &object_kind,
+                    retention_class: &retention_class,
+                    action: &action,
+                    remote_ref: &remote_ref,
+                    policy_ref: &policy_ref,
+                    authority_ref: &authority_ref,
+                    retention_evidence_refs: &retention_evidence_refs,
+                    response_evidence_refs: &response_evidence_refs,
+                    retained_refs: &retained_refs,
+                    is_current: !is_stale,
+                    revoked_refs: &revoked_refs,
+                    response_diagnostics: &diagnostics,
+                    request_peer_bootstrap_refs: &request_peer_bootstrap_refs,
+                    request_authority_refs: &request_authority_refs,
+                    request_policy_refs: &request_policy_refs,
+                    request_resource_refs: &request_resource_refs,
+                    request_transport_evidence_refs: &request_transport_evidence_refs,
+                    response_peer_bootstrap_refs: &response_peer_bootstrap_refs,
+                    response_authority_refs: &response_authority_refs,
+                    response_policy_refs: &response_policy_refs,
+                    response_resource_refs: &response_resource_refs,
+                    response_transport_evidence_refs: &response_transport_evidence_refs,
+                },
+            ))?;
+            if let Some(path) = request_out.as_ref() {
+                write_file(path, &to_text(&live.request.value)?)?;
+            }
+            if let Some(path) = response_out.as_ref() {
+                write_file(path, &to_text(&live.response.value)?)?;
+            }
+            if let Some(path) = import_out.as_ref() {
+                write_file(path, &to_text(&live.import.value)?)?;
+            }
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &live.workflow.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention remote clearance live workflow ref={} decision={} request={} response={} import={} clearance={} diagnostics={}",
+                    live.workflow.workflow_ref,
+                    live.workflow.decision,
+                    live.request.request_ref,
+                    live.response.response_ref,
+                    live.import.import_ref,
+                    live.import.clearance_ref.as_deref().unwrap_or("none"),
+                    live.workflow.diagnostics.len()
                 ),
             );
             Ok(())
