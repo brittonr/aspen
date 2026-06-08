@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
 use molten::artifacts;
@@ -1211,6 +1212,38 @@ enum ReceiptCommand {
     },
 }
 
+#[derive(Debug, Clone, Args)]
+struct RetentionEvidenceArgs {
+    #[arg(long = "retention-requester")]
+    requester_ref: Option<String>,
+    #[arg(long = "retention-policy-ref")]
+    policy_refs: Vec<String>,
+    #[arg(long = "retention-authority-ref")]
+    authority_refs: Vec<String>,
+    #[arg(long = "retention-evidence-ref")]
+    evidence_refs: Vec<String>,
+    #[arg(long = "retention-retained-ref")]
+    retained_refs: Vec<String>,
+    #[arg(long = "retention-remote-ref")]
+    remote_refs: Vec<String>,
+    #[arg(long = "retention-reference-index-complete")]
+    is_reference_index_complete: bool,
+}
+
+impl RetentionEvidenceArgs {
+    fn into_retention_evidence(self) -> retention::DestructiveRetentionEvidence {
+        retention::DestructiveRetentionEvidence {
+            requester_ref: self.requester_ref,
+            policy_refs: self.policy_refs,
+            authority_refs: self.authority_refs,
+            evidence_refs: self.evidence_refs,
+            retained_refs: self.retained_refs,
+            remote_refs: self.remote_refs,
+            is_reference_index_complete: self.is_reference_index_complete,
+        }
+    }
+}
+
 #[derive(Debug, Subcommand)]
 enum LedgerCommand {
     Import {
@@ -1243,6 +1276,8 @@ enum LedgerCommand {
         ledger: PathBuf,
         #[arg(long)]
         dry_run: bool,
+        #[command(flatten)]
+        retention: RetentionEvidenceArgs,
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
@@ -1425,6 +1460,8 @@ enum ChunkCommand {
         store: PathBuf,
         #[arg(long)]
         dry_run: bool,
+        #[command(flatten)]
+        retention: RetentionEvidenceArgs,
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
@@ -1588,6 +1625,8 @@ enum CacheCommand {
         operation: Option<String>,
         #[arg(long, default_value = "manual-invalidate")]
         reason: String,
+        #[command(flatten)]
+        retention: RetentionEvidenceArgs,
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
@@ -3085,9 +3124,14 @@ fn run_ledger_command(command: LedgerCommand) -> Result<()> {
         LedgerCommand::Gc {
             ledger,
             dry_run,
+            retention,
             receipt_out,
         } => {
-            let gc = ledger::gc(&ledger, dry_run)?;
+            let retention_evidence = retention.into_retention_evidence();
+            let gc = ledger::gc(&ledger, ledger::LedgerGcInput {
+                dry_run,
+                retention_evidence: &retention_evidence,
+            })?;
             emit_named_receipt(receipt_out.as_ref(), "ledger gc receipt", &gc.receipt_value)?;
             println!(
                 "ledger gc ok decision={} dry_run={} removed={} retention_receipts={}",
@@ -3418,9 +3462,14 @@ fn run_chunk_command(command: ChunkCommand) -> Result<()> {
         ChunkCommand::Gc {
             store,
             dry_run,
+            retention,
             receipt_out,
         } => {
-            let gc = chunk_store::gc(&store, dry_run)?;
+            let retention_evidence = retention.into_retention_evidence();
+            let gc = chunk_store::gc(&store, chunk_store::ChunkStoreGcInput {
+                dry_run,
+                retention_evidence: &retention_evidence,
+            })?;
             emit_named_receipt(receipt_out.as_ref(), "chunk store receipt", &gc.receipt_value)?;
             println!(
                 "chunk gc ok decision={} dry_run={} removed_manifests={} removed_chunks={} retention_receipts={}",
@@ -3789,6 +3838,7 @@ fn run_cache_command(command: CacheCommand) -> Result<()> {
             revocation_ref,
             operation,
             reason,
+            retention,
             receipt_out,
         } => {
             let invalidated = eval_cache::invalidate(&cache, &eval_cache::EvalCacheInvalidateInput {
@@ -3799,6 +3849,7 @@ fn run_cache_command(command: CacheCommand) -> Result<()> {
                 revocation_ref,
                 operation,
                 reason,
+                retention_evidence: retention.into_retention_evidence(),
             })?;
             emit_named_receipt(receipt_out.as_ref(), "eval cache receipt", &invalidated.receipt_value)?;
             for key_ref in &invalidated.invalidated_key_refs {
@@ -9706,6 +9757,7 @@ mod tests {
         run_chunk_command(ChunkCommand::Gc {
             store,
             dry_run: false,
+            retention: retention_cli_args("chunk-gc"),
             receipt_out: Some(dir.join("gc-receipt.preserves")),
         })
         .expect("chunk gc");
@@ -9844,6 +9896,7 @@ mod tests {
             revocation_ref: None,
             operation: None,
             reason: "cli-test".to_string(),
+            retention: retention_cli_args("cache-invalidate"),
             receipt_out: Some(dir.join("invalidate-receipt.preserves")),
         })
         .expect("cache invalidate");
@@ -11586,6 +11639,7 @@ mod tests {
         run_ledger_command(LedgerCommand::Gc {
             ledger: ledger.clone(),
             dry_run: false,
+            retention: retention_cli_args("ledger-gc"),
             receipt_out: Some(dir.join("ledger-gc.preserves")),
         })
         .expect("ledger gc");
@@ -11629,6 +11683,18 @@ mod tests {
             failure_out: None,
         })
         .expect("fetch repro");
+    }
+
+    fn retention_cli_args(label: &str) -> RetentionEvidenceArgs {
+        RetentionEvidenceArgs {
+            requester_ref: Some(test_ref(&format!("retention-requester-{label}"))),
+            policy_refs: vec![test_ref(&format!("retention-policy-{label}"))],
+            authority_refs: vec![test_ref(&format!("retention-authority-{label}"))],
+            evidence_refs: vec![test_ref(&format!("retention-evidence-{label}"))],
+            retained_refs: Vec::new(),
+            remote_refs: Vec::new(),
+            is_reference_index_complete: true,
+        }
     }
 
     fn only_blob_ref(iroh_store: &std::path::Path) -> String {

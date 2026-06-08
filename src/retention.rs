@@ -182,6 +182,17 @@ pub struct RetentionEvaluationInput<'a> {
     pub has_delete_authority: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct DestructiveRetentionEvidence {
+    pub requester_ref: Option<String>,
+    pub policy_refs: Vec<String>,
+    pub authority_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub retained_refs: Vec<String>,
+    pub remote_refs: Vec<String>,
+    pub is_reference_index_complete: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RetentionReceipt {
     pub receipt_ref: String,
@@ -549,6 +560,119 @@ pub fn evaluate_retention(input: RetentionEvaluationInput<'_>) -> Result<Retenti
     })
 }
 
+pub fn destructive_retention_requester_ref(
+    input: &DestructiveRetentionEvidence,
+    fallback_label: &str,
+) -> Result<String> {
+    validate_destructive_retention_evidence(input)?;
+    if let Some(requester_ref) = input.requester_ref.as_ref() {
+        Ok(requester_ref.clone())
+    } else {
+        synthetic_ref(fallback_label)
+    }
+}
+
+pub fn destructive_retention_has_authority(input: &DestructiveRetentionEvidence) -> bool {
+    input.requester_ref.is_some() && !input.authority_refs.is_empty()
+}
+
+pub fn validate_destructive_retention_evidence(input: &DestructiveRetentionEvidence) -> Result<()> {
+    if let Some(requester_ref) = input.requester_ref.as_ref() {
+        require_ref(requester_ref, "retention requester ref")?;
+    }
+    validate_refs(&input.policy_refs, "retention policy ref")?;
+    validate_refs(&input.authority_refs, "retention authority ref")?;
+    validate_refs(&input.evidence_refs, "retention evidence ref")?;
+    validate_refs(&input.retained_refs, "retention retained ref")?;
+    validate_refs(&input.remote_refs, "retention remote ref")
+}
+
+pub fn destructive_retention_evidence_diagnostics(
+    input: &DestructiveRetentionEvidence,
+    action: &str,
+) -> Result<Vec<String>> {
+    validate_destructive_retention_evidence(input)?;
+    validate_action(action)?;
+    let mut diagnostics = Vec::new();
+    if input.requester_ref.is_none() {
+        push_bounded(
+            &mut diagnostics,
+            "retention-requester-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention destructive evidence diagnostics",
+        )?;
+    }
+    if input.policy_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "retention-policy-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention destructive evidence diagnostics",
+        )?;
+    }
+    if is_destructive_action(action) && input.authority_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "delete-authority-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention destructive evidence diagnostics",
+        )?;
+    }
+    if is_destructive_action(action) && input.evidence_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "retention-evidence-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention destructive evidence diagnostics",
+        )?;
+    }
+    if !input.is_reference_index_complete {
+        push_bounded(
+            &mut diagnostics,
+            "incomplete-reference-proof".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention destructive evidence diagnostics",
+        )?;
+    }
+    if !input.retained_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "retained-dependencies-present".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention destructive evidence diagnostics",
+        )?;
+    }
+    if is_destructive_action(action) && !input.remote_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "remote-cache-refs-present".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention destructive evidence diagnostics",
+        )?;
+    }
+    Ok(diagnostics)
+}
+
+pub fn destructive_retention_evidence_value(input: &DestructiveRetentionEvidence) -> Result<IOValue> {
+    validate_destructive_retention_evidence(input)?;
+    let requester_value = input.requester_ref.as_deref().map(string).unwrap_or_else(|| record("none", Vec::new()));
+    Ok(record("retention-evidence-summary-v1", vec![
+        record("requester", vec![requester_value]),
+        record("policy", vec![strings_sequence(&input.policy_refs)]),
+        record("authority", vec![strings_sequence(&input.authority_refs)]),
+        record("evidence", vec![strings_sequence(&input.evidence_refs)]),
+        record("retained", vec![strings_sequence(&input.retained_refs)]),
+        record("remote", vec![strings_sequence(&input.remote_refs)]),
+        record("reference-index-complete", vec![string(pass_or_deny(input.is_reference_index_complete))]),
+        checks_value(&[
+            ("requester-bound", pass_or_deny(input.requester_ref.is_some())),
+            ("policy-bound", pass_or_deny(!input.policy_refs.is_empty())),
+            ("authority-bound", pass_or_deny(!input.authority_refs.is_empty())),
+            ("evidence-bound", pass_or_deny(!input.evidence_refs.is_empty())),
+        ]),
+    ]))
+}
+
 pub fn parse_retention_receipt(value: &IOValue) -> Result<RetentionReceipt> {
     let fields = value
         .collect_simple_record("retention-receipt-v1", Some(14))
@@ -874,10 +998,26 @@ fn retention_diagnostics(input: &RetentionEvaluationInput<'_>, index: &Retention
             "retention diagnostics",
         )?;
     }
+    if is_destructive_action(input.action) && input.evidence_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "retention-evidence-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention diagnostics",
+        )?;
+    }
     if is_destructive_action(input.action) && !input.has_delete_authority {
         push_bounded(
             &mut diagnostics,
             "delete-authority-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention diagnostics",
+        )?;
+    }
+    if is_destructive_action(input.action) && !input.remote_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "remote-cache-refs-present".to_string(),
             MAX_RETENTION_DIAGNOSTICS,
             "retention diagnostics",
         )?;
@@ -1545,6 +1685,7 @@ mod tests {
             let object_ref = fake_ref(&format!("object-{count}"));
             let requester_ref = fake_ref("requester");
             let policy_refs = vec![fake_ref("policy")];
+            let evidence_refs = vec![fake_ref("evidence")];
             let retained_refs =
                 (0..count).map(|index| fake_ref(&format!("retained-{count}-{index}"))).collect::<Vec<_>>();
             let evaluation = evaluate_retention(RetentionEvaluationInput {
@@ -1558,7 +1699,7 @@ mod tests {
                 retained_refs: &retained_refs,
                 remote_refs: &[],
                 policy_refs: &policy_refs,
-                evidence_refs: &[],
+                evidence_refs: &evidence_refs,
                 has_delete_authority: true,
             })
             .expect("evaluate");

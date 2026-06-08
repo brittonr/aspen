@@ -223,6 +223,7 @@ pub struct EvalCacheInvalidateInput {
     pub revocation_ref: Option<String>,
     pub operation: Option<String>,
     pub reason: String,
+    pub retention_evidence: retention::DestructiveRetentionEvidence,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -537,9 +538,13 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         input.reason.clone()
     };
     let selected_key_refs = keys.into_iter().collect::<Vec<_>>();
-    let requester_ref = eval_cache_retention_ref("requester")?;
-    let policy_refs = vec![eval_cache_retention_ref("policy")?];
-    let evidence_refs = vec![eval_cache_retention_ref("evidence")?];
+    let requester_ref = retention::destructive_retention_requester_ref(
+        &input.retention_evidence,
+        "eval-cache-invalidate-missing-requester",
+    )?;
+    let evidence_diagnostics =
+        retention::destructive_retention_evidence_diagnostics(&input.retention_evidence, retention::ACTION_TOMBSTONE)?;
+    let has_external_evidence_denial = !evidence_diagnostics.is_empty();
     let mut retention_receipt_refs = Vec::new();
     let mut retention_denials = Vec::new();
     for key_ref in &selected_key_refs {
@@ -550,12 +555,12 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
             retention_class: retention::CLASS_EPHEMERAL_CACHE,
             action: retention::ACTION_TOMBSTONE,
             requester_ref: &requester_ref,
-            is_reference_index_complete: true,
-            retained_refs: &[],
-            remote_refs: &[],
-            policy_refs: &policy_refs,
-            evidence_refs: &evidence_refs,
-            has_delete_authority: true,
+            is_reference_index_complete: input.retention_evidence.is_reference_index_complete,
+            retained_refs: &input.retention_evidence.retained_refs,
+            remote_refs: &input.retention_evidence.remote_refs,
+            policy_refs: &input.retention_evidence.policy_refs,
+            evidence_refs: &input.retention_evidence.evidence_refs,
+            has_delete_authority: retention::destructive_retention_has_authority(&input.retention_evidence),
         })?;
         push_bounded(
             &mut retention_receipt_refs,
@@ -563,7 +568,7 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
             MAX_EVAL_CACHE_SCAN_ENTRIES,
             "eval cache retention receipt refs",
         )?;
-        if evaluation.receipt.decision != "pass" {
+        if has_external_evidence_denial || evaluation.receipt.decision != "pass" {
             push_bounded(
                 &mut retention_denials,
                 key_ref.clone(),
@@ -587,14 +592,43 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         }
     }
     let mut refs = invalidated_key_refs.clone();
+    if let Some(requester_ref) = input.retention_evidence.requester_ref.as_ref() {
+        push_bounded(&mut refs, requester_ref.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
+    for reference in &input.retention_evidence.policy_refs {
+        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
+    for reference in &input.retention_evidence.authority_refs {
+        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
+    for reference in &input.retention_evidence.evidence_refs {
+        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
+    for reference in &input.retention_evidence.retained_refs {
+        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
+    for reference in &input.retention_evidence.remote_refs {
+        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
     for receipt_ref in &retention_receipt_refs {
         push_bounded(&mut refs, receipt_ref.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
     }
-    let diagnostics = if decision == "pass" {
+    let mut diagnostics = if decision == "pass" {
         vec![format!("invalidated {} keys", invalidated_key_refs.len())]
     } else {
         vec![format!("retention denied {} keys", retention_denials.len())]
     };
+    diagnostics.push(format!(
+        "retention evidence requester={} policy={} authority={} evidence={} retained={} remote={} index_complete={}",
+        input.retention_evidence.requester_ref.is_some(),
+        input.retention_evidence.policy_refs.len(),
+        input.retention_evidence.authority_refs.len(),
+        input.retention_evidence.evidence_refs.len(),
+        input.retention_evidence.retained_refs.len(),
+        input.retention_evidence.remote_refs.len(),
+        input.retention_evidence.is_reference_index_complete
+    ));
+    diagnostics.extend(evidence_diagnostics);
     let receipt = receipt_value(&EvalCacheReceiptValueInput {
         operation: "invalidate",
         decision,
@@ -606,6 +640,7 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
             ("cache-invalidation", if decision == "pass" { "pass" } else { "fail" }),
             ("tombstone", if decision == "pass" { "pass" } else { "fail" }),
             ("retention-receipt-bound", "pass"),
+            ("retention-authority-evidence", if has_external_evidence_denial { "fail" } else { "pass" }),
             ("deny-before-tombstone", if decision == "pass" { "pass" } else { "fail" }),
         ],
     })?;
@@ -617,10 +652,6 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         retention_receipt_refs,
         receipt_value: receipt,
     })
-}
-
-fn eval_cache_retention_ref(kind: &str) -> Result<String> {
-    canonical_hash(&record("eval-cache-retention-ref-v1", vec![string(kind)]))
 }
 
 pub fn status(root: &Path) -> Result<EvalCacheStatus> {
@@ -1239,6 +1270,7 @@ fn validate_invalidate_input(input: &EvalCacheInvalidateInput) -> Result<()> {
     if let Some(operation) = input.operation.as_ref() {
         validate_operation(operation)?;
     }
+    retention::validate_destructive_retention_evidence(&input.retention_evidence)?;
     Ok(())
 }
 
@@ -1659,6 +1691,7 @@ mod tests {
         let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
             dependency_ref: Some(dependency),
             reason: "dependency changed".to_string(),
+            retention_evidence: retention_evidence("trace-invalidate"),
             ..EvalCacheInvalidateInput::default()
         })
         .expect("invalidate dependency");
@@ -1694,6 +1727,7 @@ mod tests {
         let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
             key_ref: Some(put.key.key_ref.clone()),
             reason: "retained".to_string(),
+            retention_evidence: retention_evidence("retained-invalidate"),
             ..EvalCacheInvalidateInput::default()
         })
         .expect("invalidate retained key");
@@ -1701,6 +1735,55 @@ mod tests {
         assert!(invalidated.invalidated_key_refs.is_empty());
         assert!(!invalidated.retention_receipt_refs.is_empty());
         let hit = get(&root, &put.key.key_ref, &EvalCacheGetInput::default()).expect("retained cache hit");
+        assert_eq!(hit.output, Some(output));
+    }
+
+    #[test]
+    fn invalidation_denies_missing_authority_evidence() {
+        let root = temp_dir("eval-cache-missing-authority");
+        let key = key_input("schema-fingerprint", "missing-authority", &[]);
+        let output = record("fingerprint", vec![string("missing-authority")]);
+        let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output.clone()), &key, &[]))
+            .expect("put cache value");
+        let retention_evidence = retention::DestructiveRetentionEvidence {
+            requester_ref: Some(test_ref("retention-requester")),
+            policy_refs: vec![test_ref("retention-policy")],
+            evidence_refs: vec![test_ref("retention-evidence")],
+            is_reference_index_complete: true,
+            ..retention::DestructiveRetentionEvidence::default()
+        };
+        let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
+            key_ref: Some(put.key.key_ref.clone()),
+            reason: "missing authority".to_string(),
+            retention_evidence,
+            ..EvalCacheInvalidateInput::default()
+        })
+        .expect("invalidate denied");
+        assert_eq!(invalidated.decision, "deny");
+        assert!(invalidated.invalidated_key_refs.is_empty());
+        let hit = get(&root, &put.key.key_ref, &EvalCacheGetInput::default()).expect("cache value remains");
+        assert_eq!(hit.output, Some(output));
+    }
+
+    #[test]
+    fn invalidation_denies_retained_reference_evidence() {
+        let root = temp_dir("eval-cache-retained-ref");
+        let key = key_input("schema-fingerprint", "retained-ref", &[]);
+        let output = record("fingerprint", vec![string("retained-ref")]);
+        let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output.clone()), &key, &[]))
+            .expect("put cache value");
+        let mut retention_evidence = retention_evidence("retained-ref");
+        retention_evidence.retained_refs = vec![test_ref("retained-dependent-receipt")];
+        let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
+            key_ref: Some(put.key.key_ref.clone()),
+            reason: "retained ref".to_string(),
+            retention_evidence,
+            ..EvalCacheInvalidateInput::default()
+        })
+        .expect("invalidate denied");
+        assert_eq!(invalidated.decision, "deny");
+        assert!(invalidated.invalidated_key_refs.is_empty());
+        let hit = get(&root, &put.key.key_ref, &EvalCacheGetInput::default()).expect("cache value remains");
         assert_eq!(hit.output, Some(output));
     }
 
@@ -1753,6 +1836,7 @@ mod tests {
         let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
             dependency_ref: Some(dependency),
             reason: "property dependency invalidation".to_string(),
+            retention_evidence: retention_evidence("hegel-invalidate"),
             ..EvalCacheInvalidateInput::default()
         })
         .expect("invalidate");
@@ -1800,6 +1884,18 @@ mod tests {
             policy_refs: key.policy_refs.clone(),
             evidence_refs: evidence_refs.to_vec(),
             diagnostics: Vec::new(),
+        }
+    }
+
+    fn retention_evidence(label: &str) -> retention::DestructiveRetentionEvidence {
+        retention::DestructiveRetentionEvidence {
+            requester_ref: Some(test_ref(&format!("retention-requester-{label}"))),
+            policy_refs: vec![test_ref(&format!("retention-policy-{label}"))],
+            authority_refs: vec![test_ref(&format!("retention-authority-{label}"))],
+            evidence_refs: vec![test_ref(&format!("retention-evidence-{label}"))],
+            retained_refs: Vec::new(),
+            remote_refs: Vec::new(),
+            is_reference_index_complete: true,
         }
     }
 
