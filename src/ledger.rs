@@ -170,17 +170,43 @@ pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
     };
     let requester_ref =
         retention::destructive_retention_requester_ref(input.retention_evidence, "ledger-gc-missing-requester")?;
-    let evidence_diagnostics = retention::destructive_retention_evidence_diagnostics(input.retention_evidence, action)?;
     let evidence_summary = retention::destructive_retention_evidence_value(input.retention_evidence)?;
-    let has_external_evidence_denial = !evidence_diagnostics.is_empty();
+    let mut admission_diagnostics = Vec::new();
+    let mut admission_refs = Vec::new();
     let mut retention_receipt_refs = Vec::new();
     let mut retention_denials = Vec::new();
     for entry in &candidates {
+        let retention_class = ledger_retention_class(&entry.artifact_kind);
+        let admission =
+            retention::admit_destructive_retention_evidence(retention::DestructiveRetentionAdmissionInput {
+                root,
+                evidence: input.retention_evidence,
+                object_ref: &entry.artifact_ref,
+                object_kind: &entry.artifact_kind,
+                retention_class,
+                action,
+            })?;
+        for diagnostic in &admission.diagnostics {
+            push_bounded(
+                &mut admission_diagnostics,
+                diagnostic.clone(),
+                MAX_LEDGER_SCAN_ENTRIES,
+                "ledger retention admission diagnostics",
+            )?;
+        }
+        for reference in &admission.admitted_refs {
+            push_bounded(
+                &mut admission_refs,
+                reference.clone(),
+                MAX_LEDGER_SCAN_ENTRIES,
+                "ledger retention admission refs",
+            )?;
+        }
         let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
             root,
             object_ref: &entry.artifact_ref,
             object_kind: &entry.artifact_kind,
-            retention_class: ledger_retention_class(&entry.artifact_kind),
+            retention_class,
             action,
             requester_ref: &requester_ref,
             is_reference_index_complete: input.retention_evidence.is_reference_index_complete,
@@ -188,7 +214,8 @@ pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
             remote_refs: &input.retention_evidence.remote_refs,
             policy_refs: &input.retention_evidence.policy_refs,
             evidence_refs: &input.retention_evidence.evidence_refs,
-            has_delete_authority: retention::destructive_retention_has_authority(input.retention_evidence),
+            has_delete_authority: admission.has_delete_authority,
+            has_remote_gc_clearance: admission.has_remote_gc_clearance,
         })?;
         push_bounded(
             &mut retention_receipt_refs,
@@ -196,7 +223,7 @@ pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
             MAX_LEDGER_SCAN_ENTRIES,
             "ledger retention receipt refs",
         )?;
-        if has_external_evidence_denial || evaluation.receipt.decision != "pass" {
+        if admission.decision != "pass" || evaluation.receipt.decision != "pass" {
             push_bounded(
                 &mut retention_denials,
                 entry.artifact_ref.clone(),
@@ -228,14 +255,15 @@ pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
         record("retention", vec![sequence(retention_receipt_refs.iter().map(string).collect())]),
         record("denied", vec![sequence(retention_denials.iter().map(string).collect())]),
         record("retention-evidence", vec![evidence_summary]),
-        record("retention-diagnostics", vec![sequence(evidence_diagnostics.iter().map(string).collect())]),
+        record("retention-admission", vec![sequence(admission_refs.iter().map(string).collect())]),
+        record("retention-diagnostics", vec![sequence(admission_diagnostics.iter().map(string).collect())]),
         record("checks", vec![sequence(vec![
             record("check", vec![string("pin-preservation"), string("pass")]),
             record("check", vec![string("derived-index-scan"), string("pass")]),
             record("check", vec![string("retention-receipt-bound"), string("pass")]),
             record("check", vec![
                 string("retention-authority-evidence"),
-                string(pass_or_fail(!has_external_evidence_denial)),
+                string(pass_or_fail(admission_diagnostics.is_empty())),
             ]),
             record("check", vec![
                 string("deny-before-removal"),
@@ -650,7 +678,7 @@ mod tests {
         assert_eq!(imported.artifact_ref, duplicate.artifact_ref);
         assert_eq!(list_artifacts(&root).expect("list artifacts").len(), 1);
         pin_artifact(&root, &imported.artifact_ref).expect("pin artifact");
-        let retention_evidence = retention_evidence("pinned");
+        let retention_evidence = retention::DestructiveRetentionEvidence::default();
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -682,7 +710,14 @@ mod tests {
             has_authority: true,
         })
         .expect("retention pin");
-        let retention_evidence = retention_evidence("retention-pin");
+        let retention_evidence = retention_evidence(
+            &root,
+            "retention-pin",
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            ledger_retention_class(&imported.artifact_kind),
+            retention::ACTION_DELETE,
+        );
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -699,13 +734,14 @@ mod tests {
         let root = temp_dir("ledger-retention-missing-authority");
         let artifact = parse_text("<example \"missing-authority\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
-        let retention_evidence = retention::DestructiveRetentionEvidence {
-            requester_ref: Some(ledger_test_ref("requester", "missing-authority")),
-            policy_refs: vec![ledger_test_ref("policy", "missing-authority")],
-            evidence_refs: vec![ledger_test_ref("evidence", "missing-authority")],
-            is_reference_index_complete: true,
-            ..retention::DestructiveRetentionEvidence::default()
-        };
+        let retention_evidence = retention_evidence_without_authority(
+            &root,
+            "missing-authority",
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            ledger_retention_class(&imported.artifact_kind),
+            retention::ACTION_DELETE,
+        );
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -722,12 +758,14 @@ mod tests {
         let root = temp_dir("ledger-retention-missing-policy-evidence");
         let artifact = parse_text("<example \"missing-policy-evidence\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
-        let retention_evidence = retention::DestructiveRetentionEvidence {
-            requester_ref: Some(ledger_test_ref("requester", "missing-policy-evidence")),
-            authority_refs: vec![ledger_test_ref("authority", "missing-policy-evidence")],
-            is_reference_index_complete: true,
-            ..retention::DestructiveRetentionEvidence::default()
-        };
+        let retention_evidence = retention_evidence_without_policy_evidence(
+            &root,
+            "missing-policy-evidence",
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            ledger_retention_class(&imported.artifact_kind),
+            retention::ACTION_DELETE,
+        );
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -749,16 +787,133 @@ mod tests {
         assert!(["Preserves", "hash mismatch"].iter().any(|needle| error.to_string().contains(needle)));
     }
 
-    fn retention_evidence(label: &str) -> retention::DestructiveRetentionEvidence {
+    fn retention_evidence(
+        root: &std::path::Path,
+        label: &str,
+        object_ref: &str,
+        object_kind: &str,
+        retention_class: &str,
+        action: &str,
+    ) -> retention::DestructiveRetentionEvidence {
+        let requester_ref = ledger_test_ref("requester", label);
+        let policy_refs = vec![store_admission(
+            root,
+            retention::ADMISSION_KIND_POLICY,
+            label,
+            &requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            &[],
+            true,
+        )];
+        let authority_refs = vec![store_admission(
+            root,
+            retention::ADMISSION_KIND_AUTHORITY,
+            label,
+            &requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            &[],
+            true,
+        )];
+        let evidence_refs = vec![store_admission(
+            root,
+            retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label,
+            &requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            &[],
+            true,
+        )];
+        let reference_index_refs = vec![store_admission(
+            root,
+            retention::ADMISSION_KIND_REFERENCE_INDEX,
+            label,
+            &requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            &[],
+            true,
+        )];
         retention::DestructiveRetentionEvidence {
-            requester_ref: Some(ledger_test_ref("requester", label)),
-            policy_refs: vec![ledger_test_ref("policy", label)],
-            authority_refs: vec![ledger_test_ref("authority", label)],
-            evidence_refs: vec![ledger_test_ref("evidence", label)],
+            requester_ref: Some(requester_ref),
+            policy_refs,
+            authority_refs,
+            evidence_refs,
             retained_refs: Vec::new(),
             remote_refs: Vec::new(),
+            reference_index_refs,
+            remote_gc_refs: Vec::new(),
             is_reference_index_complete: true,
         }
+    }
+
+    fn retention_evidence_without_authority(
+        root: &std::path::Path,
+        label: &str,
+        object_ref: &str,
+        object_kind: &str,
+        retention_class: &str,
+        action: &str,
+    ) -> retention::DestructiveRetentionEvidence {
+        let mut evidence = retention_evidence(root, label, object_ref, object_kind, retention_class, action);
+        evidence.authority_refs.clear();
+        evidence
+    }
+
+    fn retention_evidence_without_policy_evidence(
+        root: &std::path::Path,
+        label: &str,
+        object_ref: &str,
+        object_kind: &str,
+        retention_class: &str,
+        action: &str,
+    ) -> retention::DestructiveRetentionEvidence {
+        let mut evidence = retention_evidence(root, label, object_ref, object_kind, retention_class, action);
+        evidence.policy_refs.clear();
+        evidence.evidence_refs.clear();
+        evidence
+    }
+
+    fn store_admission(
+        root: &std::path::Path,
+        kind: &str,
+        label: &str,
+        requester_ref: &str,
+        object_ref: &str,
+        object_kind: &str,
+        retention_class: &str,
+        action: &str,
+        remote_refs: &[String],
+        is_reference_index_complete: bool,
+    ) -> String {
+        retention::store_retention_evidence_admission(root, &retention::RetentionEvidenceAdmissionInput {
+            kind,
+            decision: "pass",
+            requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            bound_refs: &[ledger_test_ref(kind, label)],
+            retained_refs: &[],
+            remote_refs,
+            is_reference_index_complete,
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("store retention admission")
+        .admission_ref
     }
 
     fn ledger_test_ref(kind: &str, label: &str) -> String {

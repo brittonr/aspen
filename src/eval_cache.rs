@@ -542,12 +542,36 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         &input.retention_evidence,
         "eval-cache-invalidate-missing-requester",
     )?;
-    let evidence_diagnostics =
-        retention::destructive_retention_evidence_diagnostics(&input.retention_evidence, retention::ACTION_TOMBSTONE)?;
-    let has_external_evidence_denial = !evidence_diagnostics.is_empty();
+    let mut admission_diagnostics = Vec::new();
+    let mut admission_refs = Vec::new();
     let mut retention_receipt_refs = Vec::new();
     let mut retention_denials = Vec::new();
     for key_ref in &selected_key_refs {
+        let admission =
+            retention::admit_destructive_retention_evidence(retention::DestructiveRetentionAdmissionInput {
+                root,
+                evidence: &input.retention_evidence,
+                object_ref: key_ref,
+                object_kind: "eval-cache-key",
+                retention_class: retention::CLASS_EPHEMERAL_CACHE,
+                action: retention::ACTION_TOMBSTONE,
+            })?;
+        for diagnostic in &admission.diagnostics {
+            push_bounded(
+                &mut admission_diagnostics,
+                diagnostic.clone(),
+                MAX_EVAL_CACHE_SCAN_ENTRIES,
+                "eval cache retention admission diagnostics",
+            )?;
+        }
+        for reference in &admission.admitted_refs {
+            push_bounded(
+                &mut admission_refs,
+                reference.clone(),
+                MAX_EVAL_CACHE_SCAN_ENTRIES,
+                "eval cache retention admission refs",
+            )?;
+        }
         let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
             root,
             object_ref: key_ref,
@@ -560,7 +584,8 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
             remote_refs: &input.retention_evidence.remote_refs,
             policy_refs: &input.retention_evidence.policy_refs,
             evidence_refs: &input.retention_evidence.evidence_refs,
-            has_delete_authority: retention::destructive_retention_has_authority(&input.retention_evidence),
+            has_delete_authority: admission.has_delete_authority,
+            has_remote_gc_clearance: admission.has_remote_gc_clearance,
         })?;
         push_bounded(
             &mut retention_receipt_refs,
@@ -568,7 +593,7 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
             MAX_EVAL_CACHE_SCAN_ENTRIES,
             "eval cache retention receipt refs",
         )?;
-        if has_external_evidence_denial || evaluation.receipt.decision != "pass" {
+        if admission.decision != "pass" || evaluation.receipt.decision != "pass" {
             push_bounded(
                 &mut retention_denials,
                 key_ref.clone(),
@@ -610,6 +635,15 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
     for reference in &input.retention_evidence.remote_refs {
         push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
     }
+    for reference in &input.retention_evidence.reference_index_refs {
+        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
+    for reference in &input.retention_evidence.remote_gc_refs {
+        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
+    for reference in &admission_refs {
+        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
     for receipt_ref in &retention_receipt_refs {
         push_bounded(&mut refs, receipt_ref.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
     }
@@ -619,16 +653,19 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         vec![format!("retention denied {} keys", retention_denials.len())]
     };
     diagnostics.push(format!(
-        "retention evidence requester={} policy={} authority={} evidence={} retained={} remote={} index_complete={}",
+        "retention evidence requester={} policy={} authority={} evidence={} retained={} remote={} reference_index={} remote_gc={} index_complete={}",
         input.retention_evidence.requester_ref.is_some(),
         input.retention_evidence.policy_refs.len(),
         input.retention_evidence.authority_refs.len(),
         input.retention_evidence.evidence_refs.len(),
         input.retention_evidence.retained_refs.len(),
         input.retention_evidence.remote_refs.len(),
+        input.retention_evidence.reference_index_refs.len(),
+        input.retention_evidence.remote_gc_refs.len(),
         input.retention_evidence.is_reference_index_complete
     ));
-    diagnostics.extend(evidence_diagnostics);
+    let has_admission_denial = !admission_diagnostics.is_empty();
+    diagnostics.extend(admission_diagnostics);
     let receipt = receipt_value(&EvalCacheReceiptValueInput {
         operation: "invalidate",
         decision,
@@ -640,7 +677,7 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
             ("cache-invalidation", if decision == "pass" { "pass" } else { "fail" }),
             ("tombstone", if decision == "pass" { "pass" } else { "fail" }),
             ("retention-receipt-bound", "pass"),
-            ("retention-authority-evidence", if has_external_evidence_denial { "fail" } else { "pass" }),
+            ("retention-authority-evidence", if has_admission_denial { "fail" } else { "pass" }),
             ("deny-before-tombstone", if decision == "pass" { "pass" } else { "fail" }),
         ],
     })?;
@@ -1691,7 +1728,7 @@ mod tests {
         let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
             dependency_ref: Some(dependency),
             reason: "dependency changed".to_string(),
-            retention_evidence: retention_evidence("trace-invalidate"),
+            retention_evidence: retention_evidence(&root, "trace-invalidate"),
             ..EvalCacheInvalidateInput::default()
         })
         .expect("invalidate dependency");
@@ -1727,7 +1764,7 @@ mod tests {
         let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
             key_ref: Some(put.key.key_ref.clone()),
             reason: "retained".to_string(),
-            retention_evidence: retention_evidence("retained-invalidate"),
+            retention_evidence: retention_evidence(&root, "retained-invalidate"),
             ..EvalCacheInvalidateInput::default()
         })
         .expect("invalidate retained key");
@@ -1745,13 +1782,8 @@ mod tests {
         let output = record("fingerprint", vec![string("missing-authority")]);
         let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output.clone()), &key, &[]))
             .expect("put cache value");
-        let retention_evidence = retention::DestructiveRetentionEvidence {
-            requester_ref: Some(test_ref("retention-requester")),
-            policy_refs: vec![test_ref("retention-policy")],
-            evidence_refs: vec![test_ref("retention-evidence")],
-            is_reference_index_complete: true,
-            ..retention::DestructiveRetentionEvidence::default()
-        };
+        let mut retention_evidence = retention_evidence(&root, "missing-authority");
+        retention_evidence.authority_refs.clear();
         let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
             key_ref: Some(put.key.key_ref.clone()),
             reason: "missing authority".to_string(),
@@ -1772,7 +1804,7 @@ mod tests {
         let output = record("fingerprint", vec![string("retained-ref")]);
         let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output.clone()), &key, &[]))
             .expect("put cache value");
-        let mut retention_evidence = retention_evidence("retained-ref");
+        let mut retention_evidence = retention_evidence(&root, "retained-ref");
         retention_evidence.retained_refs = vec![test_ref("retained-dependent-receipt")];
         let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
             key_ref: Some(put.key.key_ref.clone()),
@@ -1836,7 +1868,7 @@ mod tests {
         let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
             dependency_ref: Some(dependency),
             reason: "property dependency invalidation".to_string(),
-            retention_evidence: retention_evidence("hegel-invalidate"),
+            retention_evidence: retention_evidence(&root, "hegel-invalidate"),
             ..EvalCacheInvalidateInput::default()
         })
         .expect("invalidate");
@@ -1887,16 +1919,91 @@ mod tests {
         }
     }
 
-    fn retention_evidence(label: &str) -> retention::DestructiveRetentionEvidence {
+    fn retention_evidence(root: &std::path::Path, label: &str) -> retention::DestructiveRetentionEvidence {
+        let requester_ref = test_ref(&format!("retention-requester-{label}"));
+        let summaries = list(root, &EvalCacheListFilter::default()).expect("list cache for retention evidence");
+        let mut policy_refs = Vec::with_capacity(summaries.len());
+        let mut authority_refs = Vec::with_capacity(summaries.len());
+        let mut evidence_refs = Vec::with_capacity(summaries.len());
+        let mut reference_index_refs = Vec::with_capacity(summaries.len());
+        for summary in summaries {
+            policy_refs.push(store_admission(
+                root,
+                retention::ADMISSION_KIND_POLICY,
+                label,
+                &requester_ref,
+                &summary.key_ref,
+                &[],
+                true,
+            ));
+            authority_refs.push(store_admission(
+                root,
+                retention::ADMISSION_KIND_AUTHORITY,
+                label,
+                &requester_ref,
+                &summary.key_ref,
+                &[],
+                true,
+            ));
+            evidence_refs.push(store_admission(
+                root,
+                retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+                label,
+                &requester_ref,
+                &summary.key_ref,
+                &[],
+                true,
+            ));
+            reference_index_refs.push(store_admission(
+                root,
+                retention::ADMISSION_KIND_REFERENCE_INDEX,
+                label,
+                &requester_ref,
+                &summary.key_ref,
+                &[],
+                true,
+            ));
+        }
         retention::DestructiveRetentionEvidence {
-            requester_ref: Some(test_ref(&format!("retention-requester-{label}"))),
-            policy_refs: vec![test_ref(&format!("retention-policy-{label}"))],
-            authority_refs: vec![test_ref(&format!("retention-authority-{label}"))],
-            evidence_refs: vec![test_ref(&format!("retention-evidence-{label}"))],
+            requester_ref: Some(requester_ref),
+            policy_refs,
+            authority_refs,
+            evidence_refs,
             retained_refs: Vec::new(),
             remote_refs: Vec::new(),
+            reference_index_refs,
+            remote_gc_refs: Vec::new(),
             is_reference_index_complete: true,
         }
+    }
+
+    fn store_admission(
+        root: &std::path::Path,
+        kind: &str,
+        label: &str,
+        requester_ref: &str,
+        key_ref: &str,
+        remote_refs: &[String],
+        is_reference_index_complete: bool,
+    ) -> String {
+        retention::store_retention_evidence_admission(root, &retention::RetentionEvidenceAdmissionInput {
+            kind,
+            decision: "pass",
+            requester_ref,
+            object_ref: key_ref,
+            object_kind: "eval-cache-key",
+            retention_class: retention::CLASS_EPHEMERAL_CACHE,
+            action: retention::ACTION_TOMBSTONE,
+            bound_refs: &[test_ref(&format!("{kind}-{label}"))],
+            retained_refs: &[],
+            remote_refs,
+            is_reference_index_complete,
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("store retention admission")
+        .admission_ref
     }
 
     fn test_ref(label: &str) -> String {

@@ -67,6 +67,7 @@ pub const EVIDENCE_SIGNED_RECEIPT_SCHEMA: &str = "molten.evidence.signed-receipt
 pub const RETENTION_CLASS_SCHEMA: &str = "molten.retention.class.v1";
 pub const RETENTION_PIN_SCHEMA: &str = "molten.retention.pin.v1";
 pub const RETENTION_REFERENCE_INDEX_SCHEMA: &str = "molten.retention.reference-index.v1";
+pub const RETENTION_EVIDENCE_ADMISSION_SCHEMA: &str = "molten.retention.evidence-admission.v1";
 pub const RETENTION_RECEIPT_SCHEMA: &str = "molten.retention.receipt.v1";
 pub const RETENTION_TOMBSTONE_SCHEMA: &str = "molten.retention.tombstone.v1";
 pub const EVIDENCE_CHAIN_LINK_SCHEMA: &str = "molten.evidence.chain-link.v1";

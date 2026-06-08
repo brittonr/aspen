@@ -1226,6 +1226,10 @@ struct RetentionEvidenceArgs {
     retained_refs: Vec<String>,
     #[arg(long = "retention-remote-ref")]
     remote_refs: Vec<String>,
+    #[arg(long = "retention-reference-index-ref")]
+    reference_index_refs: Vec<String>,
+    #[arg(long = "retention-remote-gc-ref")]
+    remote_gc_refs: Vec<String>,
     #[arg(long = "retention-reference-index-complete")]
     is_reference_index_complete: bool,
 }
@@ -1239,6 +1243,8 @@ impl RetentionEvidenceArgs {
             evidence_refs: self.evidence_refs,
             retained_refs: self.retained_refs,
             remote_refs: self.remote_refs,
+            reference_index_refs: self.reference_index_refs,
+            remote_gc_refs: self.remote_gc_refs,
             is_reference_index_complete: self.is_reference_index_complete,
         }
     }
@@ -2635,6 +2641,40 @@ enum RetentionCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    Admit {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        kind: String,
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        requester_ref: String,
+        #[arg(long)]
+        object_ref: String,
+        #[arg(long)]
+        object_kind: String,
+        #[arg(long)]
+        retention_class: String,
+        #[arg(long)]
+        action: String,
+        #[arg(long = "bound-ref")]
+        bound_refs: Vec<String>,
+        #[arg(long = "retained-ref")]
+        retained_refs: Vec<String>,
+        #[arg(long = "remote-ref")]
+        remote_refs: Vec<String>,
+        #[arg(long = "reference-index-complete")]
+        is_reference_index_complete: bool,
+        #[arg(long = "stale")]
+        is_stale: bool,
+        #[arg(long = "revoked-ref")]
+        revoked_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     Check {
         #[arg(long)]
         root: PathBuf,
@@ -2660,6 +2700,8 @@ enum RetentionCommand {
         evidence_refs: Vec<String>,
         #[arg(long, default_value = "false")]
         has_delete_authority: bool,
+        #[arg(long = "remote-gc-clearance")]
+        has_remote_gc_clearance: bool,
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
@@ -6443,6 +6485,51 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
             );
             Ok(())
         }
+        RetentionCommand::Admit {
+            root,
+            kind,
+            decision,
+            requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            bound_refs,
+            retained_refs,
+            remote_refs,
+            is_reference_index_complete,
+            is_stale,
+            revoked_refs,
+            diagnostics,
+            out,
+        } => {
+            let admission =
+                retention::store_retention_evidence_admission(&root, &retention::RetentionEvidenceAdmissionInput {
+                    kind: &kind,
+                    decision: &decision,
+                    requester_ref: &requester_ref,
+                    object_ref: &object_ref,
+                    object_kind: &object_kind,
+                    retention_class: &retention_class,
+                    action: &action,
+                    bound_refs: &bound_refs,
+                    retained_refs: &retained_refs,
+                    remote_refs: &remote_refs,
+                    is_reference_index_complete,
+                    is_current: !is_stale,
+                    revoked_refs: &revoked_refs,
+                    diagnostics: &diagnostics,
+                })?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &admission.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention admission ref={} kind={} decision={}",
+                    admission.admission_ref, admission.kind, admission.decision
+                ),
+            );
+            Ok(())
+        }
         RetentionCommand::Check {
             root,
             object_ref,
@@ -6456,6 +6543,7 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
             policy_refs,
             evidence_refs,
             has_delete_authority,
+            has_remote_gc_clearance,
             receipt_out,
         } => {
             let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
@@ -6471,6 +6559,7 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
                 policy_refs: &policy_refs,
                 evidence_refs: &evidence_refs,
                 has_delete_authority,
+                has_remote_gc_clearance,
             })?;
             let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &evaluation.receipt.value)?;
             print_or_log_summary(
@@ -9896,7 +9985,14 @@ mod tests {
             revocation_ref: None,
             operation: None,
             reason: "cli-test".to_string(),
-            retention: retention_cli_args("cache-invalidate"),
+            retention: retention_cli_args_for_object(RetentionCliObject {
+                root: &cache,
+                label: "cache-invalidate",
+                object_ref: &key.key_ref,
+                object_kind: "eval-cache-key",
+                retention_class: retention::CLASS_EPHEMERAL_CACHE,
+                action: retention::ACTION_TOMBSTONE,
+            }),
             receipt_out: Some(dir.join("invalidate-receipt.preserves")),
         })
         .expect("cache invalidate");
@@ -10330,6 +10426,30 @@ mod tests {
             artifact: class_out.clone(),
         })
         .expect("show retention class");
+        let admission_out = dir.join("authority-admission.preserves");
+        run_retention_command(RetentionCommand::Admit {
+            root: root.clone(),
+            kind: retention::ADMISSION_KIND_AUTHORITY.to_string(),
+            decision: "pass".to_string(),
+            requester_ref: owner_ref.clone(),
+            object_ref: object_ref.clone(),
+            object_kind: "encrypted-ref".to_string(),
+            retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+            action: retention::ACTION_DELETE.to_string(),
+            bound_refs: vec![authority_ref.clone()],
+            retained_refs: Vec::new(),
+            remote_refs: Vec::new(),
+            is_reference_index_complete: true,
+            is_stale: false,
+            revoked_refs: Vec::new(),
+            diagnostics: Vec::new(),
+            out: Some(admission_out.clone()),
+        })
+        .expect("retention admission");
+        run_retention_command(RetentionCommand::Show {
+            artifact: admission_out,
+        })
+        .expect("show retention admission");
         let pin_out = dir.join("pin.preserves");
         let pin_receipt_out = dir.join("pin-receipt.preserves");
         run_retention_command(RetentionCommand::Pin {
@@ -10363,6 +10483,7 @@ mod tests {
             policy_refs: vec![policy_ref.clone()],
             evidence_refs: vec![evidence_ref.clone()],
             has_delete_authority: true,
+            has_remote_gc_clearance: true,
             receipt_out: Some(denied_receipt.clone()),
         })
         .expect("deny pinned delete");
@@ -10395,6 +10516,7 @@ mod tests {
             policy_refs: vec![policy_ref],
             evidence_refs: vec![evidence_ref],
             has_delete_authority: true,
+            has_remote_gc_clearance: true,
             receipt_out: Some(tombstone_receipt.clone()),
         })
         .expect("tombstone retention object");
@@ -11693,8 +11815,76 @@ mod tests {
             evidence_refs: vec![test_ref(&format!("retention-evidence-{label}"))],
             retained_refs: Vec::new(),
             remote_refs: Vec::new(),
+            reference_index_refs: Vec::new(),
+            remote_gc_refs: Vec::new(),
             is_reference_index_complete: true,
         }
+    }
+
+    #[derive(Clone, Copy)]
+    struct RetentionCliObject<'a> {
+        root: &'a std::path::Path,
+        label: &'a str,
+        object_ref: &'a str,
+        object_kind: &'a str,
+        retention_class: &'a str,
+        action: &'a str,
+    }
+
+    fn retention_cli_args_for_object(input: RetentionCliObject<'_>) -> RetentionEvidenceArgs {
+        let requester_ref = test_ref(&format!("retention-requester-{}", input.label));
+        let policy_refs = vec![store_cli_admission(
+            input,
+            retention::ADMISSION_KIND_POLICY,
+            &requester_ref,
+        )];
+        let authority_refs = vec![store_cli_admission(
+            input,
+            retention::ADMISSION_KIND_AUTHORITY,
+            &requester_ref,
+        )];
+        let evidence_refs = vec![store_cli_admission(
+            input,
+            retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            &requester_ref,
+        )];
+        let reference_index_refs = vec![store_cli_admission(
+            input,
+            retention::ADMISSION_KIND_REFERENCE_INDEX,
+            &requester_ref,
+        )];
+        RetentionEvidenceArgs {
+            requester_ref: Some(requester_ref),
+            policy_refs,
+            authority_refs,
+            evidence_refs,
+            retained_refs: Vec::new(),
+            remote_refs: Vec::new(),
+            reference_index_refs,
+            remote_gc_refs: Vec::new(),
+            is_reference_index_complete: true,
+        }
+    }
+
+    fn store_cli_admission(input: RetentionCliObject<'_>, kind: &str, requester_ref: &str) -> String {
+        retention::store_retention_evidence_admission(input.root, &retention::RetentionEvidenceAdmissionInput {
+            kind,
+            decision: "pass",
+            requester_ref,
+            object_ref: input.object_ref,
+            object_kind: input.object_kind,
+            retention_class: input.retention_class,
+            action: input.action,
+            bound_refs: &[test_ref(&format!("{kind}-{}", input.label))],
+            retained_refs: &[],
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("store cli retention admission")
+        .admission_ref
     }
 
     fn only_blob_ref(iroh_store: &std::path::Path) -> String {

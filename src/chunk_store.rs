@@ -1526,12 +1526,37 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
     };
     let requester_ref =
         retention::destructive_retention_requester_ref(input.retention_evidence, "chunk-store-gc-missing-requester")?;
-    let evidence_diagnostics = retention::destructive_retention_evidence_diagnostics(input.retention_evidence, action)?;
     let evidence_summary = retention::destructive_retention_evidence_value(input.retention_evidence)?;
-    let has_external_evidence_denial = !evidence_diagnostics.is_empty();
+    let mut admission_diagnostics = Vec::new();
+    let mut admission_refs = Vec::new();
     let mut retention_receipt_refs = Vec::new();
     let mut retention_denials = Vec::new();
     for manifest_ref in &candidate_manifests {
+        let admission =
+            retention::admit_destructive_retention_evidence(retention::DestructiveRetentionAdmissionInput {
+                root,
+                evidence: input.retention_evidence,
+                object_ref: manifest_ref,
+                object_kind: "chunk-manifest",
+                retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+                action,
+            })?;
+        for diagnostic in &admission.diagnostics {
+            push_bounded(
+                &mut admission_diagnostics,
+                diagnostic.clone(),
+                MAX_CHUNK_STORE_RECEIPTS,
+                "chunk store retention admission diagnostics",
+            )?;
+        }
+        for reference in &admission.admitted_refs {
+            push_bounded(
+                &mut admission_refs,
+                reference.clone(),
+                MAX_CHUNK_STORE_RECEIPTS,
+                "chunk store retention admission refs",
+            )?;
+        }
         let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
             root,
             object_ref: manifest_ref,
@@ -1544,7 +1569,8 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
             remote_refs: &input.retention_evidence.remote_refs,
             policy_refs: &input.retention_evidence.policy_refs,
             evidence_refs: &input.retention_evidence.evidence_refs,
-            has_delete_authority: retention::destructive_retention_has_authority(input.retention_evidence),
+            has_delete_authority: admission.has_delete_authority,
+            has_remote_gc_clearance: admission.has_remote_gc_clearance,
         })?;
         push_bounded(
             &mut retention_receipt_refs,
@@ -1552,7 +1578,7 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
             MAX_CHUNK_STORE_RECEIPTS,
             "chunk store retention receipt refs",
         )?;
-        if has_external_evidence_denial || evaluation.receipt.decision != "pass" {
+        if admission.decision != "pass" || evaluation.receipt.decision != "pass" {
             push_bounded(
                 &mut retention_denials,
                 manifest_ref.clone(),
@@ -1562,6 +1588,31 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
         }
     }
     for chunk_ref in &candidate_chunks {
+        let admission =
+            retention::admit_destructive_retention_evidence(retention::DestructiveRetentionAdmissionInput {
+                root,
+                evidence: input.retention_evidence,
+                object_ref: chunk_ref,
+                object_kind: "chunk",
+                retention_class: retention::CLASS_DURABLE_VALUE,
+                action,
+            })?;
+        for diagnostic in &admission.diagnostics {
+            push_bounded(
+                &mut admission_diagnostics,
+                diagnostic.clone(),
+                MAX_CHUNK_STORE_RECEIPTS,
+                "chunk store retention admission diagnostics",
+            )?;
+        }
+        for reference in &admission.admitted_refs {
+            push_bounded(
+                &mut admission_refs,
+                reference.clone(),
+                MAX_CHUNK_STORE_RECEIPTS,
+                "chunk store retention admission refs",
+            )?;
+        }
         let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
             root,
             object_ref: chunk_ref,
@@ -1574,7 +1625,8 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
             remote_refs: &input.retention_evidence.remote_refs,
             policy_refs: &input.retention_evidence.policy_refs,
             evidence_refs: &input.retention_evidence.evidence_refs,
-            has_delete_authority: retention::destructive_retention_has_authority(input.retention_evidence),
+            has_delete_authority: admission.has_delete_authority,
+            has_remote_gc_clearance: admission.has_remote_gc_clearance,
         })?;
         push_bounded(
             &mut retention_receipt_refs,
@@ -1582,7 +1634,7 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
             MAX_CHUNK_STORE_RECEIPTS,
             "chunk store retention receipt refs",
         )?;
-        if has_external_evidence_denial || evaluation.receipt.decision != "pass" {
+        if admission.decision != "pass" || evaluation.receipt.decision != "pass" {
             push_bounded(
                 &mut retention_denials,
                 chunk_ref.clone(),
@@ -1616,7 +1668,7 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
             ("deny-incomplete-reachability-proof", "pass"),
             ("chunk-tombstone-eligibility", if decision == "pass" { "pass" } else { "fail" }),
             ("retention-receipt-bound", "pass"),
-            ("retention-authority-evidence", pass_or_fail(!has_external_evidence_denial)),
+            ("retention-authority-evidence", pass_or_fail(admission_diagnostics.is_empty())),
             ("redb-index-update", if decision == "pass" { "pass" } else { "fail" }),
         ],
         details: vec![
@@ -1625,7 +1677,8 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
             record("retention", vec![sequence(retention_receipt_refs.iter().map(string).collect())]),
             record("denied", vec![sequence(retention_denials.iter().map(string).collect())]),
             record("retention-evidence", vec![evidence_summary.clone()]),
-            record("retention-diagnostics", vec![sequence(evidence_diagnostics.iter().map(string).collect())]),
+            record("retention-admission", vec![sequence(admission_refs.iter().map(string).collect())]),
+            record("retention-diagnostics", vec![sequence(admission_diagnostics.iter().map(string).collect())]),
         ],
     });
     let tombstone_receipt =
@@ -1647,6 +1700,7 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
                     record("removed-manifests", vec![sequence(removed_manifests.iter().map(string).collect())]),
                     record("retention", vec![sequence(retention_receipt_refs.iter().map(string).collect())]),
                     record("retention-evidence", vec![evidence_summary]),
+                    record("retention-admission", vec![sequence(admission_refs.iter().map(string).collect())]),
                 ],
             }))
         } else {
@@ -3548,7 +3602,7 @@ mod tests {
         assert!(missing_chunks(&sync_dest, &first.manifest_ref).expect("missing after sync").is_empty());
 
         pin_manifest(&root, &first.manifest_ref).expect("pin manifest");
-        let retention_evidence = retention_evidence("hegel-pinned");
+        let retention_evidence = retention_evidence(&root, "hegel-pinned");
         gc(&root, ChunkStoreGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -3693,7 +3747,7 @@ mod tests {
         let pinned = put_bytes(&root, "artifact", b"aaaabbbbcccc", 4).expect("put pinned");
         let unpinned = put_bytes(&root, "artifact", b"dddd", 4).expect("put unpinned");
         pin_manifest(&root, &pinned.manifest_ref).expect("pin manifest");
-        let retention_evidence = retention_evidence("gc-remove");
+        let retention_evidence = retention_evidence(&root, "gc-remove");
         let gc = gc(&root, ChunkStoreGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -3726,7 +3780,7 @@ mod tests {
             has_authority: true,
         })
         .expect("retention pin");
-        let retention_evidence = retention_evidence("retention-pin");
+        let retention_evidence = retention_evidence(&root, "retention-pin");
         let gc = gc(&root, ChunkStoreGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -3743,7 +3797,7 @@ mod tests {
     fn chunk_gc_denies_incomplete_reference_index_and_remote_uncertainty() {
         let root = temp_dir("chunk-retention-incomplete-remote");
         let put = put_bytes(&root, "artifact", b"remote", 3).expect("put remote-retained");
-        let mut retention_evidence = retention_evidence("incomplete-remote");
+        let mut retention_evidence = retention_evidence(&root, "incomplete-remote");
         retention_evidence.remote_refs = vec![chunk_test_ref("remote", "incomplete-remote")];
         retention_evidence.is_reference_index_complete = false;
         let gc = gc(&root, ChunkStoreGcInput {
@@ -3808,7 +3862,7 @@ mod tests {
         range_read(&root, &put.manifest_ref, 1, 5).expect("range");
         pin_manifest(&root, &put.manifest_ref).expect("pin");
         unpin_manifest(&root, &put.manifest_ref).expect("unpin");
-        let retention_evidence = retention_evidence("receipt-index");
+        let retention_evidence = retention_evidence(&root, "receipt-index");
         gc(&root, ChunkStoreGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -3992,16 +4046,140 @@ mod tests {
         assert_eq!(parsed.chunks.len(), 2);
     }
 
-    fn retention_evidence(label: &str) -> retention::DestructiveRetentionEvidence {
+    fn retention_evidence(root: &std::path::Path, label: &str) -> retention::DestructiveRetentionEvidence {
+        let requester_ref = chunk_test_ref("requester", label);
+        let mut policy_refs = Vec::new();
+        let mut authority_refs = Vec::new();
+        let mut evidence_refs = Vec::new();
+        let mut reference_index_refs = Vec::new();
+        for manifest_ref in list_manifest_refs(root).expect("list manifests for retention evidence") {
+            push_admissions(
+                root,
+                label,
+                &requester_ref,
+                &manifest_ref,
+                "chunk-manifest",
+                retention::CLASS_PUBLIC_ARTIFACT,
+                &mut policy_refs,
+                &mut authority_refs,
+                &mut evidence_refs,
+                &mut reference_index_refs,
+            );
+        }
+        for chunk_ref in list_chunk_refs(root).expect("list chunks for retention evidence") {
+            push_admissions(
+                root,
+                label,
+                &requester_ref,
+                &chunk_ref,
+                "chunk",
+                retention::CLASS_DURABLE_VALUE,
+                &mut policy_refs,
+                &mut authority_refs,
+                &mut evidence_refs,
+                &mut reference_index_refs,
+            );
+        }
         retention::DestructiveRetentionEvidence {
-            requester_ref: Some(chunk_test_ref("requester", label)),
-            policy_refs: vec![chunk_test_ref("policy", label)],
-            authority_refs: vec![chunk_test_ref("authority", label)],
-            evidence_refs: vec![chunk_test_ref("evidence", label)],
+            requester_ref: Some(requester_ref),
+            policy_refs,
+            authority_refs,
+            evidence_refs,
             retained_refs: Vec::new(),
             remote_refs: Vec::new(),
+            reference_index_refs,
+            remote_gc_refs: Vec::new(),
             is_reference_index_complete: true,
         }
+    }
+
+    fn push_admissions(
+        root: &std::path::Path,
+        label: &str,
+        requester_ref: &str,
+        object_ref: &str,
+        object_kind: &str,
+        retention_class: &str,
+        policy_refs: &mut Vec<String>,
+        authority_refs: &mut Vec<String>,
+        evidence_refs: &mut Vec<String>,
+        reference_index_refs: &mut Vec<String>,
+    ) {
+        policy_refs.push(store_admission(
+            root,
+            retention::ADMISSION_KIND_POLICY,
+            label,
+            requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            &[],
+            true,
+        ));
+        authority_refs.push(store_admission(
+            root,
+            retention::ADMISSION_KIND_AUTHORITY,
+            label,
+            requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            &[],
+            true,
+        ));
+        evidence_refs.push(store_admission(
+            root,
+            retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label,
+            requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            &[],
+            true,
+        ));
+        reference_index_refs.push(store_admission(
+            root,
+            retention::ADMISSION_KIND_REFERENCE_INDEX,
+            label,
+            requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            &[],
+            true,
+        ));
+    }
+
+    fn store_admission(
+        root: &std::path::Path,
+        kind: &str,
+        label: &str,
+        requester_ref: &str,
+        object_ref: &str,
+        object_kind: &str,
+        retention_class: &str,
+        remote_refs: &[String],
+        is_reference_index_complete: bool,
+    ) -> String {
+        retention::store_retention_evidence_admission(root, &retention::RetentionEvidenceAdmissionInput {
+            kind,
+            decision: "pass",
+            requester_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action: retention::ACTION_DELETE,
+            bound_refs: &[chunk_test_ref(kind, label)],
+            retained_refs: &[],
+            remote_refs,
+            is_reference_index_complete,
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("store retention admission")
+        .admission_ref
     }
 
     fn chunk_test_ref(kind: &str, label: &str) -> String {

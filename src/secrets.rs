@@ -1321,6 +1321,7 @@ pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
         policy_refs: &policy_refs,
         evidence_refs: &evidence_refs,
         has_delete_authority: true,
+        has_remote_gc_clearance: true,
     })?;
     let cleanup_tombstone_ref = cleanup_retention
         .receipt

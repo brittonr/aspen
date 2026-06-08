@@ -9,6 +9,7 @@ use crate::bounded::VecSink;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::RETENTION_CLASS_SCHEMA;
+use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
 use crate::preserves_rail::RETENTION_PIN_SCHEMA;
 use crate::preserves_rail::RETENTION_RECEIPT_SCHEMA;
 use crate::preserves_rail::RETENTION_REFERENCE_INDEX_SCHEMA;
@@ -57,8 +58,15 @@ pub const ACTION_TOMBSTONE: &str = "tombstone";
 pub const ACTION_REDACT: &str = "redact";
 pub const ACTION_COMPACT: &str = "compact";
 
+pub const ADMISSION_KIND_POLICY: &str = "policy";
+pub const ADMISSION_KIND_AUTHORITY: &str = "authority";
+pub const ADMISSION_KIND_SUPPORTING_EVIDENCE: &str = "supporting-evidence";
+pub const ADMISSION_KIND_REFERENCE_INDEX: &str = "reference-index";
+pub const ADMISSION_KIND_REMOTE_GC: &str = "remote-gc";
+
 const STORE_DIR: &str = "retention";
 const PIN_DIR: &str = "pins";
+const ADMISSION_DIR: &str = "admissions";
 const RECEIPT_DIR: &str = "receipts";
 const TOMBSTONE_DIR: &str = "tombstones";
 const MAX_RETENTION_REFS: usize = 4096;
@@ -180,6 +188,7 @@ pub struct RetentionEvaluationInput<'a> {
     pub policy_refs: &'a [String],
     pub evidence_refs: &'a [String],
     pub has_delete_authority: bool,
+    pub has_remote_gc_clearance: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -190,7 +199,65 @@ pub struct DestructiveRetentionEvidence {
     pub evidence_refs: Vec<String>,
     pub retained_refs: Vec<String>,
     pub remote_refs: Vec<String>,
+    pub reference_index_refs: Vec<String>,
+    pub remote_gc_refs: Vec<String>,
     pub is_reference_index_complete: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionEvidenceAdmissionInput<'a> {
+    pub kind: &'a str,
+    pub decision: &'a str,
+    pub requester_ref: &'a str,
+    pub object_ref: &'a str,
+    pub object_kind: &'a str,
+    pub retention_class: &'a str,
+    pub action: &'a str,
+    pub bound_refs: &'a [String],
+    pub retained_refs: &'a [String],
+    pub remote_refs: &'a [String],
+    pub is_reference_index_complete: bool,
+    pub is_current: bool,
+    pub revoked_refs: &'a [String],
+    pub diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionEvidenceAdmission {
+    pub admission_ref: String,
+    pub kind: String,
+    pub decision: String,
+    pub requester_ref: String,
+    pub object_ref: String,
+    pub object_kind: String,
+    pub retention_class: String,
+    pub action: String,
+    pub bound_refs: Vec<String>,
+    pub retained_refs: Vec<String>,
+    pub remote_refs: Vec<String>,
+    pub is_reference_index_complete: bool,
+    pub is_current: bool,
+    pub revoked_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DestructiveRetentionAdmission {
+    pub decision: String,
+    pub diagnostics: Vec<String>,
+    pub admitted_refs: Vec<String>,
+    pub has_delete_authority: bool,
+    pub has_remote_gc_clearance: bool,
+}
+
+pub struct DestructiveRetentionAdmissionInput<'a> {
+    pub root: &'a Path,
+    pub evidence: &'a DestructiveRetentionEvidence,
+    pub object_ref: &'a str,
+    pub object_kind: &'a str,
+    pub retention_class: &'a str,
+    pub action: &'a str,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -560,6 +627,346 @@ pub fn evaluate_retention(input: RetentionEvaluationInput<'_>) -> Result<Retenti
     })
 }
 
+pub fn retention_evidence_admission_value(input: &RetentionEvidenceAdmissionInput<'_>) -> Result<IOValue> {
+    validate_evidence_admission_input(input)?;
+    Ok(record("retention-evidence-admission-v1", vec![
+        string(RETENTION_EVIDENCE_ADMISSION_SCHEMA),
+        record("kind", vec![string(input.kind)]),
+        record("decision", vec![string(input.decision)]),
+        record("requester", vec![string(input.requester_ref)]),
+        object_value(input.object_ref, input.object_kind),
+        record("class", vec![string(input.retention_class)]),
+        record("action", vec![string(input.action)]),
+        record("bound", vec![strings_sequence(input.bound_refs)]),
+        record("retained", vec![strings_sequence(input.retained_refs)]),
+        record("remote", vec![strings_sequence(input.remote_refs)]),
+        record("reference-index-complete", vec![string(pass_or_deny(input.is_reference_index_complete))]),
+        record("current", vec![string(pass_or_deny(input.is_current))]),
+        record("revoked", vec![strings_sequence(input.revoked_refs)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        checks_value(&[
+            ("canonical-ref-binding", "pass"),
+            ("scope-bound", "pass"),
+            ("typed-admission", "pass"),
+            ("non-authority-evidence-separated", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_evidence_admission(value: &IOValue) -> Result<RetentionEvidenceAdmission> {
+    let fields = value
+        .collect_simple_record("retention-evidence-admission-v1", Some(15))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-evidence-admission-v1 ...>"))?;
+    require_schema(&fields[0], RETENTION_EVIDENCE_ADMISSION_SCHEMA, "retention evidence admission schema")?;
+    let kind = record_string(&fields[1], "kind")?;
+    validate_admission_kind(&kind)?;
+    let decision = record_string(&fields[2], "decision")?;
+    validate_decision(&decision)?;
+    let requester_ref = record_ref(&fields[3], "requester")?;
+    let (object_ref, object_kind) = parse_object_value(&fields[4])?;
+    let retention_class = record_string(&fields[5], "class")?;
+    validate_retention_class(&retention_class)?;
+    let action = record_string(&fields[6], "action")?;
+    validate_action(&action)?;
+    let bound_refs = record_ref_sequence(&fields[7], "bound")?;
+    let retained_refs = record_ref_sequence(&fields[8], "retained")?;
+    let remote_refs = record_ref_sequence(&fields[9], "remote")?;
+    let is_reference_index_complete = record_pass_bool(&fields[10], "reference-index-complete")?;
+    let is_current = record_pass_bool(&fields[11], "current")?;
+    let revoked_refs = record_ref_sequence(&fields[12], "revoked")?;
+    let diagnostics = record_string_sequence(&fields[13], "diagnostics")?;
+    require_check(&parse_checks(&fields[14])?, "typed-admission", "retention evidence admission")?;
+    Ok(RetentionEvidenceAdmission {
+        admission_ref: canonical_hash(value)?,
+        kind,
+        decision,
+        requester_ref,
+        object_ref,
+        object_kind,
+        retention_class,
+        action,
+        bound_refs,
+        retained_refs,
+        remote_refs,
+        is_reference_index_complete,
+        is_current,
+        revoked_refs,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
+pub fn store_retention_evidence_admission(
+    root: &Path,
+    input: &RetentionEvidenceAdmissionInput<'_>,
+) -> Result<RetentionEvidenceAdmission> {
+    ensure_store(root)?;
+    let value = retention_evidence_admission_value(input)?;
+    let admission = parse_retention_evidence_admission(&value)?;
+    write_store_value(&admission_path(root, &admission.admission_ref)?, &admission.value)?;
+    Ok(admission)
+}
+
+struct AdmissionScope<'a> {
+    requester_ref: Option<&'a str>,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+    action: &'a str,
+}
+
+struct AdmissionRefsInput<'a> {
+    root: &'a Path,
+    refs: &'a [String],
+    expected_kind: &'a str,
+    scope: &'a AdmissionScope<'a>,
+    required_remote_refs: &'a [String],
+}
+
+struct AdmissionRefsResult {
+    diagnostics: Vec<String>,
+    admitted_refs: Vec<String>,
+    remote_refs: Vec<String>,
+}
+
+fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsResult> {
+    let mut diagnostics = Vec::new();
+    let mut admitted_refs = Vec::new();
+    let mut remote_refs = Vec::new();
+    let mut scope_mismatches = 0usize;
+    for reference in input.refs {
+        let admission = match read_retention_evidence_admission(input.root, reference) {
+            Ok(admission) => admission,
+            Err(error) => {
+                push_bounded(
+                    &mut diagnostics,
+                    format!("{}-admission-unreadable:{}:{}", input.expected_kind, reference, error),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention admission diagnostics",
+                )?;
+                continue;
+            }
+        };
+        let mut is_admitted = true;
+        if admission.admission_ref != *reference {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("{}-admission-ref-mismatch:{}", input.expected_kind, reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention admission diagnostics",
+            )?;
+        }
+        if admission.kind != input.expected_kind {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("{}-admission-kind-mismatch:{}", input.expected_kind, reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention admission diagnostics",
+            )?;
+        }
+        if admission.decision != "pass" {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("{}-admission-not-pass:{}", input.expected_kind, reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention admission diagnostics",
+            )?;
+        }
+        if !admission.is_current {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("{}-admission-stale:{}", input.expected_kind, reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention admission diagnostics",
+            )?;
+        }
+        if !admission.revoked_refs.is_empty() {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("{}-admission-revoked:{}", input.expected_kind, reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention admission diagnostics",
+            )?;
+        }
+        if admission.bound_refs.is_empty() {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("{}-admission-empty-bound-refs:{}", input.expected_kind, reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention admission diagnostics",
+            )?;
+        }
+        if input.scope.requester_ref != Some(admission.requester_ref.as_str()) {
+            is_admitted = false;
+            scope_mismatches += 1;
+        }
+        if admission.object_ref != input.scope.object_ref || admission.object_kind != input.scope.object_kind {
+            is_admitted = false;
+            scope_mismatches += 1;
+        }
+        if admission.retention_class != input.scope.retention_class {
+            is_admitted = false;
+            scope_mismatches += 1;
+        }
+        if admission.action != input.scope.action {
+            is_admitted = false;
+            scope_mismatches += 1;
+        }
+        if input.expected_kind == ADMISSION_KIND_REFERENCE_INDEX && !admission.is_reference_index_complete {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("reference-index-admission-incomplete:{}", reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention admission diagnostics",
+            )?;
+        }
+        if input.expected_kind == ADMISSION_KIND_REMOTE_GC {
+            for required in input.required_remote_refs {
+                if !admission.remote_refs.iter().any(|remote| remote == required) {
+                    is_admitted = false;
+                    push_bounded(
+                        &mut diagnostics,
+                        format!("remote-gc-admission-missing-remote:{}:{}", reference, required),
+                        MAX_RETENTION_DIAGNOSTICS,
+                        "retention admission diagnostics",
+                    )?;
+                }
+            }
+        }
+        if is_admitted {
+            push_bounded(&mut admitted_refs, admission.admission_ref, MAX_RETENTION_REFS, "retention admitted refs")?;
+            for remote_ref in admission.remote_refs {
+                push_bounded(&mut remote_refs, remote_ref, MAX_RETENTION_REFS, "retention admitted remote refs")?;
+            }
+        }
+    }
+    if !input.refs.is_empty() && admitted_refs.is_empty() && scope_mismatches > 0 {
+        push_bounded(
+            &mut diagnostics,
+            format!("{}-admission-scope-mismatch", input.expected_kind),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention admission diagnostics",
+        )?;
+    }
+    Ok(AdmissionRefsResult {
+        diagnostics,
+        admitted_refs,
+        remote_refs,
+    })
+}
+
+fn read_retention_evidence_admission(root: &Path, admission_ref: &str) -> Result<RetentionEvidenceAdmission> {
+    require_ref(admission_ref, "retention evidence admission ref")?;
+    let value = read_store_value(&admission_path(root, admission_ref)?)?;
+    parse_retention_evidence_admission(&value)
+}
+
+pub fn admit_destructive_retention_evidence(
+    input: DestructiveRetentionAdmissionInput<'_>,
+) -> Result<DestructiveRetentionAdmission> {
+    ensure_store(input.root)?;
+    validate_destructive_retention_evidence(input.evidence)?;
+    require_ref(input.object_ref, "retention admission object ref")?;
+    validate_name(input.object_kind, "retention admission object kind")?;
+    validate_retention_class(input.retention_class)?;
+    validate_action(input.action)?;
+    let mut diagnostics = destructive_retention_evidence_diagnostics(input.evidence, input.action)?;
+    let mut admitted_refs = Vec::new();
+    let scope = AdmissionScope {
+        requester_ref: input.evidence.requester_ref.as_deref(),
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+    };
+    let policy = admit_evidence_refs(AdmissionRefsInput {
+        root: input.root,
+        refs: &input.evidence.policy_refs,
+        expected_kind: ADMISSION_KIND_POLICY,
+        scope: &scope,
+        required_remote_refs: &[],
+    })?;
+    let authority = admit_evidence_refs(AdmissionRefsInput {
+        root: input.root,
+        refs: &input.evidence.authority_refs,
+        expected_kind: ADMISSION_KIND_AUTHORITY,
+        scope: &scope,
+        required_remote_refs: &[],
+    })?;
+    let supporting = admit_evidence_refs(AdmissionRefsInput {
+        root: input.root,
+        refs: &input.evidence.evidence_refs,
+        expected_kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+        scope: &scope,
+        required_remote_refs: &[],
+    })?;
+    let reference_index = admit_evidence_refs(AdmissionRefsInput {
+        root: input.root,
+        refs: &input.evidence.reference_index_refs,
+        expected_kind: ADMISSION_KIND_REFERENCE_INDEX,
+        scope: &scope,
+        required_remote_refs: &[],
+    })?;
+    let remote_gc = admit_evidence_refs(AdmissionRefsInput {
+        root: input.root,
+        refs: &input.evidence.remote_gc_refs,
+        expected_kind: ADMISSION_KIND_REMOTE_GC,
+        scope: &scope,
+        required_remote_refs: &input.evidence.remote_refs,
+    })?;
+    let has_policy_admission = !policy.admitted_refs.is_empty();
+    let has_authority_admission = !authority.admitted_refs.is_empty();
+    let has_supporting_admission = !supporting.admitted_refs.is_empty();
+    let has_reference_index_admission = !reference_index.admitted_refs.is_empty();
+    for diagnostic in policy
+        .diagnostics
+        .into_iter()
+        .chain(authority.diagnostics)
+        .chain(supporting.diagnostics)
+        .chain(reference_index.diagnostics)
+        .chain(remote_gc.diagnostics)
+    {
+        push_bounded(&mut diagnostics, diagnostic, MAX_RETENTION_DIAGNOSTICS, "retention admission diagnostics")?;
+    }
+    for reference in policy
+        .admitted_refs
+        .into_iter()
+        .chain(authority.admitted_refs)
+        .chain(supporting.admitted_refs)
+        .chain(reference_index.admitted_refs)
+        .chain(remote_gc.admitted_refs.clone())
+    {
+        push_bounded(&mut admitted_refs, reference, MAX_RETENTION_REFS, "retention admitted refs")?;
+    }
+    let has_remote_refs_clearance = input.evidence.remote_refs.is_empty()
+        || input
+            .evidence
+            .remote_refs
+            .iter()
+            .all(|reference| remote_gc.remote_refs.iter().any(|remote| remote == reference));
+    let has_delete_authority = is_destructive_action(input.action)
+        && has_authority_admission
+        && has_policy_admission
+        && has_supporting_admission
+        && (!input.evidence.is_reference_index_complete || has_reference_index_admission)
+        && has_remote_refs_clearance;
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    Ok(DestructiveRetentionAdmission {
+        decision: decision.to_string(),
+        diagnostics,
+        admitted_refs,
+        has_delete_authority,
+        has_remote_gc_clearance: has_remote_refs_clearance,
+    })
+}
+
 pub fn destructive_retention_requester_ref(
     input: &DestructiveRetentionEvidence,
     fallback_label: &str,
@@ -584,7 +991,9 @@ pub fn validate_destructive_retention_evidence(input: &DestructiveRetentionEvide
     validate_refs(&input.authority_refs, "retention authority ref")?;
     validate_refs(&input.evidence_refs, "retention evidence ref")?;
     validate_refs(&input.retained_refs, "retention retained ref")?;
-    validate_refs(&input.remote_refs, "retention remote ref")
+    validate_refs(&input.remote_refs, "retention remote ref")?;
+    validate_refs(&input.reference_index_refs, "retention reference-index ref")?;
+    validate_refs(&input.remote_gc_refs, "retention remote-gc ref")
 }
 
 pub fn destructive_retention_evidence_diagnostics(
@@ -634,6 +1043,14 @@ pub fn destructive_retention_evidence_diagnostics(
             "retention destructive evidence diagnostics",
         )?;
     }
+    if is_destructive_action(action) && input.is_reference_index_complete && input.reference_index_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "reference-index-evidence-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention destructive evidence diagnostics",
+        )?;
+    }
     if !input.retained_refs.is_empty() {
         push_bounded(
             &mut diagnostics,
@@ -642,10 +1059,10 @@ pub fn destructive_retention_evidence_diagnostics(
             "retention destructive evidence diagnostics",
         )?;
     }
-    if is_destructive_action(action) && !input.remote_refs.is_empty() {
+    if is_destructive_action(action) && !input.remote_refs.is_empty() && input.remote_gc_refs.is_empty() {
         push_bounded(
             &mut diagnostics,
-            "remote-cache-refs-present".to_string(),
+            "remote-gc-evidence-missing".to_string(),
             MAX_RETENTION_DIAGNOSTICS,
             "retention destructive evidence diagnostics",
         )?;
@@ -663,12 +1080,16 @@ pub fn destructive_retention_evidence_value(input: &DestructiveRetentionEvidence
         record("evidence", vec![strings_sequence(&input.evidence_refs)]),
         record("retained", vec![strings_sequence(&input.retained_refs)]),
         record("remote", vec![strings_sequence(&input.remote_refs)]),
+        record("reference-index", vec![strings_sequence(&input.reference_index_refs)]),
+        record("remote-gc", vec![strings_sequence(&input.remote_gc_refs)]),
         record("reference-index-complete", vec![string(pass_or_deny(input.is_reference_index_complete))]),
         checks_value(&[
             ("requester-bound", pass_or_deny(input.requester_ref.is_some())),
             ("policy-bound", pass_or_deny(!input.policy_refs.is_empty())),
             ("authority-bound", pass_or_deny(!input.authority_refs.is_empty())),
             ("evidence-bound", pass_or_deny(!input.evidence_refs.is_empty())),
+            ("reference-index-bound", pass_or_deny(!input.reference_index_refs.is_empty())),
+            ("remote-gc-bound", pass_or_deny(input.remote_refs.is_empty() || !input.remote_gc_refs.is_empty())),
         ]),
     ]))
 }
@@ -774,6 +1195,20 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             index.is_complete
         ));
     }
+    if let Ok(admission) = parse_retention_evidence_admission(value) {
+        return Ok(format!(
+            "retention admission ref={} kind={} decision={} object={} class={} action={} current={} revoked={} diagnostics={}",
+            admission.admission_ref,
+            admission.kind,
+            admission.decision,
+            admission.object_ref,
+            admission.retention_class,
+            admission.action,
+            admission.is_current,
+            admission.revoked_refs.len(),
+            admission.diagnostics.join(",")
+        ));
+    }
     if let Ok(receipt) = parse_retention_receipt(value) {
         return Ok(format!(
             "retention receipt ref={} decision={} action={} object={} class={} pins={} tombstone={} diagnostics={}",
@@ -843,6 +1278,7 @@ pub fn run_fixture(out: &Path) -> Result<Vec<(String, IOValue)>> {
         policy_refs: &policy_refs,
         evidence_refs: &evidence_refs,
         has_delete_authority: true,
+        has_remote_gc_clearance: true,
     })?;
     let unpin = unpin_object(UnpinObjectInput {
         root: &root,
@@ -865,6 +1301,7 @@ pub fn run_fixture(out: &Path) -> Result<Vec<(String, IOValue)>> {
         policy_refs: &policy_refs,
         evidence_refs: &evidence_refs,
         has_delete_authority: true,
+        has_remote_gc_clearance: true,
     })?;
     let mut artifacts = Vec::new();
     push_named(&mut artifacts, "retention-class.preserves", class)?;
@@ -1014,7 +1451,7 @@ fn retention_diagnostics(input: &RetentionEvaluationInput<'_>, index: &Retention
             "retention diagnostics",
         )?;
     }
-    if is_destructive_action(input.action) && !input.remote_refs.is_empty() {
+    if is_destructive_action(input.action) && !input.remote_refs.is_empty() && !input.has_remote_gc_clearance {
         push_bounded(
             &mut diagnostics,
             "remote-cache-refs-present".to_string(),
@@ -1152,8 +1589,40 @@ fn validate_action(value: &str) -> Result<()> {
     }
 }
 
+fn validate_admission_kind(value: &str) -> Result<()> {
+    if ADMISSION_KINDS.iter().any(|kind| kind == &value) {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("unsupported retention admission kind {value}")))
+    }
+}
+
+fn validate_decision(value: &str) -> Result<()> {
+    if matches!(value, "pass" | "deny") {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("unsupported retention admission decision {value}")))
+    }
+}
+
+fn validate_evidence_admission_input(input: &RetentionEvidenceAdmissionInput<'_>) -> Result<()> {
+    validate_admission_kind(input.kind)?;
+    validate_decision(input.decision)?;
+    require_ref(input.requester_ref, "retention admission requester ref")?;
+    require_ref(input.object_ref, "retention admission object ref")?;
+    validate_name(input.object_kind, "retention admission object kind")?;
+    validate_retention_class(input.retention_class)?;
+    validate_action(input.action)?;
+    validate_refs(input.bound_refs, "retention admission bound ref")?;
+    validate_refs(input.retained_refs, "retention admission retained ref")?;
+    validate_refs(input.remote_refs, "retention admission remote ref")?;
+    validate_refs(input.revoked_refs, "retention admission revoked ref")?;
+    ensure_count_at_most(input.diagnostics.len(), MAX_RETENTION_DIAGNOSTICS, "retention admission diagnostics")
+}
+
 fn ensure_store(root: &Path) -> Result<()> {
     fs::create_dir_all(pins_dir(root)).map_err(MoltenError::from)?;
+    fs::create_dir_all(admissions_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(receipts_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(tombstones_dir(root)).map_err(MoltenError::from)
 }
@@ -1208,6 +1677,10 @@ fn pins_dir(root: &Path) -> PathBuf {
     store_dir(root).join(PIN_DIR)
 }
 
+fn admissions_dir(root: &Path) -> PathBuf {
+    store_dir(root).join(ADMISSION_DIR)
+}
+
 fn receipts_dir(root: &Path) -> PathBuf {
     store_dir(root).join(RECEIPT_DIR)
 }
@@ -1218,6 +1691,10 @@ fn tombstones_dir(root: &Path) -> PathBuf {
 
 fn pin_path(root: &Path, pin_ref: &str) -> Result<PathBuf> {
     Ok(pins_dir(root).join(format!("{}.preserves", ref_file_name(pin_ref)?)))
+}
+
+fn admission_path(root: &Path, admission_ref: &str) -> Result<PathBuf> {
+    Ok(admissions_dir(root).join(format!("{}.preserves", ref_file_name(admission_ref)?)))
 }
 
 fn receipt_path(root: &Path, receipt_ref: &str) -> Result<PathBuf> {
@@ -1395,6 +1872,14 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {label}: {error}")))
 }
 
+fn record_pass_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
+    match record_string(value, label)?.as_str() {
+        "pass" => Ok(true),
+        "deny" => Ok(false),
+        other => Err(MoltenError::invalid_harness(format!("expected pass or deny for {label}, got {other}"))),
+    }
+}
+
 fn require_schema(value: &Value<IOValue>, expected: &str, label: &str) -> Result<()> {
     let actual = required_string(value, label)?;
     if actual == expected {
@@ -1504,6 +1989,14 @@ const RETENTION_ACTIONS: &[&str] = &[
     ACTION_COMPACT,
 ];
 
+const ADMISSION_KINDS: &[&str] = &[
+    ADMISSION_KIND_POLICY,
+    ADMISSION_KIND_AUTHORITY,
+    ADMISSION_KIND_SUPPORTING_EVIDENCE,
+    ADMISSION_KIND_REFERENCE_INDEX,
+    ADMISSION_KIND_REMOTE_GC,
+];
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -1548,6 +2041,7 @@ mod tests {
             policy_refs: &policy_refs,
             evidence_refs: &evidence_refs,
             has_delete_authority: true,
+            has_remote_gc_clearance: true,
         })
         .expect("deny delete");
         assert_eq!(denied.receipt.decision, "deny");
@@ -1575,6 +2069,7 @@ mod tests {
             policy_refs: &policy_refs,
             evidence_refs: &evidence_refs,
             has_delete_authority: true,
+            has_remote_gc_clearance: true,
         })
         .expect("allow tombstone");
         assert_eq!(allowed.receipt.decision, "pass");
@@ -1600,6 +2095,7 @@ mod tests {
             policy_refs: &policy_refs,
             evidence_refs: &[],
             has_delete_authority: true,
+            has_remote_gc_clearance: true,
         })
         .expect("incomplete deny")
         .receipt;
@@ -1627,6 +2123,7 @@ mod tests {
             policy_refs: &policy_refs,
             evidence_refs: &[],
             has_delete_authority: true,
+            has_remote_gc_clearance: true,
         })
         .expect("retained deny");
         assert_eq!(retained.receipt.decision, "deny");
@@ -1643,6 +2140,7 @@ mod tests {
             policy_refs: &policy_refs,
             evidence_refs: &[],
             has_delete_authority: true,
+            has_remote_gc_clearance: true,
         })
         .expect("legal deny");
         assert_eq!(legal.receipt.decision, "deny");
@@ -1668,6 +2166,7 @@ mod tests {
             policy_refs: &policy_refs,
             evidence_refs: &evidence_refs,
             has_delete_authority: true,
+            has_remote_gc_clearance: true,
         })
         .expect("redact");
         let tombstone = evaluation.tombstone.expect("tombstone");
@@ -1701,6 +2200,7 @@ mod tests {
                 policy_refs: &policy_refs,
                 evidence_refs: &evidence_refs,
                 has_delete_authority: true,
+                has_remote_gc_clearance: true,
             })
             .expect("evaluate");
             if count == 0 {
@@ -1709,6 +2209,292 @@ mod tests {
                 assert_eq!(evaluation.receipt.decision, "deny");
             }
         }
+    }
+
+    #[test]
+    fn destructive_admission_rejects_forged_and_mismatched_refs() {
+        let root = temp_dir("retention-admission-forged");
+        let requester_ref = fake_ref("requester");
+        let object_ref = fake_ref("object");
+        let wrong_object_ref = fake_ref("wrong-object");
+        let wrong_policy = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_POLICY,
+            label: "wrong-policy",
+            requester_ref: &requester_ref,
+            object_ref: &wrong_object_ref,
+            object_kind: "artifact",
+            retention_class: CLASS_PUBLIC_ARTIFACT,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let evidence = DestructiveRetentionEvidence {
+            requester_ref: Some(requester_ref),
+            policy_refs: vec![wrong_policy],
+            authority_refs: vec![fake_ref("forged-authority")],
+            evidence_refs: vec![fake_ref("forged-evidence")],
+            retained_refs: Vec::new(),
+            remote_refs: Vec::new(),
+            reference_index_refs: vec![fake_ref("forged-index")],
+            remote_gc_refs: Vec::new(),
+            is_reference_index_complete: true,
+        };
+        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &evidence,
+            object_ref: &object_ref,
+            object_kind: "artifact",
+            retention_class: CLASS_PUBLIC_ARTIFACT,
+            action: ACTION_DELETE,
+        })
+        .expect("admission denial");
+        assert_eq!(admission.decision, "deny");
+        assert!(!admission.has_delete_authority);
+        assert!(admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("scope-mismatch")));
+        assert!(admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("unreadable")));
+    }
+
+    #[test]
+    fn destructive_admission_rejects_stale_and_revoked_refs() {
+        let root = temp_dir("retention-admission-stale");
+        let requester_ref = fake_ref("requester");
+        let object_ref = fake_ref("object");
+        let stale_authority = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_AUTHORITY,
+            label: "stale-authority",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "artifact",
+            retention_class: CLASS_PUBLIC_ARTIFACT,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: false,
+            revoked_refs: &[fake_ref("revocation")],
+        });
+        let policy = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_POLICY,
+            label: "policy",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "artifact",
+            retention_class: CLASS_PUBLIC_ARTIFACT,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let support = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label: "support",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "artifact",
+            retention_class: CLASS_PUBLIC_ARTIFACT,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let index = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REFERENCE_INDEX,
+            label: "index",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "artifact",
+            retention_class: CLASS_PUBLIC_ARTIFACT,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let evidence = DestructiveRetentionEvidence {
+            requester_ref: Some(requester_ref),
+            policy_refs: vec![policy],
+            authority_refs: vec![stale_authority],
+            evidence_refs: vec![support],
+            retained_refs: Vec::new(),
+            remote_refs: Vec::new(),
+            reference_index_refs: vec![index],
+            remote_gc_refs: Vec::new(),
+            is_reference_index_complete: true,
+        };
+        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &evidence,
+            object_ref: &object_ref,
+            object_kind: "artifact",
+            retention_class: CLASS_PUBLIC_ARTIFACT,
+            action: ACTION_DELETE,
+        })
+        .expect("admission denial");
+        assert_eq!(admission.decision, "deny");
+        assert!(admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale")));
+        assert!(admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("revoked")));
+    }
+
+    #[test]
+    fn destructive_admission_accepts_matching_remote_gc_refs() {
+        let root = temp_dir("retention-admission-remote");
+        let requester_ref = fake_ref("requester");
+        let object_ref = fake_ref("object");
+        let remote_refs = vec![fake_ref("remote-cache")];
+        let policy = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_POLICY,
+            label: "policy",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let authority = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_AUTHORITY,
+            label: "authority",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let support = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label: "support",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let index = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REFERENCE_INDEX,
+            label: "index",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let remote_gc = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REMOTE_GC,
+            label: "remote-gc",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &remote_refs,
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let evidence = DestructiveRetentionEvidence {
+            requester_ref: Some(requester_ref.clone()),
+            policy_refs: vec![policy],
+            authority_refs: vec![authority],
+            evidence_refs: vec![support],
+            retained_refs: Vec::new(),
+            remote_refs: remote_refs.clone(),
+            reference_index_refs: vec![index],
+            remote_gc_refs: vec![remote_gc],
+            is_reference_index_complete: true,
+        };
+        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &evidence,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("admission pass");
+        assert_eq!(admission.decision, "pass");
+        assert!(admission.has_delete_authority);
+        assert!(admission.has_remote_gc_clearance);
+        let evaluation = evaluate_retention(RetentionEvaluationInput {
+            root: &root,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            requester_ref: &requester_ref,
+            is_reference_index_complete: true,
+            retained_refs: &[],
+            remote_refs: &remote_refs,
+            policy_refs: &evidence.policy_refs,
+            evidence_refs: &evidence.evidence_refs,
+            has_delete_authority: admission.has_delete_authority,
+            has_remote_gc_clearance: admission.has_remote_gc_clearance,
+        })
+        .expect("evaluate remote clearance");
+        assert_eq!(evaluation.receipt.decision, "pass");
+    }
+
+    struct TestAdmissionInput<'a> {
+        root: &'a std::path::Path,
+        kind: &'a str,
+        label: &'a str,
+        requester_ref: &'a str,
+        object_ref: &'a str,
+        object_kind: &'a str,
+        retention_class: &'a str,
+        action: &'a str,
+        remote_refs: &'a [String],
+        is_reference_index_complete: bool,
+        is_current: bool,
+        revoked_refs: &'a [String],
+    }
+
+    fn store_test_admission(input: TestAdmissionInput<'_>) -> String {
+        store_retention_evidence_admission(input.root, &RetentionEvidenceAdmissionInput {
+            kind: input.kind,
+            decision: "pass",
+            requester_ref: input.requester_ref,
+            object_ref: input.object_ref,
+            object_kind: input.object_kind,
+            retention_class: input.retention_class,
+            action: input.action,
+            bound_refs: &[fake_ref(input.label)],
+            retained_refs: &[],
+            remote_refs: input.remote_refs,
+            is_reference_index_complete: input.is_reference_index_complete,
+            is_current: input.is_current,
+            revoked_refs: input.revoked_refs,
+            diagnostics: &[],
+        })
+        .expect("store test admission")
+        .admission_ref
     }
 
     fn fake_ref(label: &str) -> String {

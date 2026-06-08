@@ -278,16 +278,22 @@ molten test retention pin --root target/retention-store \
   --policy-ref blake3:policy --evidence-ref blake3:evidence \
   --pin-out target/retention.pin.preserves \
   --receipt-out target/retention.pin-receipt.preserves
+molten test retention admit --root target/retention-store \
+  --kind authority --requester-ref blake3:owner \
+  --object-ref blake3:object --object-kind encrypted-ref \
+  --retention-class private-secret-ref --action delete \
+  --bound-ref blake3:authority-grant --reference-index-complete \
+  --out target/retention.authority-admission.preserves
 molten test retention check --root target/retention-store \
   --object-ref blake3:object --object-kind encrypted-ref \
   --retention-class private-secret-ref --action delete \
   --requester-ref blake3:owner --reference-index-complete true \
   --policy-ref blake3:policy --evidence-ref blake3:evidence \
-  --has-delete-authority true \
+  --has-delete-authority true --remote-gc-clearance \
   --receipt-out target/retention.delete.preserves
 ```
 
-Pinned objects, legal holds, retained receipt dependencies, remote/cache uncertainty, incomplete reference indexes, and missing requester/policy/authority/supporting evidence all deny before destructive side effects. Evidence-ledger GC, chunk-store GC, evaluation-cache invalidation, and secret cleanup bind retention receipts before removing content or writing tombstones; denial leaves content intact and emits auditable subsystem receipts. Ledger GC, chunk GC, and cache invalidation accept explicit `--retention-requester`, `--retention-policy-ref`, `--retention-authority-ref`, `--retention-evidence-ref`, `--retention-retained-ref`, `--retention-remote-ref`, and `--retention-reference-index-complete` inputs; apply-mode candidates without those inputs fail closed. Passing destructive actions emit retention receipts and tombstone/redaction metadata that preserve audit context without leaking private content. Retention receipts are deletion-safety evidence only and do not grant authority, provenance, transport, policy, resource, or execution trust.
+Pinned objects, legal holds, retained receipt dependencies, remote/cache uncertainty, incomplete reference indexes, and missing requester/policy/authority/supporting evidence all deny before destructive side effects. Evidence-ledger GC, chunk-store GC, evaluation-cache invalidation, and secret cleanup bind retention receipts before removing content or writing tombstones; denial leaves content intact and emits auditable subsystem receipts. Ledger GC, chunk GC, and cache invalidation accept explicit `--retention-requester`, `--retention-policy-ref`, `--retention-authority-ref`, `--retention-evidence-ref`, `--retention-retained-ref`, `--retention-remote-ref`, `--retention-reference-index-ref`, `--retention-remote-gc-ref`, and `--retention-reference-index-complete` inputs; apply-mode candidates without matching local `retention-evidence-admission-v1` receipts fail closed. Admission receipts bind requester, object, class, action, evidence kind, current/revoked state, reference-index proof, and remote-GC clearance before mutation. Passing destructive actions emit retention receipts and tombstone/redaction metadata that preserve audit context without leaking private content. Retention receipts are deletion-safety evidence only and do not grant authority, provenance, transport, policy, resource, or execution trust.
 
 ## Supply-chain provenance diagnostics
 
