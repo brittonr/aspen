@@ -4086,9 +4086,11 @@ mod tests {
             authority_refs,
             evidence_refs,
             retained_refs: Vec::new(),
+            remote_peer_refs: Vec::new(),
             remote_refs: Vec::new(),
             reference_index_refs,
             remote_gc_refs: Vec::new(),
+            remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
         }
     }

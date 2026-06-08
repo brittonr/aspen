@@ -1224,12 +1224,16 @@ struct RetentionEvidenceArgs {
     evidence_refs: Vec<String>,
     #[arg(long = "retention-retained-ref")]
     retained_refs: Vec<String>,
+    #[arg(long = "retention-remote-peer-ref")]
+    remote_peer_refs: Vec<String>,
     #[arg(long = "retention-remote-ref")]
     remote_refs: Vec<String>,
     #[arg(long = "retention-reference-index-ref")]
     reference_index_refs: Vec<String>,
     #[arg(long = "retention-remote-gc-ref")]
     remote_gc_refs: Vec<String>,
+    #[arg(long = "retention-remote-clearance-ref")]
+    remote_clearance_refs: Vec<String>,
     #[arg(long = "retention-reference-index-complete")]
     is_reference_index_complete: bool,
 }
@@ -1242,14 +1246,17 @@ impl RetentionEvidenceArgs {
             authority_refs: self.authority_refs,
             evidence_refs: self.evidence_refs,
             retained_refs: self.retained_refs,
+            remote_peer_refs: self.remote_peer_refs,
             remote_refs: self.remote_refs,
             reference_index_refs: self.reference_index_refs,
             remote_gc_refs: self.remote_gc_refs,
+            remote_clearance_refs: self.remote_clearance_refs,
             is_reference_index_complete: self.is_reference_index_complete,
         }
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Subcommand)]
 enum LedgerCommand {
     Import {
@@ -2666,6 +2673,42 @@ enum RetentionCommand {
         remote_refs: Vec<String>,
         #[arg(long = "reference-index-complete")]
         is_reference_index_complete: bool,
+        #[arg(long = "stale")]
+        is_stale: bool,
+        #[arg(long = "revoked-ref")]
+        revoked_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    RemoteClearance {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        requester_ref: String,
+        #[arg(long)]
+        peer_ref: String,
+        #[arg(long)]
+        object_ref: String,
+        #[arg(long)]
+        object_kind: String,
+        #[arg(long)]
+        retention_class: String,
+        #[arg(long)]
+        action: String,
+        #[arg(long)]
+        remote_ref: String,
+        #[arg(long)]
+        policy_ref: String,
+        #[arg(long)]
+        authority_ref: String,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long = "retained-ref")]
+        retained_refs: Vec<String>,
         #[arg(long = "stale")]
         is_stale: bool,
         #[arg(long = "revoked-ref")]
@@ -6526,6 +6569,53 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
                 &format!(
                     "retention admission ref={} kind={} decision={}",
                     admission.admission_ref, admission.kind, admission.decision
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::RemoteClearance {
+            root,
+            decision,
+            requester_ref,
+            peer_ref,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            remote_ref,
+            policy_ref,
+            authority_ref,
+            evidence_refs,
+            retained_refs,
+            is_stale,
+            revoked_refs,
+            diagnostics,
+            out,
+        } => {
+            let clearance =
+                retention::store_retention_remote_gc_clearance(&root, &retention::RetentionRemoteGcClearanceInput {
+                    decision: &decision,
+                    requester_ref: &requester_ref,
+                    peer_ref: &peer_ref,
+                    object_ref: &object_ref,
+                    object_kind: &object_kind,
+                    retention_class: &retention_class,
+                    action: &action,
+                    remote_ref: &remote_ref,
+                    policy_ref: &policy_ref,
+                    authority_ref: &authority_ref,
+                    evidence_refs: &evidence_refs,
+                    retained_refs: &retained_refs,
+                    is_current: !is_stale,
+                    revoked_refs: &revoked_refs,
+                    diagnostics: &diagnostics,
+                })?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &clearance.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention remote clearance ref={} peer={} remote={} decision={}",
+                    clearance.clearance_ref, clearance.peer_ref, clearance.remote_ref, clearance.decision
                 ),
             );
             Ok(())
@@ -10450,6 +10540,32 @@ mod tests {
             artifact: admission_out,
         })
         .expect("show retention admission");
+        let clearance_out = dir.join("remote-clearance.preserves");
+        let remote_ref = cli_synthetic_ref("retention-remote").expect("remote ref");
+        run_retention_command(RetentionCommand::RemoteClearance {
+            root: root.clone(),
+            decision: "pass".to_string(),
+            requester_ref: owner_ref.clone(),
+            peer_ref: cli_synthetic_ref("retention-peer").expect("peer ref"),
+            object_ref: object_ref.clone(),
+            object_kind: "encrypted-ref".to_string(),
+            retention_class: retention::CLASS_PRIVATE_SECRET_REF.to_string(),
+            action: retention::ACTION_DELETE.to_string(),
+            remote_ref,
+            policy_ref: policy_ref.clone(),
+            authority_ref: authority_ref.clone(),
+            evidence_refs: vec![evidence_ref.clone()],
+            retained_refs: Vec::new(),
+            is_stale: false,
+            revoked_refs: Vec::new(),
+            diagnostics: Vec::new(),
+            out: Some(clearance_out.clone()),
+        })
+        .expect("retention remote clearance");
+        run_retention_command(RetentionCommand::Show {
+            artifact: clearance_out,
+        })
+        .expect("show retention remote clearance");
         let pin_out = dir.join("pin.preserves");
         let pin_receipt_out = dir.join("pin-receipt.preserves");
         run_retention_command(RetentionCommand::Pin {
@@ -11814,9 +11930,11 @@ mod tests {
             authority_refs: vec![test_ref(&format!("retention-authority-{label}"))],
             evidence_refs: vec![test_ref(&format!("retention-evidence-{label}"))],
             retained_refs: Vec::new(),
+            remote_peer_refs: Vec::new(),
             remote_refs: Vec::new(),
             reference_index_refs: Vec::new(),
             remote_gc_refs: Vec::new(),
+            remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
         }
     }
@@ -11859,9 +11977,11 @@ mod tests {
             authority_refs,
             evidence_refs,
             retained_refs: Vec::new(),
+            remote_peer_refs: Vec::new(),
             remote_refs: Vec::new(),
             reference_index_refs,
             remote_gc_refs: Vec::new(),
+            remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
         }
     }

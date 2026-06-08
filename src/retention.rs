@@ -13,6 +13,7 @@ use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
 use crate::preserves_rail::RETENTION_PIN_SCHEMA;
 use crate::preserves_rail::RETENTION_RECEIPT_SCHEMA;
 use crate::preserves_rail::RETENTION_REFERENCE_INDEX_SCHEMA;
+use crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_SCHEMA;
 use crate::preserves_rail::RETENTION_TOMBSTONE_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::parse_text;
@@ -67,6 +68,7 @@ pub const ADMISSION_KIND_REMOTE_GC: &str = "remote-gc";
 const STORE_DIR: &str = "retention";
 const PIN_DIR: &str = "pins";
 const ADMISSION_DIR: &str = "admissions";
+const REMOTE_CLEARANCE_DIR: &str = "remote-clearances";
 const RECEIPT_DIR: &str = "receipts";
 const TOMBSTONE_DIR: &str = "tombstones";
 const MAX_RETENTION_REFS: usize = 4096;
@@ -198,9 +200,11 @@ pub struct DestructiveRetentionEvidence {
     pub authority_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub retained_refs: Vec<String>,
+    pub remote_peer_refs: Vec<String>,
     pub remote_refs: Vec<String>,
     pub reference_index_refs: Vec<String>,
     pub remote_gc_refs: Vec<String>,
+    pub remote_clearance_refs: Vec<String>,
     pub is_reference_index_complete: bool,
 }
 
@@ -236,6 +240,46 @@ pub struct RetentionEvidenceAdmission {
     pub retained_refs: Vec<String>,
     pub remote_refs: Vec<String>,
     pub is_reference_index_complete: bool,
+    pub is_current: bool,
+    pub revoked_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionRemoteGcClearanceInput<'a> {
+    pub decision: &'a str,
+    pub requester_ref: &'a str,
+    pub peer_ref: &'a str,
+    pub object_ref: &'a str,
+    pub object_kind: &'a str,
+    pub retention_class: &'a str,
+    pub action: &'a str,
+    pub remote_ref: &'a str,
+    pub policy_ref: &'a str,
+    pub authority_ref: &'a str,
+    pub evidence_refs: &'a [String],
+    pub retained_refs: &'a [String],
+    pub is_current: bool,
+    pub revoked_refs: &'a [String],
+    pub diagnostics: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionRemoteGcClearance {
+    pub clearance_ref: String,
+    pub decision: String,
+    pub requester_ref: String,
+    pub peer_ref: String,
+    pub object_ref: String,
+    pub object_kind: String,
+    pub retention_class: String,
+    pub action: String,
+    pub remote_ref: String,
+    pub policy_ref: String,
+    pub authority_ref: String,
+    pub evidence_refs: Vec<String>,
+    pub retained_refs: Vec<String>,
     pub is_current: bool,
     pub revoked_refs: Vec<String>,
     pub diagnostics: Vec<String>,
@@ -707,6 +751,89 @@ pub fn store_retention_evidence_admission(
     Ok(admission)
 }
 
+pub fn retention_remote_gc_clearance_value(input: &RetentionRemoteGcClearanceInput<'_>) -> Result<IOValue> {
+    validate_remote_gc_clearance_input(input)?;
+    Ok(record("retention-remote-gc-clearance-v1", vec![
+        string(RETENTION_REMOTE_GC_CLEARANCE_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("requester", vec![string(input.requester_ref)]),
+        record("peer", vec![string(input.peer_ref)]),
+        object_value(input.object_ref, input.object_kind),
+        record("class", vec![string(input.retention_class)]),
+        record("action", vec![string(input.action)]),
+        record("remote", vec![string(input.remote_ref)]),
+        record("policy", vec![string(input.policy_ref)]),
+        record("authority", vec![string(input.authority_ref)]),
+        record("evidence", vec![strings_sequence(input.evidence_refs)]),
+        record("retained", vec![strings_sequence(input.retained_refs)]),
+        record("current", vec![string(pass_or_deny(input.is_current))]),
+        record("revoked", vec![strings_sequence(input.revoked_refs)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        checks_value(&[
+            ("canonical-ref-binding", "pass"),
+            ("peer-bound", "pass"),
+            ("scope-bound", "pass"),
+            ("remote-ref-bound", "pass"),
+            ("non-authority-evidence-separated", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_remote_gc_clearance(value: &IOValue) -> Result<RetentionRemoteGcClearance> {
+    let fields = value
+        .collect_simple_record("retention-remote-gc-clearance-v1", Some(16))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-v1 ...>"))?;
+    require_schema(&fields[0], RETENTION_REMOTE_GC_CLEARANCE_SCHEMA, "retention remote GC clearance schema")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    let requester_ref = record_ref(&fields[2], "requester")?;
+    let peer_ref = record_ref(&fields[3], "peer")?;
+    let (object_ref, object_kind) = parse_object_value(&fields[4])?;
+    let retention_class = record_string(&fields[5], "class")?;
+    validate_retention_class(&retention_class)?;
+    let action = record_string(&fields[6], "action")?;
+    validate_action(&action)?;
+    let remote_ref = record_ref(&fields[7], "remote")?;
+    let policy_ref = record_ref(&fields[8], "policy")?;
+    let authority_ref = record_ref(&fields[9], "authority")?;
+    let evidence_refs = record_ref_sequence(&fields[10], "evidence")?;
+    let retained_refs = record_ref_sequence(&fields[11], "retained")?;
+    let is_current = record_pass_bool(&fields[12], "current")?;
+    let revoked_refs = record_ref_sequence(&fields[13], "revoked")?;
+    let diagnostics = record_string_sequence(&fields[14], "diagnostics")?;
+    require_check(&parse_checks(&fields[15])?, "peer-bound", "retention remote GC clearance")?;
+    Ok(RetentionRemoteGcClearance {
+        clearance_ref: canonical_hash(value)?,
+        decision,
+        requester_ref,
+        peer_ref,
+        object_ref,
+        object_kind,
+        retention_class,
+        action,
+        remote_ref,
+        policy_ref,
+        authority_ref,
+        evidence_refs,
+        retained_refs,
+        is_current,
+        revoked_refs,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
+pub fn store_retention_remote_gc_clearance(
+    root: &Path,
+    input: &RetentionRemoteGcClearanceInput<'_>,
+) -> Result<RetentionRemoteGcClearance> {
+    ensure_store(root)?;
+    let value = retention_remote_gc_clearance_value(input)?;
+    let clearance = parse_retention_remote_gc_clearance(&value)?;
+    write_store_value(&remote_clearance_path(root, &clearance.clearance_ref)?, &clearance.value)?;
+    Ok(clearance)
+}
+
 struct AdmissionScope<'a> {
     requester_ref: Option<&'a str>,
     object_ref: &'a str,
@@ -727,6 +854,23 @@ struct AdmissionRefsResult {
     diagnostics: Vec<String>,
     admitted_refs: Vec<String>,
     remote_refs: Vec<String>,
+}
+
+struct RemoteClearanceRefsInput<'a> {
+    root: &'a Path,
+    refs: &'a [String],
+    scope: &'a AdmissionScope<'a>,
+    required_remote_refs: &'a [String],
+    required_peer_refs: &'a [String],
+    policy_refs: &'a [String],
+    authority_refs: &'a [String],
+}
+
+struct RemoteClearanceRefsResult {
+    diagnostics: Vec<String>,
+    admitted_refs: Vec<String>,
+    remote_refs: Vec<String>,
+    peer_refs: Vec<String>,
 }
 
 fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsResult> {
@@ -862,10 +1006,172 @@ fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsRes
     })
 }
 
+fn admit_remote_clearance_refs(input: RemoteClearanceRefsInput<'_>) -> Result<RemoteClearanceRefsResult> {
+    let mut diagnostics = Vec::new();
+    let mut admitted_refs = Vec::new();
+    let mut remote_refs = Vec::new();
+    let mut peer_refs = Vec::new();
+    let mut scope_mismatches = 0usize;
+    for reference in input.refs {
+        let clearance = match read_retention_remote_gc_clearance(input.root, reference) {
+            Ok(clearance) => clearance,
+            Err(error) => {
+                push_bounded(
+                    &mut diagnostics,
+                    format!("remote-clearance-unreadable:{}:{}", reference, error),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention remote clearance diagnostics",
+                )?;
+                continue;
+            }
+        };
+        let mut is_admitted = true;
+        if clearance.clearance_ref != *reference {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("remote-clearance-ref-mismatch:{}", reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention remote clearance diagnostics",
+            )?;
+        }
+        if clearance.decision != "pass" {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("remote-clearance-not-pass:{}", reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention remote clearance diagnostics",
+            )?;
+        }
+        if !clearance.is_current {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("remote-clearance-stale:{}", reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention remote clearance diagnostics",
+            )?;
+        }
+        if !clearance.revoked_refs.is_empty() {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("remote-clearance-revoked:{}", reference),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention remote clearance diagnostics",
+            )?;
+        }
+        if !clearance.retained_refs.is_empty() {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("remote-clearance-retained:{}", clearance.remote_ref),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention remote clearance diagnostics",
+            )?;
+        }
+        if input.scope.requester_ref != Some(clearance.requester_ref.as_str()) {
+            is_admitted = false;
+            scope_mismatches += 1;
+        }
+        if clearance.object_ref != input.scope.object_ref || clearance.object_kind != input.scope.object_kind {
+            is_admitted = false;
+            scope_mismatches += 1;
+        }
+        if clearance.retention_class != input.scope.retention_class {
+            is_admitted = false;
+            scope_mismatches += 1;
+        }
+        if clearance.action != input.scope.action {
+            is_admitted = false;
+            scope_mismatches += 1;
+        }
+        if !input.policy_refs.iter().any(|policy_ref| policy_ref == &clearance.policy_ref) {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("remote-clearance-policy-mismatch:{}", clearance.remote_ref),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention remote clearance diagnostics",
+            )?;
+        }
+        if !input.authority_refs.iter().any(|authority_ref| authority_ref == &clearance.authority_ref) {
+            is_admitted = false;
+            push_bounded(
+                &mut diagnostics,
+                format!("remote-clearance-authority-mismatch:{}", clearance.remote_ref),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention remote clearance diagnostics",
+            )?;
+        }
+        if is_admitted {
+            push_bounded(
+                &mut admitted_refs,
+                clearance.clearance_ref,
+                MAX_RETENTION_REFS,
+                "retention remote clearance refs",
+            )?;
+            push_bounded(
+                &mut remote_refs,
+                clearance.remote_ref,
+                MAX_RETENTION_REFS,
+                "retention remote clearance remote refs",
+            )?;
+            push_bounded(
+                &mut peer_refs,
+                clearance.peer_ref,
+                MAX_RETENTION_REFS,
+                "retention remote clearance peer refs",
+            )?;
+        }
+    }
+    if !input.refs.is_empty() && admitted_refs.is_empty() && scope_mismatches > 0 {
+        push_bounded(
+            &mut diagnostics,
+            "remote-clearance-scope-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention remote clearance diagnostics",
+        )?;
+    }
+    for required in input.required_remote_refs {
+        if !remote_refs.iter().any(|remote| remote == required) {
+            push_bounded(
+                &mut diagnostics,
+                format!("remote-clearance-missing-remote:{}", required),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention remote clearance diagnostics",
+            )?;
+        }
+    }
+    for required in input.required_peer_refs {
+        if !peer_refs.iter().any(|peer| peer == required) {
+            push_bounded(
+                &mut diagnostics,
+                format!("remote-clearance-missing-peer:{}", required),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention remote clearance diagnostics",
+            )?;
+        }
+    }
+    Ok(RemoteClearanceRefsResult {
+        diagnostics,
+        admitted_refs,
+        remote_refs,
+        peer_refs,
+    })
+}
+
 fn read_retention_evidence_admission(root: &Path, admission_ref: &str) -> Result<RetentionEvidenceAdmission> {
     require_ref(admission_ref, "retention evidence admission ref")?;
     let value = read_store_value(&admission_path(root, admission_ref)?)?;
     parse_retention_evidence_admission(&value)
+}
+
+fn read_retention_remote_gc_clearance(root: &Path, clearance_ref: &str) -> Result<RetentionRemoteGcClearance> {
+    require_ref(clearance_ref, "retention remote GC clearance ref")?;
+    let value = read_store_value(&remote_clearance_path(root, clearance_ref)?)?;
+    parse_retention_remote_gc_clearance(&value)
 }
 
 pub fn admit_destructive_retention_evidence(
@@ -921,6 +1227,15 @@ pub fn admit_destructive_retention_evidence(
         scope: &scope,
         required_remote_refs: &input.evidence.remote_refs,
     })?;
+    let remote_clearance = admit_remote_clearance_refs(RemoteClearanceRefsInput {
+        root: input.root,
+        refs: &input.evidence.remote_clearance_refs,
+        scope: &scope,
+        required_remote_refs: &input.evidence.remote_refs,
+        required_peer_refs: &input.evidence.remote_peer_refs,
+        policy_refs: &input.evidence.policy_refs,
+        authority_refs: &input.evidence.authority_refs,
+    })?;
     let has_policy_admission = !policy.admitted_refs.is_empty();
     let has_authority_admission = !authority.admitted_refs.is_empty();
     let has_supporting_admission = !supporting.admitted_refs.is_empty();
@@ -932,6 +1247,7 @@ pub fn admit_destructive_retention_evidence(
         .chain(supporting.diagnostics)
         .chain(reference_index.diagnostics)
         .chain(remote_gc.diagnostics)
+        .chain(remote_clearance.diagnostics)
     {
         push_bounded(&mut diagnostics, diagnostic, MAX_RETENTION_DIAGNOSTICS, "retention admission diagnostics")?;
     }
@@ -942,15 +1258,29 @@ pub fn admit_destructive_retention_evidence(
         .chain(supporting.admitted_refs)
         .chain(reference_index.admitted_refs)
         .chain(remote_gc.admitted_refs.clone())
+        .chain(remote_clearance.admitted_refs.clone())
     {
         push_bounded(&mut admitted_refs, reference, MAX_RETENTION_REFS, "retention admitted refs")?;
     }
-    let has_remote_refs_clearance = input.evidence.remote_refs.is_empty()
+    let has_local_remote_gc_plan = input.evidence.remote_refs.is_empty()
         || input
             .evidence
             .remote_refs
             .iter()
             .all(|reference| remote_gc.remote_refs.iter().any(|remote| remote == reference));
+    let has_remote_ref_clearance = input.evidence.remote_refs.is_empty()
+        || input
+            .evidence
+            .remote_refs
+            .iter()
+            .all(|reference| remote_clearance.remote_refs.iter().any(|remote| remote == reference));
+    let has_remote_peer_clearance = input.evidence.remote_peer_refs.is_empty()
+        || input
+            .evidence
+            .remote_peer_refs
+            .iter()
+            .all(|peer| remote_clearance.peer_refs.iter().any(|cleared_peer| cleared_peer == peer));
+    let has_remote_refs_clearance = has_local_remote_gc_plan && has_remote_ref_clearance && has_remote_peer_clearance;
     let has_delete_authority = is_destructive_action(input.action)
         && has_authority_admission
         && has_policy_admission
@@ -991,9 +1321,11 @@ pub fn validate_destructive_retention_evidence(input: &DestructiveRetentionEvide
     validate_refs(&input.authority_refs, "retention authority ref")?;
     validate_refs(&input.evidence_refs, "retention evidence ref")?;
     validate_refs(&input.retained_refs, "retention retained ref")?;
+    validate_refs(&input.remote_peer_refs, "retention remote peer ref")?;
     validate_refs(&input.remote_refs, "retention remote ref")?;
     validate_refs(&input.reference_index_refs, "retention reference-index ref")?;
-    validate_refs(&input.remote_gc_refs, "retention remote-gc ref")
+    validate_refs(&input.remote_gc_refs, "retention remote-gc ref")?;
+    validate_refs(&input.remote_clearance_refs, "retention remote clearance ref")
 }
 
 pub fn destructive_retention_evidence_diagnostics(
@@ -1067,6 +1399,17 @@ pub fn destructive_retention_evidence_diagnostics(
             "retention destructive evidence diagnostics",
         )?;
     }
+    if is_destructive_action(action)
+        && (!input.remote_refs.is_empty() || !input.remote_peer_refs.is_empty())
+        && input.remote_clearance_refs.is_empty()
+    {
+        push_bounded(
+            &mut diagnostics,
+            "remote-clearance-evidence-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention destructive evidence diagnostics",
+        )?;
+    }
     Ok(diagnostics)
 }
 
@@ -1079,9 +1422,11 @@ pub fn destructive_retention_evidence_value(input: &DestructiveRetentionEvidence
         record("authority", vec![strings_sequence(&input.authority_refs)]),
         record("evidence", vec![strings_sequence(&input.evidence_refs)]),
         record("retained", vec![strings_sequence(&input.retained_refs)]),
+        record("remote-peer", vec![strings_sequence(&input.remote_peer_refs)]),
         record("remote", vec![strings_sequence(&input.remote_refs)]),
         record("reference-index", vec![strings_sequence(&input.reference_index_refs)]),
         record("remote-gc", vec![strings_sequence(&input.remote_gc_refs)]),
+        record("remote-clearance", vec![strings_sequence(&input.remote_clearance_refs)]),
         record("reference-index-complete", vec![string(pass_or_deny(input.is_reference_index_complete))]),
         checks_value(&[
             ("requester-bound", pass_or_deny(input.requester_ref.is_some())),
@@ -1090,6 +1435,13 @@ pub fn destructive_retention_evidence_value(input: &DestructiveRetentionEvidence
             ("evidence-bound", pass_or_deny(!input.evidence_refs.is_empty())),
             ("reference-index-bound", pass_or_deny(!input.reference_index_refs.is_empty())),
             ("remote-gc-bound", pass_or_deny(input.remote_refs.is_empty() || !input.remote_gc_refs.is_empty())),
+            (
+                "remote-clearance-bound",
+                pass_or_deny(
+                    (input.remote_refs.is_empty() && input.remote_peer_refs.is_empty())
+                        || !input.remote_clearance_refs.is_empty(),
+                ),
+            ),
         ]),
     ]))
 }
@@ -1207,6 +1559,22 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             admission.is_current,
             admission.revoked_refs.len(),
             admission.diagnostics.join(",")
+        ));
+    }
+    if let Ok(clearance) = parse_retention_remote_gc_clearance(value) {
+        return Ok(format!(
+            "retention remote clearance ref={} decision={} peer={} remote={} object={} class={} action={} current={} retained={} revoked={} diagnostics={}",
+            clearance.clearance_ref,
+            clearance.decision,
+            clearance.peer_ref,
+            clearance.remote_ref,
+            clearance.object_ref,
+            clearance.retention_class,
+            clearance.action,
+            clearance.is_current,
+            clearance.retained_refs.len(),
+            clearance.revoked_refs.len(),
+            clearance.diagnostics.join(",")
         ));
     }
     if let Ok(receipt) = parse_retention_receipt(value) {
@@ -1620,9 +1988,27 @@ fn validate_evidence_admission_input(input: &RetentionEvidenceAdmissionInput<'_>
     ensure_count_at_most(input.diagnostics.len(), MAX_RETENTION_DIAGNOSTICS, "retention admission diagnostics")
 }
 
+fn validate_remote_gc_clearance_input(input: &RetentionRemoteGcClearanceInput<'_>) -> Result<()> {
+    validate_decision(input.decision)?;
+    require_ref(input.requester_ref, "retention remote clearance requester ref")?;
+    require_ref(input.peer_ref, "retention remote clearance peer ref")?;
+    require_ref(input.object_ref, "retention remote clearance object ref")?;
+    validate_name(input.object_kind, "retention remote clearance object kind")?;
+    validate_retention_class(input.retention_class)?;
+    validate_action(input.action)?;
+    require_ref(input.remote_ref, "retention remote clearance remote ref")?;
+    require_ref(input.policy_ref, "retention remote clearance policy ref")?;
+    require_ref(input.authority_ref, "retention remote clearance authority ref")?;
+    validate_refs(input.evidence_refs, "retention remote clearance evidence ref")?;
+    validate_refs(input.retained_refs, "retention remote clearance retained ref")?;
+    validate_refs(input.revoked_refs, "retention remote clearance revoked ref")?;
+    ensure_count_at_most(input.diagnostics.len(), MAX_RETENTION_DIAGNOSTICS, "retention remote clearance diagnostics")
+}
+
 fn ensure_store(root: &Path) -> Result<()> {
     fs::create_dir_all(pins_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(admissions_dir(root)).map_err(MoltenError::from)?;
+    fs::create_dir_all(remote_clearances_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(receipts_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(tombstones_dir(root)).map_err(MoltenError::from)
 }
@@ -1681,6 +2067,10 @@ fn admissions_dir(root: &Path) -> PathBuf {
     store_dir(root).join(ADMISSION_DIR)
 }
 
+fn remote_clearances_dir(root: &Path) -> PathBuf {
+    store_dir(root).join(REMOTE_CLEARANCE_DIR)
+}
+
 fn receipts_dir(root: &Path) -> PathBuf {
     store_dir(root).join(RECEIPT_DIR)
 }
@@ -1695,6 +2085,10 @@ fn pin_path(root: &Path, pin_ref: &str) -> Result<PathBuf> {
 
 fn admission_path(root: &Path, admission_ref: &str) -> Result<PathBuf> {
     Ok(admissions_dir(root).join(format!("{}.preserves", ref_file_name(admission_ref)?)))
+}
+
+fn remote_clearance_path(root: &Path, clearance_ref: &str) -> Result<PathBuf> {
+    Ok(remote_clearances_dir(root).join(format!("{}.preserves", ref_file_name(clearance_ref)?)))
 }
 
 fn receipt_path(root: &Path, receipt_ref: &str) -> Result<PathBuf> {
@@ -2237,9 +2631,11 @@ mod tests {
             authority_refs: vec![fake_ref("forged-authority")],
             evidence_refs: vec![fake_ref("forged-evidence")],
             retained_refs: Vec::new(),
+            remote_peer_refs: Vec::new(),
             remote_refs: Vec::new(),
             reference_index_refs: vec![fake_ref("forged-index")],
             remote_gc_refs: Vec::new(),
+            remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
         };
         let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
@@ -2324,9 +2720,11 @@ mod tests {
             authority_refs: vec![stale_authority],
             evidence_refs: vec![support],
             retained_refs: Vec::new(),
+            remote_peer_refs: Vec::new(),
             remote_refs: Vec::new(),
             reference_index_refs: vec![index],
             remote_gc_refs: Vec::new(),
+            remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
         };
         let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
@@ -2348,6 +2746,7 @@ mod tests {
         let root = temp_dir("retention-admission-remote");
         let requester_ref = fake_ref("requester");
         let object_ref = fake_ref("object");
+        let peer_refs = vec![fake_ref("remote-peer")];
         let remote_refs = vec![fake_ref("remote-cache")];
         let policy = store_test_admission(TestAdmissionInput {
             root: &root,
@@ -2419,15 +2818,33 @@ mod tests {
             is_current: true,
             revoked_refs: &[],
         });
+        let remote_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
+            root: &root,
+            label: "remote-clearance",
+            requester_ref: &requester_ref,
+            peer_ref: &peer_refs[0],
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &remote_refs[0],
+            policy_ref: &policy,
+            authority_ref: &authority,
+            is_current: true,
+            revoked_refs: &[],
+            retained_refs: &[],
+        });
         let evidence = DestructiveRetentionEvidence {
             requester_ref: Some(requester_ref.clone()),
             policy_refs: vec![policy],
             authority_refs: vec![authority],
             evidence_refs: vec![support],
             retained_refs: Vec::new(),
+            remote_peer_refs: peer_refs,
             remote_refs: remote_refs.clone(),
             reference_index_refs: vec![index],
             remote_gc_refs: vec![remote_gc],
+            remote_clearance_refs: vec![remote_clearance],
             is_reference_index_complete: true,
         };
         let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
@@ -2461,6 +2878,255 @@ mod tests {
         assert_eq!(evaluation.receipt.decision, "pass");
     }
 
+    #[test]
+    fn destructive_admission_rejects_unreconciled_remote_clearance() {
+        let root = temp_dir("retention-admission-remote-deny");
+        let requester_ref = fake_ref("requester-deny");
+        let object_ref = fake_ref("object-deny");
+        let remote_refs = vec![fake_ref("remote-a"), fake_ref("remote-b")];
+        let peer_refs = vec![fake_ref("peer-a"), fake_ref("peer-b")];
+        let wrong_peer_ref = fake_ref("peer-wrong");
+        let policy = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_POLICY,
+            label: "policy-deny",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let authority = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_AUTHORITY,
+            label: "authority-deny",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let support = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label: "support-deny",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let index = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REFERENCE_INDEX,
+            label: "index-deny",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let remote_gc = store_test_admission(TestAdmissionInput {
+            root: &root,
+            kind: ADMISSION_KIND_REMOTE_GC,
+            label: "remote-gc-deny",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &remote_refs,
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let clearance_a = store_test_remote_clearance(TestRemoteClearanceInput {
+            root: &root,
+            label: "clearance-a",
+            requester_ref: &requester_ref,
+            peer_ref: &peer_refs[0],
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &remote_refs[0],
+            policy_ref: &policy,
+            authority_ref: &authority,
+            is_current: true,
+            revoked_refs: &[],
+            retained_refs: &[],
+        });
+        let wrong_peer_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
+            root: &root,
+            label: "wrong-peer-clearance",
+            requester_ref: &requester_ref,
+            peer_ref: &wrong_peer_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &remote_refs[0],
+            policy_ref: &policy,
+            authority_ref: &authority,
+            is_current: true,
+            revoked_refs: &[],
+            retained_refs: &[],
+        });
+        let stale_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
+            root: &root,
+            label: "stale-clearance",
+            requester_ref: &requester_ref,
+            peer_ref: &peer_refs[0],
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &remote_refs[0],
+            policy_ref: &policy,
+            authority_ref: &authority,
+            is_current: false,
+            revoked_refs: &[fake_ref("remote-revocation")],
+            retained_refs: &[],
+        });
+        let retained_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
+            root: &root,
+            label: "retained-clearance",
+            requester_ref: &requester_ref,
+            peer_ref: &peer_refs[0],
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &remote_refs[0],
+            policy_ref: &policy,
+            authority_ref: &authority,
+            is_current: true,
+            revoked_refs: &[],
+            retained_refs: &[fake_ref("remote-retained-object")],
+        });
+        let base = DestructiveRetentionEvidence {
+            requester_ref: Some(requester_ref.clone()),
+            policy_refs: vec![policy],
+            authority_refs: vec![authority],
+            evidence_refs: vec![support],
+            retained_refs: Vec::new(),
+            remote_peer_refs: peer_refs.clone(),
+            remote_refs: remote_refs.clone(),
+            reference_index_refs: vec![index],
+            remote_gc_refs: vec![remote_gc],
+            remote_clearance_refs: Vec::new(),
+            is_reference_index_complete: true,
+        };
+        let mut partial = base.clone();
+        partial.remote_clearance_refs = vec![clearance_a];
+        let partial_admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &partial,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("partial remote denial");
+        assert_eq!(partial_admission.decision, "deny");
+        assert!(partial_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing-remote")));
+        assert!(partial_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing-peer")));
+
+        let mut wrong_peer = base.clone();
+        wrong_peer.remote_refs = vec![remote_refs[0].clone()];
+        wrong_peer.remote_peer_refs = vec![peer_refs[0].clone()];
+        wrong_peer.remote_clearance_refs = vec![wrong_peer_clearance];
+        let wrong_peer_admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &wrong_peer,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("wrong peer denial");
+        assert_eq!(wrong_peer_admission.decision, "deny");
+        assert!(wrong_peer_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing-peer")));
+
+        let mut stale = wrong_peer.clone();
+        stale.remote_clearance_refs = vec![stale_clearance];
+        let stale_admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &stale,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("stale remote denial");
+        assert_eq!(stale_admission.decision, "deny");
+        assert!(stale_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale")));
+        assert!(stale_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("revoked")));
+
+        let mut retained = wrong_peer;
+        retained.remote_clearance_refs = vec![retained_clearance];
+        let retained_admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &retained,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("retained remote denial");
+        assert_eq!(retained_admission.decision, "deny");
+        assert!(retained_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("retained")));
+
+        let mut forged = base;
+        forged.remote_refs = vec![remote_refs[0].clone()];
+        forged.remote_peer_refs = vec![peer_refs[0].clone()];
+        forged.remote_clearance_refs = vec![fake_ref("forged-clearance")];
+        let forged_admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root: &root,
+            evidence: &forged,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("forged remote denial");
+        assert_eq!(forged_admission.decision, "deny");
+        assert!(forged_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("unreadable")));
+    }
+
+    struct TestRemoteClearanceInput<'a> {
+        root: &'a std::path::Path,
+        label: &'a str,
+        requester_ref: &'a str,
+        peer_ref: &'a str,
+        object_ref: &'a str,
+        object_kind: &'a str,
+        retention_class: &'a str,
+        action: &'a str,
+        remote_ref: &'a str,
+        policy_ref: &'a str,
+        authority_ref: &'a str,
+        is_current: bool,
+        revoked_refs: &'a [String],
+        retained_refs: &'a [String],
+    }
+
     struct TestAdmissionInput<'a> {
         root: &'a std::path::Path,
         kind: &'a str,
@@ -2474,6 +3140,28 @@ mod tests {
         is_reference_index_complete: bool,
         is_current: bool,
         revoked_refs: &'a [String],
+    }
+
+    fn store_test_remote_clearance(input: TestRemoteClearanceInput<'_>) -> String {
+        store_retention_remote_gc_clearance(input.root, &RetentionRemoteGcClearanceInput {
+            decision: "pass",
+            requester_ref: input.requester_ref,
+            peer_ref: input.peer_ref,
+            object_ref: input.object_ref,
+            object_kind: input.object_kind,
+            retention_class: input.retention_class,
+            action: input.action,
+            remote_ref: input.remote_ref,
+            policy_ref: input.policy_ref,
+            authority_ref: input.authority_ref,
+            evidence_refs: &[fake_ref(input.label)],
+            retained_refs: input.retained_refs,
+            is_current: input.is_current,
+            revoked_refs: input.revoked_refs,
+            diagnostics: &[],
+        })
+        .expect("store test remote clearance")
+        .clearance_ref
     }
 
     fn store_test_admission(input: TestAdmissionInput<'_>) -> String {

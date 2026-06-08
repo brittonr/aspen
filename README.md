@@ -284,6 +284,13 @@ molten test retention admit --root target/retention-store \
   --retention-class private-secret-ref --action delete \
   --bound-ref blake3:authority-grant --reference-index-complete \
   --out target/retention.authority-admission.preserves
+molten test retention remote-clearance --root target/retention-store \
+  --requester-ref blake3:owner --peer-ref blake3:peer \
+  --object-ref blake3:object --object-kind encrypted-ref \
+  --retention-class private-secret-ref --action delete \
+  --remote-ref blake3:remote-cache --policy-ref blake3:policy \
+  --authority-ref blake3:authority-grant --evidence-ref blake3:evidence \
+  --out target/retention.remote-clearance.preserves
 molten test retention check --root target/retention-store \
   --object-ref blake3:object --object-kind encrypted-ref \
   --retention-class private-secret-ref --action delete \
@@ -293,7 +300,7 @@ molten test retention check --root target/retention-store \
   --receipt-out target/retention.delete.preserves
 ```
 
-Pinned objects, legal holds, retained receipt dependencies, remote/cache uncertainty, incomplete reference indexes, and missing requester/policy/authority/supporting evidence all deny before destructive side effects. Evidence-ledger GC, chunk-store GC, evaluation-cache invalidation, and secret cleanup bind retention receipts before removing content or writing tombstones; denial leaves content intact and emits auditable subsystem receipts. Ledger GC, chunk GC, and cache invalidation accept explicit `--retention-requester`, `--retention-policy-ref`, `--retention-authority-ref`, `--retention-evidence-ref`, `--retention-retained-ref`, `--retention-remote-ref`, `--retention-reference-index-ref`, `--retention-remote-gc-ref`, and `--retention-reference-index-complete` inputs; apply-mode candidates without matching local `retention-evidence-admission-v1` receipts fail closed. Admission receipts bind requester, object, class, action, evidence kind, current/revoked state, reference-index proof, and remote-GC clearance before mutation. Passing destructive actions emit retention receipts and tombstone/redaction metadata that preserve audit context without leaking private content. Retention receipts are deletion-safety evidence only and do not grant authority, provenance, transport, policy, resource, or execution trust.
+Pinned objects, legal holds, retained receipt dependencies, remote/cache uncertainty, incomplete reference indexes, and missing requester/policy/authority/supporting evidence all deny before destructive side effects. Evidence-ledger GC, chunk-store GC, evaluation-cache invalidation, and secret cleanup bind retention receipts before removing content or writing tombstones; denial leaves content intact and emits auditable subsystem receipts. Ledger GC, chunk GC, and cache invalidation accept explicit `--retention-requester`, `--retention-policy-ref`, `--retention-authority-ref`, `--retention-evidence-ref`, `--retention-retained-ref`, `--retention-remote-peer-ref`, `--retention-remote-ref`, `--retention-reference-index-ref`, `--retention-remote-gc-ref`, `--retention-remote-clearance-ref`, and `--retention-reference-index-complete` inputs; apply-mode candidates without matching local `retention-evidence-admission-v1` receipts and per-remote `retention-remote-gc-clearance-v1` receipts fail closed. Admission receipts bind requester, object, class, action, evidence kind, current/revoked state, reference-index proof, local remote-GC plan, and per-peer remote clearance before mutation. Passing destructive actions emit retention receipts and tombstone/redaction metadata that preserve audit context without leaking private content. Retention and remote-clearance receipts are deletion-safety evidence only and do not grant authority, provenance, transport, policy, resource, or execution trust.
 
 ## Supply-chain provenance diagnostics
 
@@ -430,7 +437,7 @@ nix build .#checks.x86_64-linux.nextest
 nix build .#checks.x86_64-linux.nextest-config
 ```
 
-For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` -> `/nix/store/23b9r4wdy4s8nkzxpk78wsch82q3pxcw-molten-nextest`.
+For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` -> `/nix/store/sjc4kvkjhraaxhh4k4pzrafi4z43sazy-molten-nextest`.
 
 Strict Octet source-gate sequence:
 
@@ -440,11 +447,13 @@ cargo octet check -p molten --artifact-dir target/octet-lib -- --lib
 cargo octet object corpus receipt \
   --output target/octet/object-corpus-receipt.json \
   src/artifacts.rs src/catalog.rs src/catalog_mcp.rs \
-  src/coordination.rs src/delivery_idempotency.rs src/job_dag.rs \
-  src/ledger.rs src/main.rs src/node_daemon.rs src/node_runtime.rs src/octet_gate.rs \
+  src/chunk_store.rs src/coordination.rs src/delivery_idempotency.rs \
+  src/eval_cache.rs src/job_dag.rs src/ledger.rs src/main.rs \
+  src/node_daemon.rs src/node_runtime.rs src/octet_gate.rs \
   src/operator_dogfood.rs src/plugin_host.rs src/preserves_rail.rs \
   src/protocol_session.rs src/provenance.rs src/raft_control_plane.rs \
-  src/remote_dataspace.rs src/secrets.rs src/service_supervision.rs src/transcripts.rs
+  src/remote_dataspace.rs src/retention.rs src/secrets.rs \
+  src/service_supervision.rs src/transcripts.rs
 cargo run -- test octet artifacts import \
   --artifacts target/octet \
   --ledger target/octet-ledger \
@@ -466,7 +475,7 @@ cargo run --manifest-path /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615
   --strict
 ```
 
-The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 1882 objects (`b3:a720bc13e9b97f46476f863be924cb84e3f4e5e160640a8695406b58f9227c33`); latest artifact import receipt is `blake3:911c54614efd88a0b30b9c8c1b0bbea14666fb52106f21f42141a1ae9a6b3e3e`, latest strict pass receipt is `blake3:ff518347c3607e3e9b43c0e65eda3d129e0108a559f32267078989a858e2f379`, and latest remediation plan receipt is `blake3:ce36126202930c7b25b47b2acafa877f109ecf35891db3df9946444c9eb81b48`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
+The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 2245 objects (`b3:31bed5ee160bcf9ea4897c2e0a774f366426236805ced87e5b955795dff55a90`); latest artifact import receipt is `blake3:34fa93377e559b98481e7f88eec2fe8e4c15c067bc338381f60c001de2cbcaa8`, latest strict pass receipt is `blake3:c63e977cc66076467f646b297f3d4a470fea1c91e56cad8f271b6b8697c1d235`, and latest remediation plan receipt is `blake3:62836d7432b9b6c92ecb193b428aba32fb9e181345f5060e07fa4da6039e0f75`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
 
 ```sh
 cargo run -- test octet baseline write \

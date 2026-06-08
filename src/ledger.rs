@@ -393,6 +393,8 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("retention-class-v1", "retention-class"),
     ("retention-pin-v1", "retention-pin"),
     ("retention-reference-index-v1", "retention-reference-index"),
+    ("retention-evidence-admission-v1", "retention-evidence-admission"),
+    ("retention-remote-gc-clearance-v1", "retention-remote-gc-clearance"),
     ("retention-receipt-v1", "retention-receipt"),
     ("retention-tombstone-v1", "retention-tombstone"),
     ("chain-link-v1", "chain-link"),
@@ -777,6 +779,75 @@ mod tests {
     }
 
     #[test]
+    fn ledger_gc_requires_per_remote_clearance_before_removal() {
+        let root = temp_dir("ledger-retention-remote-clearance");
+        let artifact = parse_text("<example \"remote-clearance\">").expect("parse artifact");
+        let imported = import_artifact(&root, &artifact).expect("import artifact");
+        let retention_class = ledger_retention_class(&imported.artifact_kind);
+        let mut retention_evidence = retention_evidence(
+            &root,
+            "remote-clearance",
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            retention_class,
+            retention::ACTION_DELETE,
+        );
+        let peer_ref = ledger_test_ref("remote-peer", "remote-clearance");
+        let remote_ref = ledger_test_ref("remote-cache", "remote-clearance");
+        retention_evidence.remote_peer_refs = vec![peer_ref.clone()];
+        retention_evidence.remote_refs = vec![remote_ref.clone()];
+        retention_evidence.remote_gc_refs = vec![store_admission(
+            &root,
+            retention::ADMISSION_KIND_REMOTE_GC,
+            "remote-clearance",
+            retention_evidence.requester_ref.as_deref().expect("requester"),
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            retention_class,
+            retention::ACTION_DELETE,
+            &retention_evidence.remote_refs,
+            true,
+        )];
+        let denied = gc(&root, LedgerGcInput {
+            dry_run: false,
+            retention_evidence: &retention_evidence,
+        })
+        .expect("remote clearance missing denies");
+        assert_eq!(denied.decision, "deny");
+        assert!(denied.removed_refs.is_empty());
+        assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
+        let clearance =
+            retention::store_retention_remote_gc_clearance(&root, &retention::RetentionRemoteGcClearanceInput {
+                decision: "pass",
+                requester_ref: retention_evidence.requester_ref.as_deref().expect("requester"),
+                peer_ref: &peer_ref,
+                object_ref: &imported.artifact_ref,
+                object_kind: &imported.artifact_kind,
+                retention_class,
+                action: retention::ACTION_DELETE,
+                remote_ref: &remote_ref,
+                policy_ref: &retention_evidence.policy_refs[0],
+                authority_ref: &retention_evidence.authority_refs[0],
+                evidence_refs: &retention_evidence.evidence_refs,
+                retained_refs: &[],
+                is_current: true,
+                revoked_refs: &[],
+                diagnostics: &[],
+            })
+            .expect("store remote clearance")
+            .clearance_ref;
+        retention_evidence.remote_clearance_refs = vec![clearance];
+        let passed = gc(&root, LedgerGcInput {
+            dry_run: false,
+            retention_evidence: &retention_evidence,
+        })
+        .expect("remote clearance pass removes");
+        assert_eq!(passed.decision, "pass");
+        assert_eq!(passed.removed_refs, vec![imported.artifact_ref.clone()]);
+        assert!(read_artifact(&root, &imported.artifact_ref).is_err());
+    }
+
+    #[test]
     fn ledger_detects_corrupted_content_bytes() {
         let root = temp_dir("ledger-corrupt");
         let artifact = parse_text("<example \"ok\">").expect("parse artifact");
@@ -850,9 +921,11 @@ mod tests {
             authority_refs,
             evidence_refs,
             retained_refs: Vec::new(),
+            remote_peer_refs: Vec::new(),
             remote_refs: Vec::new(),
             reference_index_refs,
             remote_gc_refs: Vec::new(),
+            remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
         }
     }

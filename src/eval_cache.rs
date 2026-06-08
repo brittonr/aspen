@@ -632,6 +632,9 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
     for reference in &input.retention_evidence.retained_refs {
         push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
     }
+    for reference in &input.retention_evidence.remote_peer_refs {
+        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
     for reference in &input.retention_evidence.remote_refs {
         push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
     }
@@ -639,6 +642,9 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
     }
     for reference in &input.retention_evidence.remote_gc_refs {
+        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
+    for reference in &input.retention_evidence.remote_clearance_refs {
         push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
     }
     for reference in &admission_refs {
@@ -653,15 +659,17 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         vec![format!("retention denied {} keys", retention_denials.len())]
     };
     diagnostics.push(format!(
-        "retention evidence requester={} policy={} authority={} evidence={} retained={} remote={} reference_index={} remote_gc={} index_complete={}",
+        "retention evidence requester={} policy={} authority={} evidence={} retained={} remote_peers={} remote={} reference_index={} remote_gc={} remote_clearance={} index_complete={}",
         input.retention_evidence.requester_ref.is_some(),
         input.retention_evidence.policy_refs.len(),
         input.retention_evidence.authority_refs.len(),
         input.retention_evidence.evidence_refs.len(),
         input.retention_evidence.retained_refs.len(),
+        input.retention_evidence.remote_peer_refs.len(),
         input.retention_evidence.remote_refs.len(),
         input.retention_evidence.reference_index_refs.len(),
         input.retention_evidence.remote_gc_refs.len(),
+        input.retention_evidence.remote_clearance_refs.len(),
         input.retention_evidence.is_reference_index_complete
     ));
     let has_admission_denial = !admission_diagnostics.is_empty();
@@ -1970,9 +1978,11 @@ mod tests {
             authority_refs,
             evidence_refs,
             retained_refs: Vec::new(),
+            remote_peer_refs: Vec::new(),
             remote_refs: Vec::new(),
             reference_index_refs,
             remote_gc_refs: Vec::new(),
+            remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
         }
     }
