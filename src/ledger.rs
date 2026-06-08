@@ -400,6 +400,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("retention-remote-gc-clearance-import-v1", "retention-remote-gc-clearance-import"),
     ("retention-remote-gc-clearance-live-workflow-v1", "retention-remote-gc-clearance-live-workflow"),
     ("retention-gc-plan-v1", "retention-gc-plan"),
+    ("retention-gc-apply-v1", "retention-gc-apply"),
     ("retention-receipt-v1", "retention-receipt"),
     ("retention-tombstone-v1", "retention-tombstone"),
     ("chain-link-v1", "chain-link"),

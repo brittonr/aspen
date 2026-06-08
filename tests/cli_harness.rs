@@ -1788,6 +1788,7 @@ fn cli_retention_gc_plan_lists_gates_before_mutation() -> CliResult<()> {
     let dir = temp_dir("cli-retention-gc-plan")?;
     let root = dir.join("retention-state");
     let plan_path = dir.join("plan.preserves");
+    let apply_path = dir.join("apply.preserves");
     let requester_ref = test_ref("retention-plan-requester")?;
     let object_ref = test_ref("retention-plan-object")?;
     let peer_ref = test_ref("retention-plan-peer")?;
@@ -1882,6 +1883,23 @@ fn cli_retention_gc_plan_lists_gates_before_mutation() -> CliResult<()> {
     let show = molten_cmd().args(["test", "retention", "show"]).arg(&plan_path).output()?;
     assert_success(&show, "retention show gc-plan");
     assert!(stdout(&show).contains("retention gc plan"));
+    let apply_output = molten_cmd()
+        .args(["test", "retention", "gc-apply-plan", "--root"])
+        .arg(&root)
+        .args(["--plan-ref"])
+        .arg(&plan.plan_ref)
+        .args(["--receipt-out"])
+        .arg(&apply_path)
+        .output()?;
+    assert_success(&apply_output, "retention gc-apply-plan");
+    assert!(stdout(&apply_output).contains("retention gc apply ref="));
+    let apply_value = read_preserves(&apply_path)?;
+    assert_eq!(molten::ledger::artifact_kind(&apply_value), "retention-gc-apply");
+    let apply = retention::parse_retention_gc_apply(&apply_value)?;
+    assert_eq!(apply.decision, "pass");
+    assert_eq!(apply.plan_ref, plan.plan_ref);
+    assert!(apply.retention_receipt_ref.is_some());
+    assert!(apply.tombstone_ref.is_some());
     Ok(())
 }
 

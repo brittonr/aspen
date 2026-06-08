@@ -13,6 +13,7 @@ use crate::node_runtime;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::RETENTION_CLASS_SCHEMA;
 use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
+use crate::preserves_rail::RETENTION_GC_APPLY_SCHEMA;
 use crate::preserves_rail::RETENTION_GC_PLAN_SCHEMA;
 use crate::preserves_rail::RETENTION_PIN_SCHEMA;
 use crate::preserves_rail::RETENTION_RECEIPT_SCHEMA;
@@ -82,6 +83,7 @@ const REMOTE_CLEARANCE_RESPONSE_DIR: &str = "remote-clearance-responses";
 const REMOTE_CLEARANCE_IMPORT_DIR: &str = "remote-clearance-imports";
 const REMOTE_CLEARANCE_LIVE_WORKFLOW_DIR: &str = "remote-clearance-live-workflows";
 const GC_PLAN_DIR: &str = "gc-plans";
+const GC_APPLY_DIR: &str = "gc-applies";
 const RECEIPT_DIR: &str = "receipts";
 const TOMBSTONE_DIR: &str = "tombstones";
 const MAX_RETENTION_REFS: usize = 4096;
@@ -252,7 +254,33 @@ pub struct RetentionGcPlan {
     pub retention_class: String,
     pub requester_ref: Option<String>,
     pub index_ref: String,
+    pub evidence: DestructiveRetentionEvidence,
     pub gates: Vec<RetentionPlanGate>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionGcApplyFromPlanInput<'a> {
+    pub root: &'a Path,
+    pub plan_ref: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionGcApply {
+    pub apply_ref: String,
+    pub decision: String,
+    pub subsystem: String,
+    pub action: String,
+    pub object_ref: String,
+    pub object_kind: String,
+    pub retention_class: String,
+    pub requester_ref: Option<String>,
+    pub plan_ref: String,
+    pub recomputed_plan_ref: String,
+    pub retention_receipt_ref: Option<String>,
+    pub tombstone_ref: Option<String>,
+    pub admission_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub value: IOValue,
 }
@@ -2031,6 +2059,22 @@ pub struct RetentionGcPlanValueInput<'a> {
     diagnostics: &'a [String],
 }
 
+struct RetentionGcApplyValueInput<'a> {
+    decision: &'a str,
+    subsystem: &'a str,
+    action: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+    requester_ref: Option<&'a str>,
+    plan_ref: &'a str,
+    recomputed_plan_ref: &'a str,
+    retention_receipt_ref: Option<&'a str>,
+    tombstone_ref: Option<&'a str>,
+    admission_refs: &'a [String],
+    diagnostics: &'a [String],
+}
+
 struct RetentionGateInputs<'a> {
     input: &'a RetentionGcPlanInput<'a>,
     policy: AdmissionRefsResult,
@@ -2518,6 +2562,11 @@ fn parse_embedded_destructive_retention_evidence_summary(value: &Value<IOValue>)
 }
 
 fn parse_destructive_retention_evidence_summary(value: &IOValue) -> Result<IOValue> {
+    parse_destructive_retention_evidence_summary_to_evidence(value)?;
+    Ok(value.clone())
+}
+
+fn parse_destructive_retention_evidence_summary_to_evidence(value: &IOValue) -> Result<DestructiveRetentionEvidence> {
     let fields = value
         .collect_simple_record("retention-evidence-summary-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-evidence-summary-v1 ...>"))?;
@@ -2525,22 +2574,29 @@ fn parse_destructive_retention_evidence_summary(value: &IOValue) -> Result<IOVal
         .collect_simple_record("requester", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected retention evidence requester"))?;
     let requester_value = value_to_iovalue(&requester_fields[0]);
-    if requester_value.collect_simple_record("none", Some(0)).is_none() {
+    let requester_ref = if requester_value.collect_simple_record("none", Some(0)).is_some() {
+        None
+    } else {
         let requester_ref = required_string(&requester_fields[0], "retention evidence requester")?;
         require_ref(&requester_ref, "retention evidence requester")?;
-    }
-    record_ref_sequence(&fields[1], "policy")?;
-    record_ref_sequence(&fields[2], "authority")?;
-    record_ref_sequence(&fields[3], "evidence")?;
-    record_ref_sequence(&fields[4], "retained")?;
-    record_ref_sequence(&fields[5], "remote-peer")?;
-    record_ref_sequence(&fields[6], "remote")?;
-    record_ref_sequence(&fields[7], "reference-index")?;
-    record_ref_sequence(&fields[8], "remote-gc")?;
-    record_ref_sequence(&fields[9], "remote-clearance")?;
-    record_pass_bool(&fields[10], "reference-index-complete")?;
+        Some(requester_ref)
+    };
+    let evidence = DestructiveRetentionEvidence {
+        requester_ref,
+        policy_refs: record_ref_sequence(&fields[1], "policy")?,
+        authority_refs: record_ref_sequence(&fields[2], "authority")?,
+        evidence_refs: record_ref_sequence(&fields[3], "evidence")?,
+        retained_refs: record_ref_sequence(&fields[4], "retained")?,
+        remote_peer_refs: record_ref_sequence(&fields[5], "remote-peer")?,
+        remote_refs: record_ref_sequence(&fields[6], "remote")?,
+        reference_index_refs: record_ref_sequence(&fields[7], "reference-index")?,
+        remote_gc_refs: record_ref_sequence(&fields[8], "remote-gc")?,
+        remote_clearance_refs: record_ref_sequence(&fields[9], "remote-clearance")?,
+        is_reference_index_complete: record_pass_bool(&fields[10], "reference-index-complete")?,
+    };
     parse_checks(&fields[11])?;
-    Ok(value.clone())
+    validate_destructive_retention_evidence(&evidence)?;
+    Ok(evidence)
 }
 
 fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsResult> {
@@ -3233,6 +3289,10 @@ pub fn parse_retention_gc_plan(value: &IOValue) -> Result<RetentionGcPlan> {
         return Err(MoltenError::invalid_harness("retention GC plan index scope mismatch"));
     }
     let evidence_value = parse_embedded_destructive_retention_evidence_summary(&fields[9])?;
+    let evidence = parse_destructive_retention_evidence_summary_to_evidence(&evidence_value)?;
+    if requester_ref != evidence.requester_ref {
+        return Err(MoltenError::invalid_harness("retention GC plan requester evidence mismatch"));
+    }
     let gates = parse_retention_plan_gates(&fields[10])?;
     let diagnostics = record_string_sequence(&fields[11], "diagnostics")?;
     let checks = parse_checks(&fields[12])?;
@@ -3251,7 +3311,263 @@ pub fn parse_retention_gc_plan(value: &IOValue) -> Result<RetentionGcPlan> {
         retention_class,
         requester_ref,
         index_ref,
+        evidence,
         gates,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
+pub fn read_retention_gc_plan(root: &Path, plan_ref: &str) -> Result<RetentionGcPlan> {
+    require_ref(plan_ref, "retention GC plan ref")?;
+    let value = read_store_value(&gc_plan_path(root, plan_ref)?)?;
+    let plan = parse_retention_gc_plan(&value)?;
+    if plan.plan_ref != plan_ref {
+        return Err(MoltenError::invalid_harness("stored retention GC plan ref mismatch"));
+    }
+    Ok(plan)
+}
+
+pub fn apply_retention_gc_plan(input: RetentionGcApplyFromPlanInput<'_>) -> Result<RetentionGcApply> {
+    ensure_store(input.root)?;
+    let original = read_retention_gc_plan(input.root, input.plan_ref)?;
+    let recomputed = store_retention_gc_plan(RetentionGcPlanInput {
+        root: input.root,
+        subsystem: &original.subsystem,
+        object_ref: &original.object_ref,
+        object_kind: &original.object_kind,
+        retention_class: &original.retention_class,
+        action: &original.action,
+        evidence: &original.evidence,
+    })?;
+    let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+        root: input.root,
+        evidence: &original.evidence,
+        object_ref: &original.object_ref,
+        object_kind: &original.object_kind,
+        retention_class: &original.retention_class,
+        action: &original.action,
+    })?;
+    let mut diagnostics = Vec::new();
+    if original.decision != "pass" {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-apply-plan-not-pass".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC apply diagnostics",
+        )?;
+        extend_bounded(
+            &mut diagnostics,
+            original.diagnostics.iter().cloned(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC apply diagnostics",
+        )?;
+    }
+    if recomputed.plan_ref != original.plan_ref {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-apply-plan-drift".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC apply diagnostics",
+        )?;
+    }
+    if recomputed.decision != "pass" {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-apply-recomputed-plan-not-pass".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC apply diagnostics",
+        )?;
+        extend_bounded(
+            &mut diagnostics,
+            recomputed.diagnostics.iter().cloned(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC apply diagnostics",
+        )?;
+    }
+    if admission.decision != "pass" {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-apply-admission-not-pass".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC apply diagnostics",
+        )?;
+        extend_bounded(
+            &mut diagnostics,
+            admission.diagnostics.iter().cloned(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC apply diagnostics",
+        )?;
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    let mut retention_receipt_ref = None;
+    let mut tombstone_ref = None;
+    if diagnostics.is_empty() {
+        let requester_ref =
+            destructive_retention_requester_ref(&original.evidence, "retention-gc-apply-missing-requester")?;
+        let evaluation = evaluate_retention(RetentionEvaluationInput {
+            root: input.root,
+            object_ref: &original.object_ref,
+            object_kind: &original.object_kind,
+            retention_class: &original.retention_class,
+            action: &original.action,
+            requester_ref: &requester_ref,
+            is_reference_index_complete: original.evidence.is_reference_index_complete,
+            retained_refs: &original.evidence.retained_refs,
+            remote_refs: &original.evidence.remote_refs,
+            policy_refs: &original.evidence.policy_refs,
+            evidence_refs: &original.evidence.evidence_refs,
+            has_delete_authority: admission.has_delete_authority,
+            has_remote_gc_clearance: admission.has_remote_gc_clearance,
+        })?;
+        retention_receipt_ref = Some(evaluation.receipt.receipt_ref.clone());
+        tombstone_ref = evaluation.tombstone.as_ref().map(|created| created.tombstone_ref.clone());
+        if evaluation.receipt.decision != "pass" {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-apply-retention-receipt-not-pass".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC apply diagnostics",
+            )?;
+            extend_bounded(
+                &mut diagnostics,
+                evaluation.receipt.diagnostics.iter().cloned(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC apply diagnostics",
+            )?;
+        }
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let mut admission_refs = admission.admitted_refs;
+    admission_refs.sort();
+    admission_refs.dedup();
+    let value = retention_gc_apply_value(&RetentionGcApplyValueInput {
+        decision,
+        subsystem: &original.subsystem,
+        action: &original.action,
+        object_ref: &original.object_ref,
+        object_kind: &original.object_kind,
+        retention_class: &original.retention_class,
+        requester_ref: original.requester_ref.as_deref(),
+        plan_ref: &original.plan_ref,
+        recomputed_plan_ref: &recomputed.plan_ref,
+        retention_receipt_ref: retention_receipt_ref.as_deref(),
+        tombstone_ref: tombstone_ref.as_deref(),
+        admission_refs: &admission_refs,
+        diagnostics: &diagnostics,
+    })?;
+    let apply = parse_retention_gc_apply(&value)?;
+    write_store_value(&gc_apply_path(input.root, &apply.apply_ref)?, &apply.value)?;
+    Ok(apply)
+}
+
+fn retention_gc_apply_value(input: &RetentionGcApplyValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    validate_name(input.subsystem, "retention GC apply subsystem")?;
+    validate_action(input.action)?;
+    require_ref(input.object_ref, "retention GC apply object ref")?;
+    validate_name(input.object_kind, "retention GC apply object kind")?;
+    validate_retention_class(input.retention_class)?;
+    if let Some(requester_ref) = input.requester_ref {
+        require_ref(requester_ref, "retention GC apply requester ref")?;
+    }
+    require_ref(input.plan_ref, "retention GC apply plan ref")?;
+    require_ref(input.recomputed_plan_ref, "retention GC apply recomputed plan ref")?;
+    if let Some(receipt_ref) = input.retention_receipt_ref {
+        require_ref(receipt_ref, "retention GC apply receipt ref")?;
+    }
+    if let Some(tombstone_ref) = input.tombstone_ref {
+        require_ref(tombstone_ref, "retention GC apply tombstone ref")?;
+    }
+    validate_refs(input.admission_refs, "retention GC apply admission ref")?;
+    let is_plan_unchanged = input.plan_ref == input.recomputed_plan_ref;
+    let is_plan_passed = input.decision == "pass";
+    let is_tombstone_bound =
+        !is_destructive_action(input.action) || input.decision != "pass" || input.tombstone_ref.is_some();
+    Ok(record("retention-gc-apply-v1", vec![
+        string(RETENTION_GC_APPLY_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("mode", vec![string("apply")]),
+        record("subsystem", vec![string(input.subsystem)]),
+        record("action", vec![string(input.action)]),
+        object_value(input.object_ref, input.object_kind),
+        record("class", vec![string(input.retention_class)]),
+        record("requester", vec![optional_ref_value(input.requester_ref)]),
+        record("plan", vec![string(input.plan_ref)]),
+        record("recomputed-plan", vec![string(input.recomputed_plan_ref)]),
+        record("retention-receipt", vec![optional_ref_value(input.retention_receipt_ref)]),
+        record("tombstone", vec![optional_ref_value(input.tombstone_ref)]),
+        record("admission", vec![strings_sequence(input.admission_refs)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        checks_value(&[
+            ("plan-ref-bound", "pass"),
+            ("plan-recomputed-before-mutation", "pass"),
+            ("plan-unchanged", pass_or_deny(is_plan_unchanged)),
+            ("plan-decision-pass", pass_or_deny(is_plan_passed)),
+            ("normal-admission-run", "pass"),
+            (
+                "retention-receipt-bound",
+                pass_or_deny(input.decision != "pass" || input.retention_receipt_ref.is_some()),
+            ),
+            ("tombstone-bound", pass_or_deny(is_tombstone_bound)),
+            (
+                "deny-before-mutation",
+                pass_or_deny(input.decision == "pass" || input.retention_receipt_ref.is_none()),
+            ),
+            ("plan-is-not-authority", "pass"),
+            ("remote-clearance-import-still-required", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_gc_apply(value: &IOValue) -> Result<RetentionGcApply> {
+    let fields = value
+        .collect_simple_record("retention-gc-apply-v1", Some(15))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-apply-v1 ...>"))?;
+    require_schema(&fields[0], RETENTION_GC_APPLY_SCHEMA, "retention GC apply schema")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    let mode = record_string(&fields[2], "mode")?;
+    if mode != "apply" {
+        return Err(MoltenError::invalid_harness("retention GC apply mode must be apply"));
+    }
+    let subsystem = record_string(&fields[3], "subsystem")?;
+    validate_name(&subsystem, "retention GC apply subsystem")?;
+    let action = record_string(&fields[4], "action")?;
+    validate_action(&action)?;
+    let (object_ref, object_kind) = parse_object_value(&fields[5])?;
+    let retention_class = record_string(&fields[6], "class")?;
+    validate_retention_class(&retention_class)?;
+    let requester_ref = record_optional_ref(&fields[7], "requester")?;
+    let plan_ref = record_ref(&fields[8], "plan")?;
+    let recomputed_plan_ref = record_ref(&fields[9], "recomputed-plan")?;
+    let retention_receipt_ref = record_optional_ref(&fields[10], "retention-receipt")?;
+    let tombstone_ref = record_optional_ref(&fields[11], "tombstone")?;
+    let admission_refs = record_ref_sequence(&fields[12], "admission")?;
+    let diagnostics = record_string_sequence(&fields[13], "diagnostics")?;
+    let checks = parse_checks(&fields[14])?;
+    require_check(&checks, "plan-ref-bound", "retention GC apply")?;
+    require_check(&checks, "plan-recomputed-before-mutation", "retention GC apply")?;
+    require_check(&checks, "normal-admission-run", "retention GC apply")?;
+    require_check(&checks, "plan-is-not-authority", "retention GC apply")?;
+    require_check(&checks, "remote-clearance-import-still-required", "retention GC apply")?;
+    Ok(RetentionGcApply {
+        apply_ref: canonical_hash(value)?,
+        decision,
+        subsystem,
+        action,
+        object_ref,
+        object_kind,
+        retention_class,
+        requester_ref,
+        plan_ref,
+        recomputed_plan_ref,
+        retention_receipt_ref,
+        tombstone_ref,
+        admission_refs,
         diagnostics,
         value: value.clone(),
     })
@@ -3453,6 +3769,22 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             plan.index_ref,
             plan.gates.len(),
             plan.diagnostics.join(",")
+        ));
+    }
+    if let Ok(apply) = parse_retention_gc_apply(value) {
+        return Ok(format!(
+            "retention gc apply ref={} decision={} subsystem={} action={} object={} class={} plan={} recomputed={} receipt={} tombstone={} diagnostics={}",
+            apply.apply_ref,
+            apply.decision,
+            apply.subsystem,
+            apply.action,
+            apply.object_ref,
+            apply.retention_class,
+            apply.plan_ref,
+            apply.recomputed_plan_ref,
+            apply.retention_receipt_ref.as_deref().unwrap_or("none"),
+            apply.tombstone_ref.as_deref().unwrap_or("none"),
+            apply.diagnostics.join(",")
         ));
     }
     if let Ok(receipt) = parse_retention_receipt(value) {
@@ -4258,6 +4590,7 @@ fn ensure_store(root: &Path) -> Result<()> {
     fs::create_dir_all(remote_clearance_imports_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(remote_clearance_live_workflows_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(gc_plans_dir(root)).map_err(MoltenError::from)?;
+    fs::create_dir_all(gc_applies_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(receipts_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(tombstones_dir(root)).map_err(MoltenError::from)
 }
@@ -4340,6 +4673,10 @@ fn gc_plans_dir(root: &Path) -> PathBuf {
     store_dir(root).join(GC_PLAN_DIR)
 }
 
+fn gc_applies_dir(root: &Path) -> PathBuf {
+    store_dir(root).join(GC_APPLY_DIR)
+}
+
 fn receipts_dir(root: &Path) -> PathBuf {
     store_dir(root).join(RECEIPT_DIR)
 }
@@ -4378,6 +4715,10 @@ fn remote_clearance_live_workflow_path(root: &Path, workflow_ref: &str) -> Resul
 
 fn gc_plan_path(root: &Path, plan_ref: &str) -> Result<PathBuf> {
     Ok(gc_plans_dir(root).join(format!("{}.preserves", ref_file_name(plan_ref)?)))
+}
+
+fn gc_apply_path(root: &Path, apply_ref: &str) -> Result<PathBuf> {
+    Ok(gc_applies_dir(root).join(format!("{}.preserves", ref_file_name(apply_ref)?)))
 }
 
 fn receipt_path(root: &Path, receipt_ref: &str) -> Result<PathBuf> {
@@ -5440,6 +5781,51 @@ mod tests {
     }
 
     #[test]
+    fn gc_plan_rejects_requester_evidence_mismatch() {
+        let root = temp_dir("retention-gc-plan-requester-mismatch");
+        let fixture = store_passing_plan_fixture(&root, "plan-requester-mismatch");
+        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &fixture.evidence,
+        })
+        .expect("store requester-bound plan");
+        let mut mismatched_evidence = fixture.evidence.clone();
+        mismatched_evidence.requester_ref = Some(fake_ref("wrong-plan-requester"));
+        let evidence_value =
+            destructive_retention_evidence_value(&mismatched_evidence).expect("mismatched evidence value");
+        let index = reference_index_for_object(ReferenceIndexForObjectInput {
+            root: &root,
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retained_refs: &fixture.evidence.retained_refs,
+            remote_refs: &fixture.evidence.remote_refs,
+            is_complete: fixture.evidence.is_reference_index_complete,
+        })
+        .expect("reference index");
+        let tampered = retention_gc_plan_value(&RetentionGcPlanValueInput {
+            decision: &plan.decision,
+            subsystem: &plan.subsystem,
+            action: &plan.action,
+            object_ref: &plan.object_ref,
+            object_kind: &plan.object_kind,
+            retention_class: &plan.retention_class,
+            requester_ref: plan.requester_ref.as_deref(),
+            index: &index,
+            evidence_value: &evidence_value,
+            gates: &plan.gates,
+            diagnostics: &plan.diagnostics,
+        })
+        .expect("tampered plan value");
+        let error = parse_retention_gc_plan(&tampered).expect_err("requester mismatch must fail closed");
+        assert!(format!("{error}").contains("requester evidence mismatch"));
+    }
+
+    #[test]
     fn gc_plan_denies_missing_clearance_and_is_not_clearance() {
         let root = temp_dir("retention-gc-plan-deny");
         let requester_ref = fake_ref("plan-deny-requester");
@@ -5554,6 +5940,110 @@ mod tests {
         .expect("plan ref is not clearance");
         assert_eq!(admission.decision, "deny");
         assert!(admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("remote-clearance-unreadable")));
+    }
+
+    #[test]
+    fn gc_apply_from_plan_writes_apply_receipt_and_tombstone() {
+        let root = temp_dir("retention-gc-apply-pass");
+        let fixture = store_passing_plan_fixture(&root, "apply-pass");
+        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &fixture.evidence,
+        })
+        .expect("store apply plan");
+        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+            root: &root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply plan");
+        assert_eq!(apply.decision, "pass");
+        assert_eq!(apply.plan_ref, plan.plan_ref);
+        assert_eq!(apply.recomputed_plan_ref, plan.plan_ref);
+        assert!(apply.retention_receipt_ref.is_some());
+        assert!(apply.tombstone_ref.is_some());
+        assert_eq!(store_file_count(&gc_applies_dir(&root)), 1);
+        assert_eq!(store_file_count(&tombstones_dir(&root)), 1);
+        let parsed = parse_retention_gc_apply(&apply.value).expect("parse apply");
+        assert_eq!(parsed.apply_ref, apply.apply_ref);
+        read_retention_receipt(&root, parsed.retention_receipt_ref.as_deref().expect("receipt ref"))
+            .expect("read retention receipt");
+    }
+
+    #[test]
+    fn gc_apply_from_plan_denies_drift_before_tombstone() {
+        let root = temp_dir("retention-gc-apply-drift");
+        let fixture = store_passing_plan_fixture(&root, "apply-drift");
+        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+            root: &root,
+            subsystem: "chunk-gc",
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &fixture.evidence,
+        })
+        .expect("store drift plan");
+        let pin = pin_object(&root, RetentionPinInput {
+            object_ref: fixture.object_ref.clone(),
+            object_kind: "chunk".to_string(),
+            retention_class: CLASS_DURABLE_VALUE.to_string(),
+            source: SOURCE_OPERATOR_HOLD.to_string(),
+            reason: "operator hold after plan".to_string(),
+            owner_ref: fixture.requester_ref.clone(),
+            expiry_ref: None,
+            policy_refs: fixture.evidence.policy_refs.clone(),
+            evidence_refs: fixture.evidence.evidence_refs.clone(),
+            has_authority: true,
+        })
+        .expect("pin after plan");
+        assert_eq!(pin.receipt.decision, "pass");
+        let receipt_count = store_file_count(&receipts_dir(&root));
+        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+            root: &root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply drift plan");
+        assert_eq!(apply.decision, "deny");
+        assert!(apply.retention_receipt_ref.is_none());
+        assert!(apply.tombstone_ref.is_none());
+        assert!(apply.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-apply-plan-drift"));
+        assert!(apply.diagnostics.iter().any(|diagnostic| diagnostic == "active-pins-present"));
+        assert_eq!(store_file_count(&tombstones_dir(&root)), 0);
+        assert_eq!(store_file_count(&receipts_dir(&root)), receipt_count);
+    }
+
+    #[test]
+    fn gc_apply_from_denied_plan_writes_only_apply_receipt() {
+        let root = temp_dir("retention-gc-apply-denied-plan");
+        let fixture = store_passing_plan_fixture(&root, "apply-denied-plan");
+        let mut evidence = fixture.evidence;
+        evidence.remote_clearance_refs = Vec::new();
+        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &evidence,
+        })
+        .expect("store denied plan");
+        assert_eq!(plan.decision, "deny");
+        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+            root: &root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply denied plan");
+        assert_eq!(apply.decision, "deny");
+        assert!(apply.retention_receipt_ref.is_none());
+        assert!(apply.tombstone_ref.is_none());
+        assert!(apply.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-apply-plan-not-pass"));
+        assert_eq!(store_file_count(&tombstones_dir(&root)), 0);
     }
 
     #[test]
@@ -7179,6 +7669,122 @@ mod tests {
         })
         .expect("store test admission")
         .admission_ref
+    }
+
+    struct TestPlanFixture {
+        requester_ref: String,
+        object_ref: String,
+        evidence: DestructiveRetentionEvidence,
+    }
+
+    fn store_passing_plan_fixture(root: &std::path::Path, label: &str) -> TestPlanFixture {
+        let requester_ref = fake_ref(&format!("{label}-requester"));
+        let object_ref = fake_ref(&format!("{label}-object"));
+        let peer_ref = fake_ref(&format!("{label}-peer"));
+        let remote_ref = fake_ref(&format!("{label}-remote"));
+        let policy = store_test_admission(TestAdmissionInput {
+            root,
+            kind: ADMISSION_KIND_POLICY,
+            label: &format!("{label}-policy"),
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let authority = store_test_admission(TestAdmissionInput {
+            root,
+            kind: ADMISSION_KIND_AUTHORITY,
+            label: &format!("{label}-authority"),
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let support = store_test_admission(TestAdmissionInput {
+            root,
+            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label: &format!("{label}-support"),
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let index = store_test_admission(TestAdmissionInput {
+            root,
+            kind: ADMISSION_KIND_REFERENCE_INDEX,
+            label: &format!("{label}-index"),
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let remote_gc = store_test_admission(TestAdmissionInput {
+            root,
+            kind: ADMISSION_KIND_REMOTE_GC,
+            label: &format!("{label}-remote-gc"),
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: std::slice::from_ref(&remote_ref),
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        });
+        let remote_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
+            root,
+            label: &format!("{label}-clearance"),
+            requester_ref: &requester_ref,
+            peer_ref: &peer_ref,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &remote_ref,
+            policy_ref: &policy,
+            authority_ref: &authority,
+            is_current: true,
+            revoked_refs: &[],
+            retained_refs: &[],
+        });
+        TestPlanFixture {
+            requester_ref: requester_ref.clone(),
+            object_ref,
+            evidence: DestructiveRetentionEvidence {
+                requester_ref: Some(requester_ref),
+                policy_refs: vec![policy],
+                authority_refs: vec![authority],
+                evidence_refs: vec![support],
+                retained_refs: Vec::new(),
+                remote_peer_refs: vec![peer_ref],
+                remote_refs: vec![remote_ref],
+                reference_index_refs: vec![index],
+                remote_gc_refs: vec![remote_gc],
+                remote_clearance_refs: vec![remote_clearance],
+                is_reference_index_complete: true,
+            },
+        }
     }
 
     fn fake_ref(label: &str) -> String {

@@ -3009,6 +3009,14 @@ enum RetentionCommand {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    GcApplyPlan {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        plan_ref: String,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     Check {
         #[arg(long)]
         root: PathBuf,
@@ -7364,6 +7372,31 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
                     plan.object_ref,
                     plan.gates.len(),
                     plan.diagnostics.len()
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::GcApplyPlan {
+            root,
+            plan_ref,
+            receipt_out,
+        } => {
+            let apply = retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+                root: &root,
+                plan_ref: &plan_ref,
+            })?;
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &apply.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention gc apply ref={} decision={} plan={} recomputed={} receipt={} tombstone={} diagnostics={}",
+                    apply.apply_ref,
+                    apply.decision,
+                    apply.plan_ref,
+                    apply.recomputed_plan_ref,
+                    apply.retention_receipt_ref.as_deref().unwrap_or("none"),
+                    apply.tombstone_ref.as_deref().unwrap_or("none"),
+                    apply.diagnostics.len()
                 ),
             );
             Ok(())
