@@ -549,8 +549,11 @@ Nix exposes the CI command and runs nextest through flake checks:
 ```sh
 nix run .#nextest-ci
 nix build .#checks.x86_64-linux.nextest
+nix build .#checks.x86_64-linux.dogfood-local-node
 nix build .#checks.x86_64-linux.nextest-config
 ```
+
+`dogfood-local-node` depends on the hermetic nextest check, runs `molten dogfood local-node` in a temporary state root, and preserves `dogfood-report.preserves`, `release-gate.preserves`, `dogfood-summary.txt`, and an `after-nextest.txt` marker as release-review evidence. These artifacts remain evidence-only and do not grant authority, policy, provenance, resource, transport, source-gate, retention, or destructive-operation trust.
 
 For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` -> `/nix/store/sjc4kvkjhraaxhh4k4pzrafi4z43sazy-molten-nextest`.
 

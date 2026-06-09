@@ -120,7 +120,7 @@
           all = ws.allWorkspaceMembers;
         };
 
-        checks = {
+        checks = rec {
           molten = ws.test.check.molten;
           clippy = ws.clippy.allWorkspaceMembers;
 
@@ -219,6 +219,31 @@
             if [ -f target/nextest/junit.xml ]; then
               cp target/nextest/junit.xml "$out"/
             fi
+          '';
+
+          dogfood-local-node = pkgs.runCommand "molten-dogfood-local-node"
+            {
+              nativeBuildInputs = [ moltenPkg pkgs.gnugrep ];
+              src = sourceForConfigChecks;
+              nextestCheck = nextest;
+            } ''
+            set -euo pipefail
+            export HOME="$TMPDIR/home"
+            mkdir -p "$HOME"
+            cp -R $src source
+            chmod -R u+w source
+            cd source
+            molten dogfood local-node \
+              --state-root "$TMPDIR/dogfood-state" \
+              --out dogfood-report.preserves \
+              --release-gate-out release-gate.preserves \
+              > dogfood-summary.txt
+            grep -q 'decision=pass' dogfood-summary.txt
+            grep -q 'dogfood-report-v1' dogfood-report.preserves
+            grep -q 'release-gate-receipt-v1' release-gate.preserves
+            mkdir -p "$out"
+            cp dogfood-summary.txt dogfood-report.preserves release-gate.preserves "$out"/
+            printf '%s\n' "$nextestCheck" > "$out/after-nextest.txt"
           '';
 
           nextest-config = pkgs.runCommand "molten-nextest-config-check"
