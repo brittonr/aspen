@@ -14,6 +14,7 @@ use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::RETENTION_CLASS_SCHEMA;
 use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
 use crate::preserves_rail::RETENTION_GC_APPLY_SCHEMA;
+use crate::preserves_rail::RETENTION_GC_AUDIT_SCHEMA;
 use crate::preserves_rail::RETENTION_GC_EXECUTE_SCHEMA;
 use crate::preserves_rail::RETENTION_GC_PLAN_SCHEMA;
 use crate::preserves_rail::RETENTION_PIN_SCHEMA;
@@ -312,6 +313,35 @@ pub struct RetentionGcExecutionGate {
     pub recomputed_plan_ref: Option<String>,
     pub retention_receipt_ref: Option<String>,
     pub tombstone_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionGcAuditInput<'a> {
+    pub root: &'a Path,
+    pub execution_ref: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionGcAudit {
+    pub audit_ref: String,
+    pub decision: String,
+    pub subsystem: String,
+    pub action: String,
+    pub object_ref: String,
+    pub object_kind: String,
+    pub retention_class: String,
+    pub plan_ref: Option<String>,
+    pub plan_decision: String,
+    pub apply_ref: Option<String>,
+    pub apply_decision: String,
+    pub execution_ref: String,
+    pub execution_decision: String,
+    pub retention_receipt_ref: Option<String>,
+    pub retention_receipt_decision: String,
+    pub tombstone_ref: Option<String>,
+    pub tombstone_status: String,
     pub diagnostics: Vec<String>,
     pub value: IOValue,
 }
@@ -2119,6 +2149,38 @@ struct RetentionGcExecutionGateValueInput<'a> {
     retention_receipt_ref: Option<&'a str>,
     tombstone_ref: Option<&'a str>,
     diagnostics: &'a [String],
+}
+
+struct RetentionGcAuditValueInput<'a> {
+    decision: &'a str,
+    subsystem: &'a str,
+    action: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+    plan_ref: Option<&'a str>,
+    plan_decision: &'a str,
+    apply_ref: Option<&'a str>,
+    apply_decision: &'a str,
+    execution_ref: &'a str,
+    execution_decision: &'a str,
+    retention_receipt_ref: Option<&'a str>,
+    retention_receipt_decision: &'a str,
+    tombstone_ref: Option<&'a str>,
+    tombstone_status: &'a str,
+    diagnostics: &'a [String],
+}
+
+struct RetentionAuditScope<'a> {
+    action: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+}
+
+struct GcAuditScope<'a> {
+    subsystem: &'a str,
+    retention: RetentionAuditScope<'a>,
 }
 
 struct RetentionGateInputs<'a> {
@@ -3978,6 +4040,421 @@ pub fn parse_retention_gc_execution_gate(value: &IOValue) -> Result<RetentionGcE
     })
 }
 
+pub fn audit_retention_gc_execution(input: RetentionGcAuditInput<'_>) -> Result<RetentionGcAudit> {
+    ensure_store(input.root)?;
+    let execution = read_retention_gc_execution_gate(input.root, input.execution_ref)?;
+    let execution_scope = gc_audit_scope(
+        &execution.subsystem,
+        &execution.action,
+        &execution.object_ref,
+        &execution.object_kind,
+        &execution.retention_class,
+    );
+    let mut diagnostics = Vec::new();
+    if execution.decision != "pass" {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-audit-execution-not-pass".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC audit diagnostics",
+        )?;
+        extend_bounded(
+            &mut diagnostics,
+            execution.diagnostics.iter().cloned(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC audit diagnostics",
+        )?;
+    }
+
+    let mut apply_decision = "missing".to_string();
+    let mut plan_ref = execution.plan_ref.clone();
+    let mut plan_decision = "missing".to_string();
+    if let Some(apply_ref) = execution.apply_ref.as_ref() {
+        let apply = read_retention_gc_apply(input.root, apply_ref)?;
+        apply_decision.clone_from(&apply.decision);
+        if apply.decision != "pass" {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-audit-apply-not-pass".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC audit diagnostics",
+            )?;
+        }
+        if !same_gc_scope(
+            &execution_scope,
+            &gc_audit_scope(
+                &apply.subsystem,
+                &apply.action,
+                &apply.object_ref,
+                &apply.object_kind,
+                &apply.retention_class,
+            ),
+        ) {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-audit-apply-scope-mismatch".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC audit diagnostics",
+            )?;
+        }
+        if execution.plan_ref.as_deref().is_some_and(|reference| reference != apply.plan_ref) {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-audit-execution-apply-plan-mismatch".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC audit diagnostics",
+            )?;
+        }
+        if execution
+            .retention_receipt_ref
+            .as_deref()
+            .is_some_and(|reference| apply.retention_receipt_ref.as_deref() != Some(reference))
+        {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-audit-execution-apply-receipt-mismatch".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC audit diagnostics",
+            )?;
+        }
+        if execution
+            .tombstone_ref
+            .as_deref()
+            .is_some_and(|reference| apply.tombstone_ref.as_deref() != Some(reference))
+        {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-audit-execution-apply-tombstone-mismatch".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC audit diagnostics",
+            )?;
+        }
+        plan_ref.get_or_insert(apply.plan_ref.clone());
+    } else {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-audit-apply-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC audit diagnostics",
+        )?;
+    }
+
+    if let Some(reference) = plan_ref.as_ref() {
+        let plan = read_retention_gc_plan(input.root, reference)?;
+        plan_decision.clone_from(&plan.decision);
+        if plan.decision != "pass" {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-audit-plan-not-pass".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC audit diagnostics",
+            )?;
+        }
+        if !same_gc_scope(
+            &execution_scope,
+            &gc_audit_scope(&plan.subsystem, &plan.action, &plan.object_ref, &plan.object_kind, &plan.retention_class),
+        ) {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-audit-plan-scope-mismatch".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC audit diagnostics",
+            )?;
+        }
+    } else {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-audit-plan-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC audit diagnostics",
+        )?;
+    }
+
+    let mut retention_receipt_decision = "missing".to_string();
+    if let Some(receipt_ref) = execution.retention_receipt_ref.as_ref() {
+        let receipt = read_retention_receipt(input.root, receipt_ref)?;
+        retention_receipt_decision.clone_from(&receipt.decision);
+        if receipt.decision != "pass" {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-audit-retention-receipt-not-pass".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC audit diagnostics",
+            )?;
+        }
+        if !same_retention_scope(
+            &execution_scope.retention,
+            &retention_audit_scope(
+                &receipt.action,
+                &receipt.object_ref,
+                &receipt.object_kind,
+                &receipt.retention_class,
+            ),
+        ) {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-audit-retention-receipt-scope-mismatch".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC audit diagnostics",
+            )?;
+        }
+    } else {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-audit-retention-receipt-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC audit diagnostics",
+        )?;
+    }
+
+    let mut tombstone_status = "missing".to_string();
+    if let Some(tombstone_ref) = execution.tombstone_ref.as_ref() {
+        let tombstone = read_retention_tombstone(input.root, tombstone_ref)?;
+        tombstone_status = "present".to_string();
+        if !same_retention_scope(
+            &execution_scope.retention,
+            &retention_audit_scope(
+                &tombstone.action,
+                &tombstone.object_ref,
+                &tombstone.object_kind,
+                &tombstone.retention_class,
+            ),
+        ) {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-audit-tombstone-scope-mismatch".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC audit diagnostics",
+            )?;
+        }
+        if let Some(receipt_ref) = execution.retention_receipt_ref.as_ref() {
+            let pending_receipt_ref = synthetic_ref("pending-retention-receipt")?;
+            if tombstone.receipt_ref != *receipt_ref && tombstone.receipt_ref != pending_receipt_ref {
+                push_bounded(
+                    &mut diagnostics,
+                    "retention-gc-audit-tombstone-receipt-mismatch".to_string(),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention GC audit diagnostics",
+                )?;
+            }
+        }
+    } else if is_destructive_action(&execution.action) {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-audit-tombstone-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC audit diagnostics",
+        )?;
+    } else {
+        tombstone_status = "not-required".to_string();
+    }
+
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let value = retention_gc_audit_value(&RetentionGcAuditValueInput {
+        decision,
+        subsystem: &execution.subsystem,
+        action: &execution.action,
+        object_ref: &execution.object_ref,
+        object_kind: &execution.object_kind,
+        retention_class: &execution.retention_class,
+        plan_ref: plan_ref.as_deref(),
+        plan_decision: &plan_decision,
+        apply_ref: execution.apply_ref.as_deref(),
+        apply_decision: &apply_decision,
+        execution_ref: &execution.execution_ref,
+        execution_decision: &execution.decision,
+        retention_receipt_ref: execution.retention_receipt_ref.as_deref(),
+        retention_receipt_decision: &retention_receipt_decision,
+        tombstone_ref: execution.tombstone_ref.as_deref(),
+        tombstone_status: &tombstone_status,
+        diagnostics: &diagnostics,
+    })?;
+    parse_retention_gc_audit(&value)
+}
+
+fn gc_audit_scope<'a>(
+    subsystem: &'a str,
+    action: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+) -> GcAuditScope<'a> {
+    GcAuditScope {
+        subsystem,
+        retention: retention_audit_scope(action, object_ref, object_kind, retention_class),
+    }
+}
+
+fn retention_audit_scope<'a>(
+    action: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+) -> RetentionAuditScope<'a> {
+    RetentionAuditScope {
+        action,
+        object_ref,
+        object_kind,
+        retention_class,
+    }
+}
+
+fn same_gc_scope(left: &GcAuditScope<'_>, right: &GcAuditScope<'_>) -> bool {
+    left.subsystem == right.subsystem && same_retention_scope(&left.retention, &right.retention)
+}
+
+fn same_retention_scope(left: &RetentionAuditScope<'_>, right: &RetentionAuditScope<'_>) -> bool {
+    left.action == right.action
+        && left.object_ref == right.object_ref
+        && left.object_kind == right.object_kind
+        && left.retention_class == right.retention_class
+}
+
+fn retention_gc_audit_value(input: &RetentionGcAuditValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    validate_name(input.subsystem, "retention GC audit subsystem")?;
+    validate_action(input.action)?;
+    require_ref(input.object_ref, "retention GC audit object ref")?;
+    validate_name(input.object_kind, "retention GC audit object kind")?;
+    validate_retention_class(input.retention_class)?;
+    if let Some(plan_ref) = input.plan_ref {
+        require_ref(plan_ref, "retention GC audit plan ref")?;
+    }
+    validate_audit_step_status(input.plan_decision, "retention GC audit plan decision")?;
+    if let Some(apply_ref) = input.apply_ref {
+        require_ref(apply_ref, "retention GC audit apply ref")?;
+    }
+    validate_audit_step_status(input.apply_decision, "retention GC audit apply decision")?;
+    require_ref(input.execution_ref, "retention GC audit execution ref")?;
+    validate_decision(input.execution_decision)?;
+    if let Some(receipt_ref) = input.retention_receipt_ref {
+        require_ref(receipt_ref, "retention GC audit receipt ref")?;
+    }
+    validate_audit_step_status(input.retention_receipt_decision, "retention GC audit receipt decision")?;
+    if let Some(tombstone_ref) = input.tombstone_ref {
+        require_ref(tombstone_ref, "retention GC audit tombstone ref")?;
+    }
+    validate_audit_step_status(input.tombstone_status, "retention GC audit tombstone status")?;
+    Ok(record("retention-gc-audit-v1", vec![
+        string(RETENTION_GC_AUDIT_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("mode", vec![string("audit")]),
+        record("subsystem", vec![string(input.subsystem)]),
+        record("action", vec![string(input.action)]),
+        object_value(input.object_ref, input.object_kind),
+        record("class", vec![string(input.retention_class)]),
+        record("plan", vec![optional_ref_value(input.plan_ref), string(input.plan_decision)]),
+        record("apply", vec![optional_ref_value(input.apply_ref), string(input.apply_decision)]),
+        record("execution", vec![string(input.execution_ref), string(input.execution_decision)]),
+        record("retention-receipt", vec![
+            optional_ref_value(input.retention_receipt_ref),
+            string(input.retention_receipt_decision),
+        ]),
+        record("tombstone", vec![optional_ref_value(input.tombstone_ref), string(input.tombstone_status)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        checks_value(&[
+            ("audit-is-not-authority", "pass"),
+            ("plan-link-bound", pass_or_deny(input.plan_ref.is_some())),
+            ("apply-link-bound", pass_or_deny(input.apply_ref.is_some())),
+            ("execution-link-bound", "pass"),
+            ("retention-receipt-link-bound", pass_or_deny(input.retention_receipt_ref.is_some())),
+            (
+                "tombstone-link-bound",
+                pass_or_deny(!is_destructive_action(input.action) || input.tombstone_ref.is_some()),
+            ),
+            ("normal-admission-still-required", "pass"),
+            ("remote-clearance-import-still-required", "pass"),
+        ]),
+    ]))
+}
+
+fn validate_audit_step_status(status: &str, label: &str) -> Result<()> {
+    match status {
+        "pass" | "deny" | "missing" | "present" | "not-required" => Ok(()),
+        other => Err(MoltenError::invalid_harness(format!("unsupported {label}: {other}"))),
+    }
+}
+
+pub fn parse_retention_gc_audit(value: &IOValue) -> Result<RetentionGcAudit> {
+    let fields = value
+        .collect_simple_record("retention-gc-audit-v1", Some(14))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-audit-v1 ...>"))?;
+    require_schema(&fields[0], RETENTION_GC_AUDIT_SCHEMA, "retention GC audit schema")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    let mode = record_string(&fields[2], "mode")?;
+    if mode != "audit" {
+        return Err(MoltenError::invalid_harness("retention GC audit mode must be audit"));
+    }
+    let subsystem = record_string(&fields[3], "subsystem")?;
+    validate_name(&subsystem, "retention GC audit subsystem")?;
+    let action = record_string(&fields[4], "action")?;
+    validate_action(&action)?;
+    let (object_ref, object_kind) = parse_object_value(&fields[5])?;
+    let retention_class = record_string(&fields[6], "class")?;
+    validate_retention_class(&retention_class)?;
+    let (plan_ref, plan_decision) = record_optional_ref_with_status(&fields[7], "plan")?;
+    let (apply_ref, apply_decision) = record_optional_ref_with_status(&fields[8], "apply")?;
+    let execution_fields = fields[9]
+        .collect_simple_record("execution", Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention GC audit execution record"))?;
+    let execution_ref = required_string(&execution_fields[0], "retention GC audit execution ref")?;
+    require_ref(&execution_ref, "retention GC audit execution ref")?;
+    let execution_decision = required_string(&execution_fields[1], "retention GC audit execution decision")?;
+    validate_decision(&execution_decision)?;
+    let (retention_receipt_ref, retention_receipt_decision) =
+        record_optional_ref_with_status(&fields[10], "retention-receipt")?;
+    let (tombstone_ref, tombstone_status) = record_optional_ref_with_status(&fields[11], "tombstone")?;
+    let diagnostics = record_string_sequence(&fields[12], "diagnostics")?;
+    let checks = parse_checks(&fields[13])?;
+    require_check(&checks, "audit-is-not-authority", "retention GC audit")?;
+    require_check(&checks, "normal-admission-still-required", "retention GC audit")?;
+    require_check(&checks, "remote-clearance-import-still-required", "retention GC audit")?;
+    Ok(RetentionGcAudit {
+        audit_ref: canonical_hash(value)?,
+        decision,
+        subsystem,
+        action,
+        object_ref,
+        object_kind,
+        retention_class,
+        plan_ref,
+        plan_decision,
+        apply_ref,
+        apply_decision,
+        execution_ref,
+        execution_decision,
+        retention_receipt_ref,
+        retention_receipt_decision,
+        tombstone_ref,
+        tombstone_status,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
+fn record_optional_ref_with_status(value: &Value<IOValue>, label: &str) -> Result<(Option<String>, String)> {
+    let fields = value
+        .collect_simple_record(label, Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected retention GC audit {label} record")))?;
+    let inner = value_to_iovalue(&fields[0]);
+    let reference = if inner.collect_simple_record("none", Some(0)).is_some() {
+        None
+    } else {
+        let some = inner
+            .collect_simple_record("some", Some(1))
+            .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional ref for {label}")))?;
+        let reference = required_string(&some[0], label)?;
+        require_ref(&reference, label)?;
+        Some(reference)
+    };
+    let status = required_string(&fields[1], label)?;
+    validate_audit_step_status(&status, label)?;
+    Ok((reference, status))
+}
+
 pub fn parse_retention_receipt(value: &IOValue) -> Result<RetentionReceipt> {
     let fields = value
         .collect_simple_record("retention-receipt-v1", Some(14))
@@ -4216,6 +4693,23 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             execute.retention_receipt_ref.as_deref().unwrap_or("none"),
             execute.tombstone_ref.as_deref().unwrap_or("none"),
             execute.diagnostics.join(",")
+        ));
+    }
+    if let Ok(audit) = parse_retention_gc_audit(value) {
+        return Ok(format!(
+            "retention gc audit ref={} decision={} subsystem={} action={} object={} class={} plan={} apply={} execution={} receipt={} tombstone={} diagnostics={}",
+            audit.audit_ref,
+            audit.decision,
+            audit.subsystem,
+            audit.action,
+            audit.object_ref,
+            audit.retention_class,
+            audit.plan_ref.as_deref().unwrap_or("none"),
+            audit.apply_ref.as_deref().unwrap_or("none"),
+            audit.execution_ref,
+            audit.retention_receipt_ref.as_deref().unwrap_or("none"),
+            audit.tombstone_ref.as_deref().unwrap_or("none"),
+            audit.diagnostics.join(",")
         ));
     }
     if let Ok(receipt) = parse_retention_receipt(value) {
@@ -6412,6 +6906,78 @@ mod tests {
         assert_eq!(parsed.apply_ref, apply.apply_ref);
         read_retention_receipt(&root, parsed.retention_receipt_ref.as_deref().expect("receipt ref"))
             .expect("read retention receipt");
+    }
+
+    #[test]
+    fn gc_audit_binds_plan_apply_execution_receipt_and_tombstone() {
+        let root = temp_dir("retention-gc-audit-pass");
+        let fixture = store_passing_plan_fixture(&root, "audit-pass");
+        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &fixture.evidence,
+        })
+        .expect("store audit plan");
+        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+            root: &root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply audit plan");
+        let execution = store_retention_gc_execution_gate(RetentionGcExecutionGateInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            action: ACTION_DELETE,
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            apply_ref: Some(&apply.apply_ref),
+        })
+        .expect("store execution gate");
+        assert_eq!(execution.decision, "pass");
+        let audit = audit_retention_gc_execution(RetentionGcAuditInput {
+            root: &root,
+            execution_ref: &execution.execution_ref,
+        })
+        .expect("audit execution");
+        assert_eq!(audit.decision, "pass");
+        assert_eq!(audit.plan_ref.as_deref(), Some(plan.plan_ref.as_str()));
+        assert_eq!(audit.apply_ref.as_deref(), Some(apply.apply_ref.as_str()));
+        assert_eq!(audit.execution_ref, execution.execution_ref);
+        assert_eq!(audit.retention_receipt_ref, apply.retention_receipt_ref);
+        assert_eq!(audit.tombstone_ref, apply.tombstone_ref);
+        assert!(retention_summary(&audit.value).expect("audit summary").contains("retention gc audit"));
+    }
+
+    #[test]
+    fn gc_audit_denies_missing_chain_links_without_authority() {
+        let root = temp_dir("retention-gc-audit-deny");
+        let object_ref = fake_ref("audit-missing-object");
+        let execution = store_retention_gc_execution_gate(RetentionGcExecutionGateInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            action: ACTION_DELETE,
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            apply_ref: None,
+        })
+        .expect("store denied execution gate");
+        let audit = audit_retention_gc_execution(RetentionGcAuditInput {
+            root: &root,
+            execution_ref: &execution.execution_ref,
+        })
+        .expect("audit missing links");
+        assert_eq!(audit.decision, "deny");
+        assert!(audit.plan_ref.is_none());
+        assert!(audit.apply_ref.is_none());
+        assert!(audit.retention_receipt_ref.is_none());
+        assert!(audit.tombstone_ref.is_none());
+        assert!(audit.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-audit-apply-missing"));
+        assert!(audit.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-audit-plan-missing"));
     }
 
     #[test]

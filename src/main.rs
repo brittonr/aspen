@@ -3023,6 +3023,14 @@ enum RetentionCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    GcAudit {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        execution_ref: String,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     Check {
         #[arg(long)]
         root: PathBuf,
@@ -7413,6 +7421,32 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
             );
             Ok(())
         }
+        RetentionCommand::GcAudit {
+            root,
+            execution_ref,
+            out,
+        } => {
+            let audit = retention::audit_retention_gc_execution(retention::RetentionGcAuditInput {
+                root: &root,
+                execution_ref: &execution_ref,
+            })?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &audit.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention gc audit ref={} decision={} plan={} apply={} execution={} receipt={} tombstone={} diagnostics={}",
+                    audit.audit_ref,
+                    audit.decision,
+                    audit.plan_ref.as_deref().unwrap_or("none"),
+                    audit.apply_ref.as_deref().unwrap_or("none"),
+                    audit.execution_ref,
+                    audit.retention_receipt_ref.as_deref().unwrap_or("none"),
+                    audit.tombstone_ref.as_deref().unwrap_or("none"),
+                    audit.diagnostics.len()
+                ),
+            );
+            Ok(())
+        }
         RetentionCommand::Check {
             root,
             object_ref,
@@ -11533,6 +11567,43 @@ mod tests {
         .expect("parse tombstone receipt");
         assert_eq!(tombstone.decision, "pass");
         assert!(tombstone.tombstone_ref.is_some());
+        let audit_object_ref = cli_synthetic_ref("retention-audit-object").expect("audit object ref");
+        let audit_object = RetentionCliObject {
+            root: &root,
+            label: "retention-audit",
+            object_ref: &audit_object_ref,
+            object_kind: "encrypted-ref",
+            retention_class: retention::CLASS_PRIVATE_SECRET_REF,
+            action: retention::ACTION_DELETE,
+        };
+        let audit_retention = retention_cli_args_for_object(audit_object);
+        let audit_apply_ref = retention_apply_ref(audit_object, "ledger-gc", &audit_retention);
+        let audit_execution = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            action: retention::ACTION_DELETE,
+            object_ref: &audit_object_ref,
+            object_kind: "encrypted-ref",
+            retention_class: retention::CLASS_PRIVATE_SECRET_REF,
+            apply_ref: Some(&audit_apply_ref),
+        })
+        .expect("store audit execution gate");
+        assert_eq!(audit_execution.decision, "pass");
+        let audit_out = dir.join("gc-audit.preserves");
+        run_retention_command(RetentionCommand::GcAudit {
+            root: root.clone(),
+            execution_ref: audit_execution.execution_ref,
+            out: Some(audit_out.clone()),
+        })
+        .expect("retention gc audit");
+        let audit =
+            retention::parse_retention_gc_audit(&read_preserves_file(&audit_out).expect("read retention gc audit"))
+                .expect("parse retention gc audit");
+        assert_eq!(audit.decision, "pass");
+        assert_eq!(audit.apply_ref.as_deref(), Some(audit_apply_ref.as_str()));
+        assert!(audit.retention_receipt_ref.is_some());
+        assert!(audit.tombstone_ref.is_some());
+        run_retention_command(RetentionCommand::Show { artifact: audit_out }).expect("show retention gc audit");
         let fixture_out = dir.join("fixture");
         run_retention_command(RetentionCommand::RunFixture {
             out: fixture_out.clone(),
