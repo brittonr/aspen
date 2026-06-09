@@ -51,7 +51,7 @@
         };
 
         pkgs = pkgsBase;
-        unit2nixPkgs = pkgsBase.extend (final: prev: {
+        unit2nixPkgsBase = pkgsBase.extend (final: prev: {
           fetchgit = (prev.lib.makeOverridable (args:
             let
               localGitKey = if args ? rev then "${args.url}#${args.rev}" else "";
@@ -71,6 +71,19 @@
         });
 
         rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        rustToolchainCompat = rustToolchain // {
+          unwrapped = rustToolchain // {
+            configureFlags = [ "--target=${pkgs.stdenv.hostPlatform.rust.rustcTarget}" ];
+          };
+        };
+        unit2nixPkgs = unit2nixPkgsBase.extend (final: prev: {
+          # unit2nix auto mode forwards the custom toolchain to Cargo's
+          # unit-graph generation, but this pinned revision does not forward it
+          # to the clippy wrapper. Make pkgs.clippy/pkgs.rustc match the
+          # dependency compiler so Nix flake checks do not mix rustc metadata.
+          clippy = rustToolchain;
+          rustc = rustToolchainCompat;
+        });
 
         ws = unit2nix.lib.${system}.buildFromUnitGraphAuto {
           pkgs = unit2nixPkgs;
@@ -121,7 +134,9 @@
         };
 
         checks = rec {
-          molten = ws.test.check.molten;
+          # The hermetic nextest check supplies binary metadata for CLI tests
+          # using CARGO_BIN_EXE_molten; the raw unit2nix libtest runner does not.
+          molten = nextest;
           clippy = ws.clippy.allWorkspaceMembers;
 
           nextest = pkgs.runCommand "molten-nextest"
