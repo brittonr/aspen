@@ -115,6 +115,7 @@ Current Cairn roadmap changes live under `cairn/changes/`:
 - `coordination-services-control-plane`
 - `coordination-control-plane-ux`
 - `operator-dogfood-node-workflow`
+- `operator-dogfood-retention-gc-workflow`
 
 ## Node runtime daemon
 
@@ -413,6 +414,8 @@ molten test catalog mcp-call target/search-retention-gc.preserves \
 ```
 
 `search-retention-gc.preserves` is a read-only MCP request for `search_retention_gc` with optional `stage`, `object-ref`, `subsystem`, `decision`, `plan-ref`, `apply-ref`, and `execution-ref` arguments.
+
+`molten dogfood local-node` now includes a local retention GC review chain under the dogfood state root: fixture evidence admissions and remote clearance, dry-run plan, apply, execute, audit, candidate explain, public bundle export/profile/verify, and `search_retention_gc` MCP discovery. These dogfood refs are release review evidence only; destructive subsystems still require normal retention admission, plan/apply/execute, remote clearance, receipt, and tombstone gates.
 
 ## Supply-chain provenance diagnostics
 

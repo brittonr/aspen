@@ -36,6 +36,7 @@ use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
 use crate::preserves_rail::value_to_iovalue;
 use crate::remote_dataspace;
+use crate::retention;
 
 const LOCAL_NODE_WORKFLOW_ID: &str = "dogfood:local-node";
 const DOGFOOD_HARNESS_SUITE: &str = r#"<harness-suite-v1 "molten.harness.suite.v1" "dogfood-repro" 3
@@ -105,6 +106,7 @@ pub struct ReleaseGateInput<'a> {
     pub harness_gate_refs: &'a [String],
     pub catalog_query_refs: &'a [String],
     pub repro_verify_refs: &'a [String],
+    pub retention_gc_refs: &'a [String],
     pub validation_command_refs: &'a [String],
 }
 
@@ -454,6 +456,7 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IOValu
     require_non_empty_refs(input.harness_gate_refs, "dogfood release harness gate ref")?;
     require_non_empty_refs(input.catalog_query_refs, "dogfood release catalog query ref")?;
     require_non_empty_refs(input.repro_verify_refs, "dogfood release repro verify ref")?;
+    require_non_empty_refs(input.retention_gc_refs, "dogfood release retention GC ref")?;
     require_non_empty_refs(input.validation_command_refs, "dogfood release validation command ref")?;
     Ok(record("release-gate-receipt-v1", vec![
         string(OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA),
@@ -463,6 +466,7 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IOValu
         record("harness-gates", vec![refs_sequence(input.harness_gate_refs)]),
         record("catalog-queries", vec![refs_sequence(input.catalog_query_refs)]),
         record("repro-verifies", vec![refs_sequence(input.repro_verify_refs)]),
+        record("retention-gc", vec![refs_sequence(input.retention_gc_refs)]),
         record("validation-commands", vec![refs_sequence(input.validation_command_refs)]),
         checks_value_from_pairs(&[
             ("dogfood-report-pass", "pass"),
@@ -470,6 +474,8 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IOValu
             ("redaction-gate-bound", "pass"),
             ("startup-shutdown-bound", "pass"),
             ("catalog-mcp-bound", "pass"),
+            ("retention-gc-review-bound", "pass"),
+            ("retention-gc-is-evidence-only", "pass"),
             ("no-text-oracle", "pass"),
         ]),
     ]))
@@ -485,6 +491,8 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
     let ledger_root = input.state_root.join("ledger");
     let job_source_root = input.state_root.join("job-source-registry");
     let job_target_root = input.state_root.join("job-target-registry");
+    let retention_root = input.state_root.join("retention-store");
+    let retention_bundle_root = input.state_root.join("retention-bundle");
 
     let policy_refs = vec![dogfood_ref("operator-policy")?];
     let capability_refs = vec![dogfood_ref("operator-capability")?];
@@ -623,6 +631,94 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
         state_root_ref: &state_root_ref,
     })?;
 
+    let retention_gc = run_retention_gc_workflow(RetentionDogfoodInput {
+        root: &retention_root,
+        bundle_dir: &retention_bundle_root,
+        ledger_root: &ledger_root,
+        registry_root: &registry_root,
+    })?;
+    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
+        name: "plan-retention-gc",
+        request_ref: Some(&retention_gc.object_ref),
+        receipt_ref: Some(&retention_gc.plan_ref),
+        result_ref: Some(&retention_gc.plan_ref),
+        decision: &retention_gc.plan_decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&retention_gc.plan_ref),
+        diagnostics: &retention_gc.plan_diagnostics,
+        state_root_ref: &state_root_ref,
+    })?;
+    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
+        name: "apply-retention-gc-plan",
+        request_ref: Some(&retention_gc.plan_ref),
+        receipt_ref: Some(&retention_gc.apply_ref),
+        result_ref: Some(&retention_gc.apply_ref),
+        decision: &retention_gc.apply_decision,
+        replay_status: "recorded",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&retention_gc.apply_ref),
+        diagnostics: &retention_gc.apply_diagnostics,
+        state_root_ref: &state_root_ref,
+    })?;
+    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
+        name: "execute-retention-gc",
+        request_ref: Some(&retention_gc.apply_ref),
+        receipt_ref: Some(&retention_gc.execution_ref),
+        result_ref: Some(&retention_gc.execution_ref),
+        decision: &retention_gc.execution_decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&retention_gc.execution_ref),
+        diagnostics: &retention_gc.execution_diagnostics,
+        state_root_ref: &state_root_ref,
+    })?;
+    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
+        name: "audit-retention-gc",
+        request_ref: Some(&retention_gc.execution_ref),
+        receipt_ref: Some(&retention_gc.audit_ref),
+        result_ref: Some(&retention_gc.audit_ref),
+        decision: &retention_gc.audit_decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&retention_gc.audit_ref),
+        diagnostics: &retention_gc.audit_diagnostics,
+        state_root_ref: &state_root_ref,
+    })?;
+    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
+        name: "export-retention-gc-bundle",
+        request_ref: Some(&retention_gc.explain_ref),
+        receipt_ref: Some(&retention_gc.bundle_verify_ref),
+        result_ref: Some(&retention_gc.bundle_ref),
+        decision: &retention_gc.bundle_verify_decision,
+        replay_status: "recorded",
+        mandatory: true,
+        artifact_refs: &[
+            retention_gc.bundle_ref.clone(),
+            retention_gc.bundle_profile_ref.clone(),
+            retention_gc.bundle_verify_ref.clone(),
+        ],
+        diagnostics: &retention_gc.bundle_diagnostics,
+        state_root_ref: &state_root_ref,
+    })?;
+    catalog_query_refs.push_limited_value(
+        retention_gc.catalog_receipt_ref.clone(),
+        MAX_OPERATOR_REFS,
+        "catalog query refs",
+    )?;
+    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
+        name: "search-retention-gc-catalog",
+        request_ref: Some(&retention_gc.catalog_request_ref),
+        receipt_ref: Some(&retention_gc.catalog_receipt_ref),
+        result_ref: Some(&retention_gc.catalog_response_ref),
+        decision: &retention_gc.catalog_decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: &retention_gc.artifact_refs,
+        diagnostics: &[],
+        state_root_ref: &state_root_ref,
+    })?;
+
     ledger::import_artifact(&ledger_root, &installed.artifact.value)?;
     ledger::import_artifact(&ledger_root, &remote.gate_receipt_value)?;
     let mcp_request =
@@ -722,6 +818,11 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
     })?;
     let report = parse_dogfood_report(&report_value)?;
     let validation_command_refs = vec![dogfood_ref("cargo-nextest-ci")?];
+    let retention_gc_release_refs = vec![
+        retention_gc.audit_ref.clone(),
+        retention_gc.bundle_verify_ref.clone(),
+        retention_gc.catalog_receipt_ref.clone(),
+    ];
     let release_gate_value = if report.decision == "pass" {
         Some(release_gate_receipt_value(&ReleaseGateInput {
             report_value: &report_value,
@@ -730,6 +831,7 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
             harness_gate_refs: &harness_gate_refs,
             catalog_query_refs: &catalog_query_refs,
             repro_verify_refs: &repro_verify_refs,
+            retention_gc_refs: &retention_gc_release_refs,
             validation_command_refs: &validation_command_refs,
         })?)
     } else {
@@ -781,7 +883,7 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
             workflow.replay_profile
         ));
     }
-    if value.collect_simple_record("release-gate-receipt-v1", Some(9)).is_some() {
+    if value.collect_simple_record("release-gate-receipt-v1", Some(10)).is_some() {
         return Ok(format!("operator release gate receipt ref={} (summary is non-normative)", canonical_hash(value)?));
     }
     Err(MoltenError::invalid_harness("unsupported operator dogfood artifact for summary"))
@@ -940,6 +1042,55 @@ struct JobDogfoodRun {
     decision: String,
     diagnostics: Vec<String>,
     artifact_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RetentionDogfoodInput<'a> {
+    root: &'a Path,
+    bundle_dir: &'a Path,
+    ledger_root: &'a Path,
+    registry_root: &'a Path,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RetentionDogfoodRun {
+    object_ref: String,
+    plan_ref: String,
+    plan_decision: String,
+    plan_diagnostics: Vec<String>,
+    apply_ref: String,
+    apply_decision: String,
+    apply_diagnostics: Vec<String>,
+    execution_ref: String,
+    execution_decision: String,
+    execution_diagnostics: Vec<String>,
+    audit_ref: String,
+    audit_decision: String,
+    audit_diagnostics: Vec<String>,
+    explain_ref: String,
+    bundle_ref: String,
+    bundle_profile_ref: String,
+    bundle_verify_ref: String,
+    bundle_verify_decision: String,
+    bundle_diagnostics: Vec<String>,
+    catalog_request_ref: String,
+    catalog_receipt_ref: String,
+    catalog_response_ref: String,
+    catalog_decision: String,
+    artifact_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RetentionAdmissionFixtureInput<'a> {
+    root: &'a Path,
+    kind: &'a str,
+    label: &'a str,
+    requester_ref: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+    action: &'a str,
+    remote_refs: &'a [String],
 }
 
 fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
@@ -1107,6 +1258,262 @@ fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
         diagnostics: execution.diagnostics,
         artifact_refs,
     })
+}
+
+fn run_retention_gc_workflow(input: RetentionDogfoodInput<'_>) -> Result<RetentionDogfoodRun> {
+    let object_ref = dogfood_ref("retention-object")?;
+    let requester_ref = dogfood_ref("retention-requester")?;
+    let peer_ref = dogfood_ref("retention-peer")?;
+    let remote_ref = dogfood_ref("retention-remote-cache")?;
+    let remote_refs = vec![remote_ref.clone()];
+    let object_kind = "chunk";
+    let retention_class = retention::CLASS_DURABLE_VALUE;
+    let action = retention::ACTION_DELETE;
+    let policy = store_retention_admission_fixture(RetentionAdmissionFixtureInput {
+        root: input.root,
+        kind: retention::ADMISSION_KIND_POLICY,
+        label: "policy",
+        requester_ref: &requester_ref,
+        object_ref: &object_ref,
+        object_kind,
+        retention_class,
+        action,
+        remote_refs: &[],
+    })?;
+    let authority = store_retention_admission_fixture(RetentionAdmissionFixtureInput {
+        root: input.root,
+        kind: retention::ADMISSION_KIND_AUTHORITY,
+        label: "authority",
+        requester_ref: &requester_ref,
+        object_ref: &object_ref,
+        object_kind,
+        retention_class,
+        action,
+        remote_refs: &[],
+    })?;
+    let support = store_retention_admission_fixture(RetentionAdmissionFixtureInput {
+        root: input.root,
+        kind: retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+        label: "support",
+        requester_ref: &requester_ref,
+        object_ref: &object_ref,
+        object_kind,
+        retention_class,
+        action,
+        remote_refs: &[],
+    })?;
+    let index = store_retention_admission_fixture(RetentionAdmissionFixtureInput {
+        root: input.root,
+        kind: retention::ADMISSION_KIND_REFERENCE_INDEX,
+        label: "index",
+        requester_ref: &requester_ref,
+        object_ref: &object_ref,
+        object_kind,
+        retention_class,
+        action,
+        remote_refs: &[],
+    })?;
+    let remote_gc = store_retention_admission_fixture(RetentionAdmissionFixtureInput {
+        root: input.root,
+        kind: retention::ADMISSION_KIND_REMOTE_GC,
+        label: "remote-gc",
+        requester_ref: &requester_ref,
+        object_ref: &object_ref,
+        object_kind,
+        retention_class,
+        action,
+        remote_refs: &remote_refs,
+    })?;
+    let clearance_evidence = vec![support.admission_ref.clone()];
+    let clearance =
+        retention::store_retention_remote_gc_clearance(input.root, &retention::RetentionRemoteGcClearanceInput {
+            decision: "pass",
+            requester_ref: &requester_ref,
+            peer_ref: &peer_ref,
+            object_ref: &object_ref,
+            object_kind,
+            retention_class,
+            action,
+            remote_ref: &remote_ref,
+            policy_ref: &policy.admission_ref,
+            authority_ref: &authority.admission_ref,
+            evidence_refs: &clearance_evidence,
+            retained_refs: &[],
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })?;
+    let evidence = retention::DestructiveRetentionEvidence {
+        requester_ref: Some(requester_ref),
+        policy_refs: vec![policy.admission_ref.clone()],
+        authority_refs: vec![authority.admission_ref.clone()],
+        evidence_refs: vec![support.admission_ref.clone()],
+        retained_refs: Vec::new(),
+        remote_peer_refs: vec![peer_ref],
+        remote_refs,
+        reference_index_refs: vec![index.admission_ref.clone()],
+        remote_gc_refs: vec![remote_gc.admission_ref.clone()],
+        remote_clearance_refs: vec![clearance.clearance_ref.clone()],
+        is_reference_index_complete: true,
+    };
+    let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+        root: input.root,
+        subsystem: "ledger-gc",
+        object_ref: &object_ref,
+        object_kind,
+        retention_class,
+        action,
+        evidence: &evidence,
+    })?;
+    let apply = retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+        root: input.root,
+        plan_ref: &plan.plan_ref,
+    })?;
+    let execution = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+        root: input.root,
+        subsystem: "ledger-gc",
+        action,
+        object_ref: &object_ref,
+        object_kind,
+        retention_class,
+        apply_ref: Some(&apply.apply_ref),
+    })?;
+    let audit = retention::audit_retention_gc_execution(retention::RetentionGcAuditInput {
+        root: input.root,
+        execution_ref: &execution.execution_ref,
+    })?;
+    let explain = retention::explain_retention_candidate(retention::RetentionCandidateExplainInput {
+        root: input.root,
+        object_ref: &object_ref,
+        object_kind: Some(object_kind),
+        retention_class: Some(retention_class),
+        action: Some(action),
+        subsystem: Some("ledger-gc"),
+    })?;
+    let bundle = retention::export_retention_candidate_bundle(retention::RetentionCandidateBundleExportInput {
+        root: input.root,
+        explain_value: &explain.value,
+        out: input.bundle_dir,
+        profile: retention::RetentionCandidateBundleExportProfile::Public,
+    })?;
+    let profile_value =
+        parse_text(&fs::read_to_string(input.bundle_dir.join("bundle-profile.preserves")).map_err(MoltenError::from)?)?;
+    let profile = retention::parse_retention_candidate_bundle_profile(&profile_value)?;
+    let verify = retention::verify_retention_candidate_bundle(retention::RetentionCandidateBundleVerifyInput {
+        bundle_dir: input.bundle_dir,
+    })?;
+    let mut ledger_import_refs = Vec::new();
+    for value in [
+        &policy.value,
+        &authority.value,
+        &support.value,
+        &index.value,
+        &remote_gc.value,
+        &clearance.value,
+        &plan.value,
+        &apply.value,
+        &execution.value,
+        &audit.value,
+        &explain.value,
+        &bundle.value,
+        &profile.value,
+        &verify.value,
+    ] {
+        let imported = ledger::import_artifact(input.ledger_root, value)?;
+        ledger_import_refs.push_limited_value(
+            canonical_hash(&imported.receipt_value)?,
+            MAX_OPERATOR_REFS,
+            "retention dogfood ledger imports",
+        )?;
+    }
+    let mcp_request = catalog_mcp::mcp_request_value("search_retention_gc", vec![
+        record("stage", vec![string("audit")]),
+        record("object-ref", vec![string(&object_ref)]),
+        record("subsystem", vec![string("ledger-gc")]),
+    ])?;
+    let mcp_call = catalog_mcp::call(input.registry_root, Some(input.ledger_root), &mcp_request)?;
+    let catalog_receipt_ref = canonical_hash(&mcp_call.receipt_value)?;
+    let mut bundle_diagnostics = Vec::new();
+    append_dogfood_diagnostics(&mut bundle_diagnostics, "retention-bundle", &bundle.diagnostics)?;
+    append_dogfood_diagnostics(&mut bundle_diagnostics, "retention-bundle-profile", &profile.diagnostics)?;
+    append_dogfood_diagnostics(&mut bundle_diagnostics, "retention-bundle-verify", &verify.diagnostics)?;
+    let mut artifact_refs = vec![
+        policy.admission_ref,
+        authority.admission_ref,
+        support.admission_ref,
+        index.admission_ref,
+        remote_gc.admission_ref,
+        clearance.clearance_ref,
+        plan.plan_ref.clone(),
+        apply.apply_ref.clone(),
+        execution.execution_ref.clone(),
+        audit.audit_ref.clone(),
+        explain.explain_ref.clone(),
+        bundle.bundle_ref.clone(),
+        profile.profile_ref.clone(),
+        verify.verify_ref.clone(),
+        mcp_call.response_ref.clone(),
+    ];
+    artifact_refs.extend(ledger_import_refs);
+    Ok(RetentionDogfoodRun {
+        object_ref,
+        plan_ref: plan.plan_ref,
+        plan_decision: plan.decision,
+        plan_diagnostics: plan.diagnostics,
+        apply_ref: apply.apply_ref,
+        apply_decision: apply.decision,
+        apply_diagnostics: apply.diagnostics,
+        execution_ref: execution.execution_ref,
+        execution_decision: execution.decision,
+        execution_diagnostics: execution.diagnostics,
+        audit_ref: audit.audit_ref,
+        audit_decision: audit.decision,
+        audit_diagnostics: audit.diagnostics,
+        explain_ref: explain.explain_ref,
+        bundle_ref: bundle.bundle_ref,
+        bundle_profile_ref: profile.profile_ref,
+        bundle_verify_ref: verify.verify_ref,
+        bundle_verify_decision: verify.decision,
+        bundle_diagnostics,
+        catalog_request_ref: mcp_call.request.request_ref,
+        catalog_receipt_ref,
+        catalog_response_ref: mcp_call.response_ref,
+        catalog_decision: mcp_call.decision,
+        artifact_refs,
+    })
+}
+
+fn store_retention_admission_fixture(
+    input: RetentionAdmissionFixtureInput<'_>,
+) -> Result<retention::RetentionEvidenceAdmission> {
+    let bound_refs = vec![dogfood_ref(&format!("retention-{}-bound", input.label))?];
+    retention::store_retention_evidence_admission(input.root, &retention::RetentionEvidenceAdmissionInput {
+        kind: input.kind,
+        decision: "pass",
+        requester_ref: input.requester_ref,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        bound_refs: &bound_refs,
+        retained_refs: &[],
+        remote_refs: input.remote_refs,
+        is_reference_index_complete: true,
+        is_current: true,
+        revoked_refs: &[],
+        diagnostics: &[],
+    })
+}
+
+fn append_dogfood_diagnostics(sink: &mut impl PushLimited<String>, label: &str, diagnostics: &[String]) -> Result<()> {
+    for diagnostic in diagnostics {
+        sink.push_limited_value(
+            format!("{label}:{diagnostic}"),
+            MAX_OPERATOR_DIAGNOSTICS,
+            "operator dogfood diagnostics",
+        )?;
+    }
+    Ok(())
 }
 
 fn install_job_execute_authority_context(
@@ -1546,6 +1953,18 @@ mod tests {
         let entries = ledger::list_artifacts(&root.join("ledger")).expect("ledger entries");
         assert!(entries.iter().any(|entry| entry.artifact_kind == "dogfood-report"));
         assert!(entries.iter().any(|entry| entry.artifact_kind == "operator-checkpoint"));
+        assert!(entries.iter().any(|entry| entry.artifact_kind == "retention-gc-audit"));
+        assert!(entries.iter().any(|entry| entry.artifact_kind == "retention-candidate-bundle-verify"));
+        let workflow = parse_operator_workflow(&run.workflow_value).expect("parse workflow");
+        assert!(workflow.steps.iter().any(|step| step.name == "plan-retention-gc"));
+        assert!(workflow.steps.iter().any(|step| step.name == "apply-retention-gc-plan"));
+        assert!(workflow.steps.iter().any(|step| step.name == "execute-retention-gc"));
+        assert!(workflow.steps.iter().any(|step| step.name == "audit-retention-gc"));
+        assert!(workflow.steps.iter().any(|step| step.name == "export-retention-gc-bundle"));
+        assert!(workflow.steps.iter().any(|step| step.name == "search-retention-gc-catalog"));
+        let release_text = to_text(run.release_gate_value.as_ref().expect("release gate text")).expect("release text");
+        assert!(release_text.contains("retention-gc-review-bound"));
+        assert!(release_text.contains("retention-gc-is-evidence-only"));
         assert!(operator_dogfood_summary(&run.report_value).expect("summary").contains("decision=pass"));
     }
 
@@ -1617,6 +2036,7 @@ mod tests {
                 harness_gate_refs: &[dogfood_ref("harness-gate").expect("harness gate")],
                 catalog_query_refs: &[dogfood_ref("catalog").expect("catalog")],
                 repro_verify_refs: &[dogfood_ref("verify").expect("verify")],
+                retention_gc_refs: &[dogfood_ref("retention-gc").expect("retention gc")],
                 validation_command_refs: &[dogfood_ref("validation").expect("validation")],
             })
             .is_err()
