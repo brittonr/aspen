@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-09 | self | I again wrote a Steel wrapper with `define` inside a conditional `begin`, triggering `BadSyntax`. | Keep Steel command wrappers either fully top-level or use `let` for branch-local bindings; do not put `define` inside conditional branches. |
 | 2026-06-09 | self | My first background Nix wrapper used `mkdir ... && (nix ...) & echo $! > target/pi/...`; shell precedence backgrounded the whole `&&` chain, so `echo` raced before `mkdir` created the directory. | For background validation wrappers, run setup with semicolons first, then background only the build subshell: `mkdir -p target/pi; rm ...; (nix build ...; echo $? > status) & pid=$!; echo $pid > pid`. |
 | 2026-06-09 | self | I tried to `wait` directly on the `spawn-process` result again, even though this environment returns `(Ok child)` and the napkin already documents the wrapper shape. | Always unwrap `spawn-process` with `Ok->value` before `(wait child)` in Steel process snippets. |
 | 2026-06-08 | self | I started a Steel Cairn validation wrapper and submitted it with an unterminated string, wasting a tool call on an avoidable parse error. | For repeated validation commands, paste the known-good complete wrapper or bind command arguments separately before submitting. |
