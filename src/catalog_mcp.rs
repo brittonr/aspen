@@ -37,6 +37,7 @@ pub const READ_ONLY_TOOLS: &[&str] = &[
     "list_upgrade_sessions",
     "list_provenance",
     "search_provenance",
+    "search_retention_gc",
     "short_id_resolve",
 ];
 
@@ -350,6 +351,30 @@ fn dispatch_read_only(
             })
             .map(CoreResult::Query)
         }
+        "search_retention_gc" => {
+            let mut filters = filters_from_args(&request.args)?;
+            push_bounded(
+                &mut filters,
+                CatalogFilter::Text("retention-gc:".to_string()),
+                MAX_CATALOG_MCP_FILTERS,
+                "catalog MCP filters",
+            )?;
+            push_optional_text_filter(&mut filters, &request.args, "stage", "retention-gc")?;
+            push_optional_text_filter(&mut filters, &request.args, "object-ref", "retention-gc-object")?;
+            push_optional_text_filter(&mut filters, &request.args, "subsystem", "retention-gc-subsystem")?;
+            push_optional_text_filter(&mut filters, &request.args, "decision", "retention-gc-decision")?;
+            push_optional_text_filter(&mut filters, &request.args, "plan-ref", "retention-gc-plan")?;
+            push_optional_text_filter(&mut filters, &request.args, "apply-ref", "retention-gc-apply")?;
+            push_optional_text_filter(&mut filters, &request.args, "execution-ref", "retention-gc-execution")?;
+            catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
+                root_refs: arg_strings(&request.args, "root")?,
+                include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
+                include_dependents: arg_bool(&request.args, "include-dependents", true)?,
+                filters,
+                visibility: request.visibility.clone(),
+            })
+            .map(CoreResult::Query)
+        }
         "catalog.search" | "search_artifacts" => {
             let filters = filters_from_args(&request.args)?;
             let root_refs = arg_strings(&request.args, "root")?;
@@ -566,6 +591,23 @@ fn filters_from_args(args: &[IOValue]) -> Result<Vec<CatalogFilter>> {
     append_filter_args(&mut filters, arg_strings(args, "upgrade-status")?, CatalogFilter::UpgradeStatus)?;
     append_filter_args(&mut filters, arg_strings(args, "text")?, CatalogFilter::Text)?;
     Ok(filters)
+}
+
+fn push_optional_text_filter(
+    filters: &mut impl crate::bounded::VecSink<CatalogFilter>,
+    args: &[IOValue],
+    arg_name: &str,
+    prefix: &str,
+) -> Result<()> {
+    if let Some(value) = optional_arg_string(args, arg_name) {
+        push_bounded(
+            filters,
+            CatalogFilter::Text(format!("{prefix}:{value}")),
+            MAX_CATALOG_MCP_FILTERS,
+            "catalog MCP filters",
+        )?;
+    }
+    Ok(())
 }
 
 fn append_filter_args(
@@ -946,6 +988,29 @@ mod tests {
     }
 
     #[test]
+    fn retention_gc_named_tool_searches_audit_scope() {
+        let root = temp_dir("catalog-mcp-retention-gc");
+        let registry = root.join("registry");
+        let ledger_root = root.join("ledger");
+        let retention_root = root.join("retention");
+        let fixture = retention_gc_audit_fixture(&retention_root, "catalog-mcp-retention-gc", "chunk-gc");
+        ledger::import_artifact(&ledger_root, &fixture.audit.value).expect("import retention GC audit");
+
+        let request = mcp_request_value("search_retention_gc", vec![
+            record("stage", vec![string("audit")]),
+            record("object-ref", vec![string(&fixture.object_ref)]),
+            record("subsystem", vec![string("chunk-gc")]),
+            record("execution-ref", vec![string(&fixture.execution_ref)]),
+        ])
+        .expect("retention GC search request");
+        let call = call(&registry, Some(&ledger_root), &request).expect("retention GC search call");
+        assert_eq!(call.decision, "pass");
+        let text = to_text(&call.response_value).expect("retention GC search response");
+        assert!(text.contains("retention-gc:audit"));
+        assert!(text.contains(&fixture.execution_ref));
+    }
+
+    #[test]
     fn hidden_refs_stay_hidden_and_redacted_view_is_default() {
         let registry = temp_dir("catalog-mcp-hidden");
         let secret =
@@ -1001,6 +1066,98 @@ mod tests {
         let denied = call(&registry, None, &mcp_request_value("catalog.delete", Vec::new()).expect("mutating request"))
             .expect("denied mutating");
         assert_eq!(denied.decision, "deny");
+    }
+
+    struct RetentionGcAuditFixture {
+        object_ref: String,
+        execution_ref: String,
+        audit: crate::retention::RetentionGcAudit,
+    }
+
+    fn retention_gc_audit_fixture(root: &Path, label: &str, subsystem: &str) -> RetentionGcAuditFixture {
+        let requester_ref = test_ref(&format!("{label}-requester"));
+        let object_ref = test_ref(&format!("{label}-object"));
+        let object_kind = "chunk";
+        let retention_class = crate::retention::CLASS_DURABLE_VALUE;
+        let action = crate::retention::ACTION_DELETE;
+        let store_admission = |kind: &str, suffix: &str| -> String {
+            crate::retention::store_retention_evidence_admission(
+                root,
+                &crate::retention::RetentionEvidenceAdmissionInput {
+                    kind,
+                    decision: "pass",
+                    requester_ref: &requester_ref,
+                    object_ref: &object_ref,
+                    object_kind,
+                    retention_class,
+                    action,
+                    bound_refs: &[test_ref(&format!("{label}-{suffix}"))],
+                    retained_refs: &[],
+                    remote_refs: &[],
+                    is_reference_index_complete: true,
+                    is_current: true,
+                    revoked_refs: &[],
+                    diagnostics: &[],
+                },
+            )
+            .expect("store retention GC catalog MCP admission")
+            .admission_ref
+        };
+        let evidence = crate::retention::DestructiveRetentionEvidence {
+            requester_ref: Some(requester_ref.clone()),
+            policy_refs: vec![store_admission(crate::retention::ADMISSION_KIND_POLICY, "policy")],
+            authority_refs: vec![store_admission(crate::retention::ADMISSION_KIND_AUTHORITY, "authority")],
+            evidence_refs: vec![store_admission(
+                crate::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+                "support",
+            )],
+            retained_refs: Vec::new(),
+            remote_peer_refs: Vec::new(),
+            remote_refs: Vec::new(),
+            reference_index_refs: vec![store_admission(
+                crate::retention::ADMISSION_KIND_REFERENCE_INDEX,
+                "index",
+            )],
+            remote_gc_refs: Vec::new(),
+            remote_clearance_refs: Vec::new(),
+            is_reference_index_complete: true,
+        };
+        let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
+            root,
+            subsystem,
+            object_ref: &object_ref,
+            object_kind,
+            retention_class,
+            action,
+            evidence: &evidence,
+        })
+        .expect("store retention GC catalog MCP plan");
+        let apply = crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
+            root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply retention GC catalog MCP plan");
+        let execution =
+            crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
+                root,
+                subsystem,
+                action,
+                object_ref: &object_ref,
+                object_kind,
+                retention_class,
+                apply_ref: Some(&apply.apply_ref),
+            })
+            .expect("store retention GC catalog MCP execution");
+        let audit = crate::retention::audit_retention_gc_execution(crate::retention::RetentionGcAuditInput {
+            root,
+            execution_ref: &execution.execution_ref,
+        })
+        .expect("audit retention GC catalog MCP execution");
+        RetentionGcAuditFixture {
+            object_ref,
+            execution_ref: execution.execution_ref,
+            audit,
+        }
     }
 
     fn install_fixture(
