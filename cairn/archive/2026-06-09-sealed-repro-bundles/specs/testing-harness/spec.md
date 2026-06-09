@@ -42,3 +42,28 @@ r[molten.testing.sealed_repro_bundles.failure_diagnostics] Failure repro bundles
 - GIVEN a failure repro bundle
 - WHEN `molten test gate check refs.preserves` runs
 - THEN the gate rejects it as diagnostic evidence only
+
+### Requirement: Repro export writes sealed bundle files
+r[molten.testing.sealed_repro_bundles.export] The harness CLI MUST write sealed report repro bundle files, including the embedded report gate receipt, when exporting a valid deterministic report.
+
+#### Scenario: Export writes receipt artifact
+- GIVEN a deterministic report that passes validation and report gating
+- WHEN `molten test repro export` writes a bundle directory
+- THEN the directory contains the sealed refs file and embedded gate receipt artifact
+- AND the refs file binds the report, suite, and receipt content refs
+
+### Requirement: Sealed bundle regressions cover tamper cases
+r[molten.testing.sealed_repro_bundles.negative_tests] Sealed bundle tests SHOULD cover tampered reports, tampered embedded receipts, mismatched suite refs, and diagnostic-only failure bundles.
+
+#### Scenario: Tamper test fails before pass evidence
+- GIVEN a sealed bundle negative fixture with one tampered embedded artifact
+- WHEN the bundle gate is evaluated in tests
+- THEN the gate fails closed before emitting pass evidence
+
+### Requirement: Sealed bundle CLI contracts are documented
+r[molten.testing.sealed_repro_bundles.docs] User-facing documentation SHOULD describe sealed repro export, embedded receipt validation, and the diagnostic-only status of failure bundles.
+
+#### Scenario: Operator follows sealed export docs
+- GIVEN an operator reading the repro bundle CLI documentation
+- WHEN they export and gate a deterministic report bundle
+- THEN the documented commands identify the sealed refs file and embedded receipt evidence required for pass validation

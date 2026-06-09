@@ -504,6 +504,20 @@ enum DogfoodCommand {
         #[arg(long)]
         release_gate_out: Option<PathBuf>,
     },
+    NixReleaseExport {
+        #[arg(long)]
+        output_path: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    NixReleaseVerify {
+        #[arg(long)]
+        output_path: PathBuf,
+        #[arg(long)]
+        evidence: PathBuf,
+        #[arg(long)]
+        receipt_out: PathBuf,
+    },
     Show {
         artifact: PathBuf,
     },
@@ -8638,6 +8652,36 @@ fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
             );
             Ok(())
         }
+        DogfoodCommand::NixReleaseExport { output_path, out } => {
+            let evidence =
+                operator_dogfood::nix_dogfood_release_evidence_value(&operator_dogfood::NixDogfoodEvidenceInput {
+                    output_path: &output_path,
+                })?;
+            let parsed = operator_dogfood::parse_nix_dogfood_evidence(&evidence)?;
+            write_file(&out, &to_text(&evidence)?)?;
+            println!(
+                "dogfood nix-release-export evidence={} report={} release-gate={}",
+                parsed.evidence_ref, parsed.report_ref, parsed.release_gate_ref
+            );
+            Ok(())
+        }
+        DogfoodCommand::NixReleaseVerify {
+            output_path,
+            evidence,
+            receipt_out,
+        } => {
+            let evidence_value = read_preserves_file(&evidence)?;
+            let receipt = operator_dogfood::verify_nix_dogfood_evidence(&operator_dogfood::NixDogfoodVerifyInput {
+                output_path: &output_path,
+                evidence_value: &evidence_value,
+            })?;
+            write_file(&receipt_out, &to_text(&receipt.value)?)?;
+            println!(
+                "dogfood nix-release-verify decision={} receipt={} evidence={}",
+                receipt.decision, receipt.receipt_ref, receipt.evidence_ref
+            );
+            Ok(())
+        }
         DogfoodCommand::Show { artifact } => {
             let value = read_preserves_file(&artifact)?;
             println!("{}", operator_dogfood::operator_dogfood_summary(&value)?);
@@ -12553,8 +12597,36 @@ mod tests {
         let parsed = operator_dogfood::parse_dogfood_report(&report_value).expect("parse dogfood report");
         assert_eq!(parsed.decision, "pass");
         assert!(fs::read_to_string(&release_gate).expect("read release gate").contains("release-gate-receipt-v1"));
+        fs::write(
+            dir.join("dogfood-summary.txt"),
+            format!(
+                "dogfood local-node decision=pass report={} release-gate={}\n",
+                parsed.report_ref,
+                canonical_hash(&read_preserves_file(&release_gate).expect("release gate value")).expect("release ref")
+            ),
+        )
+        .expect("write summary");
+        fs::write(dir.join("after-nextest.txt"), "/nix/store/test-molten-nextest\n").expect("write nextest marker");
+        let nix_evidence = dir.join("nix-dogfood-evidence.preserves");
+        let nix_verify = dir.join("nix-dogfood-verify.preserves");
+        run_dogfood_command(DogfoodCommand::NixReleaseExport {
+            output_path: dir.clone(),
+            out: nix_evidence.clone(),
+        })
+        .expect("dogfood nix release export");
+        run_dogfood_command(DogfoodCommand::NixReleaseVerify {
+            output_path: dir.clone(),
+            evidence: nix_evidence.clone(),
+            receipt_out: nix_verify.clone(),
+        })
+        .expect("dogfood nix release verify");
+        let verify_value = read_preserves_file(&nix_verify).expect("read nix verify");
+        let verify = operator_dogfood::parse_nix_dogfood_verify_receipt(&verify_value).expect("parse nix verify");
+        assert_eq!(verify.decision, "pass");
         run_dogfood_command(DogfoodCommand::Show { artifact: report }).expect("dogfood show report");
         run_dogfood_command(DogfoodCommand::Show { artifact: release_gate }).expect("dogfood show gate");
+        run_dogfood_command(DogfoodCommand::Show { artifact: nix_evidence }).expect("dogfood show nix evidence");
+        run_dogfood_command(DogfoodCommand::Show { artifact: nix_verify }).expect("dogfood show nix verify");
     }
 
     #[test]

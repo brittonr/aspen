@@ -24,6 +24,8 @@ use crate::node_runtime;
 use crate::octet_gate;
 use crate::preserves_rail::OPERATOR_CHECKPOINT_SCHEMA;
 use crate::preserves_rail::OPERATOR_DOGFOOD_REPORT_SCHEMA;
+use crate::preserves_rail::OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA;
+use crate::preserves_rail::OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA;
 use crate::preserves_rail::OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OPERATOR_STEP_SCHEMA;
 use crate::preserves_rail::OPERATOR_WORKFLOW_SCHEMA;
@@ -108,6 +110,61 @@ pub struct ReleaseGateInput<'a> {
     pub repro_verify_refs: &'a [String],
     pub retention_gc_refs: &'a [String],
     pub validation_command_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseGateReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub report_ref: String,
+    pub startup_ref: String,
+    pub shutdown_ref: String,
+    pub harness_gate_refs: Vec<String>,
+    pub catalog_query_refs: Vec<String>,
+    pub repro_verify_refs: Vec<String>,
+    pub retention_gc_refs: Vec<String>,
+    pub validation_command_refs: Vec<String>,
+    pub checks: Vec<(String, String)>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NixDogfoodEvidenceInput<'a> {
+    pub output_path: &'a Path,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NixDogfoodEvidence {
+    pub evidence_ref: String,
+    pub output_path: String,
+    pub output_path_ref: String,
+    pub report_ref: String,
+    pub release_gate_ref: String,
+    pub summary_ref: String,
+    pub nextest_marker_ref: String,
+    pub nextest_check_path: String,
+    pub file_refs: Vec<(String, String)>,
+    pub checks: Vec<(String, String)>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NixDogfoodVerifyInput<'a> {
+    pub output_path: &'a Path,
+    pub evidence_value: &'a IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NixDogfoodVerifyReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub evidence_ref: String,
+    pub output_path_ref: String,
+    pub report_ref: String,
+    pub release_gate_ref: String,
+    pub diagnostics: Vec<String>,
+    pub checks: Vec<(String, String)>,
+    pub value: IOValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -479,6 +536,277 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IOValu
             ("no-text-oracle", "pass"),
         ]),
     ]))
+}
+
+pub fn parse_release_gate_receipt(value: &IOValue) -> Result<ReleaseGateReceipt> {
+    let fields = value
+        .collect_simple_record("release-gate-receipt-v1", Some(10))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <release-gate-receipt-v1 ...>"))?;
+    require_schema(&fields[0], OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA, "operator release gate")?;
+    let checks = parse_checks(&fields[9])?;
+    require_check(&checks, "dogfood-report-pass", "operator release gate")?;
+    require_check(&checks, "no-text-oracle", "operator release gate")?;
+    let node = value_to_iovalue(&fields[3]);
+    let node_fields = simple_record(&node, "node", 2)?;
+    Ok(ReleaseGateReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision: record_string(&fields[1], "decision")?,
+        report_ref: record_ref(&fields[2], "report")?,
+        startup_ref: required_ref(&node_fields[0], "release gate startup ref")?,
+        shutdown_ref: required_ref(&node_fields[1], "release gate shutdown ref")?,
+        harness_gate_refs: record_ref_sequence(&fields[4], "harness-gates")?,
+        catalog_query_refs: record_ref_sequence(&fields[5], "catalog-queries")?,
+        repro_verify_refs: record_ref_sequence(&fields[6], "repro-verifies")?,
+        retention_gc_refs: record_ref_sequence(&fields[7], "retention-gc")?,
+        validation_command_refs: record_ref_sequence(&fields[8], "validation-commands")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
+pub fn nix_dogfood_release_evidence_value(input: &NixDogfoodEvidenceInput<'_>) -> Result<IOValue> {
+    let observed = observe_nix_dogfood_output(input.output_path)?;
+    Ok(record("nix-dogfood-release-evidence-v1", vec![
+        string(OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA),
+        record("output-path", vec![string(observed.output_path.as_str()), string(&observed.output_path_ref)]),
+        record("report", vec![string(&observed.report_ref)]),
+        record("release-gate", vec![string(&observed.release_gate_ref)]),
+        record("summary", vec![string(&observed.summary_ref)]),
+        record("nextest", vec![
+            string(&observed.nextest_marker_ref),
+            string(observed.nextest_check_path.as_str()),
+        ]),
+        record("files", vec![file_refs_sequence(&observed.file_refs)]),
+        checks_value_from_pairs(&[
+            ("dogfood-report-pass", "pass"),
+            ("release-gate-ref-bound", "pass"),
+            ("nix-output-path-bound", "pass"),
+            ("nextest-dependency-bound", "pass"),
+            ("release-evidence-only", "pass"),
+            ("no-text-oracle", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_nix_dogfood_evidence(value: &IOValue) -> Result<NixDogfoodEvidence> {
+    let fields = value
+        .collect_simple_record("nix-dogfood-release-evidence-v1", Some(8))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <nix-dogfood-release-evidence-v1 ...>"))?;
+    require_schema(&fields[0], OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA, "Nix dogfood evidence")?;
+    let output_path = value_to_iovalue(&fields[1]);
+    let output_fields = simple_record(&output_path, "output-path", 2)?;
+    let nextest = value_to_iovalue(&fields[5]);
+    let nextest_fields = simple_record(&nextest, "nextest", 2)?;
+    let checks = parse_checks(&fields[7])?;
+    require_check(&checks, "release-evidence-only", "Nix dogfood evidence")?;
+    require_check(&checks, "no-text-oracle", "Nix dogfood evidence")?;
+    Ok(NixDogfoodEvidence {
+        evidence_ref: canonical_hash(value)?,
+        output_path: required_string(&output_fields[0], "Nix dogfood output path")?,
+        output_path_ref: required_ref(&output_fields[1], "Nix dogfood output path ref")?,
+        report_ref: record_ref(&fields[2], "report")?,
+        release_gate_ref: record_ref(&fields[3], "release-gate")?,
+        summary_ref: record_ref(&fields[4], "summary")?,
+        nextest_marker_ref: required_ref(&nextest_fields[0], "Nix dogfood nextest marker ref")?,
+        nextest_check_path: required_string(&nextest_fields[1], "Nix dogfood nextest check path")?,
+        file_refs: record_file_refs(&fields[6], "files")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
+pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<NixDogfoodVerifyReceipt> {
+    let evidence = parse_nix_dogfood_evidence(input.evidence_value)?;
+    let observed = observe_nix_dogfood_output(input.output_path)?;
+    let mut diagnostics = Vec::new();
+    for diagnostic in [
+        mismatch_diagnostic("output-path-ref", &evidence.output_path_ref, &observed.output_path_ref),
+        mismatch_diagnostic("report-ref", &evidence.report_ref, &observed.report_ref),
+        mismatch_diagnostic("release-gate-ref", &evidence.release_gate_ref, &observed.release_gate_ref),
+        mismatch_diagnostic("summary-ref", &evidence.summary_ref, &observed.summary_ref),
+        mismatch_diagnostic("nextest-marker-ref", &evidence.nextest_marker_ref, &observed.nextest_marker_ref),
+        mismatch_diagnostic("nextest-check-path", &evidence.nextest_check_path, &observed.nextest_check_path),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        diagnostics.push_limited_value(diagnostic, MAX_OPERATOR_DIAGNOSTICS, "Nix dogfood verify diagnostics")?;
+    }
+    for diagnostic in file_ref_mismatch_diagnostics(&evidence.file_refs, &observed.file_refs)? {
+        diagnostics.push_limited_value(diagnostic, MAX_OPERATOR_DIAGNOSTICS, "Nix dogfood verify diagnostics")?;
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let value = record("nix-dogfood-release-verify-receipt-v1", vec![
+        string(OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("evidence", vec![string(&evidence.evidence_ref)]),
+        record("output-path", vec![string(observed.output_path.as_str()), string(&observed.output_path_ref)]),
+        record("report", vec![string(&observed.report_ref)]),
+        record("release-gate", vec![string(&observed.release_gate_ref)]),
+        record("diagnostics", vec![strings_sequence(&diagnostics)]),
+        checks_value_from_pairs(&[
+            ("dogfood-report-pass", "pass"),
+            ("release-gate-ref-bound", status(evidence.release_gate_ref == observed.release_gate_ref)),
+            ("nix-output-path-bound", status(evidence.output_path_ref == observed.output_path_ref)),
+            ("nextest-dependency-bound", status(evidence.nextest_marker_ref == observed.nextest_marker_ref)),
+            ("release-evidence-only", "pass"),
+            ("no-text-oracle", "pass"),
+        ]),
+    ]);
+    parse_nix_dogfood_verify_receipt(&value)
+}
+
+pub fn parse_nix_dogfood_verify_receipt(value: &IOValue) -> Result<NixDogfoodVerifyReceipt> {
+    let fields = value
+        .collect_simple_record("nix-dogfood-release-verify-receipt-v1", Some(8))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <nix-dogfood-release-verify-receipt-v1 ...>"))?;
+    require_schema(&fields[0], OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA, "Nix dogfood verify receipt")?;
+    let output_path = value_to_iovalue(&fields[3]);
+    let output_fields = simple_record(&output_path, "output-path", 2)?;
+    let checks = parse_checks(&fields[7])?;
+    require_check(&checks, "release-evidence-only", "Nix dogfood verify receipt")?;
+    require_check(&checks, "no-text-oracle", "Nix dogfood verify receipt")?;
+    Ok(NixDogfoodVerifyReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision: record_string(&fields[1], "decision")?,
+        evidence_ref: record_ref(&fields[2], "evidence")?,
+        output_path_ref: required_ref(&output_fields[1], "Nix dogfood verify output path ref")?,
+        report_ref: record_ref(&fields[4], "report")?,
+        release_gate_ref: record_ref(&fields[5], "release-gate")?,
+        diagnostics: record_string_sequence(&fields[6], "diagnostics")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ObservedNixDogfoodOutput {
+    output_path: String,
+    output_path_ref: String,
+    report_ref: String,
+    release_gate_ref: String,
+    summary_ref: String,
+    nextest_marker_ref: String,
+    nextest_check_path: String,
+    file_refs: Vec<(String, String)>,
+}
+
+fn observe_nix_dogfood_output(output_path: &Path) -> Result<ObservedNixDogfoodOutput> {
+    let output_path_string = output_path.display().to_string();
+    let output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
+    let report_text = read_output_text(output_path, "dogfood-report.preserves")?;
+    let release_gate_text = read_output_text(output_path, "release-gate.preserves")?;
+    let summary_text = read_output_text(output_path, "dogfood-summary.txt")?;
+    let nextest_text = read_output_text(output_path, "after-nextest.txt")?;
+    let report_value = parse_text(&report_text)?;
+    let release_gate_value = parse_text(&release_gate_text)?;
+    let report = parse_dogfood_report(&report_value)?;
+    let release_gate = parse_release_gate_receipt(&release_gate_value)?;
+    if report.decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "Nix dogfood evidence requires pass report {}; decision is {}",
+            report.report_ref, report.decision
+        )));
+    }
+    if release_gate.decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "Nix dogfood evidence requires pass release gate {}; decision is {}",
+            release_gate.receipt_ref, release_gate.decision
+        )));
+    }
+    if release_gate.report_ref != report.report_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "Nix dogfood release gate report ref {} does not match report {}",
+            release_gate.report_ref, report.report_ref
+        )));
+    }
+    let nextest_check_path = nextest_text.trim().to_string();
+    if nextest_check_path.is_empty() {
+        return Err(MoltenError::invalid_harness("Nix dogfood after-nextest marker is empty"));
+    }
+    let summary_ref = raw_text_ref("molten.operator.nix-dogfood-summary.v1", &summary_text);
+    let nextest_marker_ref = raw_text_ref("molten.operator.nix-dogfood-nextest-marker.v1", &nextest_text);
+    let mut file_refs = Vec::new();
+    file_refs.push_limited_value(
+        ("dogfood-report.preserves".to_string(), report.report_ref.clone()),
+        MAX_OPERATOR_REFS,
+        "Nix dogfood file refs",
+    )?;
+    file_refs.push_limited_value(
+        ("release-gate.preserves".to_string(), release_gate.receipt_ref.clone()),
+        MAX_OPERATOR_REFS,
+        "Nix dogfood file refs",
+    )?;
+    file_refs.push_limited_value(
+        ("dogfood-summary.txt".to_string(), summary_ref.clone()),
+        MAX_OPERATOR_REFS,
+        "Nix dogfood file refs",
+    )?;
+    file_refs.push_limited_value(
+        ("after-nextest.txt".to_string(), nextest_marker_ref.clone()),
+        MAX_OPERATOR_REFS,
+        "Nix dogfood file refs",
+    )?;
+    Ok(ObservedNixDogfoodOutput {
+        output_path: output_path_string,
+        output_path_ref,
+        report_ref: report.report_ref,
+        release_gate_ref: release_gate.receipt_ref,
+        summary_ref,
+        nextest_marker_ref,
+        nextest_check_path,
+        file_refs,
+    })
+}
+
+fn read_output_text(output_path: &Path, name: &str) -> Result<String> {
+    fs::read_to_string(output_path.join(name)).map_err(MoltenError::from)
+}
+
+fn raw_text_ref(domain: &str, text: &str) -> String {
+    let mut bytes = Vec::with_capacity(domain.len().saturating_add(text.len()).saturating_add(1));
+    bytes.extend_from_slice(domain.as_bytes());
+    bytes.push(0);
+    bytes.extend_from_slice(text.as_bytes());
+    format!("blake3:{}", blake3::hash(&bytes).to_hex())
+}
+
+fn mismatch_diagnostic(label: &str, expected: &str, actual: &str) -> Option<String> {
+    if expected == actual {
+        None
+    } else {
+        Some(format!("{label} mismatch: evidence={expected} observed={actual}"))
+    }
+}
+
+fn file_ref_mismatch_diagnostics(expected: &[(String, String)], observed: &[(String, String)]) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    if expected.len() != observed.len() {
+        diagnostics.push_limited_value(
+            format!("file ref count mismatch: evidence={} observed={}", expected.len(), observed.len()),
+            MAX_OPERATOR_DIAGNOSTICS,
+            "Nix dogfood verify diagnostics",
+        )?;
+    }
+    for (expected_name, expected_ref) in expected {
+        match observed.iter().find(|(observed_name, _)| observed_name == expected_name) {
+            Some((_, observed_ref)) => {
+                if let Some(diagnostic) = mismatch_diagnostic(expected_name, expected_ref, observed_ref) {
+                    diagnostics.push_limited_value(
+                        diagnostic,
+                        MAX_OPERATOR_DIAGNOSTICS,
+                        "Nix dogfood verify diagnostics",
+                    )?;
+                }
+            }
+            None => diagnostics.push_limited_value(
+                format!("file ref missing from observed output: {expected_name}"),
+                MAX_OPERATOR_DIAGNOSTICS,
+                "Nix dogfood verify diagnostics",
+            )?,
+        }
+    }
+    Ok(diagnostics)
 }
 
 pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<LocalNodeDogfoodRun> {
@@ -885,6 +1213,27 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
     }
     if value.collect_simple_record("release-gate-receipt-v1", Some(10)).is_some() {
         return Ok(format!("operator release gate receipt ref={} (summary is non-normative)", canonical_hash(value)?));
+    }
+    if let Ok(evidence) = parse_nix_dogfood_evidence(value) {
+        return Ok(format!(
+            "operator Nix dogfood evidence ref={} output={} report={} release_gate={} nextest={} (summary is non-normative)",
+            evidence.evidence_ref,
+            evidence.output_path,
+            evidence.report_ref,
+            evidence.release_gate_ref,
+            evidence.nextest_check_path
+        ));
+    }
+    if let Ok(receipt) = parse_nix_dogfood_verify_receipt(value) {
+        return Ok(format!(
+            "operator Nix dogfood verify receipt ref={} decision={} evidence={} report={} release_gate={} diagnostics={} (summary is non-normative)",
+            receipt.receipt_ref,
+            receipt.decision,
+            receipt.evidence_ref,
+            receipt.report_ref,
+            receipt.release_gate_ref,
+            receipt.diagnostics.len()
+        ));
     }
     Err(MoltenError::invalid_harness("unsupported operator dogfood artifact for summary"))
 }
@@ -1781,6 +2130,10 @@ fn step_receipts_sequence(receipts: &[(String, String)]) -> IOValue {
     )
 }
 
+fn file_refs_sequence(refs: &[(String, String)]) -> IOValue {
+    sequence(refs.iter().map(|(name, reference)| record("file", vec![string(name), string(reference)])).collect())
+}
+
 fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
@@ -1902,6 +2255,18 @@ fn record_step_receipts(value: &Value<IOValue>, label: &str) -> Result<Vec<(Stri
     Ok(receipts)
 }
 
+fn record_file_refs(value: &Value<IOValue>, label: &str) -> Result<Vec<(String, String)>> {
+    let items = record_iovalue_sequence(value, label)?;
+    let mut files = Vec::new();
+    for item in &items {
+        let fields = simple_record(item, "file", 2)?;
+        let name = required_string(&fields[0], "Nix dogfood file name")?;
+        let reference = required_ref(&fields[1], "Nix dogfood file ref")?;
+        files.push_limited_value((name, reference), MAX_OPERATOR_REFS, "Nix dogfood file refs")?;
+    }
+    Ok(files)
+}
+
 fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
@@ -1966,6 +2331,60 @@ mod tests {
         assert!(release_text.contains("retention-gc-review-bound"));
         assert!(release_text.contains("retention-gc-is-evidence-only"));
         assert!(operator_dogfood_summary(&run.report_value).expect("summary").contains("decision=pass"));
+    }
+
+    #[test]
+    fn nix_dogfood_release_evidence_verifies_and_denies_stale_refs() {
+        let root = temp_dir("operator-dogfood-nix-evidence");
+        let state_root = root.join("state");
+        let output_root = root.join("nix-output");
+        fs::create_dir_all(&output_root).expect("create nix output");
+        let run = run_local_node_dogfood(&LocalNodeDogfoodInput {
+            state_root: &state_root,
+        })
+        .expect("dogfood run");
+        fs::write(output_root.join("dogfood-report.preserves"), to_text(&run.report_value).expect("report text"))
+            .expect("write report");
+        fs::write(
+            output_root.join("release-gate.preserves"),
+            to_text(run.release_gate_value.as_ref().expect("release gate")).expect("release text"),
+        )
+        .expect("write release gate");
+        fs::write(
+            output_root.join("dogfood-summary.txt"),
+            format!(
+                "dogfood local-node decision=pass report={} release-gate={}\n",
+                run.report_ref,
+                run.release_gate_ref.as_deref().expect("release ref")
+            ),
+        )
+        .expect("write summary");
+        fs::write(output_root.join("after-nextest.txt"), "/nix/store/test-molten-nextest\n")
+            .expect("write nextest marker");
+        let evidence = nix_dogfood_release_evidence_value(&NixDogfoodEvidenceInput {
+            output_path: &output_root,
+        })
+        .expect("nix evidence");
+        let parsed = parse_nix_dogfood_evidence(&evidence).expect("parse nix evidence");
+        assert_eq!(crate::ledger::artifact_kind(&evidence), "nix-dogfood-release-evidence");
+        assert_eq!(parsed.release_gate_ref, run.release_gate_ref.expect("release ref"));
+        let receipt = verify_nix_dogfood_evidence(&NixDogfoodVerifyInput {
+            output_path: &output_root,
+            evidence_value: &evidence,
+        })
+        .expect("verify nix evidence");
+        assert_eq!(receipt.decision, "pass");
+        assert_eq!(crate::ledger::artifact_kind(&receipt.value), "nix-dogfood-release-verify-receipt");
+        let stale_ref = dogfood_ref("stale-summary").expect("stale ref");
+        let stale_text = to_text(&evidence).expect("evidence text").replace(&parsed.summary_ref, &stale_ref);
+        let stale_evidence = parse_text(&stale_text).expect("stale evidence parse");
+        let stale_receipt = verify_nix_dogfood_evidence(&NixDogfoodVerifyInput {
+            output_path: &output_root,
+            evidence_value: &stale_evidence,
+        })
+        .expect("verify stale evidence");
+        assert_eq!(stale_receipt.decision, "deny");
+        assert!(stale_receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("summary-ref mismatch")));
     }
 
     #[test]

@@ -259,6 +259,15 @@
             mkdir -p "$out"
             cp dogfood-summary.txt dogfood-report.preserves release-gate.preserves "$out"/
             printf '%s\n' "$nextestCheck" > "$out/after-nextest.txt"
+            molten dogfood nix-release-export \
+              --output-path "$out" \
+              --out "$out/nix-dogfood-evidence.preserves"
+            molten dogfood nix-release-verify \
+              --output-path "$out" \
+              --evidence "$out/nix-dogfood-evidence.preserves" \
+              --receipt-out "$out/nix-dogfood-verify.preserves" \
+              | tee "$out/nix-dogfood-verify.txt"
+            grep -q 'decision=pass' "$out/nix-dogfood-verify.txt"
           '';
 
           nextest-config = pkgs.runCommand "molten-nextest-config-check"

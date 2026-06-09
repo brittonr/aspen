@@ -35,3 +35,30 @@ r[molten.artifacts.local_evidence_ledger.retention_gc] GC MUST preserve every ar
 - WHEN GC runs with policy allowing diagnostic cleanup
 - THEN the failure artifact may be removed
 - AND the GC receipt records the removed refs
+
+### Requirement: Ledger import and export preserve canonical evidence
+r[molten.artifacts.local_evidence_ledger.import_export] The local evidence ledger MUST provide import and export operations for canonical report, bundle, unpack directory, and receipt artifacts without changing their content refs.
+
+#### Scenario: Exported bytes match imported bytes
+- GIVEN a canonical artifact imported into the ledger
+- WHEN the artifact is exported back to a file
+- THEN the exported file bytes hash to the same content ref
+- AND the ledger records import and export evidence for the operation
+
+### Requirement: Ledger validation appends receipts
+r[molten.artifacts.local_evidence_ledger.validation_receipts] Ledger validation MUST append validation, import, export, pin, and GC receipts instead of mutating stored artifact bytes or overwriting prior status.
+
+#### Scenario: Validation rule changes append new evidence
+- GIVEN an artifact that already has a validation receipt
+- WHEN validation is run again under a newer rule set
+- THEN the ledger stores a new validation receipt
+- AND the original artifact bytes and prior receipt remain available by content ref
+
+### Requirement: Ledger behavior has regression coverage
+r[molten.artifacts.local_evidence_ledger.tests] The local evidence ledger SHOULD have regression tests for immutability, rebuildable indexes, corrupted bytes, missing dependencies, and retained dependency preservation.
+
+#### Scenario: Corrupted storage is detected
+- GIVEN ledger storage whose bytes no longer match the recorded content ref
+- WHEN indexes are rebuilt or the artifact is read
+- THEN the corruption is reported as a validation failure
+- AND retained dependencies are not silently dropped
