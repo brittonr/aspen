@@ -268,6 +268,15 @@
               --receipt-out "$out/nix-dogfood-verify.preserves" \
               | tee "$out/nix-dogfood-verify.txt"
             grep -q 'decision=pass' "$out/nix-dogfood-verify.txt"
+            molten dogfood release-bundle-export \
+              --output-path "$out" \
+              --out "$out/release-evidence-bundle.preserves"
+            molten dogfood release-bundle-verify \
+              --output-path "$out" \
+              --bundle "$out/release-evidence-bundle.preserves" \
+              --receipt-out "$out/release-evidence-bundle-verify.preserves" \
+              | tee "$out/release-evidence-bundle-verify.txt"
+            grep -q 'decision=pass' "$out/release-evidence-bundle-verify.txt"
           '';
 
           nextest-config = pkgs.runCommand "molten-nextest-config-check"

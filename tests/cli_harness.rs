@@ -449,6 +449,29 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let verify_receipt = molten::operator_dogfood::parse_nix_dogfood_verify_receipt(&read_preserves(&nix_verify)?)?;
     assert_eq!(verify_receipt.decision, "pass");
 
+    let release_bundle = dir.join("release-evidence-bundle.preserves");
+    let release_bundle_verify = dir.join("release-evidence-bundle-verify.preserves");
+    let export_bundle = molten_cmd()
+        .args(["dogfood", "release-bundle-export", "--output-path"])
+        .arg(&dir)
+        .args(["--out"])
+        .arg(&release_bundle)
+        .output()?;
+    assert_success(&export_bundle, "dogfood release-bundle-export");
+    let verify_bundle = molten_cmd()
+        .args(["dogfood", "release-bundle-verify", "--output-path"])
+        .arg(&dir)
+        .args(["--bundle"])
+        .arg(&release_bundle)
+        .args(["--receipt-out"])
+        .arg(&release_bundle_verify)
+        .output()?;
+    assert_success(&verify_bundle, "dogfood release-bundle-verify");
+    let bundle_verify = molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(&read_preserves(
+        &release_bundle_verify,
+    )?)?;
+    assert_eq!(bundle_verify.decision, "pass");
+
     fs::write(dir.join("after-nextest.txt"), "/nix/store/stale-molten-nextest\n")?;
     let stale_verify = dir.join("nix-dogfood-verify-stale.preserves");
     let verify_stale = molten_cmd()
@@ -464,6 +487,26 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     assert_eq!(stale_receipt.decision, "deny");
     assert!(
         stale_receipt
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("nextest-marker-ref mismatch"))
+    );
+    let stale_bundle_verify_path = dir.join("release-evidence-bundle-verify-stale.preserves");
+    let verify_stale_bundle = molten_cmd()
+        .args(["dogfood", "release-bundle-verify", "--output-path"])
+        .arg(&dir)
+        .args(["--bundle"])
+        .arg(&release_bundle)
+        .args(["--receipt-out"])
+        .arg(&stale_bundle_verify_path)
+        .output()?;
+    assert_success(&verify_stale_bundle, "dogfood release-bundle-verify stale marker");
+    let stale_bundle_receipt = molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(
+        &read_preserves(&stale_bundle_verify_path)?,
+    )?;
+    assert_eq!(stale_bundle_receipt.decision, "deny");
+    assert!(
+        stale_bundle_receipt
             .diagnostics
             .iter()
             .any(|diagnostic| diagnostic.contains("nextest-marker-ref mismatch"))

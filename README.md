@@ -116,6 +116,7 @@ Current Cairn roadmap changes live under `cairn/changes/`:
 - `coordination-control-plane-ux`
 - `operator-dogfood-node-workflow`
 - `operator-dogfood-retention-gc-workflow`
+- `operator-dogfood-release-evidence-bundle`
 
 ## Node runtime daemon
 
@@ -553,7 +554,9 @@ nix build .#checks.x86_64-linux.dogfood-local-node
 nix build .#checks.x86_64-linux.nextest-config
 ```
 
-`dogfood-local-node` depends on the hermetic nextest check, runs `molten dogfood local-node` in a temporary state root, preserves `dogfood-report.preserves`, `release-gate.preserves`, `dogfood-summary.txt`, and an `after-nextest.txt` marker, then emits `nix-dogfood-evidence.preserves` plus `nix-dogfood-verify.preserves` to bind the Nix output path, report ref, release-gate ref, and nextest dependency marker for release review. These artifacts remain evidence-only and do not grant authority, policy, provenance, resource, transport, source-gate, retention, or destructive-operation trust.
+`dogfood-local-node` depends on the hermetic nextest check, runs `molten dogfood local-node` in a temporary state root, preserves `dogfood-report.preserves`, `release-gate.preserves`, `dogfood-summary.txt`, and an `after-nextest.txt` marker, then emits `nix-dogfood-evidence.preserves` plus `nix-dogfood-verify.preserves` to bind the Nix output path, report ref, release-gate ref, and nextest dependency marker for release review. It also emits `release-evidence-bundle.preserves` and `release-evidence-bundle-verify.preserves`, which bind the complete release review member set and recompute it before accepting the graph. These artifacts remain evidence-only and do not grant authority, policy, provenance, resource, transport, source-gate, retention, or destructive-operation trust.
+
+Release bundle commands can be run manually against a realized check output: `molten dogfood release-bundle-export --output-path OUT --out release-evidence-bundle.preserves` and `molten dogfood release-bundle-verify --output-path OUT --bundle release-evidence-bundle.preserves --receipt-out release-evidence-bundle-verify.preserves`. Verification emits deny receipts for stale, missing, or tampered members instead of treating logs as primary evidence.
 
 Operator receipt readback is available for local dogfood ledgers: `molten receipts list --ledger STATE/ledger`, `molten receipts show REF --ledger STATE/ledger`, `molten receipts validate REF --ledger STATE/ledger`, and `molten receipts export REF --ledger STATE/ledger --out receipt.preserves`. The commands read canonical Preserves artifacts from the content-addressed ledger, validate supported dogfood/operator receipt kinds, render only non-normative summaries by default, and keep logs auxiliary rather than primary evidence.
 

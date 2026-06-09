@@ -522,6 +522,20 @@ enum DogfoodCommand {
         #[arg(long)]
         receipt_out: PathBuf,
     },
+    ReleaseBundleExport {
+        #[arg(long)]
+        output_path: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    ReleaseBundleVerify {
+        #[arg(long)]
+        output_path: PathBuf,
+        #[arg(long)]
+        bundle: PathBuf,
+        #[arg(long)]
+        receipt_out: PathBuf,
+    },
     Show {
         artifact: PathBuf,
     },
@@ -3392,7 +3406,9 @@ fn validate_operator_receipt_value(value: &preserves::IOValue) -> Result<String>
         | "operator-checkpoint"
         | "release-gate-receipt"
         | "nix-dogfood-release-evidence"
-        | "nix-dogfood-release-verify-receipt" => operator_dogfood::operator_dogfood_summary(value),
+        | "nix-dogfood-release-verify-receipt"
+        | "release-evidence-bundle"
+        | "release-evidence-bundle-verify-receipt" => operator_dogfood::operator_dogfood_summary(value),
         "operator-step" => {
             let step = operator_dogfood::parse_operator_step(value)?;
             Ok(format!(
@@ -3419,6 +3435,8 @@ fn is_operator_receipt_kind(kind: &str) -> bool {
             | "release-gate-receipt"
             | "nix-dogfood-release-evidence"
             | "nix-dogfood-release-verify-receipt"
+            | "release-evidence-bundle"
+            | "release-evidence-bundle-verify-receipt"
     )
 }
 
@@ -8796,6 +8814,38 @@ fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
             println!(
                 "dogfood nix-release-verify decision={} receipt={} evidence={}",
                 receipt.decision, receipt.receipt_ref, receipt.evidence_ref
+            );
+            Ok(())
+        }
+        DogfoodCommand::ReleaseBundleExport { output_path, out } => {
+            let bundle =
+                operator_dogfood::release_evidence_bundle_value(&operator_dogfood::ReleaseEvidenceBundleInput {
+                    output_path: &output_path,
+                })?;
+            let parsed = operator_dogfood::parse_release_evidence_bundle(&bundle)?;
+            write_file(&out, &to_text(&bundle)?)?;
+            println!(
+                "dogfood release-bundle-export bundle={} report={} release-gate={} nix-verify={}",
+                parsed.bundle_ref, parsed.report_ref, parsed.release_gate_ref, parsed.nix_verify_ref
+            );
+            Ok(())
+        }
+        DogfoodCommand::ReleaseBundleVerify {
+            output_path,
+            bundle,
+            receipt_out,
+        } => {
+            let bundle_value = read_preserves_file(&bundle)?;
+            let receipt = operator_dogfood::verify_release_evidence_bundle(
+                &operator_dogfood::ReleaseEvidenceBundleVerifyInput {
+                    output_path: &output_path,
+                    bundle_value: &bundle_value,
+                },
+            )?;
+            write_file(&receipt_out, &to_text(&receipt.value)?)?;
+            println!(
+                "dogfood release-bundle-verify decision={} receipt={} bundle={}",
+                receipt.decision, receipt.receipt_ref, receipt.bundle_ref
             );
             Ok(())
         }

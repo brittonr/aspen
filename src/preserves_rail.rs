@@ -169,6 +169,9 @@ pub const OPERATOR_DOGFOOD_REPORT_SCHEMA: &str = "molten.operator.dogfood-report
 pub const OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA: &str = "molten.operator.release-gate-receipt.v1";
 pub const OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA: &str = "molten.operator.nix-dogfood-evidence.v1";
 pub const OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA: &str = "molten.operator.nix-dogfood-verify-receipt.v1";
+pub const OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA: &str = "molten.operator.release-evidence-bundle.v1";
+pub const OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA: &str =
+    "molten.operator.release-evidence-bundle-verify-receipt.v1";
 pub const PLUGIN_MANIFEST_SCHEMA: &str = "molten.plugin.manifest.v1";
 pub const PLUGIN_HOST_ABI_SCHEMA: &str = "molten.plugin.host-abi.v1";
 pub const PLUGIN_HOST_ABI_RESULT_SCHEMA: &str = "molten.plugin.host-abi-result.v1";
