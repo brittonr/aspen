@@ -1903,6 +1903,299 @@ fn cli_retention_gc_plan_lists_gates_before_mutation() -> CliResult<()> {
     Ok(())
 }
 
+#[test]
+fn cli_retention_gc_negative_regression_matrix() -> CliResult<()> {
+    let dir = temp_dir("cli-retention-gc-negative")?;
+
+    let missing_plan_root = dir.join("missing-plan-root");
+    let missing_plan_ref = test_ref("retention-missing-plan")?;
+    let missing_plan_apply = molten_cmd()
+        .args(["test", "retention", "gc-apply-plan", "--root"])
+        .arg(&missing_plan_root)
+        .args(["--plan-ref"])
+        .arg(&missing_plan_ref)
+        .args(["--receipt-out"])
+        .arg(dir.join("missing-plan-apply.preserves"))
+        .output()?;
+    assert_failure(&missing_plan_apply, "retention apply missing plan ref");
+
+    let stale_plan_root = dir.join("stale-plan-root");
+    let stale_candidate = setup_retention_cli_candidate(RetentionCandidateInput {
+        root: &stale_plan_root,
+        label: "stale-plan",
+        object_ref: test_ref("retention-stale-object")?,
+        object_kind: "artifact",
+        retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+        action: retention::ACTION_DELETE,
+    })?;
+    let stale_plan = run_retention_gc_plan_cli(&stale_candidate, "ledger-gc", &dir.join("stale-plan.preserves"))?;
+    retention::pin_object(&stale_plan_root, retention::RetentionPinInput {
+        object_ref: stale_candidate.object_ref.clone(),
+        object_kind: stale_candidate.object_kind.clone(),
+        retention_class: stale_candidate.retention_class.clone(),
+        source: retention::SOURCE_OPERATOR_HOLD.to_string(),
+        reason: "negative CLI stale plan".to_string(),
+        owner_ref: stale_candidate.requester_ref.clone(),
+        expiry_ref: None,
+        policy_refs: vec![stale_candidate.policy_ref.clone()],
+        evidence_refs: vec![stale_candidate.support_ref.clone()],
+        has_authority: true,
+    })?;
+    let stale_apply_path = dir.join("stale-apply.preserves");
+    let stale_apply = molten_cmd()
+        .args(["test", "retention", "gc-apply-plan", "--root"])
+        .arg(&stale_plan_root)
+        .args(["--plan-ref"])
+        .arg(&stale_plan.plan_ref)
+        .args(["--receipt-out"])
+        .arg(&stale_apply_path)
+        .output()?;
+    assert_success(&stale_apply, "retention apply stale plan ref");
+    let stale_apply_receipt = retention::parse_retention_gc_apply(&read_preserves(&stale_apply_path)?)?;
+    assert_eq!(stale_apply_receipt.decision, "deny");
+    assert!(stale_apply_receipt.retention_receipt_ref.is_none());
+    assert!(stale_apply_receipt.tombstone_ref.is_none());
+    assert!(
+        stale_apply_receipt
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic == "retention-gc-apply-plan-drift")
+    );
+    assert!(stale_apply_receipt.diagnostics.iter().any(|diagnostic| diagnostic == "active-pins-present"));
+
+    let missing_apply_root = dir.join("missing-apply-ledger");
+    let missing_apply_artifact =
+        molten::ledger::import_artifact(&missing_apply_root, &parse_text("<artifact \"missing-apply\">")?)?;
+    let missing_apply_candidate = setup_retention_cli_candidate(RetentionCandidateInput {
+        root: &missing_apply_root,
+        label: "missing-apply",
+        object_ref: missing_apply_artifact.artifact_ref.clone(),
+        object_kind: &missing_apply_artifact.artifact_kind,
+        retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+        action: retention::ACTION_DELETE,
+    })?;
+    let missing_apply_receipt = dir.join("missing-apply-ledger-gc.preserves");
+    let mut missing_apply_gc = molten_cmd();
+    missing_apply_gc
+        .args(["test", "ledger", "gc", "--ledger"])
+        .arg(&missing_apply_root)
+        .args(["--receipt-out"])
+        .arg(&missing_apply_receipt);
+    add_retention_args(&mut missing_apply_gc, &missing_apply_candidate);
+    let missing_apply_output = missing_apply_gc.output()?;
+    assert_success(&missing_apply_output, "ledger gc missing apply ref");
+    assert!(stdout(&missing_apply_output).contains("decision=deny"));
+    let missing_apply_text = fs::read_to_string(&missing_apply_receipt)?;
+    assert!(missing_apply_text.contains("retention-gc-execute-apply-missing"));
+    molten::ledger::read_artifact(&missing_apply_root, &missing_apply_candidate.object_ref)?;
+
+    let wrong_apply_root = dir.join("wrong-apply-ledger");
+    let wrong_apply_artifact =
+        molten::ledger::import_artifact(&wrong_apply_root, &parse_text("<artifact \"wrong-apply\">")?)?;
+    let wrong_apply_candidate = setup_retention_cli_candidate(RetentionCandidateInput {
+        root: &wrong_apply_root,
+        label: "wrong-apply",
+        object_ref: wrong_apply_artifact.artifact_ref.clone(),
+        object_kind: &wrong_apply_artifact.artifact_kind,
+        retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+        action: retention::ACTION_DELETE,
+    })?;
+    let wrong_plan = run_retention_gc_plan_cli(&wrong_apply_candidate, "chunk-gc", &dir.join("wrong-plan.preserves"))?;
+    let wrong_apply_path = dir.join("wrong-apply.preserves");
+    let wrong_apply_output = molten_cmd()
+        .args(["test", "retention", "gc-apply-plan", "--root"])
+        .arg(&wrong_apply_root)
+        .args(["--plan-ref"])
+        .arg(&wrong_plan.plan_ref)
+        .args(["--receipt-out"])
+        .arg(&wrong_apply_path)
+        .output()?;
+    assert_success(&wrong_apply_output, "retention apply wrong subsystem plan");
+    let wrong_apply = retention::parse_retention_gc_apply(&read_preserves(&wrong_apply_path)?)?;
+    assert_eq!(wrong_apply.decision, "pass");
+    let wrong_apply_receipt = dir.join("wrong-apply-ledger-gc.preserves");
+    let mut wrong_apply_gc = molten_cmd();
+    wrong_apply_gc
+        .args(["test", "ledger", "gc", "--ledger"])
+        .arg(&wrong_apply_root)
+        .args(["--apply-ref"])
+        .arg(&wrong_apply.apply_ref)
+        .args(["--receipt-out"])
+        .arg(&wrong_apply_receipt);
+    add_retention_args(&mut wrong_apply_gc, &wrong_apply_candidate);
+    let wrong_apply_output = wrong_apply_gc.output()?;
+    assert_success(&wrong_apply_output, "ledger gc wrong apply ref");
+    assert!(stdout(&wrong_apply_output).contains("decision=deny"));
+    let wrong_apply_text = fs::read_to_string(&wrong_apply_receipt)?;
+    assert!(wrong_apply_text.contains("retention-gc-execute-apply-scope-mismatch"));
+    molten::ledger::read_artifact(&wrong_apply_root, &wrong_apply_candidate.object_ref)?;
+
+    let audit_root = dir.join("audit-root");
+    let missing_execution = molten_cmd()
+        .args(["test", "retention", "gc-audit", "--root"])
+        .arg(&audit_root)
+        .args(["--execution-ref"])
+        .arg(test_ref("missing-execution")?)
+        .args(["--out"])
+        .arg(dir.join("missing-execution-audit.preserves"))
+        .output()?;
+    assert_failure(&missing_execution, "retention audit missing execution ref");
+    let denied_execution = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+        root: &audit_root,
+        subsystem: "ledger-gc",
+        action: retention::ACTION_DELETE,
+        object_ref: &test_ref("denied-execution-object")?,
+        object_kind: "artifact",
+        retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+        apply_ref: None,
+    })?;
+    let denied_audit_path = dir.join("denied-execution-audit.preserves");
+    let denied_audit = molten_cmd()
+        .args(["test", "retention", "gc-audit", "--root"])
+        .arg(&audit_root)
+        .args(["--execution-ref"])
+        .arg(&denied_execution.execution_ref)
+        .args(["--out"])
+        .arg(&denied_audit_path)
+        .output()?;
+    assert_success(&denied_audit, "retention audit denied execution ref");
+    let denied_audit = retention::parse_retention_gc_audit(&read_preserves(&denied_audit_path)?)?;
+    assert_eq!(denied_audit.decision, "deny");
+    assert!(denied_audit.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-audit-apply-missing"));
+    assert!(denied_audit.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-audit-plan-missing"));
+    Ok(())
+}
+
+struct RetentionCandidateInput<'a> {
+    root: &'a Path,
+    label: &'a str,
+    object_ref: String,
+    object_kind: &'a str,
+    retention_class: &'a str,
+    action: &'a str,
+}
+
+struct RetentionCliCandidate {
+    root: PathBuf,
+    object_ref: String,
+    object_kind: String,
+    retention_class: String,
+    action: String,
+    requester_ref: String,
+    policy_ref: String,
+    authority_ref: String,
+    support_ref: String,
+    index_ref: String,
+}
+
+struct RetentionAdmissionInput<'a> {
+    candidate: &'a RetentionCliCandidate,
+    kind: &'a str,
+    label: &'a str,
+}
+
+fn setup_retention_cli_candidate(input: RetentionCandidateInput<'_>) -> CliResult<RetentionCliCandidate> {
+    let requester_ref = test_ref(&format!("{}-requester", input.label))?;
+    let mut candidate = RetentionCliCandidate {
+        root: input.root.to_path_buf(),
+        object_ref: input.object_ref,
+        object_kind: input.object_kind.to_string(),
+        retention_class: input.retention_class.to_string(),
+        action: input.action.to_string(),
+        requester_ref,
+        policy_ref: String::new(),
+        authority_ref: String::new(),
+        support_ref: String::new(),
+        index_ref: String::new(),
+    };
+    candidate.policy_ref = store_retention_cli_admission(RetentionAdmissionInput {
+        candidate: &candidate,
+        kind: retention::ADMISSION_KIND_POLICY,
+        label: "policy",
+    })?;
+    candidate.authority_ref = store_retention_cli_admission(RetentionAdmissionInput {
+        candidate: &candidate,
+        kind: retention::ADMISSION_KIND_AUTHORITY,
+        label: "authority",
+    })?;
+    candidate.support_ref = store_retention_cli_admission(RetentionAdmissionInput {
+        candidate: &candidate,
+        kind: retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
+        label: "support",
+    })?;
+    candidate.index_ref = store_retention_cli_admission(RetentionAdmissionInput {
+        candidate: &candidate,
+        kind: retention::ADMISSION_KIND_REFERENCE_INDEX,
+        label: "index",
+    })?;
+    Ok(candidate)
+}
+
+fn store_retention_cli_admission(input: RetentionAdmissionInput<'_>) -> CliResult<String> {
+    Ok(retention::store_retention_evidence_admission(
+        &input.candidate.root,
+        &retention::RetentionEvidenceAdmissionInput {
+            kind: input.kind,
+            decision: "pass",
+            requester_ref: &input.candidate.requester_ref,
+            object_ref: &input.candidate.object_ref,
+            object_kind: &input.candidate.object_kind,
+            retention_class: &input.candidate.retention_class,
+            action: &input.candidate.action,
+            bound_refs: &[test_ref(&format!("{}-{}", input.candidate.object_ref, input.label))?],
+            retained_refs: &[],
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        },
+    )?
+    .admission_ref)
+}
+
+fn run_retention_gc_plan_cli(
+    candidate: &RetentionCliCandidate,
+    subsystem: &str,
+    out: &Path,
+) -> CliResult<retention::RetentionGcPlan> {
+    let mut command = molten_cmd();
+    command
+        .args(["test", "retention", "gc-plan", "--root"])
+        .arg(&candidate.root)
+        .args(["--subsystem", subsystem, "--object-ref"])
+        .arg(&candidate.object_ref)
+        .args(["--object-kind"])
+        .arg(&candidate.object_kind)
+        .args(["--retention-class"])
+        .arg(&candidate.retention_class)
+        .args(["--action"])
+        .arg(&candidate.action)
+        .args(["--out"])
+        .arg(out);
+    add_retention_args(&mut command, candidate);
+    let output = command.output()?;
+    assert_success(&output, "retention gc-plan regression fixture");
+    let plan = retention::parse_retention_gc_plan(&read_preserves(out)?)?;
+    assert_eq!(plan.decision, "pass");
+    Ok(plan)
+}
+
+fn add_retention_args(command: &mut Command, candidate: &RetentionCliCandidate) {
+    command
+        .args(["--retention-requester"])
+        .arg(&candidate.requester_ref)
+        .args(["--retention-policy-ref"])
+        .arg(&candidate.policy_ref)
+        .args(["--retention-authority-ref"])
+        .arg(&candidate.authority_ref)
+        .args(["--retention-evidence-ref"])
+        .arg(&candidate.support_ref)
+        .args(["--retention-reference-index-ref"])
+        .arg(&candidate.index_ref)
+        .args(["--retention-reference-index-complete"]);
+}
+
 fn write_octet_artifacts(dir: &Path) -> CliResult<()> {
     write_octet_artifacts_with(dir, OCTET_WARNING_STATUS, OCTET_WARNING_SUMMARY)
 }
