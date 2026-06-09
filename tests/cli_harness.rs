@@ -16,6 +16,7 @@ use molten::harness::parse_repro_verify_receipt;
 use molten::harness::report_summary;
 use molten::preserves_rail::canonical_hash;
 use molten::preserves_rail::parse_text;
+use molten::preserves_rail::record;
 use molten::preserves_rail::string;
 use molten::preserves_rail::to_text;
 use molten::retention;
@@ -2066,6 +2067,88 @@ fn cli_retention_gc_negative_regression_matrix() -> CliResult<()> {
     Ok(())
 }
 
+#[test]
+fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
+    let dir = temp_dir("cli-retention-gc-catalog")?;
+    let registry = dir.join("registry");
+    let ledger_root = dir.join("ledger");
+    let retention_root = dir.join("retention-root");
+    let candidate = setup_retention_cli_candidate(RetentionCandidateInput {
+        root: &retention_root,
+        label: "catalog-audit",
+        object_ref: test_ref("retention-catalog-audit-object")?,
+        object_kind: "artifact",
+        retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+        action: retention::ACTION_DELETE,
+    })?;
+    let fixture = setup_retention_gc_catalog_fixture(&candidate, "ledger-gc", &dir)?;
+
+    let search_receipt = dir.join("catalog-search-receipt.preserves");
+    let search_output = molten_cmd()
+        .args(["test", "catalog", "search", "--registry"])
+        .arg(&registry)
+        .args(["--ledger"])
+        .arg(&ledger_root)
+        .args(["--text"])
+        .arg(format!("retention-gc-object:{}", fixture.object_ref))
+        .args(["--receipt-out"])
+        .arg(&search_receipt)
+        .output()?;
+    assert_success(&search_output, "catalog search retention GC object");
+    let search_stdout = stdout(&search_output);
+    assert!(search_stdout.contains("retention-gc:plan"));
+    assert!(search_stdout.contains("retention-gc:apply"));
+    assert!(search_stdout.contains("retention-gc:execute"));
+    assert!(search_stdout.contains("retention-gc:audit"));
+    assert!(search_stdout.contains(&fixture.plan_ref));
+    assert!(search_stdout.contains(&fixture.apply_ref));
+    assert!(search_stdout.contains(&fixture.execution_ref));
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&search_receipt)?), "catalog-receipt");
+
+    let audit_search = molten_cmd()
+        .args(["test", "catalog", "search", "--registry"])
+        .arg(&registry)
+        .args(["--ledger"])
+        .arg(&ledger_root)
+        .args(["--ledger-kind", "retention-gc-audit", "--text", "retention-gc:audit"])
+        .output()?;
+    assert_success(&audit_search, "catalog search retention GC audit ledger kind");
+    let audit_search_stdout = stdout(&audit_search);
+    assert!(audit_search_stdout.contains("retention-gc:audit"));
+    assert!(audit_search_stdout.contains(&fixture.audit_ref));
+
+    let mcp_request_path = dir.join("retention-gc-search-request.preserves");
+    let mcp_response_path = dir.join("retention-gc-search-response.preserves");
+    let mcp_receipt_path = dir.join("retention-gc-search-mcp-receipt.preserves");
+    let mcp_request = molten::catalog_mcp::mcp_request_value("search_retention_gc", vec![
+        record("stage", vec![string("audit")]),
+        record("object-ref", vec![string(&fixture.object_ref)]),
+        record("subsystem", vec![string("ledger-gc")]),
+        record("execution-ref", vec![string(&fixture.execution_ref)]),
+    ])?;
+    fs::write(&mcp_request_path, to_text(&mcp_request)?)?;
+    let mcp_output = molten_cmd()
+        .args(["test", "catalog", "mcp-call"])
+        .arg(&mcp_request_path)
+        .args(["--registry"])
+        .arg(&registry)
+        .args(["--ledger"])
+        .arg(&ledger_root)
+        .args(["--out"])
+        .arg(&mcp_response_path)
+        .args(["--receipt-out"])
+        .arg(&mcp_receipt_path)
+        .output()?;
+    assert_success(&mcp_output, "catalog MCP search_retention_gc");
+    let mcp_response = fs::read_to_string(&mcp_response_path)?;
+    assert!(mcp_response.contains("retention-gc:audit"));
+    assert!(mcp_response.contains(&fixture.execution_ref));
+    let mcp_receipt = molten::catalog_mcp::parse_mcp_receipt(&read_preserves(&mcp_receipt_path)?)?;
+    assert_eq!(mcp_receipt.tool, "search_retention_gc");
+    assert_eq!(mcp_receipt.decision, "pass");
+    Ok(())
+}
+
 struct RetentionCandidateInput<'a> {
     root: &'a Path,
     label: &'a str,
@@ -2092,6 +2175,71 @@ struct RetentionAdmissionInput<'a> {
     candidate: &'a RetentionCliCandidate,
     kind: &'a str,
     label: &'a str,
+}
+
+struct RetentionGcCatalogFixture {
+    object_ref: String,
+    plan_ref: String,
+    apply_ref: String,
+    execution_ref: String,
+    audit_ref: String,
+}
+
+fn setup_retention_gc_catalog_fixture(
+    candidate: &RetentionCliCandidate,
+    subsystem: &str,
+    dir: &Path,
+) -> CliResult<RetentionGcCatalogFixture> {
+    let plan_path = dir.join("catalog-retention-plan.preserves");
+    let plan = run_retention_gc_plan_cli(candidate, subsystem, &plan_path)?;
+    let apply_path = dir.join("catalog-retention-apply.preserves");
+    let apply_output = molten_cmd()
+        .args(["test", "retention", "gc-apply-plan", "--root"])
+        .arg(&candidate.root)
+        .args(["--plan-ref"])
+        .arg(&plan.plan_ref)
+        .args(["--receipt-out"])
+        .arg(&apply_path)
+        .output()?;
+    assert_success(&apply_output, "retention gc-apply-plan catalog fixture");
+    let apply = retention::parse_retention_gc_apply(&read_preserves(&apply_path)?)?;
+    assert_eq!(apply.decision, "pass");
+    let execution = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+        root: &candidate.root,
+        subsystem,
+        action: &candidate.action,
+        object_ref: &candidate.object_ref,
+        object_kind: &candidate.object_kind,
+        retention_class: &candidate.retention_class,
+        apply_ref: Some(&apply.apply_ref),
+    })?;
+    assert_eq!(execution.decision, "pass");
+    let execution_path = dir.join("catalog-retention-execution.preserves");
+    fs::write(&execution_path, to_text(&execution.value)?)?;
+    let audit = retention::audit_retention_gc_execution(retention::RetentionGcAuditInput {
+        root: &candidate.root,
+        execution_ref: &execution.execution_ref,
+    })?;
+    assert_eq!(audit.decision, "pass");
+    let audit_path = dir.join("catalog-retention-audit.preserves");
+    fs::write(&audit_path, to_text(&audit.value)?)?;
+    let ledger_root = dir.join("ledger");
+    for artifact in [&plan_path, &apply_path, &execution_path, &audit_path] {
+        let output = molten_cmd()
+            .args(["test", "ledger", "import"])
+            .arg(artifact)
+            .args(["--ledger"])
+            .arg(&ledger_root)
+            .output()?;
+        assert_success(&output, "ledger import retention GC catalog fixture");
+    }
+    Ok(RetentionGcCatalogFixture {
+        object_ref: candidate.object_ref.clone(),
+        plan_ref: plan.plan_ref,
+        apply_ref: apply.apply_ref,
+        execution_ref: execution.execution_ref,
+        audit_ref: audit.audit_ref,
+    })
 }
 
 fn setup_retention_cli_candidate(input: RetentionCandidateInput<'_>) -> CliResult<RetentionCliCandidate> {
