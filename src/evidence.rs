@@ -36,6 +36,14 @@ pub struct SignReceiptInput<'a> {
     pub parents: &'a [String],
 }
 
+pub struct VerifySignedReceiptPolicy<'a> {
+    pub required_purpose: &'a str,
+    pub trust_root: &'a str,
+    pub key: &'a str,
+    pub expected_signer: Option<&'a str>,
+    pub expected_subject_ref: Option<&'a str>,
+}
+
 pub fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IOValue> {
     if input.signer.trim().is_empty() {
         return Err(MoltenError::invalid_harness("signer id must not be empty"));
@@ -56,6 +64,7 @@ pub fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IOValue> {
             record("check", vec![string("subject-ref-binding"), string("pass")]),
             record("check", vec![string("signature-covers-canonical-receipt"), string("pass")]),
             record("check", vec![string("parent-receipt-refs"), string("pass")]),
+            record("check", vec![string("signed-receipt-is-evidence-only"), string("pass")]),
         ])]),
     ]))
 }
@@ -65,6 +74,19 @@ pub fn verify_signed_receipt(
     required_purpose: &str,
     trust_root: &str,
     key: &str,
+) -> Result<SignedReceipt> {
+    verify_signed_receipt_with_policy(value, &VerifySignedReceiptPolicy {
+        required_purpose,
+        trust_root,
+        key,
+        expected_signer: None,
+        expected_subject_ref: None,
+    })
+}
+
+pub fn verify_signed_receipt_with_policy(
+    value: &IOValue,
+    policy: &VerifySignedReceiptPolicy<'_>,
 ) -> Result<SignedReceipt> {
     let signed = value
         .collect_simple_record("signed-receipt-v1", Some(7))
@@ -87,6 +109,13 @@ pub fn verify_signed_receipt(
             "signed receipt subject ref mismatch: got {subject_ref}, expected {actual_ref}"
         )));
     }
+    if let Some(expected_subject_ref) = policy.expected_subject_ref
+        && subject_ref != expected_subject_ref
+    {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt subject ref {subject_ref} does not match required subject ref {expected_subject_ref}"
+        )));
+    }
 
     let signer_record_value = value_to_iovalue(&signed[2]);
     let signer_record = signer_record_value
@@ -95,14 +124,23 @@ pub fn verify_signed_receipt(
     let signer = required_string(&signer_record[0], "signed receipt signer")?;
     let purpose = required_string(&signer_record[1], "signed receipt purpose")?;
     let actual_trust_root = required_string(&signer_record[2], "signed receipt trust root")?;
-    if purpose != required_purpose {
+    if let Some(expected_signer) = policy.expected_signer
+        && signer != expected_signer
+    {
         return Err(MoltenError::invalid_harness(format!(
-            "signed receipt purpose {purpose} does not satisfy required purpose {required_purpose}"
+            "signed receipt signer {signer} does not match required signer {expected_signer}"
         )));
     }
-    if actual_trust_root != trust_root {
+    if purpose != policy.required_purpose {
         return Err(MoltenError::invalid_harness(format!(
-            "signed receipt trust root {actual_trust_root} does not match required trust root {trust_root}"
+            "signed receipt purpose {purpose} does not satisfy required purpose {}",
+            policy.required_purpose
+        )));
+    }
+    if actual_trust_root != policy.trust_root {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt trust root {actual_trust_root} does not match required trust root {}",
+            policy.trust_root
         )));
     }
 
@@ -113,7 +151,7 @@ pub fn verify_signed_receipt(
         )));
     }
     let signature = required_record_string(&signed[4], "signature", "signed receipt signature")?;
-    let expected_signature = signature_for(&receipt_value, &signer, &purpose, &actual_trust_root, key)?;
+    let expected_signature = signature_for(&receipt_value, &signer, &purpose, &actual_trust_root, policy.key)?;
     if signature != expected_signature {
         return Err(MoltenError::invalid_harness("signed receipt signature verification failed"));
     }
@@ -136,6 +174,11 @@ pub fn verify_signed_receipt(
             "signed receipt parent refs",
         )?;
     }
+    let checks = parse_signed_checks(&signed[6])?;
+    require_signed_check(&checks, "subject-ref-binding")?;
+    require_signed_check(&checks, "signature-covers-canonical-receipt")?;
+    require_signed_check(&checks, "parent-receipt-refs")?;
+    require_signed_check(&checks, "signed-receipt-is-evidence-only")?;
     Ok(SignedReceipt {
         envelope_ref: canonical_hash(value)?,
         subject_ref,
@@ -169,6 +212,41 @@ pub fn signed_receipt_summary(value: &IOValue) -> Result<String> {
         signer,
         purpose
     ))
+}
+
+fn parse_signed_checks(value: &preserves::Value<IOValue>) -> Result<Vec<(String, String)>> {
+    let checks_value = value_to_iovalue(value);
+    let checks_record = checks_value
+        .collect_simple_record("checks", Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing checks record"))?;
+    let check_values = checks_record[0]
+        .collect_sequence()
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt checks must be a sequence"))?;
+    let mut checks = Vec::with_capacity(check_values.len());
+    for check in check_values.iter() {
+        let check_value = value_to_iovalue(check);
+        let fields = check_value
+            .collect_simple_record("check", Some(2))
+            .ok_or_else(|| MoltenError::invalid_harness("expected signed receipt check record"))?;
+        push_bounded(
+            &mut checks,
+            (
+                required_string(&fields[0], "signed receipt check name")?,
+                required_string(&fields[1], "signed receipt check status")?,
+            ),
+            MAX_SIGNED_RECEIPT_PARENTS,
+            "signed receipt checks",
+        )?;
+    }
+    Ok(checks)
+}
+
+fn require_signed_check(checks: &[(String, String)], name: &str) -> Result<()> {
+    if checks.iter().any(|(check_name, status)| check_name == name && status == "pass") {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!("signed receipt missing pass check {name}")))
+    }
 }
 
 fn signature_for(receipt: &IOValue, signer: &str, purpose: &str, trust_root: &str, key: &str) -> Result<String> {
@@ -233,5 +311,23 @@ mod tests {
         assert!(wrong_purpose.to_string().contains("purpose"));
         let wrong_key = verify_signed_receipt(&signed, PASS_EVIDENCE_PURPOSE, "root", "wrong").expect_err("wrong key");
         assert!(wrong_key.to_string().contains("signature verification failed"));
+        let wrong_signer = verify_signed_receipt_with_policy(&signed, &VerifySignedReceiptPolicy {
+            required_purpose: PASS_EVIDENCE_PURPOSE,
+            trust_root: "root",
+            key: "key",
+            expected_signer: Some("other-signer"),
+            expected_subject_ref: None,
+        })
+        .expect_err("wrong signer");
+        assert!(wrong_signer.to_string().contains("signer"));
+        let wrong_subject = verify_signed_receipt_with_policy(&signed, &VerifySignedReceiptPolicy {
+            required_purpose: PASS_EVIDENCE_PURPOSE,
+            trust_root: "root",
+            key: "key",
+            expected_signer: Some("local"),
+            expected_subject_ref: Some("blake3:wrong-subject"),
+        })
+        .expect_err("wrong subject");
+        assert!(wrong_subject.to_string().contains("subject ref"));
     }
 }

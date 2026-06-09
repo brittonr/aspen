@@ -271,10 +271,43 @@
             molten dogfood release-bundle-export \
               --output-path "$out" \
               --out "$out/release-evidence-bundle.preserves"
+            molten receipts sign "$out/dogfood-report.preserves" \
+              --out "$out/dogfood-report.signed.preserves" \
+              --signer local-release-signer \
+              --purpose release-evidence \
+              --trust-root local-release-trust-root \
+              --key local-release-key
+            molten receipts sign "$out/release-gate.preserves" \
+              --out "$out/release-gate.signed.preserves" \
+              --signer local-release-signer \
+              --purpose release-evidence \
+              --trust-root local-release-trust-root \
+              --key local-release-key
+            molten receipts sign "$out/nix-dogfood-evidence.preserves" \
+              --out "$out/nix-dogfood-evidence.signed.preserves" \
+              --signer local-release-signer \
+              --purpose release-evidence \
+              --trust-root local-release-trust-root \
+              --key local-release-key
+            molten receipts sign "$out/nix-dogfood-verify.preserves" \
+              --out "$out/nix-dogfood-verify.signed.preserves" \
+              --signer local-release-signer \
+              --purpose release-evidence \
+              --trust-root local-release-trust-root \
+              --key local-release-key
             molten dogfood release-bundle-verify \
               --output-path "$out" \
               --bundle "$out/release-evidence-bundle.preserves" \
               --receipt-out "$out/release-evidence-bundle-verify.preserves" \
+              --require-signed-members \
+              --signed-purpose release-evidence \
+              --signed-trust-root local-release-trust-root \
+              --signed-key local-release-key \
+              --signed-signer local-release-signer \
+              --signed-member "$out/dogfood-report.signed.preserves" \
+              --signed-member "$out/release-gate.signed.preserves" \
+              --signed-member "$out/nix-dogfood-evidence.signed.preserves" \
+              --signed-member "$out/nix-dogfood-verify.signed.preserves" \
               | tee "$out/release-evidence-bundle-verify.txt"
             grep -q 'decision=pass' "$out/release-evidence-bundle-verify.txt"
           '';

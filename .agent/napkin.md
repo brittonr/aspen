@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-09 | self | I passed multiple filters directly to `cargo test` (`signed_receipt nix_dogfood_release_evidence ...`), but Cargo accepts only one test name before `--`, so the command failed immediately. | Use one broad filter, run separate `cargo test <filter>` commands, or use nextest expressions rather than passing multiple positional filters to Cargo. |
 | 2026-06-09 | self | My archive wrapper grepped for `blocked` and treated a successful Cairn archive receipt with `"blocked": false` as failure after it had already moved the change. | Check specifically for `"blocked": true`, not the word `blocked`, and inspect archive mutation receipts before retrying. |
 | 2026-06-09 | self | Cairn archive moves a change package but does not merge accepted specs in this repo. I archived `local-evidence-ledger-store` before syncing/merging and had to add accepted spec content manually. | Merge accepted spec requirements (or run and verify sync) before archive; after archive, grep accepted specs for new `r[...]` IDs. |
 | 2026-06-09 | self | Nix dogfood verification receipt text did not contain the literal `decision=pass`; the flake grep checked Preserves output and failed after the verify command had succeeded. | When enforcing CLI decision in Nix, tee and grep the CLI status line, or parse the Preserves shape explicitly instead of grepping for ad-hoc text. |
@@ -63,6 +64,7 @@
 - Prefer explicit Nickel and Steel contract boundaries where applicable: Nickel for static declarative policy/config/schema gates, Steel only for reviewed dynamic predicates/trusted callables, both enforced through Basalt before side effects.
 
 ## Patterns That Work
+- 2026-06-09 signed release evidence receipts: keep generic signing under `molten receipts sign/verify-signed`, verify optional signer/subject/purpose/trust-root/key through structured policy, and let `dogfood release-bundle-verify --require-signed-members` deny missing/wrong-signer/wrong-purpose member envelopes while preserving the evidence-only boundary.
 - 2026-06-09 release evidence bundle dogfood: bind the realized `dogfood-local-node` output with `release-evidence-bundle-v1`, include dogfood report/release gate/summary/after-nextest/Nix evidence/Nix verify member refs, and make `release-bundle-verify` recompute refs and emit deny receipts for stale/missing/tampered members. Keep bundles evidence-only; they do not grant authority, policy, provenance, resource, transport, source-gate, retention, or destructive-operation trust.
 - 2026-06-09 operator receipt dogfood cleanup: use the local dogfood state's `ledger/` as the receipt readback source, validate only supported dogfood/operator artifact kinds before summaries/exports, and make Nix evidence verification emit deny receipts for stale/tampered outputs instead of relying on log text.
 - 2026-06-08 disk rescue: `/home/brittonr/git/clankers/target` can grow enormous (727G observed) and deleting that build artifact quickly freed root space when Nix/Cargo validation was failing under a nearly full `/`.

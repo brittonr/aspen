@@ -16,6 +16,8 @@ use crate::authority;
 use crate::catalog_mcp;
 use crate::error::MoltenError;
 use crate::error::Result;
+use crate::evidence::VerifySignedReceiptPolicy;
+use crate::evidence::verify_signed_receipt_with_policy;
 use crate::harness;
 use crate::job_dag;
 use crate::ledger;
@@ -41,6 +43,8 @@ use crate::preserves_rail::u64_value;
 use crate::preserves_rail::value_to_iovalue;
 use crate::remote_dataspace;
 use crate::retention;
+
+pub const RELEASE_EVIDENCE_SIGNING_PURPOSE: &str = "release-evidence";
 
 const LOCAL_NODE_WORKFLOW_ID: &str = "dogfood:local-node";
 const DOGFOOD_HARNESS_SUITE: &str = r#"<harness-suite-v1 "molten.harness.suite.v1" "dogfood-repro" 3
@@ -196,6 +200,12 @@ pub struct ReleaseEvidenceBundle {
 pub struct ReleaseEvidenceBundleVerifyInput<'a> {
     pub output_path: &'a Path,
     pub bundle_value: &'a IOValue,
+    pub signed_member_values: &'a [IOValue],
+    pub signed_purpose: &'a str,
+    pub signed_trust_root: &'a str,
+    pub signed_key: &'a str,
+    pub signed_signer: Option<&'a str>,
+    pub is_signed_members_required: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -896,6 +906,15 @@ pub fn verify_release_evidence_bundle(
             "release evidence bundle verify diagnostics",
         )?;
     }
+    let signature_diagnostics = release_bundle_signature_diagnostics(&bundle, input)?;
+    let is_signed_member_receipts_ok = signature_diagnostics.is_empty();
+    for diagnostic in signature_diagnostics {
+        diagnostics.push_limited_value(
+            diagnostic,
+            MAX_OPERATOR_DIAGNOSTICS,
+            "release evidence bundle verify diagnostics",
+        )?;
+    }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = record("release-evidence-bundle-verify-receipt-v1", vec![
         string(OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA),
@@ -910,6 +929,8 @@ pub fn verify_release_evidence_bundle(
             ("release-gate-pass", status(is_output_observed)),
             ("nix-verify-pass", status(is_output_observed)),
             ("bundle-members-bound", status(diagnostics.is_empty())),
+            ("signed-member-receipts", status(is_signed_member_receipts_ok)),
+            ("signed-receipts-evidence-only", "pass"),
             ("release-evidence-only", "pass"),
             ("no-text-oracle", "pass"),
         ]),
@@ -934,6 +955,8 @@ pub fn parse_release_evidence_bundle_verify_receipt(value: &IOValue) -> Result<R
     let nix_fields = simple_record(&nix, "nix", 2)?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "bundle-members-bound", "release evidence bundle verify receipt")?;
+    require_check(&checks, "signed-member-receipts", "release evidence bundle verify receipt")?;
+    require_check(&checks, "signed-receipts-evidence-only", "release evidence bundle verify receipt")?;
     require_check(&checks, "release-evidence-only", "release evidence bundle verify receipt")?;
     require_check(&checks, "no-text-oracle", "release evidence bundle verify receipt")?;
     Ok(ReleaseEvidenceBundleVerifyReceipt {
@@ -1147,6 +1170,76 @@ fn release_bundle_mismatch_diagnostics(
             MAX_OPERATOR_DIAGNOSTICS,
             "release evidence bundle verify diagnostics",
         )?;
+    }
+    Ok(diagnostics)
+}
+
+fn release_bundle_signature_diagnostics(
+    bundle: &ReleaseEvidenceBundle,
+    input: &ReleaseEvidenceBundleVerifyInput<'_>,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    if input.signed_member_values.is_empty() && !input.is_signed_members_required {
+        return Ok(diagnostics);
+    }
+    let mut signable_members = Vec::new();
+    for (name, member_ref) in &bundle.member_refs {
+        if name.ends_with(".preserves") {
+            signable_members.push_limited_value(
+                (name.clone(), member_ref.clone()),
+                MAX_OPERATOR_REFS,
+                "release bundle signable member refs",
+            )?;
+        }
+    }
+    let mut signed_subject_refs = Vec::new();
+    for signed_value in input.signed_member_values {
+        match verify_signed_receipt_with_policy(signed_value, &VerifySignedReceiptPolicy {
+            required_purpose: input.signed_purpose,
+            trust_root: input.signed_trust_root,
+            key: input.signed_key,
+            expected_signer: input.signed_signer,
+            expected_subject_ref: None,
+        }) {
+            Ok(signed) => {
+                if signable_members.iter().any(|(_, member_ref)| member_ref == &signed.subject_ref) {
+                    if signed_subject_refs.iter().any(|subject_ref| subject_ref == &signed.subject_ref) {
+                        diagnostics.push_limited_value(
+                            format!("duplicate signed member receipt for subject {}", signed.subject_ref),
+                            MAX_OPERATOR_DIAGNOSTICS,
+                            "release evidence bundle signed member diagnostics",
+                        )?;
+                    }
+                    signed_subject_refs.push_limited_value(
+                        signed.subject_ref,
+                        MAX_OPERATOR_REFS,
+                        "release evidence bundle signed member refs",
+                    )?;
+                } else {
+                    diagnostics.push_limited_value(
+                        format!("signed member subject {} is not a signable bundle member", signed.subject_ref),
+                        MAX_OPERATOR_DIAGNOSTICS,
+                        "release evidence bundle signed member diagnostics",
+                    )?;
+                }
+            }
+            Err(error) => diagnostics.push_limited_value(
+                format!("signed member verification failed: {error}"),
+                MAX_OPERATOR_DIAGNOSTICS,
+                "release evidence bundle signed member diagnostics",
+            )?,
+        }
+    }
+    if input.is_signed_members_required {
+        for (name, member_ref) in &signable_members {
+            if !signed_subject_refs.iter().any(|subject_ref| subject_ref == member_ref) {
+                diagnostics.push_limited_value(
+                    format!("missing signed member receipt for {name}: {member_ref}"),
+                    MAX_OPERATOR_DIAGNOSTICS,
+                    "release evidence bundle signed member diagnostics",
+                )?;
+            }
+        }
     }
     Ok(diagnostics)
 }
@@ -2755,6 +2848,8 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use super::*;
+    use crate::evidence::SignReceiptInput;
+    use crate::evidence::sign_receipt;
     use crate::preserves_rail::to_text;
 
     #[test]
@@ -2843,10 +2938,97 @@ mod tests {
         let bundle_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
             output_path: &output_root,
             bundle_value: &bundle,
+            signed_member_values: &[],
+            signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+            signed_trust_root: "local-release-trust-root",
+            signed_key: "local-release-key",
+            signed_signer: None,
+            is_signed_members_required: false,
         })
         .expect("verify release bundle");
         assert_eq!(bundle_verify.decision, "pass");
         assert_eq!(crate::ledger::artifact_kind(&bundle_verify.value), "release-evidence-bundle-verify-receipt");
+        let signed_members = vec![
+            sign_receipt(&SignReceiptInput {
+                receipt: &run.report_value,
+                signer: "release-signer",
+                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+                trust_root: "release-root",
+                key: "release-key",
+                parents: &[],
+            })
+            .expect("sign report"),
+            sign_receipt(&SignReceiptInput {
+                receipt: run.release_gate_value.as_ref().expect("release gate"),
+                signer: "release-signer",
+                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+                trust_root: "release-root",
+                key: "release-key",
+                parents: &[],
+            })
+            .expect("sign release gate"),
+            sign_receipt(&SignReceiptInput {
+                receipt: &evidence,
+                signer: "release-signer",
+                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+                trust_root: "release-root",
+                key: "release-key",
+                parents: &[],
+            })
+            .expect("sign Nix evidence"),
+            sign_receipt(&SignReceiptInput {
+                receipt: &receipt.value,
+                signer: "release-signer",
+                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+                trust_root: "release-root",
+                key: "release-key",
+                parents: &[],
+            })
+            .expect("sign Nix verify"),
+        ];
+        let signed_bundle_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
+            output_path: &output_root,
+            bundle_value: &bundle,
+            signed_member_values: &signed_members,
+            signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+            signed_trust_root: "release-root",
+            signed_key: "release-key",
+            signed_signer: Some("release-signer"),
+            is_signed_members_required: true,
+        })
+        .expect("verify signed release bundle");
+        assert_eq!(signed_bundle_verify.decision, "pass");
+        let wrong_signer_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
+            output_path: &output_root,
+            bundle_value: &bundle,
+            signed_member_values: &signed_members,
+            signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+            signed_trust_root: "release-root",
+            signed_key: "release-key",
+            signed_signer: Some("wrong-signer"),
+            is_signed_members_required: true,
+        })
+        .expect("verify wrong signer release bundle");
+        assert_eq!(wrong_signer_verify.decision, "deny");
+        assert!(wrong_signer_verify.diagnostics.iter().any(|diagnostic| diagnostic.contains("signer")));
+        let missing_signed_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
+            output_path: &output_root,
+            bundle_value: &bundle,
+            signed_member_values: &signed_members[..1],
+            signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+            signed_trust_root: "release-root",
+            signed_key: "release-key",
+            signed_signer: Some("release-signer"),
+            is_signed_members_required: true,
+        })
+        .expect("verify missing signed member release bundle");
+        assert_eq!(missing_signed_verify.decision, "deny");
+        assert!(
+            missing_signed_verify
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("missing signed member receipt"))
+        );
         let stale_bundle_ref = dogfood_ref("stale-bundle-summary").expect("stale bundle ref");
         let stale_bundle_text =
             to_text(&bundle).expect("bundle text").replace(&parsed_bundle.summary_ref, &stale_bundle_ref);
@@ -2854,6 +3036,12 @@ mod tests {
         let stale_bundle_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
             output_path: &output_root,
             bundle_value: &stale_bundle,
+            signed_member_values: &[],
+            signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+            signed_trust_root: "local-release-trust-root",
+            signed_key: "local-release-key",
+            signed_signer: None,
+            is_signed_members_required: false,
         })
         .expect("verify stale bundle");
         assert_eq!(stale_bundle_verify.decision, "deny");

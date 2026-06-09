@@ -17,9 +17,10 @@ use molten::error::Result;
 use molten::eval_cache;
 use molten::evidence::PASS_EVIDENCE_PURPOSE;
 use molten::evidence::SignReceiptInput;
+use molten::evidence::VerifySignedReceiptPolicy;
 use molten::evidence::sign_receipt;
 use molten::evidence::signed_receipt_summary;
-use molten::evidence::verify_signed_receipt;
+use molten::evidence::verify_signed_receipt_with_policy;
 use molten::evidence_chain::ChainForkPolicy;
 use molten::evidence_chain::ChainScope;
 use molten::harness::ReproExportProfile;
@@ -535,6 +536,18 @@ enum DogfoodCommand {
         bundle: PathBuf,
         #[arg(long)]
         receipt_out: PathBuf,
+        #[arg(long = "signed-member")]
+        signed_members: Vec<PathBuf>,
+        #[arg(long)]
+        require_signed_members: bool,
+        #[arg(long, default_value = "release-evidence")]
+        signed_purpose: String,
+        #[arg(long, default_value = "local-release-trust-root")]
+        signed_trust_root: String,
+        #[arg(long, default_value = "local-release-key")]
+        signed_key: String,
+        #[arg(long)]
+        signed_signer: Option<String>,
     },
     Show {
         artifact: PathBuf,
@@ -565,6 +578,34 @@ enum ReceiptsCommand {
         out: PathBuf,
         #[arg(long)]
         receipt_out: Option<PathBuf>,
+    },
+    Sign {
+        receipt: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long, default_value = "local-signer")]
+        signer: String,
+        #[arg(long, default_value = PASS_EVIDENCE_PURPOSE)]
+        purpose: String,
+        #[arg(long, default_value = "local-trust-root")]
+        trust_root: String,
+        #[arg(long, default_value = "local-dev-key")]
+        key: String,
+        #[arg(long = "parent")]
+        parents: Vec<String>,
+    },
+    VerifySigned {
+        signed_receipt: PathBuf,
+        #[arg(long, default_value = PASS_EVIDENCE_PURPOSE)]
+        purpose: String,
+        #[arg(long, default_value = "local-trust-root")]
+        trust_root: String,
+        #[arg(long, default_value = "local-dev-key")]
+        key: String,
+        #[arg(long)]
+        signer: Option<String>,
+        #[arg(long)]
+        subject_ref: Option<String>,
     },
 }
 
@@ -1268,6 +1309,10 @@ enum ReceiptCommand {
         trust_root: String,
         #[arg(long, default_value = "local-dev-key")]
         key: String,
+        #[arg(long)]
+        signer: Option<String>,
+        #[arg(long)]
+        subject_ref: Option<String>,
     },
 }
 
@@ -3396,6 +3441,59 @@ fn run_receipts_command(command: ReceiptsCommand) -> Result<()> {
             );
             Ok(())
         }
+        ReceiptsCommand::Sign {
+            receipt,
+            out,
+            signer,
+            purpose,
+            trust_root,
+            key,
+            parents,
+        } => {
+            let receipt_value = read_preserves_file(&receipt)?;
+            let signed = sign_receipt(&SignReceiptInput {
+                receipt: &receipt_value,
+                signer: &signer,
+                purpose: &purpose,
+                trust_root: &trust_root,
+                key: &key,
+                parents: &parents,
+            })?;
+            let signed_ref = molten::preserves_rail::canonical_hash(&signed)?;
+            let subject_ref = molten::preserves_rail::canonical_hash(&receipt_value)?;
+            write_file(&out, &to_text(&signed)?)?;
+            println!(
+                "receipts sign ok signed={} subject={} signer={} purpose={} out={} evidence-only=pass",
+                signed_ref,
+                subject_ref,
+                signer,
+                purpose,
+                out.display()
+            );
+            Ok(())
+        }
+        ReceiptsCommand::VerifySigned {
+            signed_receipt,
+            purpose,
+            trust_root,
+            key,
+            signer,
+            subject_ref,
+        } => {
+            let signed_value = read_preserves_file(&signed_receipt)?;
+            let verified = verify_signed_receipt_with_policy(&signed_value, &VerifySignedReceiptPolicy {
+                required_purpose: &purpose,
+                trust_root: &trust_root,
+                key: &key,
+                expected_signer: signer.as_deref(),
+                expected_subject_ref: subject_ref.as_deref(),
+            })?;
+            println!(
+                "receipts verify-signed ok envelope={} subject={} signer={} purpose={} evidence-only=pass",
+                verified.envelope_ref, verified.subject_ref, verified.signer, verified.purpose
+            );
+            Ok(())
+        }
     }
 }
 
@@ -3409,6 +3507,7 @@ fn validate_operator_receipt_value(value: &preserves::IOValue) -> Result<String>
         | "nix-dogfood-release-verify-receipt"
         | "release-evidence-bundle"
         | "release-evidence-bundle-verify-receipt" => operator_dogfood::operator_dogfood_summary(value),
+        "signed-receipt" => signed_receipt_summary(value),
         "operator-step" => {
             let step = operator_dogfood::parse_operator_step(value)?;
             Ok(format!(
@@ -3437,6 +3536,7 @@ fn is_operator_receipt_kind(kind: &str) -> bool {
             | "nix-dogfood-release-verify-receipt"
             | "release-evidence-bundle"
             | "release-evidence-bundle-verify-receipt"
+            | "signed-receipt"
     )
 }
 
@@ -3643,9 +3743,17 @@ fn run_receipt_command(command: ReceiptCommand) -> Result<()> {
             purpose,
             trust_root,
             key,
+            signer,
+            subject_ref,
         } => {
             let signed_value = read_preserves_file(&signed_receipt)?;
-            let verified = verify_signed_receipt(&signed_value, &purpose, &trust_root, &key)?;
+            let verified = verify_signed_receipt_with_policy(&signed_value, &VerifySignedReceiptPolicy {
+                required_purpose: &purpose,
+                trust_root: &trust_root,
+                key: &key,
+                expected_signer: signer.as_deref(),
+                expected_subject_ref: subject_ref.as_deref(),
+            })?;
             println!(
                 "signed receipt verify ok envelope={} subject={} signer={} purpose={}",
                 verified.envelope_ref, verified.subject_ref, verified.signer, verified.purpose
@@ -8834,12 +8942,25 @@ fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
             output_path,
             bundle,
             receipt_out,
+            signed_members,
+            require_signed_members,
+            signed_purpose,
+            signed_trust_root,
+            signed_key,
+            signed_signer,
         } => {
             let bundle_value = read_preserves_file(&bundle)?;
+            let signed_member_values = read_preserves_files(&signed_members)?;
             let receipt = operator_dogfood::verify_release_evidence_bundle(
                 &operator_dogfood::ReleaseEvidenceBundleVerifyInput {
                     output_path: &output_path,
                     bundle_value: &bundle_value,
+                    signed_member_values: &signed_member_values,
+                    signed_purpose: &signed_purpose,
+                    signed_trust_root: &signed_trust_root,
+                    signed_key: &signed_key,
+                    signed_signer: signed_signer.as_deref(),
+                    is_signed_members_required: require_signed_members,
                 },
             )?;
             write_file(&receipt_out, &to_text(&receipt.value)?)?;
@@ -13241,6 +13362,8 @@ mod tests {
             purpose: PASS_EVIDENCE_PURPOSE.to_string(),
             trust_root: "local-trust-root".to_string(),
             key: "local-dev-key".to_string(),
+            signer: Some("local-signer".to_string()),
+            subject_ref: None,
         })
         .expect("verify signed receipt");
 
