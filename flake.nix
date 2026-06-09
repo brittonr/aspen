@@ -271,6 +271,14 @@
             molten dogfood release-bundle-export \
               --output-path "$out" \
               --out "$out/release-evidence-bundle.preserves"
+            mkdir -p "$out/signed-keyring"
+            molten receipts key import \
+              --ledger "$out/signed-keyring" \
+              --key-id local-release-key-v1 \
+              --signer local-release-signer \
+              --trust-root local-release-trust-root \
+              --key local-release-key \
+              > "$out/signed-keyring-import.txt"
             molten receipts sign "$out/dogfood-report.preserves" \
               --out "$out/dogfood-report.signed.preserves" \
               --signer local-release-signer \
@@ -302,7 +310,8 @@
               --require-signed-members \
               --signed-purpose release-evidence \
               --signed-trust-root local-release-trust-root \
-              --signed-key local-release-key \
+              --signed-key-ledger "$out/signed-keyring" \
+              --signed-key-id local-release-key-v1 \
               --signed-signer local-release-signer \
               --signed-member "$out/dogfood-report.signed.preserves" \
               --signed-member "$out/release-gate.signed.preserves" \

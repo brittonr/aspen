@@ -476,6 +476,68 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let signed_gate = dir.join("release-gate.signed.preserves");
     let signed_nix_evidence = dir.join("nix-dogfood-evidence.signed.preserves");
     let signed_nix_verify = dir.join("nix-dogfood-verify.signed.preserves");
+    let key_ledger = dir.join("signed-key-ledger");
+    let key_import = molten_cmd()
+        .args(["receipts", "key", "import", "--ledger"])
+        .arg(&key_ledger)
+        .args([
+            "--key-id",
+            "release-key-1",
+            "--signer",
+            "release-signer",
+            "--trust-root",
+            "release-root",
+            "--key",
+            "release-key",
+        ])
+        .output()?;
+    assert_success(&key_import, "receipts key import");
+    let key_import_stdout = stdout(&key_import);
+    let key_ref = key_import_stdout
+        .split_whitespace()
+        .find_map(|field| field.strip_prefix("key="))
+        .ok_or_else(|| test_error("key import output did not include key ref"))?
+        .to_string();
+    let key_list = molten_cmd().args(["receipts", "key", "list", "--ledger"]).arg(&key_ledger).output()?;
+    assert_success(&key_list, "receipts key list");
+    assert!(stdout(&key_list).contains("release-key-1"));
+    let key_show = molten_cmd()
+        .args(["receipts", "key", "show"])
+        .arg(&key_ref)
+        .args(["--ledger"])
+        .arg(&key_ledger)
+        .output()?;
+    assert_success(&key_show, "receipts key show");
+    assert!(stdout(&key_show).contains("evidence-only=pass"));
+    let rotate_seed = molten_cmd()
+        .args(["receipts", "key", "import", "--ledger"])
+        .arg(&key_ledger)
+        .args([
+            "--key-id",
+            "rotate-key-1",
+            "--signer",
+            "rotate-signer",
+            "--trust-root",
+            "rotate-root",
+            "--key",
+            "rotate-key",
+        ])
+        .output()?;
+    assert_success(&rotate_seed, "receipts key import rotate seed");
+    let rotate_key_ref = stdout(&rotate_seed)
+        .split_whitespace()
+        .find_map(|field| field.strip_prefix("key="))
+        .ok_or_else(|| test_error("rotate seed output did not include key ref"))?
+        .to_string();
+    let rotate_success = molten_cmd()
+        .args(["receipts", "key", "rotate"])
+        .arg(&rotate_key_ref)
+        .args(["--ledger"])
+        .arg(&key_ledger)
+        .args(["--new-key-id", "rotate-key-2", "--new-key", "rotate-key-2"])
+        .output()?;
+    assert_success(&rotate_success, "receipts key rotate");
+    assert!(stdout(&rotate_success).contains("new-key-id=rotate-key-2"));
     for (receipt_path, signed_path) in [
         (&report, &signed_report),
         (&release_gate, &signed_gate),
@@ -518,6 +580,22 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .output()?;
     assert_success(&verify_signed, "receipts verify-signed release member");
     assert!(stdout(&verify_signed).contains("evidence-only=pass"));
+    let verify_signed_keyring = molten_cmd()
+        .args(["receipts", "verify-signed"])
+        .arg(&signed_report)
+        .args([
+            "--purpose",
+            "release-evidence",
+            "--trust-root",
+            "release-root",
+            "--key-ledger",
+        ])
+        .arg(&key_ledger)
+        .args(["--key-ref", &key_ref, "--signer", "release-signer", "--subject-ref"])
+        .arg(&parsed_report.report_ref)
+        .output()?;
+    assert_success(&verify_signed_keyring, "receipts verify-signed release member with keyring");
+    assert!(stdout(&verify_signed_keyring).contains("keyring=current"));
 
     let signed_bundle_verify_path = dir.join("release-evidence-bundle-verify-signed.preserves");
     let mut verify_signed_bundle = molten_cmd();
@@ -549,6 +627,37 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     )?;
     assert_eq!(signed_bundle_receipt.decision, "pass");
 
+    let keyring_bundle_verify_path = dir.join("release-evidence-bundle-verify-keyring.preserves");
+    let mut verify_keyring_bundle = molten_cmd();
+    verify_keyring_bundle
+        .args(["dogfood", "release-bundle-verify", "--output-path"])
+        .arg(&dir)
+        .args(["--bundle"])
+        .arg(&release_bundle)
+        .args(["--receipt-out"])
+        .arg(&keyring_bundle_verify_path)
+        .args([
+            "--require-signed-members",
+            "--signed-purpose",
+            "release-evidence",
+            "--signed-trust-root",
+            "release-root",
+            "--signed-key-ledger",
+        ])
+        .arg(&key_ledger)
+        .args(["--signed-key-ref"])
+        .arg(&key_ref)
+        .args(["--signed-signer", "release-signer"]);
+    for signed_path in [&signed_report, &signed_gate, &signed_nix_evidence, &signed_nix_verify] {
+        verify_keyring_bundle.args(["--signed-member"]).arg(signed_path);
+    }
+    let keyring_bundle_output = verify_keyring_bundle.output()?;
+    assert_success(&keyring_bundle_output, "dogfood release-bundle-verify signed keyring members");
+    let keyring_bundle_receipt = molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(
+        &read_preserves(&keyring_bundle_verify_path)?,
+    )?;
+    assert_eq!(keyring_bundle_receipt.decision, "pass");
+
     let wrong_signer_bundle_verify_path = dir.join("release-evidence-bundle-verify-wrong-signer.preserves");
     let mut verify_wrong_signer_bundle = molten_cmd();
     verify_wrong_signer_bundle
@@ -579,6 +688,41 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     )?;
     assert_eq!(wrong_signer_bundle_receipt.decision, "deny");
     assert!(wrong_signer_bundle_receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("signer")));
+
+    let revoke_key = molten_cmd()
+        .args(["receipts", "key", "revoke"])
+        .arg(&key_ref)
+        .args(["--ledger"])
+        .arg(&key_ledger)
+        .args(["--reason", "test-revoked"])
+        .output()?;
+    assert_success(&revoke_key, "receipts key revoke");
+    let revoked_verify = molten_cmd()
+        .args(["receipts", "verify-signed"])
+        .arg(&signed_report)
+        .args([
+            "--purpose",
+            "release-evidence",
+            "--trust-root",
+            "release-root",
+            "--key-ledger",
+        ])
+        .arg(&key_ledger)
+        .args(["--key-ref"])
+        .arg(&key_ref)
+        .output()?;
+    assert_failure(&revoked_verify, "revoked key denies signed receipt");
+    assert!(stderr(&revoked_verify).contains("revoked"));
+
+    let rotate_key = molten_cmd()
+        .args(["receipts", "key", "rotate"])
+        .arg(&key_ref)
+        .args(["--ledger"])
+        .arg(&key_ledger)
+        .args(["--new-key-id", "release-key-2", "--new-key", "release-key-2"])
+        .output()?;
+    assert_failure(&rotate_key, "cannot rotate already revoked key");
+    assert!(stderr(&rotate_key).contains("already revoked"));
 
     fs::write(dir.join("after-nextest.txt"), "/nix/store/stale-molten-nextest\n")?;
     let stale_verify = dir.join("nix-dogfood-verify-stale.preserves");

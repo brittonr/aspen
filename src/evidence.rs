@@ -2,19 +2,25 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
+use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA;
+use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA;
 use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::u64_value;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const SIGNATURE_ALGORITHM: &str = "blake3-local-fixture-v1";
 pub const PASS_EVIDENCE_PURPOSE: &str = "pass-evidence";
 
 const MAX_SIGNED_RECEIPT_PARENTS: usize = 256;
+const MAX_SIGNED_KEY_RECORDS: usize = 4096;
+pub const SIGNED_RECEIPT_KEY_STATUS_CURRENT: &str = "current";
 const _: () = assert!(MAX_SIGNED_RECEIPT_PARENTS > 0);
+const _: () = assert!(MAX_SIGNED_KEY_RECORDS > 0);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignedReceipt {
@@ -25,6 +31,44 @@ pub struct SignedReceipt {
     pub trust_root: String,
     pub algorithm: String,
     pub parents: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignedReceiptKey {
+    pub key_ref: String,
+    pub key_id: String,
+    pub signer: String,
+    pub trust_root: String,
+    pub key: String,
+    pub status: String,
+    pub generation: u64,
+    pub predecessor_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignedReceiptKeyRevocation {
+    pub revocation_ref: String,
+    pub key_ref: String,
+    pub key_id: String,
+    pub signer: String,
+    pub trust_root: String,
+    pub reason: String,
+    pub superseded_by: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SignedReceiptWithKey {
+    pub receipt: SignedReceipt,
+    pub key_ref: String,
+    pub key_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SignedReceiptEnvelope {
+    subject_ref: String,
+    signer: String,
+    purpose: String,
+    trust_root: String,
 }
 
 pub struct SignReceiptInput<'a> {
@@ -42,6 +86,32 @@ pub struct VerifySignedReceiptPolicy<'a> {
     pub key: &'a str,
     pub expected_signer: Option<&'a str>,
     pub expected_subject_ref: Option<&'a str>,
+}
+
+pub struct SignedReceiptKeyInput<'a> {
+    pub key_id: &'a str,
+    pub signer: &'a str,
+    pub trust_root: &'a str,
+    pub key: &'a str,
+    pub generation: u64,
+    pub predecessor_ref: Option<&'a str>,
+}
+
+pub struct SignedReceiptKeyRevocationInput<'a> {
+    pub key: &'a SignedReceiptKey,
+    pub reason: &'a str,
+    pub superseded_by: Option<&'a str>,
+}
+
+pub struct VerifySignedReceiptKeyringPolicy<'a> {
+    pub required_purpose: &'a str,
+    pub trust_root: &'a str,
+    pub expected_signer: Option<&'a str>,
+    pub expected_subject_ref: Option<&'a str>,
+    pub required_key_ref: Option<&'a str>,
+    pub required_key_id: Option<&'a str>,
+    pub keys: &'a [SignedReceiptKey],
+    pub revocations: &'a [SignedReceiptKeyRevocation],
 }
 
 pub fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IOValue> {
@@ -67,6 +137,126 @@ pub fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IOValue> {
             record("check", vec![string("signed-receipt-is-evidence-only"), string("pass")]),
         ])]),
     ]))
+}
+
+pub fn signed_receipt_key_value(input: &SignedReceiptKeyInput<'_>) -> Result<IOValue> {
+    require_non_empty(input.key_id, "signed receipt key id")?;
+    require_non_empty(input.signer, "signed receipt key signer")?;
+    require_non_empty(input.trust_root, "signed receipt key trust root")?;
+    require_non_empty(input.key, "signed receipt verification key")?;
+    Ok(record("signed-receipt-key-v1", vec![
+        string(EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA),
+        record("identity", vec![string(input.key_id), string(input.signer), string(input.trust_root)]),
+        record("verification-key", vec![string(SIGNATURE_ALGORITHM), string(input.key)]),
+        record("status", vec![string(SIGNED_RECEIPT_KEY_STATUS_CURRENT), u64_value(input.generation)]),
+        record("predecessor", vec![optional_ref_value(input.predecessor_ref)]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("key-id-bound"), string("pass")]),
+            record("check", vec![string("key-material-bound"), string("pass")]),
+            record("check", vec![string("key-record-is-evidence-only"), string("pass")]),
+        ])]),
+    ]))
+}
+
+pub fn signed_receipt_key_revocation_value(input: &SignedReceiptKeyRevocationInput<'_>) -> Result<IOValue> {
+    require_non_empty(input.reason, "signed receipt key revocation reason")?;
+    Ok(record("signed-receipt-key-revocation-v1", vec![
+        string(EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA),
+        record("key", vec![
+            string(&input.key.key_ref),
+            string(&input.key.key_id),
+            string(&input.key.signer),
+            string(&input.key.trust_root),
+        ]),
+        record("reason", vec![string(input.reason)]),
+        record("superseded-by", vec![optional_ref_value(input.superseded_by)]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("key-ref-bound"), string("pass")]),
+            record("check", vec![string("key-revocation-currentness-bound"), string("pass")]),
+            record("check", vec![string("key-revocation-is-evidence-only"), string("pass")]),
+        ])]),
+    ]))
+}
+
+pub fn parse_signed_receipt_key(value: &IOValue) -> Result<SignedReceiptKey> {
+    let fields = value
+        .collect_simple_record("signed-receipt-key-v1", Some(6))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-key-v1 ...>"))?;
+    let schema = required_string(&fields[0], "signed receipt key schema")?;
+    if schema != EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported signed receipt key schema {schema}; expected {EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA}"
+        )));
+    }
+    let identity_value = value_to_iovalue(&fields[1]);
+    let identity = identity_value
+        .collect_simple_record("identity", Some(3))
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key missing identity record"))?;
+    let key_value = value_to_iovalue(&fields[2]);
+    let key_fields = key_value
+        .collect_simple_record("verification-key", Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key missing verification-key record"))?;
+    let algorithm = required_string(&key_fields[0], "signed receipt key algorithm")?;
+    if algorithm != SIGNATURE_ALGORITHM {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported signed receipt key algorithm {algorithm}; expected {SIGNATURE_ALGORITHM}"
+        )));
+    }
+    let status_value = value_to_iovalue(&fields[3]);
+    let status = status_value
+        .collect_simple_record("status", Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key missing status record"))?;
+    let predecessor_value = value_to_iovalue(&fields[4]);
+    let predecessor = predecessor_value
+        .collect_simple_record("predecessor", Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key missing predecessor record"))?;
+    let checks = parse_signed_checks(&fields[5])?;
+    require_signed_check(&checks, "key-id-bound")?;
+    require_signed_check(&checks, "key-material-bound")?;
+    require_signed_check(&checks, "key-record-is-evidence-only")?;
+    Ok(SignedReceiptKey {
+        key_ref: canonical_hash(value)?,
+        key_id: required_string(&identity[0], "signed receipt key id")?,
+        signer: required_string(&identity[1], "signed receipt key signer")?,
+        trust_root: required_string(&identity[2], "signed receipt key trust root")?,
+        key: required_string(&key_fields[1], "signed receipt key material")?,
+        status: required_string(&status[0], "signed receipt key status")?,
+        generation: required_u64(&status[1], "signed receipt key generation")?,
+        predecessor_ref: optional_ref(&predecessor[0], "signed receipt key predecessor")?,
+    })
+}
+
+pub fn parse_signed_receipt_key_revocation(value: &IOValue) -> Result<SignedReceiptKeyRevocation> {
+    let fields = value
+        .collect_simple_record("signed-receipt-key-revocation-v1", Some(5))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-key-revocation-v1 ...>"))?;
+    let schema = required_string(&fields[0], "signed receipt key revocation schema")?;
+    if schema != EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported signed receipt key revocation schema {schema}; expected {EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA}"
+        )));
+    }
+    let key_value = value_to_iovalue(&fields[1]);
+    let key_fields = key_value
+        .collect_simple_record("key", Some(4))
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key revocation missing key record"))?;
+    let superseded_value = value_to_iovalue(&fields[3]);
+    let superseded = superseded_value
+        .collect_simple_record("superseded-by", Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt key revocation missing superseded-by record"))?;
+    let checks = parse_signed_checks(&fields[4])?;
+    require_signed_check(&checks, "key-ref-bound")?;
+    require_signed_check(&checks, "key-revocation-currentness-bound")?;
+    require_signed_check(&checks, "key-revocation-is-evidence-only")?;
+    Ok(SignedReceiptKeyRevocation {
+        revocation_ref: canonical_hash(value)?,
+        key_ref: required_string(&key_fields[0], "signed receipt revoked key ref")?,
+        key_id: required_string(&key_fields[1], "signed receipt revoked key id")?,
+        signer: required_string(&key_fields[2], "signed receipt revoked key signer")?,
+        trust_root: required_string(&key_fields[3], "signed receipt revoked key trust root")?,
+        reason: required_record_string(&fields[2], "reason", "signed receipt key revocation reason")?,
+        superseded_by: optional_ref(&superseded[0], "signed receipt key superseded-by ref")?,
+    })
 }
 
 pub fn verify_signed_receipt(
@@ -190,6 +380,117 @@ pub fn verify_signed_receipt_with_policy(
     })
 }
 
+pub fn verify_signed_receipt_with_keyring_policy(
+    value: &IOValue,
+    policy: &VerifySignedReceiptKeyringPolicy<'_>,
+) -> Result<SignedReceiptWithKey> {
+    let envelope = signed_receipt_envelope(value)?;
+    if envelope.purpose != policy.required_purpose {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt purpose {} does not satisfy required purpose {}",
+            envelope.purpose, policy.required_purpose
+        )));
+    }
+    if envelope.trust_root != policy.trust_root {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt trust root {} does not match required trust root {}",
+            envelope.trust_root, policy.trust_root
+        )));
+    }
+    if let Some(expected_signer) = policy.expected_signer
+        && envelope.signer != expected_signer
+    {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt signer {} does not match required signer {expected_signer}",
+            envelope.signer
+        )));
+    }
+    if let Some(expected_subject_ref) = policy.expected_subject_ref
+        && envelope.subject_ref != expected_subject_ref
+    {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt subject ref {} does not match required subject ref {expected_subject_ref}",
+            envelope.subject_ref
+        )));
+    }
+    let mut matching_keys = Vec::new();
+    for key in policy.keys {
+        if key.signer != envelope.signer || key.trust_root != envelope.trust_root {
+            continue;
+        }
+        if let Some(required_key_ref) = policy.required_key_ref
+            && key.key_ref != required_key_ref
+        {
+            continue;
+        }
+        if let Some(required_key_id) = policy.required_key_id
+            && key.key_id != required_key_id
+        {
+            continue;
+        }
+        push_bounded(&mut matching_keys, key, MAX_SIGNED_KEY_RECORDS, "signed receipt keyring matches")?;
+    }
+    if matching_keys.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt keyring has no key for signer {} trust-root {}{}{}",
+            envelope.signer,
+            envelope.trust_root,
+            key_ref_suffix(policy.required_key_ref),
+            key_id_suffix(policy.required_key_id)
+        )));
+    }
+    let mut eligible_keys = Vec::new();
+    let mut blocked_reasons = Vec::new();
+    for key in matching_keys {
+        if key.status != SIGNED_RECEIPT_KEY_STATUS_CURRENT {
+            push_bounded(
+                &mut blocked_reasons,
+                format!("key {} status is {}", key.key_ref, key.status),
+                MAX_SIGNED_KEY_RECORDS,
+                "signed receipt keyring blocked key diagnostics",
+            )?;
+            continue;
+        }
+        if let Some(revocation) = policy.revocations.iter().find(|revocation| revocation.key_ref == key.key_ref) {
+            push_bounded(
+                &mut blocked_reasons,
+                format!("key {} is revoked by {}", key.key_ref, revocation.revocation_ref),
+                MAX_SIGNED_KEY_RECORDS,
+                "signed receipt keyring blocked key diagnostics",
+            )?;
+            continue;
+        }
+        push_bounded(&mut eligible_keys, key, MAX_SIGNED_KEY_RECORDS, "signed receipt keyring eligible keys")?;
+    }
+    if eligible_keys.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt keyring has no current unrevoked key for signer {} trust-root {}: {}",
+            envelope.signer,
+            envelope.trust_root,
+            blocked_reasons.join("; ")
+        )));
+    }
+    if eligible_keys.len() > 1 {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt keyring matched {} current keys; specify --key-ref or --key-id",
+            eligible_keys.len()
+        )));
+    }
+    let key = eligible_keys[0];
+    let receipt = verify_signed_receipt_with_policy(value, &VerifySignedReceiptPolicy {
+        required_purpose: policy.required_purpose,
+        trust_root: policy.trust_root,
+        key: &key.key,
+        expected_signer: Some(&key.signer),
+        expected_subject_ref: policy.expected_subject_ref,
+    })?;
+    Ok(SignedReceiptWithKey {
+        receipt,
+        key_ref: key.key_ref.clone(),
+        key_id: key.key_id.clone(),
+    })
+}
+
 pub fn signed_receipt_summary(value: &IOValue) -> Result<String> {
     let signed = value
         .collect_simple_record("signed-receipt-v1", Some(7))
@@ -212,6 +513,40 @@ pub fn signed_receipt_summary(value: &IOValue) -> Result<String> {
         signer,
         purpose
     ))
+}
+
+fn signed_receipt_envelope(value: &IOValue) -> Result<SignedReceiptEnvelope> {
+    let signed = value
+        .collect_simple_record("signed-receipt-v1", Some(7))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-v1 ...>"))?;
+    let schema = required_string(&signed[0], "signed receipt schema")?;
+    if schema != EVIDENCE_SIGNED_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported signed receipt schema {schema}; expected {EVIDENCE_SIGNED_RECEIPT_SCHEMA}"
+        )));
+    }
+    let subject = value_to_iovalue(&signed[1]);
+    let subject_record = subject
+        .collect_simple_record("subject", Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing subject record"))?;
+    let subject_ref = required_string(&subject_record[0], "signed receipt subject ref")?;
+    let receipt_value = value_to_iovalue(&subject_record[1]);
+    let actual_ref = canonical_hash(&receipt_value)?;
+    if actual_ref != subject_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt subject ref mismatch: got {subject_ref}, expected {actual_ref}"
+        )));
+    }
+    let signer_record_value = value_to_iovalue(&signed[2]);
+    let signer_record = signer_record_value
+        .collect_simple_record("signer", Some(3))
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing signer record"))?;
+    Ok(SignedReceiptEnvelope {
+        subject_ref,
+        signer: required_string(&signer_record[0], "signed receipt signer")?,
+        purpose: required_string(&signer_record[1], "signed receipt purpose")?,
+        trust_root: required_string(&signer_record[2], "signed receipt trust root")?,
+    })
 }
 
 fn parse_signed_checks(value: &preserves::Value<IOValue>) -> Result<Vec<(String, String)>> {
@@ -247,6 +582,42 @@ fn require_signed_check(checks: &[(String, String)], name: &str) -> Result<()> {
     } else {
         Err(MoltenError::invalid_harness(format!("signed receipt missing pass check {name}")))
     }
+}
+
+fn optional_ref_value(reference: Option<&str>) -> IOValue {
+    reference.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+}
+
+fn optional_ref(value: &preserves::Value<IOValue>, field: &str) -> Result<Option<String>> {
+    let inner = value_to_iovalue(value);
+    if inner.collect_simple_record("none", Some(0)).is_some() {
+        return Ok(None);
+    }
+    if let Some(fields) = inner.collect_simple_record("some", Some(1)) {
+        return Ok(Some(required_string(&fields[0], field)?));
+    }
+    Err(MoltenError::invalid_harness(format!("expected <some ref> or <none> for {field}")))
+}
+
+fn require_non_empty(value: &str, label: &str) -> Result<()> {
+    if value.trim().is_empty() {
+        Err(MoltenError::invalid_harness(format!("{label} must not be empty")))
+    } else {
+        Ok(())
+    }
+}
+
+fn required_u64(value: &preserves::Value<IOValue>, field: &str) -> Result<u64> {
+    let number = value.as_u64().ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?;
+    number.map_err(|_| MoltenError::invalid_harness(format!("u64 out of range for {field}")))
+}
+
+fn key_ref_suffix(key_ref: Option<&str>) -> String {
+    key_ref.map_or_else(String::new, |value| format!(" key-ref {value}"))
+}
+
+fn key_id_suffix(key_id: Option<&str>) -> String {
+    key_id.map_or_else(String::new, |value| format!(" key-id {value}"))
 }
 
 fn signature_for(receipt: &IOValue, signer: &str, purpose: &str, trust_root: &str, key: &str) -> Result<String> {
@@ -329,5 +700,60 @@ mod tests {
         })
         .expect_err("wrong subject");
         assert!(wrong_subject.to_string().contains("subject ref"));
+    }
+
+    #[test]
+    fn signed_receipt_keyring_enforces_current_unrevoked_keys() {
+        let receipt = parse_text("<gate-receipt-placeholder \"ok\">").expect("parse receipt");
+        let signed = sign_receipt(&SignReceiptInput {
+            receipt: &receipt,
+            signer: "release-signer",
+            purpose: PASS_EVIDENCE_PURPOSE,
+            trust_root: "release-root",
+            key: "release-key",
+            parents: &[],
+        })
+        .expect("sign receipt");
+        let key_value = signed_receipt_key_value(&SignedReceiptKeyInput {
+            key_id: "release-key-1",
+            signer: "release-signer",
+            trust_root: "release-root",
+            key: "release-key",
+            generation: 1,
+            predecessor_ref: None,
+        })
+        .expect("key value");
+        let key = parse_signed_receipt_key(&key_value).expect("parse key");
+        let verified = verify_signed_receipt_with_keyring_policy(&signed, &VerifySignedReceiptKeyringPolicy {
+            required_purpose: PASS_EVIDENCE_PURPOSE,
+            trust_root: "release-root",
+            expected_signer: Some("release-signer"),
+            expected_subject_ref: Some(&canonical_hash(&receipt).expect("receipt ref")),
+            required_key_ref: Some(&key.key_ref),
+            required_key_id: Some("release-key-1"),
+            keys: std::slice::from_ref(&key),
+            revocations: &[],
+        })
+        .expect("verify with keyring");
+        assert_eq!(verified.key_ref, key.key_ref);
+        let revocation_value = signed_receipt_key_revocation_value(&SignedReceiptKeyRevocationInput {
+            key: &key,
+            reason: "compromised",
+            superseded_by: None,
+        })
+        .expect("revocation value");
+        let revocation = parse_signed_receipt_key_revocation(&revocation_value).expect("parse revocation");
+        let revoked = verify_signed_receipt_with_keyring_policy(&signed, &VerifySignedReceiptKeyringPolicy {
+            required_purpose: PASS_EVIDENCE_PURPOSE,
+            trust_root: "release-root",
+            expected_signer: Some("release-signer"),
+            expected_subject_ref: None,
+            required_key_ref: Some(&key.key_ref),
+            required_key_id: Some("release-key-1"),
+            keys: std::slice::from_ref(&key),
+            revocations: std::slice::from_ref(&revocation),
+        })
+        .expect_err("revoked key denies");
+        assert!(revoked.to_string().contains("revoked"));
     }
 }

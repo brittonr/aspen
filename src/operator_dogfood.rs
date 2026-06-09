@@ -16,7 +16,11 @@ use crate::authority;
 use crate::catalog_mcp;
 use crate::error::MoltenError;
 use crate::error::Result;
+use crate::evidence::SignedReceiptKey;
+use crate::evidence::SignedReceiptKeyRevocation;
+use crate::evidence::VerifySignedReceiptKeyringPolicy;
 use crate::evidence::VerifySignedReceiptPolicy;
+use crate::evidence::verify_signed_receipt_with_keyring_policy;
 use crate::evidence::verify_signed_receipt_with_policy;
 use crate::harness;
 use crate::job_dag;
@@ -204,6 +208,10 @@ pub struct ReleaseEvidenceBundleVerifyInput<'a> {
     pub signed_purpose: &'a str,
     pub signed_trust_root: &'a str,
     pub signed_key: &'a str,
+    pub signed_keys: &'a [SignedReceiptKey],
+    pub signed_key_revocations: &'a [SignedReceiptKeyRevocation],
+    pub signed_key_ref: Option<&'a str>,
+    pub signed_key_id: Option<&'a str>,
     pub signed_signer: Option<&'a str>,
     pub is_signed_members_required: bool,
 }
@@ -1194,30 +1202,24 @@ fn release_bundle_signature_diagnostics(
     }
     let mut signed_subject_refs = Vec::new();
     for signed_value in input.signed_member_values {
-        match verify_signed_receipt_with_policy(signed_value, &VerifySignedReceiptPolicy {
-            required_purpose: input.signed_purpose,
-            trust_root: input.signed_trust_root,
-            key: input.signed_key,
-            expected_signer: input.signed_signer,
-            expected_subject_ref: None,
-        }) {
-            Ok(signed) => {
-                if signable_members.iter().any(|(_, member_ref)| member_ref == &signed.subject_ref) {
-                    if signed_subject_refs.iter().any(|subject_ref| subject_ref == &signed.subject_ref) {
+        match verify_release_bundle_signed_member(signed_value, input) {
+            Ok(subject_ref) => {
+                if signable_members.iter().any(|(_, member_ref)| member_ref == &subject_ref) {
+                    if signed_subject_refs.iter().any(|known_ref| known_ref == &subject_ref) {
                         diagnostics.push_limited_value(
-                            format!("duplicate signed member receipt for subject {}", signed.subject_ref),
+                            format!("duplicate signed member receipt for subject {subject_ref}"),
                             MAX_OPERATOR_DIAGNOSTICS,
                             "release evidence bundle signed member diagnostics",
                         )?;
                     }
                     signed_subject_refs.push_limited_value(
-                        signed.subject_ref,
+                        subject_ref,
                         MAX_OPERATOR_REFS,
                         "release evidence bundle signed member refs",
                     )?;
                 } else {
                     diagnostics.push_limited_value(
-                        format!("signed member subject {} is not a signable bundle member", signed.subject_ref),
+                        format!("signed member subject {subject_ref} is not a signable bundle member"),
                         MAX_OPERATOR_DIAGNOSTICS,
                         "release evidence bundle signed member diagnostics",
                     )?;
@@ -1242,6 +1244,34 @@ fn release_bundle_signature_diagnostics(
         }
     }
     Ok(diagnostics)
+}
+
+fn verify_release_bundle_signed_member(
+    signed_value: &IOValue,
+    input: &ReleaseEvidenceBundleVerifyInput<'_>,
+) -> Result<String> {
+    if input.signed_keys.is_empty() && input.signed_key_revocations.is_empty() {
+        let signed = verify_signed_receipt_with_policy(signed_value, &VerifySignedReceiptPolicy {
+            required_purpose: input.signed_purpose,
+            trust_root: input.signed_trust_root,
+            key: input.signed_key,
+            expected_signer: input.signed_signer,
+            expected_subject_ref: None,
+        })?;
+        Ok(signed.subject_ref)
+    } else {
+        let signed = verify_signed_receipt_with_keyring_policy(signed_value, &VerifySignedReceiptKeyringPolicy {
+            required_purpose: input.signed_purpose,
+            trust_root: input.signed_trust_root,
+            expected_signer: input.signed_signer,
+            expected_subject_ref: None,
+            required_key_ref: input.signed_key_ref,
+            required_key_id: input.signed_key_id,
+            keys: input.signed_keys,
+            revocations: input.signed_key_revocations,
+        })?;
+        Ok(signed.receipt.subject_ref)
+    }
 }
 
 fn read_output_text(output_path: &Path, name: &str) -> Result<String> {
@@ -2942,6 +2972,10 @@ mod tests {
             signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
             signed_trust_root: "local-release-trust-root",
             signed_key: "local-release-key",
+            signed_keys: &[],
+            signed_key_revocations: &[],
+            signed_key_ref: None,
+            signed_key_id: None,
             signed_signer: None,
             is_signed_members_required: false,
         })
@@ -2993,6 +3027,10 @@ mod tests {
             signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
             signed_trust_root: "release-root",
             signed_key: "release-key",
+            signed_keys: &[],
+            signed_key_revocations: &[],
+            signed_key_ref: None,
+            signed_key_id: None,
             signed_signer: Some("release-signer"),
             is_signed_members_required: true,
         })
@@ -3005,6 +3043,10 @@ mod tests {
             signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
             signed_trust_root: "release-root",
             signed_key: "release-key",
+            signed_keys: &[],
+            signed_key_revocations: &[],
+            signed_key_ref: None,
+            signed_key_id: None,
             signed_signer: Some("wrong-signer"),
             is_signed_members_required: true,
         })
@@ -3018,6 +3060,10 @@ mod tests {
             signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
             signed_trust_root: "release-root",
             signed_key: "release-key",
+            signed_keys: &[],
+            signed_key_revocations: &[],
+            signed_key_ref: None,
+            signed_key_id: None,
             signed_signer: Some("release-signer"),
             is_signed_members_required: true,
         })
@@ -3040,6 +3086,10 @@ mod tests {
             signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
             signed_trust_root: "local-release-trust-root",
             signed_key: "local-release-key",
+            signed_keys: &[],
+            signed_key_revocations: &[],
+            signed_key_ref: None,
+            signed_key_id: None,
             signed_signer: None,
             is_signed_members_required: false,
         })

@@ -477,6 +477,8 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("repro-verify-receipt-v1", "repro-verify-receipt"),
     ("harness-failure-v1", "failure"),
     ("signed-receipt-v1", "signed-receipt"),
+    ("signed-receipt-key-v1", "signed-receipt-key"),
+    ("signed-receipt-key-revocation-v1", "signed-receipt-key-revocation"),
     ("retention-class-v1", "retention-class"),
     ("retention-pin-v1", "retention-pin"),
     ("retention-reference-index-v1", "retention-reference-index"),
