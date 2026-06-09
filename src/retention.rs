@@ -11,6 +11,7 @@ use crate::error::Result;
 use crate::node_daemon;
 use crate::node_runtime;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
+use crate::preserves_rail::RETENTION_CANDIDATE_EXPLAIN_SCHEMA;
 use crate::preserves_rail::RETENTION_CLASS_SCHEMA;
 use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
 use crate::preserves_rail::RETENTION_GC_APPLY_SCHEMA;
@@ -87,6 +88,7 @@ const REMOTE_CLEARANCE_LIVE_WORKFLOW_DIR: &str = "remote-clearance-live-workflow
 const GC_PLAN_DIR: &str = "gc-plans";
 const GC_APPLY_DIR: &str = "gc-applies";
 const GC_EXECUTE_DIR: &str = "gc-executes";
+const GC_AUDIT_DIR: &str = "gc-audits";
 const RECEIPT_DIR: &str = "receipts";
 const TOMBSTONE_DIR: &str = "tombstones";
 const MAX_RETENTION_REFS: usize = 4096;
@@ -342,6 +344,38 @@ pub struct RetentionGcAudit {
     pub retention_receipt_decision: String,
     pub tombstone_ref: Option<String>,
     pub tombstone_status: String,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionCandidateExplainInput<'a> {
+    pub root: &'a Path,
+    pub object_ref: &'a str,
+    pub object_kind: Option<&'a str>,
+    pub retention_class: Option<&'a str>,
+    pub action: Option<&'a str>,
+    pub subsystem: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionCandidateExplain {
+    pub explain_ref: String,
+    pub object_ref: String,
+    pub object_kind: Option<String>,
+    pub retention_class: Option<String>,
+    pub action: Option<String>,
+    pub subsystem: Option<String>,
+    pub pin_refs: Vec<String>,
+    pub admission_refs: Vec<String>,
+    pub remote_clearance_refs: Vec<String>,
+    pub remote_clearance_import_refs: Vec<String>,
+    pub gc_plan_refs: Vec<String>,
+    pub gc_apply_refs: Vec<String>,
+    pub gc_execution_refs: Vec<String>,
+    pub gc_audit_refs: Vec<String>,
+    pub retention_receipt_refs: Vec<String>,
+    pub tombstone_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub value: IOValue,
 }
@@ -2169,6 +2203,33 @@ struct RetentionGcAuditValueInput<'a> {
     tombstone_ref: Option<&'a str>,
     tombstone_status: &'a str,
     diagnostics: &'a [String],
+}
+
+struct RetentionCandidateExplainValueInput<'a> {
+    object_ref: &'a str,
+    object_kind: Option<&'a str>,
+    retention_class: Option<&'a str>,
+    action: Option<&'a str>,
+    subsystem: Option<&'a str>,
+    pin_refs: &'a [String],
+    admission_refs: &'a [String],
+    remote_clearance_refs: &'a [String],
+    remote_clearance_import_refs: &'a [String],
+    gc_plan_refs: &'a [String],
+    gc_apply_refs: &'a [String],
+    gc_execution_refs: &'a [String],
+    gc_audit_refs: &'a [String],
+    retention_receipt_refs: &'a [String],
+    tombstone_refs: &'a [String],
+    diagnostics: &'a [String],
+}
+
+struct RetentionCandidateFilter<'a> {
+    object_ref: &'a str,
+    object_kind: Option<&'a str>,
+    retention_class: Option<&'a str>,
+    action: Option<&'a str>,
+    subsystem: Option<&'a str>,
 }
 
 struct RetentionAuditScope<'a> {
@@ -4271,7 +4332,9 @@ pub fn audit_retention_gc_execution(input: RetentionGcAuditInput<'_>) -> Result<
         tombstone_status: &tombstone_status,
         diagnostics: &diagnostics,
     })?;
-    parse_retention_gc_audit(&value)
+    let audit = parse_retention_gc_audit(&value)?;
+    write_store_value(&gc_audit_path(input.root, &audit.audit_ref)?, &audit.value)?;
+    Ok(audit)
 }
 
 fn gc_audit_scope<'a>(
@@ -4433,6 +4496,442 @@ pub fn parse_retention_gc_audit(value: &IOValue) -> Result<RetentionGcAudit> {
         diagnostics,
         value: value.clone(),
     })
+}
+
+pub fn read_retention_gc_audit(root: &Path, audit_ref: &str) -> Result<RetentionGcAudit> {
+    require_ref(audit_ref, "retention GC audit ref")?;
+    let value = read_store_value(&gc_audit_path(root, audit_ref)?)?;
+    let audit = parse_retention_gc_audit(&value)?;
+    if audit.audit_ref != audit_ref {
+        return Err(MoltenError::invalid_harness("stored retention GC audit ref mismatch"));
+    }
+    Ok(audit)
+}
+
+pub fn explain_retention_candidate(input: RetentionCandidateExplainInput<'_>) -> Result<RetentionCandidateExplain> {
+    validate_retention_candidate_explain_input(&input)?;
+    let filter = RetentionCandidateFilter {
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        subsystem: input.subsystem,
+    };
+    let pin_refs = collect_matching_retention_refs(
+        &pins_dir(input.root),
+        parse_retention_pin,
+        |pin| filter.matches_object(&pin.object_ref, &pin.object_kind, &pin.retention_class),
+        |pin| pin.pin_ref.clone(),
+        "retention candidate pins",
+    )?;
+    let admission_refs = collect_matching_retention_refs(
+        &admissions_dir(input.root),
+        parse_retention_evidence_admission,
+        |admission| {
+            filter.matches_retention(
+                &admission.object_ref,
+                &admission.object_kind,
+                &admission.retention_class,
+                &admission.action,
+            )
+        },
+        |admission| admission.admission_ref.clone(),
+        "retention candidate admissions",
+    )?;
+    let remote_clearance_refs = collect_matching_retention_refs(
+        &remote_clearances_dir(input.root),
+        parse_retention_remote_gc_clearance,
+        |clearance| {
+            filter.matches_retention(
+                &clearance.object_ref,
+                &clearance.object_kind,
+                &clearance.retention_class,
+                &clearance.action,
+            )
+        },
+        |clearance| clearance.clearance_ref.clone(),
+        "retention candidate remote clearances",
+    )?;
+    let remote_clearance_import_refs = collect_matching_retention_refs(
+        &remote_clearance_imports_dir(input.root),
+        parse_retention_remote_gc_clearance_import,
+        |import| import.clearance_ref.as_ref().is_some_and(|reference| remote_clearance_refs.contains(reference)),
+        |import| import.import_ref.clone(),
+        "retention candidate remote clearance imports",
+    )?;
+    let gc_plan_refs = collect_matching_retention_refs(
+        &gc_plans_dir(input.root),
+        parse_retention_gc_plan,
+        |plan| {
+            filter.matches_gc(&plan.subsystem, &plan.object_ref, &plan.object_kind, &plan.retention_class, &plan.action)
+        },
+        |plan| plan.plan_ref.clone(),
+        "retention candidate GC plans",
+    )?;
+    let gc_apply_refs = collect_matching_retention_refs(
+        &gc_applies_dir(input.root),
+        parse_retention_gc_apply,
+        |apply| {
+            filter.matches_gc(
+                &apply.subsystem,
+                &apply.object_ref,
+                &apply.object_kind,
+                &apply.retention_class,
+                &apply.action,
+            )
+        },
+        |apply| apply.apply_ref.clone(),
+        "retention candidate GC applies",
+    )?;
+    let gc_execution_refs = collect_matching_retention_refs(
+        &gc_executes_dir(input.root),
+        parse_retention_gc_execution_gate,
+        |execute| {
+            filter.matches_gc(
+                &execute.subsystem,
+                &execute.object_ref,
+                &execute.object_kind,
+                &execute.retention_class,
+                &execute.action,
+            )
+        },
+        |execute| execute.execution_ref.clone(),
+        "retention candidate GC executions",
+    )?;
+    let gc_audit_refs = collect_matching_retention_refs(
+        &gc_audits_dir(input.root),
+        parse_retention_gc_audit,
+        |audit| {
+            filter.matches_gc(
+                &audit.subsystem,
+                &audit.object_ref,
+                &audit.object_kind,
+                &audit.retention_class,
+                &audit.action,
+            )
+        },
+        |audit| audit.audit_ref.clone(),
+        "retention candidate GC audits",
+    )?;
+    let retention_receipt_refs = collect_matching_retention_refs(
+        &receipts_dir(input.root),
+        parse_retention_receipt,
+        |receipt| {
+            filter.matches_retention(
+                &receipt.object_ref,
+                &receipt.object_kind,
+                &receipt.retention_class,
+                &receipt.action,
+            )
+        },
+        |receipt| receipt.receipt_ref.clone(),
+        "retention candidate receipts",
+    )?;
+    let tombstone_refs = collect_matching_retention_refs(
+        &tombstones_dir(input.root),
+        parse_tombstone,
+        |tombstone| {
+            filter.matches_retention(
+                &tombstone.object_ref,
+                &tombstone.object_kind,
+                &tombstone.retention_class,
+                &tombstone.action,
+            )
+        },
+        |tombstone| tombstone.tombstone_ref.clone(),
+        "retention candidate tombstones",
+    )?;
+    let diagnostics = retention_candidate_explain_diagnostics(&RetentionCandidateExplainValueInput {
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        subsystem: input.subsystem,
+        pin_refs: &pin_refs,
+        admission_refs: &admission_refs,
+        remote_clearance_refs: &remote_clearance_refs,
+        remote_clearance_import_refs: &remote_clearance_import_refs,
+        gc_plan_refs: &gc_plan_refs,
+        gc_apply_refs: &gc_apply_refs,
+        gc_execution_refs: &gc_execution_refs,
+        gc_audit_refs: &gc_audit_refs,
+        retention_receipt_refs: &retention_receipt_refs,
+        tombstone_refs: &tombstone_refs,
+        diagnostics: &[],
+    })?;
+    let value = retention_candidate_explain_value(&RetentionCandidateExplainValueInput {
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        subsystem: input.subsystem,
+        pin_refs: &pin_refs,
+        admission_refs: &admission_refs,
+        remote_clearance_refs: &remote_clearance_refs,
+        remote_clearance_import_refs: &remote_clearance_import_refs,
+        gc_plan_refs: &gc_plan_refs,
+        gc_apply_refs: &gc_apply_refs,
+        gc_execution_refs: &gc_execution_refs,
+        gc_audit_refs: &gc_audit_refs,
+        retention_receipt_refs: &retention_receipt_refs,
+        tombstone_refs: &tombstone_refs,
+        diagnostics: &diagnostics,
+    })?;
+    parse_retention_candidate_explain(&value)
+}
+
+fn retention_candidate_explain_diagnostics(input: &RetentionCandidateExplainValueInput<'_>) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    if input.pin_refs.is_empty()
+        && input.admission_refs.is_empty()
+        && input.remote_clearance_refs.is_empty()
+        && input.remote_clearance_import_refs.is_empty()
+        && input.gc_plan_refs.is_empty()
+        && input.gc_apply_refs.is_empty()
+        && input.gc_execution_refs.is_empty()
+        && input.gc_audit_refs.is_empty()
+        && input.retention_receipt_refs.is_empty()
+        && input.tombstone_refs.is_empty()
+    {
+        push_bounded(
+            &mut diagnostics,
+            "retention-candidate-no-known-evidence".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention candidate explain diagnostics",
+        )?;
+    }
+    if !input.pin_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "active-pins-present".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention candidate explain diagnostics",
+        )?;
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    Ok(diagnostics)
+}
+
+fn retention_candidate_explain_value(input: &RetentionCandidateExplainValueInput<'_>) -> Result<IOValue> {
+    validate_retention_candidate_explain_value_input(input)?;
+    Ok(record("retention-candidate-explain-v1", vec![
+        string(RETENTION_CANDIDATE_EXPLAIN_SCHEMA),
+        record("object", vec![string(input.object_ref), optional_string_value(input.object_kind)]),
+        record("filters", vec![
+            record("class", vec![optional_string_value(input.retention_class)]),
+            record("action", vec![optional_string_value(input.action)]),
+            record("subsystem", vec![optional_string_value(input.subsystem)]),
+        ]),
+        record("pins", vec![strings_sequence(input.pin_refs)]),
+        record("admissions", vec![strings_sequence(input.admission_refs)]),
+        record("remote-clearances", vec![strings_sequence(input.remote_clearance_refs)]),
+        record("remote-clearance-imports", vec![strings_sequence(input.remote_clearance_import_refs)]),
+        record("gc-plans", vec![strings_sequence(input.gc_plan_refs)]),
+        record("gc-applies", vec![strings_sequence(input.gc_apply_refs)]),
+        record("gc-executes", vec![strings_sequence(input.gc_execution_refs)]),
+        record("gc-audits", vec![strings_sequence(input.gc_audit_refs)]),
+        record("retention-receipts", vec![strings_sequence(input.retention_receipt_refs)]),
+        record("tombstones", vec![strings_sequence(input.tombstone_refs)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        checks_value(&[
+            ("read-only-explain", "pass"),
+            ("catalog-discovery-only", "pass"),
+            ("normal-admission-still-required", "pass"),
+            ("plan-apply-execute-still-required", "pass"),
+            ("remote-clearance-import-still-required", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_candidate_explain(value: &IOValue) -> Result<RetentionCandidateExplain> {
+    let fields = value
+        .collect_simple_record("retention-candidate-explain-v1", Some(15))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-explain-v1 ...>"))?;
+    require_schema(&fields[0], RETENTION_CANDIDATE_EXPLAIN_SCHEMA, "retention candidate explain schema")?;
+    let object_fields = fields[1]
+        .collect_simple_record("object", Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention candidate object"))?;
+    let object_ref = required_string(&object_fields[0], "retention candidate object ref")?;
+    require_ref(&object_ref, "retention candidate object ref")?;
+    let object_kind = optional_record_string(&object_fields[1], "retention candidate object kind")?;
+    if let Some(object_kind) = object_kind.as_deref() {
+        validate_name(object_kind, "retention candidate object kind")?;
+    }
+    let filter_fields = fields[2]
+        .collect_simple_record("filters", Some(3))
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention candidate filters"))?;
+    let retention_class = record_optional_string(&filter_fields[0], "class")?;
+    if let Some(retention_class) = retention_class.as_deref() {
+        validate_retention_class(retention_class)?;
+    }
+    let action = record_optional_string(&filter_fields[1], "action")?;
+    if let Some(action) = action.as_deref() {
+        validate_action(action)?;
+    }
+    let subsystem = record_optional_string(&filter_fields[2], "subsystem")?;
+    if let Some(subsystem) = subsystem.as_deref() {
+        validate_name(subsystem, "retention candidate subsystem")?;
+    }
+    let pin_refs = record_ref_sequence(&fields[3], "pins")?;
+    let admission_refs = record_ref_sequence(&fields[4], "admissions")?;
+    let remote_clearance_refs = record_ref_sequence(&fields[5], "remote-clearances")?;
+    let remote_clearance_import_refs = record_ref_sequence(&fields[6], "remote-clearance-imports")?;
+    let gc_plan_refs = record_ref_sequence(&fields[7], "gc-plans")?;
+    let gc_apply_refs = record_ref_sequence(&fields[8], "gc-applies")?;
+    let gc_execution_refs = record_ref_sequence(&fields[9], "gc-executes")?;
+    let gc_audit_refs = record_ref_sequence(&fields[10], "gc-audits")?;
+    let retention_receipt_refs = record_ref_sequence(&fields[11], "retention-receipts")?;
+    let tombstone_refs = record_ref_sequence(&fields[12], "tombstones")?;
+    let diagnostics = record_string_sequence(&fields[13], "diagnostics")?;
+    let checks = parse_checks(&fields[14])?;
+    require_check(&checks, "read-only-explain", "retention candidate explain")?;
+    require_check(&checks, "normal-admission-still-required", "retention candidate explain")?;
+    require_check(&checks, "plan-apply-execute-still-required", "retention candidate explain")?;
+    require_check(&checks, "remote-clearance-import-still-required", "retention candidate explain")?;
+    Ok(RetentionCandidateExplain {
+        explain_ref: canonical_hash(value)?,
+        object_ref,
+        object_kind,
+        retention_class,
+        action,
+        subsystem,
+        pin_refs,
+        admission_refs,
+        remote_clearance_refs,
+        remote_clearance_import_refs,
+        gc_plan_refs,
+        gc_apply_refs,
+        gc_execution_refs,
+        gc_audit_refs,
+        retention_receipt_refs,
+        tombstone_refs,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
+fn validate_retention_candidate_explain_input(input: &RetentionCandidateExplainInput<'_>) -> Result<()> {
+    require_ref(input.object_ref, "retention candidate object ref")?;
+    if let Some(object_kind) = input.object_kind {
+        validate_name(object_kind, "retention candidate object kind")?;
+    }
+    if let Some(retention_class) = input.retention_class {
+        validate_retention_class(retention_class)?;
+    }
+    if let Some(action) = input.action {
+        validate_action(action)?;
+    }
+    if let Some(subsystem) = input.subsystem {
+        validate_name(subsystem, "retention candidate subsystem")?;
+    }
+    Ok(())
+}
+
+fn validate_retention_candidate_explain_value_input(input: &RetentionCandidateExplainValueInput<'_>) -> Result<()> {
+    validate_retention_candidate_explain_input(&RetentionCandidateExplainInput {
+        root: Path::new("."),
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        action: input.action,
+        subsystem: input.subsystem,
+    })?;
+    validate_refs(input.pin_refs, "retention candidate pin ref")?;
+    validate_refs(input.admission_refs, "retention candidate admission ref")?;
+    validate_refs(input.remote_clearance_refs, "retention candidate remote clearance ref")?;
+    validate_refs(input.remote_clearance_import_refs, "retention candidate remote clearance import ref")?;
+    validate_refs(input.gc_plan_refs, "retention candidate GC plan ref")?;
+    validate_refs(input.gc_apply_refs, "retention candidate GC apply ref")?;
+    validate_refs(input.gc_execution_refs, "retention candidate GC execution ref")?;
+    validate_refs(input.gc_audit_refs, "retention candidate GC audit ref")?;
+    validate_refs(input.retention_receipt_refs, "retention candidate receipt ref")?;
+    validate_refs(input.tombstone_refs, "retention candidate tombstone ref")?;
+    validate_diagnostics(input.diagnostics, "retention candidate explain diagnostics")
+}
+
+impl RetentionCandidateFilter<'_> {
+    fn matches_object(&self, object_ref: &str, object_kind: &str, retention_class: &str) -> bool {
+        object_ref == self.object_ref
+            && self.object_kind.is_none_or(|expected| expected == object_kind)
+            && self.retention_class.is_none_or(|expected| expected == retention_class)
+    }
+
+    fn matches_retention(&self, object_ref: &str, object_kind: &str, retention_class: &str, action: &str) -> bool {
+        self.matches_object(object_ref, object_kind, retention_class)
+            && self.action.is_none_or(|expected| expected == action)
+    }
+
+    fn matches_gc(
+        &self,
+        subsystem: &str,
+        object_ref: &str,
+        object_kind: &str,
+        retention_class: &str,
+        action: &str,
+    ) -> bool {
+        self.matches_retention(object_ref, object_kind, retention_class, action)
+            && self.subsystem.is_none_or(|expected| expected == subsystem)
+    }
+}
+
+fn collect_matching_retention_refs<T, Parse, Matches, Reference>(
+    dir: &Path,
+    parse: Parse,
+    matches: Matches,
+    reference: Reference,
+    label: &str,
+) -> Result<Vec<String>>
+where
+    Parse: Fn(&IOValue) -> Result<T>,
+    Matches: Fn(&T) -> bool,
+    Reference: Fn(&T) -> String,
+{
+    let mut refs = Vec::new();
+    if !dir.exists() {
+        return Ok(refs);
+    }
+    let mut paths = Vec::new();
+    for entry_result in fs::read_dir(dir).map_err(MoltenError::from)? {
+        let entry = entry_result.map_err(MoltenError::from)?;
+        if entry.file_type().map_err(MoltenError::from)?.is_file() {
+            push_bounded(&mut paths, entry.path(), MAX_RETENTION_REFS, label)?;
+        }
+    }
+    paths.sort();
+    for path in paths {
+        let value = read_store_value(&path)?;
+        let parsed = parse(&value)?;
+        if matches(&parsed) {
+            push_bounded(&mut refs, reference(&parsed), MAX_RETENTION_REFS, label)?;
+        }
+    }
+    refs.sort();
+    refs.dedup();
+    Ok(refs)
+}
+
+fn optional_string_value(value: Option<&str>) -> IOValue {
+    value.map_or_else(|| record("none", Vec::new()), |text| record("some", vec![string(text)]))
+}
+
+fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+    let fields = value
+        .collect_simple_record(label, Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected {label} record")))?;
+    optional_record_string(&fields[0], label)
+}
+
+fn optional_record_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+    let inner = value_to_iovalue(value);
+    if inner.collect_simple_record("none", Some(0)).is_some() {
+        Ok(None)
+    } else {
+        let some = inner
+            .collect_simple_record("some", Some(1))
+            .ok_or_else(|| MoltenError::invalid_harness(format!("expected optional string for {label}")))?;
+        Ok(Some(required_string(&some[0], label)?))
+    }
 }
 
 fn record_optional_ref_with_status(value: &Value<IOValue>, label: &str) -> Result<(Option<String>, String)> {
@@ -4710,6 +5209,27 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             audit.retention_receipt_ref.as_deref().unwrap_or("none"),
             audit.tombstone_ref.as_deref().unwrap_or("none"),
             audit.diagnostics.join(",")
+        ));
+    }
+    if let Ok(explain) = parse_retention_candidate_explain(value) {
+        return Ok(format!(
+            "retention candidate explain ref={} object={} kind={} class={} action={} subsystem={} pins={} admissions={} clearances={} plans={} applies={} executes={} audits={} receipts={} tombstones={} diagnostics={}",
+            explain.explain_ref,
+            explain.object_ref,
+            explain.object_kind.as_deref().unwrap_or("any"),
+            explain.retention_class.as_deref().unwrap_or("any"),
+            explain.action.as_deref().unwrap_or("any"),
+            explain.subsystem.as_deref().unwrap_or("any"),
+            explain.pin_refs.len(),
+            explain.admission_refs.len(),
+            explain.remote_clearance_refs.len(),
+            explain.gc_plan_refs.len(),
+            explain.gc_apply_refs.len(),
+            explain.gc_execution_refs.len(),
+            explain.gc_audit_refs.len(),
+            explain.retention_receipt_refs.len(),
+            explain.tombstone_refs.len(),
+            explain.diagnostics.join(",")
         ));
     }
     if let Ok(receipt) = parse_retention_receipt(value) {
@@ -5517,6 +6037,7 @@ fn ensure_store(root: &Path) -> Result<()> {
     fs::create_dir_all(gc_plans_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(gc_applies_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(gc_executes_dir(root)).map_err(MoltenError::from)?;
+    fs::create_dir_all(gc_audits_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(receipts_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(tombstones_dir(root)).map_err(MoltenError::from)
 }
@@ -5607,6 +6128,10 @@ fn gc_executes_dir(root: &Path) -> PathBuf {
     store_dir(root).join(GC_EXECUTE_DIR)
 }
 
+fn gc_audits_dir(root: &Path) -> PathBuf {
+    store_dir(root).join(GC_AUDIT_DIR)
+}
+
 fn receipts_dir(root: &Path) -> PathBuf {
     store_dir(root).join(RECEIPT_DIR)
 }
@@ -5653,6 +6178,10 @@ fn gc_apply_path(root: &Path, apply_ref: &str) -> Result<PathBuf> {
 
 fn gc_execute_path(root: &Path, execution_ref: &str) -> Result<PathBuf> {
     Ok(gc_executes_dir(root).join(format!("{}.preserves", ref_file_name(execution_ref)?)))
+}
+
+fn gc_audit_path(root: &Path, audit_ref: &str) -> Result<PathBuf> {
+    Ok(gc_audits_dir(root).join(format!("{}.preserves", ref_file_name(audit_ref)?)))
 }
 
 fn receipt_path(root: &Path, receipt_ref: &str) -> Result<PathBuf> {
@@ -5973,6 +6502,14 @@ fn validate_refs(values: &[String], label: &str) -> Result<()> {
     ensure_count_at_most(values.len(), MAX_RETENTION_REFS, label)?;
     for value in values {
         require_ref(value, label)?;
+    }
+    Ok(())
+}
+
+fn validate_diagnostics(values: &[String], label: &str) -> Result<()> {
+    ensure_count_at_most(values.len(), MAX_RETENTION_DIAGNOSTICS, label)?;
+    for value in values {
+        validate_name(value, label)?;
     }
     Ok(())
 }
@@ -6949,7 +7486,64 @@ mod tests {
         assert_eq!(audit.execution_ref, execution.execution_ref);
         assert_eq!(audit.retention_receipt_ref, apply.retention_receipt_ref);
         assert_eq!(audit.tombstone_ref, apply.tombstone_ref);
+        assert_eq!(store_file_count(&gc_audits_dir(&root)), 1);
         assert!(retention_summary(&audit.value).expect("audit summary").contains("retention gc audit"));
+    }
+
+    #[test]
+    fn candidate_explain_lists_known_retention_gc_evidence() {
+        let root = temp_dir("retention-candidate-explain");
+        let fixture = store_passing_plan_fixture(&root, "explain-pass");
+        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &fixture.evidence,
+        })
+        .expect("store explain plan");
+        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+            root: &root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply explain plan");
+        let execution = store_retention_gc_execution_gate(RetentionGcExecutionGateInput {
+            root: &root,
+            subsystem: "ledger-gc",
+            action: ACTION_DELETE,
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            apply_ref: Some(&apply.apply_ref),
+        })
+        .expect("store explain execution");
+        let audit = audit_retention_gc_execution(RetentionGcAuditInput {
+            root: &root,
+            execution_ref: &execution.execution_ref,
+        })
+        .expect("audit explain execution");
+        let explain = explain_retention_candidate(RetentionCandidateExplainInput {
+            root: &root,
+            object_ref: &fixture.object_ref,
+            object_kind: Some("chunk"),
+            retention_class: Some(CLASS_DURABLE_VALUE),
+            action: Some(ACTION_DELETE),
+            subsystem: Some("ledger-gc"),
+        })
+        .expect("explain retention candidate");
+        assert_eq!(explain.pin_refs.len(), 0);
+        assert_eq!(explain.admission_refs.len(), 5);
+        assert_eq!(explain.remote_clearance_refs.len(), 1);
+        assert_eq!(explain.gc_plan_refs, vec![plan.plan_ref]);
+        assert_eq!(explain.gc_apply_refs, vec![apply.apply_ref]);
+        assert_eq!(explain.gc_execution_refs, vec![execution.execution_ref]);
+        assert_eq!(explain.gc_audit_refs, vec![audit.audit_ref]);
+        assert_eq!(explain.retention_receipt_refs.len(), 1);
+        assert_eq!(explain.tombstone_refs.len(), 1);
+        assert!(explain.diagnostics.is_empty());
+        assert!(retention_summary(&explain.value).expect("explain summary").contains("retention candidate explain"));
     }
 
     #[test]

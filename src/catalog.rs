@@ -802,6 +802,25 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
         push_optional_classification(&mut classifications, "retention-gc-tombstone", audit.tombstone_ref.as_deref())?;
         return Ok(classifications);
     }
+    if let Ok(explain) = crate::retention::parse_retention_candidate_explain(value) {
+        let mut classifications = vec![
+            "retention:explain".to_string(),
+            "retention-candidate:explain".to_string(),
+            format!("retention-object:{}", explain.object_ref),
+            format!("retention-explain-pins:{}", explain.pin_refs.len()),
+            format!("retention-explain-admissions:{}", explain.admission_refs.len()),
+            format!("retention-explain-clearances:{}", explain.remote_clearance_refs.len()),
+            format!("retention-explain-plans:{}", explain.gc_plan_refs.len()),
+            format!("retention-explain-applies:{}", explain.gc_apply_refs.len()),
+            format!("retention-explain-executes:{}", explain.gc_execution_refs.len()),
+            format!("retention-explain-audits:{}", explain.gc_audit_refs.len()),
+        ];
+        push_optional_classification(&mut classifications, "retention-kind", explain.object_kind.as_deref())?;
+        push_optional_classification(&mut classifications, "retention-class", explain.retention_class.as_deref())?;
+        push_optional_classification(&mut classifications, "retention-action", explain.action.as_deref())?;
+        push_optional_classification(&mut classifications, "retention-subsystem", explain.subsystem.as_deref())?;
+        return Ok(classifications);
+    }
     if let Ok(receipt) = crate::retention::parse_retention_receipt(value) {
         return Ok(vec![
             "retention:receipt".to_string(),

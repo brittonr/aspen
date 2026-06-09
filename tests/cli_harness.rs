@@ -2083,6 +2083,36 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     })?;
     let fixture = setup_retention_gc_catalog_fixture(&candidate, "ledger-gc", &dir)?;
 
+    let explain_path = dir.join("retention-explain.preserves");
+    let explain_output = molten_cmd()
+        .args(["test", "retention", "explain", "--root"])
+        .arg(&retention_root)
+        .args(["--object-ref"])
+        .arg(&fixture.object_ref)
+        .args([
+            "--object-kind",
+            "artifact",
+            "--retention-class",
+            retention::CLASS_PUBLIC_ARTIFACT,
+            "--action",
+            retention::ACTION_DELETE,
+            "--subsystem",
+            "ledger-gc",
+            "--out",
+        ])
+        .arg(&explain_path)
+        .output()?;
+    assert_success(&explain_output, "retention explain candidate");
+    assert!(stdout(&explain_output).contains("retention explain ref="));
+    let explain = retention::parse_retention_candidate_explain(&read_preserves(&explain_path)?)?;
+    assert_eq!(explain.object_ref, fixture.object_ref);
+    assert_eq!(explain.admission_refs.len(), 4);
+    assert_eq!(explain.gc_plan_refs, vec![fixture.plan_ref.clone()]);
+    assert_eq!(explain.gc_apply_refs, vec![fixture.apply_ref.clone()]);
+    assert_eq!(explain.gc_execution_refs, vec![fixture.execution_ref.clone()]);
+    assert_eq!(explain.gc_audit_refs, vec![fixture.audit_ref.clone()]);
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&explain_path)?), "retention-candidate-explain");
+
     let search_receipt = dir.join("catalog-search-receipt.preserves");
     let search_output = molten_cmd()
         .args(["test", "catalog", "search", "--registry"])

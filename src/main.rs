@@ -2997,6 +2997,22 @@ enum RetentionCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    Explain {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        object_ref: String,
+        #[arg(long)]
+        object_kind: Option<String>,
+        #[arg(long)]
+        retention_class: Option<String>,
+        #[arg(long)]
+        action: Option<String>,
+        #[arg(long)]
+        subsystem: Option<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     GcPlan {
         #[arg(long)]
         root: PathBuf,
@@ -7356,6 +7372,44 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
                     live.import.import_ref,
                     live.import.clearance_ref.as_deref().unwrap_or("none"),
                     live.workflow.diagnostics.len()
+                ),
+            );
+            Ok(())
+        }
+        RetentionCommand::Explain {
+            root,
+            object_ref,
+            object_kind,
+            retention_class,
+            action,
+            subsystem,
+            out,
+        } => {
+            let explain = retention::explain_retention_candidate(retention::RetentionCandidateExplainInput {
+                root: &root,
+                object_ref: &object_ref,
+                object_kind: object_kind.as_deref(),
+                retention_class: retention_class.as_deref(),
+                action: action.as_deref(),
+                subsystem: subsystem.as_deref(),
+            })?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &explain.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "retention explain ref={} object={} pins={} admissions={} clearances={} plans={} applies={} executes={} audits={} receipts={} tombstones={} diagnostics={}",
+                    explain.explain_ref,
+                    explain.object_ref,
+                    explain.pin_refs.len(),
+                    explain.admission_refs.len(),
+                    explain.remote_clearance_refs.len(),
+                    explain.gc_plan_refs.len(),
+                    explain.gc_apply_refs.len(),
+                    explain.gc_execution_refs.len(),
+                    explain.gc_audit_refs.len(),
+                    explain.retention_receipt_refs.len(),
+                    explain.tombstone_refs.len(),
+                    explain.diagnostics.len()
                 ),
             );
             Ok(())
