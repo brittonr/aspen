@@ -838,6 +838,16 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
         push_optional_classification(&mut classifications, "retention-subsystem", bundle.subsystem.as_deref())?;
         return Ok(classifications);
     }
+    if let Ok(profile) = crate::retention::parse_retention_candidate_bundle_profile(value) {
+        return Ok(vec![
+            "retention:bundle-profile".to_string(),
+            "retention-candidate:bundle-profile".to_string(),
+            format!("retention-bundle-profile:{}", profile.profile),
+            format!("retention-bundle-decision:{}", profile.decision),
+            format!("retention-bundle:{}", profile.bundle_ref),
+            format!("retention-bundle-markers:{}", profile.marker_refs.len()),
+        ]);
+    }
     if let Ok(verify) = crate::retention::parse_retention_candidate_bundle_verify(value) {
         let mut classifications = vec![
             "retention:bundle-verify".to_string(),

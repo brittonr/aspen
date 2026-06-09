@@ -3020,6 +3020,8 @@ enum RetentionCommand {
         explain: PathBuf,
         #[arg(long)]
         out: PathBuf,
+        #[arg(long, default_value = "internal")]
+        profile: String,
     },
     BundleVerify {
         #[arg(long)]
@@ -7428,18 +7430,26 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
             );
             Ok(())
         }
-        RetentionCommand::BundleExport { root, explain, out } => {
+        RetentionCommand::BundleExport {
+            root,
+            explain,
+            out,
+            profile,
+        } => {
             let explain_value = read_preserves_file(&explain)?;
+            let profile = retention::RetentionCandidateBundleExportProfile::parse(&profile)?;
             let bundle =
                 retention::export_retention_candidate_bundle(retention::RetentionCandidateBundleExportInput {
                     root: &root,
                     explain_value: &explain_value,
                     out: &out,
+                    profile,
                 })?;
             eprintln!(
-                "retention bundle ref={} explain={} artifacts={} diagnostics={} out={}",
+                "retention bundle ref={} explain={} profile={} artifacts={} diagnostics={} out={}",
                 bundle.bundle_ref,
                 bundle.explain_ref,
+                profile.as_str(),
                 bundle.artifact_refs.len(),
                 bundle.diagnostics.len(),
                 out.display()

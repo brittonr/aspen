@@ -492,6 +492,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("retention-gc-audit-v1", "retention-gc-audit"),
     ("retention-candidate-explain-v1", "retention-candidate-explain"),
     ("retention-candidate-bundle-v1", "retention-candidate-bundle"),
+    ("retention-candidate-bundle-profile-v1", "retention-candidate-bundle-profile"),
     ("retention-candidate-bundle-verify-v1", "retention-candidate-bundle-verify"),
     ("retention-receipt-v1", "retention-receipt"),
     ("retention-tombstone-v1", "retention-tombstone"),

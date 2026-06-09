@@ -2121,6 +2121,7 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
         .arg(&explain_path)
         .args(["--out"])
         .arg(&bundle_dir)
+        .args(["--profile", "public"])
         .output()?;
     assert_success(&bundle_output, "retention bundle export");
     assert!(stderr(&bundle_output).contains("retention bundle ref="));
@@ -2130,6 +2131,34 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     assert_eq!(bundle.explain_ref, explain.explain_ref);
     assert_eq!(bundle.artifact_refs.len(), 6);
     assert!(bundle.diagnostics.is_empty());
+    let bundle_profile = retention::parse_retention_candidate_bundle_profile(&read_preserves(
+        &bundle_dir.join("bundle-profile.preserves"),
+    )?)?;
+    assert_eq!(bundle_profile.profile, "public");
+    assert_eq!(bundle_profile.decision, "pass");
+    assert!(bundle_profile.marker_refs.is_empty());
+    let bundle_profile_path = bundle_dir.join("bundle-profile.preserves");
+    let profile_import = molten_cmd()
+        .args(["test", "ledger", "import"])
+        .arg(&bundle_profile_path)
+        .args(["--ledger"])
+        .arg(&ledger_root)
+        .output()?;
+    assert_success(&profile_import, "ledger import retention bundle profile");
+    let profile_search = molten_cmd()
+        .args(["test", "catalog", "search", "--registry"])
+        .arg(&registry)
+        .args(["--ledger"])
+        .arg(&ledger_root)
+        .args([
+            "--ledger-kind",
+            "retention-candidate-bundle-profile",
+            "--text",
+            "retention-candidate:bundle-profile",
+        ])
+        .output()?;
+    assert_success(&profile_search, "catalog search retention bundle profile");
+    assert!(stdout(&profile_search).contains("retention-candidate:bundle-profile"));
     assert!(bundle_dir.join("explain.preserves").exists());
     assert!(bundle_dir.join("artifacts/gc-plans").exists());
     assert!(bundle_dir.join("artifacts/gc-audits").exists());

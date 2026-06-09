@@ -1,10 +1,13 @@
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+use preserves::CompoundClass;
 use preserves::IOValue;
 use preserves::Value;
+use preserves::ValueClass;
 
 use crate::bounded::VecSink;
 use crate::error::MoltenError;
@@ -12,6 +15,7 @@ use crate::error::Result;
 use crate::node_daemon;
 use crate::node_runtime;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
+use crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_PROFILE_SCHEMA;
 use crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_SCHEMA;
 use crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA;
 use crate::preserves_rail::RETENTION_CANDIDATE_EXPLAIN_SCHEMA;
@@ -94,6 +98,8 @@ const GC_EXECUTE_DIR: &str = "gc-executes";
 const GC_AUDIT_DIR: &str = "gc-audits";
 const RECEIPT_DIR: &str = "receipts";
 const TOMBSTONE_DIR: &str = "tombstones";
+const BUNDLE_PROFILE_FILE: &str = "bundle-profile.preserves";
+const BUNDLE_REDACTED_DIR: &str = "redacted";
 const MAX_RETENTION_REFS: usize = 4096;
 const MAX_RETENTION_DIAGNOSTICS: usize = 128;
 const MAX_RETENTION_TEXT_LEN: usize = 1024;
@@ -383,11 +389,48 @@ pub struct RetentionCandidateExplain {
     pub value: IOValue,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetentionCandidateBundleExportProfile {
+    Internal,
+    Public,
+    Diagnostic,
+}
+
+impl RetentionCandidateBundleExportProfile {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value {
+            "internal" => Ok(Self::Internal),
+            "public" => Ok(Self::Public),
+            "diagnostic" => Ok(Self::Diagnostic),
+            _ => Err(MoltenError::invalid_harness(format!(
+                "unsupported retention bundle export profile {value}; expected internal, public, or diagnostic"
+            ))),
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Internal => "internal",
+            Self::Public => "public",
+            Self::Diagnostic => "diagnostic",
+        }
+    }
+
+    fn loss_classification(self) -> &'static str {
+        match self {
+            Self::Internal => "local-full-fidelity",
+            Self::Public => "deny-sensitive",
+            Self::Diagnostic => "diagnostic-redacted-view",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct RetentionCandidateBundleExportInput<'a> {
     pub root: &'a Path,
     pub explain_value: &'a IOValue,
     pub out: &'a Path,
+    pub profile: RetentionCandidateBundleExportProfile,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -406,6 +449,18 @@ pub struct RetentionCandidateBundle {
     pub retention_receipt_refs: Vec<String>,
     pub tombstone_refs: Vec<String>,
     pub artifact_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionCandidateBundleProfile {
+    pub profile_ref: String,
+    pub decision: String,
+    pub profile: String,
+    pub loss_classification: String,
+    pub bundle_ref: String,
+    pub marker_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub value: IOValue,
 }
@@ -2287,6 +2342,14 @@ struct RetentionCandidateFilter<'a> {
 struct RetentionCandidateBundleValueInput<'a> {
     explain: &'a RetentionCandidateExplain,
     artifact_refs: &'a [String],
+    diagnostics: &'a [String],
+}
+
+struct RetentionCandidateBundleProfileValueInput<'a> {
+    profile: RetentionCandidateBundleExportProfile,
+    decision: &'a str,
+    bundle_ref: &'a str,
+    marker_refs: &'a [String],
     diagnostics: &'a [String],
 }
 
@@ -4977,7 +5040,13 @@ pub fn export_retention_candidate_bundle(
         diagnostics: &diagnostics,
     })?;
     write_store_value(&input.out.join("bundle.preserves"), &value)?;
-    parse_retention_candidate_bundle(&value)
+    let bundle = parse_retention_candidate_bundle(&value)?;
+    let profile = profile_retention_candidate_bundle(input.out, input.profile, &bundle)?;
+    write_store_value(&input.out.join(BUNDLE_PROFILE_FILE), &profile.value)?;
+    if input.profile == RetentionCandidateBundleExportProfile::Diagnostic {
+        write_retention_candidate_bundle_redacted_view(input.out, &bundle)?;
+    }
+    Ok(bundle)
 }
 
 fn export_retention_bundle_artifact_group(
@@ -5002,6 +5071,327 @@ fn export_retention_bundle_artifact_group(
         }
     }
     Ok(())
+}
+
+fn profile_retention_candidate_bundle(
+    bundle_dir: &Path,
+    profile: RetentionCandidateBundleExportProfile,
+    bundle: &RetentionCandidateBundle,
+) -> Result<RetentionCandidateBundleProfile> {
+    let mut marker_refs = Vec::new();
+    let mut diagnostics = Vec::new();
+    if profile != RetentionCandidateBundleExportProfile::Internal {
+        collect_retention_bundle_sensitive_markers(&bundle.value, "/bundle", &bundle.bundle_ref, &mut marker_refs)?;
+        let explain_value = read_store_value(&bundle_dir.join("explain.preserves"))?;
+        collect_retention_bundle_sensitive_markers(&explain_value, "/explain", &bundle.bundle_ref, &mut marker_refs)?;
+        collect_retention_bundle_artifact_sensitive_markers(bundle_dir, &bundle.bundle_ref, &mut marker_refs)?;
+        marker_refs.sort();
+        marker_refs.dedup();
+    }
+    match profile {
+        RetentionCandidateBundleExportProfile::Internal => {}
+        RetentionCandidateBundleExportProfile::Public => {
+            if !marker_refs.is_empty() {
+                push_bounded(
+                    &mut diagnostics,
+                    format!("retention-bundle-public-sensitive-markers:{}", marker_refs.len()),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention bundle profile diagnostics",
+                )?;
+            }
+        }
+        RetentionCandidateBundleExportProfile::Diagnostic => {
+            push_bounded(
+                &mut diagnostics,
+                format!("retention-bundle-diagnostic-redacted-markers:{}", marker_refs.len()),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle profile diagnostics",
+            )?;
+        }
+    }
+    let decision = if profile == RetentionCandidateBundleExportProfile::Public && !marker_refs.is_empty() {
+        "deny"
+    } else {
+        "pass"
+    };
+    let value = retention_candidate_bundle_profile_value(&RetentionCandidateBundleProfileValueInput {
+        profile,
+        decision,
+        bundle_ref: &bundle.bundle_ref,
+        marker_refs: &marker_refs,
+        diagnostics: &diagnostics,
+    })?;
+    parse_retention_candidate_bundle_profile(&value)
+}
+
+fn collect_retention_bundle_artifact_sensitive_markers(
+    bundle_dir: &Path,
+    bundle_ref: &str,
+    marker_refs: &mut impl VecSink<String>,
+) -> Result<()> {
+    let artifact_dir = bundle_dir.join("artifacts");
+    if !artifact_dir.exists() {
+        return Ok(());
+    }
+    for dir_name in retention_bundle_artifact_dirs() {
+        let group_dir = artifact_dir.join(dir_name);
+        if !group_dir.exists() {
+            continue;
+        }
+        for entry in fs::read_dir(&group_dir).map_err(MoltenError::from)? {
+            let entry = entry.map_err(MoltenError::from)?;
+            if !entry.file_type().map_err(MoltenError::from)?.is_file() {
+                continue;
+            }
+            let path = entry.path();
+            if path.extension().and_then(|extension| extension.to_str()) != Some("preserves") {
+                continue;
+            }
+            let value = read_store_value(&path)?;
+            let file_name = entry.file_name().to_string_lossy().into_owned();
+            collect_retention_bundle_sensitive_markers(
+                &value,
+                &format!("/artifacts/{dir_name}/{file_name}"),
+                bundle_ref,
+                marker_refs,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn collect_retention_bundle_sensitive_markers(
+    value: &IOValue,
+    path: &str,
+    bundle_ref: &str,
+    marker_refs: &mut impl VecSink<String>,
+) -> Result<()> {
+    if let Some(label) = record_label_string(value)
+        && is_sensitive_retention_bundle_token(&label)
+    {
+        push_bounded(
+            marker_refs,
+            retention_bundle_marker_ref(bundle_ref, path, &label)?,
+            MAX_RETENTION_REFS,
+            "retention bundle profile markers",
+        )?;
+    }
+    if let Some(text) = value.as_string()
+        && is_sensitive_retention_bundle_token(&text)
+    {
+        push_bounded(
+            marker_refs,
+            retention_bundle_marker_ref(bundle_ref, path, &text)?,
+            MAX_RETENTION_REFS,
+            "retention bundle profile markers",
+        )?;
+    }
+    match value.value_class() {
+        ValueClass::Compound(CompoundClass::Record) | ValueClass::Compound(CompoundClass::Sequence) => {
+            for (index, child) in value.iter().enumerate() {
+                collect_retention_bundle_sensitive_markers(
+                    &value_to_iovalue(&child),
+                    &format!("{path}/{index}"),
+                    bundle_ref,
+                    marker_refs,
+                )?;
+            }
+        }
+        ValueClass::Atomic(_)
+        | ValueClass::Embedded
+        | ValueClass::Compound(CompoundClass::Set)
+        | ValueClass::Compound(CompoundClass::Dictionary) => {}
+    }
+    Ok(())
+}
+
+fn write_retention_candidate_bundle_redacted_view(bundle_dir: &Path, bundle: &RetentionCandidateBundle) -> Result<()> {
+    let redacted_dir = bundle_dir.join(BUNDLE_REDACTED_DIR);
+    let mut ignored_markers = Vec::new();
+    let bundle_value = read_store_value(&bundle_dir.join("bundle.preserves"))?;
+    let redacted_bundle =
+        redacted_retention_bundle_value(&bundle_value, "/bundle", &bundle.bundle_ref, &mut ignored_markers)?;
+    write_store_value(&redacted_dir.join("bundle.preserves"), &redacted_bundle)?;
+    let explain_value = read_store_value(&bundle_dir.join("explain.preserves"))?;
+    let redacted_explain =
+        redacted_retention_bundle_value(&explain_value, "/explain", &bundle.bundle_ref, &mut ignored_markers)?;
+    write_store_value(&redacted_dir.join("explain.preserves"), &redacted_explain)?;
+    let artifact_dir = bundle_dir.join("artifacts");
+    for dir_name in retention_bundle_artifact_dirs() {
+        let group_dir = artifact_dir.join(dir_name);
+        if !group_dir.exists() {
+            continue;
+        }
+        for entry in fs::read_dir(&group_dir).map_err(MoltenError::from)? {
+            let entry = entry.map_err(MoltenError::from)?;
+            if !entry.file_type().map_err(MoltenError::from)?.is_file() {
+                continue;
+            }
+            let path = entry.path();
+            if path.extension().and_then(|extension| extension.to_str()) != Some("preserves") {
+                continue;
+            }
+            let value = read_store_value(&path)?;
+            let file_name = entry.file_name().to_string_lossy().into_owned();
+            let redacted = redacted_retention_bundle_value(
+                &value,
+                &format!("/artifacts/{dir_name}/{file_name}"),
+                &bundle.bundle_ref,
+                &mut ignored_markers,
+            )?;
+            write_store_value(&redacted_dir.join("artifacts").join(dir_name).join(file_name), &redacted)?;
+        }
+    }
+    Ok(())
+}
+
+fn redacted_retention_bundle_value(
+    value: &IOValue,
+    path: &str,
+    bundle_ref: &str,
+    marker_refs: &mut impl VecSink<String>,
+) -> Result<IOValue> {
+    if let Some(label) = record_label_string(value)
+        && is_sensitive_retention_bundle_token(&label)
+    {
+        let marker_ref = retention_bundle_marker_ref(bundle_ref, path, &label)?;
+        push_bounded(marker_refs, marker_ref.clone(), MAX_RETENTION_REFS, "retention bundle profile markers")?;
+        return Ok(record("retention-bundle-redaction-marker", vec![string(&marker_ref)]));
+    }
+    if let Some(text) = value.as_string()
+        && is_sensitive_retention_bundle_token(&text)
+    {
+        let marker_ref = retention_bundle_marker_ref(bundle_ref, path, &text)?;
+        push_bounded(marker_refs, marker_ref.clone(), MAX_RETENTION_REFS, "retention bundle profile markers")?;
+        return Ok(record("retention-bundle-redaction-marker", vec![string(&marker_ref)]));
+    }
+    match value.value_class() {
+        ValueClass::Atomic(_) | ValueClass::Embedded => Ok(value.clone()),
+        ValueClass::Compound(CompoundClass::Record) => {
+            let label = value_to_iovalue(&value.label());
+            let mut fields = Vec::new();
+            for (index, child) in value.iter().enumerate() {
+                push_bounded(
+                    &mut fields,
+                    redacted_retention_bundle_value(
+                        &value_to_iovalue(&child),
+                        &format!("{path}/{index}"),
+                        bundle_ref,
+                        marker_refs,
+                    )?,
+                    MAX_RETENTION_REFS,
+                    "retention bundle redacted fields",
+                )?;
+            }
+            Ok(IOValue::record(label, fields))
+        }
+        ValueClass::Compound(CompoundClass::Sequence) => {
+            let mut values = Vec::new();
+            for (index, child) in value.iter().enumerate() {
+                push_bounded(
+                    &mut values,
+                    redacted_retention_bundle_value(
+                        &value_to_iovalue(&child),
+                        &format!("{path}/{index}"),
+                        bundle_ref,
+                        marker_refs,
+                    )?,
+                    MAX_RETENTION_REFS,
+                    "retention bundle redacted sequence",
+                )?;
+            }
+            Ok(sequence(values))
+        }
+        ValueClass::Compound(CompoundClass::Set) | ValueClass::Compound(CompoundClass::Dictionary) => Ok(value.clone()),
+    }
+}
+
+fn retention_bundle_marker_ref(bundle_ref: &str, path: &str, token: &str) -> Result<String> {
+    canonical_hash(&record("retention-bundle-sensitive-marker", vec![string(bundle_ref), string(path), string(token)]))
+}
+
+fn is_sensitive_retention_bundle_token(value: &str) -> bool {
+    matches!(
+        value,
+        "secret"
+            | "confidential"
+            | "credential"
+            | "private"
+            | "encrypted-ref"
+            | "secret-ref-v1"
+            | "encrypted-ref-v1"
+            | CLASS_PRIVATE_SECRET_REF
+    )
+}
+
+fn record_label_string(value: &IOValue) -> Option<String> {
+    if !value.is_record() {
+        return None;
+    }
+    value.label().as_symbol().map(Cow::into_owned)
+}
+
+fn retention_candidate_bundle_profile_value(input: &RetentionCandidateBundleProfileValueInput<'_>) -> Result<IOValue> {
+    validate_retention_candidate_bundle_profile_value_input(input)?;
+    Ok(record("retention-candidate-bundle-profile-v1", vec![
+        string(RETENTION_CANDIDATE_BUNDLE_PROFILE_SCHEMA),
+        record("profile", vec![string(input.profile.as_str())]),
+        record("loss-classification", vec![string(input.profile.loss_classification())]),
+        record("decision", vec![string(input.decision)]),
+        record("bundle", vec![string(input.bundle_ref)]),
+        record("markers", vec![strings_sequence(input.marker_refs)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        checks_value(&[
+            ("profile-is-not-authority", "pass"),
+            ("read-only-profile", "pass"),
+            ("normal-admission-still-required", "pass"),
+            ("plan-apply-execute-still-required", "pass"),
+            ("remote-clearance-import-still-required", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_candidate_bundle_profile(value: &IOValue) -> Result<RetentionCandidateBundleProfile> {
+    let fields = value
+        .collect_simple_record("retention-candidate-bundle-profile-v1", Some(8))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-profile-v1 ...>"))?;
+    require_schema(&fields[0], RETENTION_CANDIDATE_BUNDLE_PROFILE_SCHEMA, "retention candidate bundle profile schema")?;
+    let profile = record_string(&fields[1], "profile")?;
+    let parsed_profile = RetentionCandidateBundleExportProfile::parse(&profile)?;
+    let loss_classification = record_string(&fields[2], "loss-classification")?;
+    if loss_classification != parsed_profile.loss_classification() {
+        return Err(MoltenError::invalid_harness("retention bundle profile loss classification mismatch"));
+    }
+    let decision = record_string(&fields[3], "decision")?;
+    validate_decision(&decision)?;
+    let bundle_ref = record_ref(&fields[4], "bundle")?;
+    let marker_refs = record_ref_sequence(&fields[5], "markers")?;
+    let diagnostics = record_string_sequence(&fields[6], "diagnostics")?;
+    let checks = parse_checks(&fields[7])?;
+    require_check(&checks, "profile-is-not-authority", "retention candidate bundle profile")?;
+    require_check(&checks, "read-only-profile", "retention candidate bundle profile")?;
+    require_check(&checks, "normal-admission-still-required", "retention candidate bundle profile")?;
+    require_check(&checks, "plan-apply-execute-still-required", "retention candidate bundle profile")?;
+    require_check(&checks, "remote-clearance-import-still-required", "retention candidate bundle profile")?;
+    Ok(RetentionCandidateBundleProfile {
+        profile_ref: canonical_hash(value)?,
+        decision,
+        profile,
+        loss_classification,
+        bundle_ref,
+        marker_refs,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
+fn validate_retention_candidate_bundle_profile_value_input(
+    input: &RetentionCandidateBundleProfileValueInput<'_>,
+) -> Result<()> {
+    validate_decision(input.decision)?;
+    require_ref(input.bundle_ref, "retention bundle profile bundle ref")?;
+    validate_refs(input.marker_refs, "retention bundle profile marker ref")?;
+    validate_diagnostics(input.diagnostics, "retention bundle profile diagnostics")
 }
 
 fn retention_candidate_bundle_value(input: &RetentionCandidateBundleValueInput<'_>) -> Result<IOValue> {
@@ -6154,6 +6544,18 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             bundle.retention_receipt_refs.len(),
             bundle.tombstone_refs.len(),
             bundle.diagnostics.join(",")
+        ));
+    }
+    if let Ok(profile) = parse_retention_candidate_bundle_profile(value) {
+        return Ok(format!(
+            "retention candidate bundle profile ref={} decision={} profile={} loss={} bundle={} markers={} diagnostics={}",
+            profile.profile_ref,
+            profile.decision,
+            profile.profile,
+            profile.loss_classification,
+            profile.bundle_ref,
+            profile.marker_refs.len(),
+            profile.diagnostics.join(",")
         ));
     }
     if let Ok(verify) = parse_retention_candidate_bundle_verify(value) {
@@ -8490,6 +8892,7 @@ mod tests {
             root: &root,
             explain_value: &explain.value,
             out: &bundle_dir,
+            profile: RetentionCandidateBundleExportProfile::Internal,
         })
         .expect("export retention candidate bundle");
         assert_eq!(bundle.explain_ref, explain.explain_ref);
@@ -8559,6 +8962,7 @@ mod tests {
             root: &root,
             explain_value: &explain_value,
             out: &root.join("bundle"),
+            profile: RetentionCandidateBundleExportProfile::Internal,
         })
         .expect("bundle with missing artifact diagnostic");
         assert!(bundle.artifact_refs.is_empty());
@@ -8574,6 +8978,80 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.contains("retention-bundle-missing-file:gc-plans"))
         );
+    }
+
+    #[test]
+    fn candidate_bundle_profiles_deny_or_redact_sensitive_handoff() {
+        let root = temp_dir("retention-bundle-profile");
+        let object_ref = fake_ref("bundle-profile-object");
+        let plan_ref = fake_ref("bundle-profile-plan");
+        let explain_value = retention_candidate_explain_value(&RetentionCandidateExplainValueInput {
+            object_ref: &object_ref,
+            object_kind: Some("encrypted-ref"),
+            retention_class: Some(CLASS_PRIVATE_SECRET_REF),
+            action: Some(ACTION_DELETE),
+            subsystem: Some("ledger-gc"),
+            pin_refs: &[],
+            admission_refs: &[],
+            remote_clearance_refs: &[],
+            remote_clearance_import_refs: &[],
+            gc_plan_refs: std::slice::from_ref(&plan_ref),
+            gc_apply_refs: &[],
+            gc_execution_refs: &[],
+            gc_audit_refs: &[],
+            retention_receipt_refs: &[],
+            tombstone_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("sensitive explain value");
+        let public_dir = root.join("public");
+        let public_bundle = export_retention_candidate_bundle(RetentionCandidateBundleExportInput {
+            root: &root,
+            explain_value: &explain_value,
+            out: &public_dir,
+            profile: RetentionCandidateBundleExportProfile::Public,
+        })
+        .expect("public profile bundle export");
+        let public_profile = parse_retention_candidate_bundle_profile(
+            &read_store_value(&public_dir.join(BUNDLE_PROFILE_FILE)).expect("read public bundle profile"),
+        )
+        .expect("parse public profile");
+        assert_eq!(public_profile.bundle_ref, public_bundle.bundle_ref);
+        assert_eq!(public_profile.profile, "public");
+        assert_eq!(public_profile.decision, "deny");
+        assert!(!public_profile.marker_refs.is_empty());
+        assert!(
+            public_profile
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("retention-bundle-public-sensitive-markers"))
+        );
+
+        let diagnostic_dir = root.join("diagnostic");
+        let diagnostic_bundle = export_retention_candidate_bundle(RetentionCandidateBundleExportInput {
+            root: &root,
+            explain_value: &explain_value,
+            out: &diagnostic_dir,
+            profile: RetentionCandidateBundleExportProfile::Diagnostic,
+        })
+        .expect("diagnostic profile bundle export");
+        let diagnostic_profile = parse_retention_candidate_bundle_profile(
+            &read_store_value(&diagnostic_dir.join(BUNDLE_PROFILE_FILE)).expect("read diagnostic bundle profile"),
+        )
+        .expect("parse diagnostic profile");
+        assert_eq!(diagnostic_profile.bundle_ref, diagnostic_bundle.bundle_ref);
+        assert_eq!(diagnostic_profile.profile, "diagnostic");
+        assert_eq!(diagnostic_profile.decision, "pass");
+        assert!(!diagnostic_profile.marker_refs.is_empty());
+        let redacted_explain = fs::read_to_string(diagnostic_dir.join(BUNDLE_REDACTED_DIR).join("explain.preserves"))
+            .expect("read redacted explain");
+        assert!(!redacted_explain.contains(CLASS_PRIVATE_SECRET_REF));
+        assert!(!redacted_explain.contains("encrypted-ref"));
+        let verify = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
+            bundle_dir: &diagnostic_dir,
+        })
+        .expect("verify diagnostic source bundle");
+        assert_eq!(verify.decision, "deny");
     }
 
     #[test]
