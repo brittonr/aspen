@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -12,6 +13,7 @@ use crate::node_daemon;
 use crate::node_runtime;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_SCHEMA;
+use crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA;
 use crate::preserves_rail::RETENTION_CANDIDATE_EXPLAIN_SCHEMA;
 use crate::preserves_rail::RETENTION_CLASS_SCHEMA;
 use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
@@ -404,6 +406,28 @@ pub struct RetentionCandidateBundle {
     pub retention_receipt_refs: Vec<String>,
     pub tombstone_refs: Vec<String>,
     pub artifact_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionCandidateBundleVerifyInput<'a> {
+    pub bundle_dir: &'a Path,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionCandidateBundleVerify {
+    pub verify_ref: String,
+    pub decision: String,
+    pub bundle_ref: String,
+    pub explain_ref: String,
+    pub object_ref: String,
+    pub object_kind: Option<String>,
+    pub retention_class: Option<String>,
+    pub action: Option<String>,
+    pub subsystem: Option<String>,
+    pub artifact_refs: Vec<String>,
+    pub file_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub value: IOValue,
 }
@@ -2272,6 +2296,20 @@ struct RetentionBundleArtifactGroupInput<'a> {
     dir_name: &'a str,
     refs: &'a [String],
     read: fn(&Path, &str) -> Result<IOValue>,
+}
+
+struct RetentionCandidateBundleVerifyValueInput<'a> {
+    bundle: &'a RetentionCandidateBundle,
+    decision: &'a str,
+    file_refs: &'a [String],
+    diagnostics: &'a [String],
+}
+
+struct RetentionBundleVerifyGroupInput<'a> {
+    bundle_dir: &'a Path,
+    dir_name: &'a str,
+    refs: &'a [String],
+    parse: fn(&IOValue) -> Result<()>,
 }
 
 struct RetentionAuditScope<'a> {
@@ -5062,6 +5100,573 @@ pub fn parse_retention_candidate_bundle(value: &IOValue) -> Result<RetentionCand
     })
 }
 
+pub fn verify_retention_candidate_bundle(
+    input: RetentionCandidateBundleVerifyInput<'_>,
+) -> Result<RetentionCandidateBundleVerify> {
+    let bundle_value = read_store_value(&input.bundle_dir.join("bundle.preserves"))?;
+    let bundle = parse_retention_candidate_bundle(&bundle_value)?;
+    let explain_value = read_store_value(&input.bundle_dir.join("explain.preserves"))?;
+    let explain = parse_retention_candidate_explain(&explain_value)?;
+    let mut diagnostics = Vec::new();
+    push_retention_bundle_scope_diagnostics(&bundle, &explain, &mut diagnostics)?;
+    let expected_refs = retention_candidate_bundle_expected_refs(&bundle)?;
+    push_duplicate_ref_diagnostics(&bundle.artifact_refs, "retention-bundle-duplicate-manifest-ref", &mut diagnostics)?;
+    push_duplicate_ref_diagnostics(&expected_refs, "retention-bundle-duplicate-expected-ref", &mut diagnostics)?;
+    let manifest_refs = ref_set(&bundle.artifact_refs);
+    let expected_ref_set = ref_set(&expected_refs);
+    for reference in &expected_refs {
+        if !manifest_refs.contains(reference) {
+            push_bounded(
+                &mut diagnostics,
+                format!("retention-bundle-manifest-missing-ref:{reference}"),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?;
+        }
+    }
+    for reference in &bundle.artifact_refs {
+        if !expected_ref_set.contains(reference) {
+            push_bounded(
+                &mut diagnostics,
+                format!("retention-bundle-manifest-unreferenced-ref:{reference}"),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?;
+        }
+    }
+    let mut file_refs = Vec::new();
+    scan_retention_bundle_artifact_files(
+        &input.bundle_dir.join("artifacts"),
+        &expected_ref_set,
+        &mut file_refs,
+        &mut diagnostics,
+    )?;
+    verify_retention_bundle_artifact_group(
+        RetentionBundleVerifyGroupInput {
+            bundle_dir: input.bundle_dir,
+            dir_name: "gc-plans",
+            refs: &bundle.gc_plan_refs,
+            parse: parse_retention_gc_plan_kind,
+        },
+        &mut diagnostics,
+    )?;
+    verify_retention_bundle_artifact_group(
+        RetentionBundleVerifyGroupInput {
+            bundle_dir: input.bundle_dir,
+            dir_name: "gc-applies",
+            refs: &bundle.gc_apply_refs,
+            parse: parse_retention_gc_apply_kind,
+        },
+        &mut diagnostics,
+    )?;
+    verify_retention_bundle_artifact_group(
+        RetentionBundleVerifyGroupInput {
+            bundle_dir: input.bundle_dir,
+            dir_name: "gc-executes",
+            refs: &bundle.gc_execution_refs,
+            parse: parse_retention_gc_execution_kind,
+        },
+        &mut diagnostics,
+    )?;
+    verify_retention_bundle_artifact_group(
+        RetentionBundleVerifyGroupInput {
+            bundle_dir: input.bundle_dir,
+            dir_name: "gc-audits",
+            refs: &bundle.gc_audit_refs,
+            parse: parse_retention_gc_audit_kind,
+        },
+        &mut diagnostics,
+    )?;
+    verify_retention_bundle_artifact_group(
+        RetentionBundleVerifyGroupInput {
+            bundle_dir: input.bundle_dir,
+            dir_name: "receipts",
+            refs: &bundle.retention_receipt_refs,
+            parse: parse_retention_receipt_kind,
+        },
+        &mut diagnostics,
+    )?;
+    verify_retention_bundle_artifact_group(
+        RetentionBundleVerifyGroupInput {
+            bundle_dir: input.bundle_dir,
+            dir_name: "tombstones",
+            refs: &bundle.tombstone_refs,
+            parse: parse_retention_tombstone_kind,
+        },
+        &mut diagnostics,
+    )?;
+    file_refs.sort();
+    diagnostics.sort();
+    diagnostics.dedup();
+    let file_ref_set = ref_set(&file_refs);
+    for reference in &bundle.artifact_refs {
+        if !file_ref_set.contains(reference) {
+            push_bounded(
+                &mut diagnostics,
+                format!("retention-bundle-listed-ref-missing-file:{reference}"),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?;
+        }
+    }
+    for reference in &file_refs {
+        if !manifest_refs.contains(reference) {
+            push_bounded(
+                &mut diagnostics,
+                format!("retention-bundle-unlisted-file-ref:{reference}"),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?;
+        }
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let value = retention_candidate_bundle_verify_value(&RetentionCandidateBundleVerifyValueInput {
+        bundle: &bundle,
+        decision,
+        file_refs: &file_refs,
+        diagnostics: &diagnostics,
+    })?;
+    parse_retention_candidate_bundle_verify(&value)
+}
+
+fn push_retention_bundle_scope_diagnostics(
+    bundle: &RetentionCandidateBundle,
+    explain: &RetentionCandidateExplain,
+    diagnostics: &mut impl VecSink<String>,
+) -> Result<()> {
+    if bundle.explain_ref != explain.explain_ref {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-explain-ref-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.object_ref != explain.object_ref {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-object-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.object_kind != explain.object_kind {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-kind-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.retention_class != explain.retention_class {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-class-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.action != explain.action {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-action-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.subsystem != explain.subsystem {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-subsystem-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.gc_plan_refs != explain.gc_plan_refs {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-plan-refs-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.gc_apply_refs != explain.gc_apply_refs {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-apply-refs-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.gc_execution_refs != explain.gc_execution_refs {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-execute-refs-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.gc_audit_refs != explain.gc_audit_refs {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-audit-refs-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.retention_receipt_refs != explain.retention_receipt_refs {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-receipt-refs-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    if bundle.tombstone_refs != explain.tombstone_refs {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-tombstone-refs-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    Ok(())
+}
+
+fn retention_candidate_bundle_expected_refs(bundle: &RetentionCandidateBundle) -> Result<Vec<String>> {
+    let mut refs = Vec::new();
+    push_ref_slice(&mut refs, &bundle.gc_plan_refs)?;
+    push_ref_slice(&mut refs, &bundle.gc_apply_refs)?;
+    push_ref_slice(&mut refs, &bundle.gc_execution_refs)?;
+    push_ref_slice(&mut refs, &bundle.gc_audit_refs)?;
+    push_ref_slice(&mut refs, &bundle.retention_receipt_refs)?;
+    push_ref_slice(&mut refs, &bundle.tombstone_refs)?;
+    Ok(refs)
+}
+
+fn push_ref_slice(values: &mut impl VecSink<String>, refs: &[String]) -> Result<()> {
+    for reference in refs {
+        push_bounded(values, reference.clone(), MAX_RETENTION_REFS, "retention bundle expected refs")?;
+    }
+    Ok(())
+}
+
+fn push_duplicate_ref_diagnostics(refs: &[String], prefix: &str, diagnostics: &mut impl VecSink<String>) -> Result<()> {
+    let mut seen = BTreeSet::new();
+    let mut duplicates = BTreeSet::new();
+    for reference in refs {
+        if !seen.insert(reference.clone()) {
+            duplicates.insert(reference.clone());
+        }
+    }
+    for reference in duplicates {
+        push_bounded(
+            diagnostics,
+            format!("{prefix}:{reference}"),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+    }
+    Ok(())
+}
+
+fn ref_set(refs: &[String]) -> BTreeSet<String> {
+    refs.iter().cloned().collect()
+}
+
+fn scan_retention_bundle_artifact_files(
+    artifact_dir: &Path,
+    expected_refs: &BTreeSet<String>,
+    file_refs: &mut impl VecSink<String>,
+    diagnostics: &mut impl VecSink<String>,
+) -> Result<()> {
+    if !artifact_dir.exists() {
+        push_bounded(
+            diagnostics,
+            "retention-bundle-artifacts-dir-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention bundle verify diagnostics",
+        )?;
+        return Ok(());
+    }
+    let mut seen_files = BTreeSet::new();
+    for entry in fs::read_dir(artifact_dir).map_err(MoltenError::from)? {
+        let entry = entry.map_err(MoltenError::from)?;
+        let file_type = entry.file_type().map_err(MoltenError::from)?;
+        if !file_type.is_dir() {
+            push_bounded(
+                diagnostics,
+                "retention-bundle-unexpected-artifact-root-entry".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?;
+            continue;
+        }
+        let dir_name = entry.file_name().to_string_lossy().into_owned();
+        if !retention_bundle_artifact_dirs().contains(&dir_name.as_str()) {
+            push_bounded(
+                diagnostics,
+                "retention-bundle-unexpected-artifact-dir".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?;
+            continue;
+        }
+        scan_retention_bundle_artifact_group_files(
+            &entry.path(),
+            &dir_name,
+            expected_refs,
+            file_refs,
+            diagnostics,
+            &mut seen_files,
+        )?;
+    }
+    Ok(())
+}
+
+fn scan_retention_bundle_artifact_group_files(
+    group_dir: &Path,
+    dir_name: &str,
+    expected_refs: &BTreeSet<String>,
+    file_refs: &mut impl VecSink<String>,
+    diagnostics: &mut impl VecSink<String>,
+    seen_files: &mut BTreeSet<String>,
+) -> Result<()> {
+    for entry in fs::read_dir(group_dir).map_err(MoltenError::from)? {
+        let entry = entry.map_err(MoltenError::from)?;
+        let file_type = entry.file_type().map_err(MoltenError::from)?;
+        if !file_type.is_file()
+            || entry.path().extension().and_then(|extension| extension.to_str()) != Some("preserves")
+        {
+            push_bounded(
+                diagnostics,
+                format!("retention-bundle-unexpected-artifact-entry:{dir_name}"),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?;
+            continue;
+        }
+        match read_store_value(&entry.path()) {
+            Ok(value) => {
+                let actual_ref = canonical_hash(&value)?;
+                if !seen_files.insert(actual_ref.clone()) {
+                    push_bounded(
+                        diagnostics,
+                        format!("retention-bundle-duplicate-file-ref:{actual_ref}"),
+                        MAX_RETENTION_DIAGNOSTICS,
+                        "retention bundle verify diagnostics",
+                    )?;
+                }
+                if !expected_refs.contains(&actual_ref) {
+                    push_bounded(
+                        diagnostics,
+                        format!("retention-bundle-unreferenced-file:{dir_name}:{actual_ref}"),
+                        MAX_RETENTION_DIAGNOSTICS,
+                        "retention bundle verify diagnostics",
+                    )?;
+                }
+                push_bounded(file_refs, actual_ref, MAX_RETENTION_REFS, "retention bundle file refs")?;
+            }
+            Err(_) => push_bounded(
+                diagnostics,
+                format!("retention-bundle-unreadable-file:{dir_name}"),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?,
+        }
+    }
+    Ok(())
+}
+
+fn verify_retention_bundle_artifact_group(
+    input: RetentionBundleVerifyGroupInput<'_>,
+    diagnostics: &mut impl VecSink<String>,
+) -> Result<()> {
+    for reference in input.refs {
+        let path = input
+            .bundle_dir
+            .join("artifacts")
+            .join(input.dir_name)
+            .join(format!("{}.preserves", ref_file_name(reference)?));
+        if !path.exists() {
+            push_bounded(
+                diagnostics,
+                format!("retention-bundle-missing-file:{}:{reference}", input.dir_name),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?;
+            continue;
+        }
+        let value = match read_store_value(&path) {
+            Ok(value) => value,
+            Err(_) => {
+                push_bounded(
+                    diagnostics,
+                    format!("retention-bundle-unreadable-file:{}", input.dir_name),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention bundle verify diagnostics",
+                )?;
+                continue;
+            }
+        };
+        let actual_ref = canonical_hash(&value)?;
+        if &actual_ref != reference {
+            push_bounded(
+                diagnostics,
+                format!("retention-bundle-tampered-file:{}:{reference}:{actual_ref}", input.dir_name),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?;
+            continue;
+        }
+        if (input.parse)(&value).is_err() {
+            push_bounded(
+                diagnostics,
+                format!("retention-bundle-kind-mismatch:{}:{reference}", input.dir_name),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle verify diagnostics",
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn retention_bundle_artifact_dirs() -> &'static [&'static str] {
+    &[
+        "gc-plans",
+        "gc-applies",
+        "gc-executes",
+        "gc-audits",
+        "receipts",
+        "tombstones",
+    ]
+}
+
+fn retention_candidate_bundle_verify_value(input: &RetentionCandidateBundleVerifyValueInput<'_>) -> Result<IOValue> {
+    validate_retention_candidate_bundle_verify_value_input(input)?;
+    Ok(record("retention-candidate-bundle-verify-v1", vec![
+        string(RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("bundle", vec![string(&input.bundle.bundle_ref)]),
+        record("explain", vec![string(&input.bundle.explain_ref)]),
+        record("object", vec![
+            string(&input.bundle.object_ref),
+            optional_string_value(input.bundle.object_kind.as_deref()),
+        ]),
+        record("filters", vec![
+            record("class", vec![optional_string_value(input.bundle.retention_class.as_deref())]),
+            record("action", vec![optional_string_value(input.bundle.action.as_deref())]),
+            record("subsystem", vec![optional_string_value(input.bundle.subsystem.as_deref())]),
+        ]),
+        record("artifacts", vec![strings_sequence(&input.bundle.artifact_refs)]),
+        record("files", vec![strings_sequence(input.file_refs)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        checks_value(&[
+            ("verify-is-not-authority", "pass"),
+            ("read-only-verify", "pass"),
+            ("normal-admission-still-required", "pass"),
+            ("plan-apply-execute-still-required", "pass"),
+            ("remote-clearance-import-still-required", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_candidate_bundle_verify(value: &IOValue) -> Result<RetentionCandidateBundleVerify> {
+    let fields = value
+        .collect_simple_record("retention-candidate-bundle-verify-v1", Some(10))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-verify-v1 ...>"))?;
+    require_schema(&fields[0], RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA, "retention candidate bundle verify schema")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    let bundle_ref = record_ref(&fields[2], "bundle")?;
+    let explain_ref = record_ref(&fields[3], "explain")?;
+    let object_fields = fields[4]
+        .collect_simple_record("object", Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention bundle verify object"))?;
+    let object_ref = required_string(&object_fields[0], "retention bundle verify object ref")?;
+    require_ref(&object_ref, "retention bundle verify object ref")?;
+    let object_kind = optional_record_string(&object_fields[1], "retention bundle verify object kind")?;
+    if let Some(object_kind) = object_kind.as_deref() {
+        validate_name(object_kind, "retention bundle verify object kind")?;
+    }
+    let filter_fields = fields[5]
+        .collect_simple_record("filters", Some(3))
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention bundle verify filters"))?;
+    let retention_class = record_optional_string(&filter_fields[0], "class")?;
+    if let Some(retention_class) = retention_class.as_deref() {
+        validate_retention_class(retention_class)?;
+    }
+    let action = record_optional_string(&filter_fields[1], "action")?;
+    if let Some(action) = action.as_deref() {
+        validate_action(action)?;
+    }
+    let subsystem = record_optional_string(&filter_fields[2], "subsystem")?;
+    if let Some(subsystem) = subsystem.as_deref() {
+        validate_name(subsystem, "retention bundle verify subsystem")?;
+    }
+    let artifact_refs = record_ref_sequence(&fields[6], "artifacts")?;
+    let file_refs = record_ref_sequence(&fields[7], "files")?;
+    let diagnostics = record_string_sequence(&fields[8], "diagnostics")?;
+    let checks = parse_checks(&fields[9])?;
+    require_check(&checks, "verify-is-not-authority", "retention candidate bundle verify")?;
+    require_check(&checks, "read-only-verify", "retention candidate bundle verify")?;
+    require_check(&checks, "normal-admission-still-required", "retention candidate bundle verify")?;
+    require_check(&checks, "plan-apply-execute-still-required", "retention candidate bundle verify")?;
+    require_check(&checks, "remote-clearance-import-still-required", "retention candidate bundle verify")?;
+    Ok(RetentionCandidateBundleVerify {
+        verify_ref: canonical_hash(value)?,
+        decision,
+        bundle_ref,
+        explain_ref,
+        object_ref,
+        object_kind,
+        retention_class,
+        action,
+        subsystem,
+        artifact_refs,
+        file_refs,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
+fn validate_retention_candidate_bundle_verify_value_input(
+    input: &RetentionCandidateBundleVerifyValueInput<'_>,
+) -> Result<()> {
+    validate_decision(input.decision)?;
+    require_ref(&input.bundle.bundle_ref, "retention bundle verify bundle ref")?;
+    require_ref(&input.bundle.explain_ref, "retention bundle verify explain ref")?;
+    validate_refs(&input.bundle.artifact_refs, "retention bundle verify artifact ref")?;
+    validate_refs(input.file_refs, "retention bundle verify file ref")?;
+    validate_diagnostics(input.diagnostics, "retention bundle verify diagnostics")
+}
+
+fn parse_retention_gc_plan_kind(value: &IOValue) -> Result<()> {
+    parse_retention_gc_plan(value).map(|_| ())
+}
+
+fn parse_retention_gc_apply_kind(value: &IOValue) -> Result<()> {
+    parse_retention_gc_apply(value).map(|_| ())
+}
+
+fn parse_retention_gc_execution_kind(value: &IOValue) -> Result<()> {
+    parse_retention_gc_execution_gate(value).map(|_| ())
+}
+
+fn parse_retention_gc_audit_kind(value: &IOValue) -> Result<()> {
+    parse_retention_gc_audit(value).map(|_| ())
+}
+
+fn parse_retention_receipt_kind(value: &IOValue) -> Result<()> {
+    parse_retention_receipt(value).map(|_| ())
+}
+
+fn parse_retention_tombstone_kind(value: &IOValue) -> Result<()> {
+    parse_tombstone(value).map(|_| ())
+}
+
 fn validate_retention_candidate_bundle_value_input(input: &RetentionCandidateBundleValueInput<'_>) -> Result<()> {
     require_ref(&input.explain.explain_ref, "retention bundle explain ref")?;
     validate_retention_candidate_explain_value_input(&RetentionCandidateExplainValueInput {
@@ -5549,6 +6154,23 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             bundle.retention_receipt_refs.len(),
             bundle.tombstone_refs.len(),
             bundle.diagnostics.join(",")
+        ));
+    }
+    if let Ok(verify) = parse_retention_candidate_bundle_verify(value) {
+        return Ok(format!(
+            "retention candidate bundle verify ref={} decision={} bundle={} explain={} object={} kind={} class={} action={} subsystem={} artifacts={} files={} diagnostics={}",
+            verify.verify_ref,
+            verify.decision,
+            verify.bundle_ref,
+            verify.explain_ref,
+            verify.object_ref,
+            verify.object_kind.as_deref().unwrap_or("any"),
+            verify.retention_class.as_deref().unwrap_or("any"),
+            verify.action.as_deref().unwrap_or("any"),
+            verify.subsystem.as_deref().unwrap_or("any"),
+            verify.artifact_refs.len(),
+            verify.file_refs.len(),
+            verify.diagnostics.join(",")
         ));
     }
     if let Ok(receipt) = parse_retention_receipt(value) {
@@ -7855,10 +8477,10 @@ mod tests {
         assert_eq!(explain.pin_refs.len(), 0);
         assert_eq!(explain.admission_refs.len(), 5);
         assert_eq!(explain.remote_clearance_refs.len(), 1);
-        assert_eq!(explain.gc_plan_refs, vec![plan.plan_ref]);
-        assert_eq!(explain.gc_apply_refs, vec![apply.apply_ref]);
-        assert_eq!(explain.gc_execution_refs, vec![execution.execution_ref]);
-        assert_eq!(explain.gc_audit_refs, vec![audit.audit_ref]);
+        assert_eq!(explain.gc_plan_refs, vec![plan.plan_ref.clone()]);
+        assert_eq!(explain.gc_apply_refs, vec![apply.apply_ref.clone()]);
+        assert_eq!(explain.gc_execution_refs, vec![execution.execution_ref.clone()]);
+        assert_eq!(explain.gc_audit_refs, vec![audit.audit_ref.clone()]);
         assert_eq!(explain.retention_receipt_refs.len(), 1);
         assert_eq!(explain.tombstone_refs.len(), 1);
         assert!(explain.diagnostics.is_empty());
@@ -7877,6 +8499,36 @@ mod tests {
         assert!(bundle_dir.join("explain.preserves").exists());
         assert!(bundle_dir.join("artifacts/gc-plans").exists());
         assert!(retention_summary(&bundle.value).expect("bundle summary").contains("retention candidate bundle"));
+        let verify = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
+            bundle_dir: &bundle_dir,
+        })
+        .expect("verify intact retention candidate bundle");
+        assert_eq!(verify.decision, "pass");
+        assert_eq!(verify.bundle_ref, bundle.bundle_ref);
+        assert_eq!(verify.explain_ref, explain.explain_ref);
+        assert_eq!(verify.artifact_refs.len(), 6);
+        assert_eq!(verify.file_refs.len(), 6);
+        assert!(verify.diagnostics.is_empty());
+        assert!(
+            retention_summary(&verify.value)
+                .expect("bundle verify summary")
+                .contains("retention candidate bundle verify")
+        );
+        let tampered_path = bundle_dir
+            .join("artifacts/gc-plans")
+            .join(format!("{}.preserves", ref_file_name(&plan.plan_ref).expect("plan file name")));
+        write_store_value(&tampered_path, &record("tampered", vec![string("plan")])).expect("tamper bundle plan");
+        let tampered = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
+            bundle_dir: &bundle_dir,
+        })
+        .expect("verify tampered retention candidate bundle");
+        assert_eq!(tampered.decision, "deny");
+        assert!(
+            tampered
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("retention-bundle-tampered-file:gc-plans"))
+        );
     }
 
     #[test]
@@ -7911,6 +8563,17 @@ mod tests {
         .expect("bundle with missing artifact diagnostic");
         assert!(bundle.artifact_refs.is_empty());
         assert_eq!(bundle.diagnostics, vec![format!("retention-bundle-missing-artifact:{missing_ref}")]);
+        let verify = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
+            bundle_dir: &root.join("bundle"),
+        })
+        .expect("verify missing artifact bundle");
+        assert_eq!(verify.decision, "deny");
+        assert!(
+            verify
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("retention-bundle-missing-file:gc-plans"))
+        );
     }
 
     #[test]

@@ -3021,6 +3021,12 @@ enum RetentionCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    BundleVerify {
+        #[arg(long)]
+        bundle: PathBuf,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     GcPlan {
         #[arg(long)]
         root: PathBuf,
@@ -7437,6 +7443,28 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
                 bundle.artifact_refs.len(),
                 bundle.diagnostics.len(),
                 out.display()
+            );
+            Ok(())
+        }
+        RetentionCommand::BundleVerify { bundle, receipt_out } => {
+            let verify =
+                retention::verify_retention_candidate_bundle(retention::RetentionCandidateBundleVerifyInput {
+                    bundle_dir: &bundle,
+                })?;
+            let text = to_text(&verify.value)?;
+            if let Some(path) = receipt_out {
+                write_file(&path, &text)?;
+                eprintln!("retention bundle verify receipt {} written to {}", verify.verify_ref, path.display());
+            } else {
+                println!("{text}");
+            }
+            eprintln!(
+                "retention bundle verify ref={} decision={} bundle={} files={} diagnostics={}",
+                verify.verify_ref,
+                verify.decision,
+                verify.bundle_ref,
+                verify.file_refs.len(),
+                verify.diagnostics.len()
             );
             Ok(())
         }

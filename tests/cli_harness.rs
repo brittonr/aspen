@@ -2134,6 +2134,67 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     assert!(bundle_dir.join("artifacts/gc-plans").exists());
     assert!(bundle_dir.join("artifacts/gc-audits").exists());
 
+    let verify_path = dir.join("retention-bundle-verify.preserves");
+    let verify_output = molten_cmd()
+        .args(["test", "retention", "bundle-verify", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--receipt-out"])
+        .arg(&verify_path)
+        .output()?;
+    assert_success(&verify_output, "retention bundle verify");
+    assert!(stderr(&verify_output).contains("retention bundle verify ref="));
+    let verify_value = read_preserves(&verify_path)?;
+    let verify = retention::parse_retention_candidate_bundle_verify(&verify_value)?;
+    assert_eq!(molten::ledger::artifact_kind(&verify_value), "retention-candidate-bundle-verify");
+    assert_eq!(verify.decision, "pass");
+    assert_eq!(verify.bundle_ref, bundle.bundle_ref);
+    assert_eq!(verify.file_refs.len(), 6);
+    assert!(verify.diagnostics.is_empty());
+    let verify_import = molten_cmd()
+        .args(["test", "ledger", "import"])
+        .arg(&verify_path)
+        .args(["--ledger"])
+        .arg(&ledger_root)
+        .output()?;
+    assert_success(&verify_import, "ledger import retention bundle verify");
+    let verify_search = molten_cmd()
+        .args(["test", "catalog", "search", "--registry"])
+        .arg(&registry)
+        .args(["--ledger"])
+        .arg(&ledger_root)
+        .args([
+            "--ledger-kind",
+            "retention-candidate-bundle-verify",
+            "--text",
+            "retention-candidate:bundle-verify",
+        ])
+        .output()?;
+    assert_success(&verify_search, "catalog search retention bundle verify");
+    let verify_search_stdout = stdout(&verify_search);
+    assert!(verify_search_stdout.contains("retention-candidate:bundle-verify"));
+    assert!(verify_search_stdout.contains(&verify.verify_ref));
+
+    let tampered_plan_path = bundle_dir
+        .join("artifacts/gc-plans")
+        .join(format!("{}.preserves", fixture.plan_ref.replace(':', "_")));
+    fs::write(&tampered_plan_path, to_text(&record("tampered", vec![string("plan")]))?)?;
+    let tampered_path = dir.join("retention-bundle-verify-tampered.preserves");
+    let tampered_output = molten_cmd()
+        .args(["test", "retention", "bundle-verify", "--bundle"])
+        .arg(&bundle_dir)
+        .args(["--receipt-out"])
+        .arg(&tampered_path)
+        .output()?;
+    assert_success(&tampered_output, "retention bundle verify tampered");
+    let tampered = retention::parse_retention_candidate_bundle_verify(&read_preserves(&tampered_path)?)?;
+    assert_eq!(tampered.decision, "deny");
+    assert!(
+        tampered
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("retention-bundle-tampered-file:gc-plans"))
+    );
+
     let search_receipt = dir.join("catalog-search-receipt.preserves");
     let search_output = molten_cmd()
         .args(["test", "catalog", "search", "--registry"])
