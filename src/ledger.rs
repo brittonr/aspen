@@ -46,6 +46,7 @@ pub struct LedgerGc {
     pub decision: String,
     pub removed_refs: Vec<String>,
     pub retention_receipt_refs: Vec<String>,
+    pub execution_gate_refs: Vec<String>,
     pub receipt_value: IOValue,
 }
 
@@ -53,6 +54,7 @@ pub struct LedgerGc {
 pub struct LedgerGcInput<'a> {
     pub dry_run: bool,
     pub retention_evidence: &'a retention::DestructiveRetentionEvidence,
+    pub apply_refs: &'a [String],
 }
 
 pub fn import_artifact(root: &Path, artifact: &IOValue) -> Result<LedgerImport> {
@@ -172,8 +174,10 @@ pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
         retention::destructive_retention_requester_ref(input.retention_evidence, "ledger-gc-missing-requester")?;
     let evidence_summary = retention::destructive_retention_evidence_value(input.retention_evidence)?;
     let mut admission_diagnostics = Vec::new();
+    let mut execution_diagnostics = Vec::new();
     let mut admission_refs = Vec::new();
     let mut retention_receipt_refs = Vec::new();
+    let mut execution_gate_refs = Vec::new();
     let mut retention_denials = Vec::new();
     for entry in &candidates {
         let retention_class = ledger_retention_class(&entry.artifact_kind);
@@ -223,7 +227,46 @@ pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
             MAX_LEDGER_SCAN_ENTRIES,
             "ledger retention receipt refs",
         )?;
-        if admission.decision != "pass" || evaluation.receipt.decision != "pass" {
+        let mut is_execution_denied = false;
+        if !input.dry_run {
+            let apply_ref = matching_apply_ref(ApplyRefMatchInput {
+                root,
+                apply_refs: input.apply_refs,
+                subsystem: "ledger-gc",
+                action,
+                object_ref: &entry.artifact_ref,
+                object_kind: &entry.artifact_kind,
+                retention_class,
+            });
+            let execution_gate =
+                retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+                    root,
+                    subsystem: "ledger-gc",
+                    action,
+                    object_ref: &entry.artifact_ref,
+                    object_kind: &entry.artifact_kind,
+                    retention_class,
+                    apply_ref,
+                })?;
+            push_bounded(
+                &mut execution_gate_refs,
+                execution_gate.execution_ref.clone(),
+                MAX_LEDGER_SCAN_ENTRIES,
+                "ledger retention execution gate refs",
+            )?;
+            if execution_gate.decision != "pass" {
+                is_execution_denied = true;
+                for diagnostic in &execution_gate.diagnostics {
+                    push_bounded(
+                        &mut execution_diagnostics,
+                        diagnostic.clone(),
+                        MAX_LEDGER_SCAN_ENTRIES,
+                        "ledger retention execution diagnostics",
+                    )?;
+                }
+            }
+        }
+        if admission.decision != "pass" || evaluation.receipt.decision != "pass" || is_execution_denied {
             push_bounded(
                 &mut retention_denials,
                 entry.artifact_ref.clone(),
@@ -253,14 +296,22 @@ pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
         record("mode", vec![string(if input.dry_run { "dry-run" } else { "apply" })]),
         record("removed", vec![sequence(removed_refs.iter().map(string).collect())]),
         record("retention", vec![sequence(retention_receipt_refs.iter().map(string).collect())]),
+        record("retention-execution", vec![sequence(execution_gate_refs.iter().map(string).collect())]),
         record("denied", vec![sequence(retention_denials.iter().map(string).collect())]),
         record("retention-evidence", vec![evidence_summary]),
         record("retention-admission", vec![sequence(admission_refs.iter().map(string).collect())]),
         record("retention-diagnostics", vec![sequence(admission_diagnostics.iter().map(string).collect())]),
+        record("retention-execution-diagnostics", vec![sequence(
+            execution_diagnostics.iter().map(string).collect(),
+        )]),
         record("checks", vec![sequence(vec![
             record("check", vec![string("pin-preservation"), string("pass")]),
             record("check", vec![string("derived-index-scan"), string("pass")]),
             record("check", vec![string("retention-receipt-bound"), string("pass")]),
+            record("check", vec![
+                string("retention-execution-gate"),
+                string(pass_or_fail(input.dry_run || execution_diagnostics.is_empty())),
+            ]),
             record("check", vec![
                 string("retention-authority-evidence"),
                 string(pass_or_fail(admission_diagnostics.is_empty())),
@@ -276,12 +327,48 @@ pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
         decision: decision.to_string(),
         removed_refs,
         retention_receipt_refs,
+        execution_gate_refs,
         receipt_value,
     })
 }
 
 fn pass_or_fail(value: bool) -> &'static str {
     if value { "pass" } else { "fail" }
+}
+
+struct ApplyRefMatchInput<'a> {
+    root: &'a Path,
+    apply_refs: &'a [String],
+    subsystem: &'a str,
+    action: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+}
+
+fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
+    let mut fallback_ref = None;
+    for apply_ref in input.apply_refs {
+        let Ok(apply) = retention::read_retention_gc_apply(input.root, apply_ref) else {
+            if fallback_ref.is_none() {
+                fallback_ref = Some(apply_ref.as_str());
+            }
+            continue;
+        };
+        if apply.decision == "pass"
+            && apply.subsystem == input.subsystem
+            && apply.action == input.action
+            && apply.object_ref == input.object_ref
+            && apply.object_kind == input.object_kind
+            && apply.retention_class == input.retention_class
+        {
+            return Some(apply_ref.as_str());
+        }
+        if fallback_ref.is_none() {
+            fallback_ref = Some(apply_ref.as_str());
+        }
+    }
+    fallback_ref
 }
 
 fn ledger_retention_class(artifact_kind: &str) -> &'static str {
@@ -401,6 +488,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("retention-remote-gc-clearance-live-workflow-v1", "retention-remote-gc-clearance-live-workflow"),
     ("retention-gc-plan-v1", "retention-gc-plan"),
     ("retention-gc-apply-v1", "retention-gc-apply"),
+    ("retention-gc-execute-v1", "retention-gc-execute"),
     ("retention-receipt-v1", "retention-receipt"),
     ("retention-tombstone-v1", "retention-tombstone"),
     ("chain-link-v1", "chain-link"),
@@ -690,6 +778,7 @@ mod tests {
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &[],
         })
         .expect("gc ledger");
         assert!(gc.removed_refs.is_empty());
@@ -729,6 +818,7 @@ mod tests {
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &[],
         })
         .expect("gc ledger");
         assert_eq!(gc.decision, "deny");
@@ -753,6 +843,7 @@ mod tests {
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &[],
         })
         .expect("gc ledger");
         assert_eq!(gc.decision, "deny");
@@ -777,6 +868,7 @@ mod tests {
         let gc = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &[],
         })
         .expect("gc ledger");
         assert_eq!(gc.decision, "deny");
@@ -817,6 +909,7 @@ mod tests {
         let denied = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &[],
         })
         .expect("remote clearance missing denies");
         assert_eq!(denied.decision, "deny");
@@ -843,14 +936,138 @@ mod tests {
             .expect("store remote clearance")
             .clearance_ref;
         retention_evidence.remote_clearance_refs = vec![clearance];
+        let apply_refs = vec![apply_ref_for(
+            &root,
+            "ledger-gc",
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            retention_class,
+            &retention_evidence,
+        )];
         let passed = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &apply_refs,
         })
         .expect("remote clearance pass removes");
         assert_eq!(passed.decision, "pass");
         assert_eq!(passed.removed_refs, vec![imported.artifact_ref.clone()]);
         assert!(read_artifact(&root, &imported.artifact_ref).is_err());
+    }
+
+    #[test]
+    fn ledger_gc_requires_apply_ref_before_removal() {
+        let root = temp_dir("ledger-execution-missing-apply");
+        let artifact = parse_text("<example \"missing-apply\">").expect("parse artifact");
+        let imported = import_artifact(&root, &artifact).expect("import artifact");
+        let retention_class = ledger_retention_class(&imported.artifact_kind);
+        let retention_evidence = retention_evidence(
+            &root,
+            "missing-apply",
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            retention_class,
+            retention::ACTION_DELETE,
+        );
+        let gc = gc(&root, LedgerGcInput {
+            dry_run: false,
+            retention_evidence: &retention_evidence,
+            apply_refs: &[],
+        })
+        .expect("gc denied without apply");
+        assert_eq!(gc.decision, "deny");
+        assert!(gc.removed_refs.is_empty());
+        assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
+        let gate = retention::read_retention_gc_execution_gate(&root, &gc.execution_gate_refs[0])
+            .expect("read execution gate");
+        assert!(gate.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-execute-apply-missing"));
+    }
+
+    #[test]
+    fn ledger_gc_rejects_wrong_scope_apply_ref_before_removal() {
+        let root = temp_dir("ledger-execution-wrong-scope");
+        let artifact = parse_text("<example \"wrong-scope\">").expect("parse artifact");
+        let imported = import_artifact(&root, &artifact).expect("import artifact");
+        let retention_class = ledger_retention_class(&imported.artifact_kind);
+        let retention_evidence = retention_evidence(
+            &root,
+            "wrong-scope",
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            retention_class,
+            retention::ACTION_DELETE,
+        );
+        let apply_refs = vec![apply_ref_for(
+            &root,
+            "chunk-gc",
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            retention_class,
+            &retention_evidence,
+        )];
+        let gc = gc(&root, LedgerGcInput {
+            dry_run: false,
+            retention_evidence: &retention_evidence,
+            apply_refs: &apply_refs,
+        })
+        .expect("gc denied with wrong apply scope");
+        assert_eq!(gc.decision, "deny");
+        assert!(gc.removed_refs.is_empty());
+        assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
+        let gate = retention::read_retention_gc_execution_gate(&root, &gc.execution_gate_refs[0])
+            .expect("read execution gate");
+        assert!(
+            gate.diagnostics.iter().any(|diagnostic| diagnostic == "retention-gc-execute-apply-scope-mismatch"),
+            "{:?}",
+            gate.diagnostics
+        );
+    }
+
+    #[test]
+    fn ledger_gc_rejects_drift_after_apply_before_removal() {
+        let root = temp_dir("ledger-execution-drift");
+        let artifact = parse_text("<example \"drift\">").expect("parse artifact");
+        let imported = import_artifact(&root, &artifact).expect("import artifact");
+        let retention_class = ledger_retention_class(&imported.artifact_kind);
+        let retention_evidence = retention_evidence(
+            &root,
+            "drift",
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            retention_class,
+            retention::ACTION_DELETE,
+        );
+        let apply_refs = vec![apply_ref_for(
+            &root,
+            "ledger-gc",
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            retention_class,
+            &retention_evidence,
+        )];
+        retention::pin_object(&root, retention::RetentionPinInput {
+            object_ref: imported.artifact_ref.clone(),
+            object_kind: imported.artifact_kind.clone(),
+            retention_class: retention_class.to_string(),
+            source: retention::SOURCE_OPERATOR_HOLD.to_string(),
+            reason: "post-apply drift".to_string(),
+            owner_ref: ledger_test_ref("owner", "drift"),
+            expiry_ref: None,
+            policy_refs: vec![ledger_test_ref("pin-policy", "drift")],
+            evidence_refs: vec![ledger_test_ref("pin-evidence", "drift")],
+            has_authority: true,
+        })
+        .expect("post-apply retention pin");
+        let gc = gc(&root, LedgerGcInput {
+            dry_run: false,
+            retention_evidence: &retention_evidence,
+            apply_refs: &apply_refs,
+        })
+        .expect("gc denied after drift");
+        assert_eq!(gc.decision, "deny");
+        assert!(gc.removed_refs.is_empty());
+        assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
+        assert!(!gc.execution_gate_refs.is_empty());
     }
 
     #[test]
@@ -862,6 +1079,32 @@ mod tests {
             .expect("corrupt artifact");
         let error = read_artifact(&root, &imported.artifact_ref).expect_err("corruption fails");
         assert!(["Preserves", "hash mismatch"].iter().any(|needle| error.to_string().contains(needle)));
+    }
+
+    fn apply_ref_for(
+        root: &std::path::Path,
+        subsystem: &str,
+        object_ref: &str,
+        object_kind: &str,
+        retention_class: &str,
+        evidence: &retention::DestructiveRetentionEvidence,
+    ) -> String {
+        let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+            root,
+            subsystem,
+            object_ref,
+            object_kind,
+            retention_class,
+            action: retention::ACTION_DELETE,
+            evidence,
+        })
+        .expect("store ledger GC plan");
+        retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+            root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply ledger GC plan")
+        .apply_ref
     }
 
     fn retention_evidence(

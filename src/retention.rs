@@ -14,6 +14,7 @@ use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::RETENTION_CLASS_SCHEMA;
 use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
 use crate::preserves_rail::RETENTION_GC_APPLY_SCHEMA;
+use crate::preserves_rail::RETENTION_GC_EXECUTE_SCHEMA;
 use crate::preserves_rail::RETENTION_GC_PLAN_SCHEMA;
 use crate::preserves_rail::RETENTION_PIN_SCHEMA;
 use crate::preserves_rail::RETENTION_RECEIPT_SCHEMA;
@@ -84,6 +85,7 @@ const REMOTE_CLEARANCE_IMPORT_DIR: &str = "remote-clearance-imports";
 const REMOTE_CLEARANCE_LIVE_WORKFLOW_DIR: &str = "remote-clearance-live-workflows";
 const GC_PLAN_DIR: &str = "gc-plans";
 const GC_APPLY_DIR: &str = "gc-applies";
+const GC_EXECUTE_DIR: &str = "gc-executes";
 const RECEIPT_DIR: &str = "receipts";
 const TOMBSTONE_DIR: &str = "tombstones";
 const MAX_RETENTION_REFS: usize = 4096;
@@ -281,6 +283,35 @@ pub struct RetentionGcApply {
     pub retention_receipt_ref: Option<String>,
     pub tombstone_ref: Option<String>,
     pub admission_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionGcExecutionGateInput<'a> {
+    pub root: &'a Path,
+    pub subsystem: &'a str,
+    pub action: &'a str,
+    pub object_ref: &'a str,
+    pub object_kind: &'a str,
+    pub retention_class: &'a str,
+    pub apply_ref: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionGcExecutionGate {
+    pub execution_ref: String,
+    pub decision: String,
+    pub subsystem: String,
+    pub action: String,
+    pub object_ref: String,
+    pub object_kind: String,
+    pub retention_class: String,
+    pub apply_ref: Option<String>,
+    pub plan_ref: Option<String>,
+    pub recomputed_plan_ref: Option<String>,
+    pub retention_receipt_ref: Option<String>,
+    pub tombstone_ref: Option<String>,
     pub diagnostics: Vec<String>,
     pub value: IOValue,
 }
@@ -2075,6 +2106,21 @@ struct RetentionGcApplyValueInput<'a> {
     diagnostics: &'a [String],
 }
 
+struct RetentionGcExecutionGateValueInput<'a> {
+    decision: &'a str,
+    subsystem: &'a str,
+    action: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+    apply_ref: Option<&'a str>,
+    plan_ref: Option<&'a str>,
+    recomputed_plan_ref: Option<&'a str>,
+    retention_receipt_ref: Option<&'a str>,
+    tombstone_ref: Option<&'a str>,
+    diagnostics: &'a [String],
+}
+
 struct RetentionGateInputs<'a> {
     input: &'a RetentionGcPlanInput<'a>,
     policy: AdmissionRefsResult,
@@ -3573,6 +3619,365 @@ pub fn parse_retention_gc_apply(value: &IOValue) -> Result<RetentionGcApply> {
     })
 }
 
+pub fn read_retention_gc_apply(root: &Path, apply_ref: &str) -> Result<RetentionGcApply> {
+    require_ref(apply_ref, "retention GC apply ref")?;
+    let value = read_store_value(&gc_apply_path(root, apply_ref)?)?;
+    let apply = parse_retention_gc_apply(&value)?;
+    if apply.apply_ref != apply_ref {
+        return Err(MoltenError::invalid_harness("stored retention GC apply ref mismatch"));
+    }
+    Ok(apply)
+}
+
+pub fn read_retention_gc_execution_gate(root: &Path, execution_ref: &str) -> Result<RetentionGcExecutionGate> {
+    require_ref(execution_ref, "retention GC execution ref")?;
+    let value = read_store_value(&gc_execute_path(root, execution_ref)?)?;
+    let gate = parse_retention_gc_execution_gate(&value)?;
+    if gate.execution_ref != execution_ref {
+        return Err(MoltenError::invalid_harness("stored retention GC execution ref mismatch"));
+    }
+    Ok(gate)
+}
+
+pub fn store_retention_gc_execution_gate(input: RetentionGcExecutionGateInput<'_>) -> Result<RetentionGcExecutionGate> {
+    ensure_store(input.root)?;
+    validate_name(input.subsystem, "retention GC execution subsystem")?;
+    validate_action(input.action)?;
+    require_ref(input.object_ref, "retention GC execution object ref")?;
+    validate_name(input.object_kind, "retention GC execution object kind")?;
+    validate_retention_class(input.retention_class)?;
+    let mut diagnostics = Vec::new();
+    let mut plan_ref = None;
+    let mut recomputed_plan_ref = None;
+    let mut retention_receipt_ref = None;
+    let mut tombstone_ref = None;
+    if let Some(apply_ref) = input.apply_ref {
+        require_ref(apply_ref, "retention GC execution apply ref")?;
+        match read_retention_gc_apply(input.root, apply_ref) {
+            Ok(apply) => {
+                plan_ref = Some(apply.plan_ref.clone());
+                recomputed_plan_ref = Some(apply.recomputed_plan_ref.clone());
+                retention_receipt_ref = apply.retention_receipt_ref.clone();
+                tombstone_ref = apply.tombstone_ref.clone();
+                extend_bounded(
+                    &mut diagnostics,
+                    execution_gate_apply_diagnostics(&input, &apply)?,
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention GC execution diagnostics",
+                )?;
+                if let Some(receipt_ref) = apply.retention_receipt_ref.as_ref() {
+                    extend_bounded(
+                        &mut diagnostics,
+                        execution_gate_receipt_diagnostics(input.root, &input, receipt_ref)?,
+                        MAX_RETENTION_DIAGNOSTICS,
+                        "retention GC execution diagnostics",
+                    )?;
+                } else {
+                    push_bounded(
+                        &mut diagnostics,
+                        "retention-gc-execute-retention-receipt-missing".to_string(),
+                        MAX_RETENTION_DIAGNOSTICS,
+                        "retention GC execution diagnostics",
+                    )?;
+                }
+                extend_bounded(
+                    &mut diagnostics,
+                    execution_gate_tombstone_binding_diagnostics(input.root, &input, &apply)?,
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention GC execution diagnostics",
+                )?;
+            }
+            Err(error) => push_bounded(
+                &mut diagnostics,
+                format!("retention-gc-execute-apply-unreadable:{error}"),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC execution diagnostics",
+            )?,
+        }
+    } else {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-execute-apply-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC execution diagnostics",
+        )?;
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let value = retention_gc_execution_gate_value(&RetentionGcExecutionGateValueInput {
+        decision,
+        subsystem: input.subsystem,
+        action: input.action,
+        object_ref: input.object_ref,
+        object_kind: input.object_kind,
+        retention_class: input.retention_class,
+        apply_ref: input.apply_ref,
+        plan_ref: plan_ref.as_deref(),
+        recomputed_plan_ref: recomputed_plan_ref.as_deref(),
+        retention_receipt_ref: retention_receipt_ref.as_deref(),
+        tombstone_ref: tombstone_ref.as_deref(),
+        diagnostics: &diagnostics,
+    })?;
+    let gate = parse_retention_gc_execution_gate(&value)?;
+    write_store_value(&gc_execute_path(input.root, &gate.execution_ref)?, &gate.value)?;
+    Ok(gate)
+}
+
+fn execution_gate_apply_diagnostics(
+    input: &RetentionGcExecutionGateInput<'_>,
+    apply: &RetentionGcApply,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    if apply.decision != "pass" {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-execute-apply-not-pass".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC execution diagnostics",
+        )?;
+        extend_bounded(
+            &mut diagnostics,
+            apply.diagnostics.iter().cloned(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC execution diagnostics",
+        )?;
+    }
+    if apply.plan_ref != apply.recomputed_plan_ref {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-execute-apply-plan-drift".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC execution diagnostics",
+        )?;
+    }
+    if apply.subsystem != input.subsystem
+        || apply.action != input.action
+        || apply.object_ref != input.object_ref
+        || apply.object_kind != input.object_kind
+        || apply.retention_class != input.retention_class
+    {
+        push_bounded(
+            &mut diagnostics,
+            "retention-gc-execute-apply-scope-mismatch".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC execution diagnostics",
+        )?;
+    }
+    Ok(diagnostics)
+}
+
+fn execution_gate_receipt_diagnostics(
+    root: &Path,
+    input: &RetentionGcExecutionGateInput<'_>,
+    receipt_ref: &str,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    match read_retention_receipt(root, receipt_ref) {
+        Ok(receipt) => {
+            if receipt.decision != "pass" {
+                push_bounded(
+                    &mut diagnostics,
+                    "retention-gc-execute-retention-receipt-not-pass".to_string(),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention GC execution diagnostics",
+                )?;
+            }
+            if receipt.object_ref != input.object_ref
+                || receipt.object_kind != input.object_kind
+                || receipt.retention_class != input.retention_class
+                || receipt.action != input.action
+            {
+                push_bounded(
+                    &mut diagnostics,
+                    "retention-gc-execute-retention-receipt-scope-mismatch".to_string(),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention GC execution diagnostics",
+                )?;
+            }
+            if receipt.tombstone_ref.is_none() && is_destructive_action(input.action) {
+                push_bounded(
+                    &mut diagnostics,
+                    "retention-gc-execute-retention-receipt-tombstone-missing".to_string(),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention GC execution diagnostics",
+                )?;
+            }
+        }
+        Err(error) => push_bounded(
+            &mut diagnostics,
+            format!("retention-gc-execute-retention-receipt-unreadable:{error}"),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC execution diagnostics",
+        )?,
+    }
+    Ok(diagnostics)
+}
+
+fn execution_gate_tombstone_binding_diagnostics(
+    root: &Path,
+    input: &RetentionGcExecutionGateInput<'_>,
+    apply: &RetentionGcApply,
+) -> Result<Vec<String>> {
+    let Some(tombstone_ref) = apply.tombstone_ref.as_ref() else {
+        let mut diagnostics = Vec::new();
+        if is_destructive_action(input.action) {
+            push_bounded(
+                &mut diagnostics,
+                "retention-gc-execute-tombstone-missing".to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC execution diagnostics",
+            )?;
+        }
+        return Ok(diagnostics);
+    };
+    execution_gate_tombstone_diagnostics(root, input, tombstone_ref, apply.retention_receipt_ref.as_deref())
+}
+
+fn execution_gate_tombstone_diagnostics(
+    root: &Path,
+    input: &RetentionGcExecutionGateInput<'_>,
+    tombstone_ref: &str,
+    receipt_ref: Option<&str>,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    match read_retention_tombstone(root, tombstone_ref) {
+        Ok(tombstone) => {
+            if tombstone.object_ref != input.object_ref
+                || tombstone.object_kind != input.object_kind
+                || tombstone.retention_class != input.retention_class
+                || tombstone.action != input.action
+            {
+                push_bounded(
+                    &mut diagnostics,
+                    "retention-gc-execute-tombstone-scope-mismatch".to_string(),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention GC execution diagnostics",
+                )?;
+            }
+            if let Some(expected_receipt_ref) = receipt_ref {
+                let pending_receipt_ref = synthetic_ref("pending-retention-receipt")?;
+                if tombstone.receipt_ref != expected_receipt_ref && tombstone.receipt_ref != pending_receipt_ref {
+                    push_bounded(
+                        &mut diagnostics,
+                        "retention-gc-execute-tombstone-receipt-mismatch".to_string(),
+                        MAX_RETENTION_DIAGNOSTICS,
+                        "retention GC execution diagnostics",
+                    )?;
+                }
+            }
+        }
+        Err(error) => push_bounded(
+            &mut diagnostics,
+            format!("retention-gc-execute-tombstone-unreadable:{error}"),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC execution diagnostics",
+        )?,
+    }
+    Ok(diagnostics)
+}
+
+fn retention_gc_execution_gate_value(input: &RetentionGcExecutionGateValueInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    validate_name(input.subsystem, "retention GC execution subsystem")?;
+    validate_action(input.action)?;
+    require_ref(input.object_ref, "retention GC execution object ref")?;
+    validate_name(input.object_kind, "retention GC execution object kind")?;
+    validate_retention_class(input.retention_class)?;
+    if let Some(apply_ref) = input.apply_ref {
+        require_ref(apply_ref, "retention GC execution apply ref")?;
+    }
+    if let Some(plan_ref) = input.plan_ref {
+        require_ref(plan_ref, "retention GC execution plan ref")?;
+    }
+    if let Some(recomputed_plan_ref) = input.recomputed_plan_ref {
+        require_ref(recomputed_plan_ref, "retention GC execution recomputed plan ref")?;
+    }
+    if let Some(receipt_ref) = input.retention_receipt_ref {
+        require_ref(receipt_ref, "retention GC execution receipt ref")?;
+    }
+    if let Some(tombstone_ref) = input.tombstone_ref {
+        require_ref(tombstone_ref, "retention GC execution tombstone ref")?;
+    }
+    Ok(record("retention-gc-execute-v1", vec![
+        string(RETENTION_GC_EXECUTE_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("mode", vec![string("execute-gate")]),
+        record("subsystem", vec![string(input.subsystem)]),
+        record("action", vec![string(input.action)]),
+        object_value(input.object_ref, input.object_kind),
+        record("class", vec![string(input.retention_class)]),
+        record("apply", vec![optional_ref_value(input.apply_ref)]),
+        record("plan", vec![optional_ref_value(input.plan_ref)]),
+        record("recomputed-plan", vec![optional_ref_value(input.recomputed_plan_ref)]),
+        record("retention-receipt", vec![optional_ref_value(input.retention_receipt_ref)]),
+        record("tombstone", vec![optional_ref_value(input.tombstone_ref)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        checks_value(&[
+            ("apply-ref-required", pass_or_deny(input.apply_ref.is_some())),
+            ("apply-decision-pass", pass_or_deny(input.decision == "pass")),
+            (
+                "apply-plan-unchanged",
+                pass_or_deny(input.plan_ref.is_some() && input.plan_ref == input.recomputed_plan_ref),
+            ),
+            ("retention-receipt-bound", pass_or_deny(input.retention_receipt_ref.is_some())),
+            (
+                "tombstone-bound",
+                pass_or_deny(!is_destructive_action(input.action) || input.tombstone_ref.is_some()),
+            ),
+            ("execute-gate-is-not-authority", "pass"),
+            ("normal-admission-still-required", "pass"),
+            ("remote-clearance-import-still-required", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_gc_execution_gate(value: &IOValue) -> Result<RetentionGcExecutionGate> {
+    let fields = value
+        .collect_simple_record("retention-gc-execute-v1", Some(14))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-execute-v1 ...>"))?;
+    require_schema(&fields[0], RETENTION_GC_EXECUTE_SCHEMA, "retention GC execution schema")?;
+    let decision = record_string(&fields[1], "decision")?;
+    validate_decision(&decision)?;
+    let mode = record_string(&fields[2], "mode")?;
+    if mode != "execute-gate" {
+        return Err(MoltenError::invalid_harness("retention GC execution mode must be execute-gate"));
+    }
+    let subsystem = record_string(&fields[3], "subsystem")?;
+    validate_name(&subsystem, "retention GC execution subsystem")?;
+    let action = record_string(&fields[4], "action")?;
+    validate_action(&action)?;
+    let (object_ref, object_kind) = parse_object_value(&fields[5])?;
+    let retention_class = record_string(&fields[6], "class")?;
+    validate_retention_class(&retention_class)?;
+    let apply_ref = record_optional_ref(&fields[7], "apply")?;
+    let plan_ref = record_optional_ref(&fields[8], "plan")?;
+    let recomputed_plan_ref = record_optional_ref(&fields[9], "recomputed-plan")?;
+    let retention_receipt_ref = record_optional_ref(&fields[10], "retention-receipt")?;
+    let tombstone_ref = record_optional_ref(&fields[11], "tombstone")?;
+    let diagnostics = record_string_sequence(&fields[12], "diagnostics")?;
+    let checks = parse_checks(&fields[13])?;
+    require_check(&checks, "execute-gate-is-not-authority", "retention GC execution")?;
+    require_check(&checks, "normal-admission-still-required", "retention GC execution")?;
+    require_check(&checks, "remote-clearance-import-still-required", "retention GC execution")?;
+    Ok(RetentionGcExecutionGate {
+        execution_ref: canonical_hash(value)?,
+        decision,
+        subsystem,
+        action,
+        object_ref,
+        object_kind,
+        retention_class,
+        apply_ref,
+        plan_ref,
+        recomputed_plan_ref,
+        retention_receipt_ref,
+        tombstone_ref,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
 pub fn parse_retention_receipt(value: &IOValue) -> Result<RetentionReceipt> {
     let fields = value
         .collect_simple_record("retention-receipt-v1", Some(14))
@@ -3642,6 +4047,16 @@ pub fn read_retention_receipt(root: &Path, receipt_ref: &str) -> Result<Retentio
     require_ref(receipt_ref, "retention receipt ref")?;
     let value = read_store_value(&receipt_path(root, receipt_ref)?)?;
     parse_retention_receipt(&value)
+}
+
+pub fn read_retention_tombstone(root: &Path, tombstone_ref: &str) -> Result<RetentionTombstone> {
+    require_ref(tombstone_ref, "retention tombstone ref")?;
+    let value = read_store_value(&tombstone_path(root, tombstone_ref)?)?;
+    let tombstone = parse_tombstone(&value)?;
+    if tombstone.tombstone_ref != tombstone_ref {
+        return Err(MoltenError::invalid_harness("stored retention tombstone ref mismatch"));
+    }
+    Ok(tombstone)
 }
 
 pub fn retention_summary(value: &IOValue) -> Result<String> {
@@ -3785,6 +4200,22 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             apply.retention_receipt_ref.as_deref().unwrap_or("none"),
             apply.tombstone_ref.as_deref().unwrap_or("none"),
             apply.diagnostics.join(",")
+        ));
+    }
+    if let Ok(execute) = parse_retention_gc_execution_gate(value) {
+        return Ok(format!(
+            "retention gc execute ref={} decision={} subsystem={} action={} object={} class={} apply={} plan={} receipt={} tombstone={} diagnostics={}",
+            execute.execution_ref,
+            execute.decision,
+            execute.subsystem,
+            execute.action,
+            execute.object_ref,
+            execute.retention_class,
+            execute.apply_ref.as_deref().unwrap_or("none"),
+            execute.plan_ref.as_deref().unwrap_or("none"),
+            execute.retention_receipt_ref.as_deref().unwrap_or("none"),
+            execute.tombstone_ref.as_deref().unwrap_or("none"),
+            execute.diagnostics.join(",")
         ));
     }
     if let Ok(receipt) = parse_retention_receipt(value) {
@@ -4591,6 +5022,7 @@ fn ensure_store(root: &Path) -> Result<()> {
     fs::create_dir_all(remote_clearance_live_workflows_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(gc_plans_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(gc_applies_dir(root)).map_err(MoltenError::from)?;
+    fs::create_dir_all(gc_executes_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(receipts_dir(root)).map_err(MoltenError::from)?;
     fs::create_dir_all(tombstones_dir(root)).map_err(MoltenError::from)
 }
@@ -4677,6 +5109,10 @@ fn gc_applies_dir(root: &Path) -> PathBuf {
     store_dir(root).join(GC_APPLY_DIR)
 }
 
+fn gc_executes_dir(root: &Path) -> PathBuf {
+    store_dir(root).join(GC_EXECUTE_DIR)
+}
+
 fn receipts_dir(root: &Path) -> PathBuf {
     store_dir(root).join(RECEIPT_DIR)
 }
@@ -4719,6 +5155,10 @@ fn gc_plan_path(root: &Path, plan_ref: &str) -> Result<PathBuf> {
 
 fn gc_apply_path(root: &Path, apply_ref: &str) -> Result<PathBuf> {
     Ok(gc_applies_dir(root).join(format!("{}.preserves", ref_file_name(apply_ref)?)))
+}
+
+fn gc_execute_path(root: &Path, execution_ref: &str) -> Result<PathBuf> {
+    Ok(gc_executes_dir(root).join(format!("{}.preserves", ref_file_name(execution_ref)?)))
 }
 
 fn receipt_path(root: &Path, receipt_ref: &str) -> Result<PathBuf> {

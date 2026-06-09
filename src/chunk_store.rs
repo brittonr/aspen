@@ -203,6 +203,7 @@ pub struct ChunkStoreGc {
     pub removed_manifests: Vec<String>,
     pub removed_chunks: Vec<String>,
     pub retention_receipt_refs: Vec<String>,
+    pub execution_gate_refs: Vec<String>,
     pub receipt_value: IOValue,
 }
 
@@ -210,6 +211,7 @@ pub struct ChunkStoreGc {
 pub struct ChunkStoreGcInput<'a> {
     pub dry_run: bool,
     pub retention_evidence: &'a retention::DestructiveRetentionEvidence,
+    pub apply_refs: &'a [String],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1484,6 +1486,41 @@ fn pass_or_fail(value: bool) -> &'static str {
     if value { "pass" } else { "fail" }
 }
 
+struct ApplyRefMatchInput<'a> {
+    root: &'a Path,
+    apply_refs: &'a [String],
+    subsystem: &'a str,
+    action: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+}
+
+fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
+    let mut fallback_ref = None;
+    for apply_ref in input.apply_refs {
+        let Ok(apply) = retention::read_retention_gc_apply(input.root, apply_ref) else {
+            if fallback_ref.is_none() {
+                fallback_ref = Some(apply_ref.as_str());
+            }
+            continue;
+        };
+        if apply.decision == "pass"
+            && apply.subsystem == input.subsystem
+            && apply.action == input.action
+            && apply.object_ref == input.object_ref
+            && apply.object_kind == input.object_kind
+            && apply.retention_class == input.retention_class
+        {
+            return Some(apply_ref.as_str());
+        }
+        if fallback_ref.is_none() {
+            fallback_ref = Some(apply_ref.as_str());
+        }
+    }
+    fallback_ref
+}
+
 pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
     ensure_dirs(root)?;
     let pinned_manifests = pinned_refs(&root.join("pins").join("manifests"))?;
@@ -1528,8 +1565,10 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
         retention::destructive_retention_requester_ref(input.retention_evidence, "chunk-store-gc-missing-requester")?;
     let evidence_summary = retention::destructive_retention_evidence_value(input.retention_evidence)?;
     let mut admission_diagnostics = Vec::new();
+    let mut execution_diagnostics = Vec::new();
     let mut admission_refs = Vec::new();
     let mut retention_receipt_refs = Vec::new();
+    let mut execution_gate_refs = Vec::new();
     let mut retention_denials = Vec::new();
     for manifest_ref in &candidate_manifests {
         let admission =
@@ -1578,7 +1617,46 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
             MAX_CHUNK_STORE_RECEIPTS,
             "chunk store retention receipt refs",
         )?;
-        if admission.decision != "pass" || evaluation.receipt.decision != "pass" {
+        let mut is_execution_denied = false;
+        if !input.dry_run {
+            let apply_ref = matching_apply_ref(ApplyRefMatchInput {
+                root,
+                apply_refs: input.apply_refs,
+                subsystem: "chunk-gc",
+                action,
+                object_ref: manifest_ref,
+                object_kind: "chunk-manifest",
+                retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+            });
+            let execution_gate =
+                retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+                    root,
+                    subsystem: "chunk-gc",
+                    action,
+                    object_ref: manifest_ref,
+                    object_kind: "chunk-manifest",
+                    retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+                    apply_ref,
+                })?;
+            push_bounded(
+                &mut execution_gate_refs,
+                execution_gate.execution_ref.clone(),
+                MAX_CHUNK_STORE_RECEIPTS,
+                "chunk store retention execution gate refs",
+            )?;
+            if execution_gate.decision != "pass" {
+                is_execution_denied = true;
+                for diagnostic in &execution_gate.diagnostics {
+                    push_bounded(
+                        &mut execution_diagnostics,
+                        diagnostic.clone(),
+                        MAX_CHUNK_STORE_RECEIPTS,
+                        "chunk store retention execution diagnostics",
+                    )?;
+                }
+            }
+        }
+        if admission.decision != "pass" || evaluation.receipt.decision != "pass" || is_execution_denied {
             push_bounded(
                 &mut retention_denials,
                 manifest_ref.clone(),
@@ -1634,7 +1712,46 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
             MAX_CHUNK_STORE_RECEIPTS,
             "chunk store retention receipt refs",
         )?;
-        if admission.decision != "pass" || evaluation.receipt.decision != "pass" {
+        let mut is_execution_denied = false;
+        if !input.dry_run {
+            let apply_ref = matching_apply_ref(ApplyRefMatchInput {
+                root,
+                apply_refs: input.apply_refs,
+                subsystem: "chunk-gc",
+                action,
+                object_ref: chunk_ref,
+                object_kind: "chunk",
+                retention_class: retention::CLASS_DURABLE_VALUE,
+            });
+            let execution_gate =
+                retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+                    root,
+                    subsystem: "chunk-gc",
+                    action,
+                    object_ref: chunk_ref,
+                    object_kind: "chunk",
+                    retention_class: retention::CLASS_DURABLE_VALUE,
+                    apply_ref,
+                })?;
+            push_bounded(
+                &mut execution_gate_refs,
+                execution_gate.execution_ref.clone(),
+                MAX_CHUNK_STORE_RECEIPTS,
+                "chunk store retention execution gate refs",
+            )?;
+            if execution_gate.decision != "pass" {
+                is_execution_denied = true;
+                for diagnostic in &execution_gate.diagnostics {
+                    push_bounded(
+                        &mut execution_diagnostics,
+                        diagnostic.clone(),
+                        MAX_CHUNK_STORE_RECEIPTS,
+                        "chunk store retention execution diagnostics",
+                    )?;
+                }
+            }
+        }
+        if admission.decision != "pass" || evaluation.receipt.decision != "pass" || is_execution_denied {
             push_bounded(
                 &mut retention_denials,
                 chunk_ref.clone(),
@@ -1668,6 +1785,7 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
             ("deny-incomplete-reachability-proof", "pass"),
             ("chunk-tombstone-eligibility", if decision == "pass" { "pass" } else { "fail" }),
             ("retention-receipt-bound", "pass"),
+            ("retention-execution-gate", pass_or_fail(input.dry_run || execution_diagnostics.is_empty())),
             ("retention-authority-evidence", pass_or_fail(admission_diagnostics.is_empty())),
             ("redb-index-update", if decision == "pass" { "pass" } else { "fail" }),
         ],
@@ -1675,10 +1793,14 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
             record("mode", vec![string(if input.dry_run { "dry-run" } else { "apply" })]),
             record("removed-manifests", vec![sequence(removed_manifests.iter().map(string).collect())]),
             record("retention", vec![sequence(retention_receipt_refs.iter().map(string).collect())]),
+            record("retention-execution", vec![sequence(execution_gate_refs.iter().map(string).collect())]),
             record("denied", vec![sequence(retention_denials.iter().map(string).collect())]),
             record("retention-evidence", vec![evidence_summary.clone()]),
             record("retention-admission", vec![sequence(admission_refs.iter().map(string).collect())]),
             record("retention-diagnostics", vec![sequence(admission_diagnostics.iter().map(string).collect())]),
+            record("retention-execution-diagnostics", vec![sequence(
+                execution_diagnostics.iter().map(string).collect(),
+            )]),
         ],
     });
     let tombstone_receipt =
@@ -1693,12 +1815,14 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
                     ("tombstone-eligibility", "pass"),
                     ("gc-mode-binding", "pass"),
                     ("retention-receipt-bound", "pass"),
+                    ("retention-execution-gate", "pass"),
                     ("retention-authority-evidence", "pass"),
                 ],
                 details: vec![
                     record("mode", vec![string(if input.dry_run { "dry-run" } else { "apply" })]),
                     record("removed-manifests", vec![sequence(removed_manifests.iter().map(string).collect())]),
                     record("retention", vec![sequence(retention_receipt_refs.iter().map(string).collect())]),
+                    record("retention-execution", vec![sequence(execution_gate_refs.iter().map(string).collect())]),
                     record("retention-evidence", vec![evidence_summary]),
                     record("retention-admission", vec![sequence(admission_refs.iter().map(string).collect())]),
                 ],
@@ -1720,6 +1844,7 @@ pub fn gc(root: &Path, input: ChunkStoreGcInput<'_>) -> Result<ChunkStoreGc> {
         removed_manifests,
         removed_chunks,
         retention_receipt_refs,
+        execution_gate_refs,
         receipt_value,
     })
 }
@@ -3606,6 +3731,7 @@ mod tests {
         gc(&root, ChunkStoreGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &[],
         })
         .expect("gc pinned root");
         assert_eq!(read_object(&root, &first.manifest_ref).expect("read after gc").bytes, bytes);
@@ -3748,9 +3874,16 @@ mod tests {
         let unpinned = put_bytes(&root, "artifact", b"dddd", 4).expect("put unpinned");
         pin_manifest(&root, &pinned.manifest_ref).expect("pin manifest");
         let retention_evidence = retention_evidence(&root, "gc-remove");
+        let apply_refs = chunk_gc_apply_refs(
+            &root,
+            std::slice::from_ref(&unpinned.manifest_ref),
+            &unpinned.chunk_refs,
+            &retention_evidence,
+        );
         let gc = gc(&root, ChunkStoreGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &apply_refs,
         })
         .expect("gc");
         assert!(gc.removed_manifests.contains(&unpinned.manifest_ref));
@@ -3784,6 +3917,7 @@ mod tests {
         let gc = gc(&root, ChunkStoreGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &[],
         })
         .expect("gc");
         assert_eq!(gc.decision, "deny");
@@ -3803,6 +3937,7 @@ mod tests {
         let gc = gc(&root, ChunkStoreGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &[],
         })
         .expect("gc denied");
         assert_eq!(gc.decision, "deny");
@@ -3863,9 +3998,12 @@ mod tests {
         pin_manifest(&root, &put.manifest_ref).expect("pin");
         unpin_manifest(&root, &put.manifest_ref).expect("unpin");
         let retention_evidence = retention_evidence(&root, "receipt-index");
+        let apply_refs =
+            chunk_gc_apply_refs(&root, std::slice::from_ref(&put.manifest_ref), &put.chunk_refs, &retention_evidence);
         gc(&root, ChunkStoreGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
+            apply_refs: &apply_refs,
         })
         .expect("gc");
 
@@ -4044,6 +4182,56 @@ mod tests {
         let reparsed = crate::preserves_rail::parse_text(&rendered).expect("parse manifest");
         let parsed = parse_manifest_value(&reparsed, Some(&put.manifest_ref)).expect("parse manifest value");
         assert_eq!(parsed.chunks.len(), 2);
+    }
+
+    fn chunk_gc_apply_refs(
+        root: &std::path::Path,
+        manifest_refs: &[String],
+        chunk_refs: &[String],
+        evidence: &retention::DestructiveRetentionEvidence,
+    ) -> Vec<String> {
+        let mut apply_refs = Vec::with_capacity(manifest_refs.len() + chunk_refs.len());
+        for manifest_ref in manifest_refs {
+            let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+                root,
+                subsystem: "chunk-gc",
+                object_ref: manifest_ref,
+                object_kind: "chunk-manifest",
+                retention_class: retention::CLASS_PUBLIC_ARTIFACT,
+                action: retention::ACTION_DELETE,
+                evidence,
+            })
+            .expect("store manifest GC plan");
+            apply_refs.push(
+                retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+                    root,
+                    plan_ref: &plan.plan_ref,
+                })
+                .expect("apply manifest GC plan")
+                .apply_ref,
+            );
+        }
+        for chunk_ref in chunk_refs {
+            let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+                root,
+                subsystem: "chunk-gc",
+                object_ref: chunk_ref,
+                object_kind: "chunk",
+                retention_class: retention::CLASS_DURABLE_VALUE,
+                action: retention::ACTION_DELETE,
+                evidence,
+            })
+            .expect("store chunk GC plan");
+            apply_refs.push(
+                retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+                    root,
+                    plan_ref: &plan.plan_ref,
+                })
+                .expect("apply chunk GC plan")
+                .apply_ref,
+            );
+        }
+        apply_refs
     }
 
     fn retention_evidence(root: &std::path::Path, label: &str) -> retention::DestructiveRetentionEvidence {

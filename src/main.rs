@@ -1289,6 +1289,8 @@ enum LedgerCommand {
         ledger: PathBuf,
         #[arg(long)]
         dry_run: bool,
+        #[arg(long = "apply-ref")]
+        apply_refs: Vec<String>,
         #[command(flatten)]
         retention: RetentionEvidenceArgs,
         #[arg(long)]
@@ -1473,6 +1475,8 @@ enum ChunkCommand {
         store: PathBuf,
         #[arg(long)]
         dry_run: bool,
+        #[arg(long = "apply-ref")]
+        apply_refs: Vec<String>,
         #[command(flatten)]
         retention: RetentionEvidenceArgs,
         #[arg(long)]
@@ -1638,6 +1642,8 @@ enum CacheCommand {
         operation: Option<String>,
         #[arg(long, default_value = "manual-invalidate")]
         reason: String,
+        #[arg(long = "apply-ref")]
+        apply_refs: Vec<String>,
         #[command(flatten)]
         retention: RetentionEvidenceArgs,
         #[arg(long)]
@@ -3508,6 +3514,7 @@ fn run_ledger_command(command: LedgerCommand) -> Result<()> {
         LedgerCommand::Gc {
             ledger,
             dry_run,
+            apply_refs,
             retention,
             receipt_out,
         } => {
@@ -3515,6 +3522,7 @@ fn run_ledger_command(command: LedgerCommand) -> Result<()> {
             let gc = ledger::gc(&ledger, ledger::LedgerGcInput {
                 dry_run,
                 retention_evidence: &retention_evidence,
+                apply_refs: &apply_refs,
             })?;
             emit_named_receipt(receipt_out.as_ref(), "ledger gc receipt", &gc.receipt_value)?;
             println!(
@@ -3846,6 +3854,7 @@ fn run_chunk_command(command: ChunkCommand) -> Result<()> {
         ChunkCommand::Gc {
             store,
             dry_run,
+            apply_refs,
             retention,
             receipt_out,
         } => {
@@ -3853,6 +3862,7 @@ fn run_chunk_command(command: ChunkCommand) -> Result<()> {
             let gc = chunk_store::gc(&store, chunk_store::ChunkStoreGcInput {
                 dry_run,
                 retention_evidence: &retention_evidence,
+                apply_refs: &apply_refs,
             })?;
             emit_named_receipt(receipt_out.as_ref(), "chunk store receipt", &gc.receipt_value)?;
             println!(
@@ -4222,6 +4232,7 @@ fn run_cache_command(command: CacheCommand) -> Result<()> {
             revocation_ref,
             operation,
             reason,
+            apply_refs,
             retention,
             receipt_out,
         } => {
@@ -4234,6 +4245,7 @@ fn run_cache_command(command: CacheCommand) -> Result<()> {
                 operation,
                 reason,
                 retention_evidence: retention.into_retention_evidence(),
+                apply_refs,
             })?;
             emit_named_receipt(receipt_out.as_ref(), "eval cache receipt", &invalidated.receipt_value)?;
             for key_ref in &invalidated.invalidated_key_refs {
@@ -10717,6 +10729,7 @@ mod tests {
         run_chunk_command(ChunkCommand::Gc {
             store,
             dry_run: false,
+            apply_refs: Vec::new(),
             retention: retention_cli_args("chunk-gc"),
             receipt_out: Some(dir.join("gc-receipt.preserves")),
         })
@@ -10847,6 +10860,21 @@ mod tests {
             cache: cache.clone(),
         })
         .expect("cache show value");
+        let cache_retention_object = RetentionCliObject {
+            root: &cache,
+            label: "cache-invalidate",
+            object_ref: &key.key_ref,
+            object_kind: "eval-cache-key",
+            retention_class: retention::CLASS_EPHEMERAL_CACHE,
+            action: retention::ACTION_TOMBSTONE,
+        };
+        let cache_retention = retention_cli_args_for_object(cache_retention_object);
+        let cache_apply_refs = vec![retention_apply_ref(
+            cache_retention_object,
+            "eval-cache-invalidate",
+            &cache_retention,
+        )];
+        let invalidate_receipt = dir.join("invalidate-receipt.preserves");
         run_cache_command(CacheCommand::Invalidate {
             cache: cache.clone(),
             key_ref: None,
@@ -10856,17 +10884,13 @@ mod tests {
             revocation_ref: None,
             operation: None,
             reason: "cli-test".to_string(),
-            retention: retention_cli_args_for_object(RetentionCliObject {
-                root: &cache,
-                label: "cache-invalidate",
-                object_ref: &key.key_ref,
-                object_kind: "eval-cache-key",
-                retention_class: retention::CLASS_EPHEMERAL_CACHE,
-                action: retention::ACTION_TOMBSTONE,
-            }),
-            receipt_out: Some(dir.join("invalidate-receipt.preserves")),
+            apply_refs: cache_apply_refs,
+            retention: cache_retention,
+            receipt_out: Some(invalidate_receipt.clone()),
         })
         .expect("cache invalidate");
+        let invalidate_text = fs::read_to_string(&invalidate_receipt).expect("read invalidate receipt");
+        assert!(invalidate_text.contains("retention-execution"));
         let error = run_cache_command(CacheCommand::Get {
             key_ref: key.key_ref,
             cache,
@@ -12744,6 +12768,7 @@ mod tests {
         run_ledger_command(LedgerCommand::Gc {
             ledger: ledger.clone(),
             dry_run: false,
+            apply_refs: Vec::new(),
             retention: retention_cli_args("ledger-gc"),
             receipt_out: Some(dir.join("ledger-gc.preserves")),
         })
@@ -12851,6 +12876,30 @@ mod tests {
             remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
         }
+    }
+
+    fn retention_apply_ref(
+        input: RetentionCliObject<'_>,
+        subsystem: &str,
+        retention_args: &RetentionEvidenceArgs,
+    ) -> String {
+        let evidence = retention_args.clone().into_retention_evidence();
+        let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+            root: input.root,
+            subsystem,
+            object_ref: input.object_ref,
+            object_kind: input.object_kind,
+            retention_class: input.retention_class,
+            action: input.action,
+            evidence: &evidence,
+        })
+        .expect("store CLI retention GC plan");
+        retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+            root: input.root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply CLI retention GC plan")
+        .apply_ref
     }
 
     fn store_cli_admission(input: RetentionCliObject<'_>, kind: &str, requester_ref: &str) -> String {

@@ -224,6 +224,7 @@ pub struct EvalCacheInvalidateInput {
     pub operation: Option<String>,
     pub reason: String,
     pub retention_evidence: retention::DestructiveRetentionEvidence,
+    pub apply_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,6 +232,7 @@ pub struct EvalCacheInvalidate {
     pub decision: String,
     pub invalidated_key_refs: Vec<String>,
     pub retention_receipt_refs: Vec<String>,
+    pub execution_gate_refs: Vec<String>,
     pub receipt_value: IOValue,
 }
 
@@ -543,8 +545,10 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         "eval-cache-invalidate-missing-requester",
     )?;
     let mut admission_diagnostics = Vec::new();
+    let mut execution_diagnostics = Vec::new();
     let mut admission_refs = Vec::new();
     let mut retention_receipt_refs = Vec::new();
+    let mut execution_gate_refs = Vec::new();
     let mut retention_denials = Vec::new();
     for key_ref in &selected_key_refs {
         let admission =
@@ -593,7 +597,42 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
             MAX_EVAL_CACHE_SCAN_ENTRIES,
             "eval cache retention receipt refs",
         )?;
-        if admission.decision != "pass" || evaluation.receipt.decision != "pass" {
+        let apply_ref = matching_apply_ref(ApplyRefMatchInput {
+            root,
+            apply_refs: &input.apply_refs,
+            subsystem: "eval-cache-invalidate",
+            action: retention::ACTION_TOMBSTONE,
+            object_ref: key_ref,
+            object_kind: "eval-cache-key",
+            retention_class: retention::CLASS_EPHEMERAL_CACHE,
+        });
+        let execution_gate = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+            root,
+            subsystem: "eval-cache-invalidate",
+            action: retention::ACTION_TOMBSTONE,
+            object_ref: key_ref,
+            object_kind: "eval-cache-key",
+            retention_class: retention::CLASS_EPHEMERAL_CACHE,
+            apply_ref,
+        })?;
+        push_bounded(
+            &mut execution_gate_refs,
+            execution_gate.execution_ref.clone(),
+            MAX_EVAL_CACHE_SCAN_ENTRIES,
+            "eval cache retention execution gate refs",
+        )?;
+        let is_execution_denied = execution_gate.decision != "pass";
+        if is_execution_denied {
+            for diagnostic in &execution_gate.diagnostics {
+                push_bounded(
+                    &mut execution_diagnostics,
+                    diagnostic.clone(),
+                    MAX_EVAL_CACHE_SCAN_ENTRIES,
+                    "eval cache retention execution diagnostics",
+                )?;
+            }
+        }
+        if admission.decision != "pass" || evaluation.receipt.decision != "pass" || is_execution_denied {
             push_bounded(
                 &mut retention_denials,
                 key_ref.clone(),
@@ -653,6 +692,9 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
     for receipt_ref in &retention_receipt_refs {
         push_bounded(&mut refs, receipt_ref.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
     }
+    for execution_ref in &execution_gate_refs {
+        push_bounded(&mut refs, execution_ref.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+    }
     let mut diagnostics = if decision == "pass" {
         vec![format!("invalidated {} keys", invalidated_key_refs.len())]
     } else {
@@ -673,7 +715,9 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         input.retention_evidence.is_reference_index_complete
     ));
     let has_admission_denial = !admission_diagnostics.is_empty();
+    let has_execution_denial = !execution_diagnostics.is_empty();
     diagnostics.extend(admission_diagnostics);
+    diagnostics.extend(execution_diagnostics);
     let receipt = receipt_value(&EvalCacheReceiptValueInput {
         operation: "invalidate",
         decision,
@@ -685,6 +729,7 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
             ("cache-invalidation", if decision == "pass" { "pass" } else { "fail" }),
             ("tombstone", if decision == "pass" { "pass" } else { "fail" }),
             ("retention-receipt-bound", "pass"),
+            ("retention-execution-gate", if has_execution_denial { "fail" } else { "pass" }),
             ("retention-authority-evidence", if has_admission_denial { "fail" } else { "pass" }),
             ("deny-before-tombstone", if decision == "pass" { "pass" } else { "fail" }),
         ],
@@ -695,6 +740,7 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         decision: decision.to_string(),
         invalidated_key_refs,
         retention_receipt_refs,
+        execution_gate_refs,
         receipt_value: receipt,
     })
 }
@@ -1315,6 +1361,7 @@ fn validate_invalidate_input(input: &EvalCacheInvalidateInput) -> Result<()> {
     if let Some(operation) = input.operation.as_ref() {
         validate_operation(operation)?;
     }
+    validate_refs(&input.apply_refs, "invalidate apply ref")?;
     retention::validate_destructive_retention_evidence(&input.retention_evidence)?;
     Ok(())
 }
@@ -1616,6 +1663,41 @@ fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     }
 }
 
+struct ApplyRefMatchInput<'a> {
+    root: &'a Path,
+    apply_refs: &'a [String],
+    subsystem: &'a str,
+    action: &'a str,
+    object_ref: &'a str,
+    object_kind: &'a str,
+    retention_class: &'a str,
+}
+
+fn matching_apply_ref<'a>(input: ApplyRefMatchInput<'a>) -> Option<&'a str> {
+    let mut fallback_ref = None;
+    for apply_ref in input.apply_refs {
+        let Ok(apply) = retention::read_retention_gc_apply(input.root, apply_ref) else {
+            if fallback_ref.is_none() {
+                fallback_ref = Some(apply_ref.as_str());
+            }
+            continue;
+        };
+        if apply.decision == "pass"
+            && apply.subsystem == input.subsystem
+            && apply.action == input.action
+            && apply.object_ref == input.object_ref
+            && apply.object_kind == input.object_kind
+            && apply.retention_class == input.retention_class
+        {
+            return Some(apply_ref.as_str());
+        }
+        if fallback_ref.is_none() {
+            fallback_ref = Some(apply_ref.as_str());
+        }
+    }
+    fallback_ref
+}
+
 fn validate_refs(refs: &[String], field: &str) -> Result<()> {
     for value_ref in refs {
         validate_ref(value_ref, field)?;
@@ -1733,10 +1815,13 @@ mod tests {
         let error =
             get(&root, &trace.key.key_ref, &EvalCacheGetInput::default()).expect_err("trace-only semantic denied");
         assert!(error.to_string().contains("trace-only"), "{error}");
+        let retention_evidence = retention_evidence(&root, "trace-invalidate");
+        let apply_refs = vec![eval_cache_apply_ref(&root, &trace.key.key_ref, &retention_evidence)];
         let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
             dependency_ref: Some(dependency),
             reason: "dependency changed".to_string(),
-            retention_evidence: retention_evidence(&root, "trace-invalidate"),
+            retention_evidence,
+            apply_refs,
             ..EvalCacheInvalidateInput::default()
         })
         .expect("invalidate dependency");
@@ -1873,10 +1958,13 @@ mod tests {
         assert_eq!(first_key_ref, second_key_ref);
         let output = record("closure", vec![string(&dependency)]);
         let put = put(&root, &key, &value_input(TIER_PURE, STATUS_PASS, Some(output), &key, &[])).expect("put");
+        let retention_evidence = retention_evidence(&root, "hegel-invalidate");
+        let apply_refs = vec![eval_cache_apply_ref(&root, &put.key.key_ref, &retention_evidence)];
         let invalidated = invalidate(&root, &EvalCacheInvalidateInput {
             dependency_ref: Some(dependency),
             reason: "property dependency invalidation".to_string(),
-            retention_evidence: retention_evidence(&root, "hegel-invalidate"),
+            retention_evidence,
+            apply_refs,
             ..EvalCacheInvalidateInput::default()
         })
         .expect("invalidate");
@@ -1925,6 +2013,29 @@ mod tests {
             evidence_refs: evidence_refs.to_vec(),
             diagnostics: Vec::new(),
         }
+    }
+
+    fn eval_cache_apply_ref(
+        root: &std::path::Path,
+        key_ref: &str,
+        evidence: &retention::DestructiveRetentionEvidence,
+    ) -> String {
+        let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
+            root,
+            subsystem: "eval-cache-invalidate",
+            object_ref: key_ref,
+            object_kind: "eval-cache-key",
+            retention_class: retention::CLASS_EPHEMERAL_CACHE,
+            action: retention::ACTION_TOMBSTONE,
+            evidence,
+        })
+        .expect("store cache invalidation plan");
+        retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
+            root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply cache invalidation plan")
+        .apply_ref
     }
 
     fn retention_evidence(root: &std::path::Path, label: &str) -> retention::DestructiveRetentionEvidence {
