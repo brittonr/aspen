@@ -12,4 +12,4 @@ Molten needs an operator confidence rail that proves the runtime can run itself,
 
 ## Impact
 
-This creates a practical evidence loop for Molten. The first milestone can implement `molten dogfood local` using the local dataspace, artifact registry, deterministic handlers, and receipt inspection commands.
+This creates a practical evidence loop for Molten. The first milestone implements `molten dogfood local-node` using the local dataspace, artifact registry, deterministic handlers, the local evidence ledger, and receipt inspection commands.

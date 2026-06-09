@@ -384,7 +384,7 @@ Current architectural changes are recorded under `cairn/changes/`:
 - `peer-bootstrap-negotiation` — peer bootstrap inputs, handshake records, feature negotiation, capability offers, resource limits, and join admission.
 - `content-addressed-chunk-store` — deterministic chunk manifests/Merkle roots, chunk-level dedup, streaming verification, resumable fetch, range reads, and chunk-aware retention/GC.
 - `persistent-node-identity` — stable Iroh/node identity across restarts, drift detection, key-source receipts, and bootstrap/replay integration.
-- `operator-receipts-dogfood` — operator confidence rail with local dogfood workflow, durable receipts, receipt CLI, and replay/transcript evidence.
+- `operator-receipts-dogfood` — operator confidence rail with local dogfood workflow, durable content-addressed receipt ledger, `molten receipts list/show/validate/export` CLI readback, redaction-safe summaries, and replay/transcript evidence.
 - `plugin-host-abi` — versioned host ABI discipline for sandboxed artifacts, lifecycle callbacks, Preserves result encoding, and hostcall/effect mapping.
 - `federated-pull-sync` — Aspen-inspired sovereign pull-sync for artifacts, chunks, docs, catalogs, receipts, and app resources with signed verification and local admission.
 - `blob-ref-job-submission` — content-ref-only job submissions, deterministic local worker fetch/verify/pin execution, worker status assertions, ledger receipts, and result chunk manifests.

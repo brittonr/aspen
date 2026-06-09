@@ -362,6 +362,116 @@ fn cli_failure_paths_write_canonical_failure_artifacts_to_files() -> CliResult<(
 }
 
 #[test]
+fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
+    let dir = temp_dir("dogfood-receipts")?;
+    let state_root = dir.join("state");
+    let report = dir.join("dogfood-report.preserves");
+    let release_gate = dir.join("release-gate.preserves");
+    let run = molten_cmd()
+        .args(["dogfood", "local-node", "--state-root"])
+        .arg(&state_root)
+        .args(["--out"])
+        .arg(&report)
+        .args(["--release-gate-out"])
+        .arg(&release_gate)
+        .output()?;
+    assert_success(&run, "dogfood local-node");
+    assert!(stdout(&run).contains("decision=pass"));
+
+    let report_value = read_preserves(&report)?;
+    let parsed_report = molten::operator_dogfood::parse_dogfood_report(&report_value)?;
+    assert_eq!(parsed_report.decision, "pass");
+    let release_gate_ref = canonical_hash(&read_preserves(&release_gate)?)?;
+    let ledger = state_root.join("ledger");
+
+    let list = molten_cmd().args(["receipts", "list", "--ledger"]).arg(&ledger).output()?;
+    assert_success(&list, "receipts list");
+    assert!(stdout(&list).contains(&parsed_report.report_ref));
+    assert!(stdout(&list).contains("dogfood-report"));
+
+    let show = molten_cmd()
+        .args(["receipts", "show"])
+        .arg(&parsed_report.report_ref)
+        .args(["--ledger"])
+        .arg(&ledger)
+        .output()?;
+    assert_success(&show, "receipts show");
+    assert!(stdout(&show).contains("operator dogfood report"));
+
+    let validate = molten_cmd()
+        .args(["receipts", "validate"])
+        .arg(&parsed_report.report_ref)
+        .args(["--ledger"])
+        .arg(&ledger)
+        .output()?;
+    assert_success(&validate, "receipts validate");
+    assert!(stdout(&validate).contains("receipts validate ok"));
+
+    let exported = dir.join("exported-dogfood-report.preserves");
+    let export = molten_cmd()
+        .args(["receipts", "export"])
+        .arg(&parsed_report.report_ref)
+        .args(["--ledger"])
+        .arg(&ledger)
+        .args(["--out"])
+        .arg(&exported)
+        .output()?;
+    assert_success(&export, "receipts export");
+    assert!(stdout(&export).contains("redaction=pass"));
+    assert_eq!(canonical_hash(&read_preserves(&exported)?)?, parsed_report.report_ref);
+
+    fs::write(
+        dir.join("dogfood-summary.txt"),
+        format!(
+            "dogfood local-node decision=pass report={} release-gate={}\n",
+            parsed_report.report_ref, release_gate_ref
+        ),
+    )?;
+    fs::write(dir.join("after-nextest.txt"), "/nix/store/test-molten-nextest\n")?;
+    let nix_evidence = dir.join("nix-dogfood-evidence.preserves");
+    let nix_verify = dir.join("nix-dogfood-verify.preserves");
+    let export_nix = molten_cmd()
+        .args(["dogfood", "nix-release-export", "--output-path"])
+        .arg(&dir)
+        .args(["--out"])
+        .arg(&nix_evidence)
+        .output()?;
+    assert_success(&export_nix, "dogfood nix-release-export");
+    let verify_nix = molten_cmd()
+        .args(["dogfood", "nix-release-verify", "--output-path"])
+        .arg(&dir)
+        .args(["--evidence"])
+        .arg(&nix_evidence)
+        .args(["--receipt-out"])
+        .arg(&nix_verify)
+        .output()?;
+    assert_success(&verify_nix, "dogfood nix-release-verify");
+    let verify_receipt = molten::operator_dogfood::parse_nix_dogfood_verify_receipt(&read_preserves(&nix_verify)?)?;
+    assert_eq!(verify_receipt.decision, "pass");
+
+    fs::write(dir.join("after-nextest.txt"), "/nix/store/stale-molten-nextest\n")?;
+    let stale_verify = dir.join("nix-dogfood-verify-stale.preserves");
+    let verify_stale = molten_cmd()
+        .args(["dogfood", "nix-release-verify", "--output-path"])
+        .arg(&dir)
+        .args(["--evidence"])
+        .arg(&nix_evidence)
+        .args(["--receipt-out"])
+        .arg(&stale_verify)
+        .output()?;
+    assert_success(&verify_stale, "dogfood nix-release-verify stale marker");
+    let stale_receipt = molten::operator_dogfood::parse_nix_dogfood_verify_receipt(&read_preserves(&stale_verify)?)?;
+    assert_eq!(stale_receipt.decision, "deny");
+    assert!(
+        stale_receipt
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("nextest-marker-ref mismatch"))
+    );
+    Ok(())
+}
+
+#[test]
 fn cli_blob_ref_job_submit_execute_status_and_receipt_show() -> CliResult<()> {
     let dir = temp_dir("cli-job-ref")?;
     let chunks = dir.join("chunks");

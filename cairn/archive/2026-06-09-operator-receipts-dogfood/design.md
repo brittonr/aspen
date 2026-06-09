@@ -30,7 +30,7 @@ A minimal workflow should include:
 7. Exercise typed storage or receipt store.
 8. Run an executable transcript.
 9. Produce final state hash and success/failure receipt.
-10. Clean up or leave state running according to command option.
+10. Clean up transient runtime handles while preserving the explicit state root ledger for inspection.
 
 ## Receipt shape
 
@@ -53,12 +53,11 @@ Operator receipts should include:
 Initial commands:
 
 ```text
-molten dogfood local
-molten dogfood local --leave-running
-molten receipts list
-molten receipts show <run-id>
-molten receipts validate <run-id>
-molten receipts export <run-id>
+molten dogfood local-node --state-root STATE --out dogfood-report.preserves --release-gate-out release-gate.preserves
+molten receipts list --ledger STATE/ledger
+molten receipts show <receipt-ref> --ledger STATE/ledger
+molten receipts validate <receipt-ref> --ledger STATE/ledger
+molten receipts export <receipt-ref> --ledger STATE/ledger --out receipt.preserves
 ```
 
 Later, cluster-backed readback can read receipts from Raft/control-plane storage.

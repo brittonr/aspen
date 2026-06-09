@@ -304,6 +304,9 @@
           nextest-ci = {
             type = "app";
             program = "${nextestCi}/bin/molten-nextest-ci";
+            meta = {
+              description = "Run Molten's cargo-nextest CI profile";
+            };
           };
         };
 

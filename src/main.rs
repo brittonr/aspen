@@ -106,6 +106,10 @@ enum Command {
         #[command(subcommand)]
         command: DogfoodCommand,
     },
+    Receipts {
+        #[command(subcommand)]
+        command: ReceiptsCommand,
+    },
     Node {
         #[command(subcommand)]
         command: NodeCommand,
@@ -520,6 +524,33 @@ enum DogfoodCommand {
     },
     Show {
         artifact: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ReceiptsCommand {
+    List {
+        #[arg(long)]
+        ledger: PathBuf,
+    },
+    Show {
+        receipt_ref: String,
+        #[arg(long)]
+        ledger: PathBuf,
+    },
+    Validate {
+        receipt_ref: String,
+        #[arg(long)]
+        ledger: PathBuf,
+    },
+    Export {
+        receipt_ref: String,
+        #[arg(long)]
+        ledger: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
     },
 }
 
@@ -3301,8 +3332,94 @@ fn run() -> Result<()> {
         }
         Some(Command::Test { command }) => run_test_command(command),
         Some(Command::Dogfood { command }) => run_dogfood_command(command),
+        Some(Command::Receipts { command }) => run_receipts_command(command),
         Some(Command::Node { command }) => run_node_command(command),
     }
+}
+
+fn run_receipts_command(command: ReceiptsCommand) -> Result<()> {
+    match command {
+        ReceiptsCommand::List { ledger } => {
+            for entry in ledger::list_artifacts(&ledger)? {
+                if is_operator_receipt_kind(&entry.artifact_kind) {
+                    println!("{} {}", entry.artifact_ref, entry.artifact_kind);
+                }
+            }
+            Ok(())
+        }
+        ReceiptsCommand::Show { receipt_ref, ledger } => {
+            let value = ledger::read_artifact(&ledger, &receipt_ref)?;
+            let summary = validate_operator_receipt_value(&value)?;
+            println!("{summary}");
+            Ok(())
+        }
+        ReceiptsCommand::Validate { receipt_ref, ledger } => {
+            let value = ledger::read_artifact(&ledger, &receipt_ref)?;
+            let summary = validate_operator_receipt_value(&value)?;
+            println!(
+                "receipts validate ok artifact={} kind={} summary={}",
+                receipt_ref,
+                ledger::artifact_kind(&value),
+                summary
+            );
+            Ok(())
+        }
+        ReceiptsCommand::Export {
+            receipt_ref,
+            ledger,
+            out,
+            receipt_out,
+        } => {
+            let value = ledger::read_artifact(&ledger, &receipt_ref)?;
+            validate_operator_receipt_value(&value)?;
+            let exported = ledger::export_artifact(&ledger, &receipt_ref, &out)?;
+            emit_named_receipt(receipt_out.as_ref(), "receipts export receipt", &exported.receipt_value)?;
+            println!(
+                "receipts export ok artifact={} kind={} out={} redaction=pass logs=auxiliary",
+                exported.artifact_ref,
+                exported.artifact_kind,
+                out.display()
+            );
+            Ok(())
+        }
+    }
+}
+
+fn validate_operator_receipt_value(value: &preserves::IOValue) -> Result<String> {
+    match ledger::artifact_kind(value) {
+        "dogfood-report"
+        | "operator-workflow"
+        | "operator-checkpoint"
+        | "release-gate-receipt"
+        | "nix-dogfood-release-evidence"
+        | "nix-dogfood-release-verify-receipt" => operator_dogfood::operator_dogfood_summary(value),
+        "operator-step" => {
+            let step = operator_dogfood::parse_operator_step(value)?;
+            Ok(format!(
+                "operator step ref={} name={} decision={} receipt={} (summary is non-normative)",
+                step.step_ref,
+                step.name,
+                step.decision,
+                step.receipt_ref.as_deref().unwrap_or("none")
+            ))
+        }
+        kind => Err(MoltenError::invalid_harness(format!(
+            "unsupported operator receipt kind {kind}; expected dogfood/operator receipt artifact"
+        ))),
+    }
+}
+
+fn is_operator_receipt_kind(kind: &str) -> bool {
+    matches!(
+        kind,
+        "dogfood-report"
+            | "operator-workflow"
+            | "operator-step"
+            | "operator-checkpoint"
+            | "release-gate-receipt"
+            | "nix-dogfood-release-evidence"
+            | "nix-dogfood-release-verify-receipt"
+    )
 }
 
 fn run_test_command(command: TestCommand) -> Result<()> {
@@ -12588,7 +12705,7 @@ mod tests {
         let report = dir.join("dogfood-report.preserves");
         let release_gate = dir.join("release-gate.preserves");
         run_dogfood_command(DogfoodCommand::LocalNode {
-            state_root,
+            state_root: state_root.clone(),
             out: report.clone(),
             release_gate_out: Some(release_gate.clone()),
         })
@@ -12597,6 +12714,34 @@ mod tests {
         let parsed = operator_dogfood::parse_dogfood_report(&report_value).expect("parse dogfood report");
         assert_eq!(parsed.decision, "pass");
         assert!(fs::read_to_string(&release_gate).expect("read release gate").contains("release-gate-receipt-v1"));
+        let ledger_root = state_root.join("ledger");
+        run_receipts_command(ReceiptsCommand::List {
+            ledger: ledger_root.clone(),
+        })
+        .expect("receipts list");
+        run_receipts_command(ReceiptsCommand::Show {
+            receipt_ref: parsed.report_ref.clone(),
+            ledger: ledger_root.clone(),
+        })
+        .expect("receipts show dogfood report");
+        run_receipts_command(ReceiptsCommand::Validate {
+            receipt_ref: parsed.report_ref.clone(),
+            ledger: ledger_root.clone(),
+        })
+        .expect("receipts validate dogfood report");
+        let exported_report = dir.join("exported-dogfood-report.preserves");
+        run_receipts_command(ReceiptsCommand::Export {
+            receipt_ref: parsed.report_ref.clone(),
+            ledger: ledger_root,
+            out: exported_report.clone(),
+            receipt_out: Some(dir.join("receipts-export.preserves")),
+        })
+        .expect("receipts export dogfood report");
+        assert_eq!(
+            canonical_hash(&read_preserves_file(&exported_report).expect("exported dogfood report"))
+                .expect("exported ref"),
+            parsed.report_ref
+        );
         fs::write(
             dir.join("dogfood-summary.txt"),
             format!(
@@ -12623,6 +12768,44 @@ mod tests {
         let verify_value = read_preserves_file(&nix_verify).expect("read nix verify");
         let verify = operator_dogfood::parse_nix_dogfood_verify_receipt(&verify_value).expect("parse nix verify");
         assert_eq!(verify.decision, "pass");
+        fs::write(dir.join("after-nextest.txt"), "/nix/store/stale-molten-nextest\n").expect("tamper nextest marker");
+        let stale_verify = dir.join("nix-dogfood-verify-stale.preserves");
+        run_dogfood_command(DogfoodCommand::NixReleaseVerify {
+            output_path: dir.clone(),
+            evidence: nix_evidence.clone(),
+            receipt_out: stale_verify.clone(),
+        })
+        .expect("dogfood nix release verify stale marker");
+        let stale_verify_value = read_preserves_file(&stale_verify).expect("read stale nix verify");
+        let stale_verify_receipt =
+            operator_dogfood::parse_nix_dogfood_verify_receipt(&stale_verify_value).expect("parse stale nix verify");
+        assert_eq!(stale_verify_receipt.decision, "deny");
+        assert!(
+            stale_verify_receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("nextest-marker-ref mismatch"))
+        );
+        fs::write(dir.join("dogfood-report.preserves"), "<tampered-dogfood-report>\n").expect("tamper report");
+        let tampered_verify = dir.join("nix-dogfood-verify-tampered.preserves");
+        run_dogfood_command(DogfoodCommand::NixReleaseVerify {
+            output_path: dir.clone(),
+            evidence: nix_evidence.clone(),
+            receipt_out: tampered_verify.clone(),
+        })
+        .expect("dogfood nix release verify tampered report");
+        let tampered_verify_value = read_preserves_file(&tampered_verify).expect("read tampered nix verify");
+        let tampered_verify_receipt = operator_dogfood::parse_nix_dogfood_verify_receipt(&tampered_verify_value)
+            .expect("parse tampered nix verify");
+        assert_eq!(tampered_verify_receipt.decision, "deny");
+        assert!(
+            tampered_verify_receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("Nix dogfood output observation failed"))
+        );
+        fs::write(dir.join("dogfood-report.preserves"), to_text(&report_value).expect("report text"))
+            .expect("restore report");
         run_dogfood_command(DogfoodCommand::Show { artifact: report }).expect("dogfood show report");
         run_dogfood_command(DogfoodCommand::Show { artifact: release_gate }).expect("dogfood show gate");
         run_dogfood_command(DogfoodCommand::Show { artifact: nix_evidence }).expect("dogfood show nix evidence");

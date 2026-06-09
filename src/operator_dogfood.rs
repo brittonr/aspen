@@ -97,6 +97,7 @@ pub struct DogfoodReportInput<'a> {
     pub checkpoint_values: &'a [IOValue],
     pub gate_receipt_refs: &'a [String],
     pub repro_bundle_refs: &'a [String],
+    pub final_state_ref: &'a str,
     pub diagnostics: &'a [String],
 }
 
@@ -215,6 +216,20 @@ pub struct OperatorWorkflow {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OperatorCheckpoint {
+    pub checkpoint_ref: String,
+    pub workflow_id: String,
+    pub sequence: u64,
+    pub step_ref: String,
+    pub request_ref: Option<String>,
+    pub receipt_ref: Option<String>,
+    pub result_ref: Option<String>,
+    pub state_root_ref: String,
+    pub checks: Vec<(String, String)>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DogfoodReport {
     pub report_ref: String,
     pub decision: String,
@@ -223,6 +238,7 @@ pub struct DogfoodReport {
     pub step_receipts: Vec<(String, String)>,
     pub gate_receipts: Vec<String>,
     pub repro_bundles: Vec<String>,
+    pub final_state_ref: String,
     pub diagnostics: Vec<String>,
     pub checks: Vec<(String, String)>,
     pub value: IOValue,
@@ -317,6 +333,36 @@ pub fn operator_checkpoint_value(input: &OperatorCheckpointInput<'_>) -> Result<
     ]))
 }
 
+pub fn parse_operator_checkpoint(value: &IOValue) -> Result<OperatorCheckpoint> {
+    let fields = value
+        .collect_simple_record("operator-checkpoint-v1", Some(9))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <operator-checkpoint-v1 ...>"))?;
+    require_schema(&fields[0], OPERATOR_CHECKPOINT_SCHEMA, "operator checkpoint")?;
+    let checks = parse_checks(&fields[8])?;
+    require_check(&checks, "checkpoint-after-step", "operator checkpoint")?;
+    require_check(&checks, "explicit-state-root", "operator checkpoint")?;
+    let workflow_id = record_string(&fields[1], "workflow")?;
+    validate_workflow_id(&workflow_id)?;
+    let sequence = record_u64(&fields[2], "sequence")?;
+    let step_ref = record_ref(&fields[3], "step")?;
+    let request_ref = record_optional_ref(&fields[4], "request")?;
+    let receipt_ref = record_optional_ref(&fields[5], "receipt")?;
+    let result_ref = record_optional_ref(&fields[6], "result")?;
+    let state_root_ref = record_ref(&fields[7], "state-root")?;
+    Ok(OperatorCheckpoint {
+        checkpoint_ref: canonical_hash(value)?,
+        workflow_id,
+        sequence,
+        step_ref,
+        request_ref,
+        receipt_ref,
+        result_ref,
+        state_root_ref,
+        checks,
+        value: value.clone(),
+    })
+}
+
 pub fn operator_workflow_value(input: &OperatorWorkflowInput<'_>) -> Result<IOValue> {
     validate_workflow_id(input.workflow_id)?;
     validate_refs(input.policy_refs, "operator workflow policy ref")?;
@@ -375,6 +421,7 @@ pub fn dogfood_report_value(input: &DogfoodReportInput<'_>) -> Result<IOValue> {
     let checkpoint_refs = input.checkpoint_values.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
     validate_refs(input.gate_receipt_refs, "dogfood gate receipt ref")?;
     validate_refs(input.repro_bundle_refs, "dogfood repro bundle ref")?;
+    validate_ref(input.final_state_ref, "dogfood final state ref")?;
     ensure_count_at_most(checkpoint_refs.len(), MAX_OPERATOR_STEPS, "dogfood checkpoints")?;
     let mut diagnostics = input.diagnostics.to_vec();
     ensure_count_at_most(diagnostics.len(), MAX_OPERATOR_DIAGNOSTICS, "dogfood report diagnostics")?;
@@ -464,10 +511,12 @@ pub fn dogfood_report_value(input: &DogfoodReportInput<'_>) -> Result<IOValue> {
         record("step-receipts", vec![step_receipts_sequence(&step_receipts)]),
         record("gate-receipts", vec![refs_sequence(input.gate_receipt_refs)]),
         record("repro-bundles", vec![refs_sequence(input.repro_bundle_refs)]),
+        record("final-state", vec![string(input.final_state_ref)]),
         record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value_from_pairs(&[
             ("canonical-report", "pass"),
             ("deterministic-or-recorded", status(diagnostics.iter().all(|item| !item.contains("replay status")))),
+            ("final-state-bound", "pass"),
             ("redaction-gate", status(!input.repro_bundle_refs.is_empty())),
             ("no-text-oracle", "pass"),
             (
@@ -480,11 +529,12 @@ pub fn dogfood_report_value(input: &DogfoodReportInput<'_>) -> Result<IOValue> {
 
 pub fn parse_dogfood_report(value: &IOValue) -> Result<DogfoodReport> {
     let fields = value
-        .collect_simple_record("dogfood-report-v1", Some(9))
+        .collect_simple_record("dogfood-report-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <dogfood-report-v1 ...>"))?;
     require_schema(&fields[0], OPERATOR_DOGFOOD_REPORT_SCHEMA, "dogfood report")?;
-    let checks = parse_checks(&fields[8])?;
+    let checks = parse_checks(&fields[9])?;
     require_check(&checks, "canonical-report", "dogfood report")?;
+    require_check(&checks, "final-state-bound", "dogfood report")?;
     require_check(&checks, "no-text-oracle", "dogfood report")?;
     Ok(DogfoodReport {
         report_ref: canonical_hash(value)?,
@@ -494,7 +544,8 @@ pub fn parse_dogfood_report(value: &IOValue) -> Result<DogfoodReport> {
         step_receipts: record_step_receipts(&fields[4], "step-receipts")?,
         gate_receipts: record_ref_sequence(&fields[5], "gate-receipts")?,
         repro_bundles: record_ref_sequence(&fields[6], "repro-bundles")?,
-        diagnostics: record_string_sequence(&fields[7], "diagnostics")?,
+        final_state_ref: record_ref(&fields[7], "final-state")?,
+        diagnostics: record_string_sequence(&fields[8], "diagnostics")?,
         checks,
         value: value.clone(),
     })
@@ -617,8 +668,32 @@ pub fn parse_nix_dogfood_evidence(value: &IOValue) -> Result<NixDogfoodEvidence>
 
 pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<NixDogfoodVerifyReceipt> {
     let evidence = parse_nix_dogfood_evidence(input.evidence_value)?;
-    let observed = observe_nix_dogfood_output(input.output_path)?;
+    let observed_result = observe_nix_dogfood_output(input.output_path);
     let mut diagnostics = Vec::new();
+    let output_path_string = input.output_path.display().to_string();
+    let fallback_output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
+    let mut is_output_observed = true;
+    let observed = match observed_result {
+        Ok(observed) => observed,
+        Err(error) => {
+            is_output_observed = false;
+            diagnostics.push_limited_value(
+                format!("Nix dogfood output observation failed: {error}"),
+                MAX_OPERATOR_DIAGNOSTICS,
+                "Nix dogfood verify diagnostics",
+            )?;
+            ObservedNixDogfoodOutput {
+                output_path: output_path_string,
+                output_path_ref: fallback_output_path_ref,
+                report_ref: evidence.report_ref.clone(),
+                release_gate_ref: evidence.release_gate_ref.clone(),
+                summary_ref: evidence.summary_ref.clone(),
+                nextest_marker_ref: evidence.nextest_marker_ref.clone(),
+                nextest_check_path: evidence.nextest_check_path.clone(),
+                file_refs: evidence.file_refs.clone(),
+            }
+        }
+    };
     for diagnostic in [
         mismatch_diagnostic("output-path-ref", &evidence.output_path_ref, &observed.output_path_ref),
         mismatch_diagnostic("report-ref", &evidence.report_ref, &observed.report_ref),
@@ -645,7 +720,7 @@ pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<
         record("release-gate", vec![string(&observed.release_gate_ref)]),
         record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value_from_pairs(&[
-            ("dogfood-report-pass", "pass"),
+            ("dogfood-report-pass", status(is_output_observed)),
             ("release-gate-ref-bound", status(evidence.release_gate_ref == observed.release_gate_ref)),
             ("nix-output-path-bound", status(evidence.output_path_ref == observed.output_path_ref)),
             ("nextest-dependency-bound", status(evidence.nextest_marker_ref == observed.nextest_marker_ref)),
@@ -1137,11 +1212,17 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
         resource_refs: &resource_refs,
         replay_profile: "recorded",
     })?;
+    let final_state_ref = canonical_hash(&record("operator-dogfood-final-state", vec![
+        string(&state_root_ref),
+        string(&shutdown_ref),
+        string(&health_ref),
+    ]))?;
     let report_value = dogfood_report_value(&DogfoodReportInput {
         workflow_value: &workflow_value,
         checkpoint_values: &step_checkpoints.checkpoints,
         gate_receipt_refs: &gate_receipt_refs,
         repro_bundle_refs: &repro_bundle_refs,
+        final_state_ref: &final_state_ref,
         diagnostics: &[],
     })?;
     let report = parse_dogfood_report(&report_value)?;
@@ -1192,10 +1273,11 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
 pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
     if let Ok(report) = parse_dogfood_report(value) {
         return Ok(format!(
-            "operator dogfood report ref={} decision={} workflow={} steps={} gates={} repro={} diagnostics={} (summary is non-normative)",
+            "operator dogfood report ref={} decision={} workflow={} final_state={} steps={} gates={} repro={} diagnostics={} (summary is non-normative)",
             report.report_ref,
             report.decision,
             report.workflow_ref,
+            report.final_state_ref,
             report.step_receipts.len(),
             report.gate_receipts.len(),
             report.repro_bundles.len(),
@@ -1211,8 +1293,24 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
             workflow.replay_profile
         ));
     }
-    if value.collect_simple_record("release-gate-receipt-v1", Some(10)).is_some() {
-        return Ok(format!("operator release gate receipt ref={} (summary is non-normative)", canonical_hash(value)?));
+    if let Ok(checkpoint) = parse_operator_checkpoint(value) {
+        return Ok(format!(
+            "operator checkpoint ref={} workflow={} sequence={} step={} receipt={} (summary is non-normative)",
+            checkpoint.checkpoint_ref,
+            checkpoint.workflow_id,
+            checkpoint.sequence,
+            checkpoint.step_ref,
+            checkpoint.receipt_ref.as_deref().unwrap_or("none")
+        ));
+    }
+    if let Ok(receipt) = parse_release_gate_receipt(value) {
+        return Ok(format!(
+            "operator release gate receipt ref={} decision={} report={} checks={} (summary is non-normative)",
+            receipt.receipt_ref,
+            receipt.decision,
+            receipt.report_ref,
+            receipt.checks.len()
+        ));
     }
     if let Ok(evidence) = parse_nix_dogfood_evidence(value) {
         return Ok(format!(
@@ -1314,6 +1412,7 @@ fn dirty_state_report(state_root_ref: &str, diagnostic: String) -> Result<LocalN
         checkpoint_values: &step_checkpoints.checkpoints,
         gate_receipt_refs: &[],
         repro_bundle_refs: &[],
+        final_state_ref: state_root_ref,
         diagnostics: &[],
     })?;
     let report = parse_dogfood_report(&report_value)?;
@@ -2205,6 +2304,15 @@ fn record_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected bool for {label}")))
 }
 
+fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+    let value = value_to_iovalue(value);
+    let fields = simple_record(&value, label, 1)?;
+    let number = fields[0]
+        .as_u64()
+        .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {label}")))?;
+    number.map_err(|_| MoltenError::invalid_harness(format!("u64 out of range for {label}")))
+}
+
 fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
@@ -2440,6 +2548,7 @@ mod tests {
             checkpoint_values: &[checkpoint],
             gate_receipt_refs: &[dogfood_ref("gate").expect("gate")],
             repro_bundle_refs: &[dogfood_ref("repro").expect("repro")],
+            final_state_ref: &dogfood_ref("final-state").expect("final state"),
             diagnostics: &[],
         })
         .expect("report");
@@ -2501,6 +2610,7 @@ mod tests {
             checkpoint_values: &[checkpoint],
             gate_receipt_refs: &[dogfood_ref("gate").expect("gate")],
             repro_bundle_refs: &[],
+            final_state_ref: &dogfood_ref("final-state").expect("final state"),
             diagnostics: &[],
         })
         .expect("report");
