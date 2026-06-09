@@ -79,6 +79,7 @@ pub const RETENTION_GC_APPLY_SCHEMA: &str = "molten.retention.gc-apply.v1";
 pub const RETENTION_GC_EXECUTE_SCHEMA: &str = "molten.retention.gc-execute.v1";
 pub const RETENTION_GC_AUDIT_SCHEMA: &str = "molten.retention.gc-audit.v1";
 pub const RETENTION_CANDIDATE_EXPLAIN_SCHEMA: &str = "molten.retention.candidate-explain.v1";
+pub const RETENTION_CANDIDATE_BUNDLE_SCHEMA: &str = "molten.retention.candidate-bundle.v1";
 pub const RETENTION_RECEIPT_SCHEMA: &str = "molten.retention.receipt.v1";
 pub const RETENTION_TOMBSTONE_SCHEMA: &str = "molten.retention.tombstone.v1";
 pub const EVIDENCE_CHAIN_LINK_SCHEMA: &str = "molten.evidence.chain-link.v1";

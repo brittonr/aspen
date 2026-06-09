@@ -2113,6 +2113,27 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     assert_eq!(explain.gc_audit_refs, vec![fixture.audit_ref.clone()]);
     assert_eq!(molten::ledger::artifact_kind(&read_preserves(&explain_path)?), "retention-candidate-explain");
 
+    let bundle_dir = dir.join("retention-bundle");
+    let bundle_output = molten_cmd()
+        .args(["test", "retention", "bundle-export", "--root"])
+        .arg(&retention_root)
+        .args(["--explain"])
+        .arg(&explain_path)
+        .args(["--out"])
+        .arg(&bundle_dir)
+        .output()?;
+    assert_success(&bundle_output, "retention bundle export");
+    assert!(stderr(&bundle_output).contains("retention bundle ref="));
+    let bundle_value = read_preserves(&bundle_dir.join("bundle.preserves"))?;
+    let bundle = retention::parse_retention_candidate_bundle(&bundle_value)?;
+    assert_eq!(molten::ledger::artifact_kind(&bundle_value), "retention-candidate-bundle");
+    assert_eq!(bundle.explain_ref, explain.explain_ref);
+    assert_eq!(bundle.artifact_refs.len(), 6);
+    assert!(bundle.diagnostics.is_empty());
+    assert!(bundle_dir.join("explain.preserves").exists());
+    assert!(bundle_dir.join("artifacts/gc-plans").exists());
+    assert!(bundle_dir.join("artifacts/gc-audits").exists());
+
     let search_receipt = dir.join("catalog-search-receipt.preserves");
     let search_output = molten_cmd()
         .args(["test", "catalog", "search", "--registry"])

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-08 | self | I started a Steel Cairn validation wrapper and submitted it with an unterminated string, wasting a tool call on an avoidable parse error. | For repeated validation commands, paste the known-good complete wrapper or bind command arguments separately before submitting. |
 | 2026-06-08 | self | I again ran the Nix nextest build directly through a 300s Steel wrapper; it timed out after printing `/nix/store/v7cc26lqzgl5mh722q8kpzs5qp8ij3gl-molten-nextest`, requiring separate `nix path-info` verification. | Use the background/poll wrapper for Nix nextest even when builds are expected to be cached; direct Steel wrappers still time out at the end. |
 | 2026-06-08 | self | While archiving `retention-gc-audit-catalog-search`, I repeated the Cairn policy omission and ran `cairn archive` without `--policy`, causing a missing `cairn-policy/generated/cairn-policy.json` error. | Include the checked-out policy path on every Cairn validate/gate/archive command, not just validate/gate. |
 | 2026-06-08 | self | In the retention GC catalog fixture, a closure captured `requester_ref` by borrow and I then moved `requester_ref` into the evidence struct before the closure's later uses, causing E0505. | Clone refs when test fixtures both capture them in helper closures and store owned copies, or construct all closure-derived refs before moving owned inputs. |

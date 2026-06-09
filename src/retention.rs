@@ -11,6 +11,7 @@ use crate::error::Result;
 use crate::node_daemon;
 use crate::node_runtime;
 use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
+use crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_SCHEMA;
 use crate::preserves_rail::RETENTION_CANDIDATE_EXPLAIN_SCHEMA;
 use crate::preserves_rail::RETENTION_CLASS_SCHEMA;
 use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
@@ -376,6 +377,33 @@ pub struct RetentionCandidateExplain {
     pub gc_audit_refs: Vec<String>,
     pub retention_receipt_refs: Vec<String>,
     pub tombstone_refs: Vec<String>,
+    pub diagnostics: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RetentionCandidateBundleExportInput<'a> {
+    pub root: &'a Path,
+    pub explain_value: &'a IOValue,
+    pub out: &'a Path,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetentionCandidateBundle {
+    pub bundle_ref: String,
+    pub explain_ref: String,
+    pub object_ref: String,
+    pub object_kind: Option<String>,
+    pub retention_class: Option<String>,
+    pub action: Option<String>,
+    pub subsystem: Option<String>,
+    pub gc_plan_refs: Vec<String>,
+    pub gc_apply_refs: Vec<String>,
+    pub gc_execution_refs: Vec<String>,
+    pub gc_audit_refs: Vec<String>,
+    pub retention_receipt_refs: Vec<String>,
+    pub tombstone_refs: Vec<String>,
+    pub artifact_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub value: IOValue,
 }
@@ -2230,6 +2258,20 @@ struct RetentionCandidateFilter<'a> {
     retention_class: Option<&'a str>,
     action: Option<&'a str>,
     subsystem: Option<&'a str>,
+}
+
+struct RetentionCandidateBundleValueInput<'a> {
+    explain: &'a RetentionCandidateExplain,
+    artifact_refs: &'a [String],
+    diagnostics: &'a [String],
+}
+
+struct RetentionBundleArtifactGroupInput<'a> {
+    root: &'a Path,
+    bundle_dir: &'a Path,
+    dir_name: &'a str,
+    refs: &'a [String],
+    read: fn(&Path, &str) -> Result<IOValue>,
 }
 
 struct RetentionAuditScope<'a> {
@@ -4811,6 +4853,263 @@ pub fn parse_retention_candidate_explain(value: &IOValue) -> Result<RetentionCan
     })
 }
 
+pub fn export_retention_candidate_bundle(
+    input: RetentionCandidateBundleExportInput<'_>,
+) -> Result<RetentionCandidateBundle> {
+    let explain = parse_retention_candidate_explain(input.explain_value)?;
+    fs::create_dir_all(input.out).map_err(MoltenError::from)?;
+    let artifact_dir = input.out.join("artifacts");
+    fs::create_dir_all(&artifact_dir).map_err(MoltenError::from)?;
+    write_store_value(&input.out.join("explain.preserves"), &explain.value)?;
+    let mut artifact_refs = Vec::new();
+    let mut diagnostics = Vec::new();
+    export_retention_bundle_artifact_group(
+        RetentionBundleArtifactGroupInput {
+            root: input.root,
+            bundle_dir: &artifact_dir,
+            dir_name: "gc-plans",
+            refs: &explain.gc_plan_refs,
+            read: read_retention_gc_plan_value,
+        },
+        &mut artifact_refs,
+        &mut diagnostics,
+    )?;
+    export_retention_bundle_artifact_group(
+        RetentionBundleArtifactGroupInput {
+            root: input.root,
+            bundle_dir: &artifact_dir,
+            dir_name: "gc-applies",
+            refs: &explain.gc_apply_refs,
+            read: read_retention_gc_apply_value,
+        },
+        &mut artifact_refs,
+        &mut diagnostics,
+    )?;
+    export_retention_bundle_artifact_group(
+        RetentionBundleArtifactGroupInput {
+            root: input.root,
+            bundle_dir: &artifact_dir,
+            dir_name: "gc-executes",
+            refs: &explain.gc_execution_refs,
+            read: read_retention_gc_execution_value,
+        },
+        &mut artifact_refs,
+        &mut diagnostics,
+    )?;
+    export_retention_bundle_artifact_group(
+        RetentionBundleArtifactGroupInput {
+            root: input.root,
+            bundle_dir: &artifact_dir,
+            dir_name: "gc-audits",
+            refs: &explain.gc_audit_refs,
+            read: read_retention_gc_audit_value,
+        },
+        &mut artifact_refs,
+        &mut diagnostics,
+    )?;
+    export_retention_bundle_artifact_group(
+        RetentionBundleArtifactGroupInput {
+            root: input.root,
+            bundle_dir: &artifact_dir,
+            dir_name: "receipts",
+            refs: &explain.retention_receipt_refs,
+            read: read_retention_receipt_value,
+        },
+        &mut artifact_refs,
+        &mut diagnostics,
+    )?;
+    export_retention_bundle_artifact_group(
+        RetentionBundleArtifactGroupInput {
+            root: input.root,
+            bundle_dir: &artifact_dir,
+            dir_name: "tombstones",
+            refs: &explain.tombstone_refs,
+            read: read_retention_tombstone_value,
+        },
+        &mut artifact_refs,
+        &mut diagnostics,
+    )?;
+    artifact_refs.sort();
+    artifact_refs.dedup();
+    diagnostics.sort();
+    diagnostics.dedup();
+    let value = retention_candidate_bundle_value(&RetentionCandidateBundleValueInput {
+        explain: &explain,
+        artifact_refs: &artifact_refs,
+        diagnostics: &diagnostics,
+    })?;
+    write_store_value(&input.out.join("bundle.preserves"), &value)?;
+    parse_retention_candidate_bundle(&value)
+}
+
+fn export_retention_bundle_artifact_group(
+    input: RetentionBundleArtifactGroupInput<'_>,
+    artifact_refs: &mut impl VecSink<String>,
+    diagnostics: &mut impl VecSink<String>,
+) -> Result<()> {
+    let group_dir = input.bundle_dir.join(input.dir_name);
+    fs::create_dir_all(&group_dir).map_err(MoltenError::from)?;
+    for reference in input.refs {
+        match (input.read)(input.root, reference) {
+            Ok(value) => {
+                write_store_value(&group_dir.join(format!("{}.preserves", ref_file_name(reference)?)), &value)?;
+                push_bounded(artifact_refs, reference.clone(), MAX_RETENTION_REFS, "retention bundle artifact refs")?;
+            }
+            Err(_) => push_bounded(
+                diagnostics,
+                format!("retention-bundle-missing-artifact:{reference}"),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention bundle diagnostics",
+            )?,
+        }
+    }
+    Ok(())
+}
+
+fn retention_candidate_bundle_value(input: &RetentionCandidateBundleValueInput<'_>) -> Result<IOValue> {
+    validate_retention_candidate_bundle_value_input(input)?;
+    Ok(record("retention-candidate-bundle-v1", vec![
+        string(RETENTION_CANDIDATE_BUNDLE_SCHEMA),
+        record("explain", vec![string(&input.explain.explain_ref)]),
+        record("object", vec![
+            string(&input.explain.object_ref),
+            optional_string_value(input.explain.object_kind.as_deref()),
+        ]),
+        record("filters", vec![
+            record("class", vec![optional_string_value(input.explain.retention_class.as_deref())]),
+            record("action", vec![optional_string_value(input.explain.action.as_deref())]),
+            record("subsystem", vec![optional_string_value(input.explain.subsystem.as_deref())]),
+        ]),
+        record("gc-plans", vec![strings_sequence(&input.explain.gc_plan_refs)]),
+        record("gc-applies", vec![strings_sequence(&input.explain.gc_apply_refs)]),
+        record("gc-executes", vec![strings_sequence(&input.explain.gc_execution_refs)]),
+        record("gc-audits", vec![strings_sequence(&input.explain.gc_audit_refs)]),
+        record("retention-receipts", vec![strings_sequence(&input.explain.retention_receipt_refs)]),
+        record("tombstones", vec![strings_sequence(&input.explain.tombstone_refs)]),
+        record("artifacts", vec![strings_sequence(input.artifact_refs)]),
+        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        checks_value(&[
+            ("bundle-is-not-authority", "pass"),
+            ("read-only-export", "pass"),
+            ("normal-admission-still-required", "pass"),
+            ("plan-apply-execute-still-required", "pass"),
+            ("remote-clearance-import-still-required", "pass"),
+        ]),
+    ]))
+}
+
+pub fn parse_retention_candidate_bundle(value: &IOValue) -> Result<RetentionCandidateBundle> {
+    let fields = value
+        .collect_simple_record("retention-candidate-bundle-v1", Some(13))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-v1 ...>"))?;
+    require_schema(&fields[0], RETENTION_CANDIDATE_BUNDLE_SCHEMA, "retention candidate bundle schema")?;
+    let explain_ref = record_ref(&fields[1], "explain")?;
+    let object_fields = fields[2]
+        .collect_simple_record("object", Some(2))
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention candidate bundle object"))?;
+    let object_ref = required_string(&object_fields[0], "retention bundle object ref")?;
+    require_ref(&object_ref, "retention bundle object ref")?;
+    let object_kind = optional_record_string(&object_fields[1], "retention bundle object kind")?;
+    if let Some(object_kind) = object_kind.as_deref() {
+        validate_name(object_kind, "retention bundle object kind")?;
+    }
+    let filter_fields = fields[3]
+        .collect_simple_record("filters", Some(3))
+        .ok_or_else(|| MoltenError::invalid_harness("expected retention bundle filters"))?;
+    let retention_class = record_optional_string(&filter_fields[0], "class")?;
+    if let Some(retention_class) = retention_class.as_deref() {
+        validate_retention_class(retention_class)?;
+    }
+    let action = record_optional_string(&filter_fields[1], "action")?;
+    if let Some(action) = action.as_deref() {
+        validate_action(action)?;
+    }
+    let subsystem = record_optional_string(&filter_fields[2], "subsystem")?;
+    if let Some(subsystem) = subsystem.as_deref() {
+        validate_name(subsystem, "retention bundle subsystem")?;
+    }
+    let gc_plan_refs = record_ref_sequence(&fields[4], "gc-plans")?;
+    let gc_apply_refs = record_ref_sequence(&fields[5], "gc-applies")?;
+    let gc_execution_refs = record_ref_sequence(&fields[6], "gc-executes")?;
+    let gc_audit_refs = record_ref_sequence(&fields[7], "gc-audits")?;
+    let retention_receipt_refs = record_ref_sequence(&fields[8], "retention-receipts")?;
+    let tombstone_refs = record_ref_sequence(&fields[9], "tombstones")?;
+    let artifact_refs = record_ref_sequence(&fields[10], "artifacts")?;
+    let diagnostics = record_string_sequence(&fields[11], "diagnostics")?;
+    let checks = parse_checks(&fields[12])?;
+    require_check(&checks, "bundle-is-not-authority", "retention candidate bundle")?;
+    require_check(&checks, "read-only-export", "retention candidate bundle")?;
+    require_check(&checks, "normal-admission-still-required", "retention candidate bundle")?;
+    require_check(&checks, "plan-apply-execute-still-required", "retention candidate bundle")?;
+    require_check(&checks, "remote-clearance-import-still-required", "retention candidate bundle")?;
+    Ok(RetentionCandidateBundle {
+        bundle_ref: canonical_hash(value)?,
+        explain_ref,
+        object_ref,
+        object_kind,
+        retention_class,
+        action,
+        subsystem,
+        gc_plan_refs,
+        gc_apply_refs,
+        gc_execution_refs,
+        gc_audit_refs,
+        retention_receipt_refs,
+        tombstone_refs,
+        artifact_refs,
+        diagnostics,
+        value: value.clone(),
+    })
+}
+
+fn validate_retention_candidate_bundle_value_input(input: &RetentionCandidateBundleValueInput<'_>) -> Result<()> {
+    require_ref(&input.explain.explain_ref, "retention bundle explain ref")?;
+    validate_retention_candidate_explain_value_input(&RetentionCandidateExplainValueInput {
+        object_ref: &input.explain.object_ref,
+        object_kind: input.explain.object_kind.as_deref(),
+        retention_class: input.explain.retention_class.as_deref(),
+        action: input.explain.action.as_deref(),
+        subsystem: input.explain.subsystem.as_deref(),
+        pin_refs: &input.explain.pin_refs,
+        admission_refs: &input.explain.admission_refs,
+        remote_clearance_refs: &input.explain.remote_clearance_refs,
+        remote_clearance_import_refs: &input.explain.remote_clearance_import_refs,
+        gc_plan_refs: &input.explain.gc_plan_refs,
+        gc_apply_refs: &input.explain.gc_apply_refs,
+        gc_execution_refs: &input.explain.gc_execution_refs,
+        gc_audit_refs: &input.explain.gc_audit_refs,
+        retention_receipt_refs: &input.explain.retention_receipt_refs,
+        tombstone_refs: &input.explain.tombstone_refs,
+        diagnostics: &input.explain.diagnostics,
+    })?;
+    validate_refs(input.artifact_refs, "retention bundle artifact ref")?;
+    validate_diagnostics(input.diagnostics, "retention bundle diagnostics")
+}
+
+fn read_retention_gc_plan_value(root: &Path, reference: &str) -> Result<IOValue> {
+    Ok(read_retention_gc_plan(root, reference)?.value)
+}
+
+fn read_retention_gc_apply_value(root: &Path, reference: &str) -> Result<IOValue> {
+    Ok(read_retention_gc_apply(root, reference)?.value)
+}
+
+fn read_retention_gc_execution_value(root: &Path, reference: &str) -> Result<IOValue> {
+    Ok(read_retention_gc_execution_gate(root, reference)?.value)
+}
+
+fn read_retention_gc_audit_value(root: &Path, reference: &str) -> Result<IOValue> {
+    Ok(read_retention_gc_audit(root, reference)?.value)
+}
+
+fn read_retention_receipt_value(root: &Path, reference: &str) -> Result<IOValue> {
+    Ok(read_retention_receipt(root, reference)?.value)
+}
+
+fn read_retention_tombstone_value(root: &Path, reference: &str) -> Result<IOValue> {
+    Ok(read_retention_tombstone(root, reference)?.value)
+}
+
 fn validate_retention_candidate_explain_input(input: &RetentionCandidateExplainInput<'_>) -> Result<()> {
     require_ref(input.object_ref, "retention candidate object ref")?;
     if let Some(object_kind) = input.object_kind {
@@ -5230,6 +5529,26 @@ pub fn retention_summary(value: &IOValue) -> Result<String> {
             explain.retention_receipt_refs.len(),
             explain.tombstone_refs.len(),
             explain.diagnostics.join(",")
+        ));
+    }
+    if let Ok(bundle) = parse_retention_candidate_bundle(value) {
+        return Ok(format!(
+            "retention candidate bundle ref={} explain={} object={} kind={} class={} action={} subsystem={} artifacts={} plans={} applies={} executes={} audits={} receipts={} tombstones={} diagnostics={}",
+            bundle.bundle_ref,
+            bundle.explain_ref,
+            bundle.object_ref,
+            bundle.object_kind.as_deref().unwrap_or("any"),
+            bundle.retention_class.as_deref().unwrap_or("any"),
+            bundle.action.as_deref().unwrap_or("any"),
+            bundle.subsystem.as_deref().unwrap_or("any"),
+            bundle.artifact_refs.len(),
+            bundle.gc_plan_refs.len(),
+            bundle.gc_apply_refs.len(),
+            bundle.gc_execution_refs.len(),
+            bundle.gc_audit_refs.len(),
+            bundle.retention_receipt_refs.len(),
+            bundle.tombstone_refs.len(),
+            bundle.diagnostics.join(",")
         ));
     }
     if let Ok(receipt) = parse_retention_receipt(value) {
@@ -7544,6 +7863,54 @@ mod tests {
         assert_eq!(explain.tombstone_refs.len(), 1);
         assert!(explain.diagnostics.is_empty());
         assert!(retention_summary(&explain.value).expect("explain summary").contains("retention candidate explain"));
+        let bundle_dir = root.join("bundle");
+        let bundle = export_retention_candidate_bundle(RetentionCandidateBundleExportInput {
+            root: &root,
+            explain_value: &explain.value,
+            out: &bundle_dir,
+        })
+        .expect("export retention candidate bundle");
+        assert_eq!(bundle.explain_ref, explain.explain_ref);
+        assert_eq!(bundle.artifact_refs.len(), 6);
+        assert!(bundle.diagnostics.is_empty());
+        assert!(bundle_dir.join("bundle.preserves").exists());
+        assert!(bundle_dir.join("explain.preserves").exists());
+        assert!(bundle_dir.join("artifacts/gc-plans").exists());
+        assert!(retention_summary(&bundle.value).expect("bundle summary").contains("retention candidate bundle"));
+    }
+
+    #[test]
+    fn candidate_bundle_reports_missing_local_artifacts() {
+        let root = temp_dir("retention-bundle-missing");
+        let missing_ref = fake_ref("missing-plan");
+        let object_ref = fake_ref("bundle-object");
+        let explain_value = retention_candidate_explain_value(&RetentionCandidateExplainValueInput {
+            object_ref: &object_ref,
+            object_kind: Some("encrypted-ref"),
+            retention_class: Some("private-secret-ref"),
+            action: Some("delete"),
+            subsystem: Some("ledger-gc"),
+            pin_refs: &[],
+            admission_refs: &[],
+            remote_clearance_refs: &[],
+            remote_clearance_import_refs: &[],
+            gc_plan_refs: std::slice::from_ref(&missing_ref),
+            gc_apply_refs: &[],
+            gc_execution_refs: &[],
+            gc_audit_refs: &[],
+            retention_receipt_refs: &[],
+            tombstone_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("explain value");
+        let bundle = export_retention_candidate_bundle(RetentionCandidateBundleExportInput {
+            root: &root,
+            explain_value: &explain_value,
+            out: &root.join("bundle"),
+        })
+        .expect("bundle with missing artifact diagnostic");
+        assert!(bundle.artifact_refs.is_empty());
+        assert_eq!(bundle.diagnostics, vec![format!("retention-bundle-missing-artifact:{missing_ref}")]);
     }
 
     #[test]

@@ -3013,6 +3013,14 @@ enum RetentionCommand {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    BundleExport {
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        explain: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
     GcPlan {
         #[arg(long)]
         root: PathBuf,
@@ -7411,6 +7419,24 @@ fn run_retention_command(command: RetentionCommand) -> Result<()> {
                     explain.tombstone_refs.len(),
                     explain.diagnostics.len()
                 ),
+            );
+            Ok(())
+        }
+        RetentionCommand::BundleExport { root, explain, out } => {
+            let explain_value = read_preserves_file(&explain)?;
+            let bundle =
+                retention::export_retention_candidate_bundle(retention::RetentionCandidateBundleExportInput {
+                    root: &root,
+                    explain_value: &explain_value,
+                    out: &out,
+                })?;
+            eprintln!(
+                "retention bundle ref={} explain={} artifacts={} diagnostics={} out={}",
+                bundle.bundle_ref,
+                bundle.explain_ref,
+                bundle.artifact_refs.len(),
+                bundle.diagnostics.len(),
+                out.display()
             );
             Ok(())
         }
