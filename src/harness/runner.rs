@@ -194,7 +194,7 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
             ));
         }
         let after_state_hash = canonical_hash(&snapshot_value(&state.snapshot()))?;
-        observations.push(observation_value(index as u64, step_ref, before_state_hash, after_state_hash, events));
+        observations.push(observation_value(index as u64, step_ref, before_state_hash, after_state_hash, events)?);
     }
 
     if let Some(replay_effect_log) = replay_effect_log

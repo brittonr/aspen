@@ -12,7 +12,7 @@
 
 ## Phase 3: Runtime and harness refs
 
-- [ ] [serial] r[molten.runtime_spine.canonical_content_refs.runtime_values] Expose canonical refs for runtime values, messages, assertions, events, turn journals, and state snapshots. (Started: `RuntimeValue::value_ref`, message/assertion/observer/event/step refs, and `RuntimeSnapshot::snapshot_ref`; turn-journal/report embedding remains.)
+- [ ] [serial] r[molten.runtime_spine.canonical_content_refs.runtime_values] Expose canonical refs for runtime values, messages, assertions, events, turn journals, and state snapshots. (Started: `RuntimeValue::value_ref`, message/assertion/observer/event/step refs, `RuntimeSnapshot::snapshot_ref`, and harness observation event-ref embedding; actor-scoped turn-journal chain embedding remains.)
 - [ ] [parallel] r[molten.runtime_spine.canonical_content_refs.negative_tests] Add malformed-ref, wrong-length, non-hex, missing-artifact, and tampered-bytes regression tests. (Started: parser matrix, node-runtime short fixture denial, node-daemon short fixture denial, and tampered ingress envelope materialization.)
 
 ## Phase 4: Broader migration

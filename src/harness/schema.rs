@@ -426,10 +426,12 @@ pub struct WasmImportEvidence {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessObservation {
     pub value: IOValue,
+    pub observation_ref: String,
     pub index: u64,
     pub step_ref: String,
     pub before_state_hash: String,
     pub after_state_hash: String,
+    pub event_refs: Vec<String>,
     pub events: Vec<IOValue>,
 }
 
@@ -1030,15 +1032,24 @@ pub fn observation_value(
     before_state_hash: String,
     after_state_hash: String,
     events: Vec<IOValue>,
-) -> IOValue {
-    record("turn-observation-v1", vec![
+) -> Result<IOValue> {
+    let mut event_refs = Vec::with_capacity(events.len());
+    for event in &events {
+        event_refs.push(canonical_hash(event)?);
+    }
+    let mut event_ref_values: Vec<IOValue> = Vec::with_capacity(event_refs.len());
+    for reference in event_refs {
+        event_ref_values.push(string(reference));
+    }
+    Ok(record("turn-observation-v1", vec![
         string(HARNESS_OBSERVATION_SCHEMA),
         u64_value(index),
         string(step_ref),
         string(before_state_hash),
         string(after_state_hash),
+        record("event-refs", vec![sequence(event_ref_values)]),
         sequence(events),
-    ])
+    ]))
 }
 
 pub struct ReportValueInput<'a> {
@@ -7036,33 +7047,49 @@ pub fn event_boundary(value: &IOValue) -> EventBoundary {
 
 fn parse_observation(value: &Value<IOValue>) -> Result<HarnessObservation> {
     let value = value_to_iovalue(value);
-    let (index, step_ref, before_state_hash, after_state_hash, events) = {
-        let observation = simple_record(&value, "turn-observation-v1", 6)?;
-        let schema = required_string(&observation[0], "observation schema")?;
-        if schema != HARNESS_OBSERVATION_SCHEMA {
-            return Err(MoltenError::invalid_harness(format!(
-                "unsupported observation schema {schema}; expected {HARNESS_OBSERVATION_SCHEMA}"
-            )));
-        }
-        let event_values = required_sequence(&observation[5], "observation events")?;
-        let mut events = Vec::with_capacity(event_values.len());
-        for event in event_values.iter() {
-            events.push(value_to_iovalue(&event));
-        }
-        (
-            required_u64(&observation[1], "observation index")?,
-            required_hash(&observation[2], "observation step ref")?,
-            required_hash(&observation[3], "observation before state hash")?,
-            required_hash(&observation[4], "observation after state hash")?,
-            events,
-        )
+    let observation = value
+        .collect_simple_record("turn-observation-v1", None)
+        .ok_or_else(|| MoltenError::invalid_harness("expected <turn-observation-v1 ...>"))?;
+    let arity = observation.len();
+    if arity != 6 && arity != 7 {
+        return Err(MoltenError::invalid_harness(format!(
+            "turn observation arity {arity} is unsupported; expected 6 or 7"
+        )));
+    }
+    let schema = required_string(&observation[0], "observation schema")?;
+    if schema != HARNESS_OBSERVATION_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported observation schema {schema}; expected {HARNESS_OBSERVATION_SCHEMA}"
+        )));
+    }
+    let events_index = if arity == 7 { 6 } else { 5 };
+    let event_values = required_sequence(&observation[events_index], "observation events")?;
+    let mut events = Vec::with_capacity(event_values.len());
+    for event in event_values.iter() {
+        events.push(value_to_iovalue(&event));
+    }
+    let mut computed_event_refs = Vec::with_capacity(events.len());
+    for event in &events {
+        computed_event_refs.push(canonical_hash(event)?);
+    }
+    let event_refs = if arity == 7 {
+        required_record_hash_sequence(&observation[5], "event-refs", "observation event ref")?
+    } else {
+        computed_event_refs
     };
+    let observation_ref = canonical_hash(&value)?;
+    let index = required_u64(&observation[1], "observation index")?;
+    let step_ref = required_hash(&observation[2], "observation step ref")?;
+    let before_state_hash = required_hash(&observation[3], "observation before state hash")?;
+    let after_state_hash = required_hash(&observation[4], "observation after state hash")?;
     Ok(HarnessObservation {
         value,
+        observation_ref,
         index,
         step_ref,
         before_state_hash,
         after_state_hash,
+        event_refs,
         events,
     })
 }
