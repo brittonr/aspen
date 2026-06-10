@@ -398,7 +398,7 @@ mod tests {
         let mut handle_refs = std::collections::BTreeSet::new();
         for observation in &report.observations {
             let request = observation.events[2]
-                .collect_simple_record("hostcall-request-v1", Some(11))
+                .collect_simple_record("hostcall-request-v1", None)
                 .expect("hostcall request carries handle refs");
             let handle_ref = request[10].collect_simple_record("handle-ref", Some(1)).expect("handle-ref record")[0]
                 .as_string()

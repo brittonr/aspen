@@ -18,13 +18,22 @@ use super::core::CoreEvent;
 use super::core::CoreStep;
 use super::core::RuntimeSnapshot;
 use super::core::RuntimeValue;
+use crate::effects::DeclaredEffect;
 use crate::effects::EffectHandleInput;
 use crate::effects::EffectHandleRequest;
+use crate::effects::EffectManifestInput;
+use crate::effects::EffectRequestInput;
 use crate::effects::EffectScope;
+use crate::effects::HANDLER_PROFILE_LOCAL;
 use crate::effects::HandlerBindingInput;
+use crate::effects::HandlerProfileInput;
 use crate::effects::TRANSFER_LOCAL_ONLY;
+use crate::effects::admit_effect_request;
 use crate::effects::effect_handle_value;
+use crate::effects::effect_manifest_value;
+use crate::effects::effect_request_value;
 use crate::effects::handler_binding_value;
+use crate::effects::handler_profile_value;
 use crate::effects::validate_handle_for_request;
 use crate::error::MoltenError;
 use crate::error::Result;
@@ -709,10 +718,30 @@ pub fn hostcall_request_value(
     suite: &HarnessSuite,
     step: &CoreStep,
     context: HostcallEvidenceContext<'_>,
+    decision: &AdmissionDecision,
 ) -> Result<IOValue> {
     let request = AdmissionRequest::from_step(step);
-    let effect_refs = hostcall_effect_refs(suite, step, context)?;
-    Ok(record("hostcall-request-v1", vec![
+    let effect_refs = hostcall_effect_refs(suite, step, context, decision.is_allowed())?;
+    let checks = if decision.is_allowed() {
+        vec![
+            "no-ambient-executor-io",
+            "policy-capability-budget-context",
+            "handler-binding-available",
+            "effect-handle-binding",
+            "handle-not-authority",
+            "effect-manifest-bound",
+            "deny-undeclared-effects",
+        ]
+    } else {
+        vec![
+            "no-ambient-executor-io",
+            "policy-capability-budget-context",
+            "handler-binding-available",
+            "effect-handle-binding",
+            "handle-not-authority",
+        ]
+    };
+    let mut fields = vec![
         string(RUNTIME_HOSTCALL_REQUEST_SCHEMA),
         record("sequence", vec![u64_value(context.sequence)]),
         record("step-ref", vec![string(context.step_ref)]),
@@ -721,28 +750,40 @@ pub fn hostcall_request_value(
         record("policy-ref", vec![string(context.policy_ref)]),
         record("capability-ref", vec![string(context.capability_ref)]),
         record("budget-ref", vec![string(context.budget_ref)]),
-        hostcall_checks_value(&[
-            "no-ambient-executor-io",
-            "policy-capability-budget-context",
-            "handler-binding-available",
-            "effect-handle-binding",
-            "handle-not-authority",
-        ]),
+        hostcall_checks_value(&checks),
         record("handler-binding-ref", vec![string(&effect_refs.handler_binding_ref)]),
         record("handle-ref", vec![string(&effect_refs.handle_ref)]),
-    ]))
+    ];
+    if let Some(effect_manifest_ref) = &effect_refs.effect_manifest_ref {
+        fields.push(record("effect-manifest-ref", vec![string(effect_manifest_ref)]));
+    }
+    if let Some(handler_profile_ref) = &effect_refs.handler_profile_ref {
+        fields.push(record("handler-profile-ref", vec![string(handler_profile_ref)]));
+    }
+    if let Some(effect_request_ref) = &effect_refs.effect_request_ref {
+        fields.push(record("effect-request-ref", vec![string(effect_request_ref)]));
+    }
+    if let Some(effect_binding_receipt_ref) = &effect_refs.effect_binding_receipt_ref {
+        fields.push(record("effect-binding-receipt-ref", vec![string(effect_binding_receipt_ref)]));
+    }
+    Ok(record("hostcall-request-v1", fields))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct HostcallEffectRefs {
     handler_binding_ref: String,
     handle_ref: String,
+    effect_manifest_ref: Option<String>,
+    handler_profile_ref: Option<String>,
+    effect_request_ref: Option<String>,
+    effect_binding_receipt_ref: Option<String>,
 }
 
 fn hostcall_effect_refs(
     suite: &HarnessSuite,
     step: &CoreStep,
     context: HostcallEvidenceContext<'_>,
+    bind_effect_request: bool,
 ) -> Result<HostcallEffectRefs> {
     let actor = actor_decl_for_primary_actor(suite, step.primary_actor())?;
     let operation = AdmissionRequest::from_step(step).action.as_str();
@@ -774,7 +815,7 @@ fn hostcall_effect_refs(
         capability_context_ref: context.capability_ref.to_string(),
         authority_context_ref: None,
         resource_refs: resource_refs.clone(),
-        operations: allowed_hostcalls,
+        operations: allowed_hostcalls.clone(),
         evidence_refs: evidence_refs.clone(),
     })?;
     let handler_binding_ref = canonical_hash(&handler_binding)?;
@@ -794,6 +835,62 @@ fn hostcall_effect_refs(
         evidence_refs,
     })?;
     let handle_ref = canonical_hash(&handle)?;
+    let mut effect_manifest_ref = None;
+    let mut handler_profile_ref = None;
+    let mut effect_request_ref = None;
+    let mut effect_binding_receipt_ref = None;
+    if bind_effect_request {
+        let effect_id = format!("hostcall.{operation}");
+        let effect_manifest = effect_manifest_value(&EffectManifestInput {
+            artifact_kind: actor.kind.as_str().to_string(),
+            artifact_ref: actor_ref.clone(),
+            executor_kind: actor.kind.as_str().to_string(),
+            declared_effects: allowed_hostcalls
+                .as_slice()
+                .iter()
+                .map(|hostcall| DeclaredEffect {
+                    effect_id: format!("hostcall.{hostcall}"),
+                    operation: hostcall.clone(),
+                    input_schema_ref: context.step_ref.to_string(),
+                    output_schema_ref: context.step_ref.to_string(),
+                    evidence_refs: vec![executor_preflight_ref.clone()],
+                })
+                .collect(),
+            policy_refs: vec![context.policy_ref.to_string()],
+            evidence_refs: vec![executor_preflight_ref.clone()],
+        })?;
+        effect_manifest_ref = Some(canonical_hash(&effect_manifest)?);
+        let handler_profile = handler_profile_value(&HandlerProfileInput {
+            profile: HANDLER_PROFILE_LOCAL.to_string(),
+            handler_binding_refs: vec![handler_binding_ref.clone()],
+            policy_ref: context.policy_ref.to_string(),
+            capability_context_ref: context.capability_ref.to_string(),
+            resource_refs: resource_refs.clone(),
+            evidence_refs: vec![executor_preflight_ref.clone()],
+        })?;
+        handler_profile_ref = Some(canonical_hash(&handler_profile)?);
+        let effect_request = effect_request_value(&EffectRequestInput {
+            artifact_ref: actor_ref.clone(),
+            effect_id,
+            operation: operation.to_string(),
+            handler_profile: HANDLER_PROFILE_LOCAL.to_string(),
+            input_ref: context.step_ref.to_string(),
+            capability_refs: vec![context.capability_ref.to_string()],
+            evidence_refs: vec![handler_binding_ref.clone(), handle_ref.clone()],
+        })?;
+        effect_request_ref = Some(canonical_hash(&effect_request)?);
+        let effect_binding = admit_effect_request(&effect_manifest, &handler_profile, &effect_request, &[
+            handler_binding_ref.clone(),
+            handle_ref.clone(),
+        ])?;
+        if effect_binding.decision != "pass" {
+            return Err(MoltenError::invalid_harness(format!(
+                "hostcall effect manifest denied operation {operation}: {:?}",
+                effect_binding.diagnostics
+            )));
+        }
+        effect_binding_receipt_ref = Some(effect_binding.receipt_ref.clone());
+    }
     let validation = validate_handle_for_request(&handler_binding, &handle, &EffectHandleRequest {
         kind: "hostcall",
         operation,
@@ -815,6 +912,10 @@ fn hostcall_effect_refs(
     Ok(HostcallEffectRefs {
         handler_binding_ref,
         handle_ref,
+        effect_manifest_ref,
+        handler_profile_ref,
+        effect_request_ref,
+        effect_binding_receipt_ref,
     })
 }
 
@@ -1868,7 +1969,7 @@ pub fn validate_hostcall_evidence(
         };
         let expected_input = actor_input_value(suite, step, hostcall_context)?;
         require_hostcall_event(position, "actor-input", &observation.events[1], &expected_input)?;
-        let expected_request = hostcall_request_value(suite, step, hostcall_context)?;
+        let expected_request = hostcall_request_value(suite, step, hostcall_context, &admission.decision)?;
         require_hostcall_event(position, "hostcall-request", &observation.events[2], &expected_request)?;
         let expected_decision =
             hostcall_decision_value(hostcall_context, &observation.events[0], authority, &admission.decision)?;
@@ -3625,9 +3726,9 @@ pub fn validate_executor_preflight_evidence(
         for event in &observation.events {
             if let Some(request) = event.collect_simple_record("hostcall-request-v1", None) {
                 let arity = request.fields_iter().count();
-                if arity != 9 && arity != 11 {
+                if arity != 9 && arity != 11 && arity != 15 {
                     return Err(MoltenError::invalid_harness(format!(
-                        "hostcall request at observation {position} must have arity 9 or 11, got {arity}"
+                        "hostcall request at observation {position} must have arity 9, 11, or 15, got {arity}"
                     )));
                 }
                 let admission_request = parse_admission_request(&request[4])?;
@@ -5283,8 +5384,10 @@ fn actor_ids_for_event(event: &IOValue) -> Result<Vec<String>> {
     }
     if let Some(request) = event.collect_simple_record("hostcall-request-v1", None) {
         let arity = request.fields_iter().count();
-        if arity != 9 && arity != 11 {
-            return Err(MoltenError::invalid_harness(format!("hostcall-request arity must be 9 or 11, got {arity}")));
+        if arity != 9 && arity != 11 && arity != 15 {
+            return Err(MoltenError::invalid_harness(format!(
+                "hostcall-request arity must be 9, 11, or 15, got {arity}"
+            )));
         }
         let parsed_request = parse_admission_request(&request[4])?;
         let mut actors = vec![parsed_request.actor];

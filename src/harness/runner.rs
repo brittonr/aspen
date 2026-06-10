@@ -125,7 +125,7 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
             budget_ref: &budget_ref,
         };
         let actor_input = actor_input_value(suite, step, hostcall_context)?;
-        let hostcall_request = hostcall_request_value(suite, step, hostcall_context)?;
+        let hostcall_request = hostcall_request_value(suite, step, hostcall_context, &admission_decision)?;
         let hostcall_decision =
             hostcall_decision_value(hostcall_context, &admission_event, &admission_authority, &admission_decision)?;
         let mut events = vec![
