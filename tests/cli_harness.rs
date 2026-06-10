@@ -446,6 +446,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .arg(&nix_verify)
         .output()?;
     assert_success(&verify_nix, "dogfood nix-release-verify");
+    fs::write(dir.join("nix-dogfood-verify.txt"), stdout(&verify_nix))?;
     let verify_receipt = molten::operator_dogfood::parse_nix_dogfood_verify_receipt(&read_preserves(&nix_verify)?)?;
     assert_eq!(verify_receipt.decision, "pass");
 
@@ -467,6 +468,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .arg(&release_bundle_verify)
         .output()?;
     assert_success(&verify_bundle, "dogfood release-bundle-verify");
+    fs::write(dir.join("release-evidence-bundle-verify.txt"), stdout(&verify_bundle))?;
     let bundle_verify = molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(&read_preserves(
         &release_bundle_verify,
     )?)?;
@@ -476,7 +478,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let signed_gate = dir.join("release-gate.signed.preserves");
     let signed_nix_evidence = dir.join("nix-dogfood-evidence.signed.preserves");
     let signed_nix_verify = dir.join("nix-dogfood-verify.signed.preserves");
-    let key_ledger = dir.join("signed-key-ledger");
+    let key_ledger = dir.join("signed-keyring");
     let key_import = molten_cmd()
         .args(["receipts", "key", "import", "--ledger"])
         .arg(&key_ledger)
@@ -493,6 +495,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .output()?;
     assert_success(&key_import, "receipts key import");
     let key_import_stdout = stdout(&key_import);
+    fs::write(dir.join("signed-keyring-import.txt"), &key_import_stdout)?;
     let key_ref = key_import_stdout
         .split_whitespace()
         .find_map(|field| field.strip_prefix("key="))
@@ -684,6 +687,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .output()?;
     assert_success(&promotion, "dogfood release-promote");
     assert!(stdout(&promotion).contains("decision=pass"));
+    fs::write(dir.join("release-promotion-gate.txt"), stdout(&promotion))?;
     let promotion_receipt =
         molten::operator_dogfood::parse_release_promotion_gate_receipt(&read_preserves(&promotion_receipt_path)?)?;
     assert_eq!(promotion_receipt.decision, "pass");
@@ -722,6 +726,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .arg(&promotion_receipt.receipt_ref)
         .output()?;
     assert_success(&verify_signed_promotion, "verify signed release promotion receipt");
+    fs::write(dir.join("release-promotion-gate-signed-verify.txt"), stdout(&verify_signed_promotion))?;
     let promotion_summary_path = dir.join("release-promotion-summary.preserves");
     let promotion_summary = molten_cmd()
         .args(["dogfood", "release-promotion-summary", "--output-path"])
@@ -741,6 +746,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .output()?;
     assert_success(&promotion_summary, "dogfood release-promotion-summary");
     assert!(stdout(&promotion_summary).contains("decision=pass"));
+    fs::write(dir.join("release-promotion-summary.txt"), stdout(&promotion_summary))?;
     let parsed_promotion_summary =
         molten::operator_dogfood::parse_release_promotion_summary(&read_preserves(&promotion_summary_path)?)?;
     assert_eq!(parsed_promotion_summary.decision, "pass");
@@ -769,6 +775,34 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         molten::operator_dogfood::parse_release_promotion_summary(&read_preserves(&missing_signed_summary_path)?)?;
     assert_eq!(parsed_missing_signed_summary.decision, "deny");
     fs::rename(&missing_signed_path, &signed_promotion_path)?;
+
+    let release_export_archive = dir.join("release-evidence.tar.zst");
+    let release_export_manifest = dir.join("release-export-manifest.preserves");
+    let release_export = molten_cmd()
+        .args(["dogfood", "release-export", "--output-path"])
+        .arg(&dir)
+        .args(["--out"])
+        .arg(&release_export_archive)
+        .args(["--manifest-out"])
+        .arg(&release_export_manifest)
+        .output()?;
+    assert_success(&release_export, "dogfood release-export");
+    assert!(stdout(&release_export).contains("release-export manifest="));
+    let parsed_release_export =
+        molten::operator_dogfood::parse_release_export_manifest(&read_preserves(&release_export_manifest)?)?;
+    assert_eq!(parsed_release_export.promotion_summary_ref, parsed_promotion_summary.summary_ref);
+    let release_export_verify_path = dir.join("release-export-verify.preserves");
+    let release_export_verify = molten_cmd()
+        .args(["dogfood", "release-export-verify", "--bundle"])
+        .arg(&release_export_archive)
+        .args(["--receipt-out"])
+        .arg(&release_export_verify_path)
+        .output()?;
+    assert_success(&release_export_verify, "dogfood release-export-verify");
+    assert!(stdout(&release_export_verify).contains("decision=pass"));
+    let parsed_release_export_verify =
+        molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(&release_export_verify_path)?)?;
+    assert_eq!(parsed_release_export_verify.decision, "pass");
 
     let wrong_signer_bundle_verify_path = dir.join("release-evidence-bundle-verify-wrong-signer.preserves");
     let mut verify_wrong_signer_bundle = molten_cmd();

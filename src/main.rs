@@ -607,6 +607,20 @@ enum DogfoodCommand {
         #[arg(long)]
         signed_signer: Option<String>,
     },
+    ReleaseExport {
+        #[arg(long)]
+        output_path: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        manifest_out: PathBuf,
+    },
+    ReleaseExportVerify {
+        #[arg(long)]
+        bundle: PathBuf,
+        #[arg(long)]
+        receipt_out: PathBuf,
+    },
     Show {
         artifact: PathBuf,
     },
@@ -9476,6 +9490,39 @@ fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
             );
             Ok(())
         }
+        DogfoodCommand::ReleaseExport {
+            output_path,
+            out,
+            manifest_out,
+        } => {
+            let manifest =
+                operator_dogfood::release_export_manifest_value(&operator_dogfood::ReleaseExportManifestInput {
+                    output_path: &output_path,
+                })?;
+            write_file(&manifest_out, &to_text(&manifest.value)?)?;
+            write_release_export_archive(&output_path, &out, &manifest)?;
+            println!(
+                "dogfood release-export manifest={} promotion-summary={} members={} archive={}",
+                manifest.manifest_ref,
+                manifest.promotion_summary_ref,
+                manifest.member_refs.len(),
+                out.display()
+            );
+            Ok(())
+        }
+        DogfoodCommand::ReleaseExportVerify { bundle, receipt_out } => {
+            let (manifest_value, member_refs) = read_release_export_archive(&bundle)?;
+            let receipt = operator_dogfood::verify_release_export(&operator_dogfood::ReleaseExportVerifyInput {
+                manifest_value: &manifest_value,
+                member_refs: &member_refs,
+            })?;
+            write_file(&receipt_out, &to_text(&receipt.value)?)?;
+            println!(
+                "dogfood release-export-verify decision={} receipt={} manifest={} promotion-summary={}",
+                receipt.decision, receipt.receipt_ref, receipt.manifest_ref, receipt.promotion_summary_ref
+            );
+            Ok(())
+        }
         DogfoodCommand::Show { artifact } => {
             let value = read_preserves_file(&artifact)?;
             println!("{}", operator_dogfood::operator_dogfood_summary(&value)?);
@@ -11337,6 +11384,82 @@ fn export_failure_repro(
 const REPORT_REPRO_COMMANDS: &str = "molten test repro verify refs.preserves\nmolten test report validate report.preserves\nmolten test replay report.preserves\nmolten test report show report.preserves\nmolten test gate check refs.preserves\nmolten test repro unpack refs.preserves --out unpacked\n";
 const FAILURE_REPRO_COMMANDS: &str =
     "molten test report show failure.preserves\nmolten test gate check refs.preserves\n";
+
+fn write_release_export_archive(
+    output_path: &Path,
+    archive_path: &Path,
+    manifest: &operator_dogfood::ReleaseExportManifest,
+) -> Result<()> {
+    if let Some(parent) = archive_path.parent() {
+        fs::create_dir_all(parent).map_err(MoltenError::from)?;
+    }
+    let archive_file = fs::File::create(archive_path).map_err(MoltenError::from)?;
+    let encoder = zstd::stream::write::Encoder::new(archive_file, 19).map_err(MoltenError::from)?;
+    let mut builder = tar::Builder::new(encoder);
+    append_release_export_bytes(
+        &mut builder,
+        "release-export-manifest.preserves",
+        to_text(&manifest.value)?.as_bytes(),
+    )?;
+    for (name, expected_ref) in &manifest.member_refs {
+        let bytes = fs::read(output_path.join(name)).map_err(MoltenError::from)?;
+        let actual_ref = operator_dogfood::release_export_file_ref(name, &bytes);
+        if actual_ref != *expected_ref {
+            return Err(MoltenError::invalid_harness(format!(
+                "release export member {name} ref changed before archive write: manifest={expected_ref} observed={actual_ref}"
+            )));
+        }
+        append_release_export_bytes(&mut builder, name, &bytes)?;
+    }
+    let encoder = builder.into_inner().map_err(MoltenError::from)?;
+    encoder.finish().map_err(MoltenError::from)?;
+    Ok(())
+}
+
+fn append_release_export_bytes<W: std::io::Write>(
+    builder: &mut tar::Builder<W>,
+    name: &str,
+    bytes: &[u8],
+) -> Result<()> {
+    let mut header = tar::Header::new_gnu();
+    header.set_size(bytes.len() as u64);
+    header.set_mode(0o444);
+    header.set_uid(0);
+    header.set_gid(0);
+    header.set_mtime(0);
+    header.set_cksum();
+    builder.append_data(&mut header, name, std::io::Cursor::new(bytes)).map_err(MoltenError::from)
+}
+
+fn read_release_export_archive(path: &Path) -> Result<(preserves::IOValue, Vec<(String, String)>)> {
+    let archive_file = fs::File::open(path).map_err(MoltenError::from)?;
+    let decoder = zstd::stream::read::Decoder::new(archive_file).map_err(MoltenError::from)?;
+    let mut archive = tar::Archive::new(decoder);
+    let mut manifest_value = None;
+    let mut member_refs = Vec::with_capacity(operator_dogfood::release_export_member_names().len().saturating_add(16));
+    let entries = archive.entries().map_err(MoltenError::from)?;
+    for entry in entries {
+        let mut entry = entry.map_err(MoltenError::from)?;
+        if !entry.header().entry_type().is_file() {
+            continue;
+        }
+        let name = entry.path().map_err(MoltenError::from)?.to_string_lossy().replace('\\', "/");
+        let mut bytes = Vec::new();
+        std::io::Read::read_to_end(&mut entry, &mut bytes).map_err(MoltenError::from)?;
+        if name == "release-export-manifest.preserves" {
+            let text = String::from_utf8(bytes).map_err(|error| {
+                MoltenError::invalid_harness(format!("release export manifest is not UTF-8: {error}"))
+            })?;
+            manifest_value = Some(parse_text(&text)?);
+        } else {
+            member_refs.push((name.clone(), operator_dogfood::release_export_file_ref(&name, &bytes)));
+        }
+    }
+    let manifest_value =
+        manifest_value.ok_or_else(|| MoltenError::invalid_harness("release export archive is missing manifest"))?;
+    member_refs.sort_by(|left, right| left.0.cmp(&right.0));
+    Ok((manifest_value, member_refs))
+}
 
 fn read_preserves_file(path: &Path) -> Result<preserves::IOValue> {
     let text = fs::read_to_string(path).map_err(MoltenError::from)?;

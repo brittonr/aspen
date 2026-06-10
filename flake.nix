@@ -358,6 +358,17 @@
               --signed-signer local-release-signer \
               | tee "$out/release-promotion-summary.txt"
             grep -q 'decision=pass' "$out/release-promotion-summary.txt"
+            molten dogfood release-export \
+              --output-path "$out" \
+              --out "$out/release-evidence.tar.zst" \
+              --manifest-out "$out/release-export-manifest.preserves" \
+              | tee "$out/release-export.txt"
+            grep -q 'release-export manifest=' "$out/release-export.txt"
+            molten dogfood release-export-verify \
+              --bundle "$out/release-evidence.tar.zst" \
+              --receipt-out "$out/release-export-verify.preserves" \
+              | tee "$out/release-export-verify.txt"
+            grep -q 'decision=pass' "$out/release-export-verify.txt"
           '';
 
           nextest-config = pkgs.runCommand "molten-nextest-config-check"

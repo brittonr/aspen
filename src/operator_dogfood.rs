@@ -34,6 +34,8 @@ use crate::preserves_rail::OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA;
 use crate::preserves_rail::OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA;
 use crate::preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA;
 use crate::preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA;
+use crate::preserves_rail::OPERATOR_RELEASE_EXPORT_MANIFEST_SCHEMA;
+use crate::preserves_rail::OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA;
 use crate::preserves_rail::OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA;
@@ -287,6 +289,38 @@ pub struct ReleasePromotionSummary {
     pub source_ref: String,
     pub octet_ref: String,
     pub cairn_ref: String,
+    pub diagnostics: Vec<String>,
+    pub checks: Vec<(String, String)>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseExportManifestInput<'a> {
+    pub output_path: &'a Path,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseExportManifest {
+    pub manifest_ref: String,
+    pub output_path_ref: String,
+    pub promotion_summary_ref: String,
+    pub member_refs: Vec<(String, String)>,
+    pub checks: Vec<(String, String)>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseExportVerifyInput<'a> {
+    pub manifest_value: &'a IOValue,
+    pub member_refs: &'a [(String, String)],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleaseExportVerifyReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub manifest_ref: String,
+    pub promotion_summary_ref: String,
     pub diagnostics: Vec<String>,
     pub checks: Vec<(String, String)>,
     pub value: IOValue,
@@ -1389,6 +1423,106 @@ pub fn parse_release_promotion_summary(value: &IOValue) -> Result<ReleasePromoti
     })
 }
 
+pub fn release_export_manifest_value(input: &ReleaseExportManifestInput<'_>) -> Result<ReleaseExportManifest> {
+    let output_path_string = input.output_path.display().to_string();
+    let output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
+    let summary_value = parse_text(&read_output_text(input.output_path, "release-promotion-summary.preserves")?)?;
+    let summary = parse_release_promotion_summary(&summary_value)?;
+    if summary.decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "release export requires pass promotion summary {}; decision is {}",
+            summary.summary_ref, summary.decision
+        )));
+    }
+    let member_refs = observe_release_export_members(input.output_path)?;
+    let value = record("release-export-manifest-v1", vec![
+        string(OPERATOR_RELEASE_EXPORT_MANIFEST_SCHEMA),
+        record("output", vec![string(&output_path_string), string(&output_path_ref)]),
+        record("promotion-summary", vec![string(&summary.summary_ref)]),
+        record("members", vec![file_refs_sequence(&member_refs)]),
+        checks_value_from_pairs(&[
+            ("release-promotion-summary-pass", "pass"),
+            ("release-export-members-bound", "pass"),
+            ("deterministic-archive-layout", "pass"),
+            ("release-export-is-evidence-only", "pass"),
+            ("no-release-authority-granted", "pass"),
+        ]),
+    ]);
+    parse_release_export_manifest(&value)
+}
+
+pub fn parse_release_export_manifest(value: &IOValue) -> Result<ReleaseExportManifest> {
+    let fields = value
+        .collect_simple_record("release-export-manifest-v1", Some(5))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <release-export-manifest-v1 ...>"))?;
+    require_schema(&fields[0], OPERATOR_RELEASE_EXPORT_MANIFEST_SCHEMA, "release export manifest")?;
+    let output_value = value_to_iovalue(&fields[1]);
+    let output_fields = simple_record(&output_value, "output", 2)?;
+    let checks = parse_checks(&fields[4])?;
+    require_check(&checks, "release-promotion-summary-pass", "release export manifest")?;
+    require_check(&checks, "release-export-members-bound", "release export manifest")?;
+    require_check(&checks, "deterministic-archive-layout", "release export manifest")?;
+    require_check(&checks, "release-export-is-evidence-only", "release export manifest")?;
+    require_check(&checks, "no-release-authority-granted", "release export manifest")?;
+    Ok(ReleaseExportManifest {
+        manifest_ref: canonical_hash(value)?,
+        output_path_ref: required_ref(&output_fields[1], "release export output path ref")?,
+        promotion_summary_ref: record_ref(&fields[2], "promotion-summary")?,
+        member_refs: record_file_refs(&fields[3], "members")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
+pub fn verify_release_export(input: &ReleaseExportVerifyInput<'_>) -> Result<ReleaseExportVerifyReceipt> {
+    let manifest = parse_release_export_manifest(input.manifest_value)?;
+    let mut diagnostics = file_ref_mismatch_diagnostics(&manifest.member_refs, input.member_refs)?;
+    if input.member_refs.iter().any(|(name, _)| name == "release-export-manifest.preserves") {
+        diagnostics.push_limited_value(
+            "release export archive must not list manifest as a payload member".to_string(),
+            MAX_OPERATOR_DIAGNOSTICS,
+            "release export verify diagnostics",
+        )?;
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let value = record("release-export-verify-receipt-v1", vec![
+        string(OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("manifest", vec![string(&manifest.manifest_ref), string(&manifest.promotion_summary_ref)]),
+        record("diagnostics", vec![strings_sequence(&diagnostics)]),
+        checks_value_from_pairs(&[
+            ("release-export-members-bound", status(diagnostics.is_empty())),
+            ("release-promotion-summary-bound", status(diagnostics.is_empty())),
+            ("release-export-is-evidence-only", "pass"),
+            ("no-release-authority-granted", "pass"),
+        ]),
+    ]);
+    parse_release_export_verify_receipt(&value)
+}
+
+pub fn parse_release_export_verify_receipt(value: &IOValue) -> Result<ReleaseExportVerifyReceipt> {
+    let fields = value
+        .collect_simple_record("release-export-verify-receipt-v1", Some(5))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <release-export-verify-receipt-v1 ...>"))?;
+    require_schema(&fields[0], OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA, "release export verify receipt")?;
+    let manifest_value = value_to_iovalue(&fields[2]);
+    let manifest_fields = simple_record(&manifest_value, "manifest", 2)?;
+    let checks = parse_checks(&fields[4])?;
+    require_check(&checks, "release-export-members-bound", "release export verify receipt")?;
+    require_check(&checks, "release-promotion-summary-bound", "release export verify receipt")?;
+    require_check(&checks, "release-export-is-evidence-only", "release export verify receipt")?;
+    require_check(&checks, "no-release-authority-granted", "release export verify receipt")?;
+    Ok(ReleaseExportVerifyReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision: record_string(&fields[1], "decision")?,
+        manifest_ref: required_ref(&manifest_fields[0], "release export manifest ref")?,
+        promotion_summary_ref: required_ref(&manifest_fields[1], "release export promotion summary ref")?,
+        diagnostics: record_string_sequence(&fields[3], "diagnostics")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
 fn select_release_promotion_key<'a>(input: &'a ReleasePromotionGateInput<'_>) -> Result<&'a SignedReceiptKey> {
     let mut matches = Vec::new();
     for key in input.signed_keys {
@@ -1728,6 +1862,88 @@ fn verify_release_bundle_signed_member(
     }
 }
 
+pub fn release_export_file_ref(name: &str, bytes: &[u8]) -> String {
+    raw_bytes_ref("molten.operator.release-export.file.v1", name, bytes)
+}
+
+pub fn release_export_member_names() -> &'static [&'static str] {
+    &[
+        "dogfood-report.preserves",
+        "dogfood-report.signed.preserves",
+        "release-gate.preserves",
+        "release-gate.signed.preserves",
+        "dogfood-summary.txt",
+        "after-nextest.txt",
+        "nix-dogfood-evidence.preserves",
+        "nix-dogfood-evidence.signed.preserves",
+        "nix-dogfood-verify.preserves",
+        "nix-dogfood-verify.signed.preserves",
+        "nix-dogfood-verify.txt",
+        "release-evidence-bundle.preserves",
+        "release-evidence-bundle-verify.preserves",
+        "release-evidence-bundle-verify.txt",
+        "release-promotion-gate.preserves",
+        "release-promotion-gate.txt",
+        "release-promotion-gate.signed.preserves",
+        "release-promotion-gate-signed-verify.txt",
+        "release-promotion-summary.preserves",
+        "release-promotion-summary.txt",
+        "signed-keyring-import.txt",
+    ]
+}
+
+fn observe_release_export_members(output_path: &Path) -> Result<Vec<(String, String)>> {
+    let mut members = Vec::new();
+    for name in release_export_member_names() {
+        let bytes = fs::read(output_path.join(name)).map_err(MoltenError::from)?;
+        members.push_limited_value(
+            (name.to_string(), release_export_file_ref(name, &bytes)),
+            MAX_OPERATOR_REFS,
+            "release export members",
+        )?;
+    }
+    for name in release_export_keyring_member_names(output_path)? {
+        let bytes = fs::read(output_path.join(&name)).map_err(MoltenError::from)?;
+        members.push_limited_value(
+            (name.clone(), release_export_file_ref(&name, &bytes)),
+            MAX_OPERATOR_REFS,
+            "release export members",
+        )?;
+    }
+    Ok(members)
+}
+
+fn release_export_keyring_member_names(output_path: &Path) -> Result<Vec<String>> {
+    let keyring_path = output_path.join("signed-keyring");
+    let mut names = Vec::with_capacity(MAX_OPERATOR_STEPS);
+    let mut stack = Vec::with_capacity(MAX_OPERATOR_STEPS);
+    stack.push_limited_value(
+        (keyring_path, Path::new("signed-keyring").to_path_buf()),
+        MAX_OPERATOR_REFS,
+        "release export keyring traversal",
+    )?;
+    while let Some((path, relative)) = stack.pop() {
+        for entry in fs::read_dir(path).map_err(MoltenError::from)? {
+            let entry = entry.map_err(MoltenError::from)?;
+            let child_path = entry.path();
+            let child_relative = relative.join(entry.file_name());
+            let file_type = entry.file_type().map_err(MoltenError::from)?;
+            if file_type.is_dir() {
+                stack.push_limited_value(
+                    (child_path, child_relative),
+                    MAX_OPERATOR_REFS,
+                    "release export keyring traversal",
+                )?;
+            } else if file_type.is_file() {
+                let name = child_relative.to_string_lossy().replace('\\', "/");
+                names.push_limited_value(name, MAX_OPERATOR_REFS, "release export keyring members")?;
+            }
+        }
+    }
+    names.sort();
+    Ok(names)
+}
+
 fn read_output_text(output_path: &Path, name: &str) -> Result<String> {
     fs::read_to_string(output_path.join(name)).map_err(MoltenError::from)
 }
@@ -1737,6 +1953,17 @@ fn raw_text_ref(domain: &str, text: &str) -> String {
     bytes.extend_from_slice(domain.as_bytes());
     bytes.push(0);
     bytes.extend_from_slice(text.as_bytes());
+    format!("blake3:{}", blake3::hash(&bytes).to_hex())
+}
+
+fn raw_bytes_ref(domain: &str, name: &str, payload: &[u8]) -> String {
+    let mut bytes =
+        Vec::with_capacity(domain.len().saturating_add(name.len()).saturating_add(payload.len()).saturating_add(2));
+    bytes.extend_from_slice(domain.as_bytes());
+    bytes.push(0);
+    bytes.extend_from_slice(name.as_bytes());
+    bytes.push(0);
+    bytes.extend_from_slice(payload);
     format!("blake3:{}", blake3::hash(&bytes).to_hex())
 }
 
@@ -2274,6 +2501,24 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
             summary.octet_ref,
             summary.cairn_ref,
             summary.diagnostics.len()
+        ));
+    }
+    if let Ok(manifest) = parse_release_export_manifest(value) {
+        return Ok(format!(
+            "operator release export manifest ref={} promotion_summary={} members={} (summary is non-normative)",
+            manifest.manifest_ref,
+            manifest.promotion_summary_ref,
+            manifest.member_refs.len()
+        ));
+    }
+    if let Ok(receipt) = parse_release_export_verify_receipt(value) {
+        return Ok(format!(
+            "operator release export verify receipt ref={} decision={} manifest={} promotion_summary={} diagnostics={} (summary is non-normative)",
+            receipt.receipt_ref,
+            receipt.decision,
+            receipt.manifest_ref,
+            receipt.promotion_summary_ref,
+            receipt.diagnostics.len()
         ));
     }
     Err(MoltenError::invalid_harness("unsupported operator dogfood artifact for summary"))

@@ -64,6 +64,7 @@
 - Prefer explicit Nickel and Steel contract boundaries where applicable: Nickel for static declarative policy/config/schema gates, Steel only for reviewed dynamic predicates/trusted callables, both enforced through Basalt before side effects.
 
 ## Patterns That Work
+- 2026-06-09 release evidence export bundle: after promotion summary pass, emit `release-export-manifest-v1`, deterministic `release-evidence.tar.zst`, and `release-export-verify-receipt-v1`; bind archive members by path/content refs and keep export verification evidence-only instead of treating an archive as release authority.
 - 2026-06-09 release promotion summary readback: emit `release-promotion-summary-v1` from realized dogfood outputs by reading promotion + signed promotion + keyring, verify the signed envelope subject matches the promotion ref, and return deny summaries for missing/stale readback instead of relying on logs.
 - 2026-06-09 signed promotion subject binding: when dogfood signs `release-promotion-gate.preserves`, parse the `release-promote` status line for `receipt=...` and pass it as `--subject-ref` to keyring-backed `verify-signed`; this catches envelopes over the wrong promotion subject while remaining evidence-only.
 - 2026-06-09 signed release promotion receipt: after `release-promote`, sign `release-promotion-gate.preserves` with distinct purpose `release-promotion` and verify it through the signed keyring; this proves final decision readback/signability but still grants no release/subsystem authority.
