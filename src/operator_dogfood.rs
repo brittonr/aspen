@@ -3350,6 +3350,75 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.contains("revoked") || diagnostic.contains("stale"))
         );
+        let missing_source_promotion = release_promotion_gate_receipt_value(&ReleasePromotionGateInput {
+            output_path: &output_root,
+            bundle_verify_value: &signed_bundle_verify.value,
+            source_evidence: "",
+            octet_evidence: "octet:clean",
+            cairn_evidence: "cairn:strict-validate",
+            signed_keys: std::slice::from_ref(&key),
+            signed_key_revocations: &[],
+            signed_trust_root: "release-root",
+            signed_signer: Some("release-signer"),
+            signed_key_ref: Some(&key.key_ref),
+            signed_key_id: Some("release-key-1"),
+        })
+        .expect("missing source promotion receipt");
+        assert_eq!(missing_source_promotion.decision, "deny");
+        assert!(missing_source_promotion.diagnostics.iter().any(|diagnostic| diagnostic.contains("source evidence")));
+        let stale_output_promotion = release_promotion_gate_receipt_value(&ReleasePromotionGateInput {
+            output_path: &output_root.join("stale-output"),
+            bundle_verify_value: &signed_bundle_verify.value,
+            source_evidence: "source:working-tree-reviewed",
+            octet_evidence: "octet:clean",
+            cairn_evidence: "cairn:strict-validate",
+            signed_keys: std::slice::from_ref(&key),
+            signed_key_revocations: &[],
+            signed_trust_root: "release-root",
+            signed_signer: Some("release-signer"),
+            signed_key_ref: Some(&key.key_ref),
+            signed_key_id: Some("release-key-1"),
+        })
+        .expect("stale output promotion receipt");
+        assert_eq!(stale_output_promotion.decision, "deny");
+        assert!(
+            stale_output_promotion
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("output-path-ref mismatch"))
+        );
+        let missing_signed_member_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
+            output_path: &output_root,
+            bundle_value: &bundle,
+            signed_member_values: &[],
+            signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+            signed_trust_root: "release-root",
+            signed_key: "release-key",
+            signed_keys: std::slice::from_ref(&key),
+            signed_key_revocations: &[],
+            signed_key_ref: Some(&key.key_ref),
+            signed_key_id: Some("release-key-1"),
+            signed_signer: Some("release-signer"),
+            is_signed_members_required: true,
+        })
+        .expect("missing signed member verify receipt");
+        assert_eq!(missing_signed_member_verify.decision, "deny");
+        let denied_bundle_promotion = release_promotion_gate_receipt_value(&ReleasePromotionGateInput {
+            output_path: &output_root,
+            bundle_verify_value: &missing_signed_member_verify.value,
+            source_evidence: "source:working-tree-reviewed",
+            octet_evidence: "octet:clean",
+            cairn_evidence: "cairn:strict-validate",
+            signed_keys: std::slice::from_ref(&key),
+            signed_key_revocations: &[],
+            signed_trust_root: "release-root",
+            signed_signer: Some("release-signer"),
+            signed_key_ref: Some(&key.key_ref),
+            signed_key_id: Some("release-key-1"),
+        })
+        .expect("denied bundle promotion receipt");
+        assert_eq!(denied_bundle_promotion.decision, "deny");
+        assert!(denied_bundle_promotion.diagnostics.iter().any(|diagnostic| diagnostic.contains("decision is deny")));
         let wrong_signer_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
             output_path: &output_root,
             bundle_value: &bundle,
