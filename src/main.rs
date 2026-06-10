@@ -12910,7 +12910,8 @@ mod tests {
         let dir = temp_dir("remote-cli");
         let payload = PathBuf::from("examples/remote-service-ready.preserves");
         let parsed_payload = read_preserves_file(&payload).expect("example payload parses");
-        assert!(canonical_hash(&parsed_payload).expect("payload ref").starts_with("blake3:"));
+        let payload_ref = canonical_hash(&parsed_payload).expect("payload ref");
+        molten::preserves_rail::validate_content_ref(&payload_ref).expect("payload ref is canonical");
         let envelope_out = dir.join("envelope.preserves");
         run_remote_command(RemoteCommand::Envelope {
             command: RemoteEnvelopeCommand::Build {

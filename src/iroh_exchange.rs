@@ -30,6 +30,7 @@ use crate::preserves_rail::IROH_CHAIN_EXCHANGE_RECEIPT_SCHEMA;
 use crate::preserves_rail::IROH_REPRO_EXCHANGE_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -905,11 +906,8 @@ fn exchange_receipt_value(input: &ExchangeReceiptValueInput<'_>) -> IOValue {
 }
 
 fn blob_path(root: &Path, bundle_ref: &str) -> Result<std::path::PathBuf> {
-    validate_content_ref(bundle_ref)
+    let hex = content_ref_hex(bundle_ref)
         .map_err(|error| MoltenError::invalid_harness(format!("unsupported Iroh bundle ref {bundle_ref}: {error}")))?;
-    let hex = bundle_ref
-        .strip_prefix("blake3:")
-        .ok_or_else(|| MoltenError::invalid_harness("validated Iroh bundle ref missing blake3 prefix"))?;
     Ok(root.join("blobs").join(format!("blake3_{hex}.bin")))
 }
 

@@ -19,6 +19,7 @@ use crate::preserves_rail::CATALOG_VIEW_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -322,7 +323,7 @@ pub fn resolve_short_id(
     } else {
         visible_candidates
             .into_iter()
-            .filter(|candidate| candidate.strip_prefix("blake3:").is_some_and(|hex| hex.starts_with(&normalized)))
+            .filter(|candidate| canonical_ref_matches_prefix(candidate, &normalized))
             .collect::<Vec<_>>()
     };
     let (decision, full_ref, diagnostics) = if normalized.len() < input.min_length && !is_full_ref(&input.prefix) {
@@ -1568,11 +1569,15 @@ fn contains_hidden_ref(text: &str, visibility: &CatalogVisibilityInput) -> bool 
 }
 
 fn is_full_ref(value: &str) -> bool {
-    value.starts_with("blake3:") && value.len() > "blake3:".len()
+    validate_content_ref(value).is_ok()
 }
 
 fn normalize_prefix(prefix: &str) -> String {
-    prefix.strip_prefix("blake3:").unwrap_or(prefix).to_ascii_lowercase()
+    prefix.to_ascii_lowercase()
+}
+
+fn canonical_ref_matches_prefix(candidate: &str, normalized_prefix: &str) -> bool {
+    content_ref_hex(candidate).is_ok_and(|hex| hex.starts_with(normalized_prefix))
 }
 
 fn refs_sequence(refs: &[String]) -> IOValue {
@@ -2081,17 +2086,29 @@ mod tests {
     fn short_id_resolution_denies_too_short_ambiguous_and_hidden_candidates() {
         let dir = temp_dir("catalog-short");
         let registry = dir.join("registry");
-        let first = install_fixture(&registry, "doc", parse_text("<doc \"a\">").expect("a"), &[], &[]);
-        let second = install_fixture(&registry, "doc", parse_text("<doc \"b\">").expect("b"), &[], &[]);
+        let mut refs_by_first_hex = Vec::<(char, String)>::with_capacity(32);
+        let mut ambiguous_pair = None;
+        for index in 0..32 {
+            let installed =
+                install_fixture(&registry, "doc", parse_text(&format!("<doc {index}>")).expect("doc"), &[], &[]);
+            let first_hex = installed.artifact_ref.as_bytes()[7] as char;
+            if let Some((_, existing_ref)) = refs_by_first_hex.iter().find(|(hex, _)| *hex == first_hex) {
+                ambiguous_pair = Some((existing_ref.clone(), installed.artifact_ref.clone()));
+                break;
+            }
+            refs_by_first_hex.push((first_hex, installed.artifact_ref));
+        }
+        let (first_ref, second_ref) = ambiguous_pair.expect("fixture collision within hex alphabet");
+        let shared_prefix = first_ref[7..8].to_string();
         let too_short = resolve_short_id(&registry, None, &CatalogShortIdInput {
-            prefix: first.artifact_ref[7..8].to_string(),
+            prefix: shared_prefix.clone(),
             min_length: DEFAULT_SHORT_ID_MIN_LENGTH,
             visibility: CatalogVisibilityInput::default(),
         })
         .expect("too short resolution receipt");
         assert_eq!(too_short.decision, "deny");
         let ambiguous = resolve_short_id(&registry, None, &CatalogShortIdInput {
-            prefix: "blake3:".to_string(),
+            prefix: shared_prefix.clone(),
             min_length: 0,
             visibility: CatalogVisibilityInput::default(),
         })
@@ -2099,15 +2116,15 @@ mod tests {
         assert_eq!(ambiguous.decision, "deny");
         assert!(ambiguous.candidates.len() >= 2);
         let visible = resolve_short_id(&registry, None, &CatalogShortIdInput {
-            prefix: "blake3:".to_string(),
+            prefix: shared_prefix,
             min_length: 0,
             visibility: CatalogVisibilityInput {
-                hidden_refs: vec![second.artifact_ref.clone()],
+                hidden_refs: vec![second_ref],
                 ..CatalogVisibilityInput::default()
             },
         })
         .expect("hidden candidate filtered");
-        assert_eq!(visible.full_ref, Some(first.artifact_ref));
+        assert_eq!(visible.full_ref.as_deref(), Some(first_ref.as_str()));
     }
 
     #[test]

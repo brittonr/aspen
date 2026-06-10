@@ -723,7 +723,7 @@ mod tests {
         .expect("build remediation plan");
 
         let text = to_text(&plan.value).expect("render plan");
-        assert!(plan.plan_ref.starts_with("blake3:"));
+        crate::preserves_rail::validate_content_ref(&plan.plan_ref).expect("plan ref is canonical");
         assert!(text.contains("octet-remediation-plan-v1"));
         assert!(text.contains("source-gate-and-admission"));
         assert!(text.contains("critical-deny-classes"));

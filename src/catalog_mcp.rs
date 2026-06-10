@@ -1036,10 +1036,20 @@ mod tests {
     #[test]
     fn short_id_ambiguity_denies_and_mutating_tools_fail_closed() {
         let registry = temp_dir("catalog-mcp-deny");
-        install_fixture(&registry, "doc", parse_text("<doc \"a\">").expect("a"), &[], &[]);
-        install_fixture(&registry, "doc", parse_text("<doc \"b\">").expect("b"), &[], &[]);
+        let mut refs_by_first_hex = Vec::<(char, String)>::with_capacity(32);
+        let mut shared_prefix = None;
+        for index in 0..32 {
+            let installed =
+                install_fixture(&registry, "doc", parse_text(&format!("<doc {index}>")).expect("doc"), &[], &[]);
+            let first_hex = installed.artifact_ref.as_bytes()[7] as char;
+            if refs_by_first_hex.iter().any(|(hex, _)| *hex == first_hex) {
+                shared_prefix = Some(installed.artifact_ref[7..8].to_string());
+                break;
+            }
+            refs_by_first_hex.push((first_hex, installed.artifact_ref));
+        }
         let short = mcp_request_value("catalog.short_id", vec![
-            record("prefix", vec![string("blake3:")]),
+            record("prefix", vec![string(shared_prefix.expect("fixture collision within hex alphabet"))]),
             record("min-length", vec![crate::preserves_rail::u64_value(0)]),
         ])
         .expect("short request");

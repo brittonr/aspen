@@ -15,6 +15,7 @@ use crate::preserves_rail::REMOTE_DATASPACE_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -1036,9 +1037,7 @@ fn topic_dir(root: &Path, topic: &str) -> PathBuf {
 
 fn filename_for_ref(reference: &str) -> Result<String> {
     validate_ref(reference, "local materialized ref")?;
-    let hex = reference
-        .strip_prefix("blake3:")
-        .ok_or_else(|| MoltenError::invalid_harness("validated remote dataspace ref missing blake3 prefix"))?;
+    let hex = content_ref_hex(reference)?;
     Ok(format!("blake3_{hex}.bin"))
 }
 
@@ -1181,11 +1180,8 @@ mod tests {
         let delivered = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b").expect("deliver");
         assert_eq!(delivered.envelope.envelope_ref, envelope.envelope_ref);
         assert_eq!(delivered.envelope.topic, "services");
-        assert!(
-            crate::preserves_rail::canonical_hash(&delivered.receipt_value)
-                .expect("receipt ref")
-                .starts_with("blake3:")
-        );
+        let receipt_ref = crate::preserves_rail::canonical_hash(&delivered.receipt_value).expect("receipt ref");
+        crate::preserves_rail::validate_content_ref(&receipt_ref).expect("receipt ref is canonical");
     }
 
     #[test]
@@ -1272,7 +1268,8 @@ mod tests {
         let mut state = RuntimeState::new(1);
         let applied = admit_and_apply_delivered_envelope(&mut state, &delivery, &evidence).expect("admit and apply");
         assert!(!applied.events.is_empty());
-        assert!(applied.turn_journal_context_ref.starts_with("blake3:"));
+        crate::preserves_rail::validate_content_ref(&applied.turn_journal_context_ref)
+            .expect("turn journal context ref is canonical");
         assert_eq!(
             crate::ledger::artifact_kind(&applied.admission_receipt_value),
             "remote-dataspace-admission-receipt"

@@ -11,6 +11,7 @@ use crate::preserves_rail::EVIDENCE_LEDGER_GC_RECEIPT_SCHEMA;
 use crate::preserves_rail::EVIDENCE_LEDGER_IMPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -741,12 +742,9 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 }
 
 fn filename_for_ref(artifact_ref: &str) -> Result<String> {
-    validate_content_ref(artifact_ref).map_err(|error| {
+    let hex = content_ref_hex(artifact_ref).map_err(|error| {
         MoltenError::invalid_harness(format!("unsupported ledger artifact ref {artifact_ref}: {error}"))
     })?;
-    let hex = artifact_ref
-        .strip_prefix("blake3:")
-        .ok_or_else(|| MoltenError::invalid_harness("validated ledger artifact ref missing blake3 prefix"))?;
     Ok(format!("blake3_{hex}.bin"))
 }
 

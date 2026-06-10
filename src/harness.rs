@@ -404,7 +404,7 @@ mod tests {
                 .as_string()
                 .expect("handle-ref string")
                 .into_owned();
-            assert!(handle_ref.starts_with("blake3:"));
+            crate::preserves_rail::validate_content_ref(&handle_ref).expect("handle ref is canonical");
             handle_refs.insert(handle_ref);
         }
         assert_eq!(handle_refs.len(), report.observations.len());
@@ -2380,7 +2380,7 @@ mod tests {
         let tampered_text = report_text.replacen(&run.final_state_hash, "missing-final-state", 1);
         let tampered_report = parse_text(&tampered_text).expect("parse tampered report");
         let error = validate_report_value(&tampered_report).expect_err("missing evidence should fail closed");
-        assert!(error.to_string().contains("expected blake3 hash ref"));
+        assert!(error.to_string().contains("expected canonical content ref"));
     }
 
     #[test]

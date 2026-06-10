@@ -9022,18 +9022,18 @@ mod tests {
             node_id: "node:test",
         })
         .expect("init node");
-        assert!(init.config_ref.starts_with("blake3:"));
+        crate::preserves_rail::validate_content_ref(&init.config_ref).expect("config ref is canonical");
         let run = run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-        assert!(run.startup_ref.starts_with("blake3:"));
+        crate::preserves_rail::validate_content_ref(&run.startup_ref).expect("startup ref is canonical");
         assert_eq!(run.adapter_receipt_refs.len(), node_runtime::REQUIRED_RUNTIME_ADAPTERS.len());
         let status = status_local_node(&NodeDaemonStatusInput { state_root: &root }).expect("status node");
         assert_eq!(status.status, "running");
         let stop = stop_local_node(&NodeDaemonStopInput { state_root: &root }).expect("stop node");
-        assert!(stop.shutdown_ref.starts_with("blake3:"));
+        crate::preserves_rail::validate_content_ref(&stop.shutdown_ref).expect("shutdown ref is canonical");
         let stopped = status_local_node(&NodeDaemonStatusInput { state_root: &root }).expect("stopped status");
         assert_eq!(stopped.status, "stopped");
         let restarted = run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("restart node");
-        assert!(restarted.startup_ref.starts_with("blake3:"));
+        crate::preserves_rail::validate_content_ref(&restarted.startup_ref).expect("restart startup ref is canonical");
         let restarted_status =
             status_local_node(&NodeDaemonStatusInput { state_root: &root }).expect("restarted status");
         assert_eq!(restarted_status.status, "running");
@@ -9325,7 +9325,12 @@ mod tests {
         let receipt =
             node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("control receipt");
         assert_eq!(receipt.decision, "deny");
-        assert!(receipt.subreceipt_refs.iter().any(|reference| reference.starts_with("blake3:")));
+        assert!(
+            receipt
+                .subreceipt_refs
+                .iter()
+                .any(|reference| crate::preserves_rail::validate_content_ref(reference).is_ok())
+        );
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("provenance evidence refs missing")));
         assert!(
             artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
@@ -11775,7 +11780,12 @@ mod tests {
         let gate_receipt =
             node_runtime::parse_node_control_receipt(&gate_dispatch.control_receipt_value).expect("gate receipt");
         assert_eq!(gate_receipt.decision, "pass");
-        assert!(gate_receipt.subreceipt_refs.iter().any(|reference| reference.starts_with("blake3:")));
+        assert!(
+            gate_receipt
+                .subreceipt_refs
+                .iter()
+                .any(|reference| crate::preserves_rail::validate_content_ref(reference).is_ok())
+        );
 
         let job_fixture = install_node_job_fixture(&root);
         let execution_request_ref =

@@ -66,6 +66,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1771,9 +1772,9 @@ fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
 
 fn required_hash(value: &Value<IOValue>, field: &str) -> Result<String> {
     let hash = required_string(value, field)?;
-    if !hash.starts_with("blake3:") || hash.len() != "blake3:".len() + 64 {
-        return Err(MoltenError::invalid_harness(format!("expected blake3 hash ref for {field}, got {hash}")));
-    }
+    validate_content_ref(&hash).map_err(|error| {
+        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {hash}: {error}"))
+    })?;
     Ok(hash)
 }
 

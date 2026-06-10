@@ -3653,7 +3653,8 @@ mod tests {
         let root = temp_dir("operator-dogfood-pass");
         let run = run_local_node_dogfood(&LocalNodeDogfoodInput { state_root: &root }).expect("dogfood run");
         assert_eq!(run.decision, "pass", "{}", to_text(&run.report_value).expect("report text"));
-        assert!(run.release_gate_ref.as_deref().is_some_and(|reference| reference.starts_with("blake3:")));
+        let release_gate_ref = run.release_gate_ref.as_deref().expect("release gate ref");
+        crate::preserves_rail::validate_content_ref(release_gate_ref).expect("release gate ref is canonical");
         assert_eq!(crate::ledger::artifact_kind(&run.workflow_value), "operator-workflow");
         assert_eq!(crate::ledger::artifact_kind(&run.report_value), "dogfood-report");
         assert_eq!(

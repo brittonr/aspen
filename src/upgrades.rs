@@ -17,6 +17,7 @@ use crate::preserves_rail::UPGRADE_PLAN_SCHEMA;
 use crate::preserves_rail::UPGRADE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_text;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -1199,10 +1200,9 @@ fn status_path(root: &Path, session_id: &str, task_id: &str) -> Result<PathBuf> 
 }
 
 fn filename_for_ref(value_ref: &str) -> Result<String> {
-    value_ref
-        .strip_prefix("blake3:")
-        .map(|hex| format!("blake3_{hex}.preserves"))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("unsupported ref {value_ref}; expected blake3 ref")))
+    let hex = content_ref_hex(value_ref)
+        .map_err(|error| MoltenError::invalid_harness(format!("unsupported ref {value_ref}: {error}")))?;
+    Ok(format!("blake3_{hex}.preserves"))
 }
 
 fn local_ref(kind: &str, a: &str, b: &str) -> Result<String> {

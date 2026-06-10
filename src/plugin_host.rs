@@ -1473,8 +1473,9 @@ mod tests {
         let dir = temp_dir("plugin-fixture");
         let run = minimal_plugin_fixture(&dir).expect("minimal plugin fixture");
         assert_eq!(run.decision, "pass");
-        assert!(run.manifest_ref.starts_with("blake3:"));
-        assert!(run.install_receipt_ref.starts_with("blake3:"));
+        crate::preserves_rail::validate_content_ref(&run.manifest_ref).expect("manifest ref is canonical");
+        crate::preserves_rail::validate_content_ref(&run.install_receipt_ref)
+            .expect("install receipt ref is canonical");
         assert!(plugin_summary(&run.report_value).expect("summary").contains("plugin fixture report"));
         assert!(run.evidence_values.len() >= 10);
     }

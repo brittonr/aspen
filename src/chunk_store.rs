@@ -45,11 +45,13 @@ use crate::preserves_rail::CHUNK_ROOT_SCHEMA;
 use crate::preserves_rail::CHUNK_STORE_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::retention;
 
@@ -2243,7 +2245,7 @@ struct DetailTextInput<'a> {
 }
 
 fn collect_detail_context_refs_push_text(input: DetailTextInput<'_>) -> Result<()> {
-    if input.text.starts_with("blake3:") {
+    if validate_content_ref(&input.text).is_ok() {
         push_bounded(
             input.refs,
             ChainContextRef::new("detail-ref", input.text),
@@ -3507,9 +3509,9 @@ fn chunk_pin_path(root: &Path, chunk_ref: &str) -> Result<PathBuf> {
 }
 
 fn filename_for_ref(reference: &str) -> Result<String> {
-    reference.strip_prefix("blake3:").map(|hex| format!("blake3_{hex}.bin")).ok_or_else(|| {
-        MoltenError::invalid_harness(format!("unsupported chunk-store ref {reference}; expected blake3 ref"))
-    })
+    let hex = content_ref_hex(reference)
+        .map_err(|error| MoltenError::invalid_harness(format!("unsupported chunk-store ref {reference}: {error}")))?;
+    Ok(format!("blake3_{hex}.bin"))
 }
 
 fn ref_from_filename(filename: &str) -> Option<String> {
@@ -4044,7 +4046,9 @@ mod tests {
             .expect("corrupt chunk");
         verify_manifest(&denial_root, &denial_put.manifest_ref).expect_err("corrupt verify denied");
         range_read(&denial_root, &denial_put.manifest_ref, 99, 1).expect_err("range denied");
-        pin_chunk(&denial_root, "blake3:0000").expect_err("missing chunk pin denied");
+        let missing_chunk_ref =
+            canonical_hash(&record("chunk-test-ref", vec![string("missing-pin")])).expect("missing pin ref");
+        pin_chunk(&denial_root, &missing_chunk_ref).expect_err("missing chunk pin denied");
         let denials = list_receipt_refs(&denial_root)
             .expect("list denial receipts")
             .iter()

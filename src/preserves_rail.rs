@@ -379,6 +379,20 @@ pub fn validate_content_ref(value: &str) -> Result<()> {
             "content ref must start with {BLAKE3_REF_PREFIX}, got {value}"
         )));
     };
+    validate_content_ref_hex(value, hex)
+}
+
+pub fn content_ref_hex(value: &str) -> Result<&str> {
+    let Some(hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
+        return Err(MoltenError::invalid_harness(format!(
+            "content ref must start with {BLAKE3_REF_PREFIX}, got {value}"
+        )));
+    };
+    validate_content_ref_hex(value, hex)?;
+    Ok(hex)
+}
+
+fn validate_content_ref_hex(value: &str, hex: &str) -> Result<()> {
     if hex.len() != BLAKE3_HEX_LEN {
         return Err(MoltenError::invalid_harness(format!(
             "content ref must be {BLAKE3_REF_PREFIX}<64 lowercase hex chars>, got {value}"
