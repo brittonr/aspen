@@ -332,6 +332,20 @@
               --cairn-evidence "cairn:external-strict-validate-required" \
               | tee "$out/release-promotion-gate.txt"
             grep -q 'decision=pass' "$out/release-promotion-gate.txt"
+            molten receipts sign "$out/release-promotion-gate.preserves" \
+              --out "$out/release-promotion-gate.signed.preserves" \
+              --signer local-release-signer \
+              --purpose release-promotion \
+              --trust-root local-release-trust-root \
+              --key local-release-key
+            molten receipts verify-signed "$out/release-promotion-gate.signed.preserves" \
+              --purpose release-promotion \
+              --trust-root local-release-trust-root \
+              --key-ledger "$out/signed-keyring" \
+              --key-id local-release-key-v1 \
+              --signer local-release-signer \
+              | tee "$out/release-promotion-gate-signed-verify.txt"
+            grep -q 'receipts verify-signed ok' "$out/release-promotion-gate-signed-verify.txt"
           '';
 
           nextest-config = pkgs.runCommand "molten-nextest-config-check"

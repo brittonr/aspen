@@ -687,6 +687,41 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let promotion_receipt =
         molten::operator_dogfood::parse_release_promotion_gate_receipt(&read_preserves(&promotion_receipt_path)?)?;
     assert_eq!(promotion_receipt.decision, "pass");
+    let signed_promotion_path = dir.join("release-promotion-gate.signed.preserves");
+    let sign_promotion = molten_cmd()
+        .args(["receipts", "sign"])
+        .arg(&promotion_receipt_path)
+        .args(["--out"])
+        .arg(&signed_promotion_path)
+        .args([
+            "--signer",
+            "release-signer",
+            "--purpose",
+            "release-promotion",
+            "--trust-root",
+            "release-root",
+            "--key",
+            "release-key",
+        ])
+        .output()?;
+    assert_success(&sign_promotion, "sign release promotion receipt");
+    let verify_signed_promotion = molten_cmd()
+        .args(["receipts", "verify-signed"])
+        .arg(&signed_promotion_path)
+        .args([
+            "--purpose",
+            "release-promotion",
+            "--trust-root",
+            "release-root",
+            "--key-ledger",
+        ])
+        .arg(&key_ledger)
+        .args(["--key-ref"])
+        .arg(&key_ref)
+        .args(["--signer", "release-signer", "--subject-ref"])
+        .arg(&promotion_receipt.receipt_ref)
+        .output()?;
+    assert_success(&verify_signed_promotion, "verify signed release promotion receipt");
 
     let wrong_signer_bundle_verify_path = dir.join("release-evidence-bundle-verify-wrong-signer.preserves");
     let mut verify_wrong_signer_bundle = molten_cmd();

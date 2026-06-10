@@ -64,6 +64,7 @@
 - Prefer explicit Nickel and Steel contract boundaries where applicable: Nickel for static declarative policy/config/schema gates, Steel only for reviewed dynamic predicates/trusted callables, both enforced through Basalt before side effects.
 
 ## Patterns That Work
+- 2026-06-09 signed release promotion receipt: after `release-promote`, sign `release-promotion-gate.preserves` with distinct purpose `release-promotion` and verify it through the signed keyring; this proves final decision readback/signability but still grants no release/subsystem authority.
 - 2026-06-09 release promotion gate: aggregate bundle verify receipt, selected current signed keyring key, source/Octet/Cairn evidence markers, and evidence-only caveats into `release-promotion-gate-receipt-v1`; revoked/missing/ambiguous keys or stale bundle verification should emit deny receipts, not hard-fail logs.
 - 2026-06-09 signed receipt keyring: store signer/trust-root/key-id records plus revocation records in the evidence ledger, verify signed receipts through `--key-ledger`/`--key-id` or `--key-ref`, and keep revocation/currentness as evidence-only diagnostics rather than subsystem authority.
 - 2026-06-09 signed release evidence receipts: keep generic signing under `molten receipts sign/verify-signed`, verify optional signer/subject/purpose/trust-root/key through structured policy, and let `dogfood release-bundle-verify --require-signed-members` deny missing/wrong-signer/wrong-purpose member envelopes while preserving the evidence-only boundary.
