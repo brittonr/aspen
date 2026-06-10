@@ -338,12 +338,15 @@
               --purpose release-promotion \
               --trust-root local-release-trust-root \
               --key local-release-key
+            promotion_ref=$(sed -n 's/.* receipt=\([^ ]*\).*/\1/p' "$out/release-promotion-gate.txt")
+            test -n "$promotion_ref"
             molten receipts verify-signed "$out/release-promotion-gate.signed.preserves" \
               --purpose release-promotion \
               --trust-root local-release-trust-root \
               --key-ledger "$out/signed-keyring" \
               --key-id local-release-key-v1 \
               --signer local-release-signer \
+              --subject-ref "$promotion_ref" \
               | tee "$out/release-promotion-gate-signed-verify.txt"
             grep -q 'receipts verify-signed ok' "$out/release-promotion-gate-signed-verify.txt"
           '';
