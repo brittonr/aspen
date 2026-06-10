@@ -1093,15 +1093,19 @@ fn build_turn_journals(report: &HarnessReport) -> Result<TurnJournalEvidence> {
             link_values: Vec::new(),
             payload_refs: Vec::new(),
         });
-        let observation_ref = canonical_hash(&observation.value)?;
+        let observation_ref = observation.observation_ref.clone();
         let payload = ChainPayload::new("turn-observation", observation_ref.clone(), HARNESS_OBSERVATION_SCHEMA);
         let context_refs = turn_journal_context_refs(report, observation, &actor_id)?;
         let trellis_input_ref = canonical_hash(&record("turn-journal-input", vec![
             string(&actor_id),
             u64_value(observation.index),
+            record("observation", vec![string(&observation.observation_ref)]),
             string(&observation.step_ref),
             string(&observation.before_state_hash),
             string(&observation.after_state_hash),
+            record("event-refs", vec![sequence(
+                observation.event_refs.iter().map(|reference| string(reference)).collect(),
+            )]),
         ]))?;
         let producer = turn_journal_producer()?;
         let input = if let Some(previous) = builder.links.last() {
@@ -1222,18 +1226,24 @@ fn turn_journal_context_refs(
         ChainContextRef::new("report", report.report_ref.clone()),
         ChainContextRef::new("suite", report.suite_ref.clone()),
         ChainContextRef::new("actor", canonical_hash(&record("turn-journal-actor", vec![string(actor_id)]))?),
+        ChainContextRef::new("observation", observation.observation_ref.clone()),
         ChainContextRef::new("step", observation.step_ref.clone()),
         ChainContextRef::new("before-state", observation.before_state_hash.clone()),
         ChainContextRef::new("after-state", observation.after_state_hash.clone()),
     ];
-    for event in &observation.events {
-        let event_ref = canonical_hash(event)?;
+    for (event, event_ref) in observation.events.iter().zip(observation.event_refs.iter()) {
+        let computed_event_ref = canonical_hash(event)?;
+        if computed_event_ref != *event_ref {
+            return Err(MoltenError::invalid_harness(
+                "turn journal observation event refs do not match canonical events",
+            ));
+        }
         let label = match event_boundary(event) {
             EventBoundary::PolicyDecision => "admission",
             EventBoundary::EffectRequest | EventBoundary::EffectResponse => "effect-log",
             _ => "trace",
         };
-        refs.push(ChainContextRef::new(label, event_ref));
+        refs.push(ChainContextRef::new(label, event_ref.clone()));
     }
     Ok(refs)
 }
