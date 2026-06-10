@@ -131,11 +131,11 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
         let mut events = vec![
             admission_event.clone(),
             actor_input.clone(),
-            hostcall_request,
+            hostcall_request.clone(),
             hostcall_decision.clone(),
         ];
         let steel_execution_event = if admission_decision.is_allowed() {
-            execute_steel_actor_step(suite, step, &actor_input)?
+            execute_steel_actor_step(suite, step, &actor_input, &hostcall_request)?
         } else {
             None
         };
@@ -146,6 +146,7 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
                 sequence: index as u64,
                 step_ref: &step_ref,
                 actor_input: &actor_input,
+                hostcall_request: &hostcall_request,
                 hostcall_decision: &hostcall_decision,
             })?
         } else {

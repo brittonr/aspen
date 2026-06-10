@@ -354,6 +354,10 @@ mod tests {
         assert!(report_text.contains("hostcall-request-v1"));
         assert!(report_text.contains("handler-binding-ref"));
         assert!(report_text.contains("handle-ref"));
+        assert!(report_text.contains("effect-manifest-ref"));
+        assert!(report_text.contains("handler-profile-ref"));
+        assert!(report_text.contains("effect-request-ref"));
+        assert!(report_text.contains("effect-binding-receipt-ref"));
         assert!(report_text.contains("hostcall-decision-v1"));
         assert!(report_text.contains("actor-output-v1"));
         let gate = gate_check_value(&run.report_value).expect("gate report");
@@ -1702,6 +1706,9 @@ mod tests {
         assert!(report_text.contains("wasmparser-inspection"));
         assert!(report_text.contains("wasm-execution-receipt-v1"));
         assert!(report_text.contains("wasmtime-instantiated"));
+        assert!(report_text.contains("effect-manifest-bound"));
+        assert!(report_text.contains("effect-request-admitted"));
+        assert!(report_text.contains("declared-effect-id-required"));
         validate_report_value(&run.report_value).expect("wasm report validates");
     }
 
@@ -2078,6 +2085,9 @@ mod tests {
         assert!(report_text.contains("steel-review-receipt-v1"));
         assert!(report_text.contains("steel-execution-receipt-v1"));
         assert!(report_text.contains("steel-vm-executed"));
+        assert!(report_text.contains("effect-manifest-bound"));
+        assert!(report_text.contains("effect-request-admitted"));
+        assert!(report_text.contains("declared-effect-id-required"));
         assert!(report_text.contains("steel-source-ref-binding"));
         assert!(report_text.contains("steel-callable-review"));
         validate_report_value(&run.report_value).expect("steel report validates");

@@ -932,6 +932,28 @@ fn hostcall_session_ref(context: HostcallEvidenceContext<'_>) -> Result<String> 
     ]))
 }
 
+pub(crate) fn validate_hostcall_effect_binding_request(hostcall_request: &IOValue, operation: &str) -> Result<()> {
+    let request = hostcall_request
+        .collect_simple_record("hostcall-request-v1", Some(15))
+        .ok_or_else(|| MoltenError::invalid_harness("executor hostcall gate requires bound effect request evidence"))?;
+    let request_operation = required_record_string(&request[3], "operation", "hostcall request operation")?;
+    if request_operation != operation {
+        return Err(MoltenError::invalid_harness(format!(
+            "executor hostcall gate operation mismatch: got {request_operation}, expected {operation}"
+        )));
+    }
+    for (field, label) in [
+        (&request[11], "effect-manifest-ref"),
+        (&request[12], "handler-profile-ref"),
+        (&request[13], "effect-request-ref"),
+        (&request[14], "effect-binding-receipt-ref"),
+    ] {
+        let content_ref = required_record_string(field, label, label)?;
+        validate_content_ref(&content_ref)?;
+    }
+    Ok(())
+}
+
 pub fn hostcall_decision_value(
     context: HostcallEvidenceContext<'_>,
     admission_event: &IOValue,
@@ -1025,6 +1047,9 @@ pub(crate) fn steel_execution_receipt_value(input: SteelExecutionReceiptInput<'_
             "canonical-preserves-output",
             "no-ambient-steel-io",
             "hostcall-envelope-binding",
+            "effect-manifest-bound",
+            "effect-request-admitted",
+            "declared-effect-id-required",
             "resource-bounded",
             "fuel-bounded",
             "hostcall-count-bounded",
@@ -1058,6 +1083,9 @@ pub(crate) fn wasm_execution_receipt_value(input: WasmExecutionReceiptInput<'_>)
         "fuel-bounded",
         "memory-bounded",
         "hostcall-envelope-binding",
+        "effect-manifest-bound",
+        "effect-request-admitted",
+        "declared-effect-id-required",
     ];
     let mut fields = vec![
         string(RUNTIME_WASM_EXECUTION_RECEIPT_SCHEMA),

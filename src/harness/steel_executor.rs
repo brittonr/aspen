@@ -15,6 +15,7 @@ use super::schema::SteelExecutionReceiptInput;
 use super::schema::SteelResourceReceiptInput;
 use super::schema::steel_execution_receipt_value;
 use super::schema::steel_source_ref;
+use super::schema::validate_hostcall_effect_binding_request;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::canonical_hash;
@@ -34,6 +35,7 @@ pub fn execute_steel_actor_step(
     suite: &HarnessSuite,
     step: &CoreStep,
     actor_input: &IOValue,
+    hostcall_request: &IOValue,
 ) -> Result<Option<IOValue>> {
     let actor_id = step.primary_actor();
     let Some(actor) = suite.actors.iter().find(|actor| actor.id == actor_id) else {
@@ -69,6 +71,7 @@ pub fn execute_steel_actor_step(
     }
     let allowed_hostcalls = config.allowed_hostcalls.clone();
     let expected_operation = AdmissionRequest::from_step(step).action.as_str().to_string();
+    validate_hostcall_effect_binding_request(hostcall_request, &expected_operation)?;
     let hostcall_counter = Arc::new(AtomicU64::new(0));
     let hostcall_counter_for_vm = Arc::clone(&hostcall_counter);
     let mut engine = Engine::new();

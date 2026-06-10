@@ -20,6 +20,7 @@ use super::schema::ActorKind;
 use super::schema::HarnessSuite;
 use super::schema::WasmAbiReceiptInput;
 use super::schema::WasmExecutionReceiptInput;
+use super::schema::validate_hostcall_effect_binding_request;
 use super::schema::wasm_execution_receipt_value;
 use super::schema::wasm_executor_export_name;
 use super::schema::wasm_module_bytes;
@@ -53,6 +54,7 @@ pub struct WasmActorStepInput<'a> {
     pub sequence: u64,
     pub step_ref: &'a str,
     pub actor_input: &'a IOValue,
+    pub hostcall_request: &'a IOValue,
     pub hostcall_decision: &'a IOValue,
 }
 
@@ -62,6 +64,7 @@ pub fn execute_wasm_actor_step(input: &WasmActorStepInput<'_>) -> Result<Option<
     let sequence = input.sequence;
     let step_ref = input.step_ref;
     let actor_input = input.actor_input;
+    let hostcall_request = input.hostcall_request;
     let hostcall_decision = input.hostcall_decision;
     let actor_id = step.primary_actor();
     let Some(actor) = suite.actors.iter().find(|actor| actor.id == actor_id) else {
@@ -77,6 +80,7 @@ pub fn execute_wasm_actor_step(input: &WasmActorStepInput<'_>) -> Result<Option<
     };
 
     let operation = AdmissionRequest::from_step(step).action.as_str().to_string();
+    validate_hostcall_effect_binding_request(hostcall_request, &operation)?;
     let export = wasm_executor_export_name(&operation);
     let bytes = wasm_module_bytes(config)?;
     let has_preserves_abi = module_exports(&bytes)?

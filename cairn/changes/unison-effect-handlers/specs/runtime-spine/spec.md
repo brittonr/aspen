@@ -71,3 +71,83 @@ r[molten.effects.deny_undeclared] Molten MUST reject effect requests whose effec
 - GIVEN an executable artifact with a manifest declaring only `dataspace.send`
 - WHEN it requests `blob.get`
 - THEN Molten emits a deny binding receipt before exposing the hostcall or adapter operation.
+
+### Requirement: Wasmtime hostcalls require admitted effects
+r[molten.effects.wasmtime_hostcall_gate] Wasmtime executor hostcalls MUST be exposed only when the hostcall request carries canonical effect manifest, handler profile, effect request, and passing binding receipt refs for the requested operation.
+
+#### Scenario: Wasm hostcall carries binding proof
+- GIVEN a Wasm actor whose allowed hostcall is declared in its admitted effect manifest
+- WHEN the actor invokes the hostcall
+- THEN the Wasm execution receipt records `effect-manifest-bound`, `effect-request-admitted`, and `declared-effect-id-required` checks.
+
+### Requirement: Steel runtime APIs require admitted effects
+r[molten.effects.steel_api_gate] Reviewed Steel executor APIs MUST require the same admitted effect request binding before returning hostcall responses, and MUST avoid ambient adapter access.
+
+#### Scenario: Steel hostcall carries binding proof
+- GIVEN a Steel actor whose allowed hostcall is declared in its admitted effect manifest
+- WHEN the actor calls `molten-hostcall`
+- THEN the Steel execution receipt records `effect-manifest-bound`, `effect-request-admitted`, and `declared-effect-id-required` checks.
+
+### Requirement: Dataspace handlers are explicit
+r[molten.effects.dataspace_handlers] Dataspace send and observe effects MUST use declared local or production handler bindings rather than ambient runtime access.
+
+#### Scenario: Dataspace send uses handler binding
+- GIVEN an actor declares a dataspace send effect
+- WHEN Molten executes the effect through a local or production profile
+- THEN the request is admitted through a handler binding before any message is delivered.
+
+### Requirement: Blob handlers are explicit
+r[molten.effects.blob_handlers] Blob get and blob put effects MUST use declared local or Iroh-backed handler bindings with canonical request and response refs.
+
+#### Scenario: Blob get uses handler binding
+- GIVEN an actor declares a blob get effect
+- WHEN Molten executes the effect through an Iroh-backed profile
+- THEN the blob request is admitted through a handler binding before any blob bytes are read.
+
+### Requirement: Typed storage handlers are explicit
+r[molten.effects.storage_handlers] Typed storage read and write effects MUST use declared local or Redb-backed handler bindings and MUST bind typed storage refs in effect evidence.
+
+#### Scenario: Storage write uses handler binding
+- GIVEN an actor declares a typed storage write effect
+- WHEN Molten executes the write through a Redb-backed profile
+- THEN the write is admitted through a handler binding before persisted state changes.
+
+### Requirement: Time and random handlers deny by default
+r[molten.effects.time_random_handlers] Clock and random effects MUST deny by default unless a deterministic local test handler or explicitly admitted production handler is bound.
+
+#### Scenario: Clock lacks handler
+- GIVEN an actor requests clock access without an admitted time handler
+- WHEN Molten evaluates the request
+- THEN the request is denied before any wall-clock value is exposed.
+
+### Requirement: Chaos handler profile is bounded
+r[molten.effects.chaos_profile] Chaos handler profiles MUST bound deterministic fault, delay, reorder, and partition injection and record the applied chaos profile in effect evidence.
+
+#### Scenario: Chaos delay is bounded
+- GIVEN a chaos profile with a maximum deterministic delay
+- WHEN a handler injects delay
+- THEN the effect evidence records the bounded delay and replay uses the same value.
+
+### Requirement: Profiling handler profile records effect metrics
+r[molten.effects.profiling_profile] Profiling handler profiles MUST record effect counts, payload sizes, dependency fetches, and trace refs without granting additional effect authority.
+
+#### Scenario: Profiling records counts
+- GIVEN an actor runs under the profiling profile
+- WHEN it executes admitted effects
+- THEN Molten records effect counts and payload sizes as profiling evidence only.
+
+### Requirement: Transcript tests pin handler traces
+r[molten.effects.transcript_tests] Executable transcript tests MUST pin handler profiles and expected canonical traces or receipts for effect-handler behavior.
+
+#### Scenario: Transcript pins receipt
+- GIVEN a transcript fixture with a declared handler profile
+- WHEN the fixture runs
+- THEN the observed effect receipts match the pinned canonical trace.
+
+### Requirement: Property tests cover handler substitution
+r[molten.effects.property_tests] Property tests SHOULD cover deny-by-default behavior, handler substitution, and effect-request determinism across equivalent inputs.
+
+#### Scenario: Equivalent requests are deterministic
+- GIVEN two equivalent effect requests with identical refs and profile
+- WHEN property tests render their envelopes
+- THEN the canonical request refs are equal.
