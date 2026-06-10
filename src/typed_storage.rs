@@ -33,6 +33,7 @@ use crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA;
 use crate::preserves_rail::TYPED_STORAGE_SCHEMA_ARTIFACT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -1616,9 +1617,7 @@ fn local_ref(kind: &str, label: &str) -> String {
     let value = record("typed-storage-local-ref", vec![string(kind), string(label)]);
     match canonical_hash(&value) {
         Ok(reference) => reference,
-        Err(error) => {
-            format!("blake3:{}", blake3::hash(format!("typed-storage-local-ref-error:{error}").as_bytes()).to_hex())
-        }
+        Err(error) => content_ref_from_bytes(format!("typed-storage-local-ref-error:{error}").as_bytes()),
     }
 }
 

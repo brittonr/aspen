@@ -24,6 +24,7 @@ use crate::preserves_rail::COORDINATION_SERVICE_MANIFEST_SCHEMA;
 use crate::preserves_rail::COORDINATION_STATE_SNAPSHOT_SCHEMA;
 use crate::preserves_rail::COORDINATION_STATUS_ASSERTION_SCHEMA;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -2052,7 +2053,7 @@ fn set_len_u64<T>(values: &BTreeSet<T>) -> Result<u64> {
 }
 
 fn fixture_ref(label: &str) -> String {
-    format!("blake3:{}", blake3::hash(label.as_bytes()).to_hex())
+    content_ref_from_bytes(label.as_bytes())
 }
 
 trait PushLimited<T> {

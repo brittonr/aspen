@@ -27,6 +27,8 @@ use crate::preserves_rail::OCTET_SUMMARY_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_from_bytes;
+use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -1777,7 +1779,7 @@ fn file_hash_entry(path: PathBuf) -> serde_json::Value {
     let relative = path.file_name().and_then(|name| name.to_str()).unwrap_or("unknown");
     serde_json::json!({
         "path": relative,
-        "hash": fs::read(&path).ok().map(|bytes| bytes_ref(&bytes).replace("blake3:", "b3:")),
+        "hash": fs::read(&path).ok().and_then(|bytes| b3_ref_from_bytes(&bytes).ok()),
     })
 }
 
@@ -2295,7 +2297,12 @@ fn push_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, diagn
 }
 
 fn bytes_ref(bytes: &[u8]) -> String {
-    format!("blake3:{}", blake3::hash(bytes).to_hex())
+    content_ref_from_bytes(bytes)
+}
+
+fn b3_ref_from_bytes(bytes: &[u8]) -> Result<String> {
+    let reference = content_ref_from_bytes(bytes);
+    Ok(format!("b3:{}", content_ref_hex(&reference)?))
 }
 
 #[cfg(test)]

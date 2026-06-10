@@ -14201,7 +14201,7 @@ mod tests {
                     .strip_prefix("blake3_")
                     .and_then(|name| name.strip_suffix(".bin"))
                     .expect("blob file name");
-                format!("blake3:{hex}")
+                molten::preserves_rail::content_ref_from_hex(hex).expect("canonical blob ref")
             })
             .collect::<Vec<_>>();
         refs.sort();

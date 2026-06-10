@@ -11,6 +11,7 @@ use crate::preserves_rail::EVIDENCE_LEDGER_GC_RECEIPT_SCHEMA;
 use crate::preserves_rail::EVIDENCE_LEDGER_IMPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_from_hex;
 use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
@@ -749,12 +750,8 @@ fn filename_for_ref(artifact_ref: &str) -> Result<String> {
 }
 
 fn ref_from_filename(filename: &str) -> Option<String> {
-    let reference = filename
-        .strip_prefix("blake3_")
-        .and_then(|hex| hex.strip_suffix(".bin"))
-        .map(|hex| format!("blake3:{hex}"))?;
-    validate_content_ref(&reference).ok()?;
-    Some(reference)
+    let hex = filename.strip_prefix("blake3_").and_then(|value| value.strip_suffix(".bin"))?;
+    content_ref_from_hex(hex).ok()
 }
 
 fn pinned_refs(root: &Path) -> Result<Vec<String>> {

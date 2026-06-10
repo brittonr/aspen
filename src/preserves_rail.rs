@@ -396,6 +396,12 @@ pub fn content_ref_hex(value: &str) -> Result<&str> {
     Ok(hex)
 }
 
+pub fn content_ref_from_hex(hex: &str) -> Result<String> {
+    let reference = format!("{BLAKE3_REF_PREFIX}{hex}");
+    validate_content_ref_hex(&reference, hex)?;
+    Ok(reference)
+}
+
 fn validate_content_ref_hex(value: &str, hex: &str) -> Result<()> {
     if hex.len() != BLAKE3_HEX_LEN {
         return Err(MoltenError::invalid_harness(format!(
@@ -430,7 +436,11 @@ pub fn canonical_hash(value: &IOValue) -> Result<String> {
 }
 
 pub fn content_ref_from_bytes(bytes: &[u8]) -> String {
-    format!("blake3:{}", blake3::hash(bytes).to_hex())
+    content_ref_from_blake3_hash(blake3::hash(bytes))
+}
+
+pub fn content_ref_from_blake3_hash(hash: blake3::Hash) -> String {
+    format!("{BLAKE3_REF_PREFIX}{}", hash.to_hex())
 }
 
 pub fn canonical_content_ref(value: &IOValue) -> Result<ContentRef> {
@@ -470,6 +480,7 @@ mod tests {
     use super::ContentRef;
     use super::canonical_content_ref;
     use super::canonical_hash;
+    use super::content_ref_from_hex;
     use super::parse_text;
     use super::to_text;
     use super::validate_content_ref;
@@ -490,6 +501,11 @@ mod tests {
         let parsed = ContentRef::parse(valid).expect("parsed ref");
         assert_eq!(parsed.as_str(), valid);
         assert_eq!(parsed.into_string(), valid);
+        assert_eq!(
+            content_ref_from_hex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+                .expect("ref from hex"),
+            valid
+        );
 
         for invalid in [
             "",

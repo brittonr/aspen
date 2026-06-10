@@ -15,6 +15,7 @@ use crate::preserves_rail::REMOTE_DATASPACE_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
@@ -295,7 +296,7 @@ pub fn parse_envelope(value: &IOValue) -> Result<RemoteDataspaceEnvelope> {
 
 pub fn store_content_blob(root: &Path, bytes: &[u8]) -> Result<String> {
     fs::create_dir_all(root.join("blobs")).map_err(MoltenError::from)?;
-    let content_ref = format!("blake3:{}", blake3::hash(bytes).to_hex());
+    let content_ref = content_ref_from_bytes(bytes);
     fs::write(blob_path(root, &content_ref)?, bytes).map_err(MoltenError::from)?;
     Ok(content_ref)
 }
@@ -966,7 +967,7 @@ fn validate_content_refs_available(root: &Path, refs: &[String]) -> Result<()> {
     for reference in refs {
         validate_ref(reference, "content ref")?;
         let bytes = fs::read(blob_path(root, reference)?).map_err(MoltenError::from)?;
-        let actual_ref = format!("blake3:{}", blake3::hash(&bytes).to_hex());
+        let actual_ref = content_ref_from_bytes(&bytes);
         if actual_ref != *reference {
             return Err(MoltenError::invalid_harness(format!(
                 "remote dataspace content ref {reference} hashes to {actual_ref}"

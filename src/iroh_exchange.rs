@@ -30,6 +30,7 @@ use crate::preserves_rail::IROH_CHAIN_EXCHANGE_RECEIPT_SCHEMA;
 use crate::preserves_rail::IROH_REPRO_EXCHANGE_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
@@ -168,7 +169,7 @@ pub fn publish_bundle(root: &Path, bundle: &IOValue, node: &str) -> Result<Repro
     let verify_receipt = repro_verify_receipt_value(bundle)?;
     let bundle_ref = canonical_hash(bundle)?;
     let bytes = canonical_bytes(bundle)?;
-    let blob_ref = format!("blake3:{}", blake3::hash(&bytes).to_hex());
+    let blob_ref = content_ref_from_bytes(&bytes);
     if blob_ref != bundle_ref {
         return Err(MoltenError::invalid_harness("Iroh publish bundle blob ref does not match bundle ref"));
     }
@@ -249,7 +250,7 @@ pub fn publish_chain_segment(input: &PublishChainSegmentInput<'_>) -> Result<Cha
     )?;
     let parsed = parse_chain_segment_bundle(&bundle, input.fork_policy)?;
     let bytes = canonical_bytes(&bundle)?;
-    let blob_ref = format!("blake3:{}", blake3::hash(&bytes).to_hex());
+    let blob_ref = content_ref_from_bytes(&bytes);
     if blob_ref != parsed.bundle_ref {
         return Err(MoltenError::invalid_harness("Iroh publish chain bundle blob ref does not match bundle ref"));
     }

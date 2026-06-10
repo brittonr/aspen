@@ -1255,11 +1255,12 @@ mod tests {
     use crate::catalog::CatalogVisibilityInput;
     use crate::catalog_mcp;
     use crate::ledger;
+    use crate::preserves_rail::content_ref_from_bytes;
     use crate::preserves_rail::parse_text;
     use crate::preserves_rail::to_text;
 
     fn test_ref(label: &str) -> String {
-        format!("blake3:{}", blake3::hash(label.as_bytes()).to_hex())
+        content_ref_from_bytes(label.as_bytes())
     }
 
     fn manifest_input() -> ServiceManifestInput {

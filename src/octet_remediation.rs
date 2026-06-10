@@ -10,6 +10,7 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::OCTET_REMEDIATION_PLAN_SCHEMA;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -699,7 +700,7 @@ fn push_diagnostic(diagnostics: &mut impl crate::bounded::VecSink<String>, diagn
 }
 
 fn bytes_ref(bytes: &[u8]) -> String {
-    format!("blake3:{}", blake3::hash(bytes).to_hex())
+    content_ref_from_bytes(bytes)
 }
 
 #[cfg(test)]

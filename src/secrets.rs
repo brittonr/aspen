@@ -20,6 +20,7 @@ use crate::preserves_rail::SECRET_REDACTION_TRANSFORM_RECEIPT_SCHEMA;
 use crate::preserves_rail::SECRET_REF_SCHEMA;
 use crate::preserves_rail::SECRET_REVEAL_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -1800,7 +1801,7 @@ fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()>
 }
 
 fn fixture_ref(label: &str) -> String {
-    format!("blake3:{}", blake3::hash(label.as_bytes()).to_hex())
+    content_ref_from_bytes(label.as_bytes())
 }
 
 trait PushLimited<T> {

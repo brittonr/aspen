@@ -45,6 +45,9 @@ use crate::preserves_rail::CHUNK_ROOT_SCHEMA;
 use crate::preserves_rail::CHUNK_STORE_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_from_blake3_hash;
+use crate::preserves_rail::content_ref_from_bytes;
+use crate::preserves_rail::content_ref_from_hex;
 use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
@@ -3456,7 +3459,7 @@ fn hash_chunk(bytes: &[u8], chunk_size: usize) -> String {
     hasher.update(chunk_domain(chunk_size).as_bytes());
     hasher.update(b"\0");
     hasher.update(bytes);
-    format!("blake3:{}", hasher.finalize().to_hex())
+    content_ref_from_blake3_hash(hasher.finalize())
 }
 
 fn chunk_domain(chunk_size: usize) -> String {
@@ -3464,7 +3467,7 @@ fn chunk_domain(chunk_size: usize) -> String {
 }
 
 fn hash_blob_bytes(bytes: &[u8]) -> String {
-    format!("blake3:{}", blake3::hash(bytes).to_hex())
+    content_ref_from_bytes(bytes)
 }
 
 fn ensure_iroh_dirs(root: &Path) -> Result<()> {
@@ -3515,10 +3518,8 @@ fn filename_for_ref(reference: &str) -> Result<String> {
 }
 
 fn ref_from_filename(filename: &str) -> Option<String> {
-    filename
-        .strip_prefix("blake3_")
-        .and_then(|hex| hex.strip_suffix(".bin"))
-        .map(|hex| format!("blake3:{hex}"))
+    let hex = filename.strip_prefix("blake3_").and_then(|value| value.strip_suffix(".bin"))?;
+    content_ref_from_hex(hex).ok()
 }
 
 fn refs_from_dir(dir: &Path) -> Result<Vec<String>> {

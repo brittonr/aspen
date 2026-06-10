@@ -43,6 +43,7 @@ use crate::preserves_rail::OPERATOR_STEP_SCHEMA;
 use crate::preserves_rail::OPERATOR_WORKFLOW_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::parse_text;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -1981,7 +1982,7 @@ fn raw_text_ref(domain: &str, text: &str) -> String {
     bytes.extend_from_slice(domain.as_bytes());
     bytes.push(0);
     bytes.extend_from_slice(text.as_bytes());
-    format!("blake3:{}", blake3::hash(&bytes).to_hex())
+    content_ref_from_bytes(&bytes)
 }
 
 fn raw_bytes_ref(domain: &str, name: &str, payload: &[u8]) -> String {
@@ -1992,7 +1993,7 @@ fn raw_bytes_ref(domain: &str, name: &str, payload: &[u8]) -> String {
     bytes.extend_from_slice(name.as_bytes());
     bytes.push(0);
     bytes.extend_from_slice(payload);
-    format!("blake3:{}", blake3::hash(&bytes).to_hex())
+    content_ref_from_bytes(&bytes)
 }
 
 fn mismatch_diagnostic(label: &str, expected: &str, actual: &str) -> Option<String> {
