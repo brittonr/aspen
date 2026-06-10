@@ -352,6 +352,43 @@ pub const OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA: &str = "molten.octet.source-gate
 pub const OCTET_SOURCE_GATE_VALIDATION_SCHEMA: &str = "molten.octet.source-gate-validation.v1";
 pub const OCTET_REMEDIATION_PLAN_SCHEMA: &str = "molten.octet.remediation-plan.v1";
 pub const HASH_ALGORITHM: &str = "blake3-preserves-packed-v1";
+const BLAKE3_REF_PREFIX: &str = "blake3:";
+const BLAKE3_HEX_LEN: usize = 64;
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ContentRef(String);
+
+impl ContentRef {
+    pub fn parse(value: &str) -> Result<Self> {
+        validate_content_ref(value)?;
+        Ok(Self(value.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+pub fn validate_content_ref(value: &str) -> Result<()> {
+    let Some(hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
+        return Err(MoltenError::invalid_harness(format!(
+            "content ref must start with {BLAKE3_REF_PREFIX}, got {value}"
+        )));
+    };
+    if hex.len() != BLAKE3_HEX_LEN {
+        return Err(MoltenError::invalid_harness(format!(
+            "content ref must be {BLAKE3_REF_PREFIX}<64 lowercase hex chars>, got {value}"
+        )));
+    }
+    if !hex.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
+        return Err(MoltenError::invalid_harness(format!("content ref must use lowercase hex chars, got {value}")));
+    }
+    Ok(())
+}
 
 pub fn parse_text(source: &str) -> Result<IOValue> {
     preserves::read_iovalue_text(source, false).map_err(|error| MoltenError::Preserves(error.to_string()))
@@ -371,7 +408,15 @@ pub fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
 
 pub fn canonical_hash(value: &IOValue) -> Result<String> {
     let bytes = canonical_bytes(value)?;
-    Ok(format!("blake3:{}", blake3::hash(&bytes).to_hex()))
+    Ok(content_ref_from_bytes(&bytes))
+}
+
+pub fn content_ref_from_bytes(bytes: &[u8]) -> String {
+    format!("blake3:{}", blake3::hash(bytes).to_hex())
+}
+
+pub fn canonical_content_ref(value: &IOValue) -> Result<ContentRef> {
+    ContentRef::parse(&canonical_hash(value)?)
 }
 
 pub fn symbol(name: &'static str) -> IOValue {
@@ -404,9 +449,12 @@ pub fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
 
 #[cfg(test)]
 mod tests {
+    use super::ContentRef;
+    use super::canonical_content_ref;
     use super::canonical_hash;
     use super::parse_text;
     use super::to_text;
+    use super::validate_content_ref;
 
     #[test]
     fn preserves_text_roundtrip_keeps_hash() {
@@ -415,5 +463,35 @@ mod tests {
         let rendered = to_text(&value).expect("render preserves text");
         let reparsed = parse_text(&rendered).expect("parse rendered text");
         assert_eq!(hash, canonical_hash(&reparsed).expect("hash reparsed value"));
+    }
+
+    #[test]
+    fn content_ref_parser_rejects_non_canonical_shapes() {
+        let valid = "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        validate_content_ref(valid).expect("valid ref");
+        let parsed = ContentRef::parse(valid).expect("parsed ref");
+        assert_eq!(parsed.as_str(), valid);
+        assert_eq!(parsed.into_string(), valid);
+
+        for invalid in [
+            "",
+            "blake3:",
+            "blake3:fixture",
+            "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde",
+            "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0",
+            "blake3:0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef",
+            "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+            "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde/",
+        ] {
+            assert!(validate_content_ref(invalid).is_err(), "invalid ref accepted: {invalid}");
+        }
+    }
+
+    #[test]
+    fn canonical_content_ref_matches_canonical_hash() {
+        let value = parse_text("<content-ref-fixture [#t 42]>").expect("parse fixture");
+        let reference = canonical_content_ref(&value).expect("canonical content ref");
+        assert_eq!(reference.as_str(), canonical_hash(&value).expect("canonical hash"));
     }
 }

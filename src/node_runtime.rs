@@ -16,6 +16,7 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1130,11 +1131,9 @@ fn validate_decision(decision: &str) -> Result<()> {
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
-    if value_ref.starts_with("blake3:") {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{field} must be a blake3 ref, got {value_ref}")))
-    }
+    validate_content_ref(value_ref).map_err(|error| {
+        MoltenError::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
+    })
 }
 
 fn validate_refs(refs: &[String], field: &str) -> Result<()> {
@@ -1367,6 +1366,25 @@ mod tests {
         assert_eq!(receipt.request_ref, request.request_ref);
         assert_eq!(crate::ledger::artifact_kind(&request_value), "node-control-request");
         assert_eq!(crate::ledger::artifact_kind(&receipt_value), "node-control-receipt");
+    }
+
+    #[test]
+    fn control_request_rejects_short_fixture_ref_shape() {
+        let authority_refs = vec![test_ref("authority")];
+        let policy_refs = vec![test_ref("policy")];
+        let resource_refs = vec![test_ref("resource")];
+        let error = node_control_request_value(&ControlRequestValueInput {
+            operation: "install",
+            target_ref: Some("blake3:target-fixture"),
+            payload_ref: Some("blake3:payload-fixture"),
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect_err("short fixture refs are rejected");
+
+        assert!(error.to_string().contains("canonical blake3 content ref"));
     }
 
     #[test]

@@ -58,6 +58,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::to_text;
+use crate::preserves_rail::validate_content_ref;
 use crate::protocol_session;
 use crate::provenance;
 
@@ -5191,7 +5192,7 @@ pub fn receive_node_control_live_ingress_bytes(
     let value = parse_canonical_bytes(input.bytes)?;
     let envelope = parse_node_control_ingress_envelope(&value)?;
     let mut diagnostics = live_receive_diagnostics(input, &envelope);
-    write_preserves(&control_ingress_envelope_path(input.state_root, input.topic, &envelope.envelope_ref), &value)?;
+    write_ingress_envelope_and_verify(input.state_root, input.topic, &envelope)?;
     import_node_artifact(input.state_root, &value)?;
     let delivered = if diagnostics.is_empty() {
         deliver_node_control_ingress(&NodeControlIngressDeliverInput {
@@ -5522,10 +5523,7 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
     let send_receipt_ref = canonical_hash(&send_receipt_value)?;
     if let Some(state_root) = input.state_root {
         import_node_artifact(state_root, input.receiver_ticket_value)?;
-        write_preserves(
-            &control_ingress_envelope_path(state_root, &ticket.topic, &envelope.envelope_ref),
-            &envelope.value,
-        )?;
+        write_ingress_envelope_and_verify(state_root, &ticket.topic, &envelope)?;
         import_node_artifact(state_root, &envelope.value)?;
         write_preserves(
             &control_live_transport_receipt_path(state_root, &envelope.envelope_ref, "send"),
@@ -5688,10 +5686,7 @@ fn denied_node_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_
     let send_receipt_ref = canonical_hash(&send_receipt_value)?;
     if let Some(state_root) = denied.input.state_root {
         import_node_artifact(state_root, denied.input.receiver_ticket_value)?;
-        write_preserves(
-            &control_ingress_envelope_path(state_root, &denied.ticket.topic, &denied.envelope.envelope_ref),
-            &denied.envelope.value,
-        )?;
+        write_ingress_envelope_and_verify(state_root, &denied.ticket.topic, &denied.envelope)?;
         import_node_artifact(state_root, &denied.envelope.value)?;
         write_preserves(&control_live_send_receipt_path(state_root, &send_receipt_ref), &send_receipt_value)?;
         import_node_artifact(state_root, &send_receipt_value)?;
@@ -6419,7 +6414,7 @@ pub fn publish_node_control_ingress(input: &NodeControlIngressPublishInput<'_>) 
     ensure_state_layout(input.state_root)?;
     let envelope = parse_node_control_ingress_envelope(input.envelope_value)?;
     let envelope_path = control_ingress_envelope_path(input.state_root, &envelope.topic, &envelope.envelope_ref);
-    write_preserves(&envelope_path, &envelope.value)?;
+    write_ingress_envelope_and_verify(input.state_root, &envelope.topic, &envelope)?;
     import_node_artifact(input.state_root, &envelope.value)?;
     let diagnostics = Vec::new();
     let receipt_value = ingress_receipt_value(&IngressReceiptValueInput {
@@ -6448,10 +6443,17 @@ pub fn publish_node_control_ingress(input: &NodeControlIngressPublishInput<'_>) 
 pub fn deliver_node_control_ingress(input: &NodeControlIngressDeliverInput<'_>) -> Result<NodeControlIngressDeliver> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
+    validate_ingress_ref(input.envelope_ref, "node control ingress envelope ref")?;
     ensure_state_layout(input.state_root)?;
     let envelope_value =
         read_preserves(&control_ingress_envelope_path(input.state_root, input.topic, input.envelope_ref))?;
     let envelope = parse_node_control_ingress_envelope(&envelope_value)?;
+    if envelope.envelope_ref != input.envelope_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "node control ingress materialized envelope ref {} does not match requested {}",
+            envelope.envelope_ref, input.envelope_ref
+        )));
+    }
     let mut diagnostics = ingress_pre_enqueue_diagnostics(input.state_root, input.topic, &envelope)?;
     let mut idempotency_receipt_ref = None;
     let mut queue_receipt_ref = None;
@@ -8411,6 +8413,24 @@ fn control_ingress_envelope_path(state_root: &Path, topic: &str, envelope_ref: &
         .join(format!("{}.envelope.preserves", ref_file_stem(envelope_ref)))
 }
 
+fn write_ingress_envelope_and_verify(
+    state_root: &Path,
+    topic: &str,
+    envelope: &NodeControlIngressEnvelope,
+) -> Result<()> {
+    let path = control_ingress_envelope_path(state_root, topic, &envelope.envelope_ref);
+    write_preserves(&path, &envelope.value)?;
+    let read_value = read_preserves(&path)?;
+    let read_envelope = parse_node_control_ingress_envelope(&read_value)?;
+    if read_envelope.envelope_ref != envelope.envelope_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "node control ingress materialized envelope ref {} does not match written {}",
+            read_envelope.envelope_ref, envelope.envelope_ref
+        )));
+    }
+    Ok(())
+}
+
 fn control_ingress_receipt_path(state_root: &Path, envelope_ref: &str, phase: &str) -> PathBuf {
     state_root.join(CONTROL_INGRESS_DIR).join("receipts").join(format!(
         "{}.{}.receipt.preserves",
@@ -8718,11 +8738,9 @@ fn validate_ingress_refs(refs: &[String], label: &str) -> Result<()> {
 }
 
 fn validate_ingress_ref(reference: &str, label: &str) -> Result<()> {
-    if reference.starts_with("blake3:") {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{label} must be a blake3 ref")))
-    }
+    validate_content_ref(reference).map_err(|error| {
+        MoltenError::invalid_harness(format!("{label} must be a canonical blake3 content ref: {error}"))
+    })
 }
 
 fn validate_member_ref(actual: &str, expected: &str, label: &str) -> Result<()> {
@@ -8983,6 +9001,18 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use super::*;
+
+    #[test]
+    fn node_daemon_ingress_ref_parser_rejects_short_fixture_refs() {
+        let error = validate_ingress_ref("blake3:fixture", "node control ingress payload ref")
+            .expect_err("short fixture ref denied");
+        assert!(error.to_string().contains("canonical blake3 content ref"));
+        validate_ingress_ref(
+            "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "node control ingress payload ref",
+        )
+        .expect("valid canonical ref");
+    }
 
     #[test]
     fn local_node_init_run_status_stop_and_restart_recovery_are_receipted() {
@@ -9542,6 +9572,77 @@ mod tests {
         let control = node_runtime::parse_node_control_receipt(&control_value).expect("parse control receipt");
         assert_eq!(control.decision, "deny");
         assert!(control.diagnostics.iter().any(|diagnostic| diagnostic.contains("provenance evidence refs missing")));
+    }
+
+    #[test]
+    fn node_control_ingress_denies_tampered_materialized_envelope_ref() {
+        let root = temp_dir("node-control-ingress-materialized-ref");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:ingress-materialized",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let authority_refs = vec![local_ref("node-control-authority", "materialized").expect("authority ref")];
+        let policy_refs = vec![local_ref("node-control-policy", "materialized").expect("policy ref")];
+        let resource_refs = vec![local_ref("node-control-resource", "materialized").expect("resource ref")];
+        let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:materialized").expect("bootstrap ref")];
+        let payload_ref =
+            import_node_artifact(&root, &record("node-control-ingress-payload", vec![string("materialized")]))
+                .expect("import payload");
+        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "install",
+            target_ref: None,
+            payload_ref: Some(&payload_ref),
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("request");
+        let first = node_control_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: &request_value,
+            from_peer: "peer:materialized",
+            to_node: "node:ingress-materialized",
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            sequence: 1,
+            peer_bootstrap_refs: &peer_bootstrap_refs,
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("first envelope");
+        let second = node_control_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: &request_value,
+            from_peer: "peer:materialized",
+            to_node: "node:ingress-materialized",
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            sequence: 2,
+            peer_bootstrap_refs: &peer_bootstrap_refs,
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("second envelope");
+        publish_node_control_ingress(&NodeControlIngressPublishInput {
+            state_root: &root,
+            envelope_value: &first.value,
+        })
+        .expect("publish first");
+        write_preserves(
+            &control_ingress_envelope_path(&root, DEFAULT_CONTROL_INGRESS_TOPIC, &first.envelope_ref),
+            &second.value,
+        )
+        .expect("tamper materialized envelope");
+        let denied = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
+            state_root: &root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            envelope_ref: &first.envelope_ref,
+        })
+        .expect_err("materialized ref mismatch denied");
+        assert!(denied.to_string().contains("materialized envelope ref"));
     }
 
     #[test]

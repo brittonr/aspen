@@ -10,6 +10,10 @@ use super::RuntimeStep;
 use super::TurnAction;
 use crate::error::MoltenError;
 use crate::error::Result;
+use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::record;
+use crate::preserves_rail::sequence;
+use crate::preserves_rail::u64_value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeSnapshot {
@@ -19,6 +23,23 @@ pub struct RuntimeSnapshot {
     pub messages: BTreeSet<RuntimeMessage>,
     pub assertions: BTreeSet<RuntimeAssertion>,
     pub observers: BTreeSet<RuntimeObserver>,
+}
+
+impl RuntimeSnapshot {
+    pub fn to_value(&self) -> preserves::IOValue {
+        record("runtime-snapshot-v1", vec![
+            u64_value(self.logical_time),
+            u64_value(self.rng_state),
+            u64_value(self.effect_sequence),
+            sequence(self.messages.iter().map(RuntimeMessage::to_value).collect()),
+            sequence(self.assertions.iter().map(RuntimeAssertion::to_value).collect()),
+            sequence(self.observers.iter().map(RuntimeObserver::to_value).collect()),
+        ])
+    }
+
+    pub fn snapshot_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -293,9 +314,43 @@ impl RuntimeState {
 #[cfg(test)]
 mod tests {
     use super::RuntimeState;
+    use crate::preserves_rail::canonical_hash;
+    use crate::preserves_rail::validate_content_ref;
     use crate::runtime::RuntimeEvent;
+    use crate::runtime::RuntimeMessage;
     use crate::runtime::RuntimeStep;
     use crate::runtime::RuntimeValue;
+
+    #[test]
+    fn runtime_values_and_events_expose_stable_content_refs() {
+        let value = RuntimeValue::string("service.ready").expect("runtime value");
+        validate_content_ref(value.value_ref()).expect("value ref shape");
+        assert_eq!(value.value_ref(), canonical_hash(value.as_iovalue()).expect("canonical value ref"));
+
+        let message = RuntimeMessage {
+            from: "producer".to_string(),
+            to: "consumer".to_string(),
+            body: value.clone(),
+        };
+        validate_content_ref(&message.message_ref().expect("message ref")).expect("message ref shape");
+        let mut state = RuntimeState::new(7);
+        state.apply_step(&RuntimeStep::Send {
+            from: "producer".to_string(),
+            to: "consumer".to_string(),
+            body: value.clone(),
+        });
+        let snapshot_ref = state.snapshot().snapshot_ref().expect("snapshot ref");
+        validate_content_ref(&snapshot_ref).expect("snapshot ref shape");
+
+        let event = RuntimeEvent::MessageDelivered {
+            from: "producer".to_string(),
+            to: "consumer".to_string(),
+            body: value,
+        };
+        let event_ref = event.event_ref().expect("event ref");
+        validate_content_ref(&event_ref).expect("event ref shape");
+        assert_eq!(event_ref, event.event_ref().expect("event ref stable"));
+    }
 
     #[test]
     fn transition_is_deterministic_from_explicit_seed() {
