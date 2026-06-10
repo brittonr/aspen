@@ -38,6 +38,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::schema_identity;
 
@@ -1452,11 +1453,9 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 }
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
-    if reference.starts_with("blake3:") && reference.len() == "blake3:".len() + 64 {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("expected blake3 hash ref for {field}, got {reference}")))
-    }
+    validate_content_ref(reference).map_err(|error| {
+        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
+    })
 }
 
 fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {

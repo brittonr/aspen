@@ -23,6 +23,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::to_text;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const TOOL_VERSION: &str = "local-artifact-catalog-v1";
@@ -1767,11 +1768,9 @@ fn validate_decision(decision: &str) -> Result<()> {
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
-    if value_ref.starts_with("blake3:") {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{field} must be a blake3 ref, got {value_ref}")))
-    }
+    validate_content_ref(value_ref).map_err(|error| {
+        MoltenError::invalid_harness(format!("{field} must be a canonical content ref, got {value_ref}: {error}"))
+    })
 }
 
 fn validate_refs(refs: &[String], field: &str) -> Result<()> {

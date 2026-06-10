@@ -23,6 +23,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const SCOPE_ACTOR_TURN: &str = "actor-turn";
@@ -854,13 +855,11 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 }
 
 fn require_ref(reference: &str, label: &str) -> Result<()> {
-    if reference.strip_prefix("blake3:").is_some_and(|hex| hex.len() == 64) {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!(
-            "unsupported {label} {reference}; expected blake3:<64 hex chars>"
-        )))
-    }
+    validate_content_ref(reference).map_err(|error| {
+        MoltenError::invalid_harness(format!(
+            "unsupported {label} {reference}; expected canonical content ref: {error}"
+        ))
+    })
 }
 
 fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()> {

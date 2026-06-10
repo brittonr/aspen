@@ -24,6 +24,7 @@ use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::to_text;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::schema_identity;
 use crate::typed_storage;
@@ -1280,11 +1281,9 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 }
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
-    if value_ref.starts_with("blake3:") && value_ref.len() > "blake3:".len() {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{field} must be a blake3 ref, got {value_ref}")))
-    }
+    validate_content_ref(value_ref).map_err(|error| {
+        MoltenError::invalid_harness(format!("{field} must be a canonical content ref, got {value_ref}: {error}"))
+    })
 }
 
 fn validate_refs(refs: &[String], field: &str) -> Result<()> {

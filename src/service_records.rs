@@ -18,6 +18,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 const MAX_SERVICE_IDS: usize = 512;
@@ -1066,11 +1067,9 @@ fn validate_optional_ref(reference: Option<&str>, field: &str) -> Result<()> {
 }
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
-    if reference.starts_with("blake3:") {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("expected blake3 ref for {field}, got {reference}")))
-    }
+    validate_content_ref(reference).map_err(|error| {
+        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
+    })
 }
 
 fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()> {
@@ -1303,6 +1302,17 @@ mod tests {
         )
         .expect("parse malformed manifest");
         assert!(parse_service_manifest(&malformed).is_err());
+
+        let short_ref = parse_text(
+            "<service-manifest-v1 \"molten.service.manifest.v1\" <service-id \"svc:web\"> \
+             <owner \"blake3:short\"> <target \"blake3:short\"> <requires []> <provides []> \
+             <restart-policy \"blake3:short\"> <policy [\"blake3:short\"]> <resource [\"blake3:short\"]> \
+             <effect-profile [\"blake3:short\"]> \
+             <checks [<check \"explicit-authority\" \"pass\"> <check \"policy-resource-effect-declared\" \"pass\">]>>",
+        )
+        .expect("parse short-ref manifest");
+        let error = parse_service_manifest(&short_ref).expect_err("short refs fail closed");
+        assert!(error.to_string().contains("canonical content ref"));
     }
 
     #[test]

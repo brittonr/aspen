@@ -16,6 +16,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::remote_dataspace;
 use crate::remote_dataspace::RemoteDataspaceEnvelope;
@@ -2509,10 +2510,9 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 }
 
 fn require_ref(reference: &str, label: &str) -> Result<()> {
-    if reference.starts_with("blake3:") {
-        return Ok(());
-    }
-    Err(MoltenError::invalid_harness(format!("expected blake3 ref for {label}, got {reference}")))
+    validate_content_ref(reference).map_err(|error| {
+        MoltenError::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
+    })
 }
 
 fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()> {
@@ -2541,6 +2541,18 @@ mod tests {
 
     fn test_ref(label: &str) -> String {
         canonical_hash(&record("protocol-test-ref", vec![string(label)])).expect("test ref")
+    }
+
+    #[test]
+    fn protocol_refs_reject_malformed_content_refs() {
+        for reference in [
+            "blake3:short",
+            "blake3:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "blake3:zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        ] {
+            let error = require_ref(reference, "protocol regression ref").expect_err("malformed ref must fail closed");
+            assert!(error.to_string().contains("canonical content ref"));
+        }
     }
 
     fn auth() -> Vec<String> {

@@ -16,6 +16,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const TRANSFER_LOCAL_ONLY: &str = "local-only";
@@ -962,11 +963,9 @@ fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
 }
 
 fn require_ref(value: &str, field: &str) -> Result<()> {
-    if value.starts_with("blake3:") && value.len() == "blake3:".len() + 64 {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("expected blake3 hash ref for {field}, got {value}")))
-    }
+    validate_content_ref(value).map_err(|error| {
+        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {value}: {error}"))
+    })
 }
 
 fn required_record_string(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {

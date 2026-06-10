@@ -343,21 +343,28 @@ impl RuntimeEvent {
                 actor,
                 sequence,
                 upper,
-            } => optional_upper_event_value("runtime-event-effect-request-v1", effect, actor, *sequence, *upper, None),
+            } => optional_upper_event_value(&OptionalUpperEventValueInput {
+                name: "runtime-event-effect-request-v1",
+                effect,
+                actor,
+                sequence: *sequence,
+                upper: *upper,
+                value: None,
+            }),
             RuntimeEvent::EffectResponse {
                 effect,
                 actor,
                 sequence,
                 upper,
                 value,
-            } => optional_upper_event_value(
-                "runtime-event-effect-response-v1",
+            } => optional_upper_event_value(&OptionalUpperEventValueInput {
+                name: "runtime-event-effect-response-v1",
                 effect,
                 actor,
-                *sequence,
-                *upper,
-                Some(*value),
-            ),
+                sequence: *sequence,
+                upper: *upper,
+                value: Some(*value),
+            }),
             RuntimeEvent::AdmissionDecision { request, decision } => {
                 record("runtime-event-admission-decision-v1", vec![
                     admission_request_ref_value(request),
@@ -375,22 +382,28 @@ impl RuntimeEvent {
     }
 }
 
-fn optional_upper_event_value(
+struct OptionalUpperEventValueInput<'a> {
     name: &'static str,
-    effect: &RuntimeEffect,
-    actor: &str,
+    effect: &'a RuntimeEffect,
+    actor: &'a str,
     sequence: u64,
     upper: Option<u64>,
     value: Option<u64>,
-) -> IOValue {
-    let mut fields = vec![string(effect.as_str()), string(actor), u64_value(sequence)];
-    if let Some(upper) = upper {
+}
+
+fn optional_upper_event_value(input: &OptionalUpperEventValueInput<'_>) -> IOValue {
+    let mut fields = vec![
+        string(input.effect.as_str()),
+        string(input.actor),
+        u64_value(input.sequence),
+    ];
+    if let Some(upper) = input.upper {
         fields.push(u64_value(upper));
     }
-    if let Some(value) = value {
+    if let Some(value) = input.value {
         fields.push(u64_value(value));
     }
-    record(name, fields)
+    record(input.name, fields)
 }
 
 fn admission_request_ref_value(request: &AdmissionRequest) -> IOValue {

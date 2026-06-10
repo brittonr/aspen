@@ -24,6 +24,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::to_text;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::retention;
 
@@ -1766,11 +1767,8 @@ fn validate_non_empty(value: &str, label: &str) -> Result<()> {
 }
 
 fn validate_ref(value: &str, label: &str) -> Result<()> {
-    if value.starts_with("blake3:") && value.len() > "blake3:".len() {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{label} must be a blake3 ref")))
-    }
+    validate_content_ref(value)
+        .map_err(|error| MoltenError::invalid_harness(format!("{label} must be a canonical content ref: {error}")))
 }
 
 fn validate_optional_ref(value: Option<&str>, label: &str) -> Result<()> {

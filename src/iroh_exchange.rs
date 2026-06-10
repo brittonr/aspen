@@ -34,6 +34,7 @@ use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 const MAX_CHAIN_BUNDLE_ARTIFACTS: usize = 100_000;
@@ -876,9 +877,9 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 
 fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
     let reference = required_string(value, field)?;
-    if !reference.starts_with("blake3:") {
-        return Err(MoltenError::invalid_harness(format!("expected blake3 ref for {field}, got {reference}")));
-    }
+    validate_content_ref(&reference).map_err(|error| {
+        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
+    })?;
     Ok(reference)
 }
 
@@ -904,9 +905,11 @@ fn exchange_receipt_value(input: &ExchangeReceiptValueInput<'_>) -> IOValue {
 }
 
 fn blob_path(root: &Path, bundle_ref: &str) -> Result<std::path::PathBuf> {
-    let hex = bundle_ref.strip_prefix("blake3:").ok_or_else(|| {
-        MoltenError::invalid_harness(format!("unsupported Iroh bundle ref {bundle_ref}; expected blake3 ref"))
-    })?;
+    validate_content_ref(bundle_ref)
+        .map_err(|error| MoltenError::invalid_harness(format!("unsupported Iroh bundle ref {bundle_ref}: {error}")))?;
+    let hex = bundle_ref
+        .strip_prefix("blake3:")
+        .ok_or_else(|| MoltenError::invalid_harness("validated Iroh bundle ref missing blake3 prefix"))?;
     Ok(root.join("blobs").join(format!("blake3_{hex}.bin")))
 }
 

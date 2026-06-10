@@ -48,6 +48,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::remote_dataspace;
 use crate::retention;
@@ -1141,7 +1142,7 @@ pub fn release_promotion_gate_receipt_value(
         }
     };
     let selected_key_ref =
-        selected_key.map_or_else(|| "blake3:missing-signed-key".to_string(), |key| key.key_ref.clone());
+        selected_key.map_or_else(|| dogfood_ref("missing-signed-key"), |key| Ok(key.key_ref.clone()))?;
     let selected_key_id = selected_key.map_or_else(|| "missing".to_string(), |key| key.key_id.clone());
     let selected_signer =
         selected_key.map_or_else(|| input.signed_signer.unwrap_or("missing").to_string(), |key| key.signer.clone());
@@ -1308,35 +1309,35 @@ pub fn release_promotion_summary_value(input: &ReleasePromotionSummaryInput<'_>)
 
     let promotion_ref = promotion
         .as_ref()
-        .map_or_else(|| "blake3:missing-release-promotion-gate".to_string(), |promotion| promotion.receipt_ref.clone());
+        .map_or_else(|| dogfood_ref("missing-release-promotion-gate"), |promotion| Ok(promotion.receipt_ref.clone()))?;
     let promotion_decision = promotion.as_ref().map_or("missing", |promotion| promotion.decision.as_str());
     let bundle_verify_ref = promotion.as_ref().map_or_else(
-        || "blake3:missing-release-bundle-verify".to_string(),
-        |promotion| promotion.bundle_verify_ref.clone(),
-    );
+        || dogfood_ref("missing-release-bundle-verify"),
+        |promotion| Ok(promotion.bundle_verify_ref.clone()),
+    )?;
     let bundle_ref = promotion
         .as_ref()
-        .map_or_else(|| "blake3:missing-release-evidence-bundle".to_string(), |promotion| promotion.bundle_ref.clone());
+        .map_or_else(|| dogfood_ref("missing-release-evidence-bundle"), |promotion| Ok(promotion.bundle_ref.clone()))?;
     let source_ref = promotion
         .as_ref()
-        .map_or_else(|| "blake3:missing-source-evidence".to_string(), |promotion| promotion.source_ref.clone());
+        .map_or_else(|| dogfood_ref("missing-source-evidence"), |promotion| Ok(promotion.source_ref.clone()))?;
     let octet_ref = promotion
         .as_ref()
-        .map_or_else(|| "blake3:missing-octet-evidence".to_string(), |promotion| promotion.octet_ref.clone());
+        .map_or_else(|| dogfood_ref("missing-octet-evidence"), |promotion| Ok(promotion.octet_ref.clone()))?;
     let cairn_ref = promotion
         .as_ref()
-        .map_or_else(|| "blake3:missing-cairn-evidence".to_string(), |promotion| promotion.cairn_ref.clone());
+        .map_or_else(|| dogfood_ref("missing-cairn-evidence"), |promotion| Ok(promotion.cairn_ref.clone()))?;
     let signed_envelope_ref = signed.as_ref().map_or_else(
-        || "blake3:missing-signed-release-promotion".to_string(),
-        |signed| signed.receipt.envelope_ref.clone(),
-    );
+        || dogfood_ref("missing-signed-release-promotion"),
+        |signed| Ok(signed.receipt.envelope_ref.clone()),
+    )?;
     let signed_subject_ref = signed.as_ref().map_or_else(
-        || "blake3:missing-signed-release-promotion-subject".to_string(),
-        |signed| signed.receipt.subject_ref.clone(),
-    );
+        || dogfood_ref("missing-signed-release-promotion-subject"),
+        |signed| Ok(signed.receipt.subject_ref.clone()),
+    )?;
     let signed_key_ref = signed
         .as_ref()
-        .map_or_else(|| "blake3:missing-signed-release-key".to_string(), |signed| signed.key_ref.clone());
+        .map_or_else(|| dogfood_ref("missing-signed-release-key"), |signed| Ok(signed.key_ref.clone()))?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = record("release-promotion-summary-v1", vec![
         string(OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA),
@@ -1506,11 +1507,11 @@ pub fn verify_release_export(input: &ReleaseExportVerifyInput<'_>) -> Result<Rel
     }
     let manifest_ref = parsed_manifest
         .as_ref()
-        .map_or_else(|| "blake3:missing-release-export-manifest".to_string(), |manifest| manifest.manifest_ref.clone());
+        .map_or_else(|| dogfood_ref("missing-release-export-manifest"), |manifest| Ok(manifest.manifest_ref.clone()))?;
     let promotion_summary_ref = parsed_manifest.as_ref().map_or_else(
-        || "blake3:missing-release-promotion-summary".to_string(),
-        |manifest| manifest.promotion_summary_ref.clone(),
-    );
+        || dogfood_ref("missing-release-promotion-summary"),
+        |manifest| Ok(manifest.promotion_summary_ref.clone()),
+    )?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = record("release-export-verify-receipt-v1", vec![
         string(OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA),
@@ -3373,11 +3374,8 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 }
 
 fn validate_ref(value: &str, field: &str) -> Result<()> {
-    if value.starts_with("blake3:") && value.len() > "blake3:".len() {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{field} must be a blake3 ref")))
-    }
+    validate_content_ref(value)
+        .map_err(|error| MoltenError::invalid_harness(format!("{field} must be a canonical content ref: {error}")))
 }
 
 fn validate_optional_ref(value: Option<&str>, field: &str) -> Result<()> {

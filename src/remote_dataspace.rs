@@ -19,6 +19,7 @@ use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::runtime::RuntimeEvent;
 use crate::runtime::RuntimeState;
@@ -1006,13 +1007,11 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 }
 
 fn validate_ref(reference: &str, label: &str) -> Result<()> {
-    if reference.strip_prefix("blake3:").is_some_and(|hex| hex.len() == 64) {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!(
-            "unsupported {label} {reference}; expected blake3:<64 hex chars>"
-        )))
-    }
+    validate_content_ref(reference).map_err(|error| {
+        MoltenError::invalid_harness(format!(
+            "unsupported {label} {reference}; expected canonical content ref: {error}"
+        ))
+    })
 }
 
 fn validate_name(value: &str, field: &str) -> Result<()> {
@@ -1036,10 +1035,11 @@ fn topic_dir(root: &Path, topic: &str) -> PathBuf {
 }
 
 fn filename_for_ref(reference: &str) -> Result<String> {
-    reference
+    validate_ref(reference, "local materialized ref")?;
+    let hex = reference
         .strip_prefix("blake3:")
-        .map(|hex| format!("blake3_{hex}.bin"))
-        .ok_or_else(|| MoltenError::invalid_harness(format!("unsupported ref {reference}; expected blake3 ref")))
+        .ok_or_else(|| MoltenError::invalid_harness("validated remote dataspace ref missing blake3 prefix"))?;
+    Ok(format!("blake3_{hex}.bin"))
 }
 
 fn parse_delivery_log_entry(value: &Value<IOValue>) -> Result<RemoteDataspaceDelivery> {
@@ -1238,6 +1238,18 @@ mod tests {
         let error = deliver_local_gossip(&root, "services", &envelope.envelope_ref, "peer:b")
             .expect_err("tampered content rejects delivery");
         assert!(error.to_string().contains("content ref"));
+    }
+
+    #[test]
+    fn remote_dataspace_refs_reject_malformed_content_refs() {
+        for reference in [
+            "blake3:short",
+            "blake3:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "blake3:zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        ] {
+            let error = validate_ref(reference, "remote regression ref").expect_err("malformed ref must fail closed");
+            assert!(error.to_string().contains("canonical content ref"));
+        }
     }
 
     #[test]

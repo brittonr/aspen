@@ -1103,9 +1103,7 @@ fn build_turn_journals(report: &HarnessReport) -> Result<TurnJournalEvidence> {
             string(&observation.step_ref),
             string(&observation.before_state_hash),
             string(&observation.after_state_hash),
-            record("event-refs", vec![sequence(
-                observation.event_refs.iter().map(|reference| string(reference)).collect(),
-            )]),
+            record("event-refs", vec![sequence(observation.event_refs.iter().map(string).collect())]),
         ]))?;
         let producer = turn_journal_producer()?;
         let input = if let Some(previous) = builder.links.last() {

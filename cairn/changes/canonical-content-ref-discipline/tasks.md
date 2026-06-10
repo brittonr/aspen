@@ -17,5 +17,5 @@
 
 ## Phase 4: Broader migration
 
-- [ ] [parallel] r[molten.runtime_spine.canonical_content_refs.migration] Migrate artifact registry, catalog, coordination, protocol session, service runtime, transcripts, provenance, redaction, secrets, and job DAG validators to the shared ref helper in bounded slices. (Started: artifact registry, job DAG, coordination, and service runtime validators now use the shared helper and readback checks where local materialization is claimed.)
+- [x] [parallel] r[molten.runtime_spine.canonical_content_refs.migration] Migrate artifact registry, catalog, coordination, protocol session, service runtime, transcripts, provenance, redaction, secrets, and job DAG validators to the shared ref helper in bounded slices. (Artifact registry, catalog/MCP, coordination, protocol session, service runtime/records/supervision, transcripts, provenance, secrets, job DAG, authority/resource/bootstrap/federation/retention/plugin/operator boundaries, and readback paths now use the shared helper where local materialization is claimed.)
 - [ ] [serial] r[molten.runtime_spine.canonical_content_refs.negative_tests] Run Molten validation gates, Octet, Cairn strict validation, and Nix nextest for the migrated slices.

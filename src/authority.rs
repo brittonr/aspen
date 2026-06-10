@@ -13,6 +13,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::runtime::RuntimeAssertion;
 #[cfg(test)]
@@ -536,10 +537,9 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 }
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
-    if !reference.starts_with("blake3:") {
-        return Err(MoltenError::invalid_harness(format!("expected blake3 ref for {field}, got {reference}")));
-    }
-    Ok(())
+    validate_content_ref(reference).map_err(|error| {
+        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
+    })
 }
 
 fn optional_ref_value(value: Option<&str>) -> IOValue {

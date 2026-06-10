@@ -33,6 +33,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const GENESIS_VALID_PREDICATE: &str = "molten.chain.genesis_valid.v1";
@@ -2266,11 +2267,9 @@ fn require_non_empty(value: &str, field: &str) -> Result<()> {
 
 fn require_ref(value: &str, field: &str) -> Result<()> {
     require_non_empty(value, field)?;
-    if value.strip_prefix("blake3:").is_some_and(|hash| !hash.is_empty()) {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("unsupported {field} {value}; expected blake3 ref")))
-    }
+    validate_content_ref(value).map_err(|error| {
+        MoltenError::invalid_harness(format!("unsupported {field} {value}; expected canonical content ref: {error}"))
+    })
 }
 
 fn ensure_count_at_most(count: usize, maximum: usize, label: &str) -> Result<()> {

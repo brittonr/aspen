@@ -30,6 +30,7 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const PLUGIN_HOST_ABI_VERSION: &str = "molten.plugin.host-abi.v1";
@@ -1270,11 +1271,8 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 }
 
 fn validate_ref(value: &str, field: &str) -> Result<()> {
-    if value.starts_with("blake3:") && value.len() > "blake3:".len() {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{field} must be a blake3 ref")))
-    }
+    validate_content_ref(value)
+        .map_err(|error| MoltenError::invalid_harness(format!("{field} must be a canonical content ref: {error}")))
 }
 
 fn validate_optional_ref(value: Option<&str>, field: &str) -> Result<()> {

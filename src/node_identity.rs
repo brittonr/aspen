@@ -16,6 +16,7 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 const SECRET_FILE: &str = "node-endpoint.secret";
@@ -493,10 +494,9 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 }
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
-    if !reference.starts_with("blake3:") {
-        return Err(MoltenError::invalid_harness(format!("expected blake3 ref for {field}, got {reference}")));
-    }
-    Ok(())
+    validate_content_ref(reference).map_err(|error| {
+        MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
+    })
 }
 
 fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {

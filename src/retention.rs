@@ -41,6 +41,7 @@ use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::to_text;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const CLASS_EPHEMERAL_CACHE: &str = "ephemeral-cache";
@@ -7982,11 +7983,8 @@ fn validate_diagnostics(values: &[String], label: &str) -> Result<()> {
 
 fn require_ref(value: &str, label: &str) -> Result<()> {
     validate_name(value, label)?;
-    if value.starts_with("blake3:") {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{label} must be a blake3 ref")))
-    }
+    validate_content_ref(value)
+        .map_err(|error| MoltenError::invalid_harness(format!("{label} must be a canonical content ref: {error}")))
 }
 
 fn validate_name(value: &str, label: &str) -> Result<()> {

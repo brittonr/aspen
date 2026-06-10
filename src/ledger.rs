@@ -824,7 +824,12 @@ mod tests {
         }
         let missing = "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
         let error = read_artifact(&root, missing).expect_err("valid-shaped missing ref is not materialized");
-        assert!(error.to_string().contains("No such file") || error.to_string().contains("os error"));
+        let error_text = error.to_string();
+        if error_text.contains("No such file") {
+            assert!(error_text.contains("No such file"));
+        } else {
+            assert!(error_text.contains("os error"));
+        }
     }
 
     #[test]
