@@ -13,9 +13,9 @@
 ## Phase 3: Runtime and harness refs
 
 - [x] [serial] r[molten.runtime_spine.canonical_content_refs.runtime_values] Expose canonical refs for runtime values, messages, assertions, events, turn journals, and state snapshots.
-- [ ] [parallel] r[molten.runtime_spine.canonical_content_refs.negative_tests] Add malformed-ref, wrong-length, non-hex, missing-artifact, and tampered-bytes regression tests. (Started: parser matrix, node-runtime short fixture denial, node-daemon short fixture denial, tampered ingress envelope materialization, ledger malformed/missing/tampered materialization tests, artifact malformed/missing/tampered/name-not-identity tests, job-ref malformed/missing/inline-denial tests, and coordination/service-runtime malformed-ref tests.)
+- [x] [parallel] r[molten.runtime_spine.canonical_content_refs.negative_tests] Add malformed-ref, wrong-length, non-hex, missing-artifact, and tampered-bytes regression tests. (Parser matrix, node-runtime short fixture denial, node-daemon short fixture denial, tampered ingress envelope materialization, ledger malformed/missing/tampered materialization tests, artifact malformed/missing/tampered/name-not-identity tests, job-ref malformed/missing/inline-denial tests, coordination/service-runtime malformed-ref tests, protocol malformed-ref tests, remote dataspace malformed/tampered tests, and service manifest short-ref tests.)
 
 ## Phase 4: Broader migration
 
 - [x] [parallel] r[molten.runtime_spine.canonical_content_refs.migration] Migrate artifact registry, catalog, coordination, protocol session, service runtime, transcripts, provenance, redaction, secrets, and job DAG validators to the shared ref helper in bounded slices. (Artifact registry, catalog/MCP, coordination, protocol session, service runtime/records/supervision, transcripts, provenance, secrets, job DAG, authority/resource/bootstrap/federation/retention/plugin/operator boundaries, and readback paths now use the shared helper where local materialization is claimed.)
-- [ ] [serial] r[molten.runtime_spine.canonical_content_refs.negative_tests] Run Molten validation gates, Octet, Cairn strict validation, and Nix nextest for the migrated slices.
+- [x] [serial] r[molten.runtime_spine.canonical_content_refs.negative_tests] Run Molten validation gates, Octet, Cairn strict validation, and Nix nextest for the migrated slices.
