@@ -13,9 +13,9 @@
 ## Phase 3: Runtime and harness refs
 
 - [x] [serial] r[molten.runtime_spine.canonical_content_refs.runtime_values] Expose canonical refs for runtime values, messages, assertions, events, turn journals, and state snapshots.
-- [ ] [parallel] r[molten.runtime_spine.canonical_content_refs.negative_tests] Add malformed-ref, wrong-length, non-hex, missing-artifact, and tampered-bytes regression tests. (Started: parser matrix, node-runtime short fixture denial, node-daemon short fixture denial, tampered ingress envelope materialization, ledger malformed/missing/tampered materialization tests, and artifact malformed/missing/tampered/name-not-identity tests.)
+- [ ] [parallel] r[molten.runtime_spine.canonical_content_refs.negative_tests] Add malformed-ref, wrong-length, non-hex, missing-artifact, and tampered-bytes regression tests. (Started: parser matrix, node-runtime short fixture denial, node-daemon short fixture denial, tampered ingress envelope materialization, ledger malformed/missing/tampered materialization tests, artifact malformed/missing/tampered/name-not-identity tests, and job-ref malformed/missing/inline-denial tests.)
 
 ## Phase 4: Broader migration
 
-- [ ] [parallel] r[molten.runtime_spine.canonical_content_refs.migration] Migrate artifact registry, catalog, coordination, protocol session, service runtime, transcripts, provenance, redaction, secrets, and job DAG validators to the shared ref helper in bounded slices. (Started: artifact registry validators now use the shared helper and readback checks.)
+- [ ] [parallel] r[molten.runtime_spine.canonical_content_refs.migration] Migrate artifact registry, catalog, coordination, protocol session, service runtime, transcripts, provenance, redaction, secrets, and job DAG validators to the shared ref helper in bounded slices. (Started: artifact registry and job DAG validators now use the shared helper and readback checks.)
 - [ ] [serial] r[molten.runtime_spine.canonical_content_refs.negative_tests] Run Molten validation gates, Octet, Cairn strict validation, and Nix nextest for the migrated slices.

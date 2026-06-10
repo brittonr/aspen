@@ -53,6 +53,7 @@ use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::to_text;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::remote_dataspace;
 use crate::resources;
@@ -5289,11 +5290,9 @@ fn validate_node_id(id: &str) -> Result<()> {
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
-    if value_ref.starts_with("blake3:") {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{field} must be a blake3 ref, got {value_ref}")))
-    }
+    validate_content_ref(value_ref).map_err(|error| {
+        MoltenError::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
+    })
 }
 
 fn validate_refs(refs: &[String], field: &str) -> Result<()> {
@@ -5546,6 +5545,40 @@ mod tests {
         assert!(!executed.diagnostics.is_empty());
         let receipt = parse_blob_ref_job_receipt_value(&executed.receipt_value).expect("parse deny receipt");
         assert_eq!(receipt.decision, "deny");
+    }
+
+    #[test]
+    fn blob_ref_job_submission_rejects_malformed_content_refs() {
+        let operation_id = local_ref("job-ref-operation", "malformed").expect("operation id");
+        let authority_ref = local_ref("job-ref-authority", "malformed").expect("authority ref");
+        for invalid in [
+            "blake3:fixture",
+            "blake3:0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef",
+            "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+        ] {
+            let error = job_ref_submission_value(BlobRefJobSubmissionValueInput {
+                job_id: "job-ref-malformed",
+                operation_id: &operation_id,
+                executable: JobContentRef {
+                    content_ref: invalid.to_string(),
+                    size: 4,
+                    format: "elf-executable".to_string(),
+                    schema_ref: None,
+                },
+                inputs: Vec::new(),
+                output_mode: "chunk-manifest",
+                input_schema_refs: &[],
+                output_schema_refs: &[],
+                effect_manifest_refs: &[],
+                handler_profile: "local-echo-v1",
+                authority_context_ref: &authority_ref,
+                policy_refs: &[],
+                provenance_refs: &[],
+                evidence_refs: &[],
+            })
+            .expect_err("malformed executable ref denied");
+            assert!(error.to_string().contains("canonical blake3 content ref"), "unexpected error: {error}");
+        }
     }
 
     #[test]
