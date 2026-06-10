@@ -175,6 +175,7 @@ pub const OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA: &str = "molten.operator.relea
 pub const OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA: &str =
     "molten.operator.release-evidence-bundle-verify-receipt.v1";
 pub const OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA: &str = "molten.operator.release-promotion-gate-receipt.v1";
+pub const OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA: &str = "molten.operator.release-promotion-summary.v1";
 pub const PLUGIN_MANIFEST_SCHEMA: &str = "molten.plugin.manifest.v1";
 pub const PLUGIN_HOST_ABI_SCHEMA: &str = "molten.plugin.host-abi.v1";
 pub const PLUGIN_HOST_ABI_RESULT_SCHEMA: &str = "molten.plugin.host-abi-result.v1";

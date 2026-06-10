@@ -36,6 +36,7 @@ use crate::preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA;
 use crate::preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA;
 use crate::preserves_rail::OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA;
+use crate::preserves_rail::OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA;
 use crate::preserves_rail::OPERATOR_STEP_SCHEMA;
 use crate::preserves_rail::OPERATOR_WORKFLOW_SCHEMA;
 use crate::preserves_rail::bool_value;
@@ -50,6 +51,7 @@ use crate::remote_dataspace;
 use crate::retention;
 
 pub const RELEASE_EVIDENCE_SIGNING_PURPOSE: &str = "release-evidence";
+pub const RELEASE_PROMOTION_SIGNING_PURPOSE: &str = "release-promotion";
 
 const LOCAL_NODE_WORKFLOW_ID: &str = "dogfood:local-node";
 const DOGFOOD_HARNESS_SUITE: &str = r#"<harness-suite-v1 "molten.harness.suite.v1" "dogfood-repro" 3
@@ -255,6 +257,33 @@ pub struct ReleasePromotionGateReceipt {
     pub bundle_ref: String,
     pub output_path_ref: String,
     pub selected_key_ref: String,
+    pub source_ref: String,
+    pub octet_ref: String,
+    pub cairn_ref: String,
+    pub diagnostics: Vec<String>,
+    pub checks: Vec<(String, String)>,
+    pub value: IOValue,
+}
+
+pub struct ReleasePromotionSummaryInput<'a> {
+    pub output_path: &'a Path,
+    pub signed_keys: &'a [SignedReceiptKey],
+    pub signed_key_revocations: &'a [SignedReceiptKeyRevocation],
+    pub signed_trust_root: &'a str,
+    pub signed_signer: Option<&'a str>,
+    pub signed_key_ref: Option<&'a str>,
+    pub signed_key_id: Option<&'a str>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReleasePromotionSummary {
+    pub summary_ref: String,
+    pub decision: String,
+    pub promotion_ref: String,
+    pub signed_envelope_ref: String,
+    pub signed_subject_ref: String,
+    pub signed_key_ref: String,
+    pub bundle_verify_ref: String,
     pub source_ref: String,
     pub octet_ref: String,
     pub cairn_ref: String,
@@ -1176,6 +1205,190 @@ pub fn parse_release_promotion_gate_receipt(value: &IOValue) -> Result<ReleasePr
     })
 }
 
+pub fn release_promotion_summary_value(input: &ReleasePromotionSummaryInput<'_>) -> Result<ReleasePromotionSummary> {
+    let output_path_string = input.output_path.display().to_string();
+    let output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
+    let mut diagnostics = Vec::new();
+
+    let promotion_result = read_output_text(input.output_path, "release-promotion-gate.preserves")
+        .and_then(|text| parse_text(&text))
+        .and_then(|value| parse_release_promotion_gate_receipt(&value));
+    let promotion = match promotion_result {
+        Ok(promotion) => Some(promotion),
+        Err(error) => {
+            diagnostics.push_limited_value(
+                format!("release promotion gate receipt readback failed: {error}"),
+                MAX_OPERATOR_DIAGNOSTICS,
+                "release promotion summary diagnostics",
+            )?;
+            None
+        }
+    };
+    if let Some(promotion) = promotion.as_ref() {
+        if promotion.decision != "pass" {
+            diagnostics.push_limited_value(
+                format!("release promotion gate receipt {} decision is {}", promotion.receipt_ref, promotion.decision),
+                MAX_OPERATOR_DIAGNOSTICS,
+                "release promotion summary diagnostics",
+            )?;
+        }
+        if promotion.output_path_ref != output_path_ref {
+            diagnostics.push_limited_value(
+                format!(
+                    "release promotion summary output-path-ref mismatch: receipt={} observed={}",
+                    promotion.output_path_ref, output_path_ref
+                ),
+                MAX_OPERATOR_DIAGNOSTICS,
+                "release promotion summary diagnostics",
+            )?;
+        }
+    }
+
+    let expected_subject_ref = promotion.as_ref().map(|promotion| promotion.receipt_ref.as_str());
+    let signed_result = read_output_text(input.output_path, "release-promotion-gate.signed.preserves")
+        .and_then(|text| parse_text(&text))
+        .and_then(|value| {
+            verify_signed_receipt_with_keyring_policy(&value, &VerifySignedReceiptKeyringPolicy {
+                required_purpose: RELEASE_PROMOTION_SIGNING_PURPOSE,
+                trust_root: input.signed_trust_root,
+                expected_signer: input.signed_signer,
+                expected_subject_ref,
+                required_key_ref: input.signed_key_ref,
+                required_key_id: input.signed_key_id,
+                keys: input.signed_keys,
+                revocations: input.signed_key_revocations,
+            })
+        });
+    let signed = match signed_result {
+        Ok(signed) => Some(signed),
+        Err(error) => {
+            diagnostics.push_limited_value(
+                format!("signed promotion receipt verification failed: {error}"),
+                MAX_OPERATOR_DIAGNOSTICS,
+                "release promotion summary diagnostics",
+            )?;
+            None
+        }
+    };
+
+    let promotion_ref = promotion
+        .as_ref()
+        .map_or_else(|| "blake3:missing-release-promotion-gate".to_string(), |promotion| promotion.receipt_ref.clone());
+    let promotion_decision = promotion.as_ref().map_or("missing", |promotion| promotion.decision.as_str());
+    let bundle_verify_ref = promotion.as_ref().map_or_else(
+        || "blake3:missing-release-bundle-verify".to_string(),
+        |promotion| promotion.bundle_verify_ref.clone(),
+    );
+    let bundle_ref = promotion
+        .as_ref()
+        .map_or_else(|| "blake3:missing-release-evidence-bundle".to_string(), |promotion| promotion.bundle_ref.clone());
+    let source_ref = promotion
+        .as_ref()
+        .map_or_else(|| "blake3:missing-source-evidence".to_string(), |promotion| promotion.source_ref.clone());
+    let octet_ref = promotion
+        .as_ref()
+        .map_or_else(|| "blake3:missing-octet-evidence".to_string(), |promotion| promotion.octet_ref.clone());
+    let cairn_ref = promotion
+        .as_ref()
+        .map_or_else(|| "blake3:missing-cairn-evidence".to_string(), |promotion| promotion.cairn_ref.clone());
+    let signed_envelope_ref = signed.as_ref().map_or_else(
+        || "blake3:missing-signed-release-promotion".to_string(),
+        |signed| signed.receipt.envelope_ref.clone(),
+    );
+    let signed_subject_ref = signed.as_ref().map_or_else(
+        || "blake3:missing-signed-release-promotion-subject".to_string(),
+        |signed| signed.receipt.subject_ref.clone(),
+    );
+    let signed_key_ref = signed
+        .as_ref()
+        .map_or_else(|| "blake3:missing-signed-release-key".to_string(), |signed| signed.key_ref.clone());
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let value = record("release-promotion-summary-v1", vec![
+        string(OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("output", vec![string(&output_path_string), string(&output_path_ref)]),
+        record("promotion", vec![
+            string(&promotion_ref),
+            string(promotion_decision),
+            string(&bundle_verify_ref),
+            string(&bundle_ref),
+        ]),
+        record("signed-promotion", vec![
+            string(&signed_envelope_ref),
+            string(&signed_subject_ref),
+            string(&signed_key_ref),
+            string(RELEASE_PROMOTION_SIGNING_PURPOSE),
+        ]),
+        record("evidence", vec![
+            record("source", vec![string(&source_ref)]),
+            record("octet", vec![string(&octet_ref)]),
+            record("cairn", vec![string(&cairn_ref)]),
+        ]),
+        record("diagnostics", vec![strings_sequence(&diagnostics)]),
+        checks_value_from_pairs(&[
+            (
+                "release-promotion-pass",
+                status(promotion.as_ref().is_some_and(|promotion| promotion.decision == "pass")),
+            ),
+            (
+                "release-promotion-output-bound",
+                status(promotion.as_ref().is_some_and(|promotion| promotion.output_path_ref == output_path_ref)),
+            ),
+            ("signed-promotion-present", status(signed.is_some())),
+            (
+                "signed-promotion-subject-bound",
+                status(signed.as_ref().is_some_and(|signed| signed.receipt.subject_ref == promotion_ref)),
+            ),
+            ("signed-promotion-keyring-current", status(signed.is_some())),
+            ("release-promotion-summary-is-evidence-only", "pass"),
+            ("no-release-authority-granted", "pass"),
+        ]),
+    ]);
+    parse_release_promotion_summary(&value)
+}
+
+pub fn parse_release_promotion_summary(value: &IOValue) -> Result<ReleasePromotionSummary> {
+    let fields = value
+        .collect_simple_record("release-promotion-summary-v1", Some(8))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <release-promotion-summary-v1 ...>"))?;
+    require_schema(&fields[0], OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA, "release promotion summary")?;
+    let promotion_value = value_to_iovalue(&fields[3]);
+    let promotion_fields = simple_record(&promotion_value, "promotion", 4)?;
+    let signed_value = value_to_iovalue(&fields[4]);
+    let signed_fields = simple_record(&signed_value, "signed-promotion", 4)?;
+    let evidence_value = value_to_iovalue(&fields[5]);
+    let evidence_fields = simple_record(&evidence_value, "evidence", 3)?;
+    let source_value = value_to_iovalue(&evidence_fields[0]);
+    let source_fields = simple_record(&source_value, "source", 1)?;
+    let octet_value = value_to_iovalue(&evidence_fields[1]);
+    let octet_fields = simple_record(&octet_value, "octet", 1)?;
+    let cairn_value = value_to_iovalue(&evidence_fields[2]);
+    let cairn_fields = simple_record(&cairn_value, "cairn", 1)?;
+    let checks = parse_checks(&fields[7])?;
+    require_check(&checks, "release-promotion-pass", "release promotion summary")?;
+    require_check(&checks, "release-promotion-output-bound", "release promotion summary")?;
+    require_check(&checks, "signed-promotion-present", "release promotion summary")?;
+    require_check(&checks, "signed-promotion-subject-bound", "release promotion summary")?;
+    require_check(&checks, "signed-promotion-keyring-current", "release promotion summary")?;
+    require_check(&checks, "release-promotion-summary-is-evidence-only", "release promotion summary")?;
+    require_check(&checks, "no-release-authority-granted", "release promotion summary")?;
+    Ok(ReleasePromotionSummary {
+        summary_ref: canonical_hash(value)?,
+        decision: record_string(&fields[1], "decision")?,
+        promotion_ref: required_ref(&promotion_fields[0], "release promotion summary promotion ref")?,
+        bundle_verify_ref: required_ref(&promotion_fields[2], "release promotion summary bundle verify ref")?,
+        signed_envelope_ref: required_ref(&signed_fields[0], "release promotion summary signed envelope ref")?,
+        signed_subject_ref: required_ref(&signed_fields[1], "release promotion summary signed subject ref")?,
+        signed_key_ref: required_ref(&signed_fields[2], "release promotion summary signed key ref")?,
+        source_ref: required_ref(&source_fields[0], "release promotion summary source ref")?,
+        octet_ref: required_ref(&octet_fields[0], "release promotion summary Octet ref")?,
+        cairn_ref: required_ref(&cairn_fields[0], "release promotion summary Cairn ref")?,
+        diagnostics: record_string_sequence(&fields[6], "diagnostics")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
 fn select_release_promotion_key<'a>(input: &'a ReleasePromotionGateInput<'_>) -> Result<&'a SignedReceiptKey> {
     let mut matches = Vec::new();
     for key in input.signed_keys {
@@ -2047,6 +2260,20 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
             receipt.octet_ref,
             receipt.cairn_ref,
             receipt.diagnostics.len()
+        ));
+    }
+    if let Ok(summary) = parse_release_promotion_summary(value) {
+        return Ok(format!(
+            "operator release promotion summary ref={} decision={} promotion={} signed={} key={} source={} octet={} cairn={} diagnostics={} (summary is non-normative)",
+            summary.summary_ref,
+            summary.decision,
+            summary.promotion_ref,
+            summary.signed_envelope_ref,
+            summary.signed_key_ref,
+            summary.source_ref,
+            summary.octet_ref,
+            summary.cairn_ref,
+            summary.diagnostics.len()
         ));
     }
     Err(MoltenError::invalid_harness("unsupported operator dogfood artifact for summary"))

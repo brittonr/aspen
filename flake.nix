@@ -349,6 +349,15 @@
               --subject-ref "$promotion_ref" \
               | tee "$out/release-promotion-gate-signed-verify.txt"
             grep -q 'receipts verify-signed ok' "$out/release-promotion-gate-signed-verify.txt"
+            molten dogfood release-promotion-summary \
+              --output-path "$out" \
+              --out "$out/release-promotion-summary.preserves" \
+              --signed-key-ledger "$out/signed-keyring" \
+              --signed-key-id local-release-key-v1 \
+              --signed-trust-root local-release-trust-root \
+              --signed-signer local-release-signer \
+              | tee "$out/release-promotion-summary.txt"
+            grep -q 'decision=pass' "$out/release-promotion-summary.txt"
           '';
 
           nextest-config = pkgs.runCommand "molten-nextest-config-check"

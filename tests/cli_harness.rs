@@ -722,6 +722,53 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .arg(&promotion_receipt.receipt_ref)
         .output()?;
     assert_success(&verify_signed_promotion, "verify signed release promotion receipt");
+    let promotion_summary_path = dir.join("release-promotion-summary.preserves");
+    let promotion_summary = molten_cmd()
+        .args(["dogfood", "release-promotion-summary", "--output-path"])
+        .arg(&dir)
+        .args(["--out"])
+        .arg(&promotion_summary_path)
+        .args(["--signed-key-ledger"])
+        .arg(&key_ledger)
+        .args(["--signed-key-ref"])
+        .arg(&key_ref)
+        .args([
+            "--signed-signer",
+            "release-signer",
+            "--signed-trust-root",
+            "release-root",
+        ])
+        .output()?;
+    assert_success(&promotion_summary, "dogfood release-promotion-summary");
+    assert!(stdout(&promotion_summary).contains("decision=pass"));
+    let parsed_promotion_summary =
+        molten::operator_dogfood::parse_release_promotion_summary(&read_preserves(&promotion_summary_path)?)?;
+    assert_eq!(parsed_promotion_summary.decision, "pass");
+    assert_eq!(parsed_promotion_summary.promotion_ref, promotion_receipt.receipt_ref);
+    let missing_signed_path = dir.join("release-promotion-gate.signed.missing");
+    fs::rename(&signed_promotion_path, &missing_signed_path)?;
+    let missing_signed_summary_path = dir.join("release-promotion-summary-missing-signed.preserves");
+    let missing_signed_summary = molten_cmd()
+        .args(["dogfood", "release-promotion-summary", "--output-path"])
+        .arg(&dir)
+        .args(["--out"])
+        .arg(&missing_signed_summary_path)
+        .args(["--signed-key-ledger"])
+        .arg(&key_ledger)
+        .args(["--signed-key-ref"])
+        .arg(&key_ref)
+        .args([
+            "--signed-signer",
+            "release-signer",
+            "--signed-trust-root",
+            "release-root",
+        ])
+        .output()?;
+    assert_success(&missing_signed_summary, "dogfood release-promotion-summary missing signed receipt");
+    let parsed_missing_signed_summary =
+        molten::operator_dogfood::parse_release_promotion_summary(&read_preserves(&missing_signed_summary_path)?)?;
+    assert_eq!(parsed_missing_signed_summary.decision, "deny");
+    fs::rename(&missing_signed_path, &signed_promotion_path)?;
 
     let wrong_signer_bundle_verify_path = dir.join("release-evidence-bundle-verify-wrong-signer.preserves");
     let mut verify_wrong_signer_bundle = molten_cmd();

@@ -591,6 +591,22 @@ enum DogfoodCommand {
         #[arg(long)]
         cairn_evidence: String,
     },
+    ReleasePromotionSummary {
+        #[arg(long)]
+        output_path: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        signed_key_ledger: Option<PathBuf>,
+        #[arg(long, default_value = "local-release-trust-root")]
+        signed_trust_root: String,
+        #[arg(long)]
+        signed_key_ref: Option<String>,
+        #[arg(long)]
+        signed_key_id: Option<String>,
+        #[arg(long)]
+        signed_signer: Option<String>,
+    },
     Show {
         artifact: PathBuf,
     },
@@ -9422,6 +9438,41 @@ fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
                 receipt.source_ref,
                 receipt.octet_ref,
                 receipt.cairn_ref
+            );
+            Ok(())
+        }
+        DogfoodCommand::ReleasePromotionSummary {
+            output_path,
+            out,
+            signed_key_ledger,
+            signed_trust_root,
+            signed_key_ref,
+            signed_key_id,
+            signed_signer,
+        } => {
+            let key_ledger = signed_key_ledger.unwrap_or_else(|| output_path.join("signed-keyring"));
+            let keyring = load_signed_receipt_keyring(&key_ledger)?;
+            let summary =
+                operator_dogfood::release_promotion_summary_value(&operator_dogfood::ReleasePromotionSummaryInput {
+                    output_path: &output_path,
+                    signed_keys: &keyring.keys,
+                    signed_key_revocations: &keyring.revocations,
+                    signed_trust_root: &signed_trust_root,
+                    signed_signer: signed_signer.as_deref(),
+                    signed_key_ref: signed_key_ref.as_deref(),
+                    signed_key_id: signed_key_id.as_deref(),
+                })?;
+            write_file(&out, &to_text(&summary.value)?)?;
+            println!(
+                "dogfood release-promotion-summary decision={} summary={} promotion={} signed={} key={} source={} octet={} cairn={}",
+                summary.decision,
+                summary.summary_ref,
+                summary.promotion_ref,
+                summary.signed_envelope_ref,
+                summary.signed_key_ref,
+                summary.source_ref,
+                summary.octet_ref,
+                summary.cairn_ref
             );
             Ok(())
         }
