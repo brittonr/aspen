@@ -15,6 +15,7 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::runtime::RuntimeEvent;
 use crate::runtime::RuntimeState;
@@ -932,11 +933,9 @@ fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
 }
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
-    if reference.starts_with("blake3:") {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("expected blake3 ref for {field}, got {reference}")))
-    }
+    validate_content_ref(reference).map_err(|error| {
+        MoltenError::invalid_harness(format!("expected canonical blake3 content ref for {field}: {error}"))
+    })
 }
 
 fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
@@ -1009,6 +1008,26 @@ mod tests {
             policy_refs: vec![test_ref("policy")],
         })
         .expect("service demand")
+    }
+
+    #[test]
+    fn service_runtime_rejects_malformed_content_refs() {
+        for invalid in [
+            "blake3:fixture",
+            "blake3:0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef",
+            "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+        ] {
+            let mut evidence = evidence();
+            evidence.authority_refs = vec![invalid.to_string()];
+            let error = service_runtime_suite_value(&ServiceRuntimeSuiteInput {
+                manifests: vec![manifest("svc:bad-ref", Vec::new())],
+                demands: Vec::new(),
+                statuses: Vec::new(),
+                evidence,
+            })
+            .expect_err("malformed service runtime ref denied");
+            assert!(error.to_string().contains("canonical blake3 content ref"), "unexpected error: {error}");
+        }
     }
 
     #[test]

@@ -28,6 +28,7 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::raft_control_plane;
 use crate::raft_control_plane::ControlRegistryRuntime;
@@ -2013,11 +2014,9 @@ fn validate_decision(value: &str) -> Result<()> {
 
 fn validate_ref(value: &str, label: &str) -> Result<()> {
     validate_non_empty(value, label)?;
-    if value.starts_with("blake3:") {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{label} must be a blake3: ref")))
-    }
+    validate_content_ref(value).map_err(|error| {
+        MoltenError::invalid_harness(format!("{label} must be a canonical blake3 content ref: {error}"))
+    })
 }
 
 fn validate_refs(values: &[String], label: &str) -> Result<()> {
@@ -2125,6 +2124,47 @@ mod tests {
             refs: &fixture_refs,
         })
         .expect("request")
+    }
+
+    #[test]
+    fn coordination_rejects_malformed_content_refs() {
+        let (authority_refs, resource_refs, policy_refs) = refs();
+        for invalid in [
+            "blake3:fixture",
+            "blake3:0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef",
+            "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+        ] {
+            let error = coordination_service_manifest_value(&CoordinationServiceManifestInput {
+                service_id: DEFAULT_COORDINATION_SERVICE_ID.to_string(),
+                services: vec![SERVICE_LOCK.to_string(), SERVICE_QUEUE.to_string()],
+                control_group_ref: invalid.to_string(),
+                queue_capacity: DEFAULT_COORDINATION_QUEUE_CAPACITY,
+                semaphore_capacity: DEFAULT_COORDINATION_SEMAPHORE_CAPACITY,
+                rate_limit: DEFAULT_COORDINATION_RATE_LIMIT,
+                barrier_parties: DEFAULT_COORDINATION_BARRIER_PARTIES,
+                policy_refs: policy_refs.clone(),
+                resource_refs: resource_refs.clone(),
+            })
+            .expect_err("malformed manifest ref denied");
+            assert!(error.to_string().contains("canonical blake3 content ref"), "unexpected error: {error}");
+
+            let request_error = coordination_request_value(&CoordinationRequestInput {
+                service: SERVICE_LOCK.to_string(),
+                operation: OP_ACQUIRE.to_string(),
+                key: "resource:test".to_string(),
+                client_session: "session-malformed".to_string(),
+                operation_id_ref: invalid.to_string(),
+                payload: None,
+                authority_refs: authority_refs.clone(),
+                resource_refs: resource_refs.clone(),
+                policy_refs: policy_refs.clone(),
+            })
+            .expect_err("malformed request ref denied");
+            assert!(
+                request_error.to_string().contains("canonical blake3 content ref"),
+                "unexpected error: {request_error}"
+            );
+        }
     }
 
     #[test]
