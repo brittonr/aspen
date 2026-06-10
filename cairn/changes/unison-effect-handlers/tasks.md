@@ -1,16 +1,16 @@
 ## Phase 1: Effect manifest model
 
-- [ ] [serial] r[molten.effects.manifest_model] Define effect/capability manifest DTOs for executable artifact metadata.
-- [ ] [serial] r[molten.effects.effect_ids] Assign stable effect ids and canonical schema refs for declared effects.
-- [ ] [serial] r[molten.effects.artifact_link] Link effect manifests from artifact registry metadata for Wasm, Steel, native, choreography, and job artifacts.
-- [ ] [parallel] r[molten.effects.no_unison_runtime] Document that Unison abilities are prior art only and that Molten does not implement Unison syntax or generalized algebraic effects.
+- [x] [serial] r[molten.effects.manifest_model] Define effect/capability manifest DTOs for executable artifact metadata.
+- [x] [serial] r[molten.effects.effect_ids] Assign stable effect ids and canonical schema refs for declared effects.
+- [x] [serial] r[molten.effects.artifact_link] Link effect manifests from artifact registry metadata for Wasm, Steel, native, choreography, and job artifacts.
+- [x] [parallel] r[molten.effects.no_unison_runtime] Document that Unison abilities are prior art only and that Molten does not implement Unison syntax or generalized algebraic effects.
 
 ## Phase 2: Handler binding and admission
 
-- [ ] [serial] r[molten.effects.handler_profiles] Define handler profiles for production, local, mock, chaos, profiling, and dry-run execution.
-- [ ] [serial] r[molten.effects.binding_receipts] Gate handler binding through Basalt/Nickel/Trellis policy and emit Cairn receipts.
-- [ ] [serial] r[molten.effects.request_envelope] Define canonical effect-request and effect-response envelope shapes with artifact id, effect id, handler profile, input refs, capabilities, and evidence refs.
-- [ ] [parallel] r[molten.effects.deny_undeclared] Reject effect requests whose effect id is absent from the artifact's admitted manifest.
+- [x] [serial] r[molten.effects.handler_profiles] Define handler profiles for production, local, mock, chaos, profiling, and dry-run execution.
+- [x] [serial] r[molten.effects.binding_receipts] Gate handler binding through Basalt/Nickel/Trellis policy and emit Cairn receipts.
+- [x] [serial] r[molten.effects.request_envelope] Define canonical effect-request and effect-response envelope shapes with artifact id, effect id, handler profile, input refs, capabilities, and evidence refs.
+- [x] [parallel] r[molten.effects.deny_undeclared] Reject effect requests whose effect id is absent from the artifact's admitted manifest.
 
 ## Phase 3: First handlers
 

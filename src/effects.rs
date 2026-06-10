@@ -6,11 +6,16 @@ use preserves::Value;
 
 use crate::error::MoltenError;
 use crate::error::Result;
+use crate::preserves_rail::EFFECT_BINDING_RECEIPT_SCHEMA;
 use crate::preserves_rail::EFFECT_COMPOUND_HANDLER_SCHEMA;
 use crate::preserves_rail::EFFECT_DYNAMIC_OPERATION_SCHEMA;
 use crate::preserves_rail::EFFECT_HANDLE_CLEANUP_SCHEMA;
 use crate::preserves_rail::EFFECT_HANDLE_SCHEMA;
 use crate::preserves_rail::EFFECT_HANDLER_BINDING_SCHEMA;
+use crate::preserves_rail::EFFECT_HANDLER_PROFILE_SCHEMA;
+use crate::preserves_rail::EFFECT_MANIFEST_SCHEMA;
+use crate::preserves_rail::EFFECT_REQUEST_SCHEMA;
+use crate::preserves_rail::EFFECT_RESPONSE_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -29,6 +34,143 @@ pub const ADAPTER_KIND_NETWORK: &str = "network";
 pub const ADAPTER_KIND_REMOTE_SYNC: &str = "remote-sync";
 pub const ADAPTER_KIND_REPLAY_RECORD: &str = "replay-record";
 pub const ADAPTER_KIND_HOSTCALL: &str = "hostcall";
+
+pub const HANDLER_PROFILE_PRODUCTION: &str = "production";
+pub const HANDLER_PROFILE_LOCAL: &str = "local";
+pub const HANDLER_PROFILE_MOCK: &str = "mock";
+pub const HANDLER_PROFILE_CHAOS: &str = "chaos";
+pub const HANDLER_PROFILE_PROFILING: &str = "profiling";
+pub const HANDLER_PROFILE_DRY_RUN: &str = "dry-run";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeclaredEffect {
+    pub effect_id: String,
+    pub operation: String,
+    pub input_schema_ref: String,
+    pub output_schema_ref: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectManifestInput {
+    pub artifact_kind: String,
+    pub artifact_ref: String,
+    pub executor_kind: String,
+    pub declared_effects: Vec<DeclaredEffect>,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectManifest {
+    pub manifest_ref: String,
+    pub artifact_kind: String,
+    pub artifact_ref: String,
+    pub executor_kind: String,
+    pub declared_effects: Vec<DeclaredEffect>,
+    pub policy_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub checks: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HandlerProfileInput {
+    pub profile: String,
+    pub handler_binding_refs: Vec<String>,
+    pub policy_ref: String,
+    pub capability_context_ref: String,
+    pub resource_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HandlerProfile {
+    pub profile_ref: String,
+    pub profile: String,
+    pub handler_binding_refs: Vec<String>,
+    pub policy_ref: String,
+    pub capability_context_ref: String,
+    pub resource_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub checks: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectRequestInput {
+    pub artifact_ref: String,
+    pub effect_id: String,
+    pub operation: String,
+    pub handler_profile: String,
+    pub input_ref: String,
+    pub capability_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectRequest {
+    pub request_ref: String,
+    pub artifact_ref: String,
+    pub effect_id: String,
+    pub operation: String,
+    pub handler_profile: String,
+    pub input_ref: String,
+    pub capability_refs: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub checks: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectResponseInput {
+    pub request_ref: String,
+    pub decision: String,
+    pub output_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectResponse {
+    pub response_ref: String,
+    pub request_ref: String,
+    pub decision: String,
+    pub output_ref: Option<String>,
+    pub diagnostics: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub checks: Vec<String>,
+    pub value: IOValue,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectBindingReceiptInput {
+    pub decision: String,
+    pub manifest_ref: String,
+    pub handler_profile_ref: String,
+    pub request_ref: String,
+    pub effect_id: String,
+    pub operation: String,
+    pub handler_profile: String,
+    pub diagnostics: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectBindingReceipt {
+    pub receipt_ref: String,
+    pub decision: String,
+    pub manifest_ref: String,
+    pub handler_profile_ref: String,
+    pub request_ref: String,
+    pub effect_id: String,
+    pub operation: String,
+    pub handler_profile: String,
+    pub diagnostics: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub checks: Vec<String>,
+    pub value: IOValue,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EffectScope {
@@ -209,6 +351,292 @@ pub struct HandleCleanupReceipt {
     pub evidence_refs: Vec<String>,
     pub checks: Vec<String>,
     pub value: IOValue,
+}
+
+pub fn effect_manifest_value(input: &EffectManifestInput) -> Result<IOValue> {
+    validate_non_empty(&input.artifact_kind, "effect manifest artifact kind")?;
+    require_ref(&input.artifact_ref, "effect manifest artifact ref")?;
+    validate_executor_kind(&input.executor_kind)?;
+    validate_declared_effects(&input.declared_effects)?;
+    validate_refs(&input.policy_refs, "effect manifest policy ref")?;
+    validate_refs(&input.evidence_refs, "effect manifest evidence ref")?;
+    Ok(record("effect-manifest-v1", vec![
+        string(EFFECT_MANIFEST_SCHEMA),
+        record("artifact", vec![string(&input.artifact_kind), string(&input.artifact_ref)]),
+        record("executor", vec![string(&input.executor_kind)]),
+        record("effects", vec![sequence(
+            input.declared_effects.iter().map(declared_effect_value).collect(),
+        )]),
+        refs_record("policy", &input.policy_refs),
+        refs_record("evidence", &input.evidence_refs),
+        checks_value(&[
+            "declared-effect-ids",
+            "artifact-effect-manifest-link",
+            "no-unison-runtime-compatibility",
+            "deny-undeclared-effects",
+        ]),
+    ]))
+}
+
+pub fn parse_effect_manifest(value: &IOValue) -> Result<EffectManifest> {
+    let fields = simple_record(value, "effect-manifest-v1", 7)?;
+    require_schema(&fields[0], EFFECT_MANIFEST_SCHEMA, "effect manifest schema")?;
+    let artifact = value_to_iovalue(&fields[1]);
+    let artifact = simple_record(&artifact, "artifact", 2)?;
+    let executor = value_to_iovalue(&fields[2]);
+    let executor = simple_record(&executor, "executor", 1)?;
+    let artifact_kind = required_string(&artifact[0], "effect manifest artifact kind")?;
+    let artifact_ref = required_ref(&artifact[1], "effect manifest artifact ref")?;
+    let executor_kind = required_string(&executor[0], "effect manifest executor kind")?;
+    validate_executor_kind(&executor_kind)?;
+    let declared_effects = parse_declared_effects(&fields[3])?;
+    let policy_refs = parse_ref_sequence_record(&fields[4], "policy")?;
+    let evidence_refs = parse_ref_sequence_record(&fields[5], "evidence")?;
+    let checks = parse_checks(&fields[6])?;
+    require_check(&checks, "declared-effect-ids", "effect manifest")?;
+    require_check(&checks, "artifact-effect-manifest-link", "effect manifest")?;
+    Ok(EffectManifest {
+        manifest_ref: canonical_hash(value)?,
+        artifact_kind,
+        artifact_ref,
+        executor_kind,
+        declared_effects,
+        policy_refs,
+        evidence_refs,
+        checks,
+        value: value.clone(),
+    })
+}
+
+pub fn handler_profile_value(input: &HandlerProfileInput) -> Result<IOValue> {
+    validate_handler_profile(&input.profile)?;
+    validate_refs(&input.handler_binding_refs, "handler profile binding ref")?;
+    validate_unique_refs(&input.handler_binding_refs, "handler profile binding ref")?;
+    require_ref(&input.policy_ref, "handler profile policy ref")?;
+    require_ref(&input.capability_context_ref, "handler profile capability context ref")?;
+    validate_refs(&input.resource_refs, "handler profile resource ref")?;
+    validate_refs(&input.evidence_refs, "handler profile evidence ref")?;
+    Ok(record("handler-profile-v1", vec![
+        string(EFFECT_HANDLER_PROFILE_SCHEMA),
+        record("profile", vec![string(&input.profile)]),
+        refs_record("handler-bindings", &input.handler_binding_refs),
+        record("policy", vec![string(&input.policy_ref), string(&input.capability_context_ref)]),
+        refs_record("resources", &input.resource_refs),
+        refs_record("evidence", &input.evidence_refs),
+        checks_value(&[
+            "handler-profile-admitted",
+            "policy-capability-resource-binding",
+            "deny-ambient-effects",
+        ]),
+    ]))
+}
+
+pub fn parse_handler_profile(value: &IOValue) -> Result<HandlerProfile> {
+    let fields = simple_record(value, "handler-profile-v1", 7)?;
+    require_schema(&fields[0], EFFECT_HANDLER_PROFILE_SCHEMA, "handler profile schema")?;
+    let profile = required_record_string(&fields[1], "profile", "handler profile")?;
+    validate_handler_profile(&profile)?;
+    let policy = value_to_iovalue(&fields[3]);
+    let policy = simple_record(&policy, "policy", 2)?;
+    let checks = parse_checks(&fields[6])?;
+    require_check(&checks, "handler-profile-admitted", "handler profile")?;
+    Ok(HandlerProfile {
+        profile_ref: canonical_hash(value)?,
+        profile,
+        handler_binding_refs: parse_ref_sequence_record(&fields[2], "handler-bindings")?,
+        policy_ref: required_ref(&policy[0], "handler profile policy ref")?,
+        capability_context_ref: required_ref(&policy[1], "handler profile capability context ref")?,
+        resource_refs: parse_ref_sequence_record(&fields[4], "resources")?,
+        evidence_refs: parse_ref_sequence_record(&fields[5], "evidence")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
+pub fn effect_request_value(input: &EffectRequestInput) -> Result<IOValue> {
+    require_ref(&input.artifact_ref, "effect request artifact ref")?;
+    validate_effect_id(&input.effect_id)?;
+    validate_operation(&input.operation)?;
+    validate_handler_profile(&input.handler_profile)?;
+    require_ref(&input.input_ref, "effect request input ref")?;
+    validate_refs(&input.capability_refs, "effect request capability ref")?;
+    validate_refs(&input.evidence_refs, "effect request evidence ref")?;
+    Ok(record("effect-request-v1", vec![
+        string(EFFECT_REQUEST_SCHEMA),
+        record("artifact", vec![string(&input.artifact_ref)]),
+        record("effect", vec![string(&input.effect_id), string(&input.operation)]),
+        record("handler-profile", vec![string(&input.handler_profile)]),
+        record("input", vec![string(&input.input_ref)]),
+        refs_record("capabilities", &input.capability_refs),
+        refs_record("evidence", &input.evidence_refs),
+        checks_value(&[
+            "canonical-effect-request",
+            "manifest-effect-id-bound",
+            "handler-profile-bound",
+        ]),
+    ]))
+}
+
+pub fn parse_effect_request(value: &IOValue) -> Result<EffectRequest> {
+    let fields = simple_record(value, "effect-request-v1", 8)?;
+    require_schema(&fields[0], EFFECT_REQUEST_SCHEMA, "effect request schema")?;
+    let effect = value_to_iovalue(&fields[2]);
+    let effect = simple_record(&effect, "effect", 2)?;
+    let effect_id = required_string(&effect[0], "effect request effect id")?;
+    let operation = required_string(&effect[1], "effect request operation")?;
+    validate_effect_id(&effect_id)?;
+    validate_operation(&operation)?;
+    let handler_profile = required_record_string(&fields[3], "handler-profile", "effect request handler profile")?;
+    validate_handler_profile(&handler_profile)?;
+    let checks = parse_checks(&fields[7])?;
+    require_check(&checks, "canonical-effect-request", "effect request")?;
+    Ok(EffectRequest {
+        request_ref: canonical_hash(value)?,
+        artifact_ref: required_record_ref(&fields[1], "artifact", "effect request artifact ref")?,
+        effect_id,
+        operation,
+        handler_profile,
+        input_ref: required_record_ref(&fields[4], "input", "effect request input ref")?,
+        capability_refs: parse_ref_sequence_record(&fields[5], "capabilities")?,
+        evidence_refs: parse_ref_sequence_record(&fields[6], "evidence")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
+pub fn effect_response_value(input: &EffectResponseInput) -> Result<IOValue> {
+    validate_decision(&input.decision)?;
+    require_ref(&input.request_ref, "effect response request ref")?;
+    if let Some(output_ref) = input.output_ref.as_deref() {
+        require_ref(output_ref, "effect response output ref")?;
+    }
+    validate_refs(&input.evidence_refs, "effect response evidence ref")?;
+    Ok(record("effect-response-v1", vec![
+        string(EFFECT_RESPONSE_SCHEMA),
+        record("request", vec![string(&input.request_ref)]),
+        record("decision", vec![string(&input.decision)]),
+        record("output", vec![optional_ref_value(input.output_ref.as_deref())]),
+        diagnostics_record(&input.diagnostics),
+        refs_record("evidence", &input.evidence_refs),
+        checks_value(&["canonical-effect-response", "request-ref-bound", "decision-recorded"]),
+    ]))
+}
+
+pub fn parse_effect_response(value: &IOValue) -> Result<EffectResponse> {
+    let fields = simple_record(value, "effect-response-v1", 7)?;
+    require_schema(&fields[0], EFFECT_RESPONSE_SCHEMA, "effect response schema")?;
+    let decision = required_record_string(&fields[2], "decision", "effect response decision")?;
+    validate_decision(&decision)?;
+    let checks = parse_checks(&fields[6])?;
+    require_check(&checks, "canonical-effect-response", "effect response")?;
+    Ok(EffectResponse {
+        response_ref: canonical_hash(value)?,
+        request_ref: required_record_ref(&fields[1], "request", "effect response request ref")?,
+        decision,
+        output_ref: parse_optional_ref_record(&fields[3], "output")?,
+        diagnostics: parse_string_sequence_record_unvalidated(&fields[4], "diagnostics")?,
+        evidence_refs: parse_ref_sequence_record(&fields[5], "evidence")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
+pub fn effect_binding_receipt_value(input: &EffectBindingReceiptInput) -> Result<IOValue> {
+    validate_decision(&input.decision)?;
+    require_ref(&input.manifest_ref, "effect binding manifest ref")?;
+    require_ref(&input.handler_profile_ref, "effect binding profile ref")?;
+    require_ref(&input.request_ref, "effect binding request ref")?;
+    validate_effect_id(&input.effect_id)?;
+    validate_operation(&input.operation)?;
+    validate_handler_profile(&input.handler_profile)?;
+    validate_refs(&input.evidence_refs, "effect binding evidence ref")?;
+    Ok(record("effect-binding-receipt-v1", vec![
+        string(EFFECT_BINDING_RECEIPT_SCHEMA),
+        record("decision", vec![string(&input.decision)]),
+        record("manifest", vec![string(&input.manifest_ref)]),
+        record("handler-profile", vec![string(&input.handler_profile_ref), string(&input.handler_profile)]),
+        record("request", vec![string(&input.request_ref)]),
+        record("effect", vec![string(&input.effect_id), string(&input.operation)]),
+        diagnostics_record(&input.diagnostics),
+        refs_record("evidence", &input.evidence_refs),
+        checks_value(&[
+            "effect-manifest-bound",
+            "handler-profile-bound",
+            "deny-undeclared-effects",
+            "content-addressing-is-not-authority",
+        ]),
+    ]))
+}
+
+pub fn parse_effect_binding_receipt(value: &IOValue) -> Result<EffectBindingReceipt> {
+    let fields = simple_record(value, "effect-binding-receipt-v1", 9)?;
+    require_schema(&fields[0], EFFECT_BINDING_RECEIPT_SCHEMA, "effect binding receipt schema")?;
+    let decision = required_record_string(&fields[1], "decision", "effect binding decision")?;
+    validate_decision(&decision)?;
+    let handler_profile = value_to_iovalue(&fields[3]);
+    let handler_profile = simple_record(&handler_profile, "handler-profile", 2)?;
+    let effect = value_to_iovalue(&fields[5]);
+    let effect = simple_record(&effect, "effect", 2)?;
+    let effect_id = required_string(&effect[0], "effect binding effect id")?;
+    let operation = required_string(&effect[1], "effect binding operation")?;
+    validate_effect_id(&effect_id)?;
+    validate_operation(&operation)?;
+    let profile = required_string(&handler_profile[1], "effect binding handler profile")?;
+    validate_handler_profile(&profile)?;
+    let checks = parse_checks(&fields[8])?;
+    require_check(&checks, "deny-undeclared-effects", "effect binding receipt")?;
+    Ok(EffectBindingReceipt {
+        receipt_ref: canonical_hash(value)?,
+        decision,
+        manifest_ref: required_record_ref(&fields[2], "manifest", "effect binding manifest ref")?,
+        handler_profile_ref: required_ref(&handler_profile[0], "effect binding handler profile ref")?,
+        request_ref: required_record_ref(&fields[4], "request", "effect binding request ref")?,
+        effect_id,
+        operation,
+        handler_profile: profile,
+        diagnostics: parse_string_sequence_record_unvalidated(&fields[6], "diagnostics")?,
+        evidence_refs: parse_ref_sequence_record(&fields[7], "evidence")?,
+        checks,
+        value: value.clone(),
+    })
+}
+
+pub fn admit_effect_request(
+    manifest_value: &IOValue,
+    handler_profile_value: &IOValue,
+    request_value: &IOValue,
+    evidence_refs: &[String],
+) -> Result<EffectBindingReceipt> {
+    let manifest = parse_effect_manifest(manifest_value)?;
+    let handler_profile = parse_handler_profile(handler_profile_value)?;
+    let request = parse_effect_request(request_value)?;
+    let mut diagnostics = Vec::new();
+    if request.artifact_ref != manifest.artifact_ref {
+        diagnostics.push("request artifact does not match manifest artifact".to_string());
+    }
+    if request.handler_profile != handler_profile.profile {
+        diagnostics.push("request handler profile does not match admitted profile".to_string());
+    }
+    if !manifest
+        .declared_effects
+        .iter()
+        .any(|effect| effect.effect_id == request.effect_id && effect.operation == request.operation)
+    {
+        diagnostics.push("effect id or operation is not declared by artifact manifest".to_string());
+    }
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let receipt_value = effect_binding_receipt_value(&EffectBindingReceiptInput {
+        decision: decision.to_string(),
+        manifest_ref: manifest.manifest_ref,
+        handler_profile_ref: handler_profile.profile_ref,
+        request_ref: request.request_ref,
+        effect_id: request.effect_id,
+        operation: request.operation,
+        handler_profile: request.handler_profile,
+        diagnostics,
+        evidence_refs: evidence_refs.to_vec(),
+    })?;
+    parse_effect_binding_receipt(&receipt_value)
 }
 
 pub fn handler_binding_value(input: &HandlerBindingInput) -> Result<IOValue> {
@@ -708,6 +1136,15 @@ fn require_scope_match(scope: &EffectScope, request: &EffectHandleRequest<'_>, l
     Ok(())
 }
 
+fn declared_effect_value(effect: &DeclaredEffect) -> IOValue {
+    record("declared-effect", vec![
+        record("effect-id", vec![string(&effect.effect_id)]),
+        record("operation", vec![string(&effect.operation)]),
+        record("schemas", vec![string(&effect.input_schema_ref), string(&effect.output_schema_ref)]),
+        refs_record("evidence", &effect.evidence_refs),
+    ])
+}
+
 fn operations_record(operations: &[String]) -> IOValue {
     record("operations", vec![sequence(operations.iter().map(string).collect())])
 }
@@ -720,6 +1157,10 @@ fn checks_value(checks: &[&str]) -> IOValue {
     record("checks", vec![sequence(
         checks.iter().map(|check| record("check", vec![string(*check), string("pass")])).collect(),
     )])
+}
+
+fn diagnostics_record(diagnostics: &[String]) -> IOValue {
+    record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())])
 }
 
 fn optional_ref_value(value: Option<&str>) -> IOValue {
@@ -768,6 +1209,12 @@ fn parse_ref_sequence_record(value: &Value<IOValue>, label: &str) -> Result<Vec<
 }
 
 fn parse_string_sequence_record(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+    let strings = parse_string_sequence_record_unvalidated(value, label)?;
+    validate_operations(&strings)?;
+    Ok(strings)
+}
+
+fn parse_string_sequence_record_unvalidated(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let sequence = required_sequence(&record[0], label)?;
@@ -775,8 +1222,29 @@ fn parse_string_sequence_record(value: &Value<IOValue>, label: &str) -> Result<V
     for entry in sequence.iter() {
         strings.push(required_string(entry, label)?);
     }
-    validate_operations(&strings)?;
     Ok(strings)
+}
+
+fn parse_declared_effects(value: &Value<IOValue>) -> Result<Vec<DeclaredEffect>> {
+    let value = value_to_iovalue(value);
+    let record = simple_record(&value, "effects", 1)?;
+    let sequence = required_sequence(&record[0], "declared effects")?;
+    let mut effects = Vec::with_capacity(sequence.len());
+    for entry in sequence.iter() {
+        let entry = value_to_iovalue(entry);
+        let fields = simple_record(&entry, "declared-effect", 4)?;
+        let schemas = value_to_iovalue(&fields[2]);
+        let schemas = simple_record(&schemas, "schemas", 2)?;
+        effects.push(DeclaredEffect {
+            effect_id: required_record_string(&fields[0], "effect-id", "declared effect id")?,
+            operation: required_record_string(&fields[1], "operation", "declared effect operation")?,
+            input_schema_ref: required_ref(&schemas[0], "declared effect input schema ref")?,
+            output_schema_ref: required_ref(&schemas[1], "declared effect output schema ref")?,
+            evidence_refs: parse_ref_sequence_record(&fields[3], "evidence")?,
+        });
+    }
+    validate_declared_effects(&effects)?;
+    Ok(effects)
 }
 
 fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
@@ -805,6 +1273,28 @@ fn require_check(checks: &[String], expected: &str, label: &str) -> Result<()> {
     }
 }
 
+fn validate_declared_effects(effects: &[DeclaredEffect]) -> Result<()> {
+    if effects.is_empty() {
+        return Err(MoltenError::invalid_harness("effect manifest must declare at least one effect"));
+    }
+    let mut seen = BTreeSet::new();
+    for effect in effects {
+        validate_effect_id(&effect.effect_id)?;
+        validate_operation(&effect.operation)?;
+        require_ref(&effect.input_schema_ref, "declared effect input schema ref")?;
+        require_ref(&effect.output_schema_ref, "declared effect output schema ref")?;
+        validate_refs(&effect.evidence_refs, "declared effect evidence ref")?;
+        let key = (effect.effect_id.as_str(), effect.operation.as_str());
+        if !seen.insert(key) {
+            return Err(MoltenError::invalid_harness(format!(
+                "duplicate declared effect {} operation {}",
+                effect.effect_id, effect.operation
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn validate_operations(operations: &[String]) -> Result<()> {
     if operations.is_empty() {
         return Err(MoltenError::invalid_harness("effect operation set must not be empty"));
@@ -819,6 +1309,18 @@ fn validate_operations(operations: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn validate_effect_id(effect_id: &str) -> Result<()> {
+    validate_non_empty(effect_id, "effect id")?;
+    if !effect_id.chars().all(|character| {
+        character.is_ascii_lowercase() || character.is_ascii_digit() || matches!(character, '-' | '_' | ':' | '/' | '.')
+    }) {
+        return Err(MoltenError::invalid_harness(format!(
+            "effect id {effect_id} must use lowercase ascii, digits, or effect separators"
+        )));
+    }
+    Ok(())
+}
+
 fn validate_operation(operation: &str) -> Result<()> {
     validate_non_empty(operation, "effect operation")?;
     if !operation.chars().all(|character| {
@@ -829,6 +1331,32 @@ fn validate_operation(operation: &str) -> Result<()> {
         )));
     }
     Ok(())
+}
+
+fn validate_executor_kind(executor_kind: &str) -> Result<()> {
+    match executor_kind {
+        "native" | "steel" | "wasm" | "adapter" | "remote-proxy" | "job" | "protocol" => Ok(()),
+        _ => Err(MoltenError::invalid_harness(format!("unsupported effect manifest executor kind {executor_kind}"))),
+    }
+}
+
+fn validate_handler_profile(profile: &str) -> Result<()> {
+    match profile {
+        HANDLER_PROFILE_PRODUCTION
+        | HANDLER_PROFILE_LOCAL
+        | HANDLER_PROFILE_MOCK
+        | HANDLER_PROFILE_CHAOS
+        | HANDLER_PROFILE_PROFILING
+        | HANDLER_PROFILE_DRY_RUN => Ok(()),
+        _ => Err(MoltenError::invalid_harness(format!("unsupported effect handler profile {profile}"))),
+    }
+}
+
+fn validate_decision(decision: &str) -> Result<()> {
+    match decision {
+        "pass" | "deny" => Ok(()),
+        _ => Err(MoltenError::invalid_harness(format!("unsupported effect decision {decision}"))),
+    }
 }
 
 fn validate_transfer(transfer: &str) -> Result<()> {
@@ -1010,6 +1538,49 @@ mod tests {
         }
     }
 
+    fn declared_effect(effect_id: &str, operation: &str) -> DeclaredEffect {
+        DeclaredEffect {
+            effect_id: effect_id.to_string(),
+            operation: operation.to_string(),
+            input_schema_ref: fake_ref("input-schema"),
+            output_schema_ref: fake_ref("output-schema"),
+            evidence_refs: vec![fake_ref("effect-evidence")],
+        }
+    }
+
+    fn manifest_profile_and_request(effect_id: &str, operation: &str) -> (IOValue, IOValue, IOValue) {
+        let artifact_ref = fake_ref("artifact");
+        let manifest = effect_manifest_value(&EffectManifestInput {
+            artifact_kind: "wasm".to_string(),
+            artifact_ref: artifact_ref.clone(),
+            executor_kind: "wasm".to_string(),
+            declared_effects: vec![declared_effect(effect_id, operation)],
+            policy_refs: vec![fake_ref("policy")],
+            evidence_refs: vec![fake_ref("manifest-evidence")],
+        })
+        .expect("effect manifest");
+        let profile = handler_profile_value(&HandlerProfileInput {
+            profile: HANDLER_PROFILE_LOCAL.to_string(),
+            handler_binding_refs: vec![fake_ref("handler-binding")],
+            policy_ref: fake_ref("policy"),
+            capability_context_ref: fake_ref("capability"),
+            resource_refs: vec![fake_ref("resource")],
+            evidence_refs: vec![fake_ref("profile-evidence")],
+        })
+        .expect("handler profile");
+        let request = effect_request_value(&EffectRequestInput {
+            artifact_ref,
+            effect_id: effect_id.to_string(),
+            operation: operation.to_string(),
+            handler_profile: HANDLER_PROFILE_LOCAL.to_string(),
+            input_ref: fake_ref("input"),
+            capability_refs: vec![fake_ref("capability")],
+            evidence_refs: vec![fake_ref("request-evidence")],
+        })
+        .expect("effect request");
+        (manifest, profile, request)
+    }
+
     fn binding_and_handle(operation: &str) -> (IOValue, IOValue, EffectScope, String, String) {
         let actor_ref = fake_ref("actor-a");
         let scope = scope(Some(actor_ref.clone()));
@@ -1048,6 +1619,82 @@ mod tests {
         })
         .expect("effect handle");
         (binding, handle, scope, policy_ref, capability_ref)
+    }
+
+    #[test]
+    fn effect_manifest_profile_request_and_response_roundtrip() {
+        let (manifest, profile, request) = manifest_profile_and_request("dataspace.send", "send");
+        let parsed_manifest = parse_effect_manifest(&manifest).expect("parse manifest");
+        assert_eq!(parsed_manifest.declared_effects[0].effect_id, "dataspace.send");
+        assert_eq!(parsed_manifest.executor_kind, "wasm");
+        assert!(parsed_manifest.checks.iter().any(|check| check == "deny-undeclared-effects"));
+        let parsed_profile = parse_handler_profile(&profile).expect("parse profile");
+        assert_eq!(parsed_profile.profile, HANDLER_PROFILE_LOCAL);
+        let parsed_request = parse_effect_request(&request).expect("parse request");
+        assert_eq!(parsed_request.operation, "send");
+        let response = effect_response_value(&EffectResponseInput {
+            request_ref: parsed_request.request_ref.clone(),
+            decision: "pass".to_string(),
+            output_ref: Some(fake_ref("output")),
+            diagnostics: Vec::new(),
+            evidence_refs: vec![fake_ref("response-evidence")],
+        })
+        .expect("effect response");
+        let parsed_response = parse_effect_response(&response).expect("parse response");
+        assert_eq!(parsed_response.decision, "pass");
+        assert_eq!(parsed_response.request_ref, parsed_request.request_ref);
+    }
+
+    #[test]
+    fn effect_binding_receipt_denies_undeclared_effects() {
+        let (manifest, profile, request) = manifest_profile_and_request("dataspace.send", "send");
+        let pass = admit_effect_request(&manifest, &profile, &request, &[fake_ref("admission-evidence")])
+            .expect("admit declared effect");
+        assert_eq!(pass.decision, "pass");
+        assert!(pass.checks.iter().any(|check| check == "deny-undeclared-effects"));
+
+        let request = effect_request_value(&EffectRequestInput {
+            artifact_ref: parse_effect_manifest(&manifest).expect("manifest").artifact_ref,
+            effect_id: "blob.get".to_string(),
+            operation: "get".to_string(),
+            handler_profile: HANDLER_PROFILE_LOCAL.to_string(),
+            input_ref: fake_ref("input"),
+            capability_refs: vec![fake_ref("capability")],
+            evidence_refs: vec![fake_ref("request-evidence")],
+        })
+        .expect("undeclared request");
+        let deny = admit_effect_request(&manifest, &profile, &request, &[fake_ref("admission-evidence")])
+            .expect("deny undeclared effect");
+        assert_eq!(deny.decision, "deny");
+        assert!(deny.diagnostics.iter().any(|diagnostic| diagnostic.contains("not declared")));
+    }
+
+    #[test]
+    fn effect_manifest_rejects_duplicate_and_malformed_effect_ids() {
+        let artifact_ref = fake_ref("artifact");
+        let duplicate = effect_manifest_value(&EffectManifestInput {
+            artifact_kind: "steel".to_string(),
+            artifact_ref: artifact_ref.clone(),
+            executor_kind: "steel".to_string(),
+            declared_effects: vec![
+                declared_effect("storage.read", "read"),
+                declared_effect("storage.read", "read"),
+            ],
+            policy_refs: vec![fake_ref("policy")],
+            evidence_refs: vec![fake_ref("manifest-evidence")],
+        })
+        .expect_err("duplicate effect denied");
+        assert!(duplicate.to_string().contains("duplicate declared effect"), "{duplicate}");
+        let malformed = effect_manifest_value(&EffectManifestInput {
+            artifact_kind: "steel".to_string(),
+            artifact_ref,
+            executor_kind: "steel".to_string(),
+            declared_effects: vec![declared_effect("Storage.Read", "read")],
+            policy_refs: vec![fake_ref("policy")],
+            evidence_refs: vec![fake_ref("manifest-evidence")],
+        })
+        .expect_err("malformed effect id denied");
+        assert!(malformed.to_string().contains("effect id"), "{malformed}");
     }
 
     #[test]
