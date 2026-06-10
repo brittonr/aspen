@@ -27,6 +27,7 @@ use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::to_text;
 use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const INLINE_PAYLOAD_LIMIT: usize = 4096;
@@ -334,7 +335,14 @@ pub fn read_artifact(root: &Path, artifact_ref: &str) -> Result<ArtifactRecord> 
         return Err(MoltenError::invalid_harness(format!("artifact {artifact_ref} not found")));
     };
     let value = parse_canonical_bytes(bytes.value())?;
-    parse_artifact_value(&value)
+    let artifact = parse_artifact_value(&value)?;
+    if artifact.artifact_ref != artifact_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "artifact registry content hash mismatch: got {}, expected {artifact_ref}",
+            artifact.artifact_ref
+        )));
+    }
+    Ok(artifact)
 }
 
 pub fn read_payload(root: &Path, artifact_ref: &str) -> Result<IOValue> {
@@ -1295,11 +1303,9 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
-    if value_ref.starts_with("blake3:") {
-        Ok(())
-    } else {
-        Err(MoltenError::invalid_harness(format!("{field} must be a blake3 ref, got {value_ref}")))
-    }
+    validate_content_ref(value_ref).map_err(|error| {
+        MoltenError::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
+    })
 }
 
 fn validate_refs(refs: &[String], field: &str) -> Result<()> {
@@ -1406,6 +1412,88 @@ mod tests {
         })
         .expect("changed deps");
         assert_ne!(first.artifact_ref, changed_deps.artifact_ref);
+    }
+
+    #[test]
+    fn artifact_registry_rejects_malformed_refs_and_missing_materialization() {
+        let root = temp_dir("artifact-ref-shape");
+        let mut input = test_input("steel", "bad-ref", &[]);
+        input.schema_refs = vec!["blake3:fixture".to_string()];
+        let error = install_artifact(&root, &input).expect_err("short schema ref denied");
+        assert!(error.to_string().contains("canonical blake3 content ref"));
+
+        let content_payload = ArtifactPayloadRef::ContentRef {
+            manifest_ref: "blake3:0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            length: 128,
+        };
+        let artifact_error = artifact_value(ArtifactValueInput {
+            kind: "doc",
+            payload: &content_payload,
+            schema_refs: &[test_ref("schema")],
+            dependency_refs: &[],
+            effect_manifest_ref: None,
+            policy_refs: &[test_ref("policy")],
+            evidence_refs: &[test_ref("evidence")],
+        })
+        .expect_err("uppercase content manifest ref denied");
+        assert!(artifact_error.to_string().contains("canonical blake3 content ref"));
+
+        let missing = "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let missing_error = read_artifact(&root, missing).expect_err("valid-shaped missing artifact denied");
+        assert!(missing_error.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn artifact_registry_detects_tampered_materialized_artifact_bytes() {
+        let root = temp_dir("artifact-tampered-bytes");
+        let first = install_artifact(&root, &test_input("steel", "first", &[])).expect("first artifact");
+        let second = install_artifact(&root, &test_input("steel", "second", &[])).expect("second artifact");
+        assert_ne!(first.artifact_ref, second.artifact_ref);
+        let db = ensure_index_tables(&root).expect("artifact db");
+        let write_txn = db.begin_write().expect("write txn");
+        {
+            let mut artifacts = write_txn.open_table(INDEX_ARTIFACTS).expect("artifacts table");
+            let second_bytes = canonical_bytes(&second.artifact.value).expect("second bytes");
+            artifacts
+                .insert(first.artifact_ref.as_str(), second_bytes.as_slice())
+                .expect("tamper artifact bytes");
+        }
+        write_txn.commit().expect("commit tamper");
+        drop(db);
+        let error = read_artifact(&root, &first.artifact_ref).expect_err("tampered artifact bytes denied");
+        assert!(error.to_string().contains("artifact registry content hash mismatch"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn artifact_names_do_not_substitute_for_content_identity() {
+        let root = temp_dir("artifact-name-not-identity");
+        let first = install_artifact(&root, &test_input("steel", "first-name", &[])).expect("first artifact");
+        let second = install_artifact(&root, &test_input("steel", "second-name", &[])).expect("second artifact");
+        set_name_pointer(&root, &SetNamePointerInput {
+            pointer_kind: "name",
+            name: "app/current",
+            artifact_ref: &first.artifact_ref,
+            policy_refs: &[test_ref("policy")],
+            evidence_refs: &[test_ref("evidence")],
+        })
+        .expect("first name pointer");
+        set_name_pointer(&root, &SetNamePointerInput {
+            pointer_kind: "name",
+            name: "app/current",
+            artifact_ref: &second.artifact_ref,
+            policy_refs: &[test_ref("policy")],
+            evidence_refs: &[test_ref("evidence")],
+        })
+        .expect("second name pointer");
+        assert_eq!(
+            read_payload(&root, &first.artifact_ref).expect("first payload"),
+            record("payload", vec![string("first-name")])
+        );
+        assert_eq!(
+            read_payload(&root, &second.artifact_ref).expect("second payload"),
+            record("payload", vec![string("second-name")])
+        );
+        assert_ne!(first.artifact_ref, second.artifact_ref);
     }
 
     #[test]
