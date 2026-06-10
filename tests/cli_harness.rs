@@ -804,6 +804,93 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(&release_export_verify_path)?)?;
     assert_eq!(parsed_release_export_verify.decision, "pass");
 
+    let release_export_missing_manifest = dir.join("release-evidence-missing-manifest.tar.zst");
+    write_release_export_test_archive(
+        &dir,
+        &release_export_missing_manifest,
+        None,
+        &parsed_release_export.member_refs,
+    )?;
+    let release_export_missing_manifest_verify_path = dir.join("release-export-verify-missing-manifest.preserves");
+    let release_export_missing_manifest_verify = molten_cmd()
+        .args(["dogfood", "release-export-verify", "--bundle"])
+        .arg(&release_export_missing_manifest)
+        .args(["--receipt-out"])
+        .arg(&release_export_missing_manifest_verify_path)
+        .output()?;
+    assert_success(
+        &release_export_missing_manifest_verify,
+        "dogfood release-export-verify missing manifest emits deny receipt",
+    );
+    let parsed_missing_manifest = molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(
+        &release_export_missing_manifest_verify_path,
+    )?)?;
+    assert_eq!(parsed_missing_manifest.decision, "deny");
+
+    let release_export_extra = dir.join("release-evidence-extra.tar.zst");
+    write_release_export_test_archive_with_extra(
+        &dir,
+        &release_export_extra,
+        &release_export_manifest,
+        &parsed_release_export.member_refs,
+        ExtraArchiveMember {
+            name: "unexpected.txt",
+            bytes: b"extra evidence",
+        },
+    )?;
+    let release_export_extra_verify_path = dir.join("release-export-verify-extra.preserves");
+    let release_export_extra_verify = molten_cmd()
+        .args(["dogfood", "release-export-verify", "--bundle"])
+        .arg(&release_export_extra)
+        .args(["--receipt-out"])
+        .arg(&release_export_extra_verify_path)
+        .output()?;
+    assert_success(&release_export_extra_verify, "dogfood release-export-verify extra member emits deny receipt");
+    let parsed_extra = molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(
+        &release_export_extra_verify_path,
+    )?)?;
+    assert_eq!(parsed_extra.decision, "deny");
+
+    let release_export_tampered = dir.join("release-evidence-tampered.tar.zst");
+    write_release_export_test_archive_with_tamper(
+        &dir,
+        &release_export_tampered,
+        &release_export_manifest,
+        &parsed_release_export.member_refs,
+    )?;
+    let release_export_tampered_verify_path = dir.join("release-export-verify-tampered.preserves");
+    let release_export_tampered_verify = molten_cmd()
+        .args(["dogfood", "release-export-verify", "--bundle"])
+        .arg(&release_export_tampered)
+        .args(["--receipt-out"])
+        .arg(&release_export_tampered_verify_path)
+        .output()?;
+    assert_success(&release_export_tampered_verify, "dogfood release-export-verify tampered emits deny receipt");
+    let parsed_tampered = molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(
+        &release_export_tampered_verify_path,
+    )?)?;
+    assert_eq!(parsed_tampered.decision, "deny");
+
+    let release_export_duplicate = dir.join("release-evidence-duplicate.tar.zst");
+    write_release_export_test_archive_with_duplicate(
+        &dir,
+        &release_export_duplicate,
+        &release_export_manifest,
+        &parsed_release_export.member_refs,
+    )?;
+    let release_export_duplicate_verify_path = dir.join("release-export-verify-duplicate.preserves");
+    let release_export_duplicate_verify = molten_cmd()
+        .args(["dogfood", "release-export-verify", "--bundle"])
+        .arg(&release_export_duplicate)
+        .args(["--receipt-out"])
+        .arg(&release_export_duplicate_verify_path)
+        .output()?;
+    assert_success(&release_export_duplicate_verify, "dogfood release-export-verify duplicate emits deny receipt");
+    let parsed_duplicate = molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(
+        &release_export_duplicate_verify_path,
+    )?)?;
+    assert_eq!(parsed_duplicate.decision, "deny");
+
     let wrong_signer_bundle_verify_path = dir.join("release-evidence-bundle-verify-wrong-signer.preserves");
     let mut verify_wrong_signer_bundle = molten_cmd();
     verify_wrong_signer_bundle
@@ -3217,6 +3304,122 @@ fn live_process_token_count(name: &str) -> usize {
         .filter_map(|token| token.parse::<u64>().ok())
         .filter(|pid| *pid == current_pid || std::path::Path::new("/proc").join(pid.to_string()).exists())
         .count()
+}
+
+fn write_release_export_test_archive(
+    output_dir: &Path,
+    archive_path: &Path,
+    manifest_path: Option<&Path>,
+    member_refs: &[(String, String)],
+) -> CliResult<()> {
+    if let Some(parent) = archive_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let archive_file = fs::File::create(archive_path)?;
+    let encoder = zstd::stream::write::Encoder::new(archive_file, 0)?;
+    let mut builder = tar::Builder::new(encoder);
+    if let Some(manifest_path) = manifest_path {
+        append_release_export_test_bytes(&mut builder, "release-export-manifest.preserves", &fs::read(manifest_path)?)?;
+    }
+    for (name, _) in member_refs {
+        append_release_export_test_bytes(&mut builder, name, &fs::read(output_dir.join(name))?)?;
+    }
+    let encoder = builder.into_inner()?;
+    encoder.finish()?;
+    Ok(())
+}
+
+struct ExtraArchiveMember<'a> {
+    name: &'a str,
+    bytes: &'a [u8],
+}
+
+fn write_release_export_test_archive_with_extra(
+    output_dir: &Path,
+    archive_path: &Path,
+    manifest_path: &Path,
+    member_refs: &[(String, String)],
+    extra: ExtraArchiveMember<'_>,
+) -> CliResult<()> {
+    if let Some(parent) = archive_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let archive_file = fs::File::create(archive_path)?;
+    let encoder = zstd::stream::write::Encoder::new(archive_file, 0)?;
+    let mut builder = tar::Builder::new(encoder);
+    append_release_export_test_bytes(&mut builder, "release-export-manifest.preserves", &fs::read(manifest_path)?)?;
+    for (name, _) in member_refs {
+        append_release_export_test_bytes(&mut builder, name, &fs::read(output_dir.join(name))?)?;
+    }
+    append_release_export_test_bytes(&mut builder, extra.name, extra.bytes)?;
+    let encoder = builder.into_inner()?;
+    encoder.finish()?;
+    Ok(())
+}
+
+fn write_release_export_test_archive_with_tamper(
+    output_dir: &Path,
+    archive_path: &Path,
+    manifest_path: &Path,
+    member_refs: &[(String, String)],
+) -> CliResult<()> {
+    let first = member_refs.first().ok_or_else(|| test_error("release export test needs a member"))?;
+    if let Some(parent) = archive_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let archive_file = fs::File::create(archive_path)?;
+    let encoder = zstd::stream::write::Encoder::new(archive_file, 0)?;
+    let mut builder = tar::Builder::new(encoder);
+    append_release_export_test_bytes(&mut builder, "release-export-manifest.preserves", &fs::read(manifest_path)?)?;
+    for (name, _) in member_refs {
+        if name == &first.0 {
+            append_release_export_test_bytes(&mut builder, name, b"tampered release evidence")?;
+        } else {
+            append_release_export_test_bytes(&mut builder, name, &fs::read(output_dir.join(name))?)?;
+        }
+    }
+    let encoder = builder.into_inner()?;
+    encoder.finish()?;
+    Ok(())
+}
+
+fn write_release_export_test_archive_with_duplicate(
+    output_dir: &Path,
+    archive_path: &Path,
+    manifest_path: &Path,
+    member_refs: &[(String, String)],
+) -> CliResult<()> {
+    let first = member_refs.first().ok_or_else(|| test_error("release export test needs a member"))?;
+    if let Some(parent) = archive_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let archive_file = fs::File::create(archive_path)?;
+    let encoder = zstd::stream::write::Encoder::new(archive_file, 0)?;
+    let mut builder = tar::Builder::new(encoder);
+    append_release_export_test_bytes(&mut builder, "release-export-manifest.preserves", &fs::read(manifest_path)?)?;
+    for (name, _) in member_refs {
+        append_release_export_test_bytes(&mut builder, name, &fs::read(output_dir.join(name))?)?;
+    }
+    append_release_export_test_bytes(&mut builder, &first.0, &fs::read(output_dir.join(&first.0))?)?;
+    let encoder = builder.into_inner()?;
+    encoder.finish()?;
+    Ok(())
+}
+
+fn append_release_export_test_bytes<W: std::io::Write>(
+    builder: &mut tar::Builder<W>,
+    name: &str,
+    bytes: &[u8],
+) -> CliResult<()> {
+    let mut header = tar::Header::new_gnu();
+    header.set_size(bytes.len() as u64);
+    header.set_mode(0o444);
+    header.set_uid(0);
+    header.set_gid(0);
+    header.set_mtime(0);
+    header.set_cksum();
+    builder.append_data(&mut header, name, std::io::Cursor::new(bytes))?;
+    Ok(())
 }
 
 fn temp_dir(label: &str) -> CliResult<PathBuf> {

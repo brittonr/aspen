@@ -311,8 +311,9 @@ pub struct ReleaseExportManifest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseExportVerifyInput<'a> {
-    pub manifest_value: &'a IOValue,
+    pub manifest_value: Option<&'a IOValue>,
     pub member_refs: &'a [(String, String)],
+    pub archive_diagnostics: &'a [String],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1475,8 +1476,27 @@ pub fn parse_release_export_manifest(value: &IOValue) -> Result<ReleaseExportMan
 }
 
 pub fn verify_release_export(input: &ReleaseExportVerifyInput<'_>) -> Result<ReleaseExportVerifyReceipt> {
-    let manifest = parse_release_export_manifest(input.manifest_value)?;
-    let mut diagnostics = file_ref_mismatch_diagnostics(&manifest.member_refs, input.member_refs)?;
+    let mut diagnostics = input.archive_diagnostics.to_vec();
+    let parsed_manifest = match input.manifest_value {
+        Some(value) => Some(parse_release_export_manifest(value)?),
+        None => {
+            diagnostics.push_limited_value(
+                "release export archive is missing manifest".to_string(),
+                MAX_OPERATOR_DIAGNOSTICS,
+                "release export verify diagnostics",
+            )?;
+            None
+        }
+    };
+    if let Some(manifest) = parsed_manifest.as_ref() {
+        for diagnostic in file_ref_mismatch_diagnostics(&manifest.member_refs, input.member_refs)? {
+            diagnostics.push_limited_value(
+                diagnostic,
+                MAX_OPERATOR_DIAGNOSTICS,
+                "release export verify diagnostics",
+            )?;
+        }
+    }
     if input.member_refs.iter().any(|(name, _)| name == "release-export-manifest.preserves") {
         diagnostics.push_limited_value(
             "release export archive must not list manifest as a payload member".to_string(),
@@ -1484,15 +1504,22 @@ pub fn verify_release_export(input: &ReleaseExportVerifyInput<'_>) -> Result<Rel
             "release export verify diagnostics",
         )?;
     }
+    let manifest_ref = parsed_manifest
+        .as_ref()
+        .map_or_else(|| "blake3:missing-release-export-manifest".to_string(), |manifest| manifest.manifest_ref.clone());
+    let promotion_summary_ref = parsed_manifest.as_ref().map_or_else(
+        || "blake3:missing-release-promotion-summary".to_string(),
+        |manifest| manifest.promotion_summary_ref.clone(),
+    );
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = record("release-export-verify-receipt-v1", vec![
         string(OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
-        record("manifest", vec![string(&manifest.manifest_ref), string(&manifest.promotion_summary_ref)]),
+        record("manifest", vec![string(&manifest_ref), string(&promotion_summary_ref)]),
         record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value_from_pairs(&[
             ("release-export-members-bound", status(diagnostics.is_empty())),
-            ("release-promotion-summary-bound", status(diagnostics.is_empty())),
+            ("release-promotion-summary-bound", status(parsed_manifest.is_some() && diagnostics.is_empty())),
             ("release-export-is-evidence-only", "pass"),
             ("no-release-authority-granted", "pass"),
         ]),
@@ -2000,6 +2027,15 @@ fn file_ref_mismatch_diagnostics(expected: &[(String, String)], observed: &[(Str
                 MAX_OPERATOR_DIAGNOSTICS,
                 "Nix dogfood verify diagnostics",
             )?,
+        }
+    }
+    for (observed_name, _) in observed {
+        if !expected.iter().any(|(expected_name, _)| expected_name == observed_name) {
+            diagnostics.push_limited_value(
+                format!("unexpected observed file ref: {observed_name}"),
+                MAX_OPERATOR_DIAGNOSTICS,
+                "Nix dogfood verify diagnostics",
+            )?;
         }
     }
     Ok(diagnostics)

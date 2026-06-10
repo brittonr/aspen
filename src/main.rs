@@ -9511,10 +9511,11 @@ fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
             Ok(())
         }
         DogfoodCommand::ReleaseExportVerify { bundle, receipt_out } => {
-            let (manifest_value, member_refs) = read_release_export_archive(&bundle)?;
+            let archive = read_release_export_archive(&bundle)?;
             let receipt = operator_dogfood::verify_release_export(&operator_dogfood::ReleaseExportVerifyInput {
-                manifest_value: &manifest_value,
-                member_refs: &member_refs,
+                manifest_value: archive.manifest_value.as_ref(),
+                member_refs: &archive.member_refs,
+                archive_diagnostics: &archive.diagnostics,
             })?;
             write_file(&receipt_out, &to_text(&receipt.value)?)?;
             println!(
@@ -11431,12 +11432,21 @@ fn append_release_export_bytes<W: std::io::Write>(
     builder.append_data(&mut header, name, std::io::Cursor::new(bytes)).map_err(MoltenError::from)
 }
 
-fn read_release_export_archive(path: &Path) -> Result<(preserves::IOValue, Vec<(String, String)>)> {
+#[derive(Debug)]
+struct ReleaseExportArchiveRead {
+    manifest_value: Option<preserves::IOValue>,
+    member_refs: Vec<(String, String)>,
+    diagnostics: Vec<String>,
+}
+
+fn read_release_export_archive(path: &Path) -> Result<ReleaseExportArchiveRead> {
     let archive_file = fs::File::open(path).map_err(MoltenError::from)?;
     let decoder = zstd::stream::read::Decoder::new(archive_file).map_err(MoltenError::from)?;
     let mut archive = tar::Archive::new(decoder);
     let mut manifest_value = None;
+    let mut seen_names = Vec::with_capacity(operator_dogfood::release_export_member_names().len().saturating_add(16));
     let mut member_refs = Vec::with_capacity(operator_dogfood::release_export_member_names().len().saturating_add(16));
+    let mut diagnostics = Vec::with_capacity(8);
     let entries = archive.entries().map_err(MoltenError::from)?;
     for entry in entries {
         let mut entry = entry.map_err(MoltenError::from)?;
@@ -11444,9 +11454,16 @@ fn read_release_export_archive(path: &Path) -> Result<(preserves::IOValue, Vec<(
             continue;
         }
         let name = entry.path().map_err(MoltenError::from)?.to_string_lossy().replace('\\', "/");
+        if seen_names.iter().any(|seen| seen == &name) {
+            diagnostics.push(format!("duplicate release export archive member: {name}"));
+        }
+        seen_names.push(name.clone());
         let mut bytes = Vec::new();
         std::io::Read::read_to_end(&mut entry, &mut bytes).map_err(MoltenError::from)?;
         if name == "release-export-manifest.preserves" {
+            if manifest_value.is_some() {
+                diagnostics.push("duplicate release export manifest member".to_string());
+            }
             let text = String::from_utf8(bytes).map_err(|error| {
                 MoltenError::invalid_harness(format!("release export manifest is not UTF-8: {error}"))
             })?;
@@ -11455,10 +11472,12 @@ fn read_release_export_archive(path: &Path) -> Result<(preserves::IOValue, Vec<(
             member_refs.push((name.clone(), operator_dogfood::release_export_file_ref(&name, &bytes)));
         }
     }
-    let manifest_value =
-        manifest_value.ok_or_else(|| MoltenError::invalid_harness("release export archive is missing manifest"))?;
     member_refs.sort_by(|left, right| left.0.cmp(&right.0));
-    Ok((manifest_value, member_refs))
+    Ok(ReleaseExportArchiveRead {
+        manifest_value,
+        member_refs,
+        diagnostics,
+    })
 }
 
 fn read_preserves_file(path: &Path) -> Result<preserves::IOValue> {
