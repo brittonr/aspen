@@ -382,6 +382,10 @@ pub fn validate_content_ref(value: &str) -> Result<()> {
     validate_content_ref_hex(value, hex)
 }
 
+pub fn content_ref_has_prefix(value: &str) -> bool {
+    value.starts_with(BLAKE3_REF_PREFIX)
+}
+
 pub fn content_ref_hex(value: &str) -> Result<&str> {
     let Some(hex) = value.strip_prefix(BLAKE3_REF_PREFIX) else {
         return Err(MoltenError::invalid_harness(format!(

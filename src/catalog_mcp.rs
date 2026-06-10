@@ -1056,6 +1056,15 @@ mod tests {
         let short_call = call(&registry, None, &short).expect("short call");
         assert_eq!(short_call.decision, "deny");
         assert!(to_text(&short_call.response_value).expect("short response").contains("ambiguous"));
+        let malformed_short = mcp_request_value("catalog.short_id", vec![record("prefix", vec![string("blake3:")])])
+            .expect("malformed short request");
+        let malformed_call = call(&registry, None, &malformed_short).expect("malformed short call");
+        assert_eq!(malformed_call.decision, "deny");
+        assert!(
+            to_text(&malformed_call.response_value)
+                .expect("malformed response")
+                .contains("malformed full content ref")
+        );
         let mutate = mcp_request_value("catalog.install", vec![record("kind", vec![string("doc")])]).expect("mutate");
         let denied = call(&registry, None, &mutate).expect("mutating call denied");
         assert_eq!(denied.decision, "deny");

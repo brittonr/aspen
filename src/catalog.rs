@@ -19,6 +19,7 @@ use crate::preserves_rail::CATALOG_VIEW_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_has_prefix;
 use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -314,43 +315,42 @@ pub fn resolve_short_id(
         include_payload: false,
     })?;
     let query_ref = canonical_hash(&query_value)?;
-    let normalized = normalize_prefix(&input.prefix);
+    let prefix = classify_short_id_prefix(&input.prefix);
     let visible_candidates = visible_candidate_refs(registry_root, ledger_root, &input.visibility)?;
-    let candidates = if is_full_ref(&input.prefix) {
-        visible_candidates.into_iter().filter(|candidate| candidate == &input.prefix).collect::<Vec<_>>()
-    } else if normalized.len() < input.min_length {
-        Vec::new()
-    } else {
-        visible_candidates
+    let candidates = match &prefix {
+        ShortIdPrefix::FullRef => {
+            visible_candidates.into_iter().filter(|candidate| candidate == &input.prefix).collect::<Vec<_>>()
+        }
+        ShortIdPrefix::HexPrefix(hex_prefix) if hex_prefix.len() >= input.min_length => visible_candidates
             .into_iter()
-            .filter(|candidate| canonical_ref_matches_prefix(candidate, &normalized))
-            .collect::<Vec<_>>()
+            .filter(|candidate| canonical_ref_matches_prefix(candidate, hex_prefix))
+            .collect::<Vec<_>>(),
+        ShortIdPrefix::HexPrefix(_) | ShortIdPrefix::Deny(_) => Vec::new(),
     };
-    let (decision, full_ref, diagnostics) = if normalized.len() < input.min_length && !is_full_ref(&input.prefix) {
-        ("deny".to_string(), None, vec![format!(
-            "short id prefix requires at least {} hex characters",
-            input.min_length
-        )])
-    } else if candidates.len() == 1 {
-        ("pass".to_string(), Some(candidates[0].clone()), Vec::new())
-    } else if candidates.is_empty() {
-        ("deny".to_string(), None, vec!["short id prefix matched no visible refs".to_string()])
-    } else {
-        ("deny".to_string(), None, vec![format!(
+    let (decision, full_ref, diagnostics) = match &prefix {
+        ShortIdPrefix::Deny(message) => ("deny".to_string(), None, vec![message.clone()]),
+        ShortIdPrefix::HexPrefix(hex_prefix) if hex_prefix.len() < input.min_length => {
+            ("deny".to_string(), None, vec![format!(
+                "short id prefix requires at least {} hex characters",
+                input.min_length
+            )])
+        }
+        _ if candidates.len() == 1 => ("pass".to_string(), Some(candidates[0].clone()), Vec::new()),
+        _ if candidates.is_empty() => {
+            ("deny".to_string(), None, vec!["short id prefix matched no visible refs".to_string()])
+        }
+        _ => ("deny".to_string(), None, vec![format!(
             "short id prefix is ambiguous across {} visible refs",
             candidates.len()
-        )])
+        )]),
     };
     let value = short_id_resolution_value(&input.prefix, full_ref.as_deref(), &candidates, &decision, &diagnostics)?;
     let result_value = catalog_result_value(&query_ref, &decision, std::slice::from_ref(&value), &diagnostics, &[
-        (
-            "short-id-minimum",
-            if normalized.len() >= input.min_length || is_full_ref(&input.prefix) {
-                "pass"
-            } else {
-                "fail"
-            },
-        ),
+        ("short-id-minimum", match &prefix {
+            ShortIdPrefix::FullRef => "pass",
+            ShortIdPrefix::HexPrefix(hex_prefix) if hex_prefix.len() >= input.min_length => "pass",
+            ShortIdPrefix::HexPrefix(_) | ShortIdPrefix::Deny(_) => "fail",
+        }),
         ("ambiguity-denial", if candidates.len() <= 1 { "pass" } else { "fail" }),
         ("visible-candidates-only", "pass"),
     ])?;
@@ -1242,6 +1242,10 @@ fn resolve_reference(
         }
         return Ok(reference.to_string());
     }
+    if content_ref_has_prefix(reference) {
+        let error = validate_content_ref(reference).expect_err("invalid content ref after failed full-ref check");
+        return Err(MoltenError::invalid_harness(format!("malformed full content ref: {error}")));
+    }
     let resolution = resolve_short_id(registry_root, ledger_root, &CatalogShortIdInput {
         prefix: reference.to_string(),
         min_length: DEFAULT_SHORT_ID_MIN_LENGTH,
@@ -1572,8 +1576,24 @@ fn is_full_ref(value: &str) -> bool {
     validate_content_ref(value).is_ok()
 }
 
-fn normalize_prefix(prefix: &str) -> String {
-    prefix.to_ascii_lowercase()
+enum ShortIdPrefix<'a> {
+    FullRef,
+    HexPrefix(&'a str),
+    Deny(String),
+}
+
+fn classify_short_id_prefix(prefix: &str) -> ShortIdPrefix<'_> {
+    if validate_content_ref(prefix).is_ok() {
+        return ShortIdPrefix::FullRef;
+    }
+    if content_ref_has_prefix(prefix) {
+        let error = validate_content_ref(prefix).expect_err("invalid content ref after failed validation");
+        return ShortIdPrefix::Deny(format!("malformed full content ref: {error}"));
+    }
+    if !prefix.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
+        return ShortIdPrefix::Deny("short id prefix must use lowercase hex characters".to_string());
+    }
+    ShortIdPrefix::HexPrefix(prefix)
 }
 
 fn canonical_ref_matches_prefix(candidate: &str, normalized_prefix: &str) -> bool {
@@ -2125,6 +2145,55 @@ mod tests {
         })
         .expect("hidden candidate filtered");
         assert_eq!(visible.full_ref.as_deref(), Some(first_ref.as_str()));
+    }
+
+    #[test]
+    fn short_id_resolution_rejects_malformed_ref_shapes_and_uppercase_prefixes() {
+        let dir = temp_dir("catalog-short-canonical");
+        let registry = dir.join("registry");
+        let artifact = install_fixture(&registry, "doc", parse_text("<doc \"canonical\">").expect("doc"), &[], &[]);
+
+        let malformed_ref = resolve_short_id(&registry, None, &CatalogShortIdInput {
+            prefix: "blake3:".to_string(),
+            min_length: 0,
+            visibility: CatalogVisibilityInput::default(),
+        })
+        .expect("malformed ref resolution receipt");
+        assert_eq!(malformed_ref.decision, "deny");
+        assert!(malformed_ref.candidates.is_empty());
+        assert!(to_text(&malformed_ref.value).expect("malformed ref text").contains("malformed full content ref"));
+
+        let uppercase = resolve_short_id(&registry, None, &CatalogShortIdInput {
+            prefix: "ABCDEF".to_string(),
+            min_length: 0,
+            visibility: CatalogVisibilityInput::default(),
+        })
+        .expect("uppercase resolution receipt");
+        assert_eq!(uppercase.decision, "deny");
+        assert!(uppercase.candidates.is_empty());
+        assert!(to_text(&uppercase.value).expect("uppercase text").contains("lowercase hex"));
+
+        let hidden_only = resolve_short_id(&registry, None, &CatalogShortIdInput {
+            prefix: artifact.artifact_ref[7..19].to_string(),
+            min_length: 0,
+            visibility: CatalogVisibilityInput {
+                hidden_refs: vec![artifact.artifact_ref.clone()],
+                ..CatalogVisibilityInput::default()
+            },
+        })
+        .expect("hidden-only resolution receipt");
+        assert_eq!(hidden_only.decision, "deny");
+        assert!(hidden_only.candidates.is_empty());
+        assert_eq!(hidden_only.full_ref, None);
+
+        let full_ref = resolve_short_id(&registry, None, &CatalogShortIdInput {
+            prefix: artifact.artifact_ref.clone(),
+            min_length: DEFAULT_SHORT_ID_MIN_LENGTH,
+            visibility: CatalogVisibilityInput::default(),
+        })
+        .expect("full ref resolution receipt");
+        assert_eq!(full_ref.decision, "pass");
+        assert_eq!(full_ref.full_ref, Some(artifact.artifact_ref));
     }
 
     #[test]
