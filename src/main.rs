@@ -567,6 +567,30 @@ enum DogfoodCommand {
         #[arg(long)]
         signed_signer: Option<String>,
     },
+    ReleasePromote {
+        #[arg(long)]
+        output_path: PathBuf,
+        #[arg(long)]
+        bundle_verify: PathBuf,
+        #[arg(long)]
+        receipt_out: PathBuf,
+        #[arg(long)]
+        signed_key_ledger: PathBuf,
+        #[arg(long, default_value = "local-release-trust-root")]
+        signed_trust_root: String,
+        #[arg(long)]
+        signed_key_ref: Option<String>,
+        #[arg(long)]
+        signed_key_id: Option<String>,
+        #[arg(long)]
+        signed_signer: Option<String>,
+        #[arg(long)]
+        source_evidence: String,
+        #[arg(long)]
+        octet_evidence: String,
+        #[arg(long)]
+        cairn_evidence: String,
+    },
     Show {
         artifact: PathBuf,
     },
@@ -3846,7 +3870,8 @@ fn validate_operator_receipt_value(value: &preserves::IOValue) -> Result<String>
         | "nix-dogfood-release-evidence"
         | "nix-dogfood-release-verify-receipt"
         | "release-evidence-bundle"
-        | "release-evidence-bundle-verify-receipt" => operator_dogfood::operator_dogfood_summary(value),
+        | "release-evidence-bundle-verify-receipt"
+        | "release-promotion-gate-receipt" => operator_dogfood::operator_dogfood_summary(value),
         "signed-receipt" => signed_receipt_summary(value),
         "operator-step" => {
             let step = operator_dogfood::parse_operator_step(value)?;
@@ -3876,6 +3901,7 @@ fn is_operator_receipt_kind(kind: &str) -> bool {
             | "nix-dogfood-release-verify-receipt"
             | "release-evidence-bundle"
             | "release-evidence-bundle-verify-receipt"
+            | "release-promotion-gate-receipt"
             | "signed-receipt"
     )
 }
@@ -9354,6 +9380,48 @@ fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
             println!(
                 "dogfood release-bundle-verify decision={} receipt={} bundle={}",
                 receipt.decision, receipt.receipt_ref, receipt.bundle_ref
+            );
+            Ok(())
+        }
+        DogfoodCommand::ReleasePromote {
+            output_path,
+            bundle_verify,
+            receipt_out,
+            signed_key_ledger,
+            signed_trust_root,
+            signed_key_ref,
+            signed_key_id,
+            signed_signer,
+            source_evidence,
+            octet_evidence,
+            cairn_evidence,
+        } => {
+            let bundle_verify_value = read_preserves_file(&bundle_verify)?;
+            let keyring = load_signed_receipt_keyring(&signed_key_ledger)?;
+            let receipt =
+                operator_dogfood::release_promotion_gate_receipt_value(&operator_dogfood::ReleasePromotionGateInput {
+                    output_path: &output_path,
+                    bundle_verify_value: &bundle_verify_value,
+                    source_evidence: &source_evidence,
+                    octet_evidence: &octet_evidence,
+                    cairn_evidence: &cairn_evidence,
+                    signed_keys: &keyring.keys,
+                    signed_key_revocations: &keyring.revocations,
+                    signed_trust_root: &signed_trust_root,
+                    signed_signer: signed_signer.as_deref(),
+                    signed_key_ref: signed_key_ref.as_deref(),
+                    signed_key_id: signed_key_id.as_deref(),
+                })?;
+            write_file(&receipt_out, &to_text(&receipt.value)?)?;
+            println!(
+                "dogfood release-promote decision={} receipt={} bundle-verify={} key={} source={} octet={} cairn={}",
+                receipt.decision,
+                receipt.receipt_ref,
+                receipt.bundle_verify_ref,
+                receipt.selected_key_ref,
+                receipt.source_ref,
+                receipt.octet_ref,
+                receipt.cairn_ref
             );
             Ok(())
         }

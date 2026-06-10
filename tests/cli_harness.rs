@@ -657,6 +657,36 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         &read_preserves(&keyring_bundle_verify_path)?,
     )?;
     assert_eq!(keyring_bundle_receipt.decision, "pass");
+    let promotion_receipt_path = dir.join("release-promotion-gate.preserves");
+    let promotion = molten_cmd()
+        .args(["dogfood", "release-promote", "--output-path"])
+        .arg(&dir)
+        .args(["--bundle-verify"])
+        .arg(&keyring_bundle_verify_path)
+        .args(["--receipt-out"])
+        .arg(&promotion_receipt_path)
+        .args(["--signed-key-ledger"])
+        .arg(&key_ledger)
+        .args(["--signed-key-ref"])
+        .arg(&key_ref)
+        .args([
+            "--signed-signer",
+            "release-signer",
+            "--signed-trust-root",
+            "release-root",
+            "--source-evidence",
+            "source:cli-dogfood-fixture",
+            "--octet-evidence",
+            "octet:clean-fixture",
+            "--cairn-evidence",
+            "cairn:strict-fixture",
+        ])
+        .output()?;
+    assert_success(&promotion, "dogfood release-promote");
+    assert!(stdout(&promotion).contains("decision=pass"));
+    let promotion_receipt =
+        molten::operator_dogfood::parse_release_promotion_gate_receipt(&read_preserves(&promotion_receipt_path)?)?;
+    assert_eq!(promotion_receipt.decision, "pass");
 
     let wrong_signer_bundle_verify_path = dir.join("release-evidence-bundle-verify-wrong-signer.preserves");
     let mut verify_wrong_signer_bundle = molten_cmd();
@@ -713,6 +743,35 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .output()?;
     assert_failure(&revoked_verify, "revoked key denies signed receipt");
     assert!(stderr(&revoked_verify).contains("revoked"));
+    let revoked_promotion_path = dir.join("release-promotion-gate-revoked.preserves");
+    let revoked_promotion = molten_cmd()
+        .args(["dogfood", "release-promote", "--output-path"])
+        .arg(&dir)
+        .args(["--bundle-verify"])
+        .arg(&keyring_bundle_verify_path)
+        .args(["--receipt-out"])
+        .arg(&revoked_promotion_path)
+        .args(["--signed-key-ledger"])
+        .arg(&key_ledger)
+        .args(["--signed-key-ref"])
+        .arg(&key_ref)
+        .args([
+            "--signed-signer",
+            "release-signer",
+            "--signed-trust-root",
+            "release-root",
+            "--source-evidence",
+            "source:cli-dogfood-fixture",
+            "--octet-evidence",
+            "octet:clean-fixture",
+            "--cairn-evidence",
+            "cairn:strict-fixture",
+        ])
+        .output()?;
+    assert_success(&revoked_promotion, "dogfood release-promote revoked key emits deny receipt");
+    let revoked_promotion_receipt =
+        molten::operator_dogfood::parse_release_promotion_gate_receipt(&read_preserves(&revoked_promotion_path)?)?;
+    assert_eq!(revoked_promotion_receipt.decision, "deny");
 
     let rotate_key = molten_cmd()
         .args(["receipts", "key", "rotate"])

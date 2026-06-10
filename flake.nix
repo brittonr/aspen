@@ -319,6 +319,19 @@
               --signed-member "$out/nix-dogfood-verify.signed.preserves" \
               | tee "$out/release-evidence-bundle-verify.txt"
             grep -q 'decision=pass' "$out/release-evidence-bundle-verify.txt"
+            molten dogfood release-promote \
+              --output-path "$out" \
+              --bundle-verify "$out/release-evidence-bundle-verify.preserves" \
+              --receipt-out "$out/release-promotion-gate.preserves" \
+              --signed-key-ledger "$out/signed-keyring" \
+              --signed-key-id local-release-key-v1 \
+              --signed-trust-root local-release-trust-root \
+              --signed-signer local-release-signer \
+              --source-evidence "flake-source:$src" \
+              --octet-evidence "octet:external-clean-gate-required" \
+              --cairn-evidence "cairn:external-strict-validate-required" \
+              | tee "$out/release-promotion-gate.txt"
+            grep -q 'decision=pass' "$out/release-promotion-gate.txt"
           '';
 
           nextest-config = pkgs.runCommand "molten-nextest-config-check"

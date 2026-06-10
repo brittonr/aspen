@@ -600,6 +600,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("nix-dogfood-release-verify-receipt-v1", "nix-dogfood-release-verify-receipt"),
     ("release-evidence-bundle-v1", "release-evidence-bundle"),
     ("release-evidence-bundle-verify-receipt-v1", "release-evidence-bundle-verify-receipt"),
+    ("release-promotion-gate-receipt-v1", "release-promotion-gate-receipt"),
     ("plugin-manifest-v1", "plugin-manifest"),
     ("plugin-host-abi-result-v1", "plugin-host-abi-result"),
     ("plugin-install-receipt-v1", "plugin-install-receipt"),
