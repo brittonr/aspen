@@ -13,7 +13,7 @@
 ## Phase 3: Runtime and harness refs
 
 - [x] [serial] r[molten.runtime_spine.canonical_content_refs.runtime_values] Expose canonical refs for runtime values, messages, assertions, events, turn journals, and state snapshots.
-- [ ] [parallel] r[molten.runtime_spine.canonical_content_refs.negative_tests] Add malformed-ref, wrong-length, non-hex, missing-artifact, and tampered-bytes regression tests. (Started: parser matrix, node-runtime short fixture denial, node-daemon short fixture denial, and tampered ingress envelope materialization.)
+- [ ] [parallel] r[molten.runtime_spine.canonical_content_refs.negative_tests] Add malformed-ref, wrong-length, non-hex, missing-artifact, and tampered-bytes regression tests. (Started: parser matrix, node-runtime short fixture denial, node-daemon short fixture denial, tampered ingress envelope materialization, and ledger malformed/missing/tampered materialization tests.)
 
 ## Phase 4: Broader migration
 

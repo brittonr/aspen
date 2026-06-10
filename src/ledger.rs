@@ -15,6 +15,7 @@ use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::validate_content_ref;
 use crate::retention;
 
 const MAX_LEDGER_SCAN_ENTRIES: usize = 100_000;
@@ -740,16 +741,22 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 }
 
 fn filename_for_ref(artifact_ref: &str) -> Result<String> {
-    artifact_ref.strip_prefix("blake3:").map(|hex| format!("blake3_{hex}.bin")).ok_or_else(|| {
-        MoltenError::invalid_harness(format!("unsupported ledger artifact ref {artifact_ref}; expected blake3 ref"))
-    })
+    validate_content_ref(artifact_ref).map_err(|error| {
+        MoltenError::invalid_harness(format!("unsupported ledger artifact ref {artifact_ref}: {error}"))
+    })?;
+    let hex = artifact_ref
+        .strip_prefix("blake3:")
+        .ok_or_else(|| MoltenError::invalid_harness("validated ledger artifact ref missing blake3 prefix"))?;
+    Ok(format!("blake3_{hex}.bin"))
 }
 
 fn ref_from_filename(filename: &str) -> Option<String> {
-    filename
+    let reference = filename
         .strip_prefix("blake3_")
         .and_then(|hex| hex.strip_suffix(".bin"))
-        .map(|hex| format!("blake3:{hex}"))
+        .map(|hex| format!("blake3:{hex}"))?;
+    validate_content_ref(&reference).ok()?;
+    Some(reference)
 }
 
 fn pinned_refs(root: &Path) -> Result<Vec<String>> {
@@ -761,12 +768,13 @@ fn pinned_refs(root: &Path) -> Result<Vec<String>> {
     for entry in fs::read_dir(pins).map_err(MoltenError::from)? {
         let entry = entry.map_err(MoltenError::from)?;
         if entry.file_type().map_err(MoltenError::from)?.is_file() {
-            push_bounded(
-                &mut refs,
-                fs::read_to_string(entry.path()).map_err(MoltenError::from)?,
-                MAX_LEDGER_SCAN_ENTRIES,
-                "ledger pinned refs",
-            )?;
+            let reference = fs::read_to_string(entry.path()).map_err(MoltenError::from)?;
+            validate_content_ref(&reference).map_err(|error| {
+                MoltenError::invalid_harness(format!(
+                    "ledger pin file contains invalid content ref {reference}: {error}"
+                ))
+            })?;
+            push_bounded(&mut refs, reference, MAX_LEDGER_SCAN_ENTRIES, "ledger pinned refs")?;
         }
     }
     Ok(refs)
@@ -798,6 +806,40 @@ mod tests {
         .expect("gc ledger");
         assert!(gc.removed_refs.is_empty());
         assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
+    }
+
+    #[test]
+    fn ledger_rejects_malformed_and_missing_content_refs_before_path_use() {
+        let root = temp_dir("ledger-ref-shape");
+        ensure_dirs(&root).expect("ledger dirs");
+        for invalid in [
+            "blake3:fixture",
+            "blake3:0123456789ABCDEF0123456789abcdef0123456789abcdef0123456789abcdef",
+            "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
+            "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        ] {
+            assert!(read_artifact(&root, invalid).is_err(), "invalid read ref accepted: {invalid}");
+            assert!(pin_artifact(&root, invalid).is_err(), "invalid pin ref accepted: {invalid}");
+            assert!(export_artifact(&root, invalid, &root.join("out.preserves")).is_err());
+        }
+        let missing = "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let error = read_artifact(&root, missing).expect_err("valid-shaped missing ref is not materialized");
+        assert!(error.to_string().contains("No such file") || error.to_string().contains("os error"));
+    }
+
+    #[test]
+    fn ledger_read_detects_tampered_materialized_bytes() {
+        let root = temp_dir("ledger-tampered-bytes");
+        let artifact = parse_text("<example \"original\">").expect("parse original");
+        let imported = import_artifact(&root, &artifact).expect("import original");
+        let tampered = parse_text("<example \"tampered\">").expect("parse tampered");
+        fs::write(
+            content_path(&root, &imported.artifact_ref).expect("content path"),
+            canonical_bytes(&tampered).expect("tampered canonical bytes"),
+        )
+        .expect("tamper ledger bytes");
+        let error = read_artifact(&root, &imported.artifact_ref).expect_err("tampered bytes denied");
+        assert!(error.to_string().contains("ledger content hash mismatch"));
     }
 
     #[test]
