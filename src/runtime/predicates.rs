@@ -22,6 +22,7 @@ const PRESERVES_PATTERN_PREDICATE: &str = "molten.trellis-runtime.preserves-patt
 const OBSERVE_DELIVERY_PREDICATE: &str = "molten.trellis-runtime.observe-delivery.v1";
 const PROMISE_STATE_PREDICATE: &str = "molten.trellis-runtime.promise-state.v1";
 const PROMISE_PIPELINE_PREDICATE: &str = "molten.trellis-runtime.promise-pipeline.v1";
+const REVOCATION_CLEANUP_PREDICATE: &str = "molten.trellis-runtime.revocation-cleanup.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PredicateDecision {
@@ -283,6 +284,39 @@ pub struct PromisePipelineResult {
     pub receipt: RuntimePredicateReceipt,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeRevocationCleanupState {
+    pub revoked_refs: Vec<String>,
+    pub attempted_use_refs: Vec<String>,
+    pub remaining_assertion_refs: Vec<String>,
+    pub remaining_subscription_refs: Vec<String>,
+    pub remaining_pending_call_refs: Vec<String>,
+    pub remaining_child_refs: Vec<String>,
+}
+
+impl RuntimeRevocationCleanupState {
+    pub fn cleanup_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-revocation-cleanup-state-v1", vec![
+            ref_list_value("revoked-refs", &self.revoked_refs),
+            ref_list_value("attempted-use-refs", &self.attempted_use_refs),
+            ref_list_value("remaining-assertion-refs", &self.remaining_assertion_refs),
+            ref_list_value("remaining-subscription-refs", &self.remaining_subscription_refs),
+            ref_list_value("remaining-pending-call-refs", &self.remaining_pending_call_refs),
+            ref_list_value("remaining-child-refs", &self.remaining_child_refs),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RevocationCleanupResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
 pub fn evaluate_assertion_visibility(
     snapshot: &RuntimeSnapshot,
     assertion_value: &RuntimeValue,
@@ -526,6 +560,39 @@ pub fn evaluate_promise_pipeline(state: &RuntimePromisePipelineState) -> Result<
     Ok(PromisePipelineResult { is_allowed, receipt })
 }
 
+pub fn evaluate_revocation_cleanup(state: &RuntimeRevocationCleanupState) -> Result<RevocationCleanupResult> {
+    let diagnostics = validate_revocation_cleanup(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let cleanup_ref = state.cleanup_ref()?;
+    let input_value = record("runtime-predicate-revocation-cleanup-input-v1", vec![
+        record("cleanup-ref", vec![string(&cleanup_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "revoked-refs-canonical".to_string(),
+        "revoked-refs-deny-future-use".to_string(),
+        "dependent-assertions-cleaned".to_string(),
+        "dependent-subscriptions-cleaned".to_string(),
+        "pending-calls-cleaned".to_string(),
+        "child-refs-cleaned".to_string(),
+    ];
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: REVOCATION_CLEANUP_PREDICATE,
+        input_value,
+        decision,
+        state_refs: vec![cleanup_ref],
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(RevocationCleanupResult { is_allowed, receipt })
+}
+
 fn validate_promise_pipeline(state: &RuntimePromisePipelineState) -> Vec<String> {
     let mut diagnostics = validate_promise_shape(&state.source, "source");
     if state.max_queue == 0 && !state.entries.is_empty() {
@@ -559,6 +626,57 @@ fn validate_promise_pipeline(state: &RuntimePromisePipelineState) -> Vec<String>
     diagnostics.sort();
     diagnostics.dedup();
     diagnostics
+}
+
+fn validate_revocation_cleanup(state: &RuntimeRevocationCleanupState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(16);
+    diagnostics.extend(validate_sorted_content_refs(&state.revoked_refs, "revocation", "revoked"));
+    diagnostics.extend(validate_sorted_content_refs(&state.attempted_use_refs, "revocation", "attempted-use"));
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.remaining_assertion_refs,
+        "revocation",
+        "remaining-assertion",
+    ));
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.remaining_subscription_refs,
+        "revocation",
+        "remaining-subscription",
+    ));
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.remaining_pending_call_refs,
+        "revocation",
+        "remaining-pending-call",
+    ));
+    diagnostics.extend(validate_sorted_content_refs(&state.remaining_child_refs, "revocation", "remaining-child"));
+
+    let revoked_refs: BTreeSet<&str> = state.revoked_refs.as_slice().iter().map(String::as_str).collect();
+    if has_revoked_intersection(&revoked_refs, &state.attempted_use_refs) {
+        diagnostics.push("revoked-ref-used-after-revocation".to_string());
+    }
+    if has_revoked_intersection(&revoked_refs, &state.remaining_assertion_refs) {
+        diagnostics.push("revoked-dependent-assertion-not-cleaned".to_string());
+    }
+    if has_revoked_intersection(&revoked_refs, &state.remaining_subscription_refs) {
+        diagnostics.push("revoked-dependent-subscription-not-cleaned".to_string());
+    }
+    if has_revoked_intersection(&revoked_refs, &state.remaining_pending_call_refs) {
+        diagnostics.push("revoked-pending-call-not-cleaned".to_string());
+    }
+    if has_revoked_intersection(&revoked_refs, &state.remaining_child_refs) {
+        diagnostics.push("revoked-child-ref-not-cleaned".to_string());
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    diagnostics
+}
+
+fn has_revoked_intersection(revoked_refs: &BTreeSet<&str>, refs: &[String]) -> bool {
+    for reference in refs {
+        if revoked_refs.contains(reference.as_str()) {
+            return true;
+        }
+    }
+    false
 }
 
 fn validate_promise_shape(state: &RuntimePromiseState, label: &str) -> Vec<String> {
@@ -601,6 +719,10 @@ fn validate_promise_shape(state: &RuntimePromiseState, label: &str) -> Vec<Strin
         }
     }
     diagnostics
+}
+
+fn ref_list_value(label: &'static str, refs: &[String]) -> IOValue {
+    record(label, vec![sequence(refs.iter().map(string).collect())])
 }
 
 fn validate_sorted_content_refs(refs: &[String], label: &str, field: &str) -> Vec<String> {
@@ -699,12 +821,14 @@ mod tests {
     use super::RuntimePromisePipelineEntry;
     use super::RuntimePromisePipelineState;
     use super::RuntimePromiseState;
+    use super::RuntimeRevocationCleanupState;
     use super::TurnOutcome;
     use super::evaluate_assertion_visibility;
     use super::evaluate_observe_initial_delivery;
     use super::evaluate_pattern_match;
     use super::evaluate_promise_pipeline;
     use super::evaluate_promise_state_transition;
+    use super::evaluate_revocation_cleanup;
     use super::evaluate_turn_transition;
     use crate::preserves_rail::canonical_hash;
     use crate::preserves_rail::string;
@@ -886,5 +1010,60 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic == "terminal-promise-pipeline-not-cleaned")
         );
+    }
+
+    #[test]
+    fn revocation_cleanup_predicate_denies_future_use_and_requires_cleanup() {
+        let revoked = canonical_hash(&string("revoked-ref")).expect("revoked ref");
+        let live_assertion = canonical_hash(&string("live-assertion")).expect("live assertion");
+        let live_subscription = canonical_hash(&string("live-subscription")).expect("live subscription");
+        let live_call = canonical_hash(&string("live-call")).expect("live call");
+        let live_child = canonical_hash(&string("live-child")).expect("live child");
+        let pass_state = RuntimeRevocationCleanupState {
+            revoked_refs: vec![revoked.clone()],
+            attempted_use_refs: Vec::new(),
+            remaining_assertion_refs: vec![live_assertion],
+            remaining_subscription_refs: vec![live_subscription],
+            remaining_pending_call_refs: vec![live_call],
+            remaining_child_refs: vec![live_child],
+        };
+        let pass = evaluate_revocation_cleanup(&pass_state).expect("revocation cleanup predicate");
+        assert!(pass.is_allowed);
+        assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
+        validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+
+        let denied_state = RuntimeRevocationCleanupState {
+            revoked_refs: vec![revoked.clone()],
+            attempted_use_refs: vec![revoked.clone()],
+            remaining_assertion_refs: vec![revoked.clone()],
+            remaining_subscription_refs: vec![revoked.clone()],
+            remaining_pending_call_refs: vec![revoked.clone()],
+            remaining_child_refs: vec![revoked],
+        };
+        let denied = evaluate_revocation_cleanup(&denied_state).expect("denied cleanup predicate");
+        assert!(!denied.is_allowed);
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "revoked-ref-used-after-revocation")
+        );
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "revoked-dependent-assertion-not-cleaned")
+        );
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "revoked-dependent-subscription-not-cleaned")
+        );
+        assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "revoked-pending-call-not-cleaned"));
+        assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "revoked-child-ref-not-cleaned"));
     }
 }

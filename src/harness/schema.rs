@@ -127,6 +127,7 @@ const OBSERVE_DELIVERY_PREDICATE: &str = "molten.trellis-runtime.observe-deliver
 const PRESERVES_PATTERN_PREDICATE: &str = "molten.trellis-runtime.preserves-pattern.v1";
 const PROMISE_STATE_PREDICATE: &str = "molten.trellis-runtime.promise-state.v1";
 const PROMISE_PIPELINE_PREDICATE: &str = "molten.trellis-runtime.promise-pipeline.v1";
+const REVOCATION_CLEANUP_PREDICATE: &str = "molten.trellis-runtime.revocation-cleanup.v1";
 
 const _: () = assert!(MAX_WASM_IMPORT_EVIDENCE <= 16_384);
 const _: () = assert!(MAX_HARNESS_EFFECT_LOG_ENTRIES <= 1_000_000);
@@ -2034,6 +2035,7 @@ fn parse_runtime_predicate_receipt(value: &IOValue) -> Result<String> {
             | PRESERVES_PATTERN_PREDICATE
             | PROMISE_STATE_PREDICATE
             | PROMISE_PIPELINE_PREDICATE
+            | REVOCATION_CLEANUP_PREDICATE
     ) {
         return Err(MoltenError::invalid_harness(format!(
             "unsupported runtime predicate receipt predicate {predicate}"
