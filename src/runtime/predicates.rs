@@ -9,6 +9,7 @@ use super::RuntimeValue;
 use super::TurnAction;
 use crate::error::Result;
 use crate::preserves_rail::RUNTIME_PREDICATE_RECEIPT_SCHEMA;
+use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -24,6 +25,7 @@ const PROMISE_STATE_PREDICATE: &str = "molten.trellis-runtime.promise-state.v1";
 const PROMISE_PIPELINE_PREDICATE: &str = "molten.trellis-runtime.promise-pipeline.v1";
 const REVOCATION_CLEANUP_PREDICATE: &str = "molten.trellis-runtime.revocation-cleanup.v1";
 const ACTORMAP_TRANSACTION_PREDICATE: &str = "molten.trellis-runtime.actormap-transaction.v1";
+const NEAR_FAR_REFS_PREDICATE: &str = "molten.trellis-runtime.near-far-refs.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PredicateDecision {
@@ -368,6 +370,69 @@ pub struct ActormapTransactionResult {
     pub receipt: RuntimePredicateReceipt,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeReferenceKind {
+    Near,
+    Far,
+}
+
+impl RuntimeReferenceKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Near => "near",
+            Self::Far => "far",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeReferenceCallMode {
+    Synchronous,
+    Asynchronous,
+}
+
+impl RuntimeReferenceCallMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Synchronous => "synchronous",
+            Self::Asynchronous => "asynchronous",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeNearFarRefState {
+    pub reference_ref: String,
+    pub reference_kind: RuntimeReferenceKind,
+    pub is_live: bool,
+    pub caller_vat_id: String,
+    pub target_vat_id: String,
+    pub call_mode: RuntimeReferenceCallMode,
+}
+
+impl RuntimeNearFarRefState {
+    pub fn call_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-near-far-ref-state-v1", vec![
+            record("reference-ref", vec![string(&self.reference_ref)]),
+            string(self.reference_kind.as_str()),
+            bool_value(self.is_live),
+            string(&self.caller_vat_id),
+            string(&self.target_vat_id),
+            string(self.call_mode.as_str()),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NearFarRefsResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
 pub fn evaluate_assertion_visibility(
     snapshot: &RuntimeSnapshot,
     assertion_value: &RuntimeValue,
@@ -674,6 +739,78 @@ pub fn evaluate_actormap_transaction(state: &RuntimeActormapTransactionState) ->
     })?;
 
     Ok(ActormapTransactionResult { is_allowed, receipt })
+}
+
+pub fn evaluate_near_far_refs(state: &RuntimeNearFarRefState) -> Result<NearFarRefsResult> {
+    let diagnostics = validate_near_far_refs(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let call_ref = state.call_ref()?;
+    let input_value = record("runtime-predicate-near-far-refs-input-v1", vec![
+        record("call-ref", vec![string(&call_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "reference-ref-canonical".to_string(),
+        "live-reference-required".to_string(),
+        "near-ref-synchronous-same-vat".to_string(),
+        "far-ref-asynchronous-only".to_string(),
+    ];
+    let mut state_refs = Vec::with_capacity(2);
+    state_refs.push(call_ref);
+    if validate_content_ref(&state.reference_ref).is_ok() {
+        state_refs.push(state.reference_ref.clone());
+    }
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: NEAR_FAR_REFS_PREDICATE,
+        input_value,
+        decision,
+        state_refs,
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(NearFarRefsResult { is_allowed, receipt })
+}
+
+fn validate_near_far_refs(state: &RuntimeNearFarRefState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(8);
+    if validate_content_ref(&state.reference_ref).is_err() {
+        diagnostics.push("reference-ref-noncanonical".to_string());
+    }
+    if state.caller_vat_id.is_empty() {
+        diagnostics.push("caller-vat-id-empty".to_string());
+    }
+    if state.target_vat_id.is_empty() {
+        diagnostics.push("target-vat-id-empty".to_string());
+    }
+    if !state.is_live {
+        diagnostics.push("reference-not-live".to_string());
+    }
+
+    let is_same_vat = state.caller_vat_id == state.target_vat_id;
+    match state.reference_kind {
+        RuntimeReferenceKind::Near => {
+            if !is_same_vat {
+                diagnostics.push("near-ref-cross-vat".to_string());
+            }
+            if matches!(state.call_mode, RuntimeReferenceCallMode::Synchronous) && !is_same_vat {
+                diagnostics.push("synchronous-call-not-live-same-vat-near-ref".to_string());
+            }
+        }
+        RuntimeReferenceKind::Far => {
+            if matches!(state.call_mode, RuntimeReferenceCallMode::Synchronous) {
+                diagnostics.push("far-ref-synchronous-call-denied".to_string());
+            }
+        }
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    diagnostics
 }
 
 fn validate_promise_pipeline(state: &RuntimePromisePipelineState) -> Vec<String> {
@@ -992,14 +1129,18 @@ mod tests {
     use super::PredicateDecision;
     use super::RuntimeActormapTransactionOutcome;
     use super::RuntimeActormapTransactionState;
+    use super::RuntimeNearFarRefState;
     use super::RuntimePattern;
     use super::RuntimePromisePipelineEntry;
     use super::RuntimePromisePipelineState;
     use super::RuntimePromiseState;
+    use super::RuntimeReferenceCallMode;
+    use super::RuntimeReferenceKind;
     use super::RuntimeRevocationCleanupState;
     use super::TurnOutcome;
     use super::evaluate_actormap_transaction;
     use super::evaluate_assertion_visibility;
+    use super::evaluate_near_far_refs;
     use super::evaluate_observe_initial_delivery;
     use super::evaluate_pattern_match;
     use super::evaluate_promise_pipeline;
@@ -1246,6 +1387,66 @@ mod tests {
         );
         assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "revoked-pending-call-not-cleaned"));
         assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "revoked-child-ref-not-cleaned"));
+    }
+
+    #[test]
+    fn near_far_refs_predicate_denies_dead_far_sync_and_cross_vat_near_refs() {
+        let reference_ref = canonical_hash(&string("object-ref")).expect("reference ref");
+        let sync_near = RuntimeNearFarRefState {
+            reference_ref: reference_ref.clone(),
+            reference_kind: RuntimeReferenceKind::Near,
+            is_live: true,
+            caller_vat_id: "vat-a".to_string(),
+            target_vat_id: "vat-a".to_string(),
+            call_mode: RuntimeReferenceCallMode::Synchronous,
+        };
+        let pass = evaluate_near_far_refs(&sync_near).expect("near/far predicate");
+        assert!(pass.is_allowed);
+        assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
+        validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+
+        let far_sync = RuntimeNearFarRefState {
+            reference_ref: reference_ref.clone(),
+            reference_kind: RuntimeReferenceKind::Far,
+            is_live: true,
+            caller_vat_id: "vat-a".to_string(),
+            target_vat_id: "vat-b".to_string(),
+            call_mode: RuntimeReferenceCallMode::Synchronous,
+        };
+        let far_denied = evaluate_near_far_refs(&far_sync).expect("far sync predicate");
+        assert!(!far_denied.is_allowed);
+        assert!(
+            far_denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "far-ref-synchronous-call-denied")
+        );
+
+        let cross_vat_near = RuntimeNearFarRefState {
+            reference_ref: reference_ref.clone(),
+            reference_kind: RuntimeReferenceKind::Near,
+            is_live: true,
+            caller_vat_id: "vat-a".to_string(),
+            target_vat_id: "vat-b".to_string(),
+            call_mode: RuntimeReferenceCallMode::Asynchronous,
+        };
+        let near_denied = evaluate_near_far_refs(&cross_vat_near).expect("cross-vat near predicate");
+        assert!(!near_denied.is_allowed);
+        assert!(near_denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "near-ref-cross-vat"));
+
+        let dead_ref = RuntimeNearFarRefState {
+            reference_ref: "not-a-ref".to_string(),
+            reference_kind: RuntimeReferenceKind::Far,
+            is_live: false,
+            caller_vat_id: String::new(),
+            target_vat_id: "vat-b".to_string(),
+            call_mode: RuntimeReferenceCallMode::Asynchronous,
+        };
+        let dead_denied = evaluate_near_far_refs(&dead_ref).expect("dead ref predicate");
+        assert!(!dead_denied.is_allowed);
+        assert!(dead_denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "reference-not-live"));
+        assert!(dead_denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "reference-ref-noncanonical"));
     }
 
     #[test]
