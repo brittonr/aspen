@@ -26,6 +26,7 @@ const PROMISE_PIPELINE_PREDICATE: &str = "molten.trellis-runtime.promise-pipelin
 const REVOCATION_CLEANUP_PREDICATE: &str = "molten.trellis-runtime.revocation-cleanup.v1";
 const ACTORMAP_TRANSACTION_PREDICATE: &str = "molten.trellis-runtime.actormap-transaction.v1";
 const NEAR_FAR_REFS_PREDICATE: &str = "molten.trellis-runtime.near-far-refs.v1";
+const SNAPSHOT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.snapshot-authority.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PredicateDecision {
@@ -433,6 +434,39 @@ pub struct NearFarRefsResult {
     pub receipt: RuntimePredicateReceipt,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeSnapshotAuthorityState {
+    pub snapshot_ref: String,
+    pub admitted_authority_refs: Vec<String>,
+    pub claimed_authority_refs: Vec<String>,
+    pub requested_assertion_refs: Vec<String>,
+    pub readable_assertion_refs: Vec<String>,
+    pub redacted_assertion_refs: Vec<String>,
+}
+
+impl RuntimeSnapshotAuthorityState {
+    pub fn authority_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-snapshot-authority-state-v1", vec![
+            record("snapshot-ref", vec![string(&self.snapshot_ref)]),
+            ref_list_value("admitted-authority-refs", &self.admitted_authority_refs),
+            ref_list_value("claimed-authority-refs", &self.claimed_authority_refs),
+            ref_list_value("requested-assertion-refs", &self.requested_assertion_refs),
+            ref_list_value("readable-assertion-refs", &self.readable_assertion_refs),
+            ref_list_value("redacted-assertion-refs", &self.redacted_assertion_refs),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotAuthorityResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
 pub fn evaluate_assertion_visibility(
     snapshot: &RuntimeSnapshot,
     assertion_value: &RuntimeValue,
@@ -741,6 +775,43 @@ pub fn evaluate_actormap_transaction(state: &RuntimeActormapTransactionState) ->
     Ok(ActormapTransactionResult { is_allowed, receipt })
 }
 
+pub fn evaluate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Result<SnapshotAuthorityResult> {
+    let diagnostics = validate_snapshot_authority(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let authority_ref = state.authority_ref()?;
+    let input_value = record("runtime-predicate-snapshot-authority-input-v1", vec![
+        record("authority-ref", vec![string(&authority_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "snapshot-ref-canonical".to_string(),
+        "snapshot-authority-refs-canonical".to_string(),
+        "claimed-authority-subset-admitted".to_string(),
+        "readable-assertions-subset-claimed".to_string(),
+        "requested-assertions-readable-or-redacted".to_string(),
+    ];
+    let mut state_refs = Vec::with_capacity(2);
+    state_refs.push(authority_ref);
+    if validate_content_ref(&state.snapshot_ref).is_ok() {
+        state_refs.push(state.snapshot_ref.clone());
+    }
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: SNAPSHOT_AUTHORITY_PREDICATE,
+        input_value,
+        decision,
+        state_refs,
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(SnapshotAuthorityResult { is_allowed, receipt })
+}
+
 pub fn evaluate_near_far_refs(state: &RuntimeNearFarRefState) -> Result<NearFarRefsResult> {
     let diagnostics = validate_near_far_refs(state);
     let is_allowed = diagnostics.is_empty();
@@ -775,6 +846,48 @@ pub fn evaluate_near_far_refs(state: &RuntimeNearFarRefState) -> Result<NearFarR
     })?;
 
     Ok(NearFarRefsResult { is_allowed, receipt })
+}
+
+fn validate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(24);
+    if validate_content_ref(&state.snapshot_ref).is_err() {
+        diagnostics.push("snapshot-ref-noncanonical".to_string());
+    }
+    diagnostics.extend(validate_sorted_content_refs(&state.admitted_authority_refs, "snapshot", "admitted-authority"));
+    diagnostics.extend(validate_sorted_content_refs(&state.claimed_authority_refs, "snapshot", "claimed-authority"));
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.requested_assertion_refs,
+        "snapshot",
+        "requested-assertion",
+    ));
+    diagnostics.extend(validate_sorted_content_refs(&state.readable_assertion_refs, "snapshot", "readable-assertion"));
+    diagnostics.extend(validate_sorted_content_refs(&state.redacted_assertion_refs, "snapshot", "redacted-assertion"));
+
+    let admitted_refs = string_set(&state.admitted_authority_refs);
+    let claimed_refs = string_set(&state.claimed_authority_refs);
+    let requested_refs = string_set(&state.requested_assertion_refs);
+    let readable_refs = string_set(&state.readable_assertion_refs);
+    let redacted_refs = string_set(&state.redacted_assertion_refs);
+
+    if !is_subset(&claimed_refs, &admitted_refs) {
+        diagnostics.push("snapshot-claimed-authority-not-admitted".to_string());
+    }
+    if !is_subset(&readable_refs, &admitted_refs) {
+        diagnostics.push("snapshot-readable-assertion-not-authorized".to_string());
+    }
+    if has_set_intersection(&readable_refs, &redacted_refs) {
+        diagnostics.push("snapshot-assertion-readable-and-redacted".to_string());
+    }
+    let mut covered_refs = readable_refs.clone();
+    for redacted_ref in &redacted_refs {
+        covered_refs.insert(*redacted_ref);
+    }
+    if !is_subset(&requested_refs, &covered_refs) {
+        diagnostics.push("snapshot-requested-assertion-uncovered".to_string());
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    diagnostics
 }
 
 fn validate_near_far_refs(state: &RuntimeNearFarRefState) -> Vec<String> {
@@ -1137,6 +1250,7 @@ mod tests {
     use super::RuntimeReferenceCallMode;
     use super::RuntimeReferenceKind;
     use super::RuntimeRevocationCleanupState;
+    use super::RuntimeSnapshotAuthorityState;
     use super::TurnOutcome;
     use super::evaluate_actormap_transaction;
     use super::evaluate_assertion_visibility;
@@ -1146,6 +1260,7 @@ mod tests {
     use super::evaluate_promise_pipeline;
     use super::evaluate_promise_state_transition;
     use super::evaluate_revocation_cleanup;
+    use super::evaluate_snapshot_authority;
     use super::evaluate_turn_transition;
     use crate::preserves_rail::canonical_hash;
     use crate::preserves_rail::string;
@@ -1387,6 +1502,68 @@ mod tests {
         );
         assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "revoked-pending-call-not-cleaned"));
         assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "revoked-child-ref-not-cleaned"));
+    }
+
+    #[test]
+    fn snapshot_authority_predicate_requires_admitted_claims_and_redaction_coverage() {
+        let snapshot_ref = canonical_hash(&string("snapshot")).expect("snapshot ref");
+        let admitted = canonical_hash(&string("admitted-authority")).expect("admitted authority");
+        let readable = canonical_hash(&string("readable-assertion")).expect("readable assertion");
+        let redacted = canonical_hash(&string("redacted-assertion")).expect("redacted assertion");
+        let pass_state = RuntimeSnapshotAuthorityState {
+            snapshot_ref: snapshot_ref.clone(),
+            admitted_authority_refs: vec![readable.clone()],
+            claimed_authority_refs: vec![readable.clone()],
+            requested_assertion_refs: sorted_refs(vec![readable.clone(), redacted.clone()]),
+            readable_assertion_refs: vec![readable.clone()],
+            redacted_assertion_refs: vec![redacted.clone()],
+        };
+        let pass = evaluate_snapshot_authority(&pass_state).expect("snapshot authority predicate");
+        assert!(pass.is_allowed);
+        assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
+        validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+
+        let unadmitted = canonical_hash(&string("unadmitted-authority")).expect("unadmitted authority");
+        let uncovered = canonical_hash(&string("uncovered-assertion")).expect("uncovered assertion");
+        let denied_state = RuntimeSnapshotAuthorityState {
+            snapshot_ref: "not-a-ref".to_string(),
+            admitted_authority_refs: vec![admitted],
+            claimed_authority_refs: vec![unadmitted],
+            requested_assertion_refs: sorted_refs(vec![readable.clone(), uncovered]),
+            readable_assertion_refs: vec![readable.clone()],
+            redacted_assertion_refs: vec![readable],
+        };
+        let denied = evaluate_snapshot_authority(&denied_state).expect("denied snapshot authority predicate");
+        assert!(!denied.is_allowed);
+        assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "snapshot-ref-noncanonical"));
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "snapshot-claimed-authority-not-admitted")
+        );
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "snapshot-readable-assertion-not-authorized")
+        );
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "snapshot-assertion-readable-and-redacted")
+        );
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "snapshot-requested-assertion-uncovered")
+        );
     }
 
     #[test]

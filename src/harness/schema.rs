@@ -130,6 +130,7 @@ const PROMISE_PIPELINE_PREDICATE: &str = "molten.trellis-runtime.promise-pipelin
 const REVOCATION_CLEANUP_PREDICATE: &str = "molten.trellis-runtime.revocation-cleanup.v1";
 const ACTORMAP_TRANSACTION_PREDICATE: &str = "molten.trellis-runtime.actormap-transaction.v1";
 const NEAR_FAR_REFS_PREDICATE: &str = "molten.trellis-runtime.near-far-refs.v1";
+const SNAPSHOT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.snapshot-authority.v1";
 
 const _: () = assert!(MAX_WASM_IMPORT_EVIDENCE <= 16_384);
 const _: () = assert!(MAX_HARNESS_EFFECT_LOG_ENTRIES <= 1_000_000);
@@ -2040,6 +2041,7 @@ fn parse_runtime_predicate_receipt(value: &IOValue) -> Result<String> {
             | REVOCATION_CLEANUP_PREDICATE
             | ACTORMAP_TRANSACTION_PREDICATE
             | NEAR_FAR_REFS_PREDICATE
+            | SNAPSHOT_AUTHORITY_PREDICATE
     ) {
         return Err(MoltenError::invalid_harness(format!(
             "unsupported runtime predicate receipt predicate {predicate}"
