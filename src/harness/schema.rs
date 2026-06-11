@@ -126,6 +126,7 @@ const ASSERTION_VISIBILITY_PREDICATE: &str = "molten.trellis-runtime.assertion-v
 const OBSERVE_DELIVERY_PREDICATE: &str = "molten.trellis-runtime.observe-delivery.v1";
 const PRESERVES_PATTERN_PREDICATE: &str = "molten.trellis-runtime.preserves-pattern.v1";
 const PROMISE_STATE_PREDICATE: &str = "molten.trellis-runtime.promise-state.v1";
+const PROMISE_PIPELINE_PREDICATE: &str = "molten.trellis-runtime.promise-pipeline.v1";
 
 const _: () = assert!(MAX_WASM_IMPORT_EVIDENCE <= 16_384);
 const _: () = assert!(MAX_HARNESS_EFFECT_LOG_ENTRIES <= 1_000_000);
@@ -1968,7 +1969,7 @@ pub fn validate_runtime_predicate_evidence(suite: &HarnessSuite, observations: &
                 MoltenError::invalid_harness(format!("missing admission decision at observation {position}"))
             })
             .and_then(parse_admission_decision_event)?;
-        let mut runtime_predicates = Vec::new();
+        let mut runtime_predicates = Vec::with_capacity(observation.events.as_slice().len());
         for event in observation.events.as_slice() {
             if event_boundary(event) == EventBoundary::RuntimePredicate {
                 runtime_predicates.push(parse_runtime_predicate_receipt(event)?);
@@ -2032,6 +2033,7 @@ fn parse_runtime_predicate_receipt(value: &IOValue) -> Result<String> {
             | OBSERVE_DELIVERY_PREDICATE
             | PRESERVES_PATTERN_PREDICATE
             | PROMISE_STATE_PREDICATE
+            | PROMISE_PIPELINE_PREDICATE
     ) {
         return Err(MoltenError::invalid_harness(format!(
             "unsupported runtime predicate receipt predicate {predicate}"

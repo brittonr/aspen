@@ -21,6 +21,7 @@ const TURN_COMMIT_ROLLBACK_PREDICATE: &str = "molten.trellis-runtime.turn-commit
 const PRESERVES_PATTERN_PREDICATE: &str = "molten.trellis-runtime.preserves-pattern.v1";
 const OBSERVE_DELIVERY_PREDICATE: &str = "molten.trellis-runtime.observe-delivery.v1";
 const PROMISE_STATE_PREDICATE: &str = "molten.trellis-runtime.promise-state.v1";
+const PROMISE_PIPELINE_PREDICATE: &str = "molten.trellis-runtime.promise-pipeline.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PredicateDecision {
@@ -218,6 +219,66 @@ impl RuntimePromiseState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromiseStateResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimePromisePipelineEntry {
+    pub sequence: u64,
+    pub target_ref: String,
+    pub operation: String,
+}
+
+impl RuntimePromisePipelineEntry {
+    pub fn new(sequence: u64, target_ref: impl Into<String>, operation: impl Into<String>) -> Self {
+        Self {
+            sequence,
+            target_ref: target_ref.into(),
+            operation: operation.into(),
+        }
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-promise-pipeline-entry-v1", vec![
+            crate::preserves_rail::u64_value(self.sequence),
+            record("target-ref", vec![string(&self.target_ref)]),
+            string(&self.operation),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimePromisePipelineState {
+    pub source: RuntimePromiseState,
+    pub max_queue: u64,
+    pub entries: Vec<RuntimePromisePipelineEntry>,
+}
+
+impl RuntimePromisePipelineState {
+    pub fn new(source: RuntimePromiseState, max_queue: u64, entries: Vec<RuntimePromisePipelineEntry>) -> Self {
+        Self {
+            source,
+            max_queue,
+            entries,
+        }
+    }
+
+    pub fn pipeline_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-promise-pipeline-state-v1", vec![
+            self.source.to_value(),
+            crate::preserves_rail::u64_value(self.max_queue),
+            sequence(self.entries.iter().map(RuntimePromisePipelineEntry::to_value).collect()),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromisePipelineResult {
     pub is_allowed: bool,
     pub receipt: RuntimePredicateReceipt,
 }
@@ -431,6 +492,75 @@ pub fn evaluate_promise_state_transition(
     Ok(PromiseStateResult { is_allowed, receipt })
 }
 
+pub fn evaluate_promise_pipeline(state: &RuntimePromisePipelineState) -> Result<PromisePipelineResult> {
+    let diagnostics = validate_promise_pipeline(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let pipeline_ref = state.pipeline_ref()?;
+    let source_ref = state.source.promise_ref()?;
+    let input_value = record("runtime-predicate-promise-pipeline-input-v1", vec![
+        record("pipeline-ref", vec![string(&pipeline_ref)]),
+        record("source-promise-ref", vec![string(&source_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "bounded-promise-pipeline-queue".to_string(),
+        "pending-source-allows-forwarding".to_string(),
+        "terminal-source-cleans-pipeline".to_string(),
+        "deterministic-forwarding-order".to_string(),
+        "pipeline-target-refs-canonical".to_string(),
+    ];
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: PROMISE_PIPELINE_PREDICATE,
+        input_value,
+        decision,
+        state_refs: vec![pipeline_ref, source_ref],
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(PromisePipelineResult { is_allowed, receipt })
+}
+
+fn validate_promise_pipeline(state: &RuntimePromisePipelineState) -> Vec<String> {
+    let mut diagnostics = validate_promise_shape(&state.source, "source");
+    if state.max_queue == 0 && !state.entries.is_empty() {
+        diagnostics.push("pipeline-queue-nonempty-with-zero-bound".to_string());
+    }
+    if (state.entries.len() as u64) > state.max_queue {
+        diagnostics.push("pipeline-queue-bound-exceeded".to_string());
+    }
+    if state.source.status.is_terminal() && !state.entries.is_empty() {
+        diagnostics.push("terminal-promise-pipeline-not-cleaned".to_string());
+    }
+    let mut previous_sequence = None;
+    let mut seen_sequences = BTreeSet::new();
+    for entry in state.entries.as_slice() {
+        if !seen_sequences.insert(entry.sequence) {
+            diagnostics.push("pipeline-forwarding-sequence-duplicate".to_string());
+        }
+        if let Some(previous) = previous_sequence
+            && entry.sequence <= previous
+        {
+            diagnostics.push("pipeline-forwarding-order-violation".to_string());
+        }
+        previous_sequence = Some(entry.sequence);
+        if entry.operation.is_empty() {
+            diagnostics.push("pipeline-operation-empty".to_string());
+        }
+        if validate_content_ref(&entry.target_ref).is_err() {
+            diagnostics.push("pipeline-target-ref-noncanonical".to_string());
+        }
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    diagnostics
+}
+
 fn validate_promise_shape(state: &RuntimePromiseState, label: &str) -> Vec<String> {
     let mut diagnostics = Vec::new();
     if state.promise_id.is_empty() {
@@ -474,7 +604,7 @@ fn validate_promise_shape(state: &RuntimePromiseState, label: &str) -> Vec<Strin
 }
 
 fn validate_sorted_content_refs(refs: &[String], label: &str, field: &str) -> Vec<String> {
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(refs.len() + 1);
     for reference in refs {
         if validate_content_ref(reference).is_err() {
             diagnostics.push(format!("{label}-{field}-ref-noncanonical"));
@@ -566,11 +696,14 @@ mod tests {
 
     use super::PredicateDecision;
     use super::RuntimePattern;
+    use super::RuntimePromisePipelineEntry;
+    use super::RuntimePromisePipelineState;
     use super::RuntimePromiseState;
     use super::TurnOutcome;
     use super::evaluate_assertion_visibility;
     use super::evaluate_observe_initial_delivery;
     use super::evaluate_pattern_match;
+    use super::evaluate_promise_pipeline;
     use super::evaluate_promise_state_transition;
     use super::evaluate_turn_transition;
     use crate::preserves_rail::canonical_hash;
@@ -705,6 +838,53 @@ mod tests {
                 .diagnostics
                 .iter()
                 .any(|diagnostic| diagnostic == "after-causal-failure-refs-not-sorted-unique")
+        );
+    }
+
+    #[test]
+    fn promise_pipeline_predicate_bounds_order_and_cleanup() {
+        let target_a = canonical_hash(&string("target-a")).expect("target a");
+        let target_b = canonical_hash(&string("target-b")).expect("target b");
+        let pending = RuntimePromiseState::pending("promise-pipeline");
+        let pipeline = RuntimePromisePipelineState::new(pending.clone(), 2, vec![
+            RuntimePromisePipelineEntry::new(1, target_a.clone(), "get:field"),
+            RuntimePromisePipelineEntry::new(2, target_b.clone(), "call:method"),
+        ]);
+        let pass = evaluate_promise_pipeline(&pipeline).expect("pipeline predicate");
+        assert!(pass.is_allowed);
+        assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
+        validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+
+        let over_bound = RuntimePromisePipelineState::new(pending, 1, vec![
+            RuntimePromisePipelineEntry::new(2, target_a.clone(), "second"),
+            RuntimePromisePipelineEntry::new(1, "not-a-ref", "first"),
+        ]);
+        let denied = evaluate_promise_pipeline(&over_bound).expect("denied pipeline predicate");
+        assert!(!denied.is_allowed);
+        assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "pipeline-queue-bound-exceeded"));
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "pipeline-forwarding-order-violation")
+        );
+        assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "pipeline-target-ref-noncanonical"));
+
+        let resolved = RuntimePromiseState::resolved("promise-pipeline", target_b);
+        let stale = RuntimePromisePipelineState::new(resolved, 2, vec![RuntimePromisePipelineEntry::new(
+            3,
+            target_a,
+            "late-forward",
+        )]);
+        let cleanup = evaluate_promise_pipeline(&stale).expect("cleanup predicate");
+        assert!(!cleanup.is_allowed);
+        assert!(
+            cleanup
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "terminal-promise-pipeline-not-cleaned")
         );
     }
 }
