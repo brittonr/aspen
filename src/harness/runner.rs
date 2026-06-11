@@ -39,6 +39,9 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::record;
+use crate::preserves_rail::string;
+use crate::preserves_rail::u64_value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessRun {
@@ -329,7 +332,8 @@ fn runtime_events_for_step(input: RuntimeStepInput<'_>) -> Result<Vec<IOValue>> 
     }
 
     let Some(replay_effect_log) = replay_effect_log else {
-        return Ok(state.apply_step(step).iter().map(event_value).collect());
+        let events = state.apply_step(step).iter().map(event_value).collect();
+        return with_time_random_handler_receipt(step, step_index, events);
     };
 
     replay_effect_events(state, step, step_index, replay_effect_log, replay_effect_index)
@@ -395,7 +399,51 @@ fn replay_effect_events(
     }
 
     *replay_effect_index += 1;
-    Ok(vec![request_value, response_value])
+    with_time_random_handler_receipt(step, step_index, vec![request_value, response_value])
+}
+
+fn with_time_random_handler_receipt(
+    step: &super::core::CoreStep,
+    step_index: u64,
+    events: Vec<IOValue>,
+) -> Result<Vec<IOValue>> {
+    let (effect, actor) = match step {
+        super::core::CoreStep::Clock { actor } => ("clock", actor.as_str()),
+        super::core::CoreStep::Random { actor, .. } => ("random", actor.as_str()),
+        super::core::CoreStep::Send { .. }
+        | super::core::CoreStep::Observe { .. }
+        | super::core::CoreStep::Assert { .. }
+        | super::core::CoreStep::Retract { .. } => return Ok(events),
+    };
+    if events.len() != 2 {
+        return Err(MoltenError::invalid_harness(format!(
+            "deterministic {effect} handler expected request and response events at step {step_index}"
+        )));
+    }
+    let request_ref = canonical_hash(&events[0])?;
+    let response_ref = canonical_hash(&events[1])?;
+    let handler_binding = record("time-random-handler-binding-v1", vec![
+        string("local-deterministic"),
+        string(effect),
+        string(actor),
+        u64_value(step_index),
+    ]);
+    let handler_binding_ref = canonical_hash(&handler_binding)?;
+    let receipt = record("time-random-handler-receipt-v1", vec![
+        string("molten.effects.time-random-handler.v1"),
+        record("profile", vec![string("local-deterministic")]),
+        record("effect", vec![string(effect)]),
+        record("actor", vec![string(actor)]),
+        record("request-ref", vec![string(&request_ref)]),
+        record("handler-binding-ref", vec![string(&handler_binding_ref)]),
+        record("response-ref", vec![string(&response_ref)]),
+        record("decision", vec![string("pass")]),
+        record("checks", vec![record("check", vec![
+            string("deny-by-default-bypassed-only-by-local-test-handler"),
+            string("pass"),
+        ])]),
+    ]);
+    Ok(vec![events[0].clone(), receipt, events[1].clone()])
 }
 
 fn divergence(

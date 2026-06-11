@@ -656,6 +656,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("effect-manifest-v1", "effect-manifest"),
     ("handler-profile-v1", "effect-handler-profile"),
     ("effect-binding-receipt-v1", "effect-binding-receipt"),
+    ("time-random-handler-receipt-v1", "time-random-handler-receipt"),
     ("effect-request-v1", "effect-request"),
     ("effect-response-v1", "effect-response"),
     ("service-manifest-v1", "service-manifest"),

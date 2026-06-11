@@ -120,6 +120,11 @@ r[molten.effects.time_random_handlers] Clock and random effects MUST deny by def
 - WHEN Molten evaluates the request
 - THEN the request is denied before any wall-clock value is exposed.
 
+#### Scenario: Deterministic local clock and random handlers are receipted
+- GIVEN an actor has admitted clock or random capability in a local deterministic harness run
+- WHEN Molten produces the effect response
+- THEN the observation includes a `time-random-handler-receipt-v1` binding the request ref, handler binding ref, response ref, and local deterministic profile.
+
 ### Requirement: Chaos handler profile is bounded
 r[molten.effects.chaos_profile] Chaos handler profiles MUST bound deterministic fault, delay, reorder, and partition injection and record the applied chaos profile in effect evidence.
 

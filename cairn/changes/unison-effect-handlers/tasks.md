@@ -17,7 +17,7 @@
 - [ ] [serial] r[molten.effects.dataspace_handlers] Add local and production handler bindings for dataspace send and observe effects.
 - [ ] [serial] r[molten.effects.blob_handlers] Add local and Iroh-backed handler bindings for blob get and blob put effects.
 - [ ] [parallel] r[molten.effects.storage_handlers] Add local and Redb-backed handler bindings for typed storage read/write effects.
-- [ ] [parallel] r[molten.effects.time_random_handlers] Add deny-by-default clock and random handlers with deterministic local test implementations.
+- [x] [parallel] r[molten.effects.time_random_handlers] Add deny-by-default clock and random handlers with deterministic local test implementations.
 - [x] [parallel] r[molten.effects.wasmtime_hostcall_gate] Check Wasmtime hostcalls against the artifact effect manifest before exposing them.
 - [x] [parallel] r[molten.effects.steel_api_gate] Ensure Steel orchestration uses admitted public runtime APIs rather than ambient adapter access.
 
