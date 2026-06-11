@@ -23,6 +23,7 @@ const OBSERVE_DELIVERY_PREDICATE: &str = "molten.trellis-runtime.observe-deliver
 const PROMISE_STATE_PREDICATE: &str = "molten.trellis-runtime.promise-state.v1";
 const PROMISE_PIPELINE_PREDICATE: &str = "molten.trellis-runtime.promise-pipeline.v1";
 const REVOCATION_CLEANUP_PREDICATE: &str = "molten.trellis-runtime.revocation-cleanup.v1";
+const ACTORMAP_TRANSACTION_PREDICATE: &str = "molten.trellis-runtime.actormap-transaction.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PredicateDecision {
@@ -317,6 +318,56 @@ pub struct RevocationCleanupResult {
     pub receipt: RuntimePredicateReceipt,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeActormapTransactionOutcome {
+    Committed,
+    RolledBack,
+}
+
+impl RuntimeActormapTransactionOutcome {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Committed => "committed",
+            Self::RolledBack => "rolled-back",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeActormapTransactionState {
+    pub outcome: RuntimeActormapTransactionOutcome,
+    pub before_object_refs: Vec<String>,
+    pub after_object_refs: Vec<String>,
+    pub spawned_object_refs: Vec<String>,
+    pub removed_object_refs: Vec<String>,
+    pub visible_object_refs: Vec<String>,
+    pub used_object_refs: Vec<String>,
+}
+
+impl RuntimeActormapTransactionState {
+    pub fn transaction_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-actormap-transaction-state-v1", vec![
+            string(self.outcome.as_str()),
+            ref_list_value("before-object-refs", &self.before_object_refs),
+            ref_list_value("after-object-refs", &self.after_object_refs),
+            ref_list_value("spawned-object-refs", &self.spawned_object_refs),
+            ref_list_value("removed-object-refs", &self.removed_object_refs),
+            ref_list_value("visible-object-refs", &self.visible_object_refs),
+            ref_list_value("used-object-refs", &self.used_object_refs),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ActormapTransactionResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
 pub fn evaluate_assertion_visibility(
     snapshot: &RuntimeSnapshot,
     assertion_value: &RuntimeValue,
@@ -593,6 +644,38 @@ pub fn evaluate_revocation_cleanup(state: &RuntimeRevocationCleanupState) -> Res
     Ok(RevocationCleanupResult { is_allowed, receipt })
 }
 
+pub fn evaluate_actormap_transaction(state: &RuntimeActormapTransactionState) -> Result<ActormapTransactionResult> {
+    let diagnostics = validate_actormap_transaction(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let transaction_ref = state.transaction_ref()?;
+    let input_value = record("runtime-predicate-actormap-transaction-input-v1", vec![
+        record("transaction-ref", vec![string(&transaction_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "actormap-refs-canonical".to_string(),
+        "actormap-delta-commit".to_string(),
+        "actormap-rollback-preserves-state".to_string(),
+        "spawned-object-visibility-after-commit".to_string(),
+        "removed-object-invalidation".to_string(),
+    ];
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: ACTORMAP_TRANSACTION_PREDICATE,
+        input_value,
+        decision,
+        state_refs: vec![transaction_ref],
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(ActormapTransactionResult { is_allowed, receipt })
+}
+
 fn validate_promise_pipeline(state: &RuntimePromisePipelineState) -> Vec<String> {
     let mut diagnostics = validate_promise_shape(&state.source, "source");
     if state.max_queue == 0 && !state.entries.is_empty() {
@@ -673,6 +756,96 @@ fn validate_revocation_cleanup(state: &RuntimeRevocationCleanupState) -> Vec<Str
 fn has_revoked_intersection(revoked_refs: &BTreeSet<&str>, refs: &[String]) -> bool {
     for reference in refs {
         if revoked_refs.contains(reference.as_str()) {
+            return true;
+        }
+    }
+    false
+}
+
+fn validate_actormap_transaction(state: &RuntimeActormapTransactionState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(24);
+    diagnostics.extend(validate_sorted_content_refs(&state.before_object_refs, "actormap", "before-object"));
+    diagnostics.extend(validate_sorted_content_refs(&state.after_object_refs, "actormap", "after-object"));
+    diagnostics.extend(validate_sorted_content_refs(&state.spawned_object_refs, "actormap", "spawned-object"));
+    diagnostics.extend(validate_sorted_content_refs(&state.removed_object_refs, "actormap", "removed-object"));
+    diagnostics.extend(validate_sorted_content_refs(&state.visible_object_refs, "actormap", "visible-object"));
+    diagnostics.extend(validate_sorted_content_refs(&state.used_object_refs, "actormap", "used-object"));
+
+    let before_refs = string_set(&state.before_object_refs);
+    let after_refs = string_set(&state.after_object_refs);
+    let spawned_refs = string_set(&state.spawned_object_refs);
+    let removed_refs = string_set(&state.removed_object_refs);
+    let visible_refs = string_set(&state.visible_object_refs);
+    let used_refs = string_set(&state.used_object_refs);
+
+    if has_set_intersection(&spawned_refs, &before_refs) {
+        diagnostics.push("spawned-object-already-existed".to_string());
+    }
+    if !is_subset(&removed_refs, &before_refs) {
+        diagnostics.push("removed-object-missing-before".to_string());
+    }
+
+    match state.outcome {
+        RuntimeActormapTransactionOutcome::Committed => {
+            let mut expected_after = before_refs.clone();
+            for removed in &removed_refs {
+                expected_after.remove(*removed);
+            }
+            for spawned in &spawned_refs {
+                expected_after.insert(*spawned);
+            }
+            if expected_after != after_refs {
+                diagnostics.push("actormap-commit-delta-mismatch".to_string());
+            }
+            if !is_subset(&spawned_refs, &after_refs) {
+                diagnostics.push("spawned-object-missing-after-commit".to_string());
+            }
+            if !is_subset(&spawned_refs, &visible_refs) {
+                diagnostics.push("spawned-object-not-visible-after-commit".to_string());
+            }
+            if has_set_intersection(&removed_refs, &after_refs) {
+                diagnostics.push("removed-object-present-after-commit".to_string());
+            }
+            if has_set_intersection(&removed_refs, &visible_refs) {
+                diagnostics.push("removed-object-visible-after-commit".to_string());
+            }
+            if has_set_intersection(&removed_refs, &used_refs) {
+                diagnostics.push("removed-object-used-after-removal".to_string());
+            }
+        }
+        RuntimeActormapTransactionOutcome::RolledBack => {
+            if before_refs != after_refs {
+                diagnostics.push("actormap-rollback-state-changed".to_string());
+            }
+            if has_set_intersection(&spawned_refs, &visible_refs) {
+                diagnostics.push("spawned-object-visible-after-rollback".to_string());
+            }
+            if has_set_intersection(&spawned_refs, &used_refs) {
+                diagnostics.push("spawned-object-used-after-rollback".to_string());
+            }
+        }
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    diagnostics
+}
+
+fn string_set(refs: &[String]) -> BTreeSet<&str> {
+    refs.iter().map(String::as_str).collect()
+}
+
+fn is_subset(left: &BTreeSet<&str>, right: &BTreeSet<&str>) -> bool {
+    for item in left {
+        if !right.contains(item) {
+            return false;
+        }
+    }
+    true
+}
+
+fn has_set_intersection(left: &BTreeSet<&str>, right: &BTreeSet<&str>) -> bool {
+    for item in left {
+        if right.contains(item) {
             return true;
         }
     }
@@ -817,12 +990,15 @@ mod tests {
     use std::collections::BTreeSet;
 
     use super::PredicateDecision;
+    use super::RuntimeActormapTransactionOutcome;
+    use super::RuntimeActormapTransactionState;
     use super::RuntimePattern;
     use super::RuntimePromisePipelineEntry;
     use super::RuntimePromisePipelineState;
     use super::RuntimePromiseState;
     use super::RuntimeRevocationCleanupState;
     use super::TurnOutcome;
+    use super::evaluate_actormap_transaction;
     use super::evaluate_assertion_visibility;
     use super::evaluate_observe_initial_delivery;
     use super::evaluate_pattern_match;
@@ -837,6 +1013,11 @@ mod tests {
     use crate::runtime::RuntimeState;
     use crate::runtime::RuntimeStep;
     use crate::runtime::RuntimeValue;
+
+    fn sorted_refs(mut refs: Vec<String>) -> Vec<String> {
+        refs.sort();
+        refs
+    }
 
     #[test]
     fn assertion_visibility_preserves_duplicates_until_final_owner() {
@@ -1065,5 +1246,78 @@ mod tests {
         );
         assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "revoked-pending-call-not-cleaned"));
         assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "revoked-child-ref-not-cleaned"));
+    }
+
+    #[test]
+    fn actormap_transaction_predicate_commits_rolls_back_and_invalidates_removed_objects() {
+        let existing = canonical_hash(&string("existing-object")).expect("existing object");
+        let spawned = canonical_hash(&string("spawned-object")).expect("spawned object");
+        let removed = canonical_hash(&string("removed-object")).expect("removed object");
+        let committed = RuntimeActormapTransactionState {
+            outcome: RuntimeActormapTransactionOutcome::Committed,
+            before_object_refs: sorted_refs(vec![existing.clone(), removed.clone()]),
+            after_object_refs: sorted_refs(vec![existing.clone(), spawned.clone()]),
+            spawned_object_refs: vec![spawned.clone()],
+            removed_object_refs: vec![removed.clone()],
+            visible_object_refs: sorted_refs(vec![existing.clone(), spawned.clone()]),
+            used_object_refs: sorted_refs(vec![existing.clone(), spawned.clone()]),
+        };
+        let pass = evaluate_actormap_transaction(&committed).expect("actormap transaction predicate");
+        assert!(pass.is_allowed);
+        assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
+        validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+
+        let stale_removed = RuntimeActormapTransactionState {
+            outcome: RuntimeActormapTransactionOutcome::Committed,
+            before_object_refs: sorted_refs(vec![existing.clone(), removed.clone()]),
+            after_object_refs: sorted_refs(vec![existing.clone(), removed.clone(), spawned.clone()]),
+            spawned_object_refs: vec![spawned.clone()],
+            removed_object_refs: vec![removed.clone()],
+            visible_object_refs: sorted_refs(vec![existing.clone(), removed.clone()]),
+            used_object_refs: vec![removed.clone()],
+        };
+        let denied = evaluate_actormap_transaction(&stale_removed).expect("denied actormap predicate");
+        assert!(!denied.is_allowed);
+        assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "actormap-commit-delta-mismatch"));
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "removed-object-present-after-commit")
+        );
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "removed-object-used-after-removal")
+        );
+
+        let rollback = RuntimeActormapTransactionState {
+            outcome: RuntimeActormapTransactionOutcome::RolledBack,
+            before_object_refs: vec![existing],
+            after_object_refs: vec![spawned.clone()],
+            spawned_object_refs: vec![spawned.clone()],
+            removed_object_refs: Vec::new(),
+            visible_object_refs: vec![spawned.clone()],
+            used_object_refs: vec![spawned],
+        };
+        let rollback_denied = evaluate_actormap_transaction(&rollback).expect("rollback actormap predicate");
+        assert!(!rollback_denied.is_allowed);
+        assert!(
+            rollback_denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "actormap-rollback-state-changed")
+        );
+        assert!(
+            rollback_denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "spawned-object-visible-after-rollback")
+        );
     }
 }
