@@ -1,5 +1,6 @@
 mod admission;
 mod dataspace;
+mod predicates;
 mod turn;
 
 pub use admission::AdmissionAction;
@@ -12,6 +13,17 @@ pub use admission::CapabilityContext;
 pub use admission::CapabilityGrant;
 pub use dataspace::RuntimeSnapshot;
 pub use dataspace::RuntimeState;
+pub use predicates::AssertionVisibilityResult;
+pub use predicates::ObserveDeliveryResult;
+pub use predicates::PatternMatchResult;
+pub use predicates::PredicateDecision;
+pub use predicates::RuntimePattern;
+pub use predicates::RuntimePredicateReceipt;
+pub use predicates::TurnOutcome;
+pub use predicates::evaluate_assertion_visibility;
+pub use predicates::evaluate_observe_initial_delivery;
+pub use predicates::evaluate_pattern_match;
+pub use predicates::evaluate_turn_transition;
 pub use turn::PendingTurn;
 pub use turn::RuntimeAssertion;
 pub use turn::RuntimeEffect;

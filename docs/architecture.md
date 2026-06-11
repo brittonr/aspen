@@ -335,7 +335,7 @@ Current architectural changes are recorded under `cairn/changes/`:
 - `goblins-vat-runtime` — vats, transactional actormap, object refs, promises, revocation, safe serialization, debugging.
 - `trellis-choreography` — protocol manifests, Trellis projectability/projection, dataspace endpoint interpreter.
 - `trellis-raft-consensus` — Raft-backed strongly consistent control-plane state.
-- `trellis-runtime-predicates` — follow-up Trellis predicates for dataspace visibility, turns, patterns, promises, revocation, snapshots, and service dependency admission.
+- `trellis-runtime-predicates` — Trellis-bounded runtime predicate receipts for dataspace assertion visibility, turn commit/rollback, deterministic pattern matching, Observe delivery, and harness/gate replay binding, with follow-up promises, revocation, snapshots, and service dependency admission.
 - `unison-artifact-registry` — content-addressed runtime artifacts, names as metadata, dependency graph, semantic docs/transcripts.
 - `unison-effect-handlers` — Unison ability-inspired effect/capability manifests with admitted handler profiles for production, local, chaos, and profiling execution.
 - `unison-remote-artifact-sync` — Iroh-backed dependency closure sync and remote execution envelopes for admitted artifacts, not arbitrary mobile closures.

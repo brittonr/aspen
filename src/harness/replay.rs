@@ -241,6 +241,7 @@ fn event_divergence_kind(expected: &IOValue, actual: &IOValue) -> &'static str {
         (EventBoundary::ActorOutput, _) | (_, EventBoundary::ActorOutput) => "actor-output",
         (EventBoundary::SteelExecution, _) | (_, EventBoundary::SteelExecution) => "steel-execution",
         (EventBoundary::WasmExecution, _) | (_, EventBoundary::WasmExecution) => "wasm-execution",
+        (EventBoundary::RuntimePredicate, _) | (_, EventBoundary::RuntimePredicate) => "runtime-predicate",
         (EventBoundary::Trace, EventBoundary::Trace) => "trace",
     }
 }

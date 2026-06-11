@@ -42,6 +42,9 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
+use crate::runtime::RuntimeObserver;
+use crate::runtime::evaluate_assertion_visibility;
+use crate::runtime::evaluate_observe_initial_delivery;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessRun {
@@ -323,20 +326,71 @@ fn runtime_events_for_step(input: RuntimeStepInput<'_>) -> Result<Vec<IOValue>> 
     } = input;
 
     if !admission_decision.is_allowed() {
+        let before = state.snapshot();
         let turn = state.begin_turn(step);
-        return Ok(state
-            .rollback_turn(turn, step.primary_actor(), admission_decision.reason())
-            .iter()
-            .map(event_value)
-            .collect());
+        let (runtime_events, receipt) = state.rollback_turn_with_predicate_receipt(
+            turn.clone(),
+            step.primary_actor(),
+            admission_decision.reason(),
+        )?;
+        let after = state.snapshot();
+        let mut events = vec![receipt.value];
+        events.extend(runtime_events.iter().map(event_value));
+        events.extend(step_predicate_receipts(step, &before, &after)?);
+        return Ok(events);
     }
 
     let Some(replay_effect_log) = replay_effect_log else {
-        let events = state.apply_step(step).iter().map(event_value).collect();
+        if !is_dataspace_turn(step) {
+            let events = state.apply_step(step).iter().map(event_value).collect();
+            return with_time_random_handler_receipt(step, step_index, events);
+        }
+        let before = state.snapshot();
+        let turn = state.begin_turn(step);
+        let (runtime_events, receipt) = state.commit_turn_with_predicate_receipt(turn)?;
+        let after = state.snapshot();
+        let mut events = vec![receipt.value];
+        events.extend(runtime_events.iter().map(event_value));
+        events.extend(step_predicate_receipts(step, &before, &after)?);
         return with_time_random_handler_receipt(step, step_index, events);
     };
 
     replay_effect_events(state, step, step_index, replay_effect_log, replay_effect_index)
+}
+
+fn is_dataspace_turn(step: &super::core::CoreStep) -> bool {
+    matches!(
+        step,
+        super::core::CoreStep::Send { .. }
+            | super::core::CoreStep::Observe { .. }
+            | super::core::CoreStep::Assert { .. }
+            | super::core::CoreStep::Retract { .. }
+    )
+}
+
+fn step_predicate_receipts(
+    step: &super::core::CoreStep,
+    before: &crate::runtime::RuntimeSnapshot,
+    after: &crate::runtime::RuntimeSnapshot,
+) -> Result<Vec<IOValue>> {
+    match step {
+        super::core::CoreStep::Observe { actor, pattern } => {
+            let observer = RuntimeObserver {
+                actor: actor.clone(),
+                pattern: pattern.clone(),
+            };
+            let receipt = evaluate_observe_initial_delivery(before, &observer)?.receipt;
+            Ok(vec![receipt.value])
+        }
+        super::core::CoreStep::Assert { value, .. } | super::core::CoreStep::Retract { value, .. } => {
+            let live_owners = after.assertions.iter().map(|assertion| assertion.actor.clone()).collect();
+            let receipt = evaluate_assertion_visibility(after, value, &live_owners)?.receipt;
+            Ok(vec![receipt.value])
+        }
+        super::core::CoreStep::Send { .. }
+        | super::core::CoreStep::Clock { .. }
+        | super::core::CoreStep::Random { .. } => Ok(Vec::new()),
+    }
 }
 
 fn replay_effect_events(
@@ -347,7 +401,17 @@ fn replay_effect_events(
     replay_effect_index: &mut usize,
 ) -> Result<Vec<IOValue>> {
     let Some(request) = state.begin_effect_for_step(step) else {
-        return Ok(state.apply_step(step).iter().map(event_value).collect());
+        if !is_dataspace_turn(step) {
+            return Ok(state.apply_step(step).iter().map(event_value).collect());
+        }
+        let before = state.snapshot();
+        let turn = state.begin_turn(step);
+        let (runtime_events, receipt) = state.commit_turn_with_predicate_receipt(turn)?;
+        let after = state.snapshot();
+        let mut events = vec![receipt.value];
+        events.extend(runtime_events.iter().map(event_value));
+        events.extend(step_predicate_receipts(step, &before, &after)?);
+        return Ok(events);
     };
 
     let Some(entry) = replay_effect_log.get(*replay_effect_index) else {

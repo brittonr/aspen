@@ -80,6 +80,7 @@ pub struct GateCheck {
     pub replay_actual_report_ref: String,
     pub executor_preflights_ref: String,
     pub executor_execution_receipts_ref: String,
+    pub runtime_predicate_receipts_ref: String,
     pub policy_ref: String,
     pub policy_gate_ref: String,
     pub policy_nickel_source_ref: String,
@@ -276,6 +277,7 @@ pub fn gate_receipt_value(check: &GateCheck) -> IOValue {
         ("suite", check.suite_ref.as_str()),
         ("executor-preflights", check.executor_preflights_ref.as_str()),
         ("executor-execution-receipts", check.executor_execution_receipts_ref.as_str()),
+        ("runtime-predicate-receipts", check.runtime_predicate_receipts_ref.as_str()),
         ("policy", check.policy_ref.as_str()),
         ("policy-gate", check.policy_gate_ref.as_str()),
         ("policy-nickel-source", check.policy_nickel_source_ref.as_str()),
@@ -411,6 +413,10 @@ pub fn parse_gate_receipt(value: &IOValue) -> Result<GateReceipt> {
     require_check(&checks, "admission-decisions")?;
     require_check(&checks, "deny-rollback")?;
     require_check(&checks, "denied-effect-suppression")?;
+    require_check(&checks, "runtime-predicate-receipts")?;
+    require_check(&checks, "assertion-visibility-predicate")?;
+    require_check(&checks, "turn-commit-rollback-predicate")?;
+    require_check(&checks, "observe-delivery-predicate")?;
     require_check(&checks, "chain-continuity")?;
     require_check(&checks, "chain-anchor-descent")?;
     require_check(&checks, "chain-checkpoint-freshness")?;
@@ -461,6 +467,7 @@ pub fn parse_gate_receipt(value: &IOValue) -> Result<GateReceipt> {
     require_artifact_ref(&artifact_refs, "suite", &suite_ref)?;
     require_artifact_kind(&artifact_refs, "executor-preflights")?;
     require_artifact_kind(&artifact_refs, "executor-execution-receipts")?;
+    require_artifact_kind(&artifact_refs, "runtime-predicate-receipts")?;
     require_artifact_kind(&artifact_refs, "policy")?;
     require_artifact_kind(&artifact_refs, "policy-gate")?;
     require_artifact_kind(&artifact_refs, "policy-nickel-source")?;
@@ -657,6 +664,7 @@ fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Optio
         replay_actual_report_ref: replay.actual_report_ref,
         executor_preflights_ref: canonical_hash(&executor_preflights.value)?,
         executor_execution_receipts_ref: executor_execution_receipts_ref(&report.observations)?,
+        runtime_predicate_receipts_ref: runtime_predicate_receipts_ref(&report.observations)?,
         policy_ref: policy_gate.policy_ref.clone(),
         policy_gate_ref: canonical_hash(&policy_gate.value)?,
         policy_nickel_source_ref: policy_gate.nickel_source_ref.clone(),
@@ -689,6 +697,16 @@ fn executor_execution_receipts_ref(observations: &[HarnessObservation]) -> Resul
         .cloned()
         .collect::<Vec<_>>();
     canonical_hash(&record("executor-execution-receipts", vec![sequence(receipts)]))
+}
+
+fn runtime_predicate_receipts_ref(observations: &[HarnessObservation]) -> Result<String> {
+    let receipts = observations
+        .iter()
+        .flat_map(|observation| observation.events.iter())
+        .filter(|event| event_boundary(event) == EventBoundary::RuntimePredicate)
+        .cloned()
+        .collect::<Vec<_>>();
+    canonical_hash(&record("runtime-predicate-receipts", vec![sequence(receipts)]))
 }
 
 fn tool_value() -> IOValue {
@@ -1547,6 +1565,10 @@ fn checks_value() -> IOValue {
             "admission-decisions",
             "deny-rollback",
             "denied-effect-suppression",
+            "runtime-predicate-receipts",
+            "assertion-visibility-predicate",
+            "turn-commit-rollback-predicate",
+            "observe-delivery-predicate",
             "chain-continuity",
             "chain-anchor-descent",
             "chain-checkpoint-freshness",

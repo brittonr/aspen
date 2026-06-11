@@ -471,6 +471,7 @@ pub enum EventBoundary {
     ActorOutput,
     SteelExecution,
     WasmExecution,
+    RuntimePredicate,
     Trace,
 }
 
@@ -4112,6 +4113,7 @@ fn validate_denied_observation_events(position: usize, events: &[IOValue]) -> Re
             EventBoundary::ActorInput
             | EventBoundary::HostcallRequest
             | EventBoundary::HostcallDecision
+            | EventBoundary::RuntimePredicate
             | EventBoundary::ActorOutput => {}
             EventBoundary::Trace if is_turn_rolled_back(event) => {
                 has_rollback_event = true;
@@ -7042,6 +7044,7 @@ pub fn effect_log_from_observations(observations: &[HarnessObservation]) -> Resu
                 | EventBoundary::ActorOutput
                 | EventBoundary::SteelExecution
                 | EventBoundary::WasmExecution
+                | EventBoundary::RuntimePredicate
                 | EventBoundary::Trace => {}
             }
         }
@@ -7094,6 +7097,7 @@ pub(crate) fn append_effect_entries_from_events(
             | EventBoundary::ActorOutput
             | EventBoundary::SteelExecution
             | EventBoundary::WasmExecution
+            | EventBoundary::RuntimePredicate
             | EventBoundary::Trace => {}
         }
     }
@@ -7173,6 +7177,9 @@ pub fn event_boundary(value: &IOValue) -> EventBoundary {
     }
     if value.collect_simple_record("wasm-execution-receipt-v1", None).is_some() {
         return EventBoundary::WasmExecution;
+    }
+    if value.collect_simple_record("runtime-predicate-receipt-v1", None).is_some() {
+        return EventBoundary::RuntimePredicate;
     }
     EventBoundary::Trace
 }

@@ -1419,6 +1419,10 @@ mod tests {
         assert!(receipt.checks.iter().any(|check| check == "admission-decisions"));
         assert!(receipt.checks.iter().any(|check| check == "deny-rollback"));
         assert!(receipt.checks.iter().any(|check| check == "denied-effect-suppression"));
+        assert!(receipt.checks.iter().any(|check| check == "runtime-predicate-receipts"));
+        assert!(receipt.checks.iter().any(|check| check == "assertion-visibility-predicate"));
+        assert!(receipt.checks.iter().any(|check| check == "turn-commit-rollback-predicate"));
+        assert!(receipt.checks.iter().any(|check| check == "observe-delivery-predicate"));
         assert!(receipt.checks.iter().any(|check| check == "executor-conformance-suite-binding"));
         assert!(receipt.checks.iter().any(|check| check == "cross-kind-hostcall-conformance"));
         assert!(receipt.checks.iter().any(|check| check == "chain-continuity"));
@@ -1430,6 +1434,14 @@ mod tests {
         assert!(receipt.checks.iter().any(|check| check == "turn-journal-admission-binding"));
         assert!(receipt.checks.iter().any(|check| check == "turn-journal-state-binding"));
         assert!(receipt.checks.iter().any(|check| check == "turn-journal-no-global-head"));
+        let parsed_report = parse_report(&run.report_value).expect("parse report");
+        let runtime_predicates = parsed_report
+            .observations
+            .iter()
+            .flat_map(|observation| observation.events.iter())
+            .filter(|event| event.collect_simple_record("runtime-predicate-receipt-v1", None).is_some())
+            .count();
+        assert!(runtime_predicates >= 3);
         assert!(gate_receipt_summary(&receipt_value).expect("receipt summary").contains("decision=pass"));
         let rendered = to_text(&receipt_value).expect("render receipt");
         let reparsed = parse_text(&rendered).expect("reparse receipt");

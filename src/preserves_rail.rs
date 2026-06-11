@@ -54,6 +54,7 @@ pub const RUNTIME_ADAPTER_PREFLIGHT_RECEIPT_SCHEMA: &str = "molten.runtime.adapt
 pub const RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA: &str = "molten.runtime.remote-proxy-executor.v1";
 pub const RUNTIME_REMOTE_PROXY_PREFLIGHT_RECEIPT_SCHEMA: &str = "molten.runtime.remote-proxy-preflight-receipt.v1";
 pub const RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA: &str = "molten.runtime.capability-authorization.v1";
+pub const RUNTIME_PREDICATE_RECEIPT_SCHEMA: &str = "molten.runtime.predicate-receipt.v1";
 pub const EFFECT_MANIFEST_SCHEMA: &str = "molten.effects.manifest.v1";
 pub const EFFECT_HANDLER_PROFILE_SCHEMA: &str = "molten.effects.handler-profile.v1";
 pub const EFFECT_HANDLER_BINDING_SCHEMA: &str = "molten.effects.handler-binding.v1";

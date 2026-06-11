@@ -1,13 +1,17 @@
 use std::collections::BTreeSet;
 
 use super::PendingTurn;
+use super::PredicateDecision;
 use super::RuntimeAssertion;
 use super::RuntimeEffect;
 use super::RuntimeEvent;
 use super::RuntimeMessage;
 use super::RuntimeObserver;
+use super::RuntimePredicateReceipt;
 use super::RuntimeStep;
 use super::TurnAction;
+use super::TurnOutcome;
+use super::evaluate_turn_transition;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::canonical_hash;
@@ -153,6 +157,23 @@ impl RuntimeState {
         turn.events
     }
 
+    pub fn commit_turn_with_predicate_receipt(
+        &mut self,
+        turn: PendingTurn,
+    ) -> Result<(Vec<RuntimeEvent>, RuntimePredicateReceipt)> {
+        let before = self.snapshot();
+        let mut preview = self.clone();
+        let events = preview.commit_turn(turn.clone());
+        let after = preview.snapshot();
+        let receipt = evaluate_turn_transition(&before, &turn, &after, TurnOutcome::Committed)?;
+        if receipt.decision == PredicateDecision::Pass {
+            *self = preview;
+            Ok((events, receipt))
+        } else {
+            Err(MoltenError::invalid_harness("runtime turn predicate denied commit"))
+        }
+    }
+
     pub fn rollback_turn(
         &self,
         _turn: PendingTurn,
@@ -163,6 +184,18 @@ impl RuntimeState {
             actor: actor.into(),
             reason: reason.into(),
         }]
+    }
+
+    pub fn rollback_turn_with_predicate_receipt(
+        &self,
+        turn: PendingTurn,
+        actor: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Result<(Vec<RuntimeEvent>, RuntimePredicateReceipt)> {
+        let before = self.snapshot();
+        let receipt = evaluate_turn_transition(&before, &turn, &before, TurnOutcome::Denied)?;
+        let events = self.rollback_turn(turn, actor, reason);
+        Ok((events, receipt))
     }
 
     pub fn begin_effect_for_step(&mut self, step: &RuntimeStep) -> Option<RuntimeEvent> {
