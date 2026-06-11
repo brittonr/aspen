@@ -27,6 +27,7 @@ const REVOCATION_CLEANUP_PREDICATE: &str = "molten.trellis-runtime.revocation-cl
 const ACTORMAP_TRANSACTION_PREDICATE: &str = "molten.trellis-runtime.actormap-transaction.v1";
 const NEAR_FAR_REFS_PREDICATE: &str = "molten.trellis-runtime.near-far-refs.v1";
 const SNAPSHOT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.snapshot-authority.v1";
+const SERVICE_DEPENDENCIES_PREDICATE: &str = "molten.trellis-runtime.service-dependencies.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PredicateDecision {
@@ -467,6 +468,45 @@ pub struct SnapshotAuthorityResult {
     pub receipt: RuntimePredicateReceipt,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeServiceDependenciesState {
+    pub service_ref: String,
+    pub demanded_service_refs: Vec<String>,
+    pub dependency_refs: Vec<String>,
+    pub ready_service_refs: Vec<String>,
+    pub failed_service_refs: Vec<String>,
+    pub force_run_refs: Vec<String>,
+    pub restart_refs: Vec<String>,
+    pub reverse_dependency_refs: Vec<String>,
+    pub shutdown_refs: Vec<String>,
+}
+
+impl RuntimeServiceDependenciesState {
+    pub fn dependency_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-service-dependencies-state-v1", vec![
+            record("service-ref", vec![string(&self.service_ref)]),
+            ref_list_value("demanded-service-refs", &self.demanded_service_refs),
+            ref_list_value("dependency-refs", &self.dependency_refs),
+            ref_list_value("ready-service-refs", &self.ready_service_refs),
+            ref_list_value("failed-service-refs", &self.failed_service_refs),
+            ref_list_value("force-run-refs", &self.force_run_refs),
+            ref_list_value("restart-refs", &self.restart_refs),
+            ref_list_value("reverse-dependency-refs", &self.reverse_dependency_refs),
+            ref_list_value("shutdown-refs", &self.shutdown_refs),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServiceDependenciesResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
 pub fn evaluate_assertion_visibility(
     snapshot: &RuntimeSnapshot,
     assertion_value: &RuntimeValue,
@@ -812,6 +852,43 @@ pub fn evaluate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Res
     Ok(SnapshotAuthorityResult { is_allowed, receipt })
 }
 
+pub fn evaluate_service_dependencies(state: &RuntimeServiceDependenciesState) -> Result<ServiceDependenciesResult> {
+    let diagnostics = validate_service_dependencies(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let dependency_ref = state.dependency_ref()?;
+    let input_value = record("runtime-predicate-service-dependencies-input-v1", vec![
+        record("dependency-ref", vec![string(&dependency_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "service-refs-canonical".to_string(),
+        "demand-dependencies-ready".to_string(),
+        "failed-dependency-admission".to_string(),
+        "restart-refs-match-failures".to_string(),
+        "shutdown-reverse-dependencies-first".to_string(),
+    ];
+    let mut state_refs = Vec::with_capacity(2);
+    state_refs.push(dependency_ref);
+    if validate_content_ref(&state.service_ref).is_ok() {
+        state_refs.push(state.service_ref.clone());
+    }
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: SERVICE_DEPENDENCIES_PREDICATE,
+        input_value,
+        decision,
+        state_refs,
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(ServiceDependenciesResult { is_allowed, receipt })
+}
+
 pub fn evaluate_near_far_refs(state: &RuntimeNearFarRefState) -> Result<NearFarRefsResult> {
     let diagnostics = validate_near_far_refs(state);
     let is_allowed = diagnostics.is_empty();
@@ -846,6 +923,57 @@ pub fn evaluate_near_far_refs(state: &RuntimeNearFarRefState) -> Result<NearFarR
     })?;
 
     Ok(NearFarRefsResult { is_allowed, receipt })
+}
+
+fn validate_service_dependencies(state: &RuntimeServiceDependenciesState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(32);
+    if validate_content_ref(&state.service_ref).is_err() {
+        diagnostics.push("service-ref-noncanonical".to_string());
+    }
+    diagnostics.extend(validate_sorted_content_refs(&state.demanded_service_refs, "service", "demanded"));
+    diagnostics.extend(validate_sorted_content_refs(&state.dependency_refs, "service", "dependency"));
+    diagnostics.extend(validate_sorted_content_refs(&state.ready_service_refs, "service", "ready"));
+    diagnostics.extend(validate_sorted_content_refs(&state.failed_service_refs, "service", "failed"));
+    diagnostics.extend(validate_sorted_content_refs(&state.force_run_refs, "service", "force-run"));
+    diagnostics.extend(validate_sorted_content_refs(&state.restart_refs, "service", "restart"));
+    diagnostics.extend(validate_sorted_content_refs(&state.reverse_dependency_refs, "service", "reverse-dependency"));
+    diagnostics.extend(validate_sorted_content_refs(&state.shutdown_refs, "service", "shutdown"));
+
+    let service_ref = state.service_ref.as_str();
+    let demanded_refs = string_set(&state.demanded_service_refs);
+    let dependency_refs = string_set(&state.dependency_refs);
+    let ready_refs = string_set(&state.ready_service_refs);
+    let failed_refs = string_set(&state.failed_service_refs);
+    let force_run_refs = string_set(&state.force_run_refs);
+    let restart_refs = string_set(&state.restart_refs);
+    let reverse_dependency_refs = string_set(&state.reverse_dependency_refs);
+    let shutdown_refs = string_set(&state.shutdown_refs);
+
+    if has_set_intersection(&ready_refs, &failed_refs) {
+        diagnostics.push("service-ready-and-failed".to_string());
+    }
+    if !is_subset(&restart_refs, &failed_refs) {
+        diagnostics.push("service-restart-without-failure".to_string());
+    }
+
+    let is_demanded = demanded_refs.contains(service_ref);
+    let is_force_run = force_run_refs.contains(service_ref);
+    let is_ready = ready_refs.contains(service_ref);
+    if (is_demanded || is_ready) && !is_force_run && !is_subset(&dependency_refs, &ready_refs) {
+        diagnostics.push("service-dependencies-not-ready".to_string());
+    }
+
+    let failed_dependencies = set_intersection(&dependency_refs, &failed_refs);
+    if !failed_dependencies.is_empty() && !is_force_run && !is_subset(&failed_dependencies, &restart_refs) {
+        diagnostics.push("service-failed-dependency-without-admission".to_string());
+    }
+
+    if shutdown_refs.contains(service_ref) && !is_subset(&reverse_dependency_refs, &shutdown_refs) {
+        diagnostics.push("service-shutdown-before-reverse-dependencies".to_string());
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    diagnostics
 }
 
 fn validate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Vec<String> {
@@ -1102,6 +1230,16 @@ fn has_set_intersection(left: &BTreeSet<&str>, right: &BTreeSet<&str>) -> bool {
     false
 }
 
+fn set_intersection<'a>(left: &BTreeSet<&'a str>, right: &BTreeSet<&'a str>) -> BTreeSet<&'a str> {
+    let mut intersection = BTreeSet::new();
+    for item in left {
+        if right.contains(item) {
+            intersection.insert(*item);
+        }
+    }
+    intersection
+}
+
 fn validate_promise_shape(state: &RuntimePromiseState, label: &str) -> Vec<String> {
     let mut diagnostics = Vec::new();
     if state.promise_id.is_empty() {
@@ -1250,6 +1388,7 @@ mod tests {
     use super::RuntimeReferenceCallMode;
     use super::RuntimeReferenceKind;
     use super::RuntimeRevocationCleanupState;
+    use super::RuntimeServiceDependenciesState;
     use super::RuntimeSnapshotAuthorityState;
     use super::TurnOutcome;
     use super::evaluate_actormap_transaction;
@@ -1260,6 +1399,7 @@ mod tests {
     use super::evaluate_promise_pipeline;
     use super::evaluate_promise_state_transition;
     use super::evaluate_revocation_cleanup;
+    use super::evaluate_service_dependencies;
     use super::evaluate_snapshot_authority;
     use super::evaluate_turn_transition;
     use crate::preserves_rail::canonical_hash;
@@ -1502,6 +1642,60 @@ mod tests {
         );
         assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "revoked-pending-call-not-cleaned"));
         assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "revoked-child-ref-not-cleaned"));
+    }
+
+    #[test]
+    fn service_dependencies_predicate_enforces_readiness_restart_and_shutdown_order() {
+        let service = canonical_hash(&string("frontend-service")).expect("service ref");
+        let database = canonical_hash(&string("database-service")).expect("database ref");
+        let cache = canonical_hash(&string("cache-service")).expect("cache ref");
+        let reverse = canonical_hash(&string("reverse-dependent-service")).expect("reverse ref");
+        let pass_state = RuntimeServiceDependenciesState {
+            service_ref: service.clone(),
+            demanded_service_refs: vec![service.clone()],
+            dependency_refs: sorted_refs(vec![database.clone(), cache.clone()]),
+            ready_service_refs: sorted_refs(vec![service.clone(), database.clone(), cache.clone()]),
+            failed_service_refs: Vec::new(),
+            force_run_refs: Vec::new(),
+            restart_refs: Vec::new(),
+            reverse_dependency_refs: vec![reverse.clone()],
+            shutdown_refs: sorted_refs(vec![service.clone(), reverse.clone()]),
+        };
+        let pass = evaluate_service_dependencies(&pass_state).expect("service dependencies predicate");
+        assert!(pass.is_allowed);
+        assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
+        validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+
+        let stale_restart = canonical_hash(&string("stale-restart")).expect("stale restart ref");
+        let denied_state = RuntimeServiceDependenciesState {
+            service_ref: service.clone(),
+            demanded_service_refs: vec![service.clone()],
+            dependency_refs: sorted_refs(vec![database.clone(), cache.clone()]),
+            ready_service_refs: vec![service.clone()],
+            failed_service_refs: vec![database],
+            force_run_refs: Vec::new(),
+            restart_refs: vec![stale_restart],
+            reverse_dependency_refs: vec![reverse],
+            shutdown_refs: vec![service],
+        };
+        let denied = evaluate_service_dependencies(&denied_state).expect("denied service dependencies predicate");
+        assert!(!denied.is_allowed);
+        assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "service-dependencies-not-ready"));
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "service-failed-dependency-without-admission")
+        );
+        assert!(denied.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "service-restart-without-failure"));
+        assert!(
+            denied
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "service-shutdown-before-reverse-dependencies")
+        );
     }
 
     #[test]

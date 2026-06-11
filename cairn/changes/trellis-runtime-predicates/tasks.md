@@ -16,7 +16,7 @@
 ## Phase 3: Persistence and service predicates
 
 - [x] [serial] r[molten.trellis_runtime.snapshot_authority] Add Trellis-backed predicates ensuring snapshot authority claims are subsets of held or explicitly admitted authority.
-- [ ] [parallel] r[molten.trellis_runtime.service_dependencies] Add Trellis-backed service dependency predicates for demand, readiness, failure, force-run, restart, reverse dependency, and shutdown admission.
+- [x] [parallel] r[molten.trellis_runtime.service_dependencies] Add Trellis-backed service dependency predicates for demand, readiness, failure, force-run, restart, reverse dependency, and shutdown admission.
 - [x] [parallel] r[molten.trellis_runtime.predicate_receipts] Define receipt/evidence names for runtime predicate applications so Cairn receipts can identify the applied predicate and decision.
 
 ## Phase 4: Tests and integration
