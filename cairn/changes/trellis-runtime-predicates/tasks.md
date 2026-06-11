@@ -22,4 +22,4 @@
 ## Phase 4: Tests and integration
 
 - [x] [serial] r[molten.trellis_runtime.integration_tests] Add integration tests showing Molten runtime admission calls the Trellis-backed predicates for assertion visibility, turn commit/rollback, patterns, promises, and revocation.
-- [ ] [parallel] r[molten.trellis_runtime.property_tests] Add Hegel property tests over bounded models for assertion owners, turn deltas, pattern matches, promise pipelines, revocation graphs, snapshots, and service dependencies.
+- [x] [parallel] r[molten.trellis_runtime.property_tests] Add Hegel property tests over bounded models for assertion owners, turn deltas, pattern matches, promise pipelines, revocation graphs, snapshots, and service dependencies.
