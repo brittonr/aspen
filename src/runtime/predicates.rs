@@ -13,12 +13,14 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::validate_content_ref;
 
 const PREDICATE_ENGINE: &str = "trellis-bounded-local";
 const ASSERTION_VISIBILITY_PREDICATE: &str = "molten.trellis-runtime.assertion-visibility.v1";
 const TURN_COMMIT_ROLLBACK_PREDICATE: &str = "molten.trellis-runtime.turn-commit-rollback.v1";
 const PRESERVES_PATTERN_PREDICATE: &str = "molten.trellis-runtime.preserves-pattern.v1";
 const OBSERVE_DELIVERY_PREDICATE: &str = "molten.trellis-runtime.observe-delivery.v1";
+const PROMISE_STATE_PREDICATE: &str = "molten.trellis-runtime.promise-state.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PredicateDecision {
@@ -111,6 +113,112 @@ pub struct PatternMatchResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ObserveDeliveryResult {
     pub delivered_assertion_refs: Vec<String>,
+    pub receipt: RuntimePredicateReceipt,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimePromiseStatus {
+    Pending,
+    Resolved,
+    Broken,
+    Cancelled,
+    TimedOut,
+}
+
+impl RuntimePromiseStatus {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Resolved => "resolved",
+            Self::Broken => "broken",
+            Self::Cancelled => "cancelled",
+            Self::TimedOut => "timed-out",
+        }
+    }
+
+    fn is_terminal(self) -> bool {
+        !matches!(self, Self::Pending)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimePromiseState {
+    pub promise_id: String,
+    pub status: RuntimePromiseStatus,
+    pub value_ref: Option<String>,
+    pub reason: Option<String>,
+    pub caused_by: Vec<String>,
+}
+
+impl RuntimePromiseState {
+    pub fn pending(promise_id: impl Into<String>) -> Self {
+        Self {
+            promise_id: promise_id.into(),
+            status: RuntimePromiseStatus::Pending,
+            value_ref: None,
+            reason: None,
+            caused_by: Vec::new(),
+        }
+    }
+
+    pub fn resolved(promise_id: impl Into<String>, value_ref: impl Into<String>) -> Self {
+        Self {
+            promise_id: promise_id.into(),
+            status: RuntimePromiseStatus::Resolved,
+            value_ref: Some(value_ref.into()),
+            reason: None,
+            caused_by: Vec::new(),
+        }
+    }
+
+    pub fn broken(promise_id: impl Into<String>, reason: impl Into<String>, caused_by: Vec<String>) -> Self {
+        Self {
+            promise_id: promise_id.into(),
+            status: RuntimePromiseStatus::Broken,
+            value_ref: None,
+            reason: Some(reason.into()),
+            caused_by,
+        }
+    }
+
+    pub fn cancelled(promise_id: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self {
+            promise_id: promise_id.into(),
+            status: RuntimePromiseStatus::Cancelled,
+            value_ref: None,
+            reason: Some(reason.into()),
+            caused_by: Vec::new(),
+        }
+    }
+
+    pub fn timed_out(promise_id: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self {
+            promise_id: promise_id.into(),
+            status: RuntimePromiseStatus::TimedOut,
+            value_ref: None,
+            reason: Some(reason.into()),
+            caused_by: Vec::new(),
+        }
+    }
+
+    pub fn promise_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-promise-state-v1", vec![
+            string(&self.promise_id),
+            string(self.status.as_str()),
+            optional_string_value(self.value_ref.as_deref()),
+            optional_string_value(self.reason.as_deref()),
+            sequence(self.caused_by.iter().map(string).collect()),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PromiseStateResult {
+    pub is_allowed: bool,
     pub receipt: RuntimePredicateReceipt,
 }
 
@@ -272,6 +380,115 @@ pub fn evaluate_observe_initial_delivery(
     })
 }
 
+pub fn evaluate_promise_state_transition(
+    before: &RuntimePromiseState,
+    after: &RuntimePromiseState,
+) -> Result<PromiseStateResult> {
+    let mut diagnostics = validate_promise_shape(before, "before");
+    diagnostics.extend(validate_promise_shape(after, "after"));
+    if before.promise_id != after.promise_id {
+        diagnostics.push("promise-id-mismatch".to_string());
+    }
+    if before.status.is_terminal() && before != after {
+        diagnostics.push("terminal-promise-state-changed".to_string());
+    }
+    if before.status == RuntimePromiseStatus::Pending
+        && after.status == RuntimePromiseStatus::Pending
+        && before != after
+    {
+        diagnostics.push("pending-promise-mutated-without-resolution".to_string());
+    }
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let before_ref = before.promise_ref()?;
+    let after_ref = after.promise_ref()?;
+    let input_value = record("runtime-predicate-promise-state-input-v1", vec![
+        record("before-ref", vec![string(&before_ref)]),
+        record("after-ref", vec![string(&after_ref)]),
+        before.to_value(),
+        after.to_value(),
+    ]);
+    let checks = vec![
+        "bounded-promise-state-machine".to_string(),
+        "terminal-state-immutability".to_string(),
+        "resolved-value-ref-canonical".to_string(),
+        "causal-failure-refs-canonical".to_string(),
+        "cancel-timeout-reason-required".to_string(),
+    ];
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: PROMISE_STATE_PREDICATE,
+        input_value,
+        decision,
+        state_refs: vec![before_ref, after_ref],
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(PromiseStateResult { is_allowed, receipt })
+}
+
+fn validate_promise_shape(state: &RuntimePromiseState, label: &str) -> Vec<String> {
+    let mut diagnostics = Vec::new();
+    if state.promise_id.is_empty() {
+        diagnostics.push(format!("{label}-promise-id-empty"));
+    }
+    match state.status {
+        RuntimePromiseStatus::Pending => {
+            if state.value_ref.is_some() || state.reason.is_some() || !state.caused_by.is_empty() {
+                diagnostics.push(format!("{label}-pending-promise-has-terminal-data"));
+            }
+        }
+        RuntimePromiseStatus::Resolved => {
+            if !state.caused_by.is_empty() || state.reason.is_some() {
+                diagnostics.push(format!("{label}-resolved-promise-has-failure-data"));
+            }
+            match state.value_ref.as_deref() {
+                Some(value_ref) if validate_content_ref(value_ref).is_ok() => {}
+                Some(_) => diagnostics.push(format!("{label}-resolved-value-ref-noncanonical")),
+                None => diagnostics.push(format!("{label}-resolved-value-ref-missing")),
+            }
+        }
+        RuntimePromiseStatus::Broken => {
+            if state.value_ref.is_some() {
+                diagnostics.push(format!("{label}-broken-promise-has-value"));
+            }
+            if state.reason.as_deref().is_none_or(str::is_empty) {
+                diagnostics.push(format!("{label}-broken-reason-missing"));
+            }
+            diagnostics.extend(validate_sorted_content_refs(&state.caused_by, label, "causal-failure"));
+        }
+        RuntimePromiseStatus::Cancelled | RuntimePromiseStatus::TimedOut => {
+            if state.value_ref.is_some() || !state.caused_by.is_empty() {
+                diagnostics.push(format!("{label}-cancel-timeout-has-resolution-data"));
+            }
+            if state.reason.as_deref().is_none_or(str::is_empty) {
+                diagnostics.push(format!("{label}-cancel-timeout-reason-missing"));
+            }
+        }
+    }
+    diagnostics
+}
+
+fn validate_sorted_content_refs(refs: &[String], label: &str, field: &str) -> Vec<String> {
+    let mut diagnostics = Vec::new();
+    for reference in refs {
+        if validate_content_ref(reference).is_err() {
+            diagnostics.push(format!("{label}-{field}-ref-noncanonical"));
+        }
+    }
+    let mut sorted_refs = refs.to_vec();
+    sorted_refs.sort();
+    sorted_refs.dedup();
+    if sorted_refs != refs {
+        diagnostics.push(format!("{label}-{field}-refs-not-sorted-unique"));
+    }
+    diagnostics
+}
+
 struct RuntimePredicateReceiptInput {
     predicate: &'static str,
     input_value: IOValue,
@@ -304,6 +521,13 @@ fn build_runtime_predicate_receipt(input: RuntimePredicateReceiptInput) -> Resul
         diagnostics: input.diagnostics,
         value,
     })
+}
+
+fn optional_string_value(value: Option<&str>) -> IOValue {
+    match value {
+        Some(value) => record("some", vec![string(value)]),
+        None => record("none", Vec::new()),
+    }
 }
 
 fn action_summary_value(action: &TurnAction) -> IOValue {
@@ -342,11 +566,15 @@ mod tests {
 
     use super::PredicateDecision;
     use super::RuntimePattern;
+    use super::RuntimePromiseState;
     use super::TurnOutcome;
     use super::evaluate_assertion_visibility;
     use super::evaluate_observe_initial_delivery;
     use super::evaluate_pattern_match;
+    use super::evaluate_promise_state_transition;
     use super::evaluate_turn_transition;
+    use crate::preserves_rail::canonical_hash;
+    use crate::preserves_rail::string;
     use crate::preserves_rail::validate_content_ref;
     use crate::runtime::RuntimeObserver;
     use crate::runtime::RuntimeState;
@@ -445,5 +673,38 @@ mod tests {
         let result = evaluate_observe_initial_delivery(&state.snapshot(), &observer).expect("delivery");
         assert_eq!(result.delivered_assertion_refs.len(), 1);
         assert_eq!(result.receipt.decision, PredicateDecision::Pass);
+    }
+
+    #[test]
+    fn promise_state_predicate_enforces_terminal_and_causal_rules() {
+        let value_ref = canonical_hash(&string("resolved-value")).expect("value ref");
+        let cause_ref = canonical_hash(&string("upstream-promise")).expect("cause ref");
+        let pending = RuntimePromiseState::pending("promise-1");
+        let resolved = RuntimePromiseState::resolved("promise-1", value_ref.clone());
+        let pass = evaluate_promise_state_transition(&pending, &resolved).expect("promise transition");
+        assert!(pass.is_allowed);
+        assert_eq!(pass.receipt.decision, PredicateDecision::Pass);
+        validate_content_ref(&pass.receipt.receipt_ref).expect("receipt ref");
+
+        let changed_terminal = RuntimePromiseState::broken("promise-1", "late failure", vec![cause_ref.clone()]);
+        let terminal = evaluate_promise_state_transition(&resolved, &changed_terminal).expect("terminal transition");
+        assert!(!terminal.is_allowed);
+        assert_eq!(terminal.receipt.decision, PredicateDecision::Deny);
+        assert!(terminal.receipt.diagnostics.iter().any(|diagnostic| diagnostic == "terminal-promise-state-changed"));
+
+        let mut unsorted_causes = vec![cause_ref, canonical_hash(&string("aaa")).expect("second cause")];
+        unsorted_causes.sort();
+        unsorted_causes.reverse();
+        let unsorted_broken = RuntimePromiseState::broken("promise-2", "causal failure", unsorted_causes);
+        let causal = evaluate_promise_state_transition(&RuntimePromiseState::pending("promise-2"), &unsorted_broken)
+            .expect("causal transition");
+        assert!(!causal.is_allowed);
+        assert!(
+            causal
+                .receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic == "after-causal-failure-refs-not-sorted-unique")
+        );
     }
 }

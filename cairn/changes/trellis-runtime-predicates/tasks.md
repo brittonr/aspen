@@ -7,7 +7,7 @@
 
 ## Phase 2: Object/vat predicates
 
-- [ ] [serial] r[molten.trellis_runtime.promise_state] Add Trellis-backed promise/vow state-machine predicates for pending, resolved, broken, cancelled, timed-out, and causal failure propagation states.
+- [x] [serial] r[molten.trellis_runtime.promise_state] Add Trellis-backed promise/vow state-machine predicates for pending, resolved, broken, cancelled, timed-out, and causal failure propagation states.
 - [ ] [serial] r[molten.trellis_runtime.promise_pipeline] Add Trellis-backed bounded promise-pipelining predicates for queue bounds, forwarding order, and failure cleanup.
 - [ ] [serial] r[molten.trellis_runtime.revocation_cleanup] Add Trellis-backed predicates for revoked references denying future use and cleaning dependent assertions, subscriptions, pending calls, and child references.
 - [ ] [parallel] r[molten.trellis_runtime.actormap_transaction] Add Trellis-backed predicates for actormap delta commit/rollback, spawned object visibility, and removed object invalidation.

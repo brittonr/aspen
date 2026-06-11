@@ -78,6 +78,7 @@ use crate::preserves_rail::RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA;
 use crate::preserves_rail::RUNTIME_EXECUTOR_PREFLIGHT_SCHEMA;
 use crate::preserves_rail::RUNTIME_HOSTCALL_DECISION_SCHEMA;
 use crate::preserves_rail::RUNTIME_HOSTCALL_REQUEST_SCHEMA;
+use crate::preserves_rail::RUNTIME_PREDICATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA;
 use crate::preserves_rail::RUNTIME_REMOTE_PROXY_PREFLIGHT_RECEIPT_SCHEMA;
 use crate::preserves_rail::RUNTIME_STEEL_EXECUTION_RECEIPT_SCHEMA;
@@ -119,6 +120,12 @@ const MAX_REDACTION_TRANSFORM_NODES: usize = 100_000;
 const MAX_REDACTION_CONTAINER_ITEMS: usize = 100_000;
 const MAX_REDACTION_MARKER_REFS: usize = 100_000;
 const MAX_REDACTION_ENCRYPTED_REFS: usize = 100_000;
+const RUNTIME_PREDICATE_ENGINE: &str = "trellis-bounded-local";
+const TURN_COMMIT_ROLLBACK_PREDICATE: &str = "molten.trellis-runtime.turn-commit-rollback.v1";
+const ASSERTION_VISIBILITY_PREDICATE: &str = "molten.trellis-runtime.assertion-visibility.v1";
+const OBSERVE_DELIVERY_PREDICATE: &str = "molten.trellis-runtime.observe-delivery.v1";
+const PRESERVES_PATTERN_PREDICATE: &str = "molten.trellis-runtime.preserves-pattern.v1";
+const PROMISE_STATE_PREDICATE: &str = "molten.trellis-runtime.promise-state.v1";
 
 const _: () = assert!(MAX_WASM_IMPORT_EVIDENCE <= 16_384);
 const _: () = assert!(MAX_HARNESS_EFFECT_LOG_ENTRIES <= 1_000_000);
@@ -1942,6 +1949,121 @@ pub fn validate_admission_evidence(
         }
     }
     Ok(())
+}
+
+pub fn validate_runtime_predicate_evidence(suite: &HarnessSuite, observations: &[HarnessObservation]) -> Result<()> {
+    if observations.len() != suite.steps.len() {
+        return Err(MoltenError::invalid_harness(format!(
+            "runtime predicate observation count {} does not match suite step count {}",
+            observations.len(),
+            suite.steps.len()
+        )));
+    }
+
+    for (position, (step, observation)) in suite.steps.iter().zip(observations.iter()).enumerate() {
+        let admission = observation
+            .events
+            .first()
+            .ok_or_else(|| {
+                MoltenError::invalid_harness(format!("missing admission decision at observation {position}"))
+            })
+            .and_then(parse_admission_decision_event)?;
+        let mut runtime_predicates = Vec::new();
+        for event in observation.events.as_slice() {
+            if event_boundary(event) == EventBoundary::RuntimePredicate {
+                runtime_predicates.push(parse_runtime_predicate_receipt(event)?);
+            }
+        }
+        let expected = expected_runtime_predicates(step, &admission.decision);
+        for predicate in &runtime_predicates {
+            if !expected.as_slice().iter().any(|expected_predicate| expected_predicate == &predicate.as_str()) {
+                return Err(MoltenError::invalid_harness(format!(
+                    "unexpected runtime predicate {predicate} at observation {position}"
+                )));
+            }
+        }
+        for expected_predicate in expected {
+            let count = runtime_predicates
+                .as_slice()
+                .iter()
+                .filter(|predicate| predicate.as_str() == expected_predicate)
+                .count();
+            if count != 1 {
+                return Err(MoltenError::invalid_harness(format!(
+                    "runtime predicate {expected_predicate} at observation {position} expected exactly one receipt, got {count}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn expected_runtime_predicates(step: &CoreStep, decision: &AdmissionDecision) -> Vec<&'static str> {
+    let mut expected = Vec::with_capacity(2);
+    if !decision.is_allowed()
+        || matches!(
+            step,
+            CoreStep::Send { .. } | CoreStep::Observe { .. } | CoreStep::Assert { .. } | CoreStep::Retract { .. }
+        )
+    {
+        expected.push(TURN_COMMIT_ROLLBACK_PREDICATE);
+    }
+    match step {
+        CoreStep::Observe { .. } => expected.push(OBSERVE_DELIVERY_PREDICATE),
+        CoreStep::Assert { .. } | CoreStep::Retract { .. } => expected.push(ASSERTION_VISIBILITY_PREDICATE),
+        CoreStep::Send { .. } | CoreStep::Clock { .. } | CoreStep::Random { .. } => {}
+    }
+    expected
+}
+
+fn parse_runtime_predicate_receipt(value: &IOValue) -> Result<String> {
+    let receipt = value
+        .collect_simple_record("runtime-predicate-receipt-v1", Some(8))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <runtime-predicate-receipt-v1 ...>"))?;
+    let schema = required_string(&receipt[0], "runtime predicate receipt schema")?;
+    if schema != RUNTIME_PREDICATE_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!("unsupported runtime predicate receipt schema {schema}")));
+    }
+    let predicate = required_string(&receipt[1], "runtime predicate name")?;
+    if !matches!(
+        predicate.as_str(),
+        TURN_COMMIT_ROLLBACK_PREDICATE
+            | ASSERTION_VISIBILITY_PREDICATE
+            | OBSERVE_DELIVERY_PREDICATE
+            | PRESERVES_PATTERN_PREDICATE
+            | PROMISE_STATE_PREDICATE
+    ) {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported runtime predicate receipt predicate {predicate}"
+        )));
+    }
+    let engine = required_string(&receipt[2], "runtime predicate engine")?;
+    if engine != RUNTIME_PREDICATE_ENGINE {
+        return Err(MoltenError::invalid_harness(format!("unsupported runtime predicate engine {engine}")));
+    }
+    required_record_hash(&receipt[3], "input-ref", "runtime predicate input ref")?;
+    let decision = required_string(&receipt[4], "runtime predicate decision")?;
+    if !matches!(decision.as_str(), "pass" | "deny") {
+        return Err(MoltenError::invalid_harness(format!("unsupported runtime predicate decision {decision}")));
+    }
+    let state_refs = sequence_strings(&receipt[5], "runtime predicate state refs")?;
+    if state_refs.is_empty() {
+        return Err(MoltenError::invalid_harness("runtime predicate receipt missing state refs"));
+    }
+    for state_ref in &state_refs {
+        validate_content_ref(state_ref)?;
+    }
+    let checks = sequence_strings(&receipt[6], "runtime predicate checks")?;
+    if checks.is_empty() {
+        return Err(MoltenError::invalid_harness("runtime predicate receipt missing checks"));
+    }
+    sequence_strings(&receipt[7], "runtime predicate diagnostics")?;
+    Ok(predicate)
+}
+
+fn sequence_strings(value: &Value<IOValue>, field: &str) -> Result<Vec<String>> {
+    let values = required_sequence(value, field)?;
+    values.iter().map(|value| required_string(&value, field)).collect()
 }
 
 pub fn validate_hostcall_evidence(

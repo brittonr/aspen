@@ -2386,6 +2386,39 @@ mod tests {
     }
 
     #[test]
+    fn tampered_runtime_predicate_reports_runtime_predicate_divergence() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let report_text = to_text(&run.report_value).expect("render report");
+        let tampered_text = report_text.replacen(
+            "molten.trellis-runtime.turn-commit-rollback.v1",
+            "molten.trellis-runtime.turn-commit-rollback-tampered.v1",
+            1,
+        );
+        let tampered_report = parse_text(&tampered_text).expect("parse tampered report");
+        let error = replay_report_value(&tampered_report).expect_err("tampered runtime predicate must diverge");
+        match error {
+            MoltenError::HarnessDivergence(divergence) => {
+                assert_eq!(divergence.kind, "runtime-predicate");
+                assert_eq!(divergence.step, Some(0));
+            }
+            other => panic!("expected divergence, got {other}"),
+        }
+    }
+
+    #[test]
+    fn report_validation_rejects_missing_runtime_predicate_receipt() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let report_text = to_text(&run.report_value).expect("render report");
+        let tampered_text = report_text.replacen("runtime-predicate-receipt-v1", "runtime-predicate-missing-v1", 1);
+        let tampered_report = parse_text(&tampered_text).expect("parse tampered report");
+        let error =
+            validate_report_value(&tampered_report).expect_err("missing runtime predicate must fail validation");
+        assert!(error.to_string().contains("runtime predicate"));
+    }
+
+    #[test]
     fn tampered_final_state_reports_state_divergence() {
         let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
         let run = run_suite_value(&suite).expect("run suite");

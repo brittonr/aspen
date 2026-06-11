@@ -15,6 +15,7 @@ use super::schema::validate_capability_gate_evidence;
 use super::schema::validate_executor_preflight_evidence;
 use super::schema::validate_hostcall_evidence;
 use super::schema::validate_policy_gate_evidence;
+use super::schema::validate_runtime_predicate_evidence;
 use crate::error::HarnessDivergence;
 use crate::error::MoltenError;
 use crate::error::Result;
@@ -58,6 +59,7 @@ pub fn validate_report_value(report_value: &IOValue) -> Result<ReportValidation>
         .ok_or_else(|| MoltenError::invalid_harness("missing budget gate evidence"))?;
     validate_admission_evidence(&suite, &report.observations, capability_gate)?;
     validate_executor_preflight_evidence(&suite, &report.observations, report.executor_preflights.as_ref())?;
+    validate_runtime_predicate_evidence(&suite, &report.observations)?;
     validate_hostcall_evidence(&suite, &report.observations, policy_gate, capability_gate, budget_gate)?;
     let observed_effect_log = effect_log_from_observations(&report.observations)?;
     if observed_effect_log != report.effect_log {
