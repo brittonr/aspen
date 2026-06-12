@@ -656,6 +656,38 @@ mod tests {
     }
 
     #[test]
+    fn turn_journal_refs_are_stable_under_replay() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let report = parse_report(&run.report_value).expect("parse report");
+        let replay = replay_report_value(&run.report_value).expect("replay report");
+        let parsed_suite = parse_suite(&report.suite_value).expect("parse embedded suite");
+        let replayed_run = run_suite_with_effect_log(&parsed_suite, &report.effect_log).expect("replay run");
+        let replay_report = parse_report(&replayed_run.report_value).expect("parse replay report");
+        let journal_refs = turn_journal_refs(&report);
+        let replay_journal_refs = turn_journal_refs(&replay_report);
+        let rendered = to_text(&run.report_value).expect("render report");
+
+        assert_eq!(replay.expected_report_ref, replay.actual_report_ref);
+        assert_eq!(journal_refs.len(), report.observations.len());
+        assert_eq!(journal_refs, replay_journal_refs);
+        assert!(rendered.contains("turn-journal-v1"));
+        assert!(rendered.contains("scheduler-key"));
+        assert!(rendered.contains("effect-refs"));
+        assert!(rendered.contains("receipt-refs"));
+    }
+
+    fn turn_journal_refs(report: &super::schema::HarnessReport) -> Vec<String> {
+        report
+            .observations
+            .iter()
+            .flat_map(|observation| observation.events.iter())
+            .filter(|event| event.collect_simple_record("turn-journal-v1", None).is_some())
+            .map(|event| canonical_hash(event).expect("journal ref"))
+            .collect()
+    }
+
+    #[test]
     fn capability_missing_effect_grant_suppresses_effect_request() {
         let suite = parse_text(
             r#"<harness-suite-v1 "molten.harness.suite.v1" "capability-deny-clock" 1

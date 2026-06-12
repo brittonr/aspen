@@ -20,6 +20,7 @@ use super::schema::capabilities_value;
 use super::schema::capability_gate_value;
 use super::schema::effect_request_sequence;
 use super::schema::effect_response_sequence_and_value;
+use super::schema::event_boundary;
 use super::schema::event_value;
 use super::schema::hostcall_decision_value;
 use super::schema::hostcall_request_value;
@@ -40,6 +41,7 @@ use crate::error::Result;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
+use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
 use crate::runtime::RuntimeObserver;
@@ -180,6 +182,17 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
         boundary_runtime_events.extend(runtime_events.clone());
         events.extend(boundary_runtime_events.clone());
         events.push(actor_output_value(step, hostcall_context, &admission_decision, &boundary_runtime_events)?);
+        let after_state_hash = canonical_hash(&snapshot_value(&state.snapshot()))?;
+        events.push(turn_journal_value(TurnJournalInput {
+            index: index as u64,
+            step_ref: &step_ref,
+            before_state_hash: &before_state_hash,
+            after_state_hash: &after_state_hash,
+            policy_ref: &policy_ref,
+            capability_ref: &capability_ref,
+            budget_ref: &budget_ref,
+            events: &events,
+        })?);
         total_events += events.len() as u64;
         if total_events > budget.max_events {
             return Err(divergence(
@@ -200,7 +213,6 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
                 "effect count exceeds budget",
             ));
         }
-        let after_state_hash = canonical_hash(&snapshot_value(&state.snapshot()))?;
         observations.push(observation_value(index as u64, step_ref, before_state_hash, after_state_hash, events)?);
     }
 
@@ -304,6 +316,57 @@ fn validate_actor_registry(suite: &HarnessSuite) -> Result<()> {
         }
     }
     Ok(())
+}
+
+struct TurnJournalInput<'a> {
+    index: u64,
+    step_ref: &'a str,
+    before_state_hash: &'a str,
+    after_state_hash: &'a str,
+    policy_ref: &'a str,
+    capability_ref: &'a str,
+    budget_ref: &'a str,
+    events: &'a [IOValue],
+}
+
+fn turn_journal_value(input: TurnJournalInput<'_>) -> Result<IOValue> {
+    let mut event_refs = Vec::with_capacity(input.events.len());
+    let mut effect_refs = Vec::new();
+    let mut receipt_refs = Vec::new();
+    for event in input.events {
+        let event_ref = canonical_hash(event)?;
+        match event_boundary(event) {
+            super::schema::EventBoundary::EffectRequest | super::schema::EventBoundary::EffectResponse => {
+                effect_refs.push(event_ref.clone());
+            }
+            super::schema::EventBoundary::RuntimePredicate
+            | super::schema::EventBoundary::HostcallDecision
+            | super::schema::EventBoundary::SteelExecution
+            | super::schema::EventBoundary::WasmExecution => {
+                receipt_refs.push(event_ref.clone());
+            }
+            super::schema::EventBoundary::PolicyDecision
+            | super::schema::EventBoundary::ActorInput
+            | super::schema::EventBoundary::HostcallRequest
+            | super::schema::EventBoundary::ActorOutput
+            | super::schema::EventBoundary::Trace => {}
+        }
+        event_refs.push(event_ref);
+    }
+    Ok(record("turn-journal-v1", vec![
+        string("molten.harness.turn-journal.v1"),
+        u64_value(input.index),
+        record("scheduler-key", vec![string(format!("logical:0:priority:0:queue:{}", input.index))]),
+        record("step-ref", vec![string(input.step_ref)]),
+        record("before-state-ref", vec![string(input.before_state_hash)]),
+        record("after-state-ref", vec![string(input.after_state_hash)]),
+        record("policy-ref", vec![string(input.policy_ref)]),
+        record("capability-ref", vec![string(input.capability_ref)]),
+        record("budget-ref", vec![string(input.budget_ref)]),
+        record("event-refs", vec![sequence(event_refs.iter().map(string).collect())]),
+        record("effect-refs", vec![sequence(effect_refs.iter().map(string).collect())]),
+        record("receipt-refs", vec![sequence(receipt_refs.iter().map(string).collect())]),
+    ]))
 }
 
 struct RuntimeStepInput<'a> {
