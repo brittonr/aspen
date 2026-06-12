@@ -618,6 +618,8 @@ enum DogfoodCommand {
         #[arg(long)]
         release_gate_out: Option<PathBuf>,
         #[arg(long)]
+        replay_verify_out: Option<PathBuf>,
+        #[arg(long)]
         replay_index_out: Option<PathBuf>,
     },
     NixReleaseExport {
@@ -9603,6 +9605,7 @@ fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
             state_root,
             out,
             release_gate_out,
+            replay_verify_out,
             replay_index_out,
         } => {
             let run = operator_dogfood::run_local_node_dogfood(&operator_dogfood::LocalNodeDogfoodInput {
@@ -9610,6 +9613,9 @@ fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
             })?;
             write_file(&out, &to_text(&run.report_value)?)?;
             if let (Some(path), Some(value)) = (release_gate_out.as_ref(), run.release_gate_value.as_ref()) {
+                write_file(path, &to_text(value)?)?;
+            }
+            if let (Some(path), Some(value)) = (replay_verify_out.as_ref(), run.replay_verify_value.as_ref()) {
                 write_file(path, &to_text(value)?)?;
             }
             if let (Some(path), Some(value)) = (replay_index_out.as_ref(), run.replay_index_value.as_ref()) {
@@ -13828,11 +13834,13 @@ mod tests {
         let state_root = dir.join("state");
         let report = dir.join("dogfood-report.preserves");
         let release_gate = dir.join("release-gate.preserves");
+        let replay_verify = dir.join("replay-verify.preserves");
         let replay_index = dir.join("replay-evidence-index.preserves");
         run_dogfood_command(DogfoodCommand::LocalNode {
             state_root: state_root.clone(),
             out: report.clone(),
             release_gate_out: Some(release_gate.clone()),
+            replay_verify_out: Some(replay_verify.clone()),
             replay_index_out: Some(replay_index.clone()),
         })
         .expect("dogfood local node");
@@ -13840,6 +13848,11 @@ mod tests {
         let parsed = operator_dogfood::parse_dogfood_report(&report_value).expect("parse dogfood report");
         assert_eq!(parsed.decision, "pass");
         assert!(fs::read_to_string(&release_gate).expect("read release gate").contains("release-gate-receipt-v1"));
+        assert!(
+            fs::read_to_string(&replay_verify)
+                .expect("read replay verify")
+                .contains("deterministic-replay-verify-v1")
+        );
         assert!(
             fs::read_to_string(&replay_index)
                 .expect("read replay index")

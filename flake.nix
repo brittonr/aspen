@@ -252,14 +252,16 @@
               --state-root "$TMPDIR/dogfood-state" \
               --out dogfood-report.preserves \
               --release-gate-out release-gate.preserves \
+              --replay-verify-out replay-verify.preserves \
               --replay-index-out replay-evidence-index.preserves \
               > dogfood-summary.txt
             grep -q 'decision=pass' dogfood-summary.txt
             grep -q 'dogfood-report-v1' dogfood-report.preserves
             grep -q 'release-gate-receipt-v1' release-gate.preserves
+            grep -q 'deterministic-replay-verify-v1' replay-verify.preserves
             grep -q 'deterministic-replay-index-v1' replay-evidence-index.preserves
             mkdir -p "$out"
-            cp dogfood-summary.txt dogfood-report.preserves release-gate.preserves replay-evidence-index.preserves "$out"/
+            cp dogfood-summary.txt dogfood-report.preserves release-gate.preserves replay-verify.preserves replay-evidence-index.preserves "$out"/
             printf '%s\n' "$nextestCheck" > "$out/after-nextest.txt"
             molten dogfood nix-release-export \
               --output-path "$out" \
@@ -289,6 +291,12 @@
               --key local-release-key
             molten receipts sign "$out/release-gate.preserves" \
               --out "$out/release-gate.signed.preserves" \
+              --signer local-release-signer \
+              --purpose release-evidence \
+              --trust-root local-release-trust-root \
+              --key local-release-key
+            molten receipts sign "$out/replay-verify.preserves" \
+              --out "$out/replay-verify.signed.preserves" \
               --signer local-release-signer \
               --purpose release-evidence \
               --trust-root local-release-trust-root \
@@ -323,6 +331,7 @@
               --signed-signer local-release-signer \
               --signed-member "$out/dogfood-report.signed.preserves" \
               --signed-member "$out/release-gate.signed.preserves" \
+              --signed-member "$out/replay-verify.signed.preserves" \
               --signed-member "$out/replay-evidence-index.signed.preserves" \
               --signed-member "$out/nix-dogfood-evidence.signed.preserves" \
               --signed-member "$out/nix-dogfood-verify.signed.preserves" \

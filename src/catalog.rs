@@ -752,6 +752,7 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
     if let Ok(evidence) = crate::operator_dogfood::parse_nix_dogfood_evidence(value) {
         return Ok(vec![
             "deterministic-replay:release-binding".to_string(),
+            format!("release-dogfood-replay-verify:{}", evidence.replay_verify_ref),
             format!("release-dogfood-replay-index:{}", evidence.replay_index_ref),
             format!("release-dogfood-release-gate:{}", evidence.release_gate_ref),
         ]);
@@ -760,12 +761,14 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
         return Ok(vec![
             "deterministic-replay:release-binding".to_string(),
             format!("release-dogfood-decision:{}", receipt.decision),
+            format!("release-dogfood-replay-verify:{}", receipt.replay_verify_ref),
             format!("release-dogfood-replay-index:{}", receipt.replay_index_ref),
         ]);
     }
     if let Ok(bundle) = crate::operator_dogfood::parse_release_evidence_bundle(value) {
         return Ok(vec![
             "deterministic-replay:release-binding".to_string(),
+            format!("release-dogfood-replay-verify:{}", bundle.replay_verify_ref),
             format!("release-dogfood-replay-index:{}", bundle.replay_index_ref),
             format!("release-dogfood-release-gate:{}", bundle.release_gate_ref),
         ]);
@@ -774,6 +777,7 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
         return Ok(vec![
             "deterministic-replay:release-binding".to_string(),
             format!("release-dogfood-decision:{}", receipt.decision),
+            format!("release-dogfood-replay-verify:{}", receipt.replay_verify_ref),
             format!("release-dogfood-replay-index:{}", receipt.replay_index_ref),
         ]);
     }

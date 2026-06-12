@@ -367,6 +367,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let state_root = dir.join("state");
     let report = dir.join("dogfood-report.preserves");
     let release_gate = dir.join("release-gate.preserves");
+    let replay_verify = dir.join("replay-verify.preserves");
     let replay_index = dir.join("replay-evidence-index.preserves");
     let run = molten_cmd()
         .args(["dogfood", "local-node", "--state-root"])
@@ -375,6 +376,8 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .arg(&report)
         .args(["--release-gate-out"])
         .arg(&release_gate)
+        .args(["--replay-verify-out"])
+        .arg(&replay_verify)
         .args(["--replay-index-out"])
         .arg(&replay_index)
         .output()?;
@@ -385,6 +388,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let parsed_report = molten::operator_dogfood::parse_dogfood_report(&report_value)?;
     assert_eq!(parsed_report.decision, "pass");
     let release_gate_ref = canonical_hash(&read_preserves(&release_gate)?)?;
+    assert!(fs::read_to_string(&replay_verify)?.contains("deterministic-replay-verify-v1"));
     assert!(fs::read_to_string(&replay_index)?.contains("deterministic-replay-index-v1"));
     let ledger = state_root.join("ledger");
 
@@ -480,6 +484,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
 
     let signed_report = dir.join("dogfood-report.signed.preserves");
     let signed_gate = dir.join("release-gate.signed.preserves");
+    let signed_replay_verify = dir.join("replay-verify.signed.preserves");
     let signed_replay_index = dir.join("replay-evidence-index.signed.preserves");
     let signed_nix_evidence = dir.join("nix-dogfood-evidence.signed.preserves");
     let signed_nix_verify = dir.join("nix-dogfood-verify.signed.preserves");
@@ -549,6 +554,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     for (receipt_path, signed_path) in [
         (&report, &signed_report),
         (&release_gate, &signed_gate),
+        (&replay_verify, &signed_replay_verify),
         (&replay_index, &signed_replay_index),
         (&nix_evidence, &signed_nix_evidence),
         (&nix_verify, &signed_nix_verify),
@@ -629,6 +635,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     for signed_path in [
         &signed_report,
         &signed_gate,
+        &signed_replay_verify,
         &signed_replay_index,
         &signed_nix_evidence,
         &signed_nix_verify,
@@ -666,6 +673,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     for signed_path in [
         &signed_report,
         &signed_gate,
+        &signed_replay_verify,
         &signed_replay_index,
         &signed_nix_evidence,
         &signed_nix_verify,
@@ -932,6 +940,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     for signed_path in [
         &signed_report,
         &signed_gate,
+        &signed_replay_verify,
         &signed_replay_index,
         &signed_nix_evidence,
         &signed_nix_verify,

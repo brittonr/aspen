@@ -424,6 +424,12 @@ fn dispatch_read_only(
             push_optional_text_filter(
                 &mut filters,
                 &request.args,
+                "release-replay-verify-ref",
+                "release-dogfood-replay-verify",
+            )?;
+            push_optional_text_filter(
+                &mut filters,
+                &request.args,
                 "release-replay-index-ref",
                 "release-dogfood-replay-index",
             )?;
