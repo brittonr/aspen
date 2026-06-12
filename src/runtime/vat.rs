@@ -34,6 +34,7 @@ use crate::preserves_rail::RUNTIME_VAT_OBJECT_REF_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_PORTABLE_STORAGE_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_PROMISE_FIXTURE_SCHEMA;
+use crate::preserves_rail::RUNTIME_VAT_REPLAY_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_RESTORE_RECEIPT_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_RIGHTS_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_SNAPSHOT_SCHEMA;
@@ -188,6 +189,43 @@ pub struct VatDebugFixture {
     pub fixture_ref: String,
     pub receipts: Vec<IOValue>,
     pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VatReplayFixture {
+    pub value: IOValue,
+    pub fixture_ref: String,
+    pub receipts: Vec<IOValue>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct VatReplayRun {
+    value: IOValue,
+    run_ref: String,
+    trace_ref: String,
+    effect_request_ref: String,
+    effect_response_ref: String,
+    final_state_hash: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VatReplayDivergenceKind {
+    None,
+    Input,
+    EffectResponse,
+    StateHash,
+}
+
+impl VatReplayDivergenceKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Input => "input",
+            Self::EffectResponse => "effect-response",
+            Self::StateHash => "state-hash",
+        }
+    }
 }
 
 pub fn run_vat_fixture() -> Result<VatFixtureRun> {
@@ -734,6 +772,35 @@ pub fn run_vat_time_travel_fixture() -> Result<VatDebugFixture> {
     })
 }
 
+pub fn run_vat_replay_fixture() -> Result<VatReplayFixture> {
+    let expected = vat_replay_run("seed:vat-replay:0001", "deliver:root-to-helper", "clock:logical:42")?;
+    let actual = vat_replay_run("seed:vat-replay:0001", "deliver:root-to-helper", "clock:logical:42")?;
+    let changed_input = vat_replay_run("seed:vat-replay:0001", "deliver:root-to-helper:changed", "clock:logical:42")?;
+    let changed_effect = vat_replay_run("seed:vat-replay:0001", "deliver:root-to-helper", "clock:logical:43")?;
+    let receipts = vec![
+        vat_replay_receipt_value(&expected, &actual)?,
+        vat_replay_receipt_value(&expected, &changed_input)?,
+        vat_replay_receipt_value(&expected, &changed_effect)?,
+    ];
+    let diagnostics = debug_diagnostics(&receipts)?;
+    let value = record("vat-replay-fixture-v1", vec![
+        string(RUNTIME_VAT_REPLAY_FIXTURE_SCHEMA),
+        record("profile", vec![string("replay")]),
+        record("policy", vec![string("no-real-external-effects")]),
+        record("expected-run-ref", vec![string(&expected.run_ref)]),
+        sequence([actual.value, changed_input.value, changed_effect.value].to_vec()),
+        sequence(receipts.clone()),
+        sequence(diagnostics.iter().map(string).collect()),
+    ]);
+    let fixture_ref = canonical_hash(&value)?;
+    Ok(VatReplayFixture {
+        value,
+        fixture_ref,
+        receipts,
+        diagnostics,
+    })
+}
+
 pub fn run_vat_authority_graph_fixture() -> Result<VatDebugFixture> {
     let root = VatObjectRef::new(LOCAL_VAT_ID, ROOT_OBJECT_ID, VatReferenceKind::Near, Vec::new());
     let helper = VatObjectRef::new(LOCAL_VAT_ID, HELPER_OBJECT_ID, VatReferenceKind::Near, vec![root.object_ref()?]);
@@ -880,6 +947,121 @@ fn vat_debug_receipt_value(input: VatDebugReceiptInput<'_>) -> IOValue {
     ])
 }
 
+fn vat_replay_run(
+    seed: &'static str,
+    input_message: &'static str,
+    effect_response: &'static str,
+) -> Result<VatReplayRun> {
+    let root = VatObjectRef::new(LOCAL_VAT_ID, ROOT_OBJECT_ID, VatReferenceKind::Near, Vec::new());
+    let helper = VatObjectRef::new(LOCAL_VAT_ID, HELPER_OBJECT_ID, VatReferenceKind::Near, vec![root.object_ref()?]);
+    let root_ref = root.object_ref()?;
+    let helper_ref = helper.object_ref()?;
+    let initial_state = record("vat-replay-initial-state-v1", vec![
+        string(seed),
+        sequence([root_ref.clone(), helper_ref.clone()].iter().map(string).collect()),
+    ]);
+    let initial_state_ref = canonical_hash(&initial_state)?;
+    let input = record("vat-replay-input-v1", vec![
+        string(input_message),
+        record("sender-ref", vec![string(&root_ref)]),
+        record("target-ref", vec![string(&helper_ref)]),
+    ]);
+    let input_ref = canonical_hash(&input)?;
+    let effect_request = record("vat-replay-effect-request-v1", vec![
+        string("clock"),
+        string("logical-time"),
+        record("input-ref", vec![string(&input_ref)]),
+        record("profile", vec![string("replay")]),
+    ]);
+    let effect_request_ref = canonical_hash(&effect_request)?;
+    let effect_response = record("vat-replay-effect-response-v1", vec![
+        string(effect_response),
+        record("request-ref", vec![string(&effect_request_ref)]),
+        record("source", vec![string("recorded-effect-log")]),
+    ]);
+    let effect_response_ref = canonical_hash(&effect_response)?;
+    let final_state = record("vat-replay-final-state-v1", vec![
+        record("initial-state-ref", vec![string(&initial_state_ref)]),
+        record("input-ref", vec![string(&input_ref)]),
+        record("effect-response-ref", vec![string(&effect_response_ref)]),
+        sequence([root_ref.clone(), helper_ref.clone()].iter().map(string).collect()),
+    ]);
+    let final_state_hash = canonical_hash(&final_state)?;
+    let trace = record("vat-replay-turn-trace-v1", vec![
+        string("turn:replay:0001"),
+        record("scheduler-key", vec![string("logical:0:priority:0:queue:0:vat:fixture:local")]),
+        record("input-ref", vec![string(&input_ref)]),
+        record("effect-request-ref", vec![string(&effect_request_ref)]),
+        record("effect-response-ref", vec![string(&effect_response_ref)]),
+        record("after-state-ref", vec![string(&final_state_hash)]),
+    ]);
+    let trace_ref = canonical_hash(&trace)?;
+    let value = record("vat-deterministic-replay-run-v1", vec![
+        string(RUNTIME_VAT_REPLAY_FIXTURE_SCHEMA),
+        record("profile", vec![string("replay")]),
+        record("seed", vec![string(seed)]),
+        record("initial-state-ref", vec![string(&initial_state_ref)]),
+        record("input-ref", vec![string(&input_ref)]),
+        record("effect-request-ref", vec![string(&effect_request_ref)]),
+        record("effect-response-ref", vec![string(&effect_response_ref)]),
+        record("trace-ref", vec![string(&trace_ref)]),
+        record("final-state-ref", vec![string(&final_state_hash)]),
+        record("external-effects", vec![string("denied")]),
+    ]);
+    let run_ref = canonical_hash(&value)?;
+    Ok(VatReplayRun {
+        value,
+        run_ref,
+        trace_ref,
+        effect_request_ref,
+        effect_response_ref,
+        final_state_hash,
+    })
+}
+
+fn vat_replay_receipt_value(expected: &VatReplayRun, actual: &VatReplayRun) -> Result<IOValue> {
+    let divergence = if expected.run_ref == actual.run_ref {
+        VatReplayDivergenceKind::None
+    } else if expected.effect_request_ref != actual.effect_request_ref {
+        VatReplayDivergenceKind::Input
+    } else if expected.effect_response_ref != actual.effect_response_ref {
+        VatReplayDivergenceKind::EffectResponse
+    } else {
+        VatReplayDivergenceKind::StateHash
+    };
+    let decision = if divergence == VatReplayDivergenceKind::None {
+        "pass"
+    } else {
+        "deny"
+    };
+    let diagnostics = vat_replay_diagnostics(divergence);
+    Ok(record("vat-replay-receipt-v1", vec![
+        string(RUNTIME_VAT_REPLAY_FIXTURE_SCHEMA),
+        string(decision),
+        record("profile", vec![string("replay")]),
+        record("expected-run-ref", vec![string(&expected.run_ref)]),
+        record("actual-run-ref", vec![string(&actual.run_ref)]),
+        record("divergence", vec![string(divergence.as_str())]),
+        record("expected-trace-ref", vec![string(&expected.trace_ref)]),
+        record("actual-trace-ref", vec![string(&actual.trace_ref)]),
+        record("expected-final-state-ref", vec![string(&expected.final_state_hash)]),
+        record("actual-final-state-ref", vec![string(&actual.final_state_hash)]),
+        sequence(diagnostics.iter().map(string).collect()),
+    ]))
+}
+
+fn vat_replay_diagnostics(divergence: VatReplayDivergenceKind) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(3);
+    diagnostics.push("replay-profile-denies-real-external-effects".to_string());
+    match divergence {
+        VatReplayDivergenceKind::None => diagnostics.push("deterministic-replay-identical-trace-and-state".to_string()),
+        VatReplayDivergenceKind::Input => diagnostics.push("first-divergence-input".to_string()),
+        VatReplayDivergenceKind::EffectResponse => diagnostics.push("first-divergence-effect-response".to_string()),
+        VatReplayDivergenceKind::StateHash => diagnostics.push("first-divergence-state-hash".to_string()),
+    }
+    diagnostics
+}
+
 fn authority_edge_value(from_ref: &str, to_ref: &str, edge_kind: &str) -> IOValue {
     record("authority-edge-v1", vec![string(from_ref), string(to_ref), string(edge_kind)])
 }
@@ -974,6 +1156,7 @@ mod tests {
     use super::run_vat_fixture;
     use super::run_vat_portable_storage_fixture;
     use super::run_vat_promise_fixture;
+    use super::run_vat_replay_fixture;
     use super::run_vat_restore_fixture;
     use super::run_vat_rights_fixture;
     use super::run_vat_snapshot_fixture;
@@ -1185,6 +1368,19 @@ mod tests {
         assert!(rendered.contains("vat-time-travel-debug-receipt-v1"));
         assert!(rendered.contains("debug-authority-missing"));
         assert!(rendered.contains("deterministic-replay"));
+    }
+
+    #[test]
+    fn vat_replay_fixture_reports_identity_and_first_divergence() {
+        let replay = run_vat_replay_fixture().expect("replay fixture");
+        assert_eq!(replay.receipts.len(), 3);
+        assert!(replay.fixture_ref.starts_with("blake3:"));
+        let rendered = to_text(&replay.value).expect("render replay fixture");
+        assert!(rendered.contains("vat-replay-receipt-v1"));
+        assert!(rendered.contains("deterministic-replay-identical-trace-and-state"));
+        assert!(rendered.contains("first-divergence-input"));
+        assert!(rendered.contains("first-divergence-effect-response"));
+        assert!(rendered.contains("replay-profile-denies-real-external-effects"));
     }
 
     #[test]

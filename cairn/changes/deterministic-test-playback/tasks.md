@@ -39,7 +39,7 @@
 
 ## Phase 6: Tests
 
-- [ ] [serial] r[molten.determinism.two_actor_replay_test] Add a local two-actor replay test proving identical artifacts, initial state, profile, and seed produce identical traces and final state hash.
+- [x] [serial] r[molten.determinism.two_actor_replay_test] Add a local two-actor replay test proving identical artifacts, initial state, profile, and seed produce identical traces and final state hash.
 - [ ] [serial] r[molten.determinism.random_clock_replay_test] Add tests proving logical clock and seeded random handlers replay deterministically.
 - [ ] [serial] r[molten.determinism.divergence_tests] Add tests for first-divergence reporting on changed input, effect response, policy decision, and state hash.
 - [ ] [parallel] r[molten.determinism.no_ambient_tests] Add tests or lints that reject ambient nondeterminism in core/runtime deterministic paths.

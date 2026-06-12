@@ -459,6 +459,10 @@ enum VatCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    ReplayFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
     AuthorityGraphFixture {
         #[arg(long)]
         out: PathBuf,
@@ -9019,6 +9023,12 @@ fn run_vat_command(command: VatCommand) -> Result<()> {
             let debug = molten::runtime::run_vat_time_travel_fixture()?;
             write_file(&out, &to_text(&debug.value)?)?;
             println!("vat time travel fixture: {}", debug.fixture_ref);
+            Ok(())
+        }
+        VatCommand::ReplayFixture { out } => {
+            let replay = molten::runtime::run_vat_replay_fixture()?;
+            write_file(&out, &to_text(&replay.value)?)?;
+            println!("vat replay fixture: {}", replay.fixture_ref);
             Ok(())
         }
         VatCommand::AuthorityGraphFixture { out } => {
