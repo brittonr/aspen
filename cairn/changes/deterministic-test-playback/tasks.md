@@ -24,7 +24,7 @@
 
 - [ ] [serial] r[molten.determinism.handler_profiles] Define pure, local, chaos, record, replay, and profiling handler profiles with canonical config hashes.
 - [ ] [serial] r[molten.determinism.record_profile] Record every effect request/response and relevant external observation under the record profile.
-- [ ] [serial] r[molten.determinism.replay_profile] Inject recorded effect responses under the replay profile and deny real external side effects.
+- [x] [serial] r[molten.determinism.replay_profile] Inject recorded effect responses under the replay profile and deny real external side effects.
 - [ ] [serial] r[molten.determinism.replay_algorithm] Implement replay that verifies input hash, effect requests, committed actions, receipts/traces, outputs, and after state hashes turn by turn.
 - [ ] [parallel] r[molten.determinism.first_divergence] Report first-divergence diagnostics for scheduler, input, effect request/response, policy decision, action, receipt, trace, output, or state mismatch.
 

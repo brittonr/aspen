@@ -97,6 +97,7 @@ mod tests {
     use super::repro_bundle_value_with_export_profile;
     use super::repro_verify_receipt_value;
     use super::run_suite_value;
+    use super::runner::run_suite_with_effect_log;
     use super::schema::parse_report;
     use super::sealed_repro_bundle_value_with_command;
     use super::suite_failure_value;
@@ -2321,6 +2322,21 @@ mod tests {
             }
             other => panic!("expected divergence, got {other}"),
         }
+    }
+
+    #[test]
+    fn replay_profile_injects_recorded_clock_random_effects() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let report = parse_report(&run.report_value).expect("parse report");
+        let parsed_suite = parse_suite(&report.suite_value).expect("parse embedded suite");
+        let replayed = run_suite_with_effect_log(&parsed_suite, &report.effect_log).expect("replay with effect log");
+        let rendered = to_text(&replayed.report_value).expect("render replayed report");
+
+        assert_eq!(run.report_ref, replayed.report_ref);
+        assert_eq!(run.final_state_hash, replayed.final_state_hash);
+        assert!(rendered.contains("time-random-handler-receipt-v1"));
+        assert!(rendered.contains("deny-by-default-bypassed-only-by-local-test-handler"));
     }
 
     #[test]
