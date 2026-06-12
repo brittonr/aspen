@@ -1369,7 +1369,34 @@ mod tests {
     #[test]
     fn eval_cache_hit_reuses_deterministic_transcript_receipt() {
         let source = "```preserves\n<value \"cache\">\n```\n```expect\n<expect-output <value \"cache\">>\n```\n";
-        let transcript = parse_markdown(source, &TranscriptParseInput::default()).expect("parse");
+        let dependency_ref = local_ref("transcript-dependency", "cache").expect("dependency ref");
+        let handler_profile_ref = local_ref("transcript-handler-profile", "deterministic").expect("profile ref");
+        let policy_ref = local_ref("transcript-policy", "cache").expect("policy ref");
+        let initial_state_ref = local_ref("transcript-initial-state", "cache").expect("initial state ref");
+        let seed_ref = local_ref("transcript-seed", "cache").expect("seed ref");
+        let expected_ref = local_ref("transcript-expected-output", "cache").expect("expected ref");
+        let transcript = parse_markdown(source, &TranscriptParseInput {
+            dependency_refs: vec![dependency_ref.clone()],
+            dependency_closure_hash: Some(initial_state_ref.clone()),
+            handler_profile_ref: Some(handler_profile_ref.clone()),
+            policy_refs: vec![policy_ref.clone()],
+            seed_ref: Some(seed_ref.clone()),
+            expected_refs: vec![expected_ref.clone()],
+            ..TranscriptParseInput::default()
+        })
+        .expect("parse");
+        let cache_key = eval_cache::parse_eval_cache_key(
+            &eval_cache::eval_cache_key_value(&transcript_cache_key(&transcript).expect("transcript cache key"))
+                .expect("cache key value"),
+        )
+        .expect("parse cache key");
+        assert_eq!(cache_key.dependency_closure_hash, initial_state_ref);
+        assert_eq!(cache_key.dependency_refs, vec![dependency_ref]);
+        assert_eq!(cache_key.handler_profile_ref.as_deref(), Some(handler_profile_ref.as_str()));
+        assert_eq!(cache_key.policy_refs, vec![policy_ref]);
+        assert!(cache_key.assumption_refs.contains(&seed_ref));
+        assert!(cache_key.assumption_refs.contains(&expected_ref));
+
         let cache_root = temp_state_root("cache-test").expect("cache root");
         let input = TranscriptRunInput {
             cache_root: Some(cache_root),
