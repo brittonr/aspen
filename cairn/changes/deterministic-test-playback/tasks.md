@@ -11,7 +11,7 @@
 - [x] [serial] r[molten.determinism.turn_commit] Ensure actors process one event per turn and pending actions become visible only after admitted commit.
 - [x] [serial] r[molten.determinism.logical_clock] Implement a logical clock handler for deterministic profiles.
 - [x] [parallel] r[molten.determinism.seeded_random] Implement seeded PRNG random handler with request sequencing for deterministic profiles.
-- [ ] [parallel] r[molten.determinism.chaos_schedule] Define deterministic chaos schedules for faults, delays, drops, reorders, partitions, and resource limits.
+- [x] [parallel] r[molten.determinism.chaos_schedule] Define deterministic chaos schedules for faults, delays, drops, reorders, partitions, and resource limits.
 
 ## Phase 3: Trace journal and snapshots
 

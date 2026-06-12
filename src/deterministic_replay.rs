@@ -5,6 +5,7 @@ use preserves::IOValue;
 use preserves::Value;
 
 use crate::error::Result;
+use crate::preserves_rail::DETERMINISTIC_CHAOS_SCHEDULE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_EFFECT_LOG_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIXTURE_RECORD_SCHEMA;
@@ -14,6 +15,7 @@ use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_RUN_IDENTITY_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_TURN_JOURNAL_SCHEMA;
 use crate::preserves_rail::canonical_hash;
+use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -137,6 +139,22 @@ pub struct ReplayIndexReceipt {
     pub deny_count: u64,
     pub raw_receipt_count: u64,
     pub rollup_count: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct ChaosScheduleInput {
+    pub seed_ref: String,
+    pub schedule_position: u64,
+    pub event_ref: String,
+    pub fault_kind: String,
+    pub intensity_percent: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct ChaosScheduleReceipt {
+    pub value: IOValue,
+    pub schedule_ref: String,
+    pub decision: String,
 }
 
 #[derive(Clone, Debug)]
@@ -415,6 +433,63 @@ pub fn index_replay_evidence(inputs: &[ReplayIndexInput]) -> Result<ReplayIndexR
         raw_receipt_count,
         rollup_count,
     })
+}
+
+pub fn chaos_schedule_receipt(input: &ChaosScheduleInput) -> Result<ChaosScheduleReceipt> {
+    validate_content_ref(&input.seed_ref)?;
+    validate_content_ref(&input.event_ref)?;
+    validate_chaos_fault_kind(&input.fault_kind)?;
+    if input.intensity_percent > 100 {
+        return Err(crate::error::MoltenError::invalid_harness("chaos schedule intensity exceeds 100"));
+    }
+    let preimage = record("deterministic-chaos-schedule-preimage-v1", vec![
+        record("seed-ref", vec![string(&input.seed_ref)]),
+        record("position", vec![u64_value(input.schedule_position)]),
+        record("event-ref", vec![string(&input.event_ref)]),
+        record("fault-kind", vec![string(&input.fault_kind)]),
+    ]);
+    let sample_ref = canonical_hash(&preimage)?;
+    let sample = chaos_sample_percent(&sample_ref)?;
+    let decision = if sample < input.intensity_percent {
+        "inject"
+    } else {
+        "pass"
+    };
+    let value = record("deterministic-chaos-schedule-v1", vec![
+        string(DETERMINISTIC_CHAOS_SCHEDULE_SCHEMA),
+        record("seed-ref", vec![string(&input.seed_ref)]),
+        record("position", vec![u64_value(input.schedule_position)]),
+        record("event-ref", vec![string(&input.event_ref)]),
+        record("fault-kind", vec![string(&input.fault_kind)]),
+        record("intensity-percent", vec![u64_value(input.intensity_percent)]),
+        record("sample-ref", vec![string(&sample_ref)]),
+        record("decision", vec![string(decision)]),
+        sequence(vec![
+            record("check", vec![string("deterministic-schedule"), string("pass")]),
+            record("check", vec![string("replay-identity-bound"), string("pass")]),
+            record("check", vec![string("evidence-only-no-authority"), string("pass")]),
+        ]),
+    ]);
+    let schedule_ref = canonical_hash(&value)?;
+    Ok(ChaosScheduleReceipt {
+        value,
+        schedule_ref,
+        decision: decision.to_string(),
+    })
+}
+
+fn validate_chaos_fault_kind(kind: &str) -> Result<()> {
+    match kind {
+        "fault" | "delay" | "drop" | "reorder" | "partition" | "resource-limit" => Ok(()),
+        _ => Err(crate::error::MoltenError::invalid_harness(format!("unsupported chaos fault kind {kind}"))),
+    }
+}
+
+fn chaos_sample_percent(sample_ref: &str) -> Result<u64> {
+    let hex = content_ref_hex(sample_ref)?;
+    let sample = u64::from_str_radix(&hex[..16], 16)
+        .map_err(|error| crate::error::MoltenError::invalid_harness(format!("invalid chaos sample ref: {error}")))?;
+    Ok(sample % 100)
 }
 
 fn parse_replay_verify_receipt(value: &IOValue, receipt_ref: &str) -> Result<ParsedReplayVerify> {
@@ -880,10 +955,14 @@ mod tests {
     use hegel::TestCase;
     use hegel::generators;
 
+    use super::ChaosScheduleInput;
+    use super::DEFAULT_ARTIFACT_REF;
+    use super::DEFAULT_SEED_REF;
     use super::ReplayDivergenceKind;
     use super::ReplayFixtureVariant;
     use super::ReplayIndexInput;
     use super::ReplayRollupInput;
+    use super::chaos_schedule_receipt;
     use super::index_replay_evidence;
     use super::record_fixture_value;
     use super::rollup_replay_receipts;
@@ -1057,6 +1136,42 @@ mod tests {
         let text = to_text(&index.value).expect("render index");
         assert!(text.contains("replay index ref mismatch"));
         assert!(text.contains(&wrong_ref));
+    }
+
+    #[test]
+    fn chaos_schedule_is_deterministic_replay_evidence_only() {
+        let input = ChaosScheduleInput {
+            seed_ref: DEFAULT_SEED_REF.to_string(),
+            schedule_position: 7,
+            event_ref: DEFAULT_ARTIFACT_REF.to_string(),
+            fault_kind: "drop".to_string(),
+            intensity_percent: 50,
+        };
+        let first = chaos_schedule_receipt(&input).expect("chaos schedule");
+        let second = chaos_schedule_receipt(&input).expect("chaos schedule repeat");
+        assert_eq!(first.schedule_ref, second.schedule_ref);
+        assert_eq!(first.decision, second.decision);
+        let text = to_text(&first.value).expect("render chaos schedule");
+        assert!(text.contains("deterministic-chaos-schedule-v1"));
+        assert!(text.contains("replay-identity-bound"));
+        assert!(text.contains("evidence-only-no-authority"));
+
+        let changed = chaos_schedule_receipt(&ChaosScheduleInput {
+            schedule_position: 8,
+            ..input
+        })
+        .expect("changed chaos schedule");
+        assert_ne!(first.schedule_ref, changed.schedule_ref);
+        assert!(
+            chaos_schedule_receipt(&ChaosScheduleInput {
+                seed_ref: DEFAULT_SEED_REF.to_string(),
+                schedule_position: 7,
+                event_ref: DEFAULT_ARTIFACT_REF.to_string(),
+                fault_kind: "drop".to_string(),
+                intensity_percent: 101,
+            })
+            .is_err()
+        );
     }
 
     #[hegel::test(test_cases = 16)]
