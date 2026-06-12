@@ -17,7 +17,7 @@
 
 - [x] [serial] r[molten.determinism.turn_journal] Emit canonical turn trace records with cause, scheduler key, input hash, before/after state hashes, effect refs, policy refs, committed actions, and receipt refs.
 - [ ] [serial] r[molten.determinism.snapshot_model] Define canonical snapshot or snapshot-reference model for actor state, dataspace indexes, handler state, logical clock, PRNG state, policy/capability state, and registry/dependency closure.
-- [ ] [parallel] r[molten.determinism.state_hashes] Compute state hashes from canonical snapshot representations or authenticated snapshot refs.
+- [x] [parallel] r[molten.determinism.state_hashes] Compute state hashes from canonical snapshot representations or authenticated snapshot refs.
 - [ ] [parallel] r[molten.determinism.trace_privacy] Gate access to trace journals and snapshots because they may contain sensitive data or capabilities.
 
 ## Phase 4: Handler profiles and replay

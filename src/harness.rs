@@ -100,6 +100,7 @@ mod tests {
     use super::runner::run_suite_with_effect_log;
     use super::schema::effect_log_from_observations;
     use super::schema::parse_report;
+    use super::schema::snapshot_value;
     use super::sealed_repro_bundle_value_with_command;
     use super::suite_failure_value;
     use super::validate_report_value;
@@ -2327,6 +2328,34 @@ mod tests {
         let tampered_report = parse_text(&tampered_text).expect("parse tampered report");
         let error = validate_report_value(&tampered_report).expect_err("tampered actor registry should fail");
         assert!(error.to_string().contains("report actor registry does not match embedded suite actor registry"));
+    }
+
+    #[test]
+    fn runtime_snapshot_hashes_are_canonical_and_seed_bound() {
+        let left = RuntimeState::new(7);
+        let right = RuntimeState::new(7);
+        let other_seed = RuntimeState::new(8);
+        let left_ref = canonical_hash(&snapshot_value(&left.snapshot())).expect("left snapshot ref");
+        let right_ref = canonical_hash(&snapshot_value(&right.snapshot())).expect("right snapshot ref");
+        let other_ref = canonical_hash(&snapshot_value(&other_seed.snapshot())).expect("other snapshot ref");
+
+        assert_eq!(left_ref, right_ref);
+        assert_ne!(left_ref, other_ref);
+    }
+
+    #[test]
+    fn replay_preserves_initial_and_final_state_hashes() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let report = parse_report(&run.report_value).expect("parse report");
+        let parsed_suite = parse_suite(&report.suite_value).expect("parse embedded suite");
+        let replayed = run_suite_with_effect_log(&parsed_suite, &report.effect_log).expect("replay with effect log");
+        let replayed_report = parse_report(&replayed.report_value).expect("parse replay report");
+
+        assert_eq!(report.initial_state_hash, replayed_report.initial_state_hash);
+        assert_eq!(report.final_state_hash, replayed_report.final_state_hash);
+        assert_eq!(run.initial_state_hash, replayed.initial_state_hash);
+        assert_eq!(run.final_state_hash, replayed.final_state_hash);
     }
 
     #[test]
