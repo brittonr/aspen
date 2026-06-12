@@ -75,6 +75,7 @@ pub const DETERMINISTIC_FIXTURE_RECORD_SCHEMA: &str = "molten.determinism.fixtur
 pub const DETERMINISTIC_REPLAY_VERIFY_SCHEMA: &str = "molten.determinism.replay-verify.v1";
 pub const DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA: &str = "molten.determinism.first-divergence.v1";
 pub const DETERMINISTIC_REPLAY_ROLLUP_SCHEMA: &str = "molten.determinism.replay-rollup.v1";
+pub const DETERMINISTIC_REPLAY_INDEX_SCHEMA: &str = "molten.determinism.replay-index.v1";
 pub const EFFECT_MANIFEST_SCHEMA: &str = "molten.effects.manifest.v1";
 pub const EFFECT_HANDLER_PROFILE_SCHEMA: &str = "molten.effects.handler-profile.v1";
 pub const EFFECT_HANDLER_BINDING_SCHEMA: &str = "molten.effects.handler-binding.v1";

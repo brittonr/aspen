@@ -289,6 +289,14 @@ enum ReplayFixtureCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    Index {
+        #[arg(long = "receipt")]
+        receipts: Vec<PathBuf>,
+        #[arg(long = "rollup")]
+        rollups: Vec<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+    },
     Show {
         report: PathBuf,
     },
@@ -4170,6 +4178,37 @@ fn run_replay_fixture_command(command: ReplayFixtureCommand) -> Result<()> {
                 rollup.total_count,
                 rollup.pass_count,
                 rollup.deny_count
+            );
+            Ok(())
+        }
+        ReplayFixtureCommand::Index { receipts, rollups, out } => {
+            let mut inputs = Vec::with_capacity(receipts.len() + rollups.len());
+            for receipt in receipts {
+                let value = read_preserves_file(&receipt)?;
+                inputs.push(deterministic_replay::ReplayIndexInput {
+                    expected_ref: Some(canonical_hash(&value)?),
+                    value,
+                });
+            }
+            for rollup in rollups {
+                let value = read_preserves_file(&rollup)?;
+                inputs.push(deterministic_replay::ReplayIndexInput {
+                    expected_ref: Some(canonical_hash(&value)?),
+                    value,
+                });
+            }
+            let index = deterministic_replay::index_replay_evidence(&inputs)?;
+            write_file(&out, &to_text(&index.value)?)?;
+            println!(
+                "deterministic replay index written to {} ref={} decision={} total={} pass={} deny={} raw_receipts={} rollups={}",
+                out.display(),
+                index.index_ref,
+                index.decision,
+                index.total_count,
+                index.pass_count,
+                index.deny_count,
+                index.raw_receipt_count,
+                index.rollup_count
             );
             Ok(())
         }

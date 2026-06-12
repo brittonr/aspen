@@ -1077,9 +1077,21 @@ mod tests {
                 value: verify.clone(),
             }])
             .expect("replay rollup");
+        let index = crate::deterministic_replay::index_replay_evidence(&[
+            crate::deterministic_replay::ReplayIndexInput {
+                expected_ref: Some(canonical_hash(&verify).expect("verify ref")),
+                value: verify.clone(),
+            },
+            crate::deterministic_replay::ReplayIndexInput {
+                expected_ref: Some(rollup.rollup_ref.clone()),
+                value: rollup.value.clone(),
+            },
+        ])
+        .expect("replay index");
         ledger::import_artifact(&ledger_root, &verify).expect("import replay verify");
         ledger::import_artifact(&ledger_root, &divergence).expect("import first divergence");
         ledger::import_artifact(&ledger_root, &rollup.value).expect("import replay rollup");
+        ledger::import_artifact(&ledger_root, &index.value).expect("import replay index");
 
         let verify_request = mcp_request_value("search_replay_evidence", vec![
             record("stage", vec![string("verify")]),
@@ -1122,6 +1134,19 @@ mod tests {
             to_text(&rollup_call.response_value)
                 .expect("replay rollup response")
                 .contains("deterministic-replay:rollup")
+        );
+
+        let index_request = mcp_request_value("search_replay_evidence", vec![
+            record("stage", vec![string("index")]),
+            record("text", vec![string("replay-index-decision:deny")]),
+        ])
+        .expect("replay index request");
+        let index_call = call(&registry, Some(&ledger_root), &index_request).expect("replay index call");
+        assert_eq!(index_call.decision, "pass");
+        assert!(
+            to_text(&index_call.response_value)
+                .expect("replay index response")
+                .contains("deterministic-replay:index")
         );
     }
 

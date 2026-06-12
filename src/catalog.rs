@@ -17,6 +17,7 @@ use crate::preserves_rail::CATALOG_SHORT_ID_SCHEMA;
 use crate::preserves_rail::CATALOG_SUMMARY_SCHEMA;
 use crate::preserves_rail::CATALOG_VIEW_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
+use crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
@@ -735,6 +736,9 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
     if let Some(fields) = value.collect_simple_record("deterministic-replay-rollup-v1", Some(10)) {
         return deterministic_replay_rollup_classifications(&fields);
     }
+    if let Some(fields) = value.collect_simple_record("deterministic-replay-index-v1", Some(15)) {
+        return deterministic_replay_index_classifications(&fields);
+    }
     if let Ok(profile) = crate::retention::parse_retention_class_profile(value) {
         return Ok(vec![
             "retention:class".to_string(),
@@ -1158,6 +1162,47 @@ fn deterministic_replay_rollup_classifications(fields: &Record<Value<IOValue>>) 
         let count = simple_record(&item, "divergence-count", 2)?;
         let kind = required_string(&count[0], "divergence kind")?;
         classifications.push(format!("replay-rollup-divergence:{kind}"));
+    }
+    Ok(classifications)
+}
+
+fn deterministic_replay_index_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
+    require_schema(&fields[0], DETERMINISTIC_REPLAY_INDEX_SCHEMA, "deterministic replay index")?;
+    let decision = record_string(&fields[1], "decision")?;
+    let total_count = record_u64(&fields[2], "total-count")?;
+    let pass_count = record_u64(&fields[3], "pass-count")?;
+    let deny_count = record_u64(&fields[4], "deny-count")?;
+    let raw_receipt_count = record_u64(&fields[5], "raw-receipt-count")?;
+    let rollup_count = record_u64(&fields[6], "rollup-count")?;
+    let mut classifications = vec![
+        "deterministic-replay:index".to_string(),
+        format!("replay-decision:{decision}"),
+        format!("replay-index-decision:{decision}"),
+        format!("replay-index-total:{total_count}"),
+        format!("replay-index-pass:{pass_count}"),
+        format!("replay-index-deny:{deny_count}"),
+        format!("replay-index-raw-receipts:{raw_receipt_count}"),
+        format!("replay-index-rollups:{rollup_count}"),
+    ];
+    let counts = value_to_iovalue(&fields[9]);
+    let count_fields = simple_record(&counts, "divergence-counts", 1)?;
+    for item in required_sequence(&count_fields[0], "divergence-counts")?.iter() {
+        let item = value_to_iovalue(item);
+        let count = simple_record(&item, "divergence-count", 2)?;
+        let kind = required_string(&count[0], "divergence kind")?;
+        classifications.push(format!("replay-index-divergence:{kind}"));
+    }
+    for reference in record_ref_sequence(&fields[7], "receipt-refs")? {
+        classifications.push(format!("replay-index-receipt:{reference}"));
+    }
+    for reference in record_ref_sequence(&fields[8], "rollup-refs")? {
+        classifications.push(format!("replay-index-rollup:{reference}"));
+    }
+    for reference in record_ref_sequence(&fields[11], "report-refs")? {
+        classifications.push(format!("replay-index-report:{reference}"));
+    }
+    for reference in record_ref_sequence(&fields[12], "final-state-refs")? {
+        classifications.push(format!("replay-index-final-state:{reference}"));
     }
     Ok(classifications)
 }
@@ -2157,11 +2202,24 @@ mod tests {
                 value: verify.clone(),
             }])
             .expect("replay rollup");
+        let index = crate::deterministic_replay::index_replay_evidence(&[
+            crate::deterministic_replay::ReplayIndexInput {
+                expected_ref: Some(canonical_hash(&verify).expect("verify ref")),
+                value: verify.clone(),
+            },
+            crate::deterministic_replay::ReplayIndexInput {
+                expected_ref: Some(rollup.rollup_ref.clone()),
+                value: rollup.value.clone(),
+            },
+        ])
+        .expect("replay index");
         let verify_import = ledger::import_artifact(&ledger_root, &verify).expect("import replay verify");
         ledger::import_artifact(&ledger_root, &divergence).expect("import first divergence");
         let rollup_import = ledger::import_artifact(&ledger_root, &rollup.value).expect("import replay rollup");
+        let index_import = ledger::import_artifact(&ledger_root, &index.value).expect("import replay index");
         assert_eq!(verify_import.artifact_kind, "deterministic-replay-verify-receipt");
         assert_eq!(rollup_import.artifact_kind, "deterministic-replay-rollup");
+        assert_eq!(index_import.artifact_kind, "deterministic-replay-index");
 
         let found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
             root_refs: Vec::new(),
@@ -2214,6 +2272,26 @@ mod tests {
             to_text(&rollup_found.value)
                 .expect("replay rollup result text")
                 .contains("deterministic-replay:rollup")
+        );
+
+        let index_found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
+            root_refs: Vec::new(),
+            include_dependencies: true,
+            include_dependents: true,
+            filters: vec![
+                CatalogFilter::LedgerKind("deterministic-replay-index".to_string()),
+                CatalogFilter::Text("replay-index-decision:pass".to_string()),
+                CatalogFilter::Text("replay-index-rollups:1".to_string()),
+                CatalogFilter::Text(format!("replay-index-final-state:{final_state_ref}")),
+            ],
+            visibility: CatalogVisibilityInput::default(),
+        })
+        .expect("replay index search");
+        assert_eq!(index_found.items.len(), 1);
+        assert!(
+            to_text(&index_found.value)
+                .expect("replay index result text")
+                .contains("deterministic-replay:index")
         );
     }
 
