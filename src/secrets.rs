@@ -1192,11 +1192,15 @@ pub fn fixture_field_labels() -> Result<Vec<ConfidentialLabel>> {
 }
 
 fn secrets_fixture_retention_root(secret_ref: &str) -> Result<PathBuf> {
+    static RETENTION_ROOT_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let process_id = std::process::id();
+    let invocation_id = RETENTION_ROOT_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let root_ref = canonical_hash(&record("secrets-fixture-retention-root-v1", vec![
         string(secret_ref),
-        string(std::process::id().to_string()),
+        string(process_id.to_string()),
+        string(invocation_id.to_string()),
     ]))?;
-    Ok(std::env::temp_dir().join("molten-secrets-retention").join(root_ref))
+    Ok(std::env::temp_dir().join(format!("molten-secrets-retention-{process_id}")).join(root_ref))
 }
 
 pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
