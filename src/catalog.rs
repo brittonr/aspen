@@ -16,6 +16,8 @@ use crate::preserves_rail::CATALOG_RESULT_SCHEMA;
 use crate::preserves_rail::CATALOG_SHORT_ID_SCHEMA;
 use crate::preserves_rail::CATALOG_SUMMARY_SCHEMA;
 use crate::preserves_rail::CATALOG_VIEW_SCHEMA;
+use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
+use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
@@ -707,6 +709,28 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
             format!("transcript-mode:{}", receipt.mode),
         ]);
     }
+    if let Some(fields) = value.collect_simple_record("deterministic-replay-verify-v1", Some(7)) {
+        return deterministic_replay_verify_gate_classifications(&fields);
+    }
+    if let Some(fields) = value.collect_simple_record("deterministic-replay-verify-v1", Some(13)) {
+        return deterministic_replay_verify_fixture_classifications(&fields);
+    }
+    if let Some(fields) = value.collect_simple_record("deterministic-first-divergence-v1", Some(9)) {
+        require_schema(&fields[0], DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA, "deterministic first divergence")?;
+        let kind = record_string(&fields[1], "kind")?;
+        let actor_id = record_string(&fields[3], "actor-id")?;
+        let handler_profile_ref = record_string(&fields[5], "handler-profile-ref")?;
+        let expected_ref = record_string(&fields[6], "expected-ref")?;
+        let actual_ref = record_string(&fields[7], "actual-ref")?;
+        return Ok(vec![
+            "deterministic-replay:first-divergence".to_string(),
+            format!("replay-divergence:{kind}"),
+            format!("replay-actor:{actor_id}"),
+            format!("replay-handler-profile:{handler_profile_ref}"),
+            format!("replay-expected-ref:{expected_ref}"),
+            format!("replay-actual-ref:{actual_ref}"),
+        ]);
+    }
     if let Ok(profile) = crate::retention::parse_retention_class_profile(value) {
         return Ok(vec![
             "retention:class".to_string(),
@@ -1108,6 +1132,52 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
         ]);
     }
     Ok(Vec::new())
+}
+
+fn deterministic_replay_verify_gate_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
+    require_schema(&fields[0], DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "deterministic replay verify")?;
+    let decision = required_string(&fields[1], "deterministic replay decision")?;
+    let expected_report_ref = record_string(&fields[2], "expected-report-ref")?;
+    let actual_report_ref = record_string(&fields[3], "actual-report-ref")?;
+    let final_state_ref = record_string(&fields[4], "final-state-ref")?;
+    let divergence = record_string(&fields[5], "divergence")?;
+    Ok(vec![
+        "deterministic-replay:verify".to_string(),
+        format!("replay-decision:{decision}"),
+        format!("receipt-decision:{decision}"),
+        format!("replay-divergence:{divergence}"),
+        format!("replay-expected-report:{expected_report_ref}"),
+        format!("replay-actual-report:{actual_report_ref}"),
+        format!("replay-final-state:{final_state_ref}"),
+    ])
+}
+
+fn deterministic_replay_verify_fixture_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
+    require_schema(&fields[0], DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "deterministic replay verify")?;
+    let decision = required_string(&fields[1], "deterministic replay decision")?;
+    let expected_identity_ref = record_string(&fields[2], "expected-identity-ref")?;
+    let actual_identity_ref = record_string(&fields[3], "actual-identity-ref")?;
+    let expected_effect_log_ref = record_string(&fields[4], "expected-effect-log-ref")?;
+    let actual_effect_log_ref = record_string(&fields[5], "actual-effect-log-ref")?;
+    let expected_output_ref = record_string(&fields[6], "expected-output-ref")?;
+    let actual_output_ref = record_string(&fields[7], "actual-output-ref")?;
+    let expected_final_state_ref = record_string(&fields[8], "expected-final-state-ref")?;
+    let actual_final_state_ref = record_string(&fields[9], "actual-final-state-ref")?;
+    let divergence = record_string(&fields[10], "divergence")?;
+    Ok(vec![
+        "deterministic-replay:verify".to_string(),
+        format!("replay-decision:{decision}"),
+        format!("receipt-decision:{decision}"),
+        format!("replay-divergence:{divergence}"),
+        format!("replay-expected-identity:{expected_identity_ref}"),
+        format!("replay-actual-identity:{actual_identity_ref}"),
+        format!("replay-expected-effect-log:{expected_effect_log_ref}"),
+        format!("replay-actual-effect-log:{actual_effect_log_ref}"),
+        format!("replay-expected-output:{expected_output_ref}"),
+        format!("replay-actual-output:{actual_output_ref}"),
+        format!("replay-expected-final-state:{expected_final_state_ref}"),
+        format!("replay-actual-final-state:{actual_final_state_ref}"),
+    ])
 }
 
 fn summary_matches_filters(
@@ -2023,6 +2093,73 @@ mod tests {
         })
         .expect("receipt view");
         assert!(!receipt_view.items.is_empty());
+    }
+
+    #[test]
+    fn catalog_classifies_generic_replay_receipts_and_divergence() {
+        let dir = temp_dir("catalog-replay");
+        let registry = dir.join("registry");
+        let ledger_root = dir.join("ledger");
+        let expected_report_ref = test_ref("expected-report");
+        let actual_report_ref = test_ref("actual-report");
+        let final_state_ref = test_ref("final-state");
+        let verify = record("deterministic-replay-verify-v1", vec![
+            string(crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
+            string("pass"),
+            record("expected-report-ref", vec![string(&expected_report_ref)]),
+            record("actual-report-ref", vec![string(&actual_report_ref)]),
+            record("final-state-ref", vec![string(&final_state_ref)]),
+            record("divergence", vec![string("none")]),
+            checks_value(&["report-replayed", "final-state-bound", "no-divergence"]),
+        ]);
+        let divergence = record("deterministic-first-divergence-v1", vec![
+            string(crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA),
+            record("kind", vec![string("effect-response")]),
+            record("turn-id", vec![string("turn:1")]),
+            record("actor-id", vec![string("actor:helper")]),
+            record("log-position", vec![string("0")]),
+            record("handler-profile-ref", vec![string(test_ref("handler-profile"))]),
+            record("expected-ref", vec![string(test_ref("expected-effect"))]),
+            record("actual-ref", vec![string(test_ref("actual-effect"))]),
+            sequence(vec![string("safe-canonical-refs-only")]),
+        ]);
+        let verify_import = ledger::import_artifact(&ledger_root, &verify).expect("import replay verify");
+        ledger::import_artifact(&ledger_root, &divergence).expect("import first divergence");
+        assert_eq!(verify_import.artifact_kind, "deterministic-replay-verify-receipt");
+
+        let found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
+            root_refs: Vec::new(),
+            include_dependencies: true,
+            include_dependents: true,
+            filters: vec![
+                CatalogFilter::LedgerKind("deterministic-replay-verify-receipt".to_string()),
+                CatalogFilter::ReceiptDecision("pass".to_string()),
+                CatalogFilter::Text(format!("replay-final-state:{final_state_ref}")),
+            ],
+            visibility: CatalogVisibilityInput::default(),
+        })
+        .expect("replay receipt search");
+        assert_eq!(found.items.len(), 1);
+        let text = to_text(&found.value).expect("replay search result text");
+        assert!(text.contains("deterministic-replay:verify"));
+        assert!(text.contains(&expected_report_ref));
+        assert!(text.contains(&actual_report_ref));
+        assert!(text.contains(&final_state_ref));
+
+        let divergence_found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
+            root_refs: Vec::new(),
+            include_dependencies: true,
+            include_dependents: true,
+            filters: vec![CatalogFilter::Text("replay-divergence:effect-response".to_string())],
+            visibility: CatalogVisibilityInput::default(),
+        })
+        .expect("first divergence search");
+        assert_eq!(divergence_found.items.len(), 1);
+        assert!(
+            to_text(&divergence_found.value)
+                .expect("first divergence result text")
+                .contains("deterministic-replay:first-divergence")
+        );
     }
 
     #[test]
