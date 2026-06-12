@@ -206,6 +206,7 @@ struct VatReplayRun {
     trace_ref: String,
     effect_request_ref: String,
     effect_response_ref: String,
+    policy_decision_ref: String,
     final_state_hash: String,
 }
 
@@ -214,6 +215,7 @@ enum VatReplayDivergenceKind {
     None,
     Input,
     EffectResponse,
+    PolicyDecision,
     StateHash,
 }
 
@@ -223,6 +225,7 @@ impl VatReplayDivergenceKind {
             Self::None => "none",
             Self::Input => "input",
             Self::EffectResponse => "effect-response",
+            Self::PolicyDecision => "policy-decision",
             Self::StateHash => "state-hash",
         }
     }
@@ -773,14 +776,54 @@ pub fn run_vat_time_travel_fixture() -> Result<VatDebugFixture> {
 }
 
 pub fn run_vat_replay_fixture() -> Result<VatReplayFixture> {
-    let expected = vat_replay_run("seed:vat-replay:0001", "deliver:root-to-helper", "clock:logical:42")?;
-    let actual = vat_replay_run("seed:vat-replay:0001", "deliver:root-to-helper", "clock:logical:42")?;
-    let changed_input = vat_replay_run("seed:vat-replay:0001", "deliver:root-to-helper:changed", "clock:logical:42")?;
-    let changed_effect = vat_replay_run("seed:vat-replay:0001", "deliver:root-to-helper", "clock:logical:43")?;
+    let expected = vat_replay_run(
+        "seed:vat-replay:0001",
+        "deliver:root-to-helper",
+        "clock:logical:42",
+        "policy:allow",
+        "state:committed",
+    )?;
+    let actual = vat_replay_run(
+        "seed:vat-replay:0001",
+        "deliver:root-to-helper",
+        "clock:logical:42",
+        "policy:allow",
+        "state:committed",
+    )?;
+    let changed_input = vat_replay_run(
+        "seed:vat-replay:0001",
+        "deliver:root-to-helper:changed",
+        "clock:logical:42",
+        "policy:allow",
+        "state:committed",
+    )?;
+    let changed_effect = vat_replay_run(
+        "seed:vat-replay:0001",
+        "deliver:root-to-helper",
+        "clock:logical:43",
+        "policy:allow",
+        "state:committed",
+    )?;
+    let changed_policy = vat_replay_run(
+        "seed:vat-replay:0001",
+        "deliver:root-to-helper",
+        "clock:logical:42",
+        "policy:deny",
+        "state:committed",
+    )?;
+    let changed_state = vat_replay_run(
+        "seed:vat-replay:0001",
+        "deliver:root-to-helper",
+        "clock:logical:42",
+        "policy:allow",
+        "state:diverged",
+    )?;
     let receipts = vec![
         vat_replay_receipt_value(&expected, &actual)?,
         vat_replay_receipt_value(&expected, &changed_input)?,
         vat_replay_receipt_value(&expected, &changed_effect)?,
+        vat_replay_receipt_value(&expected, &changed_policy)?,
+        vat_replay_receipt_value(&expected, &changed_state)?,
     ];
     let diagnostics = debug_diagnostics(&receipts)?;
     let value = record("vat-replay-fixture-v1", vec![
@@ -788,7 +831,16 @@ pub fn run_vat_replay_fixture() -> Result<VatReplayFixture> {
         record("profile", vec![string("replay")]),
         record("policy", vec![string("no-real-external-effects")]),
         record("expected-run-ref", vec![string(&expected.run_ref)]),
-        sequence([actual.value, changed_input.value, changed_effect.value].to_vec()),
+        sequence(
+            [
+                actual.value,
+                changed_input.value,
+                changed_effect.value,
+                changed_policy.value,
+                changed_state.value,
+            ]
+            .to_vec(),
+        ),
         sequence(receipts.clone()),
         sequence(diagnostics.iter().map(string).collect()),
     ]);
@@ -951,6 +1003,8 @@ fn vat_replay_run(
     seed: &'static str,
     input_message: &'static str,
     effect_response: &'static str,
+    policy_decision: &'static str,
+    state_marker: &'static str,
 ) -> Result<VatReplayRun> {
     let root = VatObjectRef::new(LOCAL_VAT_ID, ROOT_OBJECT_ID, VatReferenceKind::Near, Vec::new());
     let helper = VatObjectRef::new(LOCAL_VAT_ID, HELPER_OBJECT_ID, VatReferenceKind::Near, vec![root.object_ref()?]);
@@ -980,10 +1034,18 @@ fn vat_replay_run(
         record("source", vec![string("recorded-effect-log")]),
     ]);
     let effect_response_ref = canonical_hash(&effect_response)?;
+    let policy_decision = record("vat-replay-policy-decision-v1", vec![
+        string(policy_decision),
+        record("input-ref", vec![string(&input_ref)]),
+        record("effect-response-ref", vec![string(&effect_response_ref)]),
+    ]);
+    let policy_decision_ref = canonical_hash(&policy_decision)?;
     let final_state = record("vat-replay-final-state-v1", vec![
         record("initial-state-ref", vec![string(&initial_state_ref)]),
         record("input-ref", vec![string(&input_ref)]),
         record("effect-response-ref", vec![string(&effect_response_ref)]),
+        record("policy-decision-ref", vec![string(&policy_decision_ref)]),
+        record("state-marker", vec![string(state_marker)]),
         sequence([root_ref.clone(), helper_ref.clone()].iter().map(string).collect()),
     ]);
     let final_state_hash = canonical_hash(&final_state)?;
@@ -993,6 +1055,7 @@ fn vat_replay_run(
         record("input-ref", vec![string(&input_ref)]),
         record("effect-request-ref", vec![string(&effect_request_ref)]),
         record("effect-response-ref", vec![string(&effect_response_ref)]),
+        record("policy-decision-ref", vec![string(&policy_decision_ref)]),
         record("after-state-ref", vec![string(&final_state_hash)]),
     ]);
     let trace_ref = canonical_hash(&trace)?;
@@ -1004,6 +1067,7 @@ fn vat_replay_run(
         record("input-ref", vec![string(&input_ref)]),
         record("effect-request-ref", vec![string(&effect_request_ref)]),
         record("effect-response-ref", vec![string(&effect_response_ref)]),
+        record("policy-decision-ref", vec![string(&policy_decision_ref)]),
         record("trace-ref", vec![string(&trace_ref)]),
         record("final-state-ref", vec![string(&final_state_hash)]),
         record("external-effects", vec![string("denied")]),
@@ -1015,6 +1079,7 @@ fn vat_replay_run(
         trace_ref,
         effect_request_ref,
         effect_response_ref,
+        policy_decision_ref,
         final_state_hash,
     })
 }
@@ -1026,6 +1091,8 @@ fn vat_replay_receipt_value(expected: &VatReplayRun, actual: &VatReplayRun) -> R
         VatReplayDivergenceKind::Input
     } else if expected.effect_response_ref != actual.effect_response_ref {
         VatReplayDivergenceKind::EffectResponse
+    } else if expected.policy_decision_ref != actual.policy_decision_ref {
+        VatReplayDivergenceKind::PolicyDecision
     } else {
         VatReplayDivergenceKind::StateHash
     };
@@ -1044,6 +1111,8 @@ fn vat_replay_receipt_value(expected: &VatReplayRun, actual: &VatReplayRun) -> R
         record("divergence", vec![string(divergence.as_str())]),
         record("expected-trace-ref", vec![string(&expected.trace_ref)]),
         record("actual-trace-ref", vec![string(&actual.trace_ref)]),
+        record("expected-policy-decision-ref", vec![string(&expected.policy_decision_ref)]),
+        record("actual-policy-decision-ref", vec![string(&actual.policy_decision_ref)]),
         record("expected-final-state-ref", vec![string(&expected.final_state_hash)]),
         record("actual-final-state-ref", vec![string(&actual.final_state_hash)]),
         sequence(diagnostics.iter().map(string).collect()),
@@ -1057,6 +1126,7 @@ fn vat_replay_diagnostics(divergence: VatReplayDivergenceKind) -> Vec<String> {
         VatReplayDivergenceKind::None => diagnostics.push("deterministic-replay-identical-trace-and-state".to_string()),
         VatReplayDivergenceKind::Input => diagnostics.push("first-divergence-input".to_string()),
         VatReplayDivergenceKind::EffectResponse => diagnostics.push("first-divergence-effect-response".to_string()),
+        VatReplayDivergenceKind::PolicyDecision => diagnostics.push("first-divergence-policy-decision".to_string()),
         VatReplayDivergenceKind::StateHash => diagnostics.push("first-divergence-state-hash".to_string()),
     }
     diagnostics
@@ -1373,13 +1443,15 @@ mod tests {
     #[test]
     fn vat_replay_fixture_reports_identity_and_first_divergence() {
         let replay = run_vat_replay_fixture().expect("replay fixture");
-        assert_eq!(replay.receipts.len(), 3);
+        assert_eq!(replay.receipts.len(), 5);
         assert!(replay.fixture_ref.starts_with("blake3:"));
         let rendered = to_text(&replay.value).expect("render replay fixture");
         assert!(rendered.contains("vat-replay-receipt-v1"));
         assert!(rendered.contains("deterministic-replay-identical-trace-and-state"));
         assert!(rendered.contains("first-divergence-input"));
         assert!(rendered.contains("first-divergence-effect-response"));
+        assert!(rendered.contains("first-divergence-policy-decision"));
+        assert!(rendered.contains("first-divergence-state-hash"));
         assert!(rendered.contains("replay-profile-denies-real-external-effects"));
     }
 
