@@ -906,7 +906,16 @@ mod tests {
         let text = to_text(&fixture.value).expect("render fixture");
         assert!(text.contains("deterministic-fixture-record-v1"));
         assert!(text.contains("deterministic-run-identity-v1"));
+        assert!(text.contains("artifact-ref"));
+        assert!(text.contains("dependency-closure-ref"));
+        assert!(text.contains("initial-state-ref"));
+        assert!(text.contains("handler-profile-ref"));
+        assert!(text.contains("seed-ref"));
         assert!(text.contains("deterministic-effect-log-v1"));
+        assert!(text.contains("effect-entry-v1"));
+        assert!(text.contains("request-ref"));
+        assert!(text.contains("response-ref"));
+        assert!(text.contains("no-ambient-observations"));
     }
 
     #[test]

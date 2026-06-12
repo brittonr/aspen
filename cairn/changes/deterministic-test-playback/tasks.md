@@ -1,9 +1,9 @@
 ## Phase 1: Central law and deterministic boundaries
 
-- [ ] [serial] r[molten.determinism.central_law] Define Molten's deterministic playback law as a central runtime requirement.
-- [ ] [serial] r[molten.determinism.no_ambient_nondeterminism] Prohibit ambient clock, random, filesystem, network, environment, process, and OS scheduling observations from core/runtime semantics.
-- [ ] [serial] r[molten.determinism.effect_boundary] Require every external observation to enter through canonical effect request/response envelopes.
-- [ ] [parallel] r[molten.determinism.identity_inputs] Require artifacts, dependency closure, initial state, schema refs, policy refs, handler profile, seed/log hash, and runtime/tool versions in deterministic run identity.
+- [x] [serial] r[molten.determinism.central_law] Define Molten's deterministic playback law as a central runtime requirement.
+- [x] [serial] r[molten.determinism.no_ambient_nondeterminism] Prohibit ambient clock, random, filesystem, network, environment, process, and OS scheduling observations from core/runtime semantics.
+- [x] [serial] r[molten.determinism.effect_boundary] Require every external observation to enter through canonical effect request/response envelopes.
+- [x] [parallel] r[molten.determinism.identity_inputs] Require artifacts, dependency closure, initial state, schema refs, policy refs, handler profile, seed/log hash, and runtime/tool versions in deterministic run identity.
 
 ## Phase 2: Scheduler, logical time, and random
 
