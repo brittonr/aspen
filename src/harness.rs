@@ -98,6 +98,7 @@ mod tests {
     use super::repro_verify_receipt_value;
     use super::run_suite_value;
     use super::runner::run_suite_with_effect_log;
+    use super::schema::effect_log_from_observations;
     use super::schema::parse_report;
     use super::sealed_repro_bundle_value_with_command;
     use super::suite_failure_value;
@@ -2322,6 +2323,26 @@ mod tests {
             }
             other => panic!("expected divergence, got {other}"),
         }
+    }
+
+    #[test]
+    fn record_profile_captures_clock_random_effect_log() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let report = parse_report(&run.report_value).expect("parse report");
+        let observed_effect_log = effect_log_from_observations(&report.observations).expect("observed effect log");
+        let rendered_log = to_text(&super::schema::effect_log_value(&report.effect_log)).expect("render effect log");
+
+        assert_eq!(report.effect_log, observed_effect_log);
+        assert_eq!(report.effect_log.len(), 2);
+        assert!(rendered_log.contains("<effect-request \"clock\" \"producer\" 0>"));
+        assert!(rendered_log.contains("<effect-response \"clock\" \"producer\" 0"));
+        assert!(rendered_log.contains("<effect-request \"random\" \"producer\" 1 100>"));
+        assert!(rendered_log.contains("<effect-response \"random\" \"producer\" 1 100"));
+
+        let parsed_suite = parse_suite(&report.suite_value).expect("parse embedded suite");
+        let replayed = run_suite_with_effect_log(&parsed_suite, &report.effect_log).expect("replay with recorded log");
+        assert_eq!(run.report_ref, replayed.report_ref);
     }
 
     #[test]
