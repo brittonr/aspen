@@ -42,5 +42,5 @@
 - [x] [serial] r[molten.determinism.two_actor_replay_test] Add a local two-actor replay test proving identical artifacts, initial state, profile, and seed produce identical traces and final state hash.
 - [x] [serial] r[molten.determinism.random_clock_replay_test] Add tests proving logical clock and seeded random handlers replay deterministically.
 - [x] [serial] r[molten.determinism.divergence_tests] Add tests for first-divergence reporting on changed input, effect response, policy decision, and state hash.
-- [ ] [parallel] r[molten.determinism.no_ambient_tests] Add tests or lints that reject ambient nondeterminism in core/runtime deterministic paths.
-- [ ] [parallel] r[molten.determinism.property_tests] Add Hegel property tests for replay identity, scheduler total order, trace hash stability, and snapshot authority preservation.
+- [x] [parallel] r[molten.determinism.no_ambient_tests] Add tests or lints that reject ambient nondeterminism in core/runtime deterministic paths.
+- [x] [parallel] r[molten.determinism.property_tests] Add Hegel property tests for replay identity, scheduler total order, trace hash stability, and snapshot authority preservation.

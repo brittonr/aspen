@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-12 | self | While adding deterministic replay Hegel coverage, I submitted a Steel cargo-test wrapper with a missing closing parenthesis and imported private `runtime::predicates` items despite public re-exports. | Use the known-good process wrapper shape exactly, and prefer `crate::runtime::{...}` public re-exports from outside the runtime module. |
 | 2026-06-12 | self | I archived `release-replay-verify-export` without setting `CAIRN_ARCHIVE_DATE`, repeating the 1970 archive-path mistake and requiring a manual rename. | Always set `CAIRN_ARCHIVE_DATE=$(date +%F)` (or explicit current date) before `cairn archive --execute`; do not rely on Cairn's default date. |
 | 2026-06-12 | self | While draining replay MCP UX, I ran full `cargo test --workspace` in parallel with Octet under a 240s Steel timeout; tests passed but the wrapper timed out before returning status. | For full workspace tests after a cold rebuild, use the max Steel timeout or run alone first, then Octet in parallel only after caches are warm. |
 | 2026-06-12 | self | While validating replay receipt catalog work, I tried `(join! args " ")` in Steel and the wrapper failed before running checks. | Do not guess mutating/list helpers in validation wrappers; either print the command name only or use a known-good wrapper with explicit args. |
