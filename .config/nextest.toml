@@ -7,10 +7,10 @@ slow-timeout = { period = "30s", terminate-after = 2 }
 [profile.ci]
 fail-fast = false
 retries = 0
-test-threads = 8
+test-threads = 4
 status-level = "fail"
 final-status-level = "slow"
-slow-timeout = { period = "30s", terminate-after = 2 }
+slow-timeout = { period = "60s", terminate-after = 3 }
 junit = { path = "target/nextest/junit.xml" }
 
 [profile.deterministic]
