@@ -4,7 +4,7 @@
 - [x] [serial] r[molten.runtime_spine.vat_model] Define Molten vats, near references, far references, and the rule that only near references can be called synchronously.
 - [x] [serial] r[molten.runtime_spine.transactional_actormap] Define the transactional actormap model for object state, spawn/remove operations, pending actions, commit, and rollback.
 - [x] [parallel] r[molten.runtime_spine.object_capability_refs] Define object references as capability-bearing authority and specify how references cross Preserves envelope boundaries.
-- [ ] [parallel] r[molten.runtime_spine.no_ambient_object_authority] Ensure new objects start without ambient filesystem, network, clock, process, dataspace, or host-resource authority unless explicitly endowed.
+- [x] [parallel] r[molten.runtime_spine.no_ambient_object_authority] Ensure new objects start without ambient filesystem, network, clock, process, dataspace, or host-resource authority unless explicitly endowed.
 
 ## Phase 2: Far calls, promises, and reference control
 

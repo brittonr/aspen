@@ -4,6 +4,8 @@ use super::PredicateDecision;
 use super::RuntimeActormapTransactionOutcome;
 use super::RuntimeActormapTransactionState;
 use super::RuntimeNearFarRefState;
+use super::RuntimeObjectAuthorityKind;
+use super::RuntimeObjectAuthorityState;
 use super::RuntimePredicateReceipt;
 use super::RuntimePromisePipelineEntry;
 use super::RuntimePromisePipelineState;
@@ -14,11 +16,13 @@ use super::RuntimeRevocationCleanupState;
 use super::RuntimeSnapshotAuthorityState;
 use super::evaluate_actormap_transaction;
 use super::evaluate_near_far_refs;
+use super::evaluate_object_authority;
 use super::evaluate_promise_pipeline;
 use super::evaluate_promise_state_transition;
 use super::evaluate_revocation_cleanup;
 use super::evaluate_snapshot_authority;
 use crate::error::Result;
+use crate::preserves_rail::RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_FIXTURE_RUN_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_OBJECT_REF_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA;
@@ -139,6 +143,14 @@ pub struct VatRestoreFixture {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatPromiseFixture {
+    pub value: IOValue,
+    pub fixture_ref: String,
+    pub receipts: Vec<RuntimePredicateReceipt>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VatAmbientAuthorityFixture {
     pub value: IOValue,
     pub fixture_ref: String,
     pub receipts: Vec<RuntimePredicateReceipt>,
@@ -380,6 +392,64 @@ pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
     })
 }
 
+pub fn run_vat_ambient_authority_fixture() -> Result<VatAmbientAuthorityFixture> {
+    let spawned = VatObjectRef::new(LOCAL_VAT_ID, SPAWNED_OBJECT_ID, VatReferenceKind::Near, Vec::new());
+    let spawned_ref = spawned.object_ref()?;
+    let authority_kinds = [
+        RuntimeObjectAuthorityKind::Filesystem,
+        RuntimeObjectAuthorityKind::Network,
+        RuntimeObjectAuthorityKind::Clock,
+        RuntimeObjectAuthorityKind::Process,
+        RuntimeObjectAuthorityKind::Dataspace,
+        RuntimeObjectAuthorityKind::Store,
+        RuntimeObjectAuthorityKind::Blob,
+        RuntimeObjectAuthorityKind::Consensus,
+        RuntimeObjectAuthorityKind::Choreography,
+        RuntimeObjectAuthorityKind::HostResource,
+    ];
+    let mut authority_refs = Vec::with_capacity(authority_kinds.len());
+    let mut receipts = Vec::with_capacity(authority_kinds.len() + 1);
+    for authority_kind in authority_kinds {
+        let authority_ref = authority_descriptor_ref(authority_kind)?;
+        let denied = evaluate_object_authority(&RuntimeObjectAuthorityState {
+            object_ref: spawned_ref.clone(),
+            requested_authority_ref: authority_ref.clone(),
+            requested_authority_kind: authority_kind,
+            endowed_authority_refs: Vec::new(),
+            admitted_authority_refs: Vec::new(),
+        })?;
+        authority_refs.push(authority_ref);
+        receipts.push(denied.receipt);
+    }
+
+    let clock_ref = authority_descriptor_ref(RuntimeObjectAuthorityKind::Clock)?;
+    let clock_pass = evaluate_object_authority(&RuntimeObjectAuthorityState {
+        object_ref: spawned_ref,
+        requested_authority_ref: clock_ref.clone(),
+        requested_authority_kind: RuntimeObjectAuthorityKind::Clock,
+        endowed_authority_refs: vec![clock_ref.clone()],
+        admitted_authority_refs: vec![clock_ref],
+    })?;
+    receipts.push(clock_pass.receipt);
+
+    let diagnostics = fixture_diagnostics(&receipts);
+    let value = record("vat-ambient-authority-fixture-v1", vec![
+        string(RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA),
+        string(LOCAL_VAT_ID),
+        spawned.value(),
+        sequence(authority_refs.iter().map(string).collect()),
+        sequence(receipts.iter().map(|receipt| receipt.value.clone()).collect()),
+        sequence(diagnostics.iter().map(string).collect()),
+    ]);
+    let fixture_ref = canonical_hash(&value)?;
+    Ok(VatAmbientAuthorityFixture {
+        value,
+        fixture_ref,
+        receipts,
+        diagnostics,
+    })
+}
+
 pub fn run_vat_restore_fixture() -> Result<VatRestoreFixture> {
     let old_object = versioned_object_value("object:legacy", "schema:v1", "legacy-state");
     let old_object_ref = canonical_hash(&old_object)?;
@@ -432,6 +502,10 @@ struct VatRestoreReceiptInput<'a> {
     recipe_ref: Option<&'a str>,
     restored_object_ref: Option<&'a str>,
     diagnostics: Vec<String>,
+}
+
+fn authority_descriptor_ref(authority_kind: RuntimeObjectAuthorityKind) -> Result<String> {
+    canonical_hash(&record("vat-authority-descriptor-v1", vec![string(authority_kind.as_str())]))
 }
 
 fn versioned_object_value(object_id: &'static str, schema_version: &'static str, state: &'static str) -> IOValue {
@@ -499,6 +573,7 @@ fn fixture_diagnostics(receipts: &[RuntimePredicateReceipt]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::run_vat_ambient_authority_fixture;
     use super::run_vat_fixture;
     use super::run_vat_promise_fixture;
     use super::run_vat_restore_fixture;
@@ -567,6 +642,35 @@ mod tests {
         let rendered = to_text(&restore.value).expect("render restore fixture");
         assert!(rendered.contains("vat-object-upgrade-recipe-v1"));
         assert!(rendered.contains("missing-compatible-upgrade-recipe"));
+    }
+
+    #[test]
+    fn vat_ambient_authority_fixture_denies_unendowed_authority() {
+        let authority = run_vat_ambient_authority_fixture().expect("ambient authority fixture");
+        assert_eq!(authority.receipts.len(), 11);
+        assert!(authority.fixture_ref.starts_with("blake3:"));
+        assert!(
+            authority
+                .receipts
+                .iter()
+                .any(|receipt| receipt.predicate == "molten.trellis-runtime.object-authority.v1")
+        );
+        assert!(authority.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Pass));
+        assert!(authority.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny));
+        assert!(
+            authority
+                .receipts
+                .iter()
+                .flat_map(|receipt| receipt.diagnostics.iter())
+                .any(|diagnostic| diagnostic == "object-authority-not-endowed")
+        );
+        assert!(
+            authority
+                .receipts
+                .iter()
+                .flat_map(|receipt| receipt.diagnostics.iter())
+                .any(|diagnostic| diagnostic == "object-authority-not-policy-admitted")
+        );
     }
 
     #[test]

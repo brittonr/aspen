@@ -27,6 +27,7 @@ const REVOCATION_CLEANUP_PREDICATE: &str = "molten.trellis-runtime.revocation-cl
 const ACTORMAP_TRANSACTION_PREDICATE: &str = "molten.trellis-runtime.actormap-transaction.v1";
 const NEAR_FAR_REFS_PREDICATE: &str = "molten.trellis-runtime.near-far-refs.v1";
 const SNAPSHOT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.snapshot-authority.v1";
+const OBJECT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.object-authority.v1";
 const SERVICE_DEPENDENCIES_PREDICATE: &str = "molten.trellis-runtime.service-dependencies.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -431,6 +432,68 @@ impl RuntimeNearFarRefState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NearFarRefsResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeObjectAuthorityKind {
+    Filesystem,
+    Network,
+    Clock,
+    Process,
+    Dataspace,
+    Store,
+    Blob,
+    Consensus,
+    Choreography,
+    HostResource,
+}
+
+impl RuntimeObjectAuthorityKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Filesystem => "filesystem",
+            Self::Network => "network",
+            Self::Clock => "clock",
+            Self::Process => "process",
+            Self::Dataspace => "dataspace",
+            Self::Store => "store",
+            Self::Blob => "blob",
+            Self::Consensus => "consensus",
+            Self::Choreography => "choreography",
+            Self::HostResource => "host-resource",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeObjectAuthorityState {
+    pub object_ref: String,
+    pub requested_authority_ref: String,
+    pub requested_authority_kind: RuntimeObjectAuthorityKind,
+    pub endowed_authority_refs: Vec<String>,
+    pub admitted_authority_refs: Vec<String>,
+}
+
+impl RuntimeObjectAuthorityState {
+    pub fn authority_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-object-authority-state-v1", vec![
+            record("object-ref", vec![string(&self.object_ref)]),
+            record("requested-authority-ref", vec![string(&self.requested_authority_ref)]),
+            string(self.requested_authority_kind.as_str()),
+            ref_list_value("endowed-authority-refs", &self.endowed_authority_refs),
+            ref_list_value("admitted-authority-refs", &self.admitted_authority_refs),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ObjectAuthorityResult {
     pub is_allowed: bool,
     pub receipt: RuntimePredicateReceipt,
 }
@@ -852,6 +915,45 @@ pub fn evaluate_snapshot_authority(state: &RuntimeSnapshotAuthorityState) -> Res
     Ok(SnapshotAuthorityResult { is_allowed, receipt })
 }
 
+pub fn evaluate_object_authority(state: &RuntimeObjectAuthorityState) -> Result<ObjectAuthorityResult> {
+    let diagnostics = validate_object_authority(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let authority_ref = state.authority_ref()?;
+    let input_value = record("runtime-predicate-object-authority-input-v1", vec![
+        record("authority-ref", vec![string(&authority_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "object-authority-refs-canonical".to_string(),
+        "new-object-starts-without-ambient-authority".to_string(),
+        "requested-authority-explicitly-endowed".to_string(),
+        "requested-authority-policy-admitted".to_string(),
+    ];
+    let mut state_refs = Vec::with_capacity(3);
+    state_refs.push(authority_ref);
+    if validate_content_ref(&state.object_ref).is_ok() {
+        state_refs.push(state.object_ref.clone());
+    }
+    if validate_content_ref(&state.requested_authority_ref).is_ok() {
+        state_refs.push(state.requested_authority_ref.clone());
+    }
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: OBJECT_AUTHORITY_PREDICATE,
+        input_value,
+        decision,
+        state_refs,
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(ObjectAuthorityResult { is_allowed, receipt })
+}
+
 pub fn evaluate_service_dependencies(state: &RuntimeServiceDependenciesState) -> Result<ServiceDependenciesResult> {
     let diagnostics = validate_service_dependencies(state);
     let is_allowed = diagnostics.is_empty();
@@ -923,6 +1025,32 @@ pub fn evaluate_near_far_refs(state: &RuntimeNearFarRefState) -> Result<NearFarR
     })?;
 
     Ok(NearFarRefsResult { is_allowed, receipt })
+}
+
+fn validate_object_authority(state: &RuntimeObjectAuthorityState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(16);
+    if validate_content_ref(&state.object_ref).is_err() {
+        diagnostics.push("object-authority-object-ref-noncanonical".to_string());
+    }
+    if validate_content_ref(&state.requested_authority_ref).is_err() {
+        diagnostics.push("object-authority-requested-ref-noncanonical".to_string());
+    }
+    diagnostics.extend(validate_sorted_content_refs(&state.endowed_authority_refs, "object-authority", "endowed"));
+    diagnostics.extend(validate_sorted_content_refs(&state.admitted_authority_refs, "object-authority", "admitted"));
+
+    let requested_ref = state.requested_authority_ref.as_str();
+    let endowed_refs = string_set(&state.endowed_authority_refs);
+    let admitted_refs = string_set(&state.admitted_authority_refs);
+    if !endowed_refs.contains(requested_ref) {
+        diagnostics.push("object-authority-not-endowed".to_string());
+    }
+    if !admitted_refs.contains(requested_ref) {
+        diagnostics.push("object-authority-not-policy-admitted".to_string());
+    }
+    if !is_subset(&endowed_refs, &admitted_refs) {
+        diagnostics.push("object-authority-endowment-not-admitted".to_string());
+    }
+    diagnostics
 }
 
 fn validate_service_dependencies(state: &RuntimeServiceDependenciesState) -> Vec<String> {

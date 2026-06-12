@@ -443,6 +443,10 @@ enum VatCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    AmbientAuthorityFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
     Show {
         report: PathBuf,
     },
@@ -8971,6 +8975,12 @@ fn run_vat_command(command: VatCommand) -> Result<()> {
             let promise = molten::runtime::run_vat_promise_fixture()?;
             write_file(&out, &to_text(&promise.value)?)?;
             println!("vat promise fixture: {}", promise.fixture_ref);
+            Ok(())
+        }
+        VatCommand::AmbientAuthorityFixture { out } => {
+            let authority = molten::runtime::run_vat_ambient_authority_fixture()?;
+            write_file(&out, &to_text(&authority.value)?)?;
+            println!("vat ambient authority fixture: {}", authority.fixture_ref);
             Ok(())
         }
         VatCommand::Show { report } => {
