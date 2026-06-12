@@ -439,6 +439,10 @@ enum VatCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    PromiseFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
     Show {
         report: PathBuf,
     },
@@ -8961,6 +8965,12 @@ fn run_vat_command(command: VatCommand) -> Result<()> {
             let restore = molten::runtime::run_vat_restore_fixture()?;
             write_file(&out, &to_text(&restore.value)?)?;
             println!("vat restore fixture: {}", restore.fixture_ref);
+            Ok(())
+        }
+        VatCommand::PromiseFixture { out } => {
+            let promise = molten::runtime::run_vat_promise_fixture()?;
+            write_file(&out, &to_text(&promise.value)?)?;
+            println!("vat promise fixture: {}", promise.fixture_ref);
             Ok(())
         }
         VatCommand::Show { report } => {

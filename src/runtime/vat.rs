@@ -15,12 +15,14 @@ use super::RuntimeSnapshotAuthorityState;
 use super::evaluate_actormap_transaction;
 use super::evaluate_near_far_refs;
 use super::evaluate_promise_pipeline;
+use super::evaluate_promise_state_transition;
 use super::evaluate_revocation_cleanup;
 use super::evaluate_snapshot_authority;
 use crate::error::Result;
 use crate::preserves_rail::RUNTIME_VAT_FIXTURE_RUN_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_OBJECT_REF_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA;
+use crate::preserves_rail::RUNTIME_VAT_PROMISE_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_RESTORE_RECEIPT_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_SNAPSHOT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
@@ -132,6 +134,14 @@ pub struct VatRestoreFixture {
     pub value: IOValue,
     pub fixture_ref: String,
     pub receipts: Vec<IOValue>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VatPromiseFixture {
+    pub value: IOValue,
+    pub fixture_ref: String,
+    pub receipts: Vec<RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
 }
 
@@ -322,6 +332,54 @@ pub fn run_vat_snapshot_fixture() -> Result<VatSnapshotFixture> {
     })
 }
 
+pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
+    let result_ref = canonical_hash(&string("far-call-result"))?;
+    let cause_ref = canonical_hash(&string("target-turn-aborted"))?;
+    let pending = RuntimePromiseState::pending("promise:far-call");
+    let resolved = RuntimePromiseState::resolved("promise:far-call", result_ref);
+    let broken = RuntimePromiseState::broken("promise:failed-call", "target turn aborted", vec![cause_ref]);
+    let cancelled = RuntimePromiseState::cancelled("promise:cancelled-call", "caller revoked interest");
+    let timed_out = RuntimePromiseState::timed_out("promise:timeout-call", "logical timeout elapsed");
+    let changed_terminal = RuntimePromiseState::broken("promise:far-call", "late failure", Vec::new());
+
+    let resolve_receipt = evaluate_promise_state_transition(&pending, &resolved)?.receipt;
+    let broken_receipt =
+        evaluate_promise_state_transition(&RuntimePromiseState::pending("promise:failed-call"), &broken)?.receipt;
+    let cancel_receipt =
+        evaluate_promise_state_transition(&RuntimePromiseState::pending("promise:cancelled-call"), &cancelled)?.receipt;
+    let timeout_receipt =
+        evaluate_promise_state_transition(&RuntimePromiseState::pending("promise:timeout-call"), &timed_out)?.receipt;
+    let terminal_denial = evaluate_promise_state_transition(&resolved, &changed_terminal)?.receipt;
+    let pipeline_cleanup =
+        evaluate_promise_pipeline(&RuntimePromisePipelineState::new(broken, PIPELINE_MAX_QUEUE, vec![
+            RuntimePromisePipelineEntry::new(1, canonical_hash(&string("stale-target"))?, "after-break"),
+        ]))?
+        .receipt;
+
+    let receipts = vec![
+        resolve_receipt,
+        broken_receipt,
+        cancel_receipt,
+        timeout_receipt,
+        terminal_denial,
+        pipeline_cleanup,
+    ];
+    let diagnostics = fixture_diagnostics(&receipts);
+    let value = record("vat-promise-fixture-v1", vec![
+        string(RUNTIME_VAT_PROMISE_FIXTURE_SCHEMA),
+        string(LOCAL_VAT_ID),
+        sequence(receipts.iter().map(|receipt| receipt.value.clone()).collect()),
+        sequence(diagnostics.iter().map(string).collect()),
+    ]);
+    let fixture_ref = canonical_hash(&value)?;
+    Ok(VatPromiseFixture {
+        value,
+        fixture_ref,
+        receipts,
+        diagnostics,
+    })
+}
+
 pub fn run_vat_restore_fixture() -> Result<VatRestoreFixture> {
     let old_object = versioned_object_value("object:legacy", "schema:v1", "legacy-state");
     let old_object_ref = canonical_hash(&old_object)?;
@@ -442,6 +500,7 @@ fn fixture_diagnostics(receipts: &[RuntimePredicateReceipt]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::run_vat_fixture;
+    use super::run_vat_promise_fixture;
     use super::run_vat_restore_fixture;
     use super::run_vat_snapshot_fixture;
     use super::vat_fixture_summary;
@@ -508,5 +567,40 @@ mod tests {
         let rendered = to_text(&restore.value).expect("render restore fixture");
         assert!(rendered.contains("vat-object-upgrade-recipe-v1"));
         assert!(rendered.contains("missing-compatible-upgrade-recipe"));
+    }
+
+    #[test]
+    fn vat_promise_fixture_records_terminal_results_and_denials() {
+        let promise = run_vat_promise_fixture().expect("promise fixture");
+        assert_eq!(promise.receipts.len(), 6);
+        assert!(promise.fixture_ref.starts_with("blake3:"));
+        assert!(
+            promise
+                .receipts
+                .iter()
+                .any(|receipt| receipt.predicate == "molten.trellis-runtime.promise-state.v1")
+        );
+        assert!(
+            promise
+                .receipts
+                .iter()
+                .any(|receipt| receipt.predicate == "molten.trellis-runtime.promise-pipeline.v1")
+        );
+        assert!(promise.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Pass));
+        assert!(promise.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny));
+        assert!(
+            promise
+                .receipts
+                .iter()
+                .flat_map(|receipt| receipt.diagnostics.iter())
+                .any(|diagnostic| diagnostic == "terminal-promise-state-changed")
+        );
+        assert!(
+            promise
+                .receipts
+                .iter()
+                .flat_map(|receipt| receipt.diagnostics.iter())
+                .any(|diagnostic| diagnostic == "terminal-promise-pipeline-not-cleaned")
+        );
     }
 }
