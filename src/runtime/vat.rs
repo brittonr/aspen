@@ -13,6 +13,7 @@ use super::RuntimePromiseState;
 use super::RuntimeReferenceCallMode;
 use super::RuntimeReferenceKind;
 use super::RuntimeRevocationCleanupState;
+use super::RuntimeRightsAmplificationState;
 use super::RuntimeSnapshotAuthorityState;
 use super::evaluate_actormap_transaction;
 use super::evaluate_near_far_refs;
@@ -20,6 +21,7 @@ use super::evaluate_object_authority;
 use super::evaluate_promise_pipeline;
 use super::evaluate_promise_state_transition;
 use super::evaluate_revocation_cleanup;
+use super::evaluate_rights_amplification;
 use super::evaluate_snapshot_authority;
 use crate::error::Result;
 use crate::preserves_rail::RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA;
@@ -28,6 +30,7 @@ use crate::preserves_rail::RUNTIME_VAT_OBJECT_REF_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_PROMISE_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_RESTORE_RECEIPT_SCHEMA;
+use crate::preserves_rail::RUNTIME_VAT_RIGHTS_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_SNAPSHOT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -151,6 +154,14 @@ pub struct VatPromiseFixture {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatAmbientAuthorityFixture {
+    pub value: IOValue,
+    pub fixture_ref: String,
+    pub receipts: Vec<RuntimePredicateReceipt>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VatRightsFixture {
     pub value: IOValue,
     pub fixture_ref: String,
     pub receipts: Vec<RuntimePredicateReceipt>,
@@ -392,6 +403,64 @@ pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
     })
 }
 
+pub fn run_vat_rights_fixture() -> Result<VatRightsFixture> {
+    let root = VatObjectRef::new(LOCAL_VAT_ID, ROOT_OBJECT_ID, VatReferenceKind::Near, Vec::new());
+    let root_ref = root.object_ref()?;
+    let helper = VatObjectRef::new(LOCAL_VAT_ID, HELPER_OBJECT_ID, VatReferenceKind::Near, vec![root_ref.clone()]);
+    let helper_ref = helper.object_ref()?;
+    let brand_ref = canonical_hash(&record("vat-rights-brand-v1", vec![string("private-cooperator")]))?;
+    let wrong_brand_ref = canonical_hash(&record("vat-rights-brand-v1", vec![string("unrelated-cooperator")]))?;
+    let sealed_value = record("vat-sealed-value-v1", vec![
+        record("brand-ref", vec![string(&brand_ref)]),
+        record("sealed-authority-ref", vec![string(&root_ref)]),
+    ]);
+    let sealed_value_ref = canonical_hash(&sealed_value)?;
+
+    let unsealed = evaluate_rights_amplification(&RuntimeRightsAmplificationState {
+        holder_object_ref: helper_ref.clone(),
+        sealed_value_ref: sealed_value_ref.clone(),
+        sealer_brand_ref: brand_ref.clone(),
+        unsealer_brand_ref: brand_ref.clone(),
+        sealed_authority_refs: vec![root_ref.clone()],
+        recovered_authority_refs: vec![root_ref.clone()],
+    })?;
+    let wrong_unsealer = evaluate_rights_amplification(&RuntimeRightsAmplificationState {
+        holder_object_ref: helper_ref.clone(),
+        sealed_value_ref: sealed_value_ref.clone(),
+        sealer_brand_ref: brand_ref.clone(),
+        unsealer_brand_ref: wrong_brand_ref,
+        sealed_authority_refs: vec![root_ref.clone()],
+        recovered_authority_refs: vec![root_ref.clone()],
+    })?;
+    let over_recovery_ref = canonical_hash(&string("unsealed-extra-authority"))?;
+    let over_recovery = evaluate_rights_amplification(&RuntimeRightsAmplificationState {
+        holder_object_ref: helper_ref,
+        sealed_value_ref: sealed_value_ref.clone(),
+        sealer_brand_ref: brand_ref.clone(),
+        unsealer_brand_ref: brand_ref,
+        sealed_authority_refs: vec![root_ref.clone()],
+        recovered_authority_refs: sorted_refs(vec![root_ref, over_recovery_ref]),
+    })?;
+
+    let receipts = vec![unsealed.receipt, wrong_unsealer.receipt, over_recovery.receipt];
+    let diagnostics = fixture_diagnostics(&receipts);
+    let value = record("vat-rights-fixture-v1", vec![
+        string(RUNTIME_VAT_RIGHTS_FIXTURE_SCHEMA),
+        string(LOCAL_VAT_ID),
+        sealed_value,
+        sequence([root, helper].iter().map(VatObjectRef::value).collect()),
+        sequence(receipts.iter().map(|receipt| receipt.value.clone()).collect()),
+        sequence(diagnostics.iter().map(string).collect()),
+    ]);
+    let fixture_ref = canonical_hash(&value)?;
+    Ok(VatRightsFixture {
+        value,
+        fixture_ref,
+        receipts,
+        diagnostics,
+    })
+}
+
 pub fn run_vat_ambient_authority_fixture() -> Result<VatAmbientAuthorityFixture> {
     let spawned = VatObjectRef::new(LOCAL_VAT_ID, SPAWNED_OBJECT_ID, VatReferenceKind::Near, Vec::new());
     let spawned_ref = spawned.object_ref()?;
@@ -577,6 +646,7 @@ mod tests {
     use super::run_vat_fixture;
     use super::run_vat_promise_fixture;
     use super::run_vat_restore_fixture;
+    use super::run_vat_rights_fixture;
     use super::run_vat_snapshot_fixture;
     use super::vat_fixture_summary;
     use crate::preserves_rail::to_text;
@@ -642,6 +712,35 @@ mod tests {
         let rendered = to_text(&restore.value).expect("render restore fixture");
         assert!(rendered.contains("vat-object-upgrade-recipe-v1"));
         assert!(rendered.contains("missing-compatible-upgrade-recipe"));
+    }
+
+    #[test]
+    fn vat_rights_fixture_records_unseal_and_denials() {
+        let rights = run_vat_rights_fixture().expect("rights fixture");
+        assert_eq!(rights.receipts.len(), 3);
+        assert!(rights.fixture_ref.starts_with("blake3:"));
+        assert!(
+            rights
+                .receipts
+                .iter()
+                .any(|receipt| receipt.predicate == "molten.trellis-runtime.rights-amplification.v1")
+        );
+        assert!(rights.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Pass));
+        assert!(rights.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny));
+        assert!(
+            rights
+                .receipts
+                .iter()
+                .flat_map(|receipt| receipt.diagnostics.iter())
+                .any(|diagnostic| diagnostic == "rights-amplification-brand-mismatch")
+        );
+        assert!(
+            rights
+                .receipts
+                .iter()
+                .flat_map(|receipt| receipt.diagnostics.iter())
+                .any(|diagnostic| diagnostic == "rights-amplification-recovered-authority-not-sealed")
+        );
     }
 
     #[test]

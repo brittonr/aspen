@@ -447,6 +447,10 @@ enum VatCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    RightsFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
     Show {
         report: PathBuf,
     },
@@ -8981,6 +8985,12 @@ fn run_vat_command(command: VatCommand) -> Result<()> {
             let authority = molten::runtime::run_vat_ambient_authority_fixture()?;
             write_file(&out, &to_text(&authority.value)?)?;
             println!("vat ambient authority fixture: {}", authority.fixture_ref);
+            Ok(())
+        }
+        VatCommand::RightsFixture { out } => {
+            let rights = molten::runtime::run_vat_rights_fixture()?;
+            write_file(&out, &to_text(&rights.value)?)?;
+            println!("vat rights fixture: {}", rights.fixture_ref);
             Ok(())
         }
         VatCommand::Show { report } => {

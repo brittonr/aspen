@@ -62,6 +62,7 @@ pub const RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA: &str = "molten.runtime.vat-o
 pub const RUNTIME_VAT_RESTORE_RECEIPT_SCHEMA: &str = "molten.runtime.vat-restore-receipt.v1";
 pub const RUNTIME_VAT_PROMISE_FIXTURE_SCHEMA: &str = "molten.runtime.vat-promise-fixture.v1";
 pub const RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA: &str = "molten.runtime.vat-ambient-authority-fixture.v1";
+pub const RUNTIME_VAT_RIGHTS_FIXTURE_SCHEMA: &str = "molten.runtime.vat-rights-fixture.v1";
 pub const EFFECT_MANIFEST_SCHEMA: &str = "molten.effects.manifest.v1";
 pub const EFFECT_HANDLER_PROFILE_SCHEMA: &str = "molten.effects.handler-profile.v1";
 pub const EFFECT_HANDLER_BINDING_SCHEMA: &str = "molten.effects.handler-binding.v1";

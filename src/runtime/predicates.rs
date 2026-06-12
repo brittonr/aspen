@@ -28,6 +28,7 @@ const ACTORMAP_TRANSACTION_PREDICATE: &str = "molten.trellis-runtime.actormap-tr
 const NEAR_FAR_REFS_PREDICATE: &str = "molten.trellis-runtime.near-far-refs.v1";
 const SNAPSHOT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.snapshot-authority.v1";
 const OBJECT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.object-authority.v1";
+const RIGHTS_AMPLIFICATION_PREDICATE: &str = "molten.trellis-runtime.rights-amplification.v1";
 const SERVICE_DEPENDENCIES_PREDICATE: &str = "molten.trellis-runtime.service-dependencies.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -499,6 +500,39 @@ pub struct ObjectAuthorityResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeRightsAmplificationState {
+    pub holder_object_ref: String,
+    pub sealed_value_ref: String,
+    pub sealer_brand_ref: String,
+    pub unsealer_brand_ref: String,
+    pub sealed_authority_refs: Vec<String>,
+    pub recovered_authority_refs: Vec<String>,
+}
+
+impl RuntimeRightsAmplificationState {
+    pub fn amplification_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-rights-amplification-state-v1", vec![
+            record("holder-object-ref", vec![string(&self.holder_object_ref)]),
+            record("sealed-value-ref", vec![string(&self.sealed_value_ref)]),
+            record("sealer-brand-ref", vec![string(&self.sealer_brand_ref)]),
+            record("unsealer-brand-ref", vec![string(&self.unsealer_brand_ref)]),
+            ref_list_value("sealed-authority-refs", &self.sealed_authority_refs),
+            ref_list_value("recovered-authority-refs", &self.recovered_authority_refs),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RightsAmplificationResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeSnapshotAuthorityState {
     pub snapshot_ref: String,
     pub admitted_authority_refs: Vec<String>,
@@ -954,6 +988,48 @@ pub fn evaluate_object_authority(state: &RuntimeObjectAuthorityState) -> Result<
     Ok(ObjectAuthorityResult { is_allowed, receipt })
 }
 
+pub fn evaluate_rights_amplification(state: &RuntimeRightsAmplificationState) -> Result<RightsAmplificationResult> {
+    let diagnostics = validate_rights_amplification(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let amplification_ref = state.amplification_ref()?;
+    let input_value = record("runtime-predicate-rights-amplification-input-v1", vec![
+        record("amplification-ref", vec![string(&amplification_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "rights-amplification-refs-canonical".to_string(),
+        "matching-private-brand-required".to_string(),
+        "recovered-authority-subset-sealed".to_string(),
+        "no-ambient-identity-amplification".to_string(),
+    ];
+    let mut state_refs = Vec::with_capacity(4);
+    state_refs.push(amplification_ref);
+    if validate_content_ref(&state.holder_object_ref).is_ok() {
+        state_refs.push(state.holder_object_ref.clone());
+    }
+    if validate_content_ref(&state.sealed_value_ref).is_ok() {
+        state_refs.push(state.sealed_value_ref.clone());
+    }
+    if validate_content_ref(&state.sealer_brand_ref).is_ok() {
+        state_refs.push(state.sealer_brand_ref.clone());
+    }
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: RIGHTS_AMPLIFICATION_PREDICATE,
+        input_value,
+        decision,
+        state_refs,
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(RightsAmplificationResult { is_allowed, receipt })
+}
+
 pub fn evaluate_service_dependencies(state: &RuntimeServiceDependenciesState) -> Result<ServiceDependenciesResult> {
     let diagnostics = validate_service_dependencies(state);
     let is_allowed = diagnostics.is_empty();
@@ -1049,6 +1125,48 @@ fn validate_object_authority(state: &RuntimeObjectAuthorityState) -> Vec<String>
     }
     if !is_subset(&endowed_refs, &admitted_refs) {
         diagnostics.push("object-authority-endowment-not-admitted".to_string());
+    }
+    diagnostics
+}
+
+fn validate_rights_amplification(state: &RuntimeRightsAmplificationState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(16);
+    if validate_content_ref(&state.holder_object_ref).is_err() {
+        diagnostics.push("rights-amplification-holder-ref-noncanonical".to_string());
+    }
+    if validate_content_ref(&state.sealed_value_ref).is_err() {
+        diagnostics.push("rights-amplification-sealed-value-ref-noncanonical".to_string());
+    }
+    if validate_content_ref(&state.sealer_brand_ref).is_err() {
+        diagnostics.push("rights-amplification-sealer-brand-ref-noncanonical".to_string());
+    }
+    if validate_content_ref(&state.unsealer_brand_ref).is_err() {
+        diagnostics.push("rights-amplification-unsealer-brand-ref-noncanonical".to_string());
+    }
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.sealed_authority_refs,
+        "rights-amplification",
+        "sealed-authority",
+    ));
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.recovered_authority_refs,
+        "rights-amplification",
+        "recovered-authority",
+    ));
+
+    if state.sealed_authority_refs.is_empty() {
+        diagnostics.push("rights-amplification-empty-sealed-authority".to_string());
+    }
+    if state.recovered_authority_refs.is_empty() {
+        diagnostics.push("rights-amplification-empty-recovered-authority".to_string());
+    }
+    if state.sealer_brand_ref != state.unsealer_brand_ref {
+        diagnostics.push("rights-amplification-brand-mismatch".to_string());
+    }
+    let sealed_refs = string_set(&state.sealed_authority_refs);
+    let recovered_refs = string_set(&state.recovered_authority_refs);
+    if !is_subset(&recovered_refs, &sealed_refs) {
+        diagnostics.push("rights-amplification-recovered-authority-not-sealed".to_string());
     }
     diagnostics
 }

@@ -11,7 +11,7 @@
 - [x] [serial] r[molten.runtime_spine.promise_vows] Define promise/vow results for far-object calls, including success, failure, cancellation, timeout, and causal failure propagation.
 - [x] [serial] r[molten.runtime_spine.promise_pipelining] Define bounded promise pipelining for queued calls against unresolved future references.
 - [x] [serial] r[molten.runtime_spine.revocable_proxies] Define revocable and attenuated proxies with cleanup of dependent assertions, subscriptions, pending calls, and references.
-- [ ] [parallel] r[molten.runtime_spine.rights_amplification] Define sealer/unsealer or branded-token rights-amplification patterns for private cooperation between objects.
+- [x] [parallel] r[molten.runtime_spine.rights_amplification] Define sealer/unsealer or branded-token rights-amplification patterns for private cooperation between objects.
 - [ ] [parallel] r[molten.runtime_spine.distributed_ref_lifetimes] Define session-scoped far-reference descriptors, handoff/bootstrap, and distributed lifetime or garbage-tracking rules.
 
 ## Phase 3: Persistence, upgrade, debugging, and storage
