@@ -28,6 +28,7 @@ use crate::ledger;
 use crate::node_identity;
 use crate::node_runtime;
 use crate::octet_gate;
+use crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA;
 use crate::preserves_rail::OPERATOR_CHECKPOINT_SCHEMA;
 use crate::preserves_rail::OPERATOR_DOGFOOD_REPORT_SCHEMA;
 use crate::preserves_rail::OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA;
@@ -126,6 +127,7 @@ pub struct ReleaseGateInput<'a> {
     pub harness_gate_refs: &'a [String],
     pub catalog_query_refs: &'a [String],
     pub repro_verify_refs: &'a [String],
+    pub replay_index_refs: &'a [String],
     pub retention_gc_refs: &'a [String],
     pub validation_command_refs: &'a [String],
 }
@@ -140,6 +142,7 @@ pub struct ReleaseGateReceipt {
     pub harness_gate_refs: Vec<String>,
     pub catalog_query_refs: Vec<String>,
     pub repro_verify_refs: Vec<String>,
+    pub replay_index_refs: Vec<String>,
     pub retention_gc_refs: Vec<String>,
     pub validation_command_refs: Vec<String>,
     pub checks: Vec<(String, String)>,
@@ -158,6 +161,7 @@ pub struct NixDogfoodEvidence {
     pub output_path_ref: String,
     pub report_ref: String,
     pub release_gate_ref: String,
+    pub replay_index_ref: String,
     pub summary_ref: String,
     pub nextest_marker_ref: String,
     pub nextest_check_path: String,
@@ -180,6 +184,7 @@ pub struct NixDogfoodVerifyReceipt {
     pub output_path_ref: String,
     pub report_ref: String,
     pub release_gate_ref: String,
+    pub replay_index_ref: String,
     pub diagnostics: Vec<String>,
     pub checks: Vec<(String, String)>,
     pub value: IOValue,
@@ -197,6 +202,7 @@ pub struct ReleaseEvidenceBundle {
     pub output_path_ref: String,
     pub report_ref: String,
     pub release_gate_ref: String,
+    pub replay_index_ref: String,
     pub nix_evidence_ref: String,
     pub nix_verify_ref: String,
     pub summary_ref: String,
@@ -231,6 +237,7 @@ pub struct ReleaseEvidenceBundleVerifyReceipt {
     pub output_path_ref: String,
     pub report_ref: String,
     pub release_gate_ref: String,
+    pub replay_index_ref: String,
     pub nix_evidence_ref: String,
     pub nix_verify_ref: String,
     pub diagnostics: Vec<String>,
@@ -345,6 +352,8 @@ pub struct LocalNodeDogfoodRun {
     pub report_value: IOValue,
     pub release_gate_ref: Option<String>,
     pub release_gate_value: Option<IOValue>,
+    pub replay_index_ref: Option<String>,
+    pub replay_index_value: Option<IOValue>,
     pub ledger_import_receipt_refs: Vec<String>,
 }
 
@@ -725,6 +734,7 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IOValu
     require_non_empty_refs(input.harness_gate_refs, "dogfood release harness gate ref")?;
     require_non_empty_refs(input.catalog_query_refs, "dogfood release catalog query ref")?;
     require_non_empty_refs(input.repro_verify_refs, "dogfood release repro verify ref")?;
+    require_non_empty_refs(input.replay_index_refs, "dogfood release replay index ref")?;
     require_non_empty_refs(input.retention_gc_refs, "dogfood release retention GC ref")?;
     require_non_empty_refs(input.validation_command_refs, "dogfood release validation command ref")?;
     Ok(record("release-gate-receipt-v1", vec![
@@ -735,6 +745,7 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IOValu
         record("harness-gates", vec![refs_sequence(input.harness_gate_refs)]),
         record("catalog-queries", vec![refs_sequence(input.catalog_query_refs)]),
         record("repro-verifies", vec![refs_sequence(input.repro_verify_refs)]),
+        record("replay-indexes", vec![refs_sequence(input.replay_index_refs)]),
         record("retention-gc", vec![refs_sequence(input.retention_gc_refs)]),
         record("validation-commands", vec![refs_sequence(input.validation_command_refs)]),
         checks_value_from_pairs(&[
@@ -743,6 +754,8 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IOValu
             ("redaction-gate-bound", "pass"),
             ("startup-shutdown-bound", "pass"),
             ("catalog-mcp-bound", "pass"),
+            ("replay-evidence-index-bound", "pass"),
+            ("replay-index-is-evidence-only", "pass"),
             ("retention-gc-review-bound", "pass"),
             ("retention-gc-is-evidence-only", "pass"),
             ("no-text-oracle", "pass"),
@@ -752,11 +765,13 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IOValu
 
 pub fn parse_release_gate_receipt(value: &IOValue) -> Result<ReleaseGateReceipt> {
     let fields = value
-        .collect_simple_record("release-gate-receipt-v1", Some(10))
+        .collect_simple_record("release-gate-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-gate-receipt-v1 ...>"))?;
     require_schema(&fields[0], OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA, "operator release gate")?;
-    let checks = parse_checks(&fields[9])?;
+    let checks = parse_checks(&fields[10])?;
     require_check(&checks, "dogfood-report-pass", "operator release gate")?;
+    require_check(&checks, "replay-evidence-index-bound", "operator release gate")?;
+    require_check(&checks, "replay-index-is-evidence-only", "operator release gate")?;
     require_check(&checks, "no-text-oracle", "operator release gate")?;
     let node = value_to_iovalue(&fields[3]);
     let node_fields = simple_record(&node, "node", 2)?;
@@ -769,8 +784,9 @@ pub fn parse_release_gate_receipt(value: &IOValue) -> Result<ReleaseGateReceipt>
         harness_gate_refs: record_ref_sequence(&fields[4], "harness-gates")?,
         catalog_query_refs: record_ref_sequence(&fields[5], "catalog-queries")?,
         repro_verify_refs: record_ref_sequence(&fields[6], "repro-verifies")?,
-        retention_gc_refs: record_ref_sequence(&fields[7], "retention-gc")?,
-        validation_command_refs: record_ref_sequence(&fields[8], "validation-commands")?,
+        replay_index_refs: record_ref_sequence(&fields[7], "replay-indexes")?,
+        retention_gc_refs: record_ref_sequence(&fields[8], "retention-gc")?,
+        validation_command_refs: record_ref_sequence(&fields[9], "validation-commands")?,
         checks,
         value: value.clone(),
     })
@@ -783,6 +799,7 @@ pub fn nix_dogfood_release_evidence_value(input: &NixDogfoodEvidenceInput<'_>) -
         record("output-path", vec![string(observed.output_path.as_str()), string(&observed.output_path_ref)]),
         record("report", vec![string(&observed.report_ref)]),
         record("release-gate", vec![string(&observed.release_gate_ref)]),
+        record("replay-index", vec![string(&observed.replay_index_ref)]),
         record("summary", vec![string(&observed.summary_ref)]),
         record("nextest", vec![
             string(&observed.nextest_marker_ref),
@@ -792,6 +809,8 @@ pub fn nix_dogfood_release_evidence_value(input: &NixDogfoodEvidenceInput<'_>) -
         checks_value_from_pairs(&[
             ("dogfood-report-pass", "pass"),
             ("release-gate-ref-bound", "pass"),
+            ("replay-index-ref-bound", "pass"),
+            ("replay-index-is-evidence-only", "pass"),
             ("nix-output-path-bound", "pass"),
             ("nextest-dependency-bound", "pass"),
             ("release-evidence-only", "pass"),
@@ -802,14 +821,16 @@ pub fn nix_dogfood_release_evidence_value(input: &NixDogfoodEvidenceInput<'_>) -
 
 pub fn parse_nix_dogfood_evidence(value: &IOValue) -> Result<NixDogfoodEvidence> {
     let fields = value
-        .collect_simple_record("nix-dogfood-release-evidence-v1", Some(8))
+        .collect_simple_record("nix-dogfood-release-evidence-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <nix-dogfood-release-evidence-v1 ...>"))?;
     require_schema(&fields[0], OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA, "Nix dogfood evidence")?;
     let output_path = value_to_iovalue(&fields[1]);
     let output_fields = simple_record(&output_path, "output-path", 2)?;
-    let nextest = value_to_iovalue(&fields[5]);
+    let nextest = value_to_iovalue(&fields[6]);
     let nextest_fields = simple_record(&nextest, "nextest", 2)?;
-    let checks = parse_checks(&fields[7])?;
+    let checks = parse_checks(&fields[8])?;
+    require_check(&checks, "replay-index-ref-bound", "Nix dogfood evidence")?;
+    require_check(&checks, "replay-index-is-evidence-only", "Nix dogfood evidence")?;
     require_check(&checks, "release-evidence-only", "Nix dogfood evidence")?;
     require_check(&checks, "no-text-oracle", "Nix dogfood evidence")?;
     Ok(NixDogfoodEvidence {
@@ -818,10 +839,11 @@ pub fn parse_nix_dogfood_evidence(value: &IOValue) -> Result<NixDogfoodEvidence>
         output_path_ref: required_ref(&output_fields[1], "Nix dogfood output path ref")?,
         report_ref: record_ref(&fields[2], "report")?,
         release_gate_ref: record_ref(&fields[3], "release-gate")?,
-        summary_ref: record_ref(&fields[4], "summary")?,
+        replay_index_ref: record_ref(&fields[4], "replay-index")?,
+        summary_ref: record_ref(&fields[5], "summary")?,
         nextest_marker_ref: required_ref(&nextest_fields[0], "Nix dogfood nextest marker ref")?,
         nextest_check_path: required_string(&nextest_fields[1], "Nix dogfood nextest check path")?,
-        file_refs: record_file_refs(&fields[6], "files")?,
+        file_refs: record_file_refs(&fields[7], "files")?,
         checks,
         value: value.clone(),
     })
@@ -848,6 +870,7 @@ pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<
                 output_path_ref: fallback_output_path_ref,
                 report_ref: evidence.report_ref.clone(),
                 release_gate_ref: evidence.release_gate_ref.clone(),
+                replay_index_ref: evidence.replay_index_ref.clone(),
                 summary_ref: evidence.summary_ref.clone(),
                 nextest_marker_ref: evidence.nextest_marker_ref.clone(),
                 nextest_check_path: evidence.nextest_check_path.clone(),
@@ -859,6 +882,7 @@ pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<
         mismatch_diagnostic("output-path-ref", &evidence.output_path_ref, &observed.output_path_ref),
         mismatch_diagnostic("report-ref", &evidence.report_ref, &observed.report_ref),
         mismatch_diagnostic("release-gate-ref", &evidence.release_gate_ref, &observed.release_gate_ref),
+        mismatch_diagnostic("replay-index-ref", &evidence.replay_index_ref, &observed.replay_index_ref),
         mismatch_diagnostic("summary-ref", &evidence.summary_ref, &observed.summary_ref),
         mismatch_diagnostic("nextest-marker-ref", &evidence.nextest_marker_ref, &observed.nextest_marker_ref),
         mismatch_diagnostic("nextest-check-path", &evidence.nextest_check_path, &observed.nextest_check_path),
@@ -879,10 +903,13 @@ pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<
         record("output-path", vec![string(observed.output_path.as_str()), string(&observed.output_path_ref)]),
         record("report", vec![string(&observed.report_ref)]),
         record("release-gate", vec![string(&observed.release_gate_ref)]),
+        record("replay-index", vec![string(&observed.replay_index_ref)]),
         record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value_from_pairs(&[
             ("dogfood-report-pass", status(is_output_observed)),
             ("release-gate-ref-bound", status(evidence.release_gate_ref == observed.release_gate_ref)),
+            ("replay-index-ref-bound", status(evidence.replay_index_ref == observed.replay_index_ref)),
+            ("replay-index-is-evidence-only", "pass"),
             ("nix-output-path-bound", status(evidence.output_path_ref == observed.output_path_ref)),
             ("nextest-dependency-bound", status(evidence.nextest_marker_ref == observed.nextest_marker_ref)),
             ("release-evidence-only", "pass"),
@@ -894,12 +921,14 @@ pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<
 
 pub fn parse_nix_dogfood_verify_receipt(value: &IOValue) -> Result<NixDogfoodVerifyReceipt> {
     let fields = value
-        .collect_simple_record("nix-dogfood-release-verify-receipt-v1", Some(8))
+        .collect_simple_record("nix-dogfood-release-verify-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <nix-dogfood-release-verify-receipt-v1 ...>"))?;
     require_schema(&fields[0], OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA, "Nix dogfood verify receipt")?;
     let output_path = value_to_iovalue(&fields[3]);
     let output_fields = simple_record(&output_path, "output-path", 2)?;
-    let checks = parse_checks(&fields[7])?;
+    let checks = parse_checks(&fields[8])?;
+    require_check(&checks, "replay-index-ref-bound", "Nix dogfood verify receipt")?;
+    require_check(&checks, "replay-index-is-evidence-only", "Nix dogfood verify receipt")?;
     require_check(&checks, "release-evidence-only", "Nix dogfood verify receipt")?;
     require_check(&checks, "no-text-oracle", "Nix dogfood verify receipt")?;
     Ok(NixDogfoodVerifyReceipt {
@@ -909,7 +938,8 @@ pub fn parse_nix_dogfood_verify_receipt(value: &IOValue) -> Result<NixDogfoodVer
         output_path_ref: required_ref(&output_fields[1], "Nix dogfood verify output path ref")?,
         report_ref: record_ref(&fields[4], "report")?,
         release_gate_ref: record_ref(&fields[5], "release-gate")?,
-        diagnostics: record_string_sequence(&fields[6], "diagnostics")?,
+        replay_index_ref: record_ref(&fields[6], "replay-index")?,
+        diagnostics: record_string_sequence(&fields[7], "diagnostics")?,
         checks,
         value: value.clone(),
     })
@@ -922,6 +952,7 @@ pub fn release_evidence_bundle_value(input: &ReleaseEvidenceBundleInput<'_>) -> 
         record("output-path", vec![string(observed.output_path.as_str()), string(&observed.output_path_ref)]),
         record("members", vec![file_refs_sequence(&observed.member_refs)]),
         record("dogfood", vec![string(&observed.report_ref), string(&observed.release_gate_ref)]),
+        record("replay-index", vec![string(&observed.replay_index_ref)]),
         record("nix", vec![string(&observed.nix_evidence_ref), string(&observed.nix_verify_ref)]),
         record("nextest", vec![
             string(&observed.nextest_marker_ref),
@@ -930,6 +961,8 @@ pub fn release_evidence_bundle_value(input: &ReleaseEvidenceBundleInput<'_>) -> 
         checks_value_from_pairs(&[
             ("dogfood-report-pass", "pass"),
             ("release-gate-pass", "pass"),
+            ("replay-index-bound", "pass"),
+            ("replay-index-is-evidence-only", "pass"),
             ("nix-verify-pass", "pass"),
             ("bundle-members-bound", "pass"),
             ("nextest-dependency-bound", "pass"),
@@ -941,19 +974,21 @@ pub fn release_evidence_bundle_value(input: &ReleaseEvidenceBundleInput<'_>) -> 
 
 pub fn parse_release_evidence_bundle(value: &IOValue) -> Result<ReleaseEvidenceBundle> {
     let fields = value
-        .collect_simple_record("release-evidence-bundle-v1", Some(7))
+        .collect_simple_record("release-evidence-bundle-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-evidence-bundle-v1 ...>"))?;
     require_schema(&fields[0], OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA, "release evidence bundle")?;
     let output_path = value_to_iovalue(&fields[1]);
     let output_fields = simple_record(&output_path, "output-path", 2)?;
     let dogfood = value_to_iovalue(&fields[3]);
     let dogfood_fields = simple_record(&dogfood, "dogfood", 2)?;
-    let nix = value_to_iovalue(&fields[4]);
+    let nix = value_to_iovalue(&fields[5]);
     let nix_fields = simple_record(&nix, "nix", 2)?;
-    let nextest = value_to_iovalue(&fields[5]);
+    let nextest = value_to_iovalue(&fields[6]);
     let nextest_fields = simple_record(&nextest, "nextest", 2)?;
-    let checks = parse_checks(&fields[6])?;
+    let checks = parse_checks(&fields[7])?;
     require_check(&checks, "bundle-members-bound", "release evidence bundle")?;
+    require_check(&checks, "replay-index-bound", "release evidence bundle")?;
+    require_check(&checks, "replay-index-is-evidence-only", "release evidence bundle")?;
     require_check(&checks, "release-evidence-only", "release evidence bundle")?;
     require_check(&checks, "no-text-oracle", "release evidence bundle")?;
     Ok(ReleaseEvidenceBundle {
@@ -962,6 +997,7 @@ pub fn parse_release_evidence_bundle(value: &IOValue) -> Result<ReleaseEvidenceB
         output_path_ref: required_ref(&output_fields[1], "release evidence output path ref")?,
         report_ref: required_ref(&dogfood_fields[0], "release evidence report ref")?,
         release_gate_ref: required_ref(&dogfood_fields[1], "release evidence release gate ref")?,
+        replay_index_ref: record_ref(&fields[4], "replay-index")?,
         nix_evidence_ref: required_ref(&nix_fields[0], "release evidence Nix evidence ref")?,
         nix_verify_ref: required_ref(&nix_fields[1], "release evidence Nix verify ref")?,
         summary_ref: member_ref(&fields[2], "dogfood-summary.txt")?,
@@ -996,6 +1032,7 @@ pub fn verify_release_evidence_bundle(
                 output_path_ref: fallback_output_path_ref,
                 report_ref: bundle.report_ref.clone(),
                 release_gate_ref: bundle.release_gate_ref.clone(),
+                replay_index_ref: bundle.replay_index_ref.clone(),
                 nix_evidence_ref: bundle.nix_evidence_ref.clone(),
                 nix_verify_ref: bundle.nix_verify_ref.clone(),
                 summary_ref: bundle.summary_ref.clone(),
@@ -1028,11 +1065,14 @@ pub fn verify_release_evidence_bundle(
         record("bundle", vec![string(&bundle.bundle_ref)]),
         record("output-path", vec![string(observed.output_path.as_str()), string(&observed.output_path_ref)]),
         record("dogfood", vec![string(&observed.report_ref), string(&observed.release_gate_ref)]),
+        record("replay-index", vec![string(&observed.replay_index_ref)]),
         record("nix", vec![string(&observed.nix_evidence_ref), string(&observed.nix_verify_ref)]),
         record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value_from_pairs(&[
             ("dogfood-report-pass", status(is_output_observed)),
             ("release-gate-pass", status(is_output_observed)),
+            ("replay-index-bound", status(is_output_observed)),
+            ("replay-index-is-evidence-only", "pass"),
             ("nix-verify-pass", status(is_output_observed)),
             ("bundle-members-bound", status(diagnostics.is_empty())),
             ("signed-member-receipts", status(is_signed_member_receipts_ok)),
@@ -1046,7 +1086,7 @@ pub fn verify_release_evidence_bundle(
 
 pub fn parse_release_evidence_bundle_verify_receipt(value: &IOValue) -> Result<ReleaseEvidenceBundleVerifyReceipt> {
     let fields = value
-        .collect_simple_record("release-evidence-bundle-verify-receipt-v1", Some(8))
+        .collect_simple_record("release-evidence-bundle-verify-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-evidence-bundle-verify-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
@@ -1057,10 +1097,12 @@ pub fn parse_release_evidence_bundle_verify_receipt(value: &IOValue) -> Result<R
     let output_fields = simple_record(&output_path, "output-path", 2)?;
     let dogfood = value_to_iovalue(&fields[4]);
     let dogfood_fields = simple_record(&dogfood, "dogfood", 2)?;
-    let nix = value_to_iovalue(&fields[5]);
+    let nix = value_to_iovalue(&fields[6]);
     let nix_fields = simple_record(&nix, "nix", 2)?;
-    let checks = parse_checks(&fields[7])?;
+    let checks = parse_checks(&fields[8])?;
     require_check(&checks, "bundle-members-bound", "release evidence bundle verify receipt")?;
+    require_check(&checks, "replay-index-bound", "release evidence bundle verify receipt")?;
+    require_check(&checks, "replay-index-is-evidence-only", "release evidence bundle verify receipt")?;
     require_check(&checks, "signed-member-receipts", "release evidence bundle verify receipt")?;
     require_check(&checks, "signed-receipts-evidence-only", "release evidence bundle verify receipt")?;
     require_check(&checks, "release-evidence-only", "release evidence bundle verify receipt")?;
@@ -1072,9 +1114,10 @@ pub fn parse_release_evidence_bundle_verify_receipt(value: &IOValue) -> Result<R
         output_path_ref: required_ref(&output_fields[1], "release evidence verify output path ref")?,
         report_ref: required_ref(&dogfood_fields[0], "release evidence verify report ref")?,
         release_gate_ref: required_ref(&dogfood_fields[1], "release evidence verify release gate ref")?,
+        replay_index_ref: record_ref(&fields[5], "replay-index")?,
         nix_evidence_ref: required_ref(&nix_fields[0], "release evidence verify Nix evidence ref")?,
         nix_verify_ref: required_ref(&nix_fields[1], "release evidence verify Nix verify ref")?,
-        diagnostics: record_string_sequence(&fields[6], "diagnostics")?,
+        diagnostics: record_string_sequence(&fields[7], "diagnostics")?,
         checks,
         value: value.clone(),
     })
@@ -1605,6 +1648,7 @@ struct ObservedNixDogfoodOutput {
     output_path_ref: String,
     report_ref: String,
     release_gate_ref: String,
+    replay_index_ref: String,
     summary_ref: String,
     nextest_marker_ref: String,
     nextest_check_path: String,
@@ -1616,12 +1660,15 @@ fn observe_nix_dogfood_output(output_path: &Path) -> Result<ObservedNixDogfoodOu
     let output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
     let report_text = read_output_text(output_path, "dogfood-report.preserves")?;
     let release_gate_text = read_output_text(output_path, "release-gate.preserves")?;
+    let replay_index_text = read_output_text(output_path, "replay-evidence-index.preserves")?;
     let summary_text = read_output_text(output_path, "dogfood-summary.txt")?;
     let nextest_text = read_output_text(output_path, "after-nextest.txt")?;
     let report_value = parse_text(&report_text)?;
     let release_gate_value = parse_text(&release_gate_text)?;
+    let replay_index_value = parse_text(&replay_index_text)?;
     let report = parse_dogfood_report(&report_value)?;
     let release_gate = parse_release_gate_receipt(&release_gate_value)?;
+    let replay_index_ref = parse_release_replay_index(&replay_index_value)?;
     if report.decision != "pass" {
         return Err(MoltenError::invalid_harness(format!(
             "Nix dogfood evidence requires pass report {}; decision is {}",
@@ -1638,6 +1685,11 @@ fn observe_nix_dogfood_output(output_path: &Path) -> Result<ObservedNixDogfoodOu
         return Err(MoltenError::invalid_harness(format!(
             "Nix dogfood release gate report ref {} does not match report {}",
             release_gate.report_ref, report.report_ref
+        )));
+    }
+    if !release_gate.replay_index_refs.iter().any(|reference| reference == &replay_index_ref) {
+        return Err(MoltenError::invalid_harness(format!(
+            "Nix dogfood release gate does not bind replay index {replay_index_ref}"
         )));
     }
     let nextest_check_path = nextest_text.trim().to_string();
@@ -1658,6 +1710,11 @@ fn observe_nix_dogfood_output(output_path: &Path) -> Result<ObservedNixDogfoodOu
         "Nix dogfood file refs",
     )?;
     file_refs.push_limited_value(
+        ("replay-evidence-index.preserves".to_string(), replay_index_ref.clone()),
+        MAX_OPERATOR_REFS,
+        "Nix dogfood file refs",
+    )?;
+    file_refs.push_limited_value(
         ("dogfood-summary.txt".to_string(), summary_ref.clone()),
         MAX_OPERATOR_REFS,
         "Nix dogfood file refs",
@@ -1672,6 +1729,7 @@ fn observe_nix_dogfood_output(output_path: &Path) -> Result<ObservedNixDogfoodOu
         output_path_ref,
         report_ref: report.report_ref,
         release_gate_ref: release_gate.receipt_ref,
+        replay_index_ref,
         summary_ref,
         nextest_marker_ref,
         nextest_check_path,
@@ -1685,12 +1743,44 @@ struct ObservedReleaseBundleOutput {
     output_path_ref: String,
     report_ref: String,
     release_gate_ref: String,
+    replay_index_ref: String,
     nix_evidence_ref: String,
     nix_verify_ref: String,
     summary_ref: String,
     nextest_marker_ref: String,
     nextest_check_path: String,
     member_refs: Vec<(String, String)>,
+}
+
+fn parse_release_replay_index(value: &IOValue) -> Result<String> {
+    let fields = value
+        .collect_simple_record("deterministic-replay-index-v1", Some(15))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <deterministic-replay-index-v1 ...>"))?;
+    require_schema(&fields[0], DETERMINISTIC_REPLAY_INDEX_SCHEMA, "release replay index")?;
+    let decision = record_string(&fields[1], "decision")?;
+    if decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "release replay index decision is {decision}; expected pass"
+        )));
+    }
+    let checks = parse_replay_index_checks(&fields[14])?;
+    require_check(&checks, "evidence-only", "release replay index")?;
+    require_check(&checks, "no-authority-grant", "release replay index")?;
+    canonical_hash(value)
+}
+
+fn parse_replay_index_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+    let items = required_sequence(value, "release replay index checks")?;
+    ensure_count_at_most(items.len(), MAX_OPERATOR_REFS, "release replay index checks")?;
+    let mut checks = Vec::new();
+    for item in items.iter() {
+        let item = value_to_iovalue(item);
+        let fields = simple_record(&item, "check", 2)?;
+        let name = required_string(&fields[0], "release replay index check name")?;
+        let status = required_string(&fields[1], "release replay index check status")?;
+        checks.push_limited_value((name, status), MAX_OPERATOR_REFS, "release replay index checks")?;
+    }
+    Ok(checks)
 }
 
 fn observe_release_bundle_output(output_path: &Path) -> Result<ObservedReleaseBundleOutput> {
@@ -1716,6 +1806,7 @@ fn observe_release_bundle_output(output_path: &Path) -> Result<ObservedReleaseBu
         output_path_ref: observed_nix.output_path_ref,
         report_ref: observed_nix.report_ref,
         release_gate_ref: observed_nix.release_gate_ref,
+        replay_index_ref: observed_nix.replay_index_ref,
         nix_evidence_ref: nix_evidence.evidence_ref,
         nix_verify_ref: nix_verify.receipt_ref,
         summary_ref: observed_nix.summary_ref,
@@ -1734,6 +1825,7 @@ fn ensure_nix_release_artifacts_match(
         mismatch_diagnostic("Nix evidence output-path-ref", &evidence.output_path_ref, &observed.output_path_ref),
         mismatch_diagnostic("Nix evidence report-ref", &evidence.report_ref, &observed.report_ref),
         mismatch_diagnostic("Nix evidence release-gate-ref", &evidence.release_gate_ref, &observed.release_gate_ref),
+        mismatch_diagnostic("Nix evidence replay-index-ref", &evidence.replay_index_ref, &observed.replay_index_ref),
         mismatch_diagnostic("Nix evidence summary-ref", &evidence.summary_ref, &observed.summary_ref),
         mismatch_diagnostic(
             "Nix evidence nextest-marker-ref",
@@ -1749,6 +1841,7 @@ fn ensure_nix_release_artifacts_match(
         mismatch_diagnostic("Nix verify output-path-ref", &verify.output_path_ref, &observed.output_path_ref),
         mismatch_diagnostic("Nix verify report-ref", &verify.report_ref, &observed.report_ref),
         mismatch_diagnostic("Nix verify release-gate-ref", &verify.release_gate_ref, &observed.release_gate_ref),
+        mismatch_diagnostic("Nix verify replay-index-ref", &verify.replay_index_ref, &observed.replay_index_ref),
     ]
     .into_iter()
     .flatten()
@@ -1774,6 +1867,7 @@ fn release_bundle_mismatch_diagnostics(
         mismatch_diagnostic("output-path-ref", &bundle.output_path_ref, &observed.output_path_ref),
         mismatch_diagnostic("report-ref", &bundle.report_ref, &observed.report_ref),
         mismatch_diagnostic("release-gate-ref", &bundle.release_gate_ref, &observed.release_gate_ref),
+        mismatch_diagnostic("replay-index-ref", &bundle.replay_index_ref, &observed.replay_index_ref),
         mismatch_diagnostic("nix-evidence-ref", &bundle.nix_evidence_ref, &observed.nix_evidence_ref),
         mismatch_diagnostic("nix-verify-ref", &bundle.nix_verify_ref, &observed.nix_verify_ref),
         mismatch_diagnostic("summary-ref", &bundle.summary_ref, &observed.summary_ref),
@@ -1901,6 +1995,8 @@ pub fn release_export_member_names() -> &'static [&'static str] {
         "dogfood-report.signed.preserves",
         "release-gate.preserves",
         "release-gate.signed.preserves",
+        "replay-evidence-index.preserves",
+        "replay-evidence-index.signed.preserves",
         "dogfood-summary.txt",
         "after-nextest.txt",
         "nix-dogfood-evidence.preserves",
@@ -2065,6 +2161,7 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
     let mut harness_gate_refs = Vec::new();
     let mut catalog_query_refs = Vec::new();
     let mut repro_verify_refs = Vec::new();
+    let mut replay_index_refs = Vec::new();
 
     let identity_resolution = resolve_identity(input.state_root, &policy_refs)?;
     let identity = identity_resolution
@@ -2332,6 +2429,31 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
         state_root_ref: &state_root_ref,
     })?;
 
+    let replay_verify =
+        crate::deterministic_replay::verify_fixture_value(crate::deterministic_replay::ReplayFixtureVariant::Baseline)?;
+    let replay_index =
+        crate::deterministic_replay::index_replay_evidence(&[crate::deterministic_replay::ReplayIndexInput {
+            expected_ref: Some(replay_verify.receipt_ref.clone()),
+            value: replay_verify.value.clone(),
+        }])?;
+    replay_index_refs.push_limited_value(
+        replay_index.index_ref.clone(),
+        MAX_OPERATOR_REFS,
+        "dogfood replay index refs",
+    )?;
+    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
+        name: "index-replay-evidence",
+        request_ref: Some(&replay_verify.receipt_ref),
+        receipt_ref: Some(&replay_index.index_ref),
+        result_ref: Some(&replay_index.index_ref),
+        decision: &replay_index.decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&replay_verify.receipt_ref),
+        diagnostics: &[],
+        state_root_ref: &state_root_ref,
+    })?;
+
     let shutdown = node_runtime::node_shutdown_receipt_value(&node_runtime::ShutdownReceiptValueInput {
         decision: "pass",
         startup_receipt_ref: &startup_ref,
@@ -2399,6 +2521,7 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
             harness_gate_refs: &harness_gate_refs,
             catalog_query_refs: &catalog_query_refs,
             repro_verify_refs: &repro_verify_refs,
+            replay_index_refs: &replay_index_refs,
             retention_gc_refs: &retention_gc_release_refs,
             validation_command_refs: &validation_command_refs,
         })?)
@@ -2412,6 +2535,8 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
         checkpoint_values: &step_checkpoints.checkpoints,
         report_value: &report_value,
         release_gate_value: release_gate_value.as_ref(),
+        replay_verify_value: &replay_verify.value,
+        replay_index_value: &replay_index.value,
     })?;
     let release_gate_ref = release_gate_value.as_ref().map(canonical_hash).transpose()?;
     let StepCheckpointBuffers { steps, checkpoints } = step_checkpoints;
@@ -2425,6 +2550,8 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
         report_value,
         release_gate_ref,
         release_gate_value,
+        replay_index_ref: Some(replay_index.index_ref),
+        replay_index_value: Some(replay_index.value),
         ledger_import_receipt_refs: import_refs,
     })
 }
@@ -2653,6 +2780,8 @@ fn dirty_state_report(state_root_ref: &str, diagnostic: String) -> Result<LocalN
         report_value,
         release_gate_ref: None,
         release_gate_value: None,
+        replay_index_ref: None,
+        replay_index_value: None,
         ledger_import_receipt_refs: Vec::new(),
     })
 }
@@ -3281,6 +3410,8 @@ struct DogfoodEvidenceImportInput<'a> {
     checkpoint_values: &'a [IOValue],
     report_value: &'a IOValue,
     release_gate_value: Option<&'a IOValue>,
+    replay_verify_value: &'a IOValue,
+    replay_index_value: &'a IOValue,
 }
 
 fn import_dogfood_evidence(input: DogfoodEvidenceImportInput<'_>) -> Result<Vec<String>> {
@@ -3291,6 +3422,8 @@ fn import_dogfood_evidence(input: DogfoodEvidenceImportInput<'_>) -> Result<Vec<
         checkpoint_values,
         report_value,
         release_gate_value,
+        replay_verify_value,
+        replay_index_value,
     } = input;
     let mut imports = Vec::new();
     for value in step_values
@@ -3298,6 +3431,8 @@ fn import_dogfood_evidence(input: DogfoodEvidenceImportInput<'_>) -> Result<Vec<
         .chain(checkpoint_values.iter())
         .chain(std::iter::once(workflow_value))
         .chain(std::iter::once(report_value))
+        .chain(std::iter::once(replay_verify_value))
+        .chain(std::iter::once(replay_index_value))
         .chain(release_gate_value)
     {
         let import = ledger::import_artifact(ledger_root, value)?;
@@ -3674,7 +3809,14 @@ mod tests {
         assert!(workflow.steps.iter().any(|step| step.name == "audit-retention-gc"));
         assert!(workflow.steps.iter().any(|step| step.name == "export-retention-gc-bundle"));
         assert!(workflow.steps.iter().any(|step| step.name == "search-retention-gc-catalog"));
+        assert!(workflow.steps.iter().any(|step| step.name == "index-replay-evidence"));
+        assert_eq!(
+            crate::ledger::artifact_kind(run.replay_index_value.as_ref().expect("replay index")),
+            "deterministic-replay-index"
+        );
         let release_text = to_text(run.release_gate_value.as_ref().expect("release gate text")).expect("release text");
+        assert!(release_text.contains("replay-evidence-index-bound"));
+        assert!(release_text.contains("replay-index-is-evidence-only"));
         assert!(release_text.contains("retention-gc-review-bound"));
         assert!(release_text.contains("retention-gc-is-evidence-only"));
         assert!(operator_dogfood_summary(&run.report_value).expect("summary").contains("decision=pass"));
@@ -3698,6 +3840,11 @@ mod tests {
         )
         .expect("write release gate");
         fs::write(
+            output_root.join("replay-evidence-index.preserves"),
+            to_text(run.replay_index_value.as_ref().expect("replay index")).expect("replay index text"),
+        )
+        .expect("write replay index");
+        fs::write(
             output_root.join("dogfood-summary.txt"),
             format!(
                 "dogfood local-node decision=pass report={} release-gate={}\n",
@@ -3715,6 +3862,7 @@ mod tests {
         let parsed = parse_nix_dogfood_evidence(&evidence).expect("parse nix evidence");
         assert_eq!(crate::ledger::artifact_kind(&evidence), "nix-dogfood-release-evidence");
         assert_eq!(parsed.release_gate_ref, run.release_gate_ref.expect("release ref"));
+        assert_eq!(parsed.replay_index_ref, run.replay_index_ref.expect("replay index ref"));
         let receipt = verify_nix_dogfood_evidence(&NixDogfoodVerifyInput {
             output_path: &output_root,
             evidence_value: &evidence,
@@ -3722,6 +3870,25 @@ mod tests {
         .expect("verify nix evidence");
         assert_eq!(receipt.decision, "pass");
         assert_eq!(crate::ledger::artifact_kind(&receipt.value), "nix-dogfood-release-verify-receipt");
+        fs::write(output_root.join("replay-evidence-index.preserves"), "<tampered-replay-index>\n")
+            .expect("tamper replay index");
+        let tampered_replay_verify = verify_nix_dogfood_evidence(&NixDogfoodVerifyInput {
+            output_path: &output_root,
+            evidence_value: &evidence,
+        })
+        .expect("verify tampered replay index evidence");
+        assert_eq!(tampered_replay_verify.decision, "deny");
+        assert!(
+            tampered_replay_verify
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("replay index") || diagnostic.contains("observation failed"))
+        );
+        fs::write(
+            output_root.join("replay-evidence-index.preserves"),
+            to_text(run.replay_index_value.as_ref().expect("replay index")).expect("replay index text"),
+        )
+        .expect("restore replay index");
         fs::write(output_root.join("nix-dogfood-evidence.preserves"), to_text(&evidence).expect("evidence text"))
             .expect("write evidence");
         fs::write(output_root.join("nix-dogfood-verify.preserves"), to_text(&receipt.value).expect("verify text"))
@@ -3750,6 +3917,25 @@ mod tests {
         .expect("verify release bundle");
         assert_eq!(bundle_verify.decision, "pass");
         assert_eq!(crate::ledger::artifact_kind(&bundle_verify.value), "release-evidence-bundle-verify-receipt");
+        let catalog_registry = root.join("catalog-registry");
+        let release_ledger = root.join("release-ledger");
+        ledger::import_artifact(&release_ledger, run.release_gate_value.as_ref().expect("release gate"))
+            .expect("import release gate");
+        ledger::import_artifact(&release_ledger, &evidence).expect("import Nix evidence");
+        ledger::import_artifact(&release_ledger, &bundle_verify.value).expect("import bundle verify");
+        let replay_binding_request = catalog_mcp::mcp_request_value("search_replay_evidence", vec![
+            record("stage", vec![string("release-binding")]),
+            record("release-replay-index-ref", vec![string(&parsed.replay_index_ref)]),
+        ])
+        .expect("replay binding request");
+        let replay_binding = catalog_mcp::call(&catalog_registry, Some(&release_ledger), &replay_binding_request)
+            .expect("replay binding search");
+        assert_eq!(replay_binding.decision, "pass");
+        assert!(
+            to_text(&replay_binding.response_value)
+                .expect("replay binding response")
+                .contains("deterministic-replay:release-binding")
+        );
         let signed_members = vec![
             sign_receipt(&SignReceiptInput {
                 receipt: &run.report_value,
@@ -3769,6 +3955,15 @@ mod tests {
                 parents: &[],
             })
             .expect("sign release gate"),
+            sign_receipt(&SignReceiptInput {
+                receipt: run.replay_index_value.as_ref().expect("replay index"),
+                signer: "release-signer",
+                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+                trust_root: "release-root",
+                key: "release-key",
+                parents: &[],
+            })
+            .expect("sign replay index"),
             sign_receipt(&SignReceiptInput {
                 receipt: &evidence,
                 signer: "release-signer",
@@ -4068,6 +4263,7 @@ mod tests {
                 harness_gate_refs: &[dogfood_ref("harness-gate").expect("harness gate")],
                 catalog_query_refs: &[dogfood_ref("catalog").expect("catalog")],
                 repro_verify_refs: &[dogfood_ref("verify").expect("verify")],
+                replay_index_refs: &[dogfood_ref("replay-index").expect("replay index")],
                 retention_gc_refs: &[dogfood_ref("retention-gc").expect("retention gc")],
                 validation_command_refs: &[dogfood_ref("validation").expect("validation")],
             })

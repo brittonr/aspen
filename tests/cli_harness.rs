@@ -367,6 +367,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let state_root = dir.join("state");
     let report = dir.join("dogfood-report.preserves");
     let release_gate = dir.join("release-gate.preserves");
+    let replay_index = dir.join("replay-evidence-index.preserves");
     let run = molten_cmd()
         .args(["dogfood", "local-node", "--state-root"])
         .arg(&state_root)
@@ -374,6 +375,8 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .arg(&report)
         .args(["--release-gate-out"])
         .arg(&release_gate)
+        .args(["--replay-index-out"])
+        .arg(&replay_index)
         .output()?;
     assert_success(&run, "dogfood local-node");
     assert!(stdout(&run).contains("decision=pass"));
@@ -382,6 +385,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let parsed_report = molten::operator_dogfood::parse_dogfood_report(&report_value)?;
     assert_eq!(parsed_report.decision, "pass");
     let release_gate_ref = canonical_hash(&read_preserves(&release_gate)?)?;
+    assert!(fs::read_to_string(&replay_index)?.contains("deterministic-replay-index-v1"));
     let ledger = state_root.join("ledger");
 
     let list = molten_cmd().args(["receipts", "list", "--ledger"]).arg(&ledger).output()?;
@@ -476,6 +480,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
 
     let signed_report = dir.join("dogfood-report.signed.preserves");
     let signed_gate = dir.join("release-gate.signed.preserves");
+    let signed_replay_index = dir.join("replay-evidence-index.signed.preserves");
     let signed_nix_evidence = dir.join("nix-dogfood-evidence.signed.preserves");
     let signed_nix_verify = dir.join("nix-dogfood-verify.signed.preserves");
     let key_ledger = dir.join("signed-keyring");
@@ -544,6 +549,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     for (receipt_path, signed_path) in [
         (&report, &signed_report),
         (&release_gate, &signed_gate),
+        (&replay_index, &signed_replay_index),
         (&nix_evidence, &signed_nix_evidence),
         (&nix_verify, &signed_nix_verify),
     ] {
@@ -620,7 +626,13 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
             "--signed-signer",
             "release-signer",
         ]);
-    for signed_path in [&signed_report, &signed_gate, &signed_nix_evidence, &signed_nix_verify] {
+    for signed_path in [
+        &signed_report,
+        &signed_gate,
+        &signed_replay_index,
+        &signed_nix_evidence,
+        &signed_nix_verify,
+    ] {
         verify_signed_bundle.args(["--signed-member"]).arg(signed_path);
     }
     let signed_bundle_output = verify_signed_bundle.output()?;
@@ -651,7 +663,13 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .args(["--signed-key-ref"])
         .arg(&key_ref)
         .args(["--signed-signer", "release-signer"]);
-    for signed_path in [&signed_report, &signed_gate, &signed_nix_evidence, &signed_nix_verify] {
+    for signed_path in [
+        &signed_report,
+        &signed_gate,
+        &signed_replay_index,
+        &signed_nix_evidence,
+        &signed_nix_verify,
+    ] {
         verify_keyring_bundle.args(["--signed-member"]).arg(signed_path);
     }
     let keyring_bundle_output = verify_keyring_bundle.output()?;
@@ -911,7 +929,13 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
             "--signed-signer",
             "wrong-signer",
         ]);
-    for signed_path in [&signed_report, &signed_gate, &signed_nix_evidence, &signed_nix_verify] {
+    for signed_path in [
+        &signed_report,
+        &signed_gate,
+        &signed_replay_index,
+        &signed_nix_evidence,
+        &signed_nix_verify,
+    ] {
         verify_wrong_signer_bundle.args(["--signed-member"]).arg(signed_path);
     }
     let wrong_signer_bundle = verify_wrong_signer_bundle.output()?;

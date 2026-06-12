@@ -739,6 +739,44 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
     if let Some(fields) = value.collect_simple_record("deterministic-replay-index-v1", Some(15)) {
         return deterministic_replay_index_classifications(&fields);
     }
+    if let Ok(receipt) = crate::operator_dogfood::parse_release_gate_receipt(value) {
+        let mut classifications = vec![
+            "deterministic-replay:release-binding".to_string(),
+            format!("release-dogfood-decision:{}", receipt.decision),
+        ];
+        for reference in receipt.replay_index_refs {
+            classifications.push(format!("release-replay-index:{reference}"));
+        }
+        return Ok(classifications);
+    }
+    if let Ok(evidence) = crate::operator_dogfood::parse_nix_dogfood_evidence(value) {
+        return Ok(vec![
+            "deterministic-replay:release-binding".to_string(),
+            format!("release-dogfood-replay-index:{}", evidence.replay_index_ref),
+            format!("release-dogfood-release-gate:{}", evidence.release_gate_ref),
+        ]);
+    }
+    if let Ok(receipt) = crate::operator_dogfood::parse_nix_dogfood_verify_receipt(value) {
+        return Ok(vec![
+            "deterministic-replay:release-binding".to_string(),
+            format!("release-dogfood-decision:{}", receipt.decision),
+            format!("release-dogfood-replay-index:{}", receipt.replay_index_ref),
+        ]);
+    }
+    if let Ok(bundle) = crate::operator_dogfood::parse_release_evidence_bundle(value) {
+        return Ok(vec![
+            "deterministic-replay:release-binding".to_string(),
+            format!("release-dogfood-replay-index:{}", bundle.replay_index_ref),
+            format!("release-dogfood-release-gate:{}", bundle.release_gate_ref),
+        ]);
+    }
+    if let Ok(receipt) = crate::operator_dogfood::parse_release_evidence_bundle_verify_receipt(value) {
+        return Ok(vec![
+            "deterministic-replay:release-binding".to_string(),
+            format!("release-dogfood-decision:{}", receipt.decision),
+            format!("release-dogfood-replay-index:{}", receipt.replay_index_ref),
+        ]);
+    }
     if let Ok(profile) = crate::retention::parse_retention_class_profile(value) {
         return Ok(vec![
             "retention:class".to_string(),

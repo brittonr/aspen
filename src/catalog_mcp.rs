@@ -421,6 +421,12 @@ fn dispatch_read_only(
                 "actual-final-state-ref",
                 "replay-actual-final-state",
             )?;
+            push_optional_text_filter(
+                &mut filters,
+                &request.args,
+                "release-replay-index-ref",
+                "release-dogfood-replay-index",
+            )?;
             catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
                 root_refs: arg_strings(&request.args, "root")?,
                 include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
