@@ -27,14 +27,17 @@ use super::evaluate_rights_amplification;
 use super::evaluate_snapshot_authority;
 use crate::error::Result;
 use crate::preserves_rail::RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA;
+use crate::preserves_rail::RUNTIME_VAT_AUTHORITY_GRAPH_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_DISTRIBUTED_REF_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_FIXTURE_RUN_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_OBJECT_REF_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA;
+use crate::preserves_rail::RUNTIME_VAT_PORTABLE_STORAGE_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_PROMISE_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_RESTORE_RECEIPT_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_RIGHTS_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_SNAPSHOT_SCHEMA;
+use crate::preserves_rail::RUNTIME_VAT_TIME_TRAVEL_FIXTURE_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -176,6 +179,14 @@ pub struct VatDistributedRefFixture {
     pub value: IOValue,
     pub fixture_ref: String,
     pub receipts: Vec<RuntimePredicateReceipt>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VatDebugFixture {
+    pub value: IOValue,
+    pub fixture_ref: String,
+    pub receipts: Vec<IOValue>,
     pub diagnostics: Vec<String>,
 }
 
@@ -655,6 +666,188 @@ pub fn run_vat_restore_fixture() -> Result<VatRestoreFixture> {
     })
 }
 
+pub fn run_vat_time_travel_fixture() -> Result<VatDebugFixture> {
+    let root = VatObjectRef::new(LOCAL_VAT_ID, ROOT_OBJECT_ID, VatReferenceKind::Near, Vec::new());
+    let helper = VatObjectRef::new(LOCAL_VAT_ID, HELPER_OBJECT_ID, VatReferenceKind::Near, vec![root.object_ref()?]);
+    let root_ref = root.object_ref()?;
+    let helper_ref = helper.object_ref()?;
+    let turn_trace = record("vat-turn-trace-v1", vec![
+        string(LOCAL_VAT_ID),
+        string("turn:0001"),
+        sequence([root_ref.clone(), helper_ref.clone()].iter().map(string).collect()),
+        sequence(["message:deliver", "assertion:add", "turn:commit"].iter().map(string).collect()),
+    ]);
+    let turn_trace_ref = canonical_hash(&turn_trace)?;
+    let snapshot = record("vat-debug-snapshot-v1", vec![
+        string(LOCAL_VAT_ID),
+        string("turn:0001"),
+        record("trace-ref", vec![string(&turn_trace_ref)]),
+        sequence([root_ref.clone(), helper_ref.clone()].iter().map(string).collect()),
+    ]);
+    let snapshot_ref = canonical_hash(&snapshot)?;
+    let replay = record("vat-replay-hook-v1", vec![
+        record("snapshot-ref", vec![string(&snapshot_ref)]),
+        record("trace-ref", vec![string(&turn_trace_ref)]),
+        string("deterministic-replay"),
+    ]);
+    let replay_ref = canonical_hash(&replay)?;
+    let receipts = vec![
+        vat_debug_receipt_value(VatDebugReceiptInput {
+            kind: "vat-time-travel-debug-receipt-v1",
+            schema: RUNTIME_VAT_TIME_TRAVEL_FIXTURE_SCHEMA,
+            decision: "pass",
+            subject_ref: &snapshot_ref,
+            evidence_refs: sorted_refs(vec![turn_trace_ref.clone(), replay_ref]),
+            diagnostics: vec![
+                "reconstructs-prior-turn".to_string(),
+                "correlates-trace-snapshot-replay".to_string(),
+            ],
+        }),
+        vat_debug_receipt_value(VatDebugReceiptInput {
+            kind: "vat-time-travel-debug-receipt-v1",
+            schema: RUNTIME_VAT_TIME_TRAVEL_FIXTURE_SCHEMA,
+            decision: "deny",
+            subject_ref: &snapshot_ref,
+            evidence_refs: vec![turn_trace_ref],
+            diagnostics: vec![
+                "debug-authority-missing".to_string(),
+                "redacted-events-not-readable".to_string(),
+            ],
+        }),
+    ];
+    let diagnostics = debug_diagnostics(&receipts)?;
+    let value = record("vat-time-travel-fixture-v1", vec![
+        string(RUNTIME_VAT_TIME_TRAVEL_FIXTURE_SCHEMA),
+        turn_trace,
+        snapshot,
+        replay,
+        sequence([root, helper].iter().map(VatObjectRef::value).collect()),
+        sequence(receipts.clone()),
+        sequence(diagnostics.iter().map(string).collect()),
+    ]);
+    let fixture_ref = canonical_hash(&value)?;
+    Ok(VatDebugFixture {
+        value,
+        fixture_ref,
+        receipts,
+        diagnostics,
+    })
+}
+
+pub fn run_vat_authority_graph_fixture() -> Result<VatDebugFixture> {
+    let root = VatObjectRef::new(LOCAL_VAT_ID, ROOT_OBJECT_ID, VatReferenceKind::Near, Vec::new());
+    let helper = VatObjectRef::new(LOCAL_VAT_ID, HELPER_OBJECT_ID, VatReferenceKind::Near, vec![root.object_ref()?]);
+    let proxy = VatObjectRef::new(LOCAL_VAT_ID, PROXY_OBJECT_ID, VatReferenceKind::Proxy, vec![helper.object_ref()?]);
+    let root_ref = root.object_ref()?;
+    let helper_ref = helper.object_ref()?;
+    let proxy_ref = proxy.object_ref()?;
+    let graph = record("vat-authority-graph-v1", vec![
+        string(LOCAL_VAT_ID),
+        sequence([root_ref.clone(), helper_ref.clone(), proxy_ref.clone()].iter().map(string).collect()),
+        sequence(
+            [
+                authority_edge_value(&helper_ref, &root_ref, "holds"),
+                authority_edge_value(&proxy_ref, &helper_ref, "attenuates"),
+            ]
+            .to_vec(),
+        ),
+        sequence([proxy_ref.clone()].iter().map(string).collect()),
+    ]);
+    let graph_ref = canonical_hash(&graph)?;
+    let receipts = vec![
+        vat_debug_receipt_value(VatDebugReceiptInput {
+            kind: "vat-authority-graph-inspect-receipt-v1",
+            schema: RUNTIME_VAT_AUTHORITY_GRAPH_FIXTURE_SCHEMA,
+            decision: "pass",
+            subject_ref: &graph_ref,
+            evidence_refs: sorted_refs(vec![root_ref.clone(), helper_ref.clone(), proxy_ref.clone()]),
+            diagnostics: vec![
+                "authority-graph-readable".to_string(),
+                "proxy-chain-visible".to_string(),
+            ],
+        }),
+        vat_debug_receipt_value(VatDebugReceiptInput {
+            kind: "vat-authority-graph-inspect-receipt-v1",
+            schema: RUNTIME_VAT_AUTHORITY_GRAPH_FIXTURE_SCHEMA,
+            decision: "deny",
+            subject_ref: &graph_ref,
+            evidence_refs: vec![proxy_ref],
+            diagnostics: vec![
+                "inspection-authority-missing".to_string(),
+                "redacted-edge-not-disclosed".to_string(),
+            ],
+        }),
+    ];
+    let diagnostics = debug_diagnostics(&receipts)?;
+    let value = record("vat-authority-graph-fixture-v1", vec![
+        string(RUNTIME_VAT_AUTHORITY_GRAPH_FIXTURE_SCHEMA),
+        graph,
+        sequence([root, helper, proxy].iter().map(VatObjectRef::value).collect()),
+        sequence(receipts.clone()),
+        sequence(diagnostics.iter().map(string).collect()),
+    ]);
+    let fixture_ref = canonical_hash(&value)?;
+    Ok(VatDebugFixture {
+        value,
+        fixture_ref,
+        receipts,
+        diagnostics,
+    })
+}
+
+pub fn run_vat_portable_storage_fixture() -> Result<VatDebugFixture> {
+    let chunk_a = canonical_hash(&record("encrypted-chunk-v1", vec![string("ciphertext:a")]))?;
+    let chunk_b = canonical_hash(&record("encrypted-chunk-v1", vec![string("ciphertext:b")]))?;
+    let read_cap = canonical_hash(&record("storage-read-capability-v1", vec![string("snapshot-reader")]))?;
+    let write_cap = canonical_hash(&record("storage-write-capability-v1", vec![string("snapshot-writer")]))?;
+    let manifest = record("vat-portable-storage-manifest-v1", vec![
+        string("fixed_v1"),
+        string("encrypted-before-storage"),
+        string("provider-independent"),
+        sequence([chunk_a.clone(), chunk_b.clone()].iter().map(string).collect()),
+        sequence([read_cap.clone(), write_cap.clone()].iter().map(string).collect()),
+    ]);
+    let manifest_ref = canonical_hash(&manifest)?;
+    let receipts = vec![
+        vat_debug_receipt_value(VatDebugReceiptInput {
+            kind: "vat-portable-storage-receipt-v1",
+            schema: RUNTIME_VAT_PORTABLE_STORAGE_FIXTURE_SCHEMA,
+            decision: "pass",
+            subject_ref: &manifest_ref,
+            evidence_refs: sorted_refs(vec![chunk_a.clone(), chunk_b.clone(), read_cap.clone(), write_cap]),
+            diagnostics: vec![
+                "content-addressed-chunked-encrypted".to_string(),
+                "provider-independent".to_string(),
+            ],
+        }),
+        vat_debug_receipt_value(VatDebugReceiptInput {
+            kind: "vat-portable-storage-receipt-v1",
+            schema: RUNTIME_VAT_PORTABLE_STORAGE_FIXTURE_SCHEMA,
+            decision: "deny",
+            subject_ref: &manifest_ref,
+            evidence_refs: vec![chunk_a, read_cap],
+            diagnostics: vec![
+                "plaintext-storage-denied".to_string(),
+                "provider-bound-location-denied".to_string(),
+            ],
+        }),
+    ];
+    let diagnostics = debug_diagnostics(&receipts)?;
+    let value = record("vat-portable-storage-fixture-v1", vec![
+        string(RUNTIME_VAT_PORTABLE_STORAGE_FIXTURE_SCHEMA),
+        manifest,
+        sequence(receipts.clone()),
+        sequence(diagnostics.iter().map(string).collect()),
+    ]);
+    let fixture_ref = canonical_hash(&value)?;
+    Ok(VatDebugFixture {
+        value,
+        fixture_ref,
+        receipts,
+        diagnostics,
+    })
+}
+
 pub fn vat_fixture_summary(value: &IOValue) -> Result<String> {
     let artifact_ref = canonical_hash(value)?;
     Ok(format!("vat artifact: {artifact_ref}"))
@@ -666,6 +859,29 @@ struct VatRestoreReceiptInput<'a> {
     recipe_ref: Option<&'a str>,
     restored_object_ref: Option<&'a str>,
     diagnostics: Vec<String>,
+}
+
+struct VatDebugReceiptInput<'a> {
+    kind: &'static str,
+    schema: &'static str,
+    decision: &'a str,
+    subject_ref: &'a str,
+    evidence_refs: Vec<String>,
+    diagnostics: Vec<String>,
+}
+
+fn vat_debug_receipt_value(input: VatDebugReceiptInput<'_>) -> IOValue {
+    record(input.kind, vec![
+        string(input.schema),
+        string(input.decision),
+        record("subject-ref", vec![string(input.subject_ref)]),
+        sequence(input.evidence_refs.iter().map(string).collect()),
+        sequence(input.diagnostics.iter().map(string).collect()),
+    ])
+}
+
+fn authority_edge_value(from_ref: &str, to_ref: &str, edge_kind: &str) -> IOValue {
+    record("authority-edge-v1", vec![string(from_ref), string(to_ref), string(edge_kind)])
 }
 
 fn authority_descriptor_ref(authority_kind: RuntimeObjectAuthorityKind) -> Result<String> {
@@ -718,6 +934,16 @@ fn restore_diagnostics(receipts: &[IOValue]) -> Result<Vec<String>> {
     Ok(diagnostics)
 }
 
+fn debug_diagnostics(receipts: &[IOValue]) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::with_capacity(receipts.len() + 1);
+    for receipt in receipts {
+        let receipt_ref = canonical_hash(receipt)?;
+        diagnostics.push(format!("debug-receipt:{receipt_ref}"));
+    }
+    diagnostics.push("evidence-only-debugging-surface".to_string());
+    Ok(diagnostics)
+}
+
 fn sorted_refs(mut refs: Vec<String>) -> Vec<String> {
     refs.sort();
     refs.dedup();
@@ -737,16 +963,33 @@ fn fixture_diagnostics(receipts: &[RuntimePredicateReceipt]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    use hegel::TestCase;
+    use hegel::generators;
+
+    use super::PIPELINE_MAX_QUEUE;
+    use super::canonical_hash;
     use super::run_vat_ambient_authority_fixture;
+    use super::run_vat_authority_graph_fixture;
     use super::run_vat_distributed_ref_fixture;
     use super::run_vat_fixture;
+    use super::run_vat_portable_storage_fixture;
     use super::run_vat_promise_fixture;
     use super::run_vat_restore_fixture;
     use super::run_vat_rights_fixture;
     use super::run_vat_snapshot_fixture;
+    use super::run_vat_time_travel_fixture;
+    use super::sorted_refs;
+    use super::string;
     use super::vat_fixture_summary;
     use crate::preserves_rail::to_text;
     use crate::runtime::PredicateDecision;
+    use crate::runtime::RuntimeActormapTransactionOutcome;
+    use crate::runtime::RuntimeActormapTransactionState;
+    use crate::runtime::RuntimePromisePipelineEntry;
+    use crate::runtime::RuntimePromisePipelineState;
+    use crate::runtime::RuntimePromiseState;
+    use crate::runtime::evaluate_actormap_transaction;
+    use crate::runtime::evaluate_promise_pipeline;
 
     #[test]
     fn vat_fixture_binds_near_far_actormap_pipeline_and_revocation_predicates() {
@@ -930,5 +1173,128 @@ mod tests {
                 .flat_map(|receipt| receipt.diagnostics.iter())
                 .any(|diagnostic| diagnostic == "terminal-promise-pipeline-not-cleaned")
         );
+    }
+
+    #[test]
+    fn vat_time_travel_fixture_records_trace_snapshot_replay_hooks() {
+        let debug = run_vat_time_travel_fixture().expect("time travel fixture");
+        assert_eq!(debug.receipts.len(), 2);
+        assert!(debug.fixture_ref.starts_with("blake3:"));
+        assert!(debug.diagnostics.iter().any(|diagnostic| diagnostic == "evidence-only-debugging-surface"));
+        let rendered = to_text(&debug.value).expect("render time travel fixture");
+        assert!(rendered.contains("vat-time-travel-debug-receipt-v1"));
+        assert!(rendered.contains("debug-authority-missing"));
+        assert!(rendered.contains("deterministic-replay"));
+    }
+
+    #[test]
+    fn vat_authority_graph_fixture_records_inspection_denials() {
+        let graph = run_vat_authority_graph_fixture().expect("authority graph fixture");
+        assert_eq!(graph.receipts.len(), 2);
+        assert!(graph.fixture_ref.starts_with("blake3:"));
+        let rendered = to_text(&graph.value).expect("render authority graph fixture");
+        assert!(rendered.contains("vat-authority-graph-inspect-receipt-v1"));
+        assert!(rendered.contains("proxy-chain-visible"));
+        assert!(rendered.contains("inspection-authority-missing"));
+    }
+
+    #[test]
+    fn vat_portable_storage_fixture_records_encrypted_chunked_storage() {
+        let storage = run_vat_portable_storage_fixture().expect("portable storage fixture");
+        assert_eq!(storage.receipts.len(), 2);
+        assert!(storage.fixture_ref.starts_with("blake3:"));
+        let rendered = to_text(&storage.value).expect("render portable storage fixture");
+        assert!(rendered.contains("vat-portable-storage-receipt-v1"));
+        assert!(rendered.contains("content-addressed-chunked-encrypted"));
+        assert!(rendered.contains("plaintext-storage-denied"));
+    }
+
+    #[hegel::test(test_cases = 16)]
+    fn hegel_promise_pipeline_ordering_bounds_and_terminal_cleanup(tc: TestCase) {
+        let queue_len = tc.draw(generators::integers::<u64>().min_value(0).max_value(4));
+        let queue = (0..queue_len)
+            .map(|index| RuntimePromisePipelineEntry::new(index + 1, vat_test_ref(&format!("target-{index}")), "call"))
+            .collect::<Vec<_>>();
+        let pending = evaluate_promise_pipeline(&RuntimePromisePipelineState::new(
+            RuntimePromiseState::pending("promise:hegel"),
+            PIPELINE_MAX_QUEUE,
+            queue,
+        ))
+        .expect("pending pipeline");
+        assert_eq!(pending.receipt.decision, PredicateDecision::Pass);
+
+        let overflow_len = tc.draw(generators::integers::<u64>().min_value(5).max_value(8));
+        let overflow_queue = (0..overflow_len)
+            .map(|index| {
+                RuntimePromisePipelineEntry::new(index + 1, vat_test_ref(&format!("overflow-{index}")), "call")
+            })
+            .collect::<Vec<_>>();
+        let overflow = evaluate_promise_pipeline(&RuntimePromisePipelineState::new(
+            RuntimePromiseState::pending("promise:overflow"),
+            PIPELINE_MAX_QUEUE,
+            overflow_queue,
+        ))
+        .expect("overflow pipeline");
+        assert_eq!(overflow.receipt.decision, PredicateDecision::Deny);
+
+        let terminal = evaluate_promise_pipeline(&RuntimePromisePipelineState::new(
+            RuntimePromiseState::broken("promise:terminal", "causal failure", Vec::new()),
+            PIPELINE_MAX_QUEUE,
+            vec![RuntimePromisePipelineEntry::new(
+                1,
+                vat_test_ref("stale-terminal"),
+                "late-call",
+            )],
+        ))
+        .expect("terminal pipeline");
+        assert_eq!(terminal.receipt.decision, PredicateDecision::Deny);
+    }
+
+    #[hegel::test(test_cases = 16)]
+    fn hegel_actormap_commit_and_rollback_invariants(tc: TestCase) {
+        let spawn_count = tc.draw(generators::integers::<u64>().min_value(1).max_value(4));
+        let before = sorted_refs(vec![vat_test_ref("root"), vat_test_ref("helper")]);
+        let spawned =
+            sorted_refs((0..spawn_count).map(|index| vat_test_ref(&format!("spawned-{index}"))).collect::<Vec<_>>());
+        let after = sorted_refs(before.iter().cloned().chain(spawned.iter().cloned()).collect());
+        let committed = evaluate_actormap_transaction(&RuntimeActormapTransactionState {
+            outcome: RuntimeActormapTransactionOutcome::Committed,
+            before_object_refs: before.clone(),
+            after_object_refs: after.clone(),
+            spawned_object_refs: spawned.clone(),
+            removed_object_refs: Vec::new(),
+            visible_object_refs: after,
+            used_object_refs: vec![before[0].clone()],
+        })
+        .expect("commit");
+        assert_eq!(committed.receipt.decision, PredicateDecision::Pass);
+
+        let rollback = evaluate_actormap_transaction(&RuntimeActormapTransactionState {
+            outcome: RuntimeActormapTransactionOutcome::RolledBack,
+            before_object_refs: before.clone(),
+            after_object_refs: before.clone(),
+            spawned_object_refs: spawned.clone(),
+            removed_object_refs: Vec::new(),
+            visible_object_refs: before.clone(),
+            used_object_refs: Vec::new(),
+        })
+        .expect("rollback");
+        assert_eq!(rollback.receipt.decision, PredicateDecision::Pass);
+
+        let leaked_spawn = evaluate_actormap_transaction(&RuntimeActormapTransactionState {
+            outcome: RuntimeActormapTransactionOutcome::RolledBack,
+            before_object_refs: before.clone(),
+            after_object_refs: before,
+            spawned_object_refs: spawned.clone(),
+            removed_object_refs: Vec::new(),
+            visible_object_refs: spawned,
+            used_object_refs: Vec::new(),
+        })
+        .expect("leaked rollback");
+        assert_eq!(leaked_spawn.receipt.decision, PredicateDecision::Deny);
+    }
+
+    fn vat_test_ref(label: &str) -> String {
+        canonical_hash(&string(format!("vat-test:{label}"))).expect("vat test ref")
     }
 }

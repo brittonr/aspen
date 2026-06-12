@@ -455,6 +455,18 @@ enum VatCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    TimeTravelFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
+    AuthorityGraphFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
+    PortableStorageFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
     Show {
         report: PathBuf,
     },
@@ -9001,6 +9013,24 @@ fn run_vat_command(command: VatCommand) -> Result<()> {
             let distributed_ref = molten::runtime::run_vat_distributed_ref_fixture()?;
             write_file(&out, &to_text(&distributed_ref.value)?)?;
             println!("vat distributed ref fixture: {}", distributed_ref.fixture_ref);
+            Ok(())
+        }
+        VatCommand::TimeTravelFixture { out } => {
+            let debug = molten::runtime::run_vat_time_travel_fixture()?;
+            write_file(&out, &to_text(&debug.value)?)?;
+            println!("vat time travel fixture: {}", debug.fixture_ref);
+            Ok(())
+        }
+        VatCommand::AuthorityGraphFixture { out } => {
+            let graph = molten::runtime::run_vat_authority_graph_fixture()?;
+            write_file(&out, &to_text(&graph.value)?)?;
+            println!("vat authority graph fixture: {}", graph.fixture_ref);
+            Ok(())
+        }
+        VatCommand::PortableStorageFixture { out } => {
+            let storage = molten::runtime::run_vat_portable_storage_fixture()?;
+            write_file(&out, &to_text(&storage.value)?)?;
+            println!("vat portable storage fixture: {}", storage.fixture_ref);
             Ok(())
         }
         VatCommand::Show { report } => {
