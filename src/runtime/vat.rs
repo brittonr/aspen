@@ -780,69 +780,69 @@ pub fn run_vat_time_travel_fixture() -> Result<VatDebugFixture> {
 }
 
 pub fn run_vat_replay_fixture() -> Result<VatReplayFixture> {
-    let expected = vat_replay_run(
-        "seed:vat-replay:0001",
-        "deliver:root-to-helper",
-        "clock:logical:42",
-        "random-seq:0001",
-        "random:seeded:7",
-        "policy:allow",
-        "state:committed",
-    )?;
-    let actual = vat_replay_run(
-        "seed:vat-replay:0001",
-        "deliver:root-to-helper",
-        "clock:logical:42",
-        "random-seq:0001",
-        "random:seeded:7",
-        "policy:allow",
-        "state:committed",
-    )?;
-    let changed_input = vat_replay_run(
-        "seed:vat-replay:0001",
-        "deliver:root-to-helper:changed",
-        "clock:logical:42",
-        "random-seq:0001",
-        "random:seeded:7",
-        "policy:allow",
-        "state:committed",
-    )?;
-    let changed_effect = vat_replay_run(
-        "seed:vat-replay:0001",
-        "deliver:root-to-helper",
-        "clock:logical:43",
-        "random-seq:0001",
-        "random:seeded:7",
-        "policy:allow",
-        "state:committed",
-    )?;
-    let changed_sequence = vat_replay_run(
-        "seed:vat-replay:0001",
-        "deliver:root-to-helper",
-        "clock:logical:42",
-        "random-seq:changed",
-        "random:seeded:7",
-        "policy:allow",
-        "state:committed",
-    )?;
-    let changed_policy = vat_replay_run(
-        "seed:vat-replay:0001",
-        "deliver:root-to-helper",
-        "clock:logical:42",
-        "random-seq:0001",
-        "random:seeded:7",
-        "policy:deny",
-        "state:committed",
-    )?;
-    let changed_state = vat_replay_run(
-        "seed:vat-replay:0001",
-        "deliver:root-to-helper",
-        "clock:logical:42",
-        "random-seq:0001",
-        "random:seeded:7",
-        "policy:allow",
-        "state:diverged",
-    )?;
+    let expected = vat_replay_run(VatReplayRunInput {
+        seed: "seed:vat-replay:0001",
+        input_message: "deliver:root-to-helper",
+        effect_response: "clock:logical:42",
+        random_sequence: "random-seq:0001",
+        random_response: "random:seeded:7",
+        policy_decision: "policy:allow",
+        state_marker: "state:committed",
+    })?;
+    let actual = vat_replay_run(VatReplayRunInput {
+        seed: "seed:vat-replay:0001",
+        input_message: "deliver:root-to-helper",
+        effect_response: "clock:logical:42",
+        random_sequence: "random-seq:0001",
+        random_response: "random:seeded:7",
+        policy_decision: "policy:allow",
+        state_marker: "state:committed",
+    })?;
+    let changed_input = vat_replay_run(VatReplayRunInput {
+        seed: "seed:vat-replay:0001",
+        input_message: "deliver:root-to-helper:changed",
+        effect_response: "clock:logical:42",
+        random_sequence: "random-seq:0001",
+        random_response: "random:seeded:7",
+        policy_decision: "policy:allow",
+        state_marker: "state:committed",
+    })?;
+    let changed_effect = vat_replay_run(VatReplayRunInput {
+        seed: "seed:vat-replay:0001",
+        input_message: "deliver:root-to-helper",
+        effect_response: "clock:logical:43",
+        random_sequence: "random-seq:0001",
+        random_response: "random:seeded:7",
+        policy_decision: "policy:allow",
+        state_marker: "state:committed",
+    })?;
+    let changed_sequence = vat_replay_run(VatReplayRunInput {
+        seed: "seed:vat-replay:0001",
+        input_message: "deliver:root-to-helper",
+        effect_response: "clock:logical:42",
+        random_sequence: "random-seq:changed",
+        random_response: "random:seeded:7",
+        policy_decision: "policy:allow",
+        state_marker: "state:committed",
+    })?;
+    let changed_policy = vat_replay_run(VatReplayRunInput {
+        seed: "seed:vat-replay:0001",
+        input_message: "deliver:root-to-helper",
+        effect_response: "clock:logical:42",
+        random_sequence: "random-seq:0001",
+        random_response: "random:seeded:7",
+        policy_decision: "policy:deny",
+        state_marker: "state:committed",
+    })?;
+    let changed_state = vat_replay_run(VatReplayRunInput {
+        seed: "seed:vat-replay:0001",
+        input_message: "deliver:root-to-helper",
+        effect_response: "clock:logical:42",
+        random_sequence: "random-seq:0001",
+        random_response: "random:seeded:7",
+        policy_decision: "policy:allow",
+        state_marker: "state:diverged",
+    })?;
     let receipts = vec![
         vat_replay_receipt_value(&expected, &actual)?,
         vat_replay_receipt_value(&expected, &changed_input)?,
@@ -1026,7 +1026,7 @@ fn vat_debug_receipt_value(input: VatDebugReceiptInput<'_>) -> IOValue {
     ])
 }
 
-fn vat_replay_run(
+struct VatReplayRunInput {
     seed: &'static str,
     input_message: &'static str,
     effect_response: &'static str,
@@ -1034,18 +1034,20 @@ fn vat_replay_run(
     random_response: &'static str,
     policy_decision: &'static str,
     state_marker: &'static str,
-) -> Result<VatReplayRun> {
+}
+
+fn vat_replay_run(run_input: VatReplayRunInput) -> Result<VatReplayRun> {
     let root = VatObjectRef::new(LOCAL_VAT_ID, ROOT_OBJECT_ID, VatReferenceKind::Near, Vec::new());
     let helper = VatObjectRef::new(LOCAL_VAT_ID, HELPER_OBJECT_ID, VatReferenceKind::Near, vec![root.object_ref()?]);
     let root_ref = root.object_ref()?;
     let helper_ref = helper.object_ref()?;
     let initial_state = record("vat-replay-initial-state-v1", vec![
-        string(seed),
+        string(run_input.seed),
         sequence([root_ref.clone(), helper_ref.clone()].iter().map(string).collect()),
     ]);
     let initial_state_ref = canonical_hash(&initial_state)?;
     let input = record("vat-replay-input-v1", vec![
-        string(input_message),
+        string(run_input.input_message),
         record("sender-ref", vec![string(&root_ref)]),
         record("target-ref", vec![string(&helper_ref)]),
     ]);
@@ -1058,26 +1060,26 @@ fn vat_replay_run(
     ]);
     let effect_request_ref = canonical_hash(&effect_request)?;
     let effect_response = record("vat-replay-effect-response-v1", vec![
-        string(effect_response),
+        string(run_input.effect_response),
         record("request-ref", vec![string(&effect_request_ref)]),
         record("source", vec![string("recorded-effect-log")]),
     ]);
     let effect_response_ref = canonical_hash(&effect_response)?;
     let random_request = record("vat-replay-effect-request-v1", vec![
         string("random"),
-        string(random_sequence),
+        string(run_input.random_sequence),
         record("input-ref", vec![string(&input_ref)]),
         record("profile", vec![string("replay")]),
     ]);
     let random_request_ref = canonical_hash(&random_request)?;
     let random_response = record("vat-replay-effect-response-v1", vec![
-        string(random_response),
+        string(run_input.random_response),
         record("request-ref", vec![string(&random_request_ref)]),
         record("source", vec![string("seeded-prng")]),
     ]);
     let random_response_ref = canonical_hash(&random_response)?;
     let policy_decision = record("vat-replay-policy-decision-v1", vec![
-        string(policy_decision),
+        string(run_input.policy_decision),
         record("input-ref", vec![string(&input_ref)]),
         record("effect-response-ref", vec![string(&effect_response_ref)]),
         record("random-response-ref", vec![string(&random_response_ref)]),
@@ -1089,7 +1091,7 @@ fn vat_replay_run(
         record("effect-response-ref", vec![string(&effect_response_ref)]),
         record("random-response-ref", vec![string(&random_response_ref)]),
         record("policy-decision-ref", vec![string(&policy_decision_ref)]),
-        record("state-marker", vec![string(state_marker)]),
+        record("state-marker", vec![string(run_input.state_marker)]),
         sequence([root_ref.clone(), helper_ref.clone()].iter().map(string).collect()),
     ]);
     let final_state_hash = canonical_hash(&final_state)?;
@@ -1108,7 +1110,7 @@ fn vat_replay_run(
     let value = record("vat-deterministic-replay-run-v1", vec![
         string(RUNTIME_VAT_REPLAY_FIXTURE_SCHEMA),
         record("profile", vec![string("replay")]),
-        record("seed", vec![string(seed)]),
+        record("seed", vec![string(run_input.seed)]),
         record("initial-state-ref", vec![string(&initial_state_ref)]),
         record("input-ref", vec![string(&input_ref)]),
         record("effect-request-ref", vec![string(&effect_request_ref)]),
@@ -1134,22 +1136,30 @@ fn vat_replay_run(
     })
 }
 
+fn vat_replay_divergence(expected: &VatReplayRun, actual: &VatReplayRun) -> VatReplayDivergenceKind {
+    if expected.run_ref == actual.run_ref {
+        return VatReplayDivergenceKind::None;
+    }
+    if expected.effect_request_ref != actual.effect_request_ref {
+        return VatReplayDivergenceKind::Input;
+    }
+    if expected.effect_response_ref != actual.effect_response_ref {
+        return VatReplayDivergenceKind::EffectResponse;
+    }
+    if expected.random_request_ref != actual.random_request_ref {
+        return VatReplayDivergenceKind::EffectRequest;
+    }
+    if expected.random_response_ref != actual.random_response_ref {
+        return VatReplayDivergenceKind::EffectResponse;
+    }
+    if expected.policy_decision_ref != actual.policy_decision_ref {
+        return VatReplayDivergenceKind::PolicyDecision;
+    }
+    VatReplayDivergenceKind::StateHash
+}
+
 fn vat_replay_receipt_value(expected: &VatReplayRun, actual: &VatReplayRun) -> Result<IOValue> {
-    let divergence = if expected.run_ref == actual.run_ref {
-        VatReplayDivergenceKind::None
-    } else if expected.effect_request_ref != actual.effect_request_ref {
-        VatReplayDivergenceKind::Input
-    } else if expected.effect_response_ref != actual.effect_response_ref {
-        VatReplayDivergenceKind::EffectResponse
-    } else if expected.random_request_ref != actual.random_request_ref {
-        VatReplayDivergenceKind::EffectRequest
-    } else if expected.random_response_ref != actual.random_response_ref {
-        VatReplayDivergenceKind::EffectResponse
-    } else if expected.policy_decision_ref != actual.policy_decision_ref {
-        VatReplayDivergenceKind::PolicyDecision
-    } else {
-        VatReplayDivergenceKind::StateHash
-    };
+    let divergence = vat_replay_divergence(expected, actual);
     let decision = if divergence == VatReplayDivergenceKind::None {
         "pass"
     } else {

@@ -331,8 +331,8 @@ struct TurnJournalInput<'a> {
 
 fn turn_journal_value(input: TurnJournalInput<'_>) -> Result<IOValue> {
     let mut event_refs = Vec::with_capacity(input.events.len());
-    let mut effect_refs = Vec::new();
-    let mut receipt_refs = Vec::new();
+    let mut effect_refs = Vec::with_capacity(input.events.len());
+    let mut receipt_refs = Vec::with_capacity(input.events.len());
     for event in input.events {
         let event_ref = canonical_hash(event)?;
         match event_boundary(event) {
