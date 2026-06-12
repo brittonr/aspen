@@ -12,6 +12,7 @@ use molten::chunk_store;
 use molten::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 use molten::coordination;
 use molten::delivery_idempotency;
+use molten::deterministic_replay;
 use molten::error::MoltenError;
 use molten::error::Result;
 use molten::eval_cache;
@@ -142,6 +143,10 @@ enum TestCommand {
         #[arg(long)]
         failure_out: Option<PathBuf>,
     },
+    ReplayFixture {
+        #[command(subcommand)]
+        command: ReplayFixtureCommand,
+    },
     Report {
         #[command(subcommand)]
         command: ReportCommand,
@@ -257,6 +262,29 @@ enum TestCommand {
     Repro {
         #[command(subcommand)]
         command: ReproCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ReplayFixtureCommand {
+    Record {
+        #[arg(long)]
+        out: PathBuf,
+    },
+    Verify {
+        fixture: PathBuf,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
+    Tamper {
+        fixture: PathBuf,
+        #[arg(long, default_value = "effect-response")]
+        kind: String,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    Show {
+        report: PathBuf,
     },
 }
 
@@ -4041,6 +4069,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
             );
             Ok(())
         }
+        TestCommand::ReplayFixture { command } => run_replay_fixture_command(command),
         TestCommand::Report { command } => run_report_command(command),
         TestCommand::Gate { command } => run_gate_command(command),
         TestCommand::Receipt { command } => run_receipt_command(command),
@@ -4070,6 +4099,76 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Octet { command } => run_octet_command(command),
         TestCommand::Node { command } => run_node_command(command),
         TestCommand::Repro { command } => run_repro_command(command),
+    }
+}
+
+fn run_replay_fixture_command(command: ReplayFixtureCommand) -> Result<()> {
+    match command {
+        ReplayFixtureCommand::Record { out } => {
+            let fixture = deterministic_replay::record_fixture_value()?;
+            write_file(&out, &to_text(&fixture.value)?)?;
+            println!(
+                "deterministic replay fixture written to {} ref={} identity={} final_state={}",
+                out.display(),
+                fixture.record_ref,
+                fixture.identity_ref,
+                fixture.final_state_ref
+            );
+            Ok(())
+        }
+        ReplayFixtureCommand::Verify { fixture, receipt_out } => {
+            read_preserves_file(&fixture)?;
+            let receipt =
+                deterministic_replay::verify_fixture_value(deterministic_replay::ReplayFixtureVariant::Baseline)?;
+            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &receipt.value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "deterministic replay verify ref={} decision={} divergence={}",
+                    receipt.receipt_ref,
+                    receipt.decision,
+                    receipt.divergence.as_str()
+                ),
+            );
+            Ok(())
+        }
+        ReplayFixtureCommand::Tamper { fixture, kind, out } => {
+            read_preserves_file(&fixture)?;
+            let variant = replay_fixture_variant_from_kind(&kind)?;
+            let receipt = deterministic_replay::verify_fixture_value(variant)?;
+            write_file(&out, &to_text(&receipt.value)?)?;
+            println!(
+                "deterministic replay tamper receipt written to {} ref={} divergence={}",
+                out.display(),
+                receipt.receipt_ref,
+                receipt.divergence.as_str()
+            );
+            Ok(())
+        }
+        ReplayFixtureCommand::Show { report } => {
+            let value = read_preserves_file(&report)?;
+            let reference = canonical_hash(&value)?;
+            println!("deterministic replay artifact ref={reference}");
+            println!("{}", to_text(&value)?);
+            Ok(())
+        }
+    }
+}
+
+fn replay_fixture_variant_from_kind(kind: &str) -> Result<deterministic_replay::ReplayFixtureVariant> {
+    match kind {
+        "identity" => Ok(deterministic_replay::ReplayFixtureVariant::ChangedIdentity),
+        "scheduler" => Ok(deterministic_replay::ReplayFixtureVariant::ChangedScheduler),
+        "input" => Ok(deterministic_replay::ReplayFixtureVariant::ChangedInput),
+        "effect-request" => Ok(deterministic_replay::ReplayFixtureVariant::ChangedEffectRequest),
+        "effect-response" => Ok(deterministic_replay::ReplayFixtureVariant::ChangedEffectResponse),
+        "policy" | "policy-decision" => Ok(deterministic_replay::ReplayFixtureVariant::ChangedPolicyDecision),
+        "action" => Ok(deterministic_replay::ReplayFixtureVariant::ChangedAction),
+        "receipt" => Ok(deterministic_replay::ReplayFixtureVariant::ChangedReceipt),
+        "output" => Ok(deterministic_replay::ReplayFixtureVariant::ChangedOutput),
+        "state" | "state-hash" => Ok(deterministic_replay::ReplayFixtureVariant::ChangedStateHash),
+        "live-effect" | "missing-effect" => Ok(deterministic_replay::ReplayFixtureVariant::MissingRecordedEffect),
+        _ => Err(MoltenError::invalid_harness(format!("unsupported replay fixture tamper kind {kind}"))),
     }
 }
 

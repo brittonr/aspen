@@ -7,6 +7,7 @@ pub mod catalog_mcp;
 pub mod chunk_store;
 pub mod coordination;
 pub mod delivery_idempotency;
+pub mod deterministic_replay;
 pub mod effects;
 pub mod error;
 pub mod eval_cache;

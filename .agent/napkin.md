@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-12 | self | While adding deterministic replay fixture receipts, I mapped `Vec<IOValue>` through the string helper and hit `IOValue: AsRef<str>` compile errors. | When a helper already returns Preserves `IOValue` records, pass the vector directly to `sequence(...)`; only map `string` over string slices/Strings. |
 | 2026-06-12 | self | Nix nextest on current head failed under the sandbox with 60s per-test timeouts for dogfood/job CLI tests and Hegel property failures while 8 tests ran concurrently; local cargo/nextest passed. | Treat Nix nextest timeouts/property flakes as resource pressure first: reduce CI nextest concurrency and raise slow-timeout before debugging source semantics. |
 | 2026-06-12 | self | I initially treated archived operator dogfood work as the only next step, but validation exposed new Octet warnings in recent vat/harness code. | When user asks to “do it” after a completed roadmap item, run current validation and burn down newly exposed source-gate warnings before picking another roadmap slice. |
 | 2026-06-10 | self | I tried to print Steel process spawn errors with non-existent `Err->string`, causing the status wrapper itself to fail before running useful checks. | In this Steel environment, keep error branches simple or inspect known result helpers first; use `Ok->value` for happy-path process wrappers and avoid guessed error-format helpers. |
