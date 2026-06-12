@@ -2103,13 +2103,18 @@ pub fn validate_hostcall_evidence(
         if observation.step_ref != step_ref {
             return Err(MoltenError::invalid_harness(format!("hostcall step ref mismatch at observation {position}")));
         }
-        let Some(last_event) = observation.events.last() else {
+        let actor_output_index = if observation.events.last().is_some_and(is_turn_journal) {
+            observation.events.len() - 2
+        } else {
+            observation.events.len() - 1
+        };
+        let Some(actor_output_event) = observation.events.as_slice().get(actor_output_index) else {
             return Err(MoltenError::invalid_harness(format!("missing final actor output at observation {position}")));
         };
         if event_boundary(&observation.events[1]) != EventBoundary::ActorInput
             || event_boundary(&observation.events[2]) != EventBoundary::HostcallRequest
             || event_boundary(&observation.events[3]) != EventBoundary::HostcallDecision
-            || event_boundary(last_event) != EventBoundary::ActorOutput
+            || event_boundary(actor_output_event) != EventBoundary::ActorOutput
         {
             return Err(MoltenError::invalid_harness(format!(
                 "executor hostcall boundary order mismatch at observation {position}"
@@ -2137,7 +2142,7 @@ pub fn validate_hostcall_evidence(
         let expected_decision =
             hostcall_decision_value(hostcall_context, &observation.events[0], authority, &admission.decision)?;
         require_hostcall_event(position, "hostcall-decision", &observation.events[3], &expected_decision)?;
-        let runtime_events = &observation.events[4..observation.events.len() - 1];
+        let runtime_events = &observation.events[4..actor_output_index];
         validate_steel_execution_evidence(suite, step, position, &admission.decision, runtime_events)?;
         validate_wasm_execution_evidence(&WasmExecutionEvidenceInput {
             suite,
@@ -2148,10 +2153,7 @@ pub fn validate_hostcall_evidence(
             runtime_events,
         })?;
         let expected_output = actor_output_value(step, hostcall_context, &admission.decision, runtime_events)?;
-        let Some(last_event) = observation.events.last() else {
-            return Err(MoltenError::invalid_harness(format!("missing final actor output at observation {position}")));
-        };
-        require_hostcall_event(position, "actor-output", last_event, &expected_output)?;
+        require_hostcall_event(position, "actor-output", actor_output_event, &expected_output)?;
     }
     Ok(())
 }
@@ -4252,6 +4254,7 @@ fn validate_denied_observation_events(position: usize, events: &[IOValue]) -> Re
             EventBoundary::Trace if is_turn_rolled_back(event) => {
                 has_rollback_event = true;
             }
+            EventBoundary::Trace if is_turn_journal(event) => {}
             EventBoundary::Trace => {
                 return Err(MoltenError::invalid_harness(format!(
                     "denied turn committed action or non-rollback trace at observation {position}"
@@ -4269,6 +4272,10 @@ fn validate_denied_observation_events(position: usize, events: &[IOValue]) -> Re
 
 fn is_turn_rolled_back(value: &IOValue) -> bool {
     value.collect_simple_record("turn-rolled-back", Some(2)).is_some()
+}
+
+fn is_turn_journal(value: &IOValue) -> bool {
+    value.collect_simple_record("turn-journal-v1", None).is_some()
 }
 
 fn parse_admission_request(value: &Value<IOValue>) -> Result<AdmissionRequest> {
