@@ -72,6 +72,7 @@
 | 2026-06-11 | self | Cairn sync for `trellis-protocol-session-runtime` created a new accepted `choreography` spec wrapper with only header/purpose/requirements and omitted the change delta body. | After every Cairn sync, grep/read accepted specs for the exact `r[...]` IDs; if missing, manually merge the delta requirements before archive. |
 | 2026-06-11 | self | `iroh-sam-dataspace` archive was blocked because completed tasks referenced fine-grained IDs that were only task labels, not requirement IDs in the change spec. | Before sync/archive, run tasks gate and align task markers to actual requirement IDs present in the delta or accepted spec. |
 | 2026-06-11 | self | I synced `synit-sam-runtime` after tasks gate passed but before reading tasks; archive correctly blocked because all 15 tasks were still unchecked. | For archival cleanup, read tasks first and do not sync active incomplete changes even if tasks gate only validates references; archive-ready requires zero todos. |
+| 2026-06-11 | self | Cairn sync for `executor-hostcall-boundary` reported unblocked but had identical before/after hashes and did not merge missing accepted requirements. | After sync, verify accepted `r[...]` IDs; if absent despite a no-op sync receipt, manually merge the delta before archive. |
 
 ## User Preferences
 - Prefer explicit Nickel and Steel contract boundaries where applicable: Nickel for static declarative policy/config/schema gates, Steel only for reviewed dynamic predicates/trusted callables, both enforced through Basalt before side effects.
