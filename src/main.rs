@@ -242,6 +242,10 @@ enum TestCommand {
         #[command(subcommand)]
         command: ServiceCommand,
     },
+    Vat {
+        #[command(subcommand)]
+        command: VatCommand,
+    },
     Octet {
         #[command(subcommand)]
         command: OctetCommand,
@@ -417,6 +421,25 @@ enum ServiceCommand {
         report: PathBuf,
     },
     ReplaySupervision {
+        report: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum VatCommand {
+    RunFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
+    SnapshotFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
+    RestoreFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
+    Show {
         report: PathBuf,
     },
 }
@@ -4011,6 +4034,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Coordination { command } => run_coordination_command(command),
         TestCommand::Secrets { command } => run_secrets_command(command),
         TestCommand::Service { command } => run_service_command(command),
+        TestCommand::Vat { command } => run_vat_command(command),
         TestCommand::Octet { command } => run_octet_command(command),
         TestCommand::Node { command } => run_node_command(command),
         TestCommand::Repro { command } => run_repro_command(command),
@@ -8914,6 +8938,34 @@ fn run_plugin_command(command: PluginCommand) -> Result<()> {
         PluginCommand::Show { artifact } => {
             let value = read_preserves_file(&artifact)?;
             println!("{}", plugin_host::plugin_summary(&value)?);
+            Ok(())
+        }
+    }
+}
+
+fn run_vat_command(command: VatCommand) -> Result<()> {
+    match command {
+        VatCommand::RunFixture { out } => {
+            let run = molten::runtime::run_vat_fixture()?;
+            write_file(&out, &to_text(&run.value)?)?;
+            println!("vat fixture run: {}", run.run_ref);
+            Ok(())
+        }
+        VatCommand::SnapshotFixture { out } => {
+            let snapshot = molten::runtime::run_vat_snapshot_fixture()?;
+            write_file(&out, &to_text(&snapshot.value)?)?;
+            println!("vat snapshot fixture: {}", snapshot.fixture_ref);
+            Ok(())
+        }
+        VatCommand::RestoreFixture { out } => {
+            let restore = molten::runtime::run_vat_restore_fixture()?;
+            write_file(&out, &to_text(&restore.value)?)?;
+            println!("vat restore fixture: {}", restore.fixture_ref);
+            Ok(())
+        }
+        VatCommand::Show { report } => {
+            let value = read_preserves_file(&report)?;
+            println!("{}", molten::runtime::vat_fixture_summary(&value)?);
             Ok(())
         }
     }
