@@ -32,10 +32,10 @@
 
 - [x] [serial] r[molten.determinism.transcript_integration] Require executable transcripts to pin deterministic identity inputs and compare canonical trace/receipt expectations.
 - [x] [serial] r[molten.determinism.eval_cache_integration] Include handler profile, seed/config, initial state hash, policy refs, and dependency closure in evaluation-cache keys.
-- [ ] [parallel] r[molten.determinism.remote_sync_integration] Record and replay remote artifact sync discovery, fetch, verification, and admission effects.
-- [ ] [parallel] r[molten.determinism.storage_integration] Replay typed storage reads/writes through fixture snapshots or recorded storage effect responses.
-- [ ] [parallel] r[molten.determinism.job_dag_integration] Use deterministic local/profiling/chaos profiles and record/replay logs for distributed job DAG testing and incidents.
-- [ ] [parallel] r[molten.determinism.upgrade_gate] Allow upgrade sessions to require deterministic transcript or playback success before cutover.
+- [x] [parallel] r[molten.determinism.remote_sync_integration] Record and replay remote artifact sync discovery, fetch, verification, and admission effects.
+- [x] [parallel] r[molten.determinism.storage_integration] Replay typed storage reads/writes through fixture snapshots or recorded storage effect responses.
+- [x] [parallel] r[molten.determinism.job_dag_integration] Use deterministic local/profiling/chaos profiles and record/replay logs for distributed job DAG testing and incidents.
+- [x] [parallel] r[molten.determinism.upgrade_gate] Allow upgrade sessions to require deterministic transcript or playback success before cutover.
 
 ## Phase 6: Tests
 

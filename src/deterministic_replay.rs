@@ -9,6 +9,7 @@ use crate::preserves_rail::DETERMINISTIC_CHAOS_SCHEDULE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_EFFECT_LOG_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIXTURE_RECORD_SCHEMA;
+use crate::preserves_rail::DETERMINISTIC_INTEGRATION_GATE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
@@ -170,6 +171,23 @@ pub struct TracePrivacyInput {
 
 #[derive(Clone, Debug)]
 pub struct TracePrivacyReceipt {
+    pub value: IOValue,
+    pub receipt_ref: String,
+    pub decision: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct DeterministicIntegrationInput {
+    pub integration_kind: String,
+    pub handler_profile_ref: String,
+    pub effect_log_ref: String,
+    pub snapshot_ref: String,
+    pub gate_ref: String,
+    pub admitted_live_effects: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct DeterministicIntegrationReceipt {
     pub value: IOValue,
     pub receipt_ref: String,
     pub decision: String,
@@ -496,6 +514,42 @@ pub fn chaos_schedule_receipt(input: &ChaosScheduleInput) -> Result<ChaosSchedul
     })
 }
 
+pub fn deterministic_integration_receipt(
+    input: &DeterministicIntegrationInput,
+) -> Result<DeterministicIntegrationReceipt> {
+    validate_integration_kind(&input.integration_kind)?;
+    validate_content_ref(&input.handler_profile_ref)?;
+    validate_content_ref(&input.effect_log_ref)?;
+    validate_content_ref(&input.snapshot_ref)?;
+    validate_content_ref(&input.gate_ref)?;
+    let decision = if input.admitted_live_effects { "deny" } else { "pass" };
+    let value = record("deterministic-integration-gate-v1", vec![
+        string(DETERMINISTIC_INTEGRATION_GATE_SCHEMA),
+        record("integration-kind", vec![string(&input.integration_kind)]),
+        record("decision", vec![string(decision)]),
+        record("handler-profile-ref", vec![string(&input.handler_profile_ref)]),
+        record("effect-log-ref", vec![string(&input.effect_log_ref)]),
+        record("snapshot-ref", vec![string(&input.snapshot_ref)]),
+        record("gate-ref", vec![string(&input.gate_ref)]),
+        sequence(vec![
+            record("check", vec![string("handler-profile-bound"), string("pass")]),
+            record("check", vec![string("effect-log-bound"), string("pass")]),
+            record("check", vec![string("snapshot-bound"), string("pass")]),
+            record("check", vec![
+                string("no-live-effect-during-replay"),
+                string(if input.admitted_live_effects { "deny" } else { "pass" }),
+            ]),
+            record("check", vec![string("integration-gate-decision"), string(decision)]),
+        ]),
+    ]);
+    let receipt_ref = canonical_hash(&value)?;
+    Ok(DeterministicIntegrationReceipt {
+        value,
+        receipt_ref,
+        decision: decision.to_string(),
+    })
+}
+
 pub fn trace_privacy_receipt(input: &TracePrivacyInput) -> Result<TracePrivacyReceipt> {
     validate_content_ref(&input.trace_ref)?;
     validate_content_ref(&input.snapshot_ref)?;
@@ -545,6 +599,15 @@ fn trace_privacy_checks(decision: &str, has_export_authority: bool, contains_sen
         ]),
         record("check", vec![string("trace-privacy-decision"), string(decision)]),
     ]
+}
+
+fn validate_integration_kind(kind: &str) -> Result<()> {
+    match kind {
+        "remote-sync" | "storage" | "job-dag" | "upgrade" => Ok(()),
+        _ => Err(crate::error::MoltenError::invalid_harness(format!(
+            "unsupported deterministic integration kind {kind}"
+        ))),
+    }
 }
 
 fn validate_chaos_fault_kind(kind: &str) -> Result<()> {
@@ -1027,15 +1090,18 @@ mod tests {
     use super::ChaosScheduleInput;
     use super::DEFAULT_ARTIFACT_REF;
     use super::DEFAULT_CAPABILITY_REF;
+    use super::DEFAULT_HANDLER_PROFILE_REF;
     use super::DEFAULT_INITIAL_STATE_REF;
     use super::DEFAULT_POLICY_REF;
     use super::DEFAULT_SEED_REF;
+    use super::DeterministicIntegrationInput;
     use super::ReplayDivergenceKind;
     use super::ReplayFixtureVariant;
     use super::ReplayIndexInput;
     use super::ReplayRollupInput;
     use super::TracePrivacyInput;
     use super::chaos_schedule_receipt;
+    use super::deterministic_integration_receipt;
     use super::index_replay_evidence;
     use super::record_fixture_value;
     use super::rollup_replay_receipts;
@@ -1210,6 +1276,39 @@ mod tests {
         let text = to_text(&index.value).expect("render index");
         assert!(text.contains("replay index ref mismatch"));
         assert!(text.contains(&wrong_ref));
+    }
+
+    #[test]
+    fn deterministic_integration_gates_bind_recorded_replay_inputs() {
+        for integration_kind in ["remote-sync", "storage", "job-dag", "upgrade"] {
+            let receipt = deterministic_integration_receipt(&DeterministicIntegrationInput {
+                integration_kind: integration_kind.to_string(),
+                handler_profile_ref: DEFAULT_HANDLER_PROFILE_REF.to_string(),
+                effect_log_ref: DEFAULT_SEED_REF.to_string(),
+                snapshot_ref: DEFAULT_INITIAL_STATE_REF.to_string(),
+                gate_ref: DEFAULT_ARTIFACT_REF.to_string(),
+                admitted_live_effects: false,
+            })
+            .expect("integration receipt");
+            assert_eq!(receipt.decision, "pass");
+            assert_eq!(receipt.receipt_ref, canonical_hash(&receipt.value).expect("receipt ref"));
+            let text = to_text(&receipt.value).expect("render integration receipt");
+            assert!(text.contains(integration_kind));
+            assert!(text.contains("handler-profile-bound"));
+            assert!(text.contains("effect-log-bound"));
+            assert!(text.contains("snapshot-bound"));
+        }
+        let denied = deterministic_integration_receipt(&DeterministicIntegrationInput {
+            integration_kind: "remote-sync".to_string(),
+            handler_profile_ref: DEFAULT_HANDLER_PROFILE_REF.to_string(),
+            effect_log_ref: DEFAULT_SEED_REF.to_string(),
+            snapshot_ref: DEFAULT_INITIAL_STATE_REF.to_string(),
+            gate_ref: DEFAULT_ARTIFACT_REF.to_string(),
+            admitted_live_effects: true,
+        })
+        .expect("integration denial");
+        assert_eq!(denied.decision, "deny");
+        assert!(to_text(&denied.value).expect("denial text").contains("no-live-effect-during-replay"));
     }
 
     #[test]

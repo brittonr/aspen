@@ -78,6 +78,7 @@ pub const DETERMINISTIC_REPLAY_ROLLUP_SCHEMA: &str = "molten.determinism.replay-
 pub const DETERMINISTIC_REPLAY_INDEX_SCHEMA: &str = "molten.determinism.replay-index.v1";
 pub const DETERMINISTIC_CHAOS_SCHEDULE_SCHEMA: &str = "molten.determinism.chaos-schedule.v1";
 pub const DETERMINISTIC_TRACE_PRIVACY_SCHEMA: &str = "molten.determinism.trace-privacy.v1";
+pub const DETERMINISTIC_INTEGRATION_GATE_SCHEMA: &str = "molten.determinism.integration-gate.v1";
 pub const EFFECT_MANIFEST_SCHEMA: &str = "molten.effects.manifest.v1";
 pub const EFFECT_HANDLER_PROFILE_SCHEMA: &str = "molten.effects.handler-profile.v1";
 pub const EFFECT_HANDLER_BINDING_SCHEMA: &str = "molten.effects.handler-binding.v1";
