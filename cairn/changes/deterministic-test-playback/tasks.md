@@ -22,7 +22,7 @@
 
 ## Phase 4: Handler profiles and replay
 
-- [ ] [serial] r[molten.determinism.handler_profiles] Define pure, local, chaos, record, replay, and profiling handler profiles with canonical config hashes.
+- [x] [serial] r[molten.determinism.handler_profiles] Define pure, local, chaos, record, replay, and profiling handler profiles with canonical config hashes.
 - [x] [serial] r[molten.determinism.record_profile] Record every effect request/response and relevant external observation under the record profile.
 - [x] [serial] r[molten.determinism.replay_profile] Inject recorded effect responses under the replay profile and deny real external side effects.
 - [ ] [serial] r[molten.determinism.replay_algorithm] Implement replay that verifies input hash, effect requests, committed actions, receipts/traces, outputs, and after state hashes turn by turn.

@@ -633,10 +633,26 @@ mod tests {
         let run = run_suite_value(&suite).expect("run suite");
         validate_report_value(&run.report_value).expect("validate report");
         replay_report_value(&run.report_value).expect("replay report");
+        let report = parse_report(&run.report_value).expect("parse report");
         let report_text = to_text(&run.report_value).expect("render report");
+        assert_eq!(report.replay_status, "deterministic");
+        assert_eq!(report.profile, "local-deterministic");
         assert!(report_text.contains("time-random-handler-receipt-v1"));
         assert!(report_text.contains("local-deterministic"));
         assert!(report_text.contains("deny-by-default-bypassed-only-by-local-test-handler"));
+    }
+
+    #[test]
+    fn report_binds_deterministic_handler_profile_identity() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let report = parse_report(&run.report_value).expect("parse report");
+        let replay = replay_report_value(&run.report_value).expect("replay report");
+
+        assert_eq!(report.profile, "local-deterministic");
+        assert_eq!(report.replay_status, "deterministic");
+        assert_eq!(replay.expected_report_ref, run.report_ref);
+        assert_eq!(replay.actual_report_ref, run.report_ref);
     }
 
     #[test]

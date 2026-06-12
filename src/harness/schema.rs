@@ -1222,7 +1222,7 @@ pub fn report_value(input: ReportValueInput<'_>) -> IOValue {
         string(HARNESS_REPORT_SCHEMA),
         string("pass"),
         string("deterministic"),
-        string("local"),
+        string("local-deterministic"),
         string(HASH_ALGORITHM),
         string(input.suite_ref),
         string(input.initial_state_hash),
