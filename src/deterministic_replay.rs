@@ -13,6 +13,7 @@ use crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_RUN_IDENTITY_SCHEMA;
+use crate::preserves_rail::DETERMINISTIC_TRACE_PRIVACY_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_TURN_JOURNAL_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::content_ref_hex;
@@ -154,6 +155,23 @@ pub struct ChaosScheduleInput {
 pub struct ChaosScheduleReceipt {
     pub value: IOValue,
     pub schedule_ref: String,
+    pub decision: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct TracePrivacyInput {
+    pub trace_ref: String,
+    pub snapshot_ref: String,
+    pub requester_ref: String,
+    pub policy_ref: String,
+    pub has_export_authority: bool,
+    pub contains_sensitive_refs: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct TracePrivacyReceipt {
+    pub value: IOValue,
+    pub receipt_ref: String,
     pub decision: String,
 }
 
@@ -476,6 +494,57 @@ pub fn chaos_schedule_receipt(input: &ChaosScheduleInput) -> Result<ChaosSchedul
         schedule_ref,
         decision: decision.to_string(),
     })
+}
+
+pub fn trace_privacy_receipt(input: &TracePrivacyInput) -> Result<TracePrivacyReceipt> {
+    validate_content_ref(&input.trace_ref)?;
+    validate_content_ref(&input.snapshot_ref)?;
+    validate_content_ref(&input.requester_ref)?;
+    validate_content_ref(&input.policy_ref)?;
+    let decision = match (input.has_export_authority, input.contains_sensitive_refs) {
+        (false, true) => "deny",
+        (true, true) => "redacted",
+        _ => "pass",
+    };
+    let value = record("deterministic-trace-privacy-v1", vec![
+        string(DETERMINISTIC_TRACE_PRIVACY_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("trace-ref", vec![string(&input.trace_ref)]),
+        record("snapshot-ref", vec![string(&input.snapshot_ref)]),
+        record("requester-ref", vec![string(&input.requester_ref)]),
+        record("policy-ref", vec![string(&input.policy_ref)]),
+        record("contains-sensitive-refs", vec![string(if input.contains_sensitive_refs { "yes" } else { "no" })]),
+        sequence(trace_privacy_checks(decision, input.has_export_authority, input.contains_sensitive_refs)),
+    ]);
+    let receipt_ref = canonical_hash(&value)?;
+    Ok(TracePrivacyReceipt {
+        value,
+        receipt_ref,
+        decision: decision.to_string(),
+    })
+}
+
+fn trace_privacy_checks(decision: &str, has_export_authority: bool, contains_sensitive_refs: bool) -> Vec<IOValue> {
+    vec![
+        record("check", vec![string("policy-admission-before-render"), string("pass")]),
+        record("check", vec![
+            string("sensitive-trace-gated"),
+            string(if !contains_sensitive_refs || has_export_authority {
+                "pass"
+            } else {
+                "deny"
+            }),
+        ]),
+        record("check", vec![
+            string("redacted-view-when-authorized-sensitive"),
+            string(if decision == "redacted" || !contains_sensitive_refs {
+                "pass"
+            } else {
+                "deny"
+            }),
+        ]),
+        record("check", vec![string("trace-privacy-decision"), string(decision)]),
+    ]
 }
 
 fn validate_chaos_fault_kind(kind: &str) -> Result<()> {
@@ -957,15 +1026,20 @@ mod tests {
 
     use super::ChaosScheduleInput;
     use super::DEFAULT_ARTIFACT_REF;
+    use super::DEFAULT_CAPABILITY_REF;
+    use super::DEFAULT_INITIAL_STATE_REF;
+    use super::DEFAULT_POLICY_REF;
     use super::DEFAULT_SEED_REF;
     use super::ReplayDivergenceKind;
     use super::ReplayFixtureVariant;
     use super::ReplayIndexInput;
     use super::ReplayRollupInput;
+    use super::TracePrivacyInput;
     use super::chaos_schedule_receipt;
     use super::index_replay_evidence;
     use super::record_fixture_value;
     use super::rollup_replay_receipts;
+    use super::trace_privacy_receipt;
     use super::verify_fixture_value;
     use crate::preserves_rail::canonical_hash;
     use crate::preserves_rail::string;
@@ -1136,6 +1210,40 @@ mod tests {
         let text = to_text(&index.value).expect("render index");
         assert!(text.contains("replay index ref mismatch"));
         assert!(text.contains(&wrong_ref));
+    }
+
+    #[test]
+    fn trace_privacy_gates_sensitive_trace_and_snapshot_exports() {
+        let input = TracePrivacyInput {
+            trace_ref: DEFAULT_ARTIFACT_REF.to_string(),
+            snapshot_ref: DEFAULT_INITIAL_STATE_REF.to_string(),
+            requester_ref: DEFAULT_CAPABILITY_REF.to_string(),
+            policy_ref: DEFAULT_POLICY_REF.to_string(),
+            has_export_authority: false,
+            contains_sensitive_refs: true,
+        };
+        let denied = trace_privacy_receipt(&input).expect("trace privacy deny");
+        assert_eq!(denied.decision, "deny");
+        assert_eq!(denied.receipt_ref, canonical_hash(&denied.value).expect("privacy receipt ref"));
+        let denied_text = to_text(&denied.value).expect("render denied privacy receipt");
+        assert!(denied_text.contains("policy-admission-before-render"));
+        assert!(denied_text.contains("sensitive-trace-gated"));
+
+        let redacted = trace_privacy_receipt(&TracePrivacyInput {
+            has_export_authority: true,
+            ..input.clone()
+        })
+        .expect("trace privacy redacted");
+        assert_eq!(redacted.decision, "redacted");
+        let redacted_text = to_text(&redacted.value).expect("render redacted privacy receipt");
+        assert!(redacted_text.contains("redacted-view-when-authorized-sensitive"));
+
+        let public = trace_privacy_receipt(&TracePrivacyInput {
+            contains_sensitive_refs: false,
+            ..input
+        })
+        .expect("trace privacy public");
+        assert_eq!(public.decision, "pass");
     }
 
     #[test]

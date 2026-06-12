@@ -386,6 +386,40 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_model_covers_handler_state_and_dataspace_indexes() {
+        let mut state = RuntimeState::new(7);
+        let message = RuntimeValue::string("hello").expect("runtime test value");
+        state.apply_step(&RuntimeStep::Send {
+            from: "producer".into(),
+            to: "consumer".into(),
+            body: message,
+        });
+        state.apply_step(&RuntimeStep::Observe {
+            actor: "consumer".into(),
+            pattern: RuntimeValue::string("service.ready").expect("runtime test value"),
+        });
+        state.apply_step(&RuntimeStep::Assert {
+            actor: "producer".into(),
+            value: RuntimeValue::string("service.ready").expect("runtime test value"),
+        });
+        state.apply_step(&RuntimeStep::Clock {
+            actor: "producer".into(),
+        });
+        state.apply_step(&RuntimeStep::Random {
+            actor: "producer".into(),
+            upper: 100,
+        });
+        let snapshot = state.snapshot();
+        assert_eq!(snapshot.logical_time, 1);
+        assert_ne!(snapshot.rng_state, 7);
+        assert_eq!(snapshot.effect_sequence, 2);
+        assert_eq!(snapshot.messages.len(), 1);
+        assert_eq!(snapshot.assertions.len(), 1);
+        assert_eq!(snapshot.observers.len(), 1);
+        validate_content_ref(&snapshot.snapshot_ref().expect("snapshot ref")).expect("snapshot ref shape");
+    }
+
+    #[test]
     fn transition_is_deterministic_from_explicit_seed() {
         let steps = [
             RuntimeStep::Observe {
