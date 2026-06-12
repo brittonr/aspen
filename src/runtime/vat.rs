@@ -25,6 +25,7 @@ use super::evaluate_promise_state_transition;
 use super::evaluate_revocation_cleanup;
 use super::evaluate_rights_amplification;
 use super::evaluate_snapshot_authority;
+use crate::deterministic_replay;
 use crate::error::Result;
 use crate::preserves_rail::RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_AUTHORITY_GRAPH_FIXTURE_SCHEMA;
@@ -843,6 +844,14 @@ pub fn run_vat_replay_fixture() -> Result<VatReplayFixture> {
         policy_decision: "policy:allow",
         state_marker: "state:diverged",
     })?;
+    let generic_pass =
+        deterministic_replay::verify_fixture_value(deterministic_replay::ReplayFixtureVariant::Baseline)?;
+    let generic_deny =
+        deterministic_replay::verify_fixture_value(deterministic_replay::ReplayFixtureVariant::ChangedEffectResponse)?;
+    let generic_first_divergence = generic_deny
+        .first_divergence
+        .clone()
+        .unwrap_or_else(|| record("deterministic-first-divergence-v1", Vec::new()));
     let receipts = vec![
         vat_replay_receipt_value(&expected, &actual)?,
         vat_replay_receipt_value(&expected, &changed_input)?,
@@ -851,7 +860,10 @@ pub fn run_vat_replay_fixture() -> Result<VatReplayFixture> {
         vat_replay_receipt_value(&expected, &changed_policy)?,
         vat_replay_receipt_value(&expected, &changed_state)?,
     ];
-    let diagnostics = debug_diagnostics(&receipts)?;
+    let generic_receipts = vec![generic_pass.value, generic_deny.value, generic_first_divergence];
+    let mut diagnostic_receipts = receipts.clone();
+    diagnostic_receipts.extend(generic_receipts.clone());
+    let diagnostics = debug_diagnostics(&diagnostic_receipts)?;
     let value = record("vat-replay-fixture-v1", vec![
         string(RUNTIME_VAT_REPLAY_FIXTURE_SCHEMA),
         record("profile", vec![string("replay")]),
@@ -869,6 +881,7 @@ pub fn run_vat_replay_fixture() -> Result<VatReplayFixture> {
             .to_vec(),
         ),
         sequence(receipts.clone()),
+        sequence(generic_receipts),
         sequence(diagnostics.iter().map(string).collect()),
     ]);
     let fixture_ref = canonical_hash(&value)?;
@@ -1518,6 +1531,9 @@ mod tests {
         assert!(replay.fixture_ref.starts_with("blake3:"));
         let rendered = to_text(&replay.value).expect("render replay fixture");
         assert!(rendered.contains("vat-replay-receipt-v1"));
+        assert!(rendered.contains("deterministic-replay-verify-v1"));
+        assert!(rendered.contains("deterministic-first-divergence-v1"));
+        assert!(rendered.contains("evidence-only-debugging-surface"));
         assert!(rendered.contains("deterministic-replay-identical-trace-and-state"));
         assert!(rendered.contains("first-divergence-input"));
         assert!(rendered.contains("first-divergence-effect-response"));
