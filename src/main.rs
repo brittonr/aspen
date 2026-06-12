@@ -451,6 +451,10 @@ enum VatCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    DistributedRefFixture {
+        #[arg(long)]
+        out: PathBuf,
+    },
     Show {
         report: PathBuf,
     },
@@ -8991,6 +8995,12 @@ fn run_vat_command(command: VatCommand) -> Result<()> {
             let rights = molten::runtime::run_vat_rights_fixture()?;
             write_file(&out, &to_text(&rights.value)?)?;
             println!("vat rights fixture: {}", rights.fixture_ref);
+            Ok(())
+        }
+        VatCommand::DistributedRefFixture { out } => {
+            let distributed_ref = molten::runtime::run_vat_distributed_ref_fixture()?;
+            write_file(&out, &to_text(&distributed_ref.value)?)?;
+            println!("vat distributed ref fixture: {}", distributed_ref.fixture_ref);
             Ok(())
         }
         VatCommand::Show { report } => {

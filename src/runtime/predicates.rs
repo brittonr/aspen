@@ -29,6 +29,7 @@ const NEAR_FAR_REFS_PREDICATE: &str = "molten.trellis-runtime.near-far-refs.v1";
 const SNAPSHOT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.snapshot-authority.v1";
 const OBJECT_AUTHORITY_PREDICATE: &str = "molten.trellis-runtime.object-authority.v1";
 const RIGHTS_AMPLIFICATION_PREDICATE: &str = "molten.trellis-runtime.rights-amplification.v1";
+const DISTRIBUTED_REF_LIFETIME_PREDICATE: &str = "molten.trellis-runtime.distributed-ref-lifetime.v1";
 const SERVICE_DEPENDENCIES_PREDICATE: &str = "molten.trellis-runtime.service-dependencies.v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -533,6 +534,43 @@ pub struct RightsAmplificationResult {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeDistributedRefLifetimeState {
+    pub far_ref: String,
+    pub session_ref: String,
+    pub replacement_ref: Option<String>,
+    pub is_session_live: bool,
+    pub is_handoff_admitted: bool,
+    pub pending_call_refs: Vec<String>,
+    pub failed_pending_call_refs: Vec<String>,
+    pub attempted_use_refs: Vec<String>,
+}
+
+impl RuntimeDistributedRefLifetimeState {
+    pub fn lifetime_ref(&self) -> Result<String> {
+        canonical_hash(&self.to_value())
+    }
+
+    fn to_value(&self) -> IOValue {
+        record("runtime-distributed-ref-lifetime-state-v1", vec![
+            record("far-ref", vec![string(&self.far_ref)]),
+            record("session-ref", vec![string(&self.session_ref)]),
+            optional_ref_record("replacement-ref", self.replacement_ref.as_deref()),
+            bool_value(self.is_session_live),
+            bool_value(self.is_handoff_admitted),
+            ref_list_value("pending-call-refs", &self.pending_call_refs),
+            ref_list_value("failed-pending-call-refs", &self.failed_pending_call_refs),
+            ref_list_value("attempted-use-refs", &self.attempted_use_refs),
+        ])
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DistributedRefLifetimeResult {
+    pub is_allowed: bool,
+    pub receipt: RuntimePredicateReceipt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeSnapshotAuthorityState {
     pub snapshot_ref: String,
     pub admitted_authority_refs: Vec<String>,
@@ -1030,6 +1068,52 @@ pub fn evaluate_rights_amplification(state: &RuntimeRightsAmplificationState) ->
     Ok(RightsAmplificationResult { is_allowed, receipt })
 }
 
+pub fn evaluate_distributed_ref_lifetime(
+    state: &RuntimeDistributedRefLifetimeState,
+) -> Result<DistributedRefLifetimeResult> {
+    let diagnostics = validate_distributed_ref_lifetime(state);
+    let is_allowed = diagnostics.is_empty();
+    let decision = if is_allowed {
+        PredicateDecision::Pass
+    } else {
+        PredicateDecision::Deny
+    };
+    let lifetime_ref = state.lifetime_ref()?;
+    let input_value = record("runtime-predicate-distributed-ref-lifetime-input-v1", vec![
+        record("lifetime-ref", vec![string(&lifetime_ref)]),
+        state.to_value(),
+    ]);
+    let checks = vec![
+        "distributed-ref-refs-canonical".to_string(),
+        "active-session-required-for-original-far-ref".to_string(),
+        "disconnect-fails-dependent-pending-calls".to_string(),
+        "handoff-requires-admitted-replacement".to_string(),
+    ];
+    let mut state_refs = Vec::with_capacity(4);
+    state_refs.push(lifetime_ref);
+    if validate_content_ref(&state.far_ref).is_ok() {
+        state_refs.push(state.far_ref.clone());
+    }
+    if validate_content_ref(&state.session_ref).is_ok() {
+        state_refs.push(state.session_ref.clone());
+    }
+    if let Some(replacement_ref) =
+        state.replacement_ref.as_ref().filter(|reference| validate_content_ref(reference).is_ok())
+    {
+        state_refs.push(replacement_ref.clone());
+    }
+    let receipt = build_runtime_predicate_receipt(RuntimePredicateReceiptInput {
+        predicate: DISTRIBUTED_REF_LIFETIME_PREDICATE,
+        input_value,
+        decision,
+        state_refs,
+        checks,
+        diagnostics,
+    })?;
+
+    Ok(DistributedRefLifetimeResult { is_allowed, receipt })
+}
+
 pub fn evaluate_service_dependencies(state: &RuntimeServiceDependenciesState) -> Result<ServiceDependenciesResult> {
     let diagnostics = validate_service_dependencies(state);
     let is_allowed = diagnostics.is_empty();
@@ -1167,6 +1251,61 @@ fn validate_rights_amplification(state: &RuntimeRightsAmplificationState) -> Vec
     let recovered_refs = string_set(&state.recovered_authority_refs);
     if !is_subset(&recovered_refs, &sealed_refs) {
         diagnostics.push("rights-amplification-recovered-authority-not-sealed".to_string());
+    }
+    diagnostics
+}
+
+fn validate_distributed_ref_lifetime(state: &RuntimeDistributedRefLifetimeState) -> Vec<String> {
+    let mut diagnostics = Vec::with_capacity(24);
+    if validate_content_ref(&state.far_ref).is_err() {
+        diagnostics.push("distributed-ref-far-ref-noncanonical".to_string());
+    }
+    if validate_content_ref(&state.session_ref).is_err() {
+        diagnostics.push("distributed-ref-session-ref-noncanonical".to_string());
+    }
+    if state
+        .replacement_ref
+        .as_ref()
+        .is_some_and(|replacement_ref| validate_content_ref(replacement_ref).is_err())
+    {
+        diagnostics.push("distributed-ref-replacement-ref-noncanonical".to_string());
+    }
+    diagnostics.extend(validate_sorted_content_refs(&state.pending_call_refs, "distributed-ref", "pending-call"));
+    diagnostics.extend(validate_sorted_content_refs(
+        &state.failed_pending_call_refs,
+        "distributed-ref",
+        "failed-pending-call",
+    ));
+    diagnostics.extend(validate_sorted_content_refs(&state.attempted_use_refs, "distributed-ref", "attempted-use"));
+
+    let pending_refs = string_set(&state.pending_call_refs);
+    let failed_refs = string_set(&state.failed_pending_call_refs);
+    let attempted_refs = string_set(&state.attempted_use_refs);
+    let far_ref = state.far_ref.as_str();
+
+    if state.is_session_live && state.is_handoff_admitted {
+        diagnostics.push("distributed-ref-live-session-with-handoff".to_string());
+    }
+    if state.is_session_live && state.replacement_ref.is_some() {
+        diagnostics.push("distributed-ref-live-session-has-replacement".to_string());
+    }
+    if !state.is_session_live && !state.is_handoff_admitted && !is_subset(&pending_refs, &failed_refs) {
+        diagnostics.push("distributed-ref-disconnected-pending-calls-not-failed".to_string());
+    }
+    if !state.is_session_live && attempted_refs.contains(far_ref) {
+        diagnostics.push("distributed-ref-stale-descriptor-used".to_string());
+    }
+    if state.is_handoff_admitted {
+        match state.replacement_ref.as_deref() {
+            Some(replacement_ref) => {
+                let mut replacement_refs = BTreeSet::new();
+                replacement_refs.insert(replacement_ref);
+                if !is_subset(&attempted_refs, &replacement_refs) {
+                    diagnostics.push("distributed-ref-handoff-use-not-replacement".to_string());
+                }
+            }
+            None => diagnostics.push("distributed-ref-handoff-replacement-missing".to_string()),
+        }
     }
     diagnostics
 }
@@ -1530,6 +1669,13 @@ fn validate_promise_shape(state: &RuntimePromiseState, label: &str) -> Vec<Strin
 
 fn ref_list_value(label: &'static str, refs: &[String]) -> IOValue {
     record(label, vec![sequence(refs.iter().map(string).collect())])
+}
+
+fn optional_ref_record(label: &'static str, reference: Option<&str>) -> IOValue {
+    match reference {
+        Some(reference) => record(label, vec![string(reference)]),
+        None => record(label, Vec::new()),
+    }
 }
 
 fn validate_sorted_content_refs(refs: &[String], label: &str, field: &str) -> Vec<String> {

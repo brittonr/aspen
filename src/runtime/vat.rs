@@ -3,6 +3,7 @@ use preserves::IOValue;
 use super::PredicateDecision;
 use super::RuntimeActormapTransactionOutcome;
 use super::RuntimeActormapTransactionState;
+use super::RuntimeDistributedRefLifetimeState;
 use super::RuntimeNearFarRefState;
 use super::RuntimeObjectAuthorityKind;
 use super::RuntimeObjectAuthorityState;
@@ -16,6 +17,7 @@ use super::RuntimeRevocationCleanupState;
 use super::RuntimeRightsAmplificationState;
 use super::RuntimeSnapshotAuthorityState;
 use super::evaluate_actormap_transaction;
+use super::evaluate_distributed_ref_lifetime;
 use super::evaluate_near_far_refs;
 use super::evaluate_object_authority;
 use super::evaluate_promise_pipeline;
@@ -25,6 +27,7 @@ use super::evaluate_rights_amplification;
 use super::evaluate_snapshot_authority;
 use crate::error::Result;
 use crate::preserves_rail::RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA;
+use crate::preserves_rail::RUNTIME_VAT_DISTRIBUTED_REF_FIXTURE_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_FIXTURE_RUN_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_OBJECT_REF_SCHEMA;
 use crate::preserves_rail::RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA;
@@ -162,6 +165,14 @@ pub struct VatAmbientAuthorityFixture {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatRightsFixture {
+    pub value: IOValue,
+    pub fixture_ref: String,
+    pub receipts: Vec<RuntimePredicateReceipt>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VatDistributedRefFixture {
     pub value: IOValue,
     pub fixture_ref: String,
     pub receipts: Vec<RuntimePredicateReceipt>,
@@ -396,6 +407,90 @@ pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
     ]);
     let fixture_ref = canonical_hash(&value)?;
     Ok(VatPromiseFixture {
+        value,
+        fixture_ref,
+        receipts,
+        diagnostics,
+    })
+}
+
+pub fn run_vat_distributed_ref_fixture() -> Result<VatDistributedRefFixture> {
+    let far = VatObjectRef::new(REMOTE_VAT_ID, FAR_OBJECT_ID, VatReferenceKind::Far, Vec::new());
+    let replacement = VatObjectRef::new(REMOTE_VAT_ID, "object:remote:handoff", VatReferenceKind::Far, Vec::new());
+    let far_ref = far.object_ref()?;
+    let replacement_ref = replacement.object_ref()?;
+    let session_ref = canonical_hash(&record("vat-session-descriptor-v1", vec![string("session:primary")]))?;
+    let pending_call_ref = canonical_hash(&record("vat-pending-call-v1", vec![string("call:primary")]))?;
+    let stale_call_ref = canonical_hash(&record("vat-pending-call-v1", vec![string("call:stale")]))?;
+
+    let live = evaluate_distributed_ref_lifetime(&RuntimeDistributedRefLifetimeState {
+        far_ref: far_ref.clone(),
+        session_ref: session_ref.clone(),
+        replacement_ref: None,
+        is_session_live: true,
+        is_handoff_admitted: false,
+        pending_call_refs: Vec::new(),
+        failed_pending_call_refs: Vec::new(),
+        attempted_use_refs: vec![far_ref.clone()],
+    })?;
+    let disconnected_cleanup = evaluate_distributed_ref_lifetime(&RuntimeDistributedRefLifetimeState {
+        far_ref: far_ref.clone(),
+        session_ref: session_ref.clone(),
+        replacement_ref: None,
+        is_session_live: false,
+        is_handoff_admitted: false,
+        pending_call_refs: vec![pending_call_ref.clone()],
+        failed_pending_call_refs: vec![pending_call_ref],
+        attempted_use_refs: Vec::new(),
+    })?;
+    let handoff = evaluate_distributed_ref_lifetime(&RuntimeDistributedRefLifetimeState {
+        far_ref: far_ref.clone(),
+        session_ref: session_ref.clone(),
+        replacement_ref: Some(replacement_ref.clone()),
+        is_session_live: false,
+        is_handoff_admitted: true,
+        pending_call_refs: Vec::new(),
+        failed_pending_call_refs: Vec::new(),
+        attempted_use_refs: vec![replacement_ref],
+    })?;
+    let stale_use = evaluate_distributed_ref_lifetime(&RuntimeDistributedRefLifetimeState {
+        far_ref: far_ref.clone(),
+        session_ref: session_ref.clone(),
+        replacement_ref: None,
+        is_session_live: false,
+        is_handoff_admitted: false,
+        pending_call_refs: Vec::new(),
+        failed_pending_call_refs: Vec::new(),
+        attempted_use_refs: vec![far_ref.clone()],
+    })?;
+    let pending_not_failed = evaluate_distributed_ref_lifetime(&RuntimeDistributedRefLifetimeState {
+        far_ref,
+        session_ref,
+        replacement_ref: None,
+        is_session_live: false,
+        is_handoff_admitted: false,
+        pending_call_refs: vec![stale_call_ref],
+        failed_pending_call_refs: Vec::new(),
+        attempted_use_refs: Vec::new(),
+    })?;
+
+    let receipts = vec![
+        live.receipt,
+        disconnected_cleanup.receipt,
+        handoff.receipt,
+        stale_use.receipt,
+        pending_not_failed.receipt,
+    ];
+    let diagnostics = fixture_diagnostics(&receipts);
+    let value = record("vat-distributed-ref-fixture-v1", vec![
+        string(RUNTIME_VAT_DISTRIBUTED_REF_FIXTURE_SCHEMA),
+        string(LOCAL_VAT_ID),
+        sequence([far, replacement].iter().map(VatObjectRef::value).collect()),
+        sequence(receipts.iter().map(|receipt| receipt.value.clone()).collect()),
+        sequence(diagnostics.iter().map(string).collect()),
+    ]);
+    let fixture_ref = canonical_hash(&value)?;
+    Ok(VatDistributedRefFixture {
         value,
         fixture_ref,
         receipts,
@@ -643,6 +738,7 @@ fn fixture_diagnostics(receipts: &[RuntimePredicateReceipt]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::run_vat_ambient_authority_fixture;
+    use super::run_vat_distributed_ref_fixture;
     use super::run_vat_fixture;
     use super::run_vat_promise_fixture;
     use super::run_vat_restore_fixture;
@@ -712,6 +808,35 @@ mod tests {
         let rendered = to_text(&restore.value).expect("render restore fixture");
         assert!(rendered.contains("vat-object-upgrade-recipe-v1"));
         assert!(rendered.contains("missing-compatible-upgrade-recipe"));
+    }
+
+    #[test]
+    fn vat_distributed_ref_fixture_records_lifetime_and_handoff() {
+        let distributed_ref = run_vat_distributed_ref_fixture().expect("distributed ref fixture");
+        assert_eq!(distributed_ref.receipts.len(), 5);
+        assert!(distributed_ref.fixture_ref.starts_with("blake3:"));
+        assert!(
+            distributed_ref
+                .receipts
+                .iter()
+                .any(|receipt| receipt.predicate == "molten.trellis-runtime.distributed-ref-lifetime.v1")
+        );
+        assert!(distributed_ref.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Pass));
+        assert!(distributed_ref.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny));
+        assert!(
+            distributed_ref
+                .receipts
+                .iter()
+                .flat_map(|receipt| receipt.diagnostics.iter())
+                .any(|diagnostic| diagnostic == "distributed-ref-stale-descriptor-used")
+        );
+        assert!(
+            distributed_ref
+                .receipts
+                .iter()
+                .flat_map(|receipt| receipt.diagnostics.iter())
+                .any(|diagnostic| diagnostic == "distributed-ref-disconnected-pending-calls-not-failed")
+        );
     }
 
     #[test]
