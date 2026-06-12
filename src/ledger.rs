@@ -480,6 +480,7 @@ const ARTIFACT_KIND_RECORDS: &[(&str, &str)] = &[
     ("repro-verify-receipt-v1", "repro-verify-receipt"),
     ("deterministic-replay-verify-v1", "deterministic-replay-verify-receipt"),
     ("deterministic-first-divergence-v1", "deterministic-first-divergence"),
+    ("deterministic-replay-rollup-v1", "deterministic-replay-rollup"),
     ("harness-failure-v1", "failure"),
     ("signed-receipt-v1", "signed-receipt"),
     ("signed-receipt-key-v1", "signed-receipt-key"),

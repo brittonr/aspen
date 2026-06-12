@@ -1,9 +1,14 @@
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+
 use preserves::IOValue;
+use preserves::Value;
 
 use crate::error::Result;
 use crate::preserves_rail::DETERMINISTIC_EFFECT_LOG_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIXTURE_RECORD_SCHEMA;
+use crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_RUN_IDENTITY_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_TURN_JOURNAL_SCHEMA;
@@ -11,6 +16,9 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::u64_value;
+use crate::preserves_rail::validate_content_ref;
+use crate::preserves_rail::value_to_iovalue;
 
 const DEFAULT_ARTIFACT_REF: &str = "blake3:1111111111111111111111111111111111111111111111111111111111111111";
 const DEFAULT_CLOSURE_REF: &str = "blake3:2222222222222222222222222222222222222222222222222222222222222222";
@@ -23,6 +31,7 @@ const DEFAULT_HANDLER_PROFILE_REF: &str = "blake3:888888888888888888888888888888
 const DEFAULT_SEED_REF: &str = "blake3:9999999999999999999999999999999999999999999999999999999999999999";
 const DEFAULT_RUNTIME_REF: &str = "blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const DEFAULT_TOOL_REF: &str = "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const MAX_REPLAY_ROLLUP_INPUTS: usize = 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReplayDivergenceKind {
@@ -92,6 +101,30 @@ pub struct ReplayVerifyReceipt {
     pub decision: &'static str,
     pub divergence: ReplayDivergenceKind,
     pub first_divergence: Option<IOValue>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplayRollupInput {
+    pub expected_ref: Option<String>,
+    pub value: IOValue,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplayRollupReceipt {
+    pub value: IOValue,
+    pub rollup_ref: String,
+    pub decision: String,
+    pub total_count: u64,
+    pub pass_count: u64,
+    pub deny_count: u64,
+}
+
+#[derive(Clone, Debug)]
+struct ParsedReplayVerify {
+    receipt_ref: String,
+    decision: String,
+    divergence: String,
+    first_divergence_ref: Option<String>,
 }
 
 #[derive(Clone)]
@@ -182,6 +215,104 @@ pub fn verify_fixture_value(variant: ReplayFixtureVariant) -> Result<ReplayVerif
         divergence,
         first_divergence,
     })
+}
+
+pub fn rollup_replay_receipts(inputs: &[ReplayRollupInput]) -> Result<ReplayRollupReceipt> {
+    if inputs.len() > MAX_REPLAY_ROLLUP_INPUTS {
+        return Err(crate::error::MoltenError::invalid_harness(format!(
+            "replay rollup input count exceeds {MAX_REPLAY_ROLLUP_INPUTS}"
+        )));
+    }
+    let mut diagnostics = Vec::with_capacity(inputs.len());
+    let mut parsed_receipts = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let actual_ref = canonical_hash(&input.value)?;
+        if let Some(expected_ref) = input.expected_ref.as_deref() {
+            validate_content_ref(expected_ref)?;
+            if expected_ref != actual_ref {
+                diagnostics.push(format!("replay receipt ref mismatch expected={expected_ref} actual={actual_ref}"));
+                continue;
+            }
+        }
+        match parse_replay_verify_receipt(&input.value, &actual_ref) {
+            Ok(parsed) => parsed_receipts.push(parsed),
+            Err(error) => diagnostics.push(format!("replay receipt {actual_ref} is invalid: {error}")),
+        }
+    }
+    let mut receipt_refs = BTreeSet::new();
+    let mut first_divergence_refs = BTreeSet::new();
+    let mut divergence_counts = BTreeMap::<String, u64>::new();
+    let mut pass_count = 0_u64;
+    let mut deny_count = 0_u64;
+    for parsed in &parsed_receipts {
+        receipt_refs.insert(parsed.receipt_ref.clone());
+        *divergence_counts.entry(parsed.divergence.clone()).or_insert(0) += 1;
+        if parsed.decision == "pass" {
+            pass_count += 1;
+        } else {
+            deny_count += 1;
+        }
+        if let Some(reference) = &parsed.first_divergence_ref {
+            first_divergence_refs.insert(reference.clone());
+        }
+    }
+    let total_count = parsed_receipts.len() as u64;
+    let decision = if diagnostics.is_empty() && deny_count == 0 {
+        "pass"
+    } else {
+        "deny"
+    };
+    let value = record("deterministic-replay-rollup-v1", vec![
+        string(DETERMINISTIC_REPLAY_ROLLUP_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("total-count", vec![u64_value(total_count)]),
+        record("pass-count", vec![u64_value(pass_count)]),
+        record("deny-count", vec![u64_value(deny_count)]),
+        record("receipt-refs", vec![refs_value(&receipt_refs)]),
+        record("divergence-counts", vec![divergence_counts_value(&divergence_counts)]),
+        record("first-divergence-refs", vec![refs_value(&first_divergence_refs)]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        sequence(rollup_checks(decision, diagnostics.is_empty())),
+    ]);
+    let rollup_ref = canonical_hash(&value)?;
+    Ok(ReplayRollupReceipt {
+        value,
+        rollup_ref,
+        decision: decision.to_string(),
+        total_count,
+        pass_count,
+        deny_count,
+    })
+}
+
+fn parse_replay_verify_receipt(value: &IOValue, receipt_ref: &str) -> Result<ParsedReplayVerify> {
+    if let Some(fields) = value.collect_simple_record("deterministic-replay-verify-v1", Some(13)) {
+        require_schema_value(&fields[0], DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "deterministic replay verify")?;
+        let decision = required_string_value(&fields[1], "deterministic replay decision")?;
+        let divergence = record_string_value(&fields[10], "divergence")?;
+        let first_divergence_ref = record_string_value(&fields[11], "first-divergence-ref")?;
+        validate_replay_decision(&decision)?;
+        validate_divergence_ref(&first_divergence_ref)?;
+        return Ok(ParsedReplayVerify {
+            receipt_ref: receipt_ref.to_string(),
+            decision,
+            divergence,
+            first_divergence_ref: (first_divergence_ref != "none").then_some(first_divergence_ref),
+        });
+    }
+    if let Some(fields) = value.collect_simple_record("deterministic-replay-verify-v1", Some(7)) {
+        require_schema_value(&fields[0], DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "deterministic replay verify")?;
+        let decision = required_string_value(&fields[1], "deterministic replay decision")?;
+        let divergence = record_string_value(&fields[5], "divergence")?;
+        validate_replay_decision(&decision)?;
+        return Ok(ParsedReplayVerify {
+            receipt_ref: receipt_ref.to_string(),
+            decision,
+            divergence,
+            first_divergence_ref: None,
+        });
+    }
+    Err(crate::error::MoltenError::invalid_harness("expected <deterministic-replay-verify-v1 ...>"))
 }
 
 fn replay_run_parts(variant: ReplayFixtureVariant) -> Result<ReplayRunParts> {
@@ -425,11 +556,83 @@ fn verify_checks(decision: &str, divergence: ReplayDivergenceKind) -> Vec<IOValu
     ]
 }
 
+fn rollup_checks(decision: &str, all_inputs_readable: bool) -> Vec<IOValue> {
+    vec![
+        record("check", vec![string("evidence-only"), string("pass")]),
+        record("check", vec![string("no-authority-grant"), string("pass")]),
+        record("check", vec![string("individual-receipts-required"), string("pass")]),
+        record("check", vec![
+            string("all-inputs-readable"),
+            string(if all_inputs_readable { "pass" } else { "fail" }),
+        ]),
+        record("check", vec![string("rollup-decision"), string(decision)]),
+    ]
+}
+
+fn refs_value(refs: &BTreeSet<String>) -> IOValue {
+    sequence(refs.iter().map(string).collect())
+}
+
+fn divergence_counts_value(counts: &BTreeMap<String, u64>) -> IOValue {
+    sequence(
+        counts
+            .iter()
+            .map(|(kind, count)| record("divergence-count", vec![string(kind), u64_value(*count)]))
+            .collect(),
+    )
+}
+
+fn require_schema_value(value: &Value<IOValue>, schema: &str, label: &str) -> Result<()> {
+    let actual = required_string_value(value, label)?;
+    if actual == schema {
+        Ok(())
+    } else {
+        Err(crate::error::MoltenError::invalid_harness(format!(
+            "{label} schema mismatch: expected {schema}, got {actual}"
+        )))
+    }
+}
+
+fn record_string_value(value: &Value<IOValue>, label: &'static str) -> Result<String> {
+    let value = value_to_iovalue(value);
+    let fields = value
+        .collect_simple_record(label, Some(1))
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
+    required_string_value(&fields[0], label)
+}
+
+fn required_string_value(value: &Value<IOValue>, label: &str) -> Result<String> {
+    value
+        .as_string()
+        .map(|value| value.into_owned())
+        .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("{label} must be a string")))
+}
+
+fn validate_replay_decision(decision: &str) -> Result<()> {
+    if decision == "pass" || decision == "deny" {
+        Ok(())
+    } else {
+        Err(crate::error::MoltenError::invalid_harness(format!(
+            "replay decision must be pass or deny, got {decision}"
+        )))
+    }
+}
+
+fn validate_divergence_ref(reference: &str) -> Result<()> {
+    if reference == "none" {
+        Ok(())
+    } else {
+        validate_content_ref(reference)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::ReplayDivergenceKind;
     use super::ReplayFixtureVariant;
+    use super::ReplayRollupInput;
     use super::record_fixture_value;
+    use super::rollup_replay_receipts;
     use super::verify_fixture_value;
     use crate::preserves_rail::canonical_hash;
     use crate::preserves_rail::to_text;
@@ -490,5 +693,48 @@ mod tests {
         let text = to_text(&receipt.value).expect("render receipt");
         assert!(text.contains("recorded-effects-only"));
         assert!(text.contains("live-effect"));
+    }
+
+    #[test]
+    fn replay_rollup_summarizes_pass_deny_and_divergence_counts() {
+        let pass = verify_fixture_value(ReplayFixtureVariant::Baseline).expect("pass replay");
+        let deny = verify_fixture_value(ReplayFixtureVariant::ChangedEffectResponse).expect("deny replay");
+        let rollup = rollup_replay_receipts(&[
+            ReplayRollupInput {
+                expected_ref: Some(pass.receipt_ref.clone()),
+                value: pass.value,
+            },
+            ReplayRollupInput {
+                expected_ref: Some(deny.receipt_ref.clone()),
+                value: deny.value,
+            },
+        ])
+        .expect("rollup replay receipts");
+        assert_eq!(rollup.decision, "deny");
+        assert_eq!(rollup.total_count, 2);
+        assert_eq!(rollup.pass_count, 1);
+        assert_eq!(rollup.deny_count, 1);
+        assert_eq!(rollup.rollup_ref, canonical_hash(&rollup.value).expect("rollup hash"));
+        let text = to_text(&rollup.value).expect("render rollup");
+        assert!(text.contains("deterministic-replay-rollup-v1"));
+        assert!(text.contains("effect-response"));
+        assert!(text.contains("individual-receipts-required"));
+    }
+
+    #[test]
+    fn replay_rollup_denies_mismatched_receipt_refs_without_counting_them() {
+        let pass = verify_fixture_value(ReplayFixtureVariant::Baseline).expect("pass replay");
+        let wrong_ref = canonical_hash(&record_fixture_value().expect("fixture").value).expect("fixture ref");
+        let rollup = rollup_replay_receipts(&[ReplayRollupInput {
+            expected_ref: Some(wrong_ref.clone()),
+            value: pass.value,
+        }])
+        .expect("rollup replay receipts");
+        assert_eq!(rollup.decision, "deny");
+        assert_eq!(rollup.total_count, 0);
+        let text = to_text(&rollup.value).expect("render rollup");
+        assert!(text.contains("replay receipt ref mismatch"));
+        assert!(text.contains(&wrong_ref));
+        assert!(text.contains("all-inputs-readable"));
     }
 }

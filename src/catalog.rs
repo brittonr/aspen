@@ -17,6 +17,7 @@ use crate::preserves_rail::CATALOG_SHORT_ID_SCHEMA;
 use crate::preserves_rail::CATALOG_SUMMARY_SCHEMA;
 use crate::preserves_rail::CATALOG_VIEW_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
+use crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
@@ -731,6 +732,9 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
             format!("replay-actual-ref:{actual_ref}"),
         ]);
     }
+    if let Some(fields) = value.collect_simple_record("deterministic-replay-rollup-v1", Some(10)) {
+        return deterministic_replay_rollup_classifications(&fields);
+    }
     if let Ok(profile) = crate::retention::parse_retention_class_profile(value) {
         return Ok(vec![
             "retention:class".to_string(),
@@ -1132,6 +1136,30 @@ fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> 
         ]);
     }
     Ok(Vec::new())
+}
+
+fn deterministic_replay_rollup_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
+    require_schema(&fields[0], DETERMINISTIC_REPLAY_ROLLUP_SCHEMA, "deterministic replay rollup")?;
+    let decision = record_string(&fields[1], "decision")?;
+    let total_count = record_u64(&fields[2], "total-count")?;
+    let pass_count = record_u64(&fields[3], "pass-count")?;
+    let deny_count = record_u64(&fields[4], "deny-count")?;
+    let mut classifications = vec![
+        "deterministic-replay:rollup".to_string(),
+        format!("replay-rollup-decision:{decision}"),
+        format!("replay-rollup-total:{total_count}"),
+        format!("replay-rollup-pass:{pass_count}"),
+        format!("replay-rollup-deny:{deny_count}"),
+    ];
+    let counts = value_to_iovalue(&fields[6]);
+    let count_fields = simple_record(&counts, "divergence-counts", 1)?;
+    for item in required_sequence(&count_fields[0], "divergence-counts")?.iter() {
+        let item = value_to_iovalue(item);
+        let count = simple_record(&item, "divergence-count", 2)?;
+        let kind = required_string(&count[0], "divergence kind")?;
+        classifications.push(format!("replay-rollup-divergence:{kind}"));
+    }
+    Ok(classifications)
 }
 
 fn deterministic_replay_verify_gate_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
@@ -2123,9 +2151,17 @@ mod tests {
             record("actual-ref", vec![string(test_ref("actual-effect"))]),
             sequence(vec![string("safe-canonical-refs-only")]),
         ]);
+        let rollup =
+            crate::deterministic_replay::rollup_replay_receipts(&[crate::deterministic_replay::ReplayRollupInput {
+                expected_ref: Some(canonical_hash(&verify).expect("verify ref")),
+                value: verify.clone(),
+            }])
+            .expect("replay rollup");
         let verify_import = ledger::import_artifact(&ledger_root, &verify).expect("import replay verify");
         ledger::import_artifact(&ledger_root, &divergence).expect("import first divergence");
+        let rollup_import = ledger::import_artifact(&ledger_root, &rollup.value).expect("import replay rollup");
         assert_eq!(verify_import.artifact_kind, "deterministic-replay-verify-receipt");
+        assert_eq!(rollup_import.artifact_kind, "deterministic-replay-rollup");
 
         let found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
             root_refs: Vec::new(),
@@ -2159,6 +2195,25 @@ mod tests {
             to_text(&divergence_found.value)
                 .expect("first divergence result text")
                 .contains("deterministic-replay:first-divergence")
+        );
+
+        let rollup_found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
+            root_refs: Vec::new(),
+            include_dependencies: true,
+            include_dependents: true,
+            filters: vec![
+                CatalogFilter::LedgerKind("deterministic-replay-rollup".to_string()),
+                CatalogFilter::Text("replay-rollup-decision:pass".to_string()),
+                CatalogFilter::Text("replay-rollup-total:1".to_string()),
+            ],
+            visibility: CatalogVisibilityInput::default(),
+        })
+        .expect("replay rollup search");
+        assert_eq!(rollup_found.items.len(), 1);
+        assert!(
+            to_text(&rollup_found.value)
+                .expect("replay rollup result text")
+                .contains("deterministic-replay:rollup")
         );
     }
 

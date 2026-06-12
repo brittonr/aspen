@@ -1071,8 +1071,15 @@ mod tests {
             record("actual-ref", vec![string(&actual_ref)]),
             checks_value(&["evidence-only", "first-divergence"]),
         ]);
+        let rollup =
+            crate::deterministic_replay::rollup_replay_receipts(&[crate::deterministic_replay::ReplayRollupInput {
+                expected_ref: Some(canonical_hash(&verify).expect("verify ref")),
+                value: verify.clone(),
+            }])
+            .expect("replay rollup");
         ledger::import_artifact(&ledger_root, &verify).expect("import replay verify");
         ledger::import_artifact(&ledger_root, &divergence).expect("import first divergence");
+        ledger::import_artifact(&ledger_root, &rollup.value).expect("import replay rollup");
 
         let verify_request = mcp_request_value("search_replay_evidence", vec![
             record("stage", vec![string("verify")]),
@@ -1102,6 +1109,19 @@ mod tests {
             to_text(&divergence_call.receipt_value)
                 .expect("replay MCP receipt")
                 .contains("mutating-tools-denied")
+        );
+
+        let rollup_request = mcp_request_value("search_replay_evidence", vec![
+            record("stage", vec![string("rollup")]),
+            record("text", vec![string("replay-rollup-decision:deny")]),
+        ])
+        .expect("replay rollup request");
+        let rollup_call = call(&registry, Some(&ledger_root), &rollup_request).expect("replay rollup call");
+        assert_eq!(rollup_call.decision, "pass");
+        assert!(
+            to_text(&rollup_call.response_value)
+                .expect("replay rollup response")
+                .contains("deterministic-replay:rollup")
         );
     }
 

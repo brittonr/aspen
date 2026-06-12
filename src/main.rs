@@ -283,6 +283,12 @@ enum ReplayFixtureCommand {
         #[arg(long)]
         out: PathBuf,
     },
+    Rollup {
+        #[arg(long = "receipt")]
+        receipts: Vec<PathBuf>,
+        #[arg(long)]
+        out: PathBuf,
+    },
     Show {
         report: PathBuf,
     },
@@ -4142,6 +4148,28 @@ fn run_replay_fixture_command(command: ReplayFixtureCommand) -> Result<()> {
                 out.display(),
                 receipt.receipt_ref,
                 receipt.divergence.as_str()
+            );
+            Ok(())
+        }
+        ReplayFixtureCommand::Rollup { receipts, out } => {
+            let mut inputs = Vec::new();
+            for receipt in receipts {
+                let value = read_preserves_file(&receipt)?;
+                inputs.push(deterministic_replay::ReplayRollupInput {
+                    expected_ref: Some(canonical_hash(&value)?),
+                    value,
+                });
+            }
+            let rollup = deterministic_replay::rollup_replay_receipts(&inputs)?;
+            write_file(&out, &to_text(&rollup.value)?)?;
+            println!(
+                "deterministic replay rollup written to {} ref={} decision={} total={} pass={} deny={}",
+                out.display(),
+                rollup.rollup_ref,
+                rollup.decision,
+                rollup.total_count,
+                rollup.pass_count,
+                rollup.deny_count
             );
             Ok(())
         }
