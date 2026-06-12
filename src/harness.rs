@@ -364,7 +364,12 @@ mod tests {
         assert!(report_text.contains("hostcall-decision-v1"));
         assert!(report_text.contains("actor-output-v1"));
         let gate = gate_check_value(&run.report_value).expect("gate report");
-        let receipt = parse_gate_receipt(&gate_receipt_value(&gate)).expect("parse gate receipt");
+        let gate_receipt = gate_receipt_value(&gate);
+        let receipt_text = to_text(&gate_receipt).expect("render gate receipt");
+        assert!(receipt_text.contains("deterministic-replay-verify-v1"));
+        assert!(receipt_text.contains("deterministic-replay-verify"));
+        assert!(receipt_text.contains("no-divergence"));
+        let receipt = parse_gate_receipt(&gate_receipt).expect("parse gate receipt");
         assert!(receipt.checks.iter().any(|check| check == "executor-preflight"));
         assert!(receipt.checks.iter().any(|check| check == "executor-kind-binding"));
         assert!(receipt.checks.iter().any(|check| check == "allowed-hostcall-binding"));
@@ -442,6 +447,12 @@ mod tests {
         let tampered = parse_text(&tampered_text).expect("parse tampered gate receipt");
         let error = parse_gate_receipt(&tampered).expect_err("missing executor execution binding check fails");
         assert!(error.to_string().contains("executor-execution-receipt-binding"), "{error}");
+
+        let tampered_replay_text =
+            receipt_text.replacen("<divergence \"none\">", "<divergence \"effect-response\">", 1);
+        let tampered_replay = parse_text(&tampered_replay_text).expect("parse tampered replay receipt");
+        let error = parse_gate_receipt(&tampered_replay).expect_err("tampered generic replay receipt fails");
+        assert!(error.to_string().contains("replay verify ref"), "{error}");
     }
 
     #[test]

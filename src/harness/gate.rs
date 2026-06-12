@@ -56,6 +56,7 @@ use crate::evidence_chain::parse_chain_anchor;
 use crate::evidence_chain::parse_chain_checkpoint;
 use crate::evidence_chain::parse_chain_link;
 use crate::evidence_chain::parse_chain_predicate_receipt;
+use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
 use crate::preserves_rail::HARNESS_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::HARNESS_OBSERVATION_SCHEMA;
@@ -78,6 +79,8 @@ pub struct GateCheck {
     pub initial_state_hash: String,
     pub final_state_hash: String,
     pub replay_actual_report_ref: String,
+    pub deterministic_replay_verify_ref: String,
+    pub deterministic_replay_verify_value: IOValue,
     pub executor_preflights_ref: String,
     pub executor_execution_receipts_ref: String,
     pub runtime_predicate_receipts_ref: String,
@@ -298,6 +301,7 @@ pub fn gate_receipt_value(check: &GateCheck) -> IOValue {
         ("chain-checkpoint", check.chain_evidence.checkpoint_ref.as_str()),
         ("chain-range-predicate", check.chain_evidence.range_predicate_ref.as_str()),
         ("turn-journals", check.turn_journals.aggregate_ref.as_str()),
+        ("deterministic-replay-verify", check.deterministic_replay_verify_ref.as_str()),
     ];
     if let Some(redaction_policy_ref) = &check.redaction_policy_ref {
         refs.push(("redaction-policy", redaction_policy_ref.as_str()));
@@ -488,6 +492,7 @@ pub fn parse_gate_receipt(value: &IOValue) -> Result<GateReceipt> {
     require_artifact_ref(&artifact_refs, "chain-checkpoint", &chain_evidence.checkpoint_ref)?;
     require_artifact_ref(&artifact_refs, "chain-range-predicate", &chain_evidence.range_predicate_ref)?;
     require_artifact_ref(&artifact_refs, "turn-journals", &turn_journals.aggregate_ref)?;
+    require_artifact_ref(&artifact_refs, "deterministic-replay-verify", &replay.verify_ref)?;
     if artifact_kind == "repro-bundle" {
         require_artifact_kind(&artifact_refs, "redaction-policy")?;
         require_artifact_kind(&artifact_refs, "redaction-gate")?;
@@ -647,6 +652,9 @@ fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Optio
         .executor_preflights
         .as_ref()
         .ok_or_else(|| MoltenError::invalid_harness("missing executor preflight evidence"))?;
+    let deterministic_replay_verify_value =
+        harness_replay_verify_value(&replay.expected_report_ref, &replay.actual_report_ref, &replay.final_state_hash);
+    let deterministic_replay_verify_ref = canonical_hash(&deterministic_replay_verify_value)?;
     let chain_evidence = build_gate_chain_evidence(
         &validation.report_ref,
         &validation.suite_ref,
@@ -662,6 +670,8 @@ fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Optio
         initial_state_hash: report.initial_state_hash,
         final_state_hash: report.final_state_hash,
         replay_actual_report_ref: replay.actual_report_ref,
+        deterministic_replay_verify_ref,
+        deterministic_replay_verify_value,
         executor_preflights_ref: canonical_hash(&executor_preflights.value)?,
         executor_execution_receipts_ref: executor_execution_receipts_ref(&report.observations)?,
         runtime_predicate_receipts_ref: runtime_predicate_receipts_ref(&report.observations)?,
@@ -733,12 +743,30 @@ fn validation_value(check: &GateCheck) -> IOValue {
     ])
 }
 
+fn harness_replay_verify_value(expected_report_ref: &str, actual_report_ref: &str, final_state_hash: &str) -> IOValue {
+    record("deterministic-replay-verify-v1", vec![
+        string(DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
+        string("pass"),
+        record("expected-report-ref", vec![string(expected_report_ref)]),
+        record("actual-report-ref", vec![string(actual_report_ref)]),
+        record("final-state-ref", vec![string(final_state_hash)]),
+        record("divergence", vec![string("none")]),
+        record("checks", vec![sequence(vec![
+            record("check", vec![string("report-replayed"), string("pass")]),
+            record("check", vec![string("final-state-bound"), string("pass")]),
+            record("check", vec![string("no-divergence"), string("pass")]),
+        ])]),
+    ])
+}
+
 fn replay_value(check: &GateCheck) -> IOValue {
     record("replay", vec![
         record("status", vec![string("pass")]),
         record("expected-report", vec![string(&check.report_ref)]),
         record("actual-report", vec![string(&check.replay_actual_report_ref)]),
         record("final-state", vec![string(&check.final_state_hash)]),
+        record("verify-ref", vec![string(&check.deterministic_replay_verify_ref)]),
+        check.deterministic_replay_verify_value.clone(),
     ])
 }
 
@@ -1598,6 +1626,7 @@ struct ReplayReceipt {
     expected_report_ref: String,
     actual_report_ref: String,
     final_state_hash: String,
+    verify_ref: String,
 }
 
 fn parse_validation(value: &Value<IOValue>) -> Result<ValidationReceipt> {
@@ -1627,16 +1656,77 @@ fn parse_validation(value: &Value<IOValue>) -> Result<ValidationReceipt> {
 
 fn parse_replay(value: &Value<IOValue>) -> Result<ReplayReceipt> {
     let value = value_to_iovalue(value);
-    let replay = simple_record(&value, "replay", 4)?;
+    let replay = simple_record(&value, "replay", 6)?;
     let status = required_record_string(&replay[0], "status", "gate replay status")?;
     if status != "pass" {
         return Err(MoltenError::invalid_harness(format!("unsupported gate replay status {status}")));
     }
+    let expected_report_ref = required_record_hash(&replay[1], "expected-report", "gate replay expected report ref")?;
+    let actual_report_ref = required_record_hash(&replay[2], "actual-report", "gate replay actual report ref")?;
+    let final_state_hash = required_record_hash(&replay[3], "final-state", "gate replay final state hash")?;
+    let verify_ref = required_record_hash(&replay[4], "verify-ref", "gate replay verify ref")?;
+    let verify_value = value_to_iovalue(&replay[5]);
+    validate_harness_replay_verify_value(
+        &verify_value,
+        &verify_ref,
+        &expected_report_ref,
+        &actual_report_ref,
+        &final_state_hash,
+    )?;
     Ok(ReplayReceipt {
-        expected_report_ref: required_record_hash(&replay[1], "expected-report", "gate replay expected report ref")?,
-        actual_report_ref: required_record_hash(&replay[2], "actual-report", "gate replay actual report ref")?,
-        final_state_hash: required_record_hash(&replay[3], "final-state", "gate replay final state hash")?,
+        expected_report_ref,
+        actual_report_ref,
+        final_state_hash,
+        verify_ref,
     })
+}
+
+fn validate_harness_replay_verify_value(
+    value: &IOValue,
+    expected_verify_ref: &str,
+    expected_report_ref: &str,
+    actual_report_ref: &str,
+    final_state_hash: &str,
+) -> Result<()> {
+    let actual_verify_ref = canonical_hash(value)?;
+    if actual_verify_ref != expected_verify_ref {
+        return Err(MoltenError::invalid_harness("gate replay verify ref does not match embedded value"));
+    }
+    let receipt = simple_record(value, "deterministic-replay-verify-v1", 7)?;
+    let schema = required_string(&receipt[0], "deterministic replay verify schema")?;
+    if schema != DETERMINISTIC_REPLAY_VERIFY_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported deterministic replay verify schema {schema}; expected {DETERMINISTIC_REPLAY_VERIFY_SCHEMA}"
+        )));
+    }
+    let decision = required_string(&receipt[1], "deterministic replay verify decision")?;
+    if decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported deterministic replay verify decision {decision}"
+        )));
+    }
+    let verify_expected_report =
+        required_record_hash(&receipt[2], "expected-report-ref", "deterministic replay expected report")?;
+    let verify_actual_report =
+        required_record_hash(&receipt[3], "actual-report-ref", "deterministic replay actual report")?;
+    let verify_final_state = required_record_hash(&receipt[4], "final-state-ref", "deterministic replay final state")?;
+    let divergence = required_record_string(&receipt[5], "divergence", "deterministic replay divergence")?;
+    if divergence != "none" {
+        return Err(MoltenError::invalid_harness(format!(
+            "deterministic replay verify divergence must be none, got {divergence}"
+        )));
+    }
+    let checks = parse_checks(&receipt[6])?;
+    require_check(&checks, "report-replayed")?;
+    require_check(&checks, "final-state-bound")?;
+    require_check(&checks, "no-divergence")?;
+    if verify_expected_report != expected_report_ref
+        || verify_actual_report != actual_report_ref
+        || verify_final_state != final_state_hash
+    {
+        return Err(MoltenError::invalid_harness("deterministic replay verify refs do not match gate replay refs"));
+    }
+    Ok(())
 }
 
 fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
