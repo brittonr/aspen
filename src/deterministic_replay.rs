@@ -1067,6 +1067,9 @@ mod tests {
         assert_eq!(first.receipt_ref, second.receipt_ref);
         assert_eq!(first.decision, "pass");
         assert_eq!(first.divergence, ReplayDivergenceKind::None);
+        let first_text = to_text(&first.value).expect("render first replay");
+        assert!(first_text.contains("ordered-boundary-comparison"));
+        assert!(first_text.contains("recorded-effects-only"));
 
         let trace_a = record_fixture_value().expect("first fixture record");
         let trace_b = record_fixture_value().expect("second fixture record");

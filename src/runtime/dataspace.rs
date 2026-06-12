@@ -417,17 +417,39 @@ mod tests {
         let mut state = RuntimeState::new(7);
         let clock = state.apply_step(&RuntimeStep::Clock { actor: "a".into() });
         assert!(matches!(clock.as_slice(), [
-            RuntimeEvent::EffectRequest { .. },
-            RuntimeEvent::EffectResponse { .. }
+            RuntimeEvent::EffectRequest { sequence: 0, .. },
+            RuntimeEvent::EffectResponse {
+                sequence: 0,
+                value: 0,
+                ..
+            }
         ]));
         let random = state.apply_step(&RuntimeStep::Random {
             actor: "a".into(),
             upper: 10,
         });
         assert!(matches!(random.as_slice(), [
-            RuntimeEvent::EffectRequest { .. },
-            RuntimeEvent::EffectResponse { .. }
+            RuntimeEvent::EffectRequest {
+                sequence: 1,
+                upper: Some(10),
+                ..
+            },
+            RuntimeEvent::EffectResponse {
+                sequence: 1,
+                upper: Some(10),
+                ..
+            }
         ]));
+
+        let mut replay = RuntimeState::new(7);
+        assert_eq!(clock, replay.apply_step(&RuntimeStep::Clock { actor: "a".into() }));
+        assert_eq!(
+            random,
+            replay.apply_step(&RuntimeStep::Random {
+                actor: "a".into(),
+                upper: 10
+            })
+        );
     }
 
     #[test]
@@ -439,6 +461,7 @@ mod tests {
             value: RuntimeValue::string("service.ready").expect("runtime test value"),
         };
         let turn = state.begin_turn(&step);
+        assert_eq!(state.snapshot(), before);
         let events = state.rollback_turn(turn, step.primary_actor(), "policy denied");
         assert_eq!(state.snapshot(), before);
         assert!(matches!(events.as_slice(), [RuntimeEvent::TurnRolledBack { .. }]));
