@@ -39,6 +39,7 @@ pub const READ_ONLY_TOOLS: &[&str] = &[
     "list_provenance",
     "search_provenance",
     "search_retention_gc",
+    "search_replay_evidence",
     "short_id_resolve",
 ];
 
@@ -367,6 +368,59 @@ fn dispatch_read_only(
             push_optional_text_filter(&mut filters, &request.args, "plan-ref", "retention-gc-plan")?;
             push_optional_text_filter(&mut filters, &request.args, "apply-ref", "retention-gc-apply")?;
             push_optional_text_filter(&mut filters, &request.args, "execution-ref", "retention-gc-execution")?;
+            catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
+                root_refs: arg_strings(&request.args, "root")?,
+                include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
+                include_dependents: arg_bool(&request.args, "include-dependents", true)?,
+                filters,
+                visibility: request.visibility.clone(),
+            })
+            .map(CoreResult::Query)
+        }
+        "search_replay_evidence" => {
+            let mut filters = filters_from_args(&request.args)?;
+            push_bounded(
+                &mut filters,
+                CatalogFilter::Text("deterministic-replay:".to_string()),
+                MAX_CATALOG_MCP_FILTERS,
+                "catalog MCP filters",
+            )?;
+            push_optional_text_filter(&mut filters, &request.args, "stage", "deterministic-replay")?;
+            push_optional_text_filter(&mut filters, &request.args, "decision", "replay-decision")?;
+            push_optional_text_filter(&mut filters, &request.args, "divergence", "replay-divergence")?;
+            push_optional_text_filter(&mut filters, &request.args, "actor-id", "replay-actor")?;
+            push_optional_text_filter(&mut filters, &request.args, "handler-profile-ref", "replay-handler-profile")?;
+            push_optional_text_filter(&mut filters, &request.args, "expected-report-ref", "replay-expected-report")?;
+            push_optional_text_filter(&mut filters, &request.args, "actual-report-ref", "replay-actual-report")?;
+            push_optional_text_filter(&mut filters, &request.args, "final-state-ref", "replay-final-state")?;
+            push_optional_text_filter(&mut filters, &request.args, "expected-ref", "replay-expected-ref")?;
+            push_optional_text_filter(&mut filters, &request.args, "actual-ref", "replay-actual-ref")?;
+            push_optional_text_filter(&mut filters, &request.args, "expected-output-ref", "replay-expected-output")?;
+            push_optional_text_filter(&mut filters, &request.args, "actual-output-ref", "replay-actual-output")?;
+            push_optional_text_filter(
+                &mut filters,
+                &request.args,
+                "expected-effect-log-ref",
+                "replay-expected-effect-log",
+            )?;
+            push_optional_text_filter(
+                &mut filters,
+                &request.args,
+                "actual-effect-log-ref",
+                "replay-actual-effect-log",
+            )?;
+            push_optional_text_filter(
+                &mut filters,
+                &request.args,
+                "expected-final-state-ref",
+                "replay-expected-final-state",
+            )?;
+            push_optional_text_filter(
+                &mut filters,
+                &request.args,
+                "actual-final-state-ref",
+                "replay-actual-final-state",
+            )?;
             catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
                 root_refs: arg_strings(&request.args, "root")?,
                 include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
@@ -984,6 +1038,71 @@ mod tests {
         assert_eq!(receipt_call.decision, "pass");
         let receipt_text = to_text(&receipt_call.response_value).expect("provenance receipt response");
         assert!(receipt_text.contains("provenance:receipt"));
+    }
+
+    #[test]
+    fn replay_evidence_named_tool_searches_decision_divergence_and_refs() {
+        let root = temp_dir("catalog-mcp-replay-evidence");
+        let registry = root.join("registry");
+        let ledger_root = root.join("ledger");
+        let expected_report_ref = test_ref("replay-expected-report");
+        let actual_report_ref = test_ref("replay-actual-report");
+        let final_state_ref = test_ref("replay-final-state");
+        let expected_ref = test_ref("replay-expected-effect");
+        let actual_ref = test_ref("replay-actual-effect");
+        let handler_profile_ref = test_ref("replay-handler-profile");
+        let verify = record("deterministic-replay-verify-v1", vec![
+            string(crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
+            string("deny"),
+            record("expected-report-ref", vec![string(&expected_report_ref)]),
+            record("actual-report-ref", vec![string(&actual_report_ref)]),
+            record("final-state-ref", vec![string(&final_state_ref)]),
+            record("divergence", vec![string("effect-response")]),
+            checks_value(&["evidence-only", "no-authority-grant"]),
+        ]);
+        let divergence = record("deterministic-first-divergence-v1", vec![
+            string(crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA),
+            record("kind", vec![string("effect-response")]),
+            record("turn-id", vec![string("turn:0001")]),
+            record("actor-id", vec![string("actor:helper")]),
+            record("log-position", vec![string("0")]),
+            record("handler-profile-ref", vec![string(&handler_profile_ref)]),
+            record("expected-ref", vec![string(&expected_ref)]),
+            record("actual-ref", vec![string(&actual_ref)]),
+            checks_value(&["evidence-only", "first-divergence"]),
+        ]);
+        ledger::import_artifact(&ledger_root, &verify).expect("import replay verify");
+        ledger::import_artifact(&ledger_root, &divergence).expect("import first divergence");
+
+        let verify_request = mcp_request_value("search_replay_evidence", vec![
+            record("stage", vec![string("verify")]),
+            record("decision", vec![string("deny")]),
+            record("final-state-ref", vec![string(&final_state_ref)]),
+        ])
+        .expect("replay verify request");
+        let verify_call = call(&registry, Some(&ledger_root), &verify_request).expect("replay verify call");
+        assert_eq!(verify_call.decision, "pass");
+        let verify_text = to_text(&verify_call.response_value).expect("replay verify response");
+        assert!(verify_text.contains("deterministic-replay:verify"));
+        assert!(verify_text.contains(&expected_report_ref));
+
+        let divergence_request = mcp_request_value("search_replay_evidence", vec![
+            record("stage", vec![string("first-divergence")]),
+            record("divergence", vec![string("effect-response")]),
+            record("handler-profile-ref", vec![string(&handler_profile_ref)]),
+            record("actual-ref", vec![string(&actual_ref)]),
+        ])
+        .expect("replay divergence request");
+        let divergence_call = call(&registry, Some(&ledger_root), &divergence_request).expect("replay divergence call");
+        assert_eq!(divergence_call.decision, "pass");
+        let divergence_text = to_text(&divergence_call.response_value).expect("replay divergence response");
+        assert!(divergence_text.contains("deterministic-replay:first-divergence"));
+        assert!(divergence_text.contains("actor:helper"));
+        assert!(
+            to_text(&divergence_call.receipt_value)
+                .expect("replay MCP receipt")
+                .contains("mutating-tools-denied")
+        );
     }
 
     #[test]

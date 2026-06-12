@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-12 | self | While draining replay MCP UX, I ran full `cargo test --workspace` in parallel with Octet under a 240s Steel timeout; tests passed but the wrapper timed out before returning status. | For full workspace tests after a cold rebuild, use the max Steel timeout or run alone first, then Octet in parallel only after caches are warm. |
 | 2026-06-12 | self | While validating replay receipt catalog work, I tried `(join! args " ")` in Steel and the wrapper failed before running checks. | Do not guess mutating/list helpers in validation wrappers; either print the command name only or use a known-good wrapper with explicit args. |
 | 2026-06-12 | self | While adding deterministic replay fixture receipts, I mapped `Vec<IOValue>` through the string helper and hit `IOValue: AsRef<str>` compile errors. | When a helper already returns Preserves `IOValue` records, pass the vector directly to `sequence(...)`; only map `string` over string slices/Strings. |
 | 2026-06-12 | self | Nix nextest on current head failed under the sandbox with 60s per-test timeouts for dogfood/job CLI tests and Hegel property failures while 8 tests ran concurrently; local cargo/nextest passed. | Treat Nix nextest timeouts/property flakes as resource pressure first: reduce CI nextest concurrency and raise slow-timeout before debugging source semantics. |
