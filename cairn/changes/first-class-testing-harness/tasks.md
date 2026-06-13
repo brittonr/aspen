@@ -32,18 +32,18 @@
 
 ## Phase 4: Integration rails
 
-- [ ] [serial] r[molten.testing.integration_rails.transcript_step] Run executable transcript stanzas as harness steps and preserve transcript-run receipts in harness reports.
+- [x] [serial] r[molten.testing.integration_rails.transcript_step] Run executable transcript stanzas as harness steps and preserve transcript-run receipts in harness reports.
 - [x] [serial] r[molten.testing.determinism_replay_core.record_replay] Integrate record and replay handler profiles so production-like runs can be captured and re-executed through the same harness rail.
-- [ ] [parallel] r[molten.testing.integration_rails] Add deterministic chaos mode with seeded failures, delays, drops, reorders, partitions, and resource pressure.
-- [ ] [parallel] r[molten.testing.harness_artifacts.identity] Memoize deterministic harness results by artifact closure, initial state, policy/schema refs, profile config, seed/log hash, runner version, and canonical suite hash.
-- [ ] [parallel] r[molten.testing.integration_rails] Define the operator dogfood workflow as a named harness suite with final receipt-backed report.
+- [x] [parallel] r[molten.testing.integration_rails] Add deterministic chaos mode with seeded failures, delays, drops, reorders, partitions, and resource pressure.
+- [x] [parallel] r[molten.testing.harness_artifacts.identity] Memoize deterministic harness results by artifact closure, initial state, policy/schema refs, profile config, seed/log hash, runner version, and canonical suite hash.
+- [x] [parallel] r[molten.testing.integration_rails] Define the operator dogfood workflow as a named harness suite with final receipt-backed report.
 
 ## Phase 5: Property and predicate testing
 
-- [ ] [serial] r[molten.testing.integration_rails.property_counterexample] Record Hegel generated inputs, shrunk counterexamples, and replay seeds as Preserves fixtures and report refs.
-- [ ] [serial] r[molten.testing.integration_rails.property_counterexample] Add Hegel property suites for scheduler total order, envelope canonical identity, Preserves pattern matching, trace hash stability, replay identity, and no invisible fixture mutation.
-- [ ] [parallel] r[molten.testing.integration_rails] Run bounded Trellis predicate checks for choreography projection, turn visibility, leases/fencing, replay guards, and resource invariants as harness checks.
-- [ ] [parallel] r[molten.testing.preserves_comm_rail.rendering] Add optional CI exporters such as JUnit or markdown while keeping canonical Preserves reports normative.
+- [x] [serial] r[molten.testing.integration_rails.property_counterexample] Record Hegel generated inputs, shrunk counterexamples, and replay seeds as Preserves fixtures and report refs.
+- [x] [serial] r[molten.testing.integration_rails.property_counterexample] Add Hegel property suites for scheduler total order, envelope canonical identity, Preserves pattern matching, trace hash stability, replay identity, and no invisible fixture mutation.
+- [x] [parallel] r[molten.testing.integration_rails] Run bounded Trellis predicate checks for choreography projection, turn visibility, leases/fencing, replay guards, and resource invariants as harness checks.
+- [x] [parallel] r[molten.testing.preserves_comm_rail.rendering] Add optional CI exporters such as JUnit or markdown while keeping canonical Preserves reports normative.
 
 ## Phase 6: Conformance, repro, and security rails
 
