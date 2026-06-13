@@ -1,13 +1,8 @@
 ## Context
 
-Octet summary highlights the immediate blockers to strict mode:
+Early Octet summaries highlighted blockers to strict mode: high-volume lint families, oversized shell files, high-arity helpers, unbounded collection growth, raw/stringly refs, and critical caveats such as panic/unwrap/time/resource-shape findings. Current strict evidence is configuration-clean with disabled lint families documented in `dylint.toml` and `docs/octet-tigerstyle-remediation.md`.
 
-- full workspace: `3763` warnings, `142` autofixable;
-- lib-only: `1586` warnings, `56` autofixable;
-- high-volume lint families: `non_trait_imports`, `path_segment_repetition`, `unbounded_collection_growth`, `too_many_parameters`, `function_length`, `bool_naming`, `no_unwrap`, `excessive_file_length`, `ambient_clock`, `unbounded_loop`, `no_panic`;
-- focused paths: `src/job_dag.rs`, `src/main.rs`, and `src/node_runtime.rs` have warning clusters relevant to current development.
-
-Some lints are style/noise in early scaffolding. Others are direct Tiger Style and fail-close blockers: long functions hide control flow, high-arity builders produce mismatched evidence fields, unbounded collections undermine deterministic resource policy, raw strings blur authority/ref identity, and panic/unwrap/time caveats can make evidence unreplayable.
+Some lints are style/noise in early scaffolding. Others are direct Tiger Style and fail-close blockers: long functions hide control flow, high-arity builders produce mismatched evidence fields, unbounded collections undermine deterministic resource policy, raw strings blur authority/ref identity, and panic/unwrap/time caveats can make evidence unreplayable. This archive distinguishes completed gate/evidence remediation from future source-remediated-zero module splits.
 
 ## Remediation principles
 
@@ -23,15 +18,15 @@ Some lints are style/noise in early scaffolding. Others are direct Tiger Style a
 
 ### `src/main.rs`
 
-- Extract command groups into module-specific dispatch files under a CLI shell namespace.
+- Future source-remediated-zero work should extract command groups into module-specific dispatch files under a CLI shell namespace.
 - Keep Clap-only parsing at the edge; convert CLI strings into typed refs before calling core modules.
-- Replace long match arms with command handler functions under 70 lines.
+- Replace long match arms with command handler functions under bounded sizes where touched.
 - Ensure commands that request artifact output emit canonical failure artifacts rather than relying on stderr.
 
 ### `src/job_dag.rs`
 
-- Split canonical DTOs, parsing, sync, admission, execution, and tests into submodules.
-- Replace high-arity request/receipt builders with input structs.
+- Future source-remediated-zero work should split canonical DTOs, parsing, sync, admission, execution, and tests into submodules without changing canonical refs.
+- Replace high-arity request/receipt builders with input structs where touched.
 - Add explicit collection bounds for stage lists, selected stage sets, diagnostics, receipt refs, and artifact closure traversal.
 - Remove sentinel fallback patterns in admission/execution validation.
 
@@ -46,11 +41,12 @@ Some lints are style/noise in early scaffolding. Others are direct Tiger Style a
 
 Each remediation slice should report:
 
-- before/after Octet finding counts by lint and path;
+- before/after Octet finding counts by lint and path, or configuration-clean caveats when disabled lint families are in use;
 - strict/quarantine gate receipt refs;
+- remediation-plan refs;
 - object corpus/fingerprint refs for changed critical paths;
 - focused cargo/clippy/tests/Cairn validation;
-- whether warning burn-down target was met.
+- whether warning burn-down target was met or deferred as future source-remediated-zero work.
 
 ## Non-goals
 
