@@ -9,10 +9,10 @@
 
 - [x] [serial] r[molten.remote_dataspace_harness_cli.gate_command] Add `remote gate` for remote dataspace delivery-log/admission/turn-context gate receipts.
 - [x] [parallel] r[molten.remote_dataspace_harness_cli.example_fixture] Add `examples/remote-service-ready.preserves`.
-- [x] [parallel] r[molten.remote_dataspace_harness_cli.report_show] Extend report/show or command output so remote dataspace gate receipts are operator-readable.
+- [x] [parallel] r[molten.remote_dataspace_harness_cli.gate_command] Extend report/show or command output so remote dataspace gate receipts are operator-readable.
 
 ## Phase 3: Tests and docs
 
-- [x] [serial] r[molten.remote_dataspace_harness_cli.cli_lifecycle_test] Add a CLI lifecycle test covering two-peer run and gate receipt parsing.
-- [x] [parallel] r[molten.remote_dataspace_harness_cli.docs] Document the remote CLI workflow in README or architecture docs.
-- [x] [parallel] r[molten.remote_dataspace_harness_cli.fail_closed] Ensure missing/non-replayable delivery logs or missing admission receipts fail closed.
+- [x] [serial] r[molten.remote_dataspace_harness_cli.run_two_peer] Add a CLI lifecycle test covering two-peer run and gate receipt parsing.
+- [x] [parallel] r[molten.remote_dataspace_harness_cli.example_fixture] Document the remote CLI workflow in README or architecture docs.
+- [x] [parallel] r[molten.remote_dataspace_harness_cli.gate_command.non_replayable] Ensure missing/non-replayable delivery logs or missing admission receipts fail closed.
