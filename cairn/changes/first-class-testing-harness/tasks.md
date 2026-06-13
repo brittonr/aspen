@@ -47,12 +47,12 @@
 
 ## Phase 6: Conformance, repro, and security rails
 
-- [ ] [serial] r[molten.testing.adapter_conformance] Add conformance suites for Iroh, Redb, Wasmtime/WASI, Steel, blob/chunk, typed storage, policy, resource, and fake network adapters using the same Preserves/effect contract.
-- [ ] [serial] r[molten.testing.actor_kind_interop] Add cross-kind suites for native Rust, Steel, Wasm component, adapter-backed, and remote-proxy actors communicating through the same envelope, dataspace, hostcall, policy, effect, trace, and receipt boundaries.
-- [ ] [serial] r[molten.testing.system_layer_suites] Add system-layer suites for demand-driven services, dependency gating, readiness/failure assertions, logical supervision, restart/shutdown, scoped service refs, auto-retraction, policy admission, and deterministic replay.
-- [ ] [serial] r[molten.testing.repro_bundles] Export minimal, policy-redacted repro bundles with suite/case/step refs, dependency closure, initial snapshot, policy/schema refs, profile, seed/effect log, traces, receipts, and first-divergence report.
-- [ ] [serial] r[molten.testing.negative_security_suites] Add negative/security suites for denied capabilities, revoked authority, malformed envelopes, noncanonical encodings, tampered content refs, invalid receipts, resource exhaustion, replay failures, and redaction leaks.
-- [ ] [parallel] r[molten.testing.counterexample_shrinking] Store Hegel generation seeds, shrink paths, shrunk Preserves fixtures, and replay identity as reusable regression cases.
+- [x] [serial] r[molten.testing.adapter_conformance] Add conformance suites for Iroh, Redb, Wasmtime/WASI, Steel, blob/chunk, typed storage, policy, resource, and fake network adapters using the same Preserves/effect contract.
+- [x] [serial] r[molten.testing.actor_kind_interop] Add cross-kind suites for native Rust, Steel, Wasm component, adapter-backed, and remote-proxy actors communicating through the same envelope, dataspace, hostcall, policy, effect, trace, and receipt boundaries.
+- [x] [serial] r[molten.testing.system_layer_suites] Add system-layer suites for demand-driven services, dependency gating, readiness/failure assertions, logical supervision, restart/shutdown, scoped service refs, auto-retraction, policy admission, and deterministic replay.
+- [x] [serial] r[molten.testing.repro_bundles] Export minimal, policy-redacted repro bundles with suite/case/step refs, dependency closure, initial snapshot, policy/schema refs, profile, seed/effect log, traces, receipts, and first-divergence report.
+- [x] [serial] r[molten.testing.negative_security_suites] Add negative/security suites for denied capabilities, revoked authority, malformed envelopes, noncanonical encodings, tampered content refs, invalid receipts, resource exhaustion, replay failures, and redaction leaks.
+- [x] [parallel] r[molten.testing.counterexample_shrinking] Store Hegel generation seeds, shrink paths, shrunk Preserves fixtures, and replay identity as reusable regression cases.
 
 ## Phase 7: Upgrade, coverage, multi-peer, and resource rails
 
