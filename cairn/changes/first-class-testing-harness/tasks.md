@@ -64,4 +64,4 @@
 ## Phase 8: Golden traces and flake prevention
 
 - [ ] [serial] r[molten.testing.golden_traces] Maintain versioned golden canonical trace, receipt, and state-hash artifacts with reviewed update receipts and migration notes.
-- [ ] [serial] r[molten.testing.flake_prevention] Reject flaky tests from CI/admission/release/upgrade gates unless they are deterministic, replayed, or recorded for replay; mark exploratory runs as non-replayable evidence.
+- [x] [serial] r[molten.testing.flake_prevention] Reject flaky tests from CI/admission/release/upgrade gates unless they are deterministic, replayed, or recorded for replay; mark exploratory runs as non-replayable evidence.

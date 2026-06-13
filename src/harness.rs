@@ -1525,6 +1525,22 @@ mod tests {
     }
 
     #[test]
+    fn non_replayable_exploratory_pass_report_cannot_satisfy_gate() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let report_text = to_text(&run.report_value).expect("render report");
+        let exploratory_text = report_text.replacen("\"deterministic\"", "\"non-replayable\"", 1);
+        let exploratory_report = parse_text(&exploratory_text).expect("parse exploratory report");
+
+        let error = gate_check_value(&exploratory_report)
+            .expect_err("non-replayable pass report cannot satisfy deterministic gate");
+        assert!(
+            error.to_string().contains("unsupported evidence replay status non-replayable"),
+            "{error}"
+        );
+    }
+
+    #[test]
     fn actor_executor_registry_marks_placeholders() {
         let suite = parse_text(
             r#"<harness-suite-v1 "molten.harness.suite.v1" "wasm-future" 1
