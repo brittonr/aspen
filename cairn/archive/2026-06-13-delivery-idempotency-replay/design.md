@@ -33,15 +33,15 @@ Operation identity is part of receipts and dedup ledgers.
 
 ## Delivery classes
 
-Molten should distinguish:
+This completed slice distinguishes the concrete evidence outcomes implemented by the delivery idempotency module:
 
-- `ephemeral`: best-effort notification, no durable retry.
-- `deduped`: duplicate requests return prior result/receipt within a window.
-- `transactional`: commit or rollback within a turn/store transaction.
-- `compensating`: requires explicit compensating action for rollback-like behavior.
-- `one_shot_external`: cannot be retried safely without operator/policy approval.
+- `first`: the next scoped sequence is admitted and the caller may commit the covered side effect.
+- `duplicate`: the same operation/evidence returns the prior receipt or semantic result and suppresses a second side effect.
+- `conflict`, `stale`, and `gap`: the delivery is denied before side effects.
+- `retry`: a deterministic retry receipt points at the expected sequence boundary before side effects.
+- lifecycle failure traces separately disclose `one_shot_external` effects without pretending they were rolled back.
 
-Effect manifests and handler bindings declare the delivery class.
+Richer `ephemeral`, `transactional`, `compensating`, or manifest-declared delivery classes remain future extensions unless a specific effect manifest or handler profile admits them.
 
 ## Dedup and replay windows
 
@@ -53,10 +53,10 @@ Retries are runtime actions with their own traces. Retry schedules use logical t
 
 ## Integration
 
-Choreography messages use protocol/session/op indices and reject out-of-state duplicates. Typed storage writes use operation ids to prevent duplicate mutations. Remote artifact sync fetch/install uses closure and operation ids. Job DAG stages use memo keys and stage operation ids. Upgrade tasks are idempotent where possible and record irreversible one-shot actions.
+Remote dataspace and node-control ingress use scoped operation ids and idempotency receipts before committing local side effects or durable enqueue operations. Coordination/control-plane commands derive operation ids for duplicate replay. Job DAG stages carry stage operation ids and memo keys as evidence, while worker execution still requires separate authority/provenance/source-gate checks. Choreography op-index integration, typed storage mutation dedup, remote artifact sync install dedup, and upgrade storage-migration idempotency are future explicit extensions; generic delivery receipts do not grant those subsystems authority or exactly-once semantics.
 
 ## Open Questions
 
-- Which dedup ledgers should be local Redb first vs Raft-backed control-plane state?
-- What is the default dedup window per operation class?
-- How should one-shot external effects be represented in upgrade rollback plans?
+- Which remaining subsystems should get first-class delivery idempotency next: typed storage writes, choreography op indices, remote artifact install, or upgrade storage migrations?
+- Which dedup ledgers should stay local Redb and which should move to Raft-backed control-plane state?
+- What is the default retention window per future manifest-declared delivery class?
