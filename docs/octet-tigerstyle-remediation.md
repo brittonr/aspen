@@ -4,24 +4,24 @@ This file records the current Octet source-gate evidence and the remaining cavea
 
 Canonical plan receipt: `target/octet/remediation-plan.preserves`
 
-Plan ref: `blake3:88109c97b000db6325392cb834cfeea475a90fd7e6e64c608b7b865082cc9157`
+Plan ref: `blake3:0768b1f12b4575ea68ef72cb69753607a633cded847a2d7c39c4e763d91eddba`
 
-Latest Octet receipt refs: artifact import `blake3:1d9a63acab05c45b7de3ee960f7b05c1ec78ced919b3f33ee16f63e381cf466b`; strict gate pass `blake3:1e345244fbba421d7aee3ff4aeb8391aea6c16fa34a8f0e8bd952c00b0d8e0c9`; remediation plan `blake3:88109c97b000db6325392cb834cfeea475a90fd7e6e64c608b7b865082cc9157`.
+Latest Octet receipt refs: artifact import `blake3:395b1e271a8392578b87c748db5d1b7aafd41fbc43ab1d28a6ed35126ed1771e`; strict gate pass `blake3:cf0cc384a6881b2b99642c6693c89a13e933bc273fa01e7035643e244f769e9d`; remediation plan `blake3:0768b1f12b4575ea68ef72cb69753607a633cded847a2d7c39c4e763d91eddba`.
 
 ## Artifact refs
 
 | Scope | Artifact | Content/canonical ref |
 |---|---|---|
-| workspace | `target/octet/status.json` | `blake3:4a0e50c1d618632fa99e0799890c69cffb292a10cc5d4c4d6a336717d166db8f` |
-| workspace | `target/octet/summary.txt` | `blake3:390cf1201df74cc8c138476002fbe3a0d2cd6332f3f04cfb09cef48931f54eac` |
-| workspace/focused | `target/octet/object-corpus-receipt.json` | `blake3:c820c5a496005f8c568d289016082fb8be20316932777fe79a9af2ec466130df` |
-| lib-only | `target/octet-lib/status.json` | `blake3:09166845bf27b17ed19b30a49b8a54ad9c8738d24c8110eb950f3dae35164c36` |
-| lib-only | `target/octet-lib/summary.txt` | `blake3:cf9e24bf22e8af6374620ac714f1dfca701f3c95d7d5107e7656b83c17a1560f` |
-| workspace/import | `target/octet/artifact-ledger-receipt.preserves` | `blake3:1d9a63acab05c45b7de3ee960f7b05c1ec78ced919b3f33ee16f63e381cf466b` |
-| workspace/gate | `target/octet/gate-receipt.preserves` | `blake3:1e345244fbba421d7aee3ff4aeb8391aea6c16fa34a8f0e8bd952c00b0d8e0c9` |
-| workspace/plan | `target/octet/remediation-plan.preserves` | `blake3:88109c97b000db6325392cb834cfeea475a90fd7e6e64c608b7b865082cc9157` |
+| workspace | `target/octet/status.json` | `blake3:22df34469748c613baf9546600f608569344f9c1b1c3a403ae27e9f814e41d72` |
+| workspace | `target/octet/summary.txt` | `blake3:950623ea396e4d89b32d1e2f41f621f5d58b78a441de16cbd31ccf7a01044fca` |
+| workspace/focused | `target/octet/object-corpus-receipt.json` | `blake3:99f0e63d70a0bedd90584ebfac4b12828803a491da97cbc410531783ea5068c2` |
+| lib-only | `target/octet-lib/status.json` | `blake3:fa51f427bf8e5716e3f910e25e2f7877e46577dea09a960c07f33d786cb30086` |
+| lib-only | `target/octet-lib/summary.txt` | `blake3:3240ff47b4e2515d42fccb52d810beed032ccacdc07f7bc652d37cd3c3c5cdae` |
+| workspace/import | `target/octet/artifact-ledger-receipt.preserves` | `blake3:395b1e271a8392578b87c748db5d1b7aafd41fbc43ab1d28a6ed35126ed1771e` |
+| workspace/gate | `target/octet/gate-receipt.preserves` | `blake3:cf0cc384a6881b2b99642c6693c89a13e933bc273fa01e7035643e244f769e9d` |
+| workspace/plan | `target/octet/remediation-plan.preserves` | `blake3:0768b1f12b4575ea68ef72cb69753607a633cded847a2d7c39c4e763d91eddba` |
 
-Focused object corpus: object-set hash `b3:280a9b948271535f2d11930b090011d50013d276b63918d0592547ce286455a9`, 312 objects, 312 pure-cache blocked, source paths `src/job_dag.rs`, `src/main.rs`, `src/node_runtime.rs`.
+Focused object corpus: object-set hash `b3:6ad79a749ffabf9f04d86001b7028f4b12b5ff0b9ab5384b120f8996ee9a3d3b`, 2650 objects, 2650 pure-cache blocked, source paths include `src/cli_octet.rs` plus the critical runtime, node, job, retention, secrets, protocol, catalog, and CLI paths listed in `target/octet/object-corpus-receipt.json`.
 
 ## Counts
 
@@ -38,6 +38,8 @@ Critical caveat pass: the latest lib-only and workspace runs have no active Octe
 
 Additional validation after the Nix fetch fix: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` completed successfully at `/nix/store/8fcxgyj17dkigp5idpvnzb5dv78nd4nz-molten-nextest`. The flake now maps private OnixResearch git dependencies to locked local `*-src` path inputs for unit2nix git-cache population, so the Nix builder no longer needs SSH access.
 
+Release dogfood validation for the active `octet-source-remediated-zero` first split completed with `nix build .#checks.x86_64-linux.dogfood-local-node --no-link --print-out-paths -L --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` at `/nix/store/fwssw4qm1n291lh5f919w626pi239kid-molten-dogfood-local-node`. Evidence highlights: nextest 609/609 passed; Nix release verify `blake3:83c9a66232d736c2e63bea3ae342a763d806c9d17af2cbded16e3bfdccfaf8dc`; release bundle verify `blake3:268d3489901b6b43dbd1c6596fa5eb66a1cd5a6c3b2f231e00e41487521841ab`; promotion gate `blake3:4757c7aebf542911fc9227b5fede634484b1c1fc48e4148f297d2affe62994f4`; promotion summary `blake3:a51acc6108ab576f32a68dcd42ef60310f2d43b9372278c1dcf9c0bef859685d`; export verify `blake3:74ed8add45f1a99a35a4e5578a23e3c90fc712b409a19c2db45ec91fbce21bf0`.
+
 ## Critical surfaces
 
 | Surface | Files | Workspace findings | Critical findings |
@@ -49,9 +51,11 @@ Additional validation after the Nix fetch fix: `nix build .#checks.x86_64-linux.
 | ledger-and-evidence | `src/ledger.rs`, `src/evidence.rs`, `src/evidence_chain.rs` | 0 | 0 |
 | adapter-boundaries | `src/harness/wasm_executor.rs`, `src/harness/steel_executor.rs`, `src/effects.rs`, `src/remote_dataspace.rs` | 0 | 0 |
 | redaction-and-export | `src/catalog.rs`, `src/catalog_mcp.rs`, `src/transcripts.rs`, `src/harness/repro.rs` | 0 | 0 |
-| cli-artifact-output | `src/main.rs` | 0 | 0 |
+| cli-artifact-output | `src/main.rs`, `src/cli_octet.rs` | 0 | 0 |
 
 ## Burn-down order if source-remediated zero is required
+
+Active first slice: `cairn/changes/octet-source-remediated-zero` starts the source-remediated-zero burn-down by moving Octet CLI command parsing and dispatch from `src/main.rs` into `src/cli_octet.rs` while preserving `molten test octet ...` command semantics. The broader state remains configuration-clean until disabled lint families are removed or narrowed and evidence is refreshed.
 
 1. Split or reshape long files/functions instead of relying on `function_length` and `excessive_file_length` disables.
 2. Normalize imports and repeated path segments instead of relying on `non_trait_imports` and `path_segment_repetition` disables.
