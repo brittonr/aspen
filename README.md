@@ -574,7 +574,7 @@ cargo octet check -p molten --artifact-dir target/octet-lib -- --lib
 cargo octet object corpus receipt \
   --output target/octet/object-corpus-receipt.json \
   src/artifacts.rs src/catalog.rs src/catalog_mcp.rs \
-  src/chunk_store.rs src/cli_octet.rs src/coordination.rs src/delivery_idempotency.rs \
+  src/chunk_store.rs src/cli_octet.rs src/cli_retention.rs src/coordination.rs src/delivery_idempotency.rs \
   src/eval_cache.rs src/job_dag.rs src/ledger.rs src/main.rs \
   src/node_daemon.rs src/node_runtime.rs src/octet_gate.rs \
   src/operator_dogfood.rs src/plugin_host.rs src/preserves_rail.rs \
