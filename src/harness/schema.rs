@@ -68,6 +68,7 @@ use crate::preserves_rail::HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA;
 use crate::preserves_rail::HARNESS_REPORT_SCHEMA;
 use crate::preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA;
 use crate::preserves_rail::HARNESS_REPRO_SEAL_SCHEMA;
+use crate::preserves_rail::HARNESS_RUN_RECEIPT_SCHEMA;
 use crate::preserves_rail::HARNESS_SUITE_SCHEMA;
 use crate::preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA;
 use crate::preserves_rail::HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA;
@@ -2818,6 +2819,88 @@ pub fn validate_upgrade_replay_receipt(
 
 fn report_trace_ref(report: &HarnessReport) -> Result<String> {
     canonical_hash(&sequence(report.observations.iter().map(|observation| observation.value.clone()).collect()))
+}
+
+pub fn harness_run_receipt_value(report_value: &IOValue, export_refs: &[&str]) -> Result<IOValue> {
+    let report = parse_report(report_value)?;
+    for export_ref in export_refs {
+        validate_content_ref(export_ref)?;
+    }
+    let step_results = report
+        .observations
+        .iter()
+        .map(|observation| {
+            record("step-result", vec![
+                record("index", vec![u64_value(observation.index)]),
+                record("step-ref", vec![string(&observation.step_ref)]),
+                record("observation-ref", vec![string(&observation.observation_ref)]),
+                record("status", vec![string("pass")]),
+            ])
+        })
+        .collect::<Vec<_>>();
+    let adapter_fixture_ref = report
+        .executor_preflights
+        .as_ref()
+        .map(|preflights| canonical_hash(&preflights.value))
+        .transpose()?;
+    Ok(record("harness-run-receipt-v1", vec![
+        string(HARNESS_RUN_RECEIPT_SCHEMA),
+        record("decision", vec![string("pass")]),
+        record("suite-start", vec![string(&report.suite_ref)]),
+        record("report-ref", vec![string(&report.report_ref)]),
+        record("step-results", vec![sequence(step_results)]),
+        record("adapter-fixture-decision-ref", vec![string(adapter_fixture_ref.as_deref().unwrap_or("none"))]),
+        record("expected-failure-refs", vec![sequence(Vec::new())]),
+        record("known-bug-refs", vec![sequence(Vec::new())]),
+        record("final-status", vec![string(&report.status)]),
+        record("report-export-refs", vec![refs_sequence_from_strs(export_refs)]),
+        hostcall_checks_value(&[
+            "suite-start-bound",
+            "step-results-bound",
+            "adapter-fixture-decision-bound",
+            "expected-failure-recorded",
+            "known-bug-recorded",
+            "final-status-bound",
+            "report-export-bound",
+        ]),
+    ]))
+}
+
+pub fn validate_harness_run_receipt(value: &IOValue, report_value: &IOValue, export_refs: &[&str]) -> Result<()> {
+    let expected = harness_run_receipt_value(report_value, export_refs)?;
+    if canonical_hash(value)? != canonical_hash(&expected)? {
+        return Err(MoltenError::invalid_harness("harness run receipt does not match report and export refs"));
+    }
+    let receipt = simple_record(value, "harness-run-receipt-v1", 11)?;
+    let schema = required_string(&receipt[0], "harness run receipt schema")?;
+    if schema != HARNESS_RUN_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported harness run receipt schema {schema}; expected {HARNESS_RUN_RECEIPT_SCHEMA}"
+        )));
+    }
+    if required_record_string(&receipt[1], "decision", "harness run receipt decision")? != "pass" {
+        return Err(MoltenError::invalid_harness("harness run receipt decision must be pass"));
+    }
+    if required_record_string(&receipt[8], "final-status", "harness run final status")? != "pass" {
+        return Err(MoltenError::invalid_harness("harness run final status must be pass"));
+    }
+    let checks = parse_executor_preflight_checks(&receipt[10])?;
+    for expected in [
+        "suite-start-bound",
+        "step-results-bound",
+        "adapter-fixture-decision-bound",
+        "expected-failure-recorded",
+        "known-bug-recorded",
+        "final-status-bound",
+        "report-export-bound",
+    ] {
+        require_executor_preflight_check(&checks, expected)?;
+    }
+    Ok(())
+}
+
+fn refs_sequence_from_strs(refs: &[&str]) -> IOValue {
+    sequence(refs.iter().map(|value| string(*value)).collect())
 }
 
 pub fn deterministic_multipeer_receipt_value(

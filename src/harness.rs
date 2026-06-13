@@ -59,6 +59,7 @@ pub use schema::failure_repro_bundle_value_with_command;
 pub use schema::failure_summary;
 pub use schema::failure_value;
 pub use schema::golden_trace_update_receipt_value;
+pub use schema::harness_run_receipt_value;
 pub use schema::upgrade_replay_receipt_value;
 pub use schema::parse_budget_gate;
 pub use schema::parse_capabilities;
@@ -72,6 +73,7 @@ pub use schema::parse_suite;
 pub use schema::policy_gate_value;
 pub use schema::validate_deterministic_multipeer_receipt;
 pub use schema::validate_golden_trace_update_receipt;
+pub use schema::validate_harness_run_receipt;
 pub use schema::validate_upgrade_replay_receipt;
 pub use schema::policy_value;
 pub use schema::report_failure_value;
@@ -94,6 +96,7 @@ mod tests {
     use super::failure_repro_bundle_value;
     use super::failure_value;
     use super::golden_trace_update_receipt_value;
+    use super::harness_run_receipt_value;
     use super::upgrade_replay_receipt_value;
     use super::gate_check_value;
     use super::gate_receipt_summary;
@@ -116,6 +119,7 @@ mod tests {
     use super::suite_failure_value;
     use super::validate_deterministic_multipeer_receipt;
     use super::validate_golden_trace_update_receipt;
+    use super::validate_harness_run_receipt;
     use super::validate_report_value;
     use super::validate_upgrade_replay_receipt;
     use crate::error::MoltenError;
@@ -1568,6 +1572,23 @@ mod tests {
         assert!(receipt_text.contains(&run.report_ref));
         assert!(receipt_text.contains(&run.final_state_hash));
         validate_golden_trace_update_receipt(&receipt, &run.report_value).expect("validate golden update receipt");
+    }
+
+    #[test]
+    fn harness_run_receipt_binds_suite_steps_adapter_status_and_exports() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let export_ref = canonical_hash(&run.report_value).expect("report export ref");
+        let receipt = harness_run_receipt_value(&run.report_value, &[&export_ref]).expect("harness run receipt");
+        let receipt_text = to_text(&receipt).expect("render harness run receipt");
+
+        assert!(receipt_text.contains("harness-run-receipt-v1"));
+        assert!(receipt_text.contains("suite-start-bound"));
+        assert!(receipt_text.contains("step-results-bound"));
+        assert!(receipt_text.contains("adapter-fixture-decision-bound"));
+        assert!(receipt_text.contains("final-status-bound"));
+        assert!(receipt_text.contains(&export_ref));
+        validate_harness_run_receipt(&receipt, &run.report_value, &[&export_ref]).expect("validate run receipt");
     }
 
     #[test]

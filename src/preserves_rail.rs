@@ -6,6 +6,7 @@ use crate::error::Result;
 
 pub const HARNESS_SUITE_SCHEMA: &str = "molten.harness.suite.v1";
 pub const HARNESS_REPORT_SCHEMA: &str = "molten.harness.report.v1";
+pub const HARNESS_RUN_RECEIPT_SCHEMA: &str = "molten.harness.run-receipt.v1";
 pub const HARNESS_FAILURE_SCHEMA: &str = "molten.harness.failure.v1";
 pub const HARNESS_OBSERVATION_SCHEMA: &str = "molten.harness.observation.v1";
 pub const HARNESS_EFFECT_LOG_SCHEMA: &str = "molten.harness.effect-log.v1";

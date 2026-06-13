@@ -27,7 +27,7 @@
 - [x] [serial] r[molten.testing.first_divergence_reports] Report first-divergence diagnostics for scheduler, input, effect request/response, policy decision, action, receipt, trace, output, and state mismatches.
 - [x] [serial] r[molten.testing.canonical_failure_artifacts] Emit canonical `<harness-failure-v1 ...>` Preserves artifacts for preflight, execution, replay, validation, and export failures; ensure failure artifacts carry suite/report refs and first-divergence details when available but do not satisfy pass evidence gates.
 - [x] [serial] r[molten.testing.gate_receipts] Emit canonical `<gate-receipt-v1 ...>` Preserves artifacts for successful pass-evidence gate decisions, including artifact refs plus validation, replay, budget, and actor-registry check evidence.
-- [ ] [serial] r[molten.testing.run_receipts] Emit Cairn receipts for suite start, step result, adapter fixture decision, expected failure, known bug, final status, and report export.
+- [x] [serial] r[molten.testing.run_receipts] Emit Cairn receipts for suite start, step result, adapter fixture decision, expected failure, known bug, final status, and report export.
 - [x] [parallel] r[molten.testing.redaction_policy] Gate report read/export with policy and apply redaction markers or encrypted refs for secrets, capabilities, and sensitive observations.
 
 ## Phase 4: Integration rails
