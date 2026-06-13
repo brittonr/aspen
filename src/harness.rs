@@ -57,6 +57,7 @@ pub use schema::failure_repro_bundle_value;
 pub use schema::failure_repro_bundle_value_with_command;
 pub use schema::failure_summary;
 pub use schema::failure_value;
+pub use schema::golden_trace_update_receipt_value;
 pub use schema::parse_budget_gate;
 pub use schema::parse_capabilities;
 pub use schema::parse_capability_gate;
@@ -67,6 +68,7 @@ pub use schema::parse_policy_gate;
 pub use schema::parse_repro_bundle;
 pub use schema::parse_suite;
 pub use schema::policy_gate_value;
+pub use schema::validate_golden_trace_update_receipt;
 pub use schema::policy_value;
 pub use schema::report_failure_value;
 pub use schema::report_suite_value;
@@ -86,6 +88,7 @@ mod tests {
     use super::core::RuntimeValue;
     use super::failure_repro_bundle_value;
     use super::failure_value;
+    use super::golden_trace_update_receipt_value;
     use super::gate_check_value;
     use super::gate_receipt_summary;
     use super::gate_receipt_value;
@@ -105,6 +108,7 @@ mod tests {
     use super::schema::snapshot_value;
     use super::sealed_repro_bundle_value_with_command;
     use super::suite_failure_value;
+    use super::validate_golden_trace_update_receipt;
     use super::validate_report_value;
     use crate::error::MoltenError;
     use crate::preserves_rail::canonical_bytes;
@@ -1539,6 +1543,33 @@ mod tests {
         assert!(coverage_text.contains("<boundary \"policy-denials\" \"unexercised\">"));
         assert!(coverage_text.contains("<unexercised ["));
         assert!(coverage_text.contains("\"policy-denials\""));
+    }
+
+    #[test]
+    fn golden_trace_update_receipt_binds_report_trace_state_and_reason() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let reviewer_ref = canonical_hash(&parse_text("<reviewer \"alice\">").expect("reviewer")).expect("reviewer ref");
+        let receipt = golden_trace_update_receipt_value(None, &run.report_value, "bug-fix", &reviewer_ref)
+            .expect("golden update receipt");
+        let receipt_text = to_text(&receipt).expect("render golden receipt");
+
+        assert!(receipt_text.contains("golden-trace-update-receipt-v1"));
+        assert!(receipt_text.contains("<reason \"bug-fix\">"));
+        assert!(receipt_text.contains("reviewed-update-receipt"));
+        assert!(receipt_text.contains(&run.report_ref));
+        assert!(receipt_text.contains(&run.final_state_hash));
+        validate_golden_trace_update_receipt(&receipt, &run.report_value).expect("validate golden update receipt");
+    }
+
+    #[test]
+    fn golden_trace_update_receipt_rejects_unclassified_reason() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let reviewer_ref = canonical_hash(&parse_text("<reviewer \"alice\">").expect("reviewer")).expect("reviewer ref");
+        let error = golden_trace_update_receipt_value(None, &run.report_value, "because", &reviewer_ref)
+            .expect_err("unclassified golden reason fails");
+        assert!(error.to_string().contains("unsupported golden trace update reason"), "{error}");
     }
 
     #[test]

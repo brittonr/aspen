@@ -53,6 +53,7 @@ use crate::preserves_rail::HARNESS_EFFECT_LOG_SCHEMA;
 use crate::preserves_rail::HARNESS_EXECUTOR_CONFORMANCE_SCHEMA;
 use crate::preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA;
 use crate::preserves_rail::HARNESS_FAILURE_SCHEMA;
+use crate::preserves_rail::HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::HARNESS_OBSERVATION_SCHEMA;
 use crate::preserves_rail::HARNESS_POLICY_CONTRACT_SCHEMA;
 use crate::preserves_rail::HARNESS_POLICY_GATE_SCHEMA;
@@ -2566,6 +2567,117 @@ fn report_has_denied_admission(report: &HarnessReport) -> Result<bool> {
 
 fn report_value_contains_label(value: &IOValue, label: &str) -> bool {
     to_text(value).is_ok_and(|text| text.contains(label))
+}
+
+pub fn golden_trace_update_receipt_value(
+    previous_report_ref: Option<&str>,
+    updated_report_value: &IOValue,
+    reason: &str,
+    reviewer_ref: &str,
+) -> Result<IOValue> {
+    validate_golden_trace_update_reason(reason)?;
+    if let Some(previous_report_ref) = previous_report_ref {
+        validate_content_ref(previous_report_ref)?;
+    }
+    validate_content_ref(reviewer_ref)?;
+    let report = parse_report(updated_report_value)?;
+    Ok(record("golden-trace-update-receipt-v1", vec![
+        string(HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA),
+        record("decision", vec![string("pass")]),
+        record("reason", vec![string(reason)]),
+        record("previous-report-ref", vec![string(previous_report_ref.unwrap_or("none"))]),
+        record("updated-report-ref", vec![string(&report.report_ref)]),
+        record("suite-ref", vec![string(&report.suite_ref)]),
+        record("trace-ref", vec![string(canonical_hash(&sequence(
+            report.observations.iter().map(|observation| observation.value.clone()).collect(),
+        ))?)]),
+        record("receipt-ref", vec![string(canonical_hash(&record("harness-golden-receipt-anchor", vec![
+            string(&report.report_ref),
+            string(&report.suite_ref),
+            string(&report.final_state_hash),
+        ]))?)]),
+        record("state-ref", vec![string(&report.final_state_hash)]),
+        record("reviewer-ref", vec![string(reviewer_ref)]),
+        hostcall_checks_value(&[
+            "reviewed-update-receipt",
+            "canonical-trace-ref",
+            "canonical-receipt-ref",
+            "canonical-state-ref",
+            "reason-classification",
+        ]),
+    ]))
+}
+
+pub fn validate_golden_trace_update_receipt(value: &IOValue, updated_report_value: &IOValue) -> Result<()> {
+    let receipt = simple_record(value, "golden-trace-update-receipt-v1", 11)?;
+    let schema = required_string(&receipt[0], "golden trace update receipt schema")?;
+    if schema != HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported golden trace update receipt schema {schema}; expected {HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA}"
+        )));
+    }
+    let decision = required_record_string(&receipt[1], "decision", "golden trace update decision")?;
+    if decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!("unsupported golden trace update decision {decision}")));
+    }
+    let reason = required_record_string(&receipt[2], "reason", "golden trace update reason")?;
+    validate_golden_trace_update_reason(&reason)?;
+    let previous_report_ref = required_record_string(&receipt[3], "previous-report-ref", "previous golden report ref")?;
+    if previous_report_ref != "none" {
+        validate_content_ref(&previous_report_ref)?;
+    }
+    let report = parse_report(updated_report_value)?;
+    let updated_report_ref = required_record_hash(&receipt[4], "updated-report-ref", "updated golden report ref")?;
+    if updated_report_ref != report.report_ref {
+        return Err(MoltenError::invalid_harness("golden trace update report ref does not match updated report"));
+    }
+    let suite_ref = required_record_hash(&receipt[5], "suite-ref", "golden trace suite ref")?;
+    if suite_ref != report.suite_ref {
+        return Err(MoltenError::invalid_harness("golden trace update suite ref does not match updated report"));
+    }
+    let expected_trace_ref = canonical_hash(&sequence(
+        report.observations.iter().map(|observation| observation.value.clone()).collect(),
+    ))?;
+    let trace_ref = required_record_hash(&receipt[6], "trace-ref", "golden trace ref")?;
+    if trace_ref != expected_trace_ref {
+        return Err(MoltenError::invalid_harness("golden trace update trace ref does not match report observations"));
+    }
+    let expected_receipt_ref = canonical_hash(&record("harness-golden-receipt-anchor", vec![
+        string(&report.report_ref),
+        string(&report.suite_ref),
+        string(&report.final_state_hash),
+    ]))?;
+    let receipt_ref = required_record_hash(&receipt[7], "receipt-ref", "golden receipt ref")?;
+    if receipt_ref != expected_receipt_ref {
+        return Err(MoltenError::invalid_harness("golden trace update receipt ref does not match report"));
+    }
+    let state_ref = required_record_hash(&receipt[8], "state-ref", "golden state ref")?;
+    if state_ref != report.final_state_hash {
+        return Err(MoltenError::invalid_harness("golden trace update state ref does not match final state"));
+    }
+    let reviewer_ref = required_record_hash(&receipt[9], "reviewer-ref", "golden trace reviewer ref")?;
+    validate_content_ref(&reviewer_ref)?;
+    let checks = parse_executor_preflight_checks(&receipt[10])?;
+    for expected in [
+        "reviewed-update-receipt",
+        "canonical-trace-ref",
+        "canonical-receipt-ref",
+        "canonical-state-ref",
+        "reason-classification",
+    ] {
+        require_executor_preflight_check(&checks, expected)?;
+    }
+    Ok(())
+}
+
+fn validate_golden_trace_update_reason(reason: &str) -> Result<()> {
+    if matches!(reason, "schema-driven" | "policy-driven" | "migration-driven" | "bug-fix") {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "unsupported golden trace update reason {reason}; expected schema-driven, policy-driven, migration-driven, or bug-fix"
+        )))
+    }
 }
 
 pub fn repro_bundle_value(report_value: &IOValue) -> Result<IOValue> {
