@@ -28,6 +28,7 @@ pub const TRANSFER_LOCAL_ONLY: &str = "local-only";
 pub const TRANSFER_ATTENUATED_DELEGATION: &str = "attenuated-delegation";
 pub const TRANSFER_REMOTE_PROXY: &str = "remote-proxy";
 
+pub const ADAPTER_KIND_DATASPACE: &str = "dataspace";
 pub const ADAPTER_KIND_STORAGE: &str = "storage";
 pub const ADAPTER_KIND_BLOB: &str = "blob";
 pub const ADAPTER_KIND_NETWORK: &str = "network";
@@ -1921,6 +1922,193 @@ mod tests {
         let parsed_cleanup = parse_handle_cleanup_receipt(&cleanup).expect("parse cleanup");
         assert!(!parsed_cleanup.live_usable);
         assert!(parsed_cleanup.preserve_artifact);
+    }
+
+    #[test]
+    fn dataspace_blob_and_storage_handlers_bind_local_and_production_operations() {
+        let cases = [
+            (HANDLER_PROFILE_LOCAL, ADAPTER_KIND_DATASPACE, ["send", "observe"].as_slice()),
+            (HANDLER_PROFILE_PRODUCTION, ADAPTER_KIND_DATASPACE, ["send", "observe"].as_slice()),
+            (HANDLER_PROFILE_LOCAL, ADAPTER_KIND_BLOB, ["get", "put"].as_slice()),
+            (HANDLER_PROFILE_PRODUCTION, ADAPTER_KIND_BLOB, ["get", "put"].as_slice()),
+            (HANDLER_PROFILE_LOCAL, ADAPTER_KIND_STORAGE, ["read", "write"].as_slice()),
+            (HANDLER_PROFILE_PRODUCTION, ADAPTER_KIND_STORAGE, ["read", "write"].as_slice()),
+        ];
+        for (profile, adapter_kind, operations) in cases {
+            let scope = scope(Some(fake_ref(&format!("actor-{profile}-{adapter_kind}"))));
+            let policy_ref = fake_ref(&format!("policy-{profile}-{adapter_kind}"));
+            let capability_ref = fake_ref(&format!("capability-{profile}-{adapter_kind}"));
+            let resource_refs = vec![fake_ref(&format!("resource-{profile}-{adapter_kind}"))];
+            let operations = operations.iter().map(|operation| (*operation).to_string()).collect::<Vec<_>>();
+            let binding = handler_binding_value(&HandlerBindingInput {
+                profile: profile.to_string(),
+                scope: scope.clone(),
+                adapter_kind: adapter_kind.to_string(),
+                adapter_ref: fake_ref(&format!("adapter-{profile}-{adapter_kind}")),
+                executor_preflight_ref: None,
+                policy_ref: policy_ref.clone(),
+                capability_context_ref: capability_ref.clone(),
+                authority_context_ref: None,
+                resource_refs: resource_refs.clone(),
+                operations: operations.clone(),
+                evidence_refs: vec![fake_ref(&format!("binding-evidence-{profile}-{adapter_kind}"))],
+            })
+            .expect("handler binding");
+            let binding_ref = canonical_hash(&binding).expect("binding ref");
+            let handler_profile = handler_profile_value(&HandlerProfileInput {
+                profile: profile.to_string(),
+                handler_binding_refs: vec![binding_ref.clone()],
+                policy_ref: policy_ref.clone(),
+                capability_context_ref: capability_ref.clone(),
+                resource_refs: resource_refs.clone(),
+                evidence_refs: vec![fake_ref(&format!("profile-evidence-{profile}-{adapter_kind}"))],
+            })
+            .expect("handler profile");
+            assert_eq!(parse_handler_profile(&handler_profile).expect("parse handler profile").profile, profile);
+            let handle = effect_handle_value(&EffectHandleInput {
+                kind: adapter_kind.to_string(),
+                scope: scope.clone(),
+                handler_binding_ref: binding_ref,
+                operations: operations.clone(),
+                capability_context_ref: capability_ref.clone(),
+                authority_context_ref: None,
+                resource_refs: resource_refs.clone(),
+                not_before: None,
+                expires_at: None,
+                revocation_refs: Vec::new(),
+                transfer: TRANSFER_LOCAL_ONLY.to_string(),
+                parent_handle_ref: None,
+                evidence_refs: vec![fake_ref(&format!("handle-evidence-{profile}-{adapter_kind}"))],
+            })
+            .expect("effect handle");
+            for operation in &operations {
+                validate_handle_for_request(&binding, &handle, &EffectHandleRequest {
+                    kind: adapter_kind,
+                    operation,
+                    run_ref: &scope.run_ref,
+                    session_ref: &scope.session_ref,
+                    actor_ref: scope.actor_ref.as_deref(),
+                    turn_ref: scope.turn_ref.as_deref(),
+                    policy_ref: &policy_ref,
+                    capability_context_ref: &capability_ref,
+                    authority_context_ref: None,
+                    resource_refs: &resource_refs,
+                    logical_time: 0,
+                    remote_use: false,
+                    revoked_refs: &[],
+                })
+                .expect("handler operation validates");
+            }
+        }
+    }
+
+    #[test]
+    fn chaos_and_profiling_profiles_are_bounded_evidence_only() {
+        let scope = scope(Some(fake_ref("actor-chaos-profile")));
+        let policy_ref = fake_ref("chaos-policy");
+        let capability_ref = fake_ref("chaos-capability");
+        let resource_refs = vec![fake_ref("chaos-resource-bound")];
+        let chaos_binding = handler_binding_value(&HandlerBindingInput {
+            profile: HANDLER_PROFILE_CHAOS.to_string(),
+            scope: scope.clone(),
+            adapter_kind: ADAPTER_KIND_DATASPACE.to_string(),
+            adapter_ref: fake_ref("chaos-dataspace-adapter"),
+            executor_preflight_ref: None,
+            policy_ref: policy_ref.clone(),
+            capability_context_ref: capability_ref.clone(),
+            authority_context_ref: None,
+            resource_refs: resource_refs.clone(),
+            operations: vec!["delay".to_string(), "partition".to_string(), "reorder".to_string()],
+            evidence_refs: vec![fake_ref("chaos-schedule-evidence")],
+        })
+        .expect("chaos binding");
+        let chaos_binding_ref = canonical_hash(&chaos_binding).expect("chaos binding ref");
+        let chaos_profile = handler_profile_value(&HandlerProfileInput {
+            profile: HANDLER_PROFILE_CHAOS.to_string(),
+            handler_binding_refs: vec![chaos_binding_ref.clone()],
+            policy_ref: policy_ref.clone(),
+            capability_context_ref: capability_ref.clone(),
+            resource_refs: resource_refs.clone(),
+            evidence_refs: vec![fake_ref("bounded-chaos-profile")],
+        })
+        .expect("chaos profile");
+        assert_eq!(parse_handler_profile(&chaos_profile).expect("parse chaos profile").profile, HANDLER_PROFILE_CHAOS);
+        let chaos_handle = effect_handle_value(&EffectHandleInput {
+            kind: ADAPTER_KIND_DATASPACE.to_string(),
+            scope: scope.clone(),
+            handler_binding_ref: chaos_binding_ref,
+            operations: vec!["delay".to_string(), "partition".to_string(), "reorder".to_string()],
+            capability_context_ref: capability_ref.clone(),
+            authority_context_ref: None,
+            resource_refs: resource_refs.clone(),
+            not_before: Some(0),
+            expires_at: Some(100),
+            revocation_refs: Vec::new(),
+            transfer: TRANSFER_LOCAL_ONLY.to_string(),
+            parent_handle_ref: None,
+            evidence_refs: vec![fake_ref("bounded-chaos-handle")],
+        })
+        .expect("chaos handle");
+        validate_handle_for_request(&chaos_binding, &chaos_handle, &EffectHandleRequest {
+            kind: ADAPTER_KIND_DATASPACE,
+            operation: "delay",
+            run_ref: &scope.run_ref,
+            session_ref: &scope.session_ref,
+            actor_ref: scope.actor_ref.as_deref(),
+            turn_ref: scope.turn_ref.as_deref(),
+            policy_ref: &policy_ref,
+            capability_context_ref: &capability_ref,
+            authority_context_ref: None,
+            resource_refs: &resource_refs,
+            logical_time: 50,
+            remote_use: false,
+            revoked_refs: &[],
+        })
+        .expect("bounded chaos delay validates");
+
+        let profiling_binding = handler_binding_value(&HandlerBindingInput {
+            profile: HANDLER_PROFILE_PROFILING.to_string(),
+            scope: scope.clone(),
+            adapter_kind: ADAPTER_KIND_STORAGE.to_string(),
+            adapter_ref: fake_ref("profiling-storage-adapter"),
+            executor_preflight_ref: None,
+            policy_ref: policy_ref.clone(),
+            capability_context_ref: capability_ref.clone(),
+            authority_context_ref: None,
+            resource_refs: resource_refs.clone(),
+            operations: vec!["count".to_string(), "payload-bytes".to_string()],
+            evidence_refs: vec![fake_ref("profiling-evidence")],
+        })
+        .expect("profiling binding");
+        let profiling_profile = handler_profile_value(&HandlerProfileInput {
+            profile: HANDLER_PROFILE_PROFILING.to_string(),
+            handler_binding_refs: vec![canonical_hash(&profiling_binding).expect("profiling binding ref")],
+            policy_ref: policy_ref.clone(),
+            capability_context_ref: capability_ref.clone(),
+            resource_refs: resource_refs.clone(),
+            evidence_refs: vec![fake_ref("profiling-profile-evidence")],
+        })
+        .expect("profiling profile");
+        assert_eq!(
+            parse_handler_profile(&profiling_profile).expect("parse profiling profile").profile,
+            HANDLER_PROFILE_PROFILING
+        );
+        let profiling_record = dynamic_operation_record_value(&DynamicOperationRecordInput {
+            operation: "count".to_string(),
+            adapter_ref: fake_ref("profiling-storage-adapter"),
+            callable_ref: fake_ref("profiling-callable"),
+            request_ref: fake_ref("profiling-request"),
+            response_ref: fake_ref("profiling-response"),
+            policy_ref,
+            capability_context_ref: capability_ref,
+            resource_refs,
+            evidence_refs: vec![fake_ref("effect-counts-and-payload-bytes")],
+        })
+        .expect("profiling record");
+        assert_eq!(
+            parse_dynamic_operation_record(&profiling_record).expect("parse profiling record").operation,
+            "count"
+        );
     }
 
     #[test]
