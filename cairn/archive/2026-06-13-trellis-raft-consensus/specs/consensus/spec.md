@@ -1,10 +1,4 @@
-# Consensus Specification
-
-## Purpose
-
-Defines the `consensus` capability.
-
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Raft-backed control-plane scope
 r[molten.consensus.scope] Molten MUST use Raft-backed consensus only for explicitly declared strongly consistent control-plane state and MUST NOT require Raft for normal actor messages, ordinary choreography step traffic, gossip fanout, blob transfer, or local-only dataspace assertions.
