@@ -66,13 +66,7 @@ Molten should define this as a canonical Preserves shape or equivalent typed DTO
 
 ### Preserves patterns
 
-Patterns should be bounded and indexable. The first version should support:
-
-- wildcard/discard,
-- literal atoms,
-- records, arrays, and dictionaries,
-- binding positions with deterministic binding order,
-- optional bounded conjunction/negation only if policy and indexing remain tractable.
+Patterns should be bounded and indexable. The completed initial runtime predicate subset supports exact canonical value matching and wildcard binding with deterministic binding order. Literal/record/array/dictionary structural matching, bounded conjunction, negation, and extensible compound matching remain future admitted extensions unless a later slice adds the indexing and policy rules.
 
 Pattern matching should be pure and deterministic. Pattern values are Preserves values, and routing decisions must not depend on Rust debug formatting, allocation identity, or nondeterministic map iteration.
 
@@ -85,15 +79,15 @@ Capabilities should govern both behavior and observation:
 - which `Observe` subscriptions may be established,
 - which references may be introduced to another actor or remote peer.
 
-Molten can borrow Synit's caveat/rewrite/filter concept but route it through Molten policy:
+Molten can borrow Synit's caveat/filter concept but route it through Molten policy:
 
 ```text
 capability + attenuation pattern + requested assertion/message
         -> Basalt/UCAN + Nickel/Steel contract + Trellis bounded predicate
-        -> admitted, rewritten, or denied with receipt evidence
+        -> admitted or denied with receipt evidence
 ```
 
-Unknown or invalid attenuation rules deny by default. Rewrites must preserve canonical Preserves identity and produce evidence that identifies the applied rule.
+The completed initial scope supports scoped allow/deny authority contexts and live refs. Unknown or invalid attenuation rules deny by default. Rewrite transforms must preserve canonical Preserves identity and require explicit future rule evidence that identifies the applied rule.
 
 ### Gatekeeper resolver
 
@@ -130,7 +124,7 @@ Tracing is data, not logs only. Trace records should be Preserves values so they
 
 ## Open Questions
 
-- Should Molten's first pattern language match Synit's pattern schema exactly or define a smaller verified subset first?
+- Which compound Preserves pattern forms should extend the current exact/wildcard subset first?
 - Should duplicate assertion deduplication be global per dataspace or scoped by subject/facet for performance?
 - How should turn rollback interact with adapter effects that require reservation before commit?
 - Which live references should be first-class Rust values versus envelope-level Preserves references?
