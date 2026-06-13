@@ -24,10 +24,10 @@ Initial primitives:
 
 - `DistributedLock` with fencing token and lease.
 - `LeaderElection` with lease renewal and fencing token.
-- `Queue` with enqueue, dequeue, visibility timeout, ack, nack, retry, DLQ.
+- `Queue` with explicit enqueue/dequeue, FIFO ordering, capacity/resource denials, and operation-id replay. Visibility timeout, ack, nack, retry, and DLQ policy are future extensions, not part of this completed slice.
 - `Semaphore` with bounded permits.
-- `RateLimiter` with token bucket or fixed window.
-- `Counter` and `SequenceGenerator` for monotonic ids.
+- `RateLimiter` with bounded deterministic admission.
+- `Counter` and `SequenceGenerator` are future service ids and are not admitted until a separate manifest/implementation slice lands.
 - `Barrier` for N-party synchronization.
 - `ServiceRegistry` for service instance registration, readiness, health, and discovery.
 
@@ -50,7 +50,7 @@ Any lock/lease/election grant that may guard external side effects carries a mon
 
 ## Queues
 
-Queues are for explicit work distribution, not default actor mailboxes. Queue items have operation ids, visibility timeout, ack/nack, retry count, DLQ reason, and payload refs. Delivery/idempotency rules apply.
+Queues are for explicit work distribution, not default actor mailboxes. Queue items have operation ids and payload refs in this slice; enqueue/dequeue are FIFO, capacity-bounded, receipt-backed, and duplicate operation ids replay prior results. Visibility timeout, ack/nack, retry count, and DLQ reason require a later admitted queue policy extension. Delivery/idempotency rules apply.
 
 ## Backend modes
 
@@ -61,6 +61,6 @@ Queues are for explicit work distribution, not default actor mailboxes. Queue it
 
 ## Open Questions
 
-- Which primitive should be implemented first after locks: queue or service registry?
-- Should fencing token monotonicity be proved with Trellis/Verus-style predicates?
+- Which rich queue policy extension should land first: visibility timeout, ack/nack, retry, or DLQ?
+- Should fencing token monotonicity be promoted from bounded Hegel/Trellis-style checks to a Verus proof?
 - Which coordination state belongs in Raft vs Redb local metadata?
