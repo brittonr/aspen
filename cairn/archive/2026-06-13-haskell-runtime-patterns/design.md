@@ -85,7 +85,7 @@ Hegel property tests should use the law style common in Haskell testing:
 - authority laws: attenuation monotonicity, revocation cleanup, no authority minting,
 - resource laws: bounded queues, monotonic budget consumption, no silent drops.
 
-Generated inputs, seeds, shrink paths, and final shrunk counterexamples are stored as Preserves fixtures. A shrunk counterexample must be runnable without the generator and suitable for repro bundle export.
+Generated inputs, seeds, shrink paths, and final shrunk counterexamples are stored as Preserves fixtures when a suite persists them across an evidence boundary. A persisted shrunk counterexample must be runnable without the generator and suitable for repro bundle export. Automatic export of every Hegel shrink result is a future harness extension unless a specific suite implements it.
 
 ## STM-style transactional turns
 
@@ -99,7 +99,7 @@ Actor turns are transactions over runtime-visible state. During a turn, actor co
 - child actor/service lifecycle actions,
 - resource consumption records.
 
-The staged turn is validated, policy-admitted, resource-checked, and then committed atomically. If actor code fails, policy denies, a required effect is unavailable, or a deterministic guard fails, staged changes are discarded. Adapter effects either occur after commit admission or are split into explicit reserve/commit/abort effect records so replay can prove no invisible partial side effect occurred.
+The staged turn is validated, policy-admitted, resource-checked, and then committed atomically. If actor code fails, policy denies, a required effect is unavailable, or a deterministic guard fails, staged changes are discarded. Adapter effects either occur after commit admission, deny before side effect, or are split by a future explicit reserve/commit/abort effect-record extension so replay can prove no invisible partial side effect occurred. This archived slice records the fail-closed boundary; it does not claim a general reserve/commit/abort adapter API.
 
 ## Adapter laws and conformance
 
@@ -140,7 +140,7 @@ The goal is to make invalid states unrepresentable where practical and denied wh
 
 ## Golden canonical traces
 
-Golden tests should be over canonical Preserves trace, receipt, snapshot, and state-hash artifacts. Text snapshots are rendered views only. Golden updates require receipts identifying old and new refs, authority/reviewer, reason class, and compatibility/migration notes.
+Golden tests should be over canonical Preserves trace, receipt, snapshot, fixture, and state-hash artifacts. Text snapshots are rendered views only. Golden updates should require receipts identifying old and new refs, authority/reviewer, reason class, and compatibility/migration notes; suites without update receipts must treat that as a future explicit extension rather than silent authority.
 
 ## Parser-combinator-style DSLs
 
@@ -192,7 +192,8 @@ Wall-clock performance may be advisory; deterministic resource budgets are the g
 
 ## Open Questions
 
-- Which typed wrappers should land in the first implementation milestone?
+- Which remaining id/ref wrappers should become Rust newtypes instead of schema-only distinctions?
+- When should the current fail-closed pre-commit effect boundary grow a general reserve/commit/abort adapter API?
 - Should effect handler traits be hand-written first or derived from effect manifests/WIT metadata?
 - How much of the Preserves pattern/oracle parser should be implemented with combinators versus generated parsers?
-- Which adapter law suites are mandatory before an adapter can be used by dogfood or release gates?
+- Which adapter law suites become mandatory before an adapter can be used by dogfood or release gates?
