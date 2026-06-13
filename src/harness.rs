@@ -58,6 +58,7 @@ pub use schema::failure_repro_bundle_value_with_command;
 pub use schema::failure_summary;
 pub use schema::failure_value;
 pub use schema::golden_trace_update_receipt_value;
+pub use schema::upgrade_replay_receipt_value;
 pub use schema::parse_budget_gate;
 pub use schema::parse_capabilities;
 pub use schema::parse_capability_gate;
@@ -69,6 +70,7 @@ pub use schema::parse_repro_bundle;
 pub use schema::parse_suite;
 pub use schema::policy_gate_value;
 pub use schema::validate_golden_trace_update_receipt;
+pub use schema::validate_upgrade_replay_receipt;
 pub use schema::policy_value;
 pub use schema::report_failure_value;
 pub use schema::report_suite_value;
@@ -89,6 +91,7 @@ mod tests {
     use super::failure_repro_bundle_value;
     use super::failure_value;
     use super::golden_trace_update_receipt_value;
+    use super::upgrade_replay_receipt_value;
     use super::gate_check_value;
     use super::gate_receipt_summary;
     use super::gate_receipt_value;
@@ -110,6 +113,7 @@ mod tests {
     use super::suite_failure_value;
     use super::validate_golden_trace_update_receipt;
     use super::validate_report_value;
+    use super::validate_upgrade_replay_receipt;
     use crate::error::MoltenError;
     use crate::preserves_rail::canonical_bytes;
     use crate::preserves_rail::canonical_hash;
@@ -1560,6 +1564,45 @@ mod tests {
         assert!(receipt_text.contains(&run.report_ref));
         assert!(receipt_text.contains(&run.final_state_hash));
         validate_golden_trace_update_receipt(&receipt, &run.report_value).expect("validate golden update receipt");
+    }
+
+    #[test]
+    fn upgrade_replay_receipt_accepts_stable_replay() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let receipt = upgrade_replay_receipt_value(&run.report_value, &run.report_value, None, None)
+            .expect("stable upgrade replay receipt");
+        let receipt_text = to_text(&receipt).expect("render upgrade replay receipt");
+
+        assert!(receipt_text.contains("upgrade-replay-receipt-v1"));
+        assert!(receipt_text.contains("<outcome \"stable\">"));
+        validate_upgrade_replay_receipt(&receipt, &run.report_value, &run.report_value)
+            .expect("validate stable upgrade replay receipt");
+    }
+
+    #[test]
+    fn upgrade_replay_receipt_requires_explained_trace_drift() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let report_text = to_text(&run.report_value).expect("render report");
+        let drifted_text = report_text.replacen(
+            &run.final_state_hash,
+            "blake3:1111111111111111111111111111111111111111111111111111111111111111",
+            1,
+        );
+        let drifted_report = parse_text(&drifted_text).expect("parse drifted report");
+        let error = upgrade_replay_receipt_value(&run.report_value, &drifted_report, None, None)
+            .expect_err("unexplained drift fails");
+        assert!(error.to_string().contains("trace drift requires migration receipt"), "{error}");
+
+        let diagnostic_ref = canonical_hash(&parse_text("<compatibility-diagnostic \"intentional\">").expect("diagnostic"))
+            .expect("diagnostic ref");
+        let explained = upgrade_replay_receipt_value(&run.report_value, &drifted_report, None, Some(&diagnostic_ref))
+            .expect("diagnosed drift passes");
+        let explained_text = to_text(&explained).expect("render explained upgrade receipt");
+        assert!(explained_text.contains("<outcome \"diagnosed\">"));
+        validate_upgrade_replay_receipt(&explained, &run.report_value, &drifted_report)
+            .expect("validate diagnosed upgrade replay receipt");
     }
 
     #[test]

@@ -37,6 +37,7 @@ pub const HARNESS_REDACTION_PROFILE_SCHEMA: &str = "molten.harness.redaction-pro
 pub const HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA: &str = "molten.harness.redaction-transform-manifest.v1";
 pub const HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA: &str = "molten.harness.redaction-transform.v1";
 pub const HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA: &str = "molten.harness.golden-trace-update-receipt.v1";
+pub const HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA: &str = "molten.harness.upgrade-replay-receipt.v1";
 pub const RUNTIME_ADMISSION_DECISION_SCHEMA: &str = "molten.runtime.admission-decision.v1";
 pub const RUNTIME_ACTOR_INPUT_SCHEMA: &str = "molten.runtime.actor-input.v1";
 pub const RUNTIME_HOSTCALL_REQUEST_SCHEMA: &str = "molten.runtime.hostcall-request.v1";
