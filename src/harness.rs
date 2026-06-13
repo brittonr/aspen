@@ -47,6 +47,7 @@ pub use schema::ReproExportProfile;
 pub use schema::SteelExecutorConfig;
 pub use schema::WasmExecutorConfig;
 pub use schema::actor_registry_value;
+pub use schema::boundary_coverage_value;
 pub use schema::budget_gate_value;
 pub use schema::budget_limits_value;
 pub use schema::capabilities_value;
@@ -79,6 +80,7 @@ pub use schema::suite_failure_value;
 mod tests {
     use super::ReproExportProfile;
     use super::actor_executor_registry;
+    use super::boundary_coverage_value;
     use super::core::CoreStep;
     use super::core::RuntimeState;
     use super::core::RuntimeValue;
@@ -1522,6 +1524,21 @@ mod tests {
         assert_eq!(parsed_bundle.kind, super::HarnessReproBundleKind::Failure);
         let gate_error = gate_check_value(&failure_bundle).expect_err("failure bundle cannot satisfy gate");
         assert!(gate_error.to_string().contains("cannot satisfy pass evidence gate"));
+    }
+
+    #[test]
+    fn boundary_coverage_identifies_unexercised_policy_denial_gate() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let coverage = boundary_coverage_value(&run.report_value).expect("boundary coverage");
+        let coverage_text = to_text(&coverage).expect("render coverage");
+
+        assert!(coverage_text.contains("harness-boundary-coverage-v1"));
+        assert!(coverage_text.contains("<boundary \"envelope-routes\" \"exercised\">"));
+        assert!(coverage_text.contains("<boundary \"policy-gates\" \"exercised\">"));
+        assert!(coverage_text.contains("<boundary \"policy-denials\" \"unexercised\">"));
+        assert!(coverage_text.contains("<unexercised ["));
+        assert!(coverage_text.contains("\"policy-denials\""));
     }
 
     #[test]

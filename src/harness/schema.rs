@@ -2490,6 +2490,84 @@ pub fn report_suite_value(report_value: &IOValue) -> Result<IOValue> {
     Ok(parse_report(report_value)?.suite_value)
 }
 
+pub fn boundary_coverage_value(report_value: &IOValue) -> Result<IOValue> {
+    let report = parse_report(report_value)?;
+    let suite = parse_suite(&report.suite_value)?;
+    let mut coverage = Vec::new();
+    push_boundary_coverage(&mut coverage, "envelope-routes", suite.steps.iter().any(|step| matches!(step, CoreStep::Send { .. })));
+    push_boundary_coverage(
+        &mut coverage,
+        "dataspace-semantics",
+        suite.steps.iter().any(|step| {
+            matches!(step, CoreStep::Observe { .. } | CoreStep::Assert { .. } | CoreStep::Retract { .. })
+        }),
+    );
+    push_boundary_coverage(&mut coverage, "policy-gates", report.policy_gate.is_some() && report.capability_gate.is_some());
+    push_boundary_coverage(&mut coverage, "policy-denials", report_has_denied_admission(&report)?);
+    push_boundary_coverage(&mut coverage, "effects", !report.effect_log.is_empty());
+    push_boundary_coverage(
+        &mut coverage,
+        "receipts",
+        report.policy_gate.is_some() && report.capability_gate.is_some() && report.budget_gate.is_some(),
+    );
+    push_boundary_coverage(&mut coverage, "traces", !report.observations.is_empty());
+    push_boundary_coverage(&mut coverage, "storage-paths", false);
+    push_boundary_coverage(&mut coverage, "resources", report.budget_gate.is_some());
+    push_boundary_coverage(
+        &mut coverage,
+        "replay-branches",
+        matches!(report.replay_status.as_str(), "deterministic" | "replay" | "record"),
+    );
+    push_boundary_coverage(
+        &mut coverage,
+        "adapters",
+        report.actors.iter().any(|actor| !matches!(actor.kind, ActorKind::Native)),
+    );
+    push_boundary_coverage(&mut coverage, "confidentiality-paths", report_value_contains_label(report_value, "redaction-gate-v1"));
+
+    let unexercised = coverage
+        .iter()
+        .filter_map(|value| {
+            let fields = value.collect_simple_record("boundary", Some(2))?;
+            let name = required_string(&fields[0], "coverage boundary name").ok()?;
+            let status = required_string(&fields[1], "coverage boundary status").ok()?;
+            (status == "unexercised").then_some(string(name))
+        })
+        .collect::<Vec<_>>();
+
+    Ok(record("harness-boundary-coverage-v1", vec![
+        string("molten.harness.boundary-coverage.v1"),
+        record("report-ref", vec![string(&report.report_ref)]),
+        record("suite-ref", vec![string(&report.suite_ref)]),
+        sequence(coverage),
+        record("unexercised", vec![sequence(unexercised)]),
+    ]))
+}
+
+fn push_boundary_coverage(out: &mut Vec<IOValue>, name: &str, exercised: bool) {
+    out.push(record("boundary", vec![
+        string(name),
+        string(if exercised { "exercised" } else { "unexercised" }),
+    ]));
+}
+
+fn report_has_denied_admission(report: &HarnessReport) -> Result<bool> {
+    for observation in &report.observations {
+        for event in &observation.events {
+            if event.collect_simple_record("admission-decision-v1", None).is_some()
+                && !parse_admission_decision_event(event)?.decision.is_allowed()
+            {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+fn report_value_contains_label(value: &IOValue, label: &str) -> bool {
+    to_text(value).is_ok_and(|text| text.contains(label))
+}
+
 pub fn repro_bundle_value(report_value: &IOValue) -> Result<IOValue> {
     repro_bundle_value_with_command(report_value, &default_report_bundle_command())
 }
