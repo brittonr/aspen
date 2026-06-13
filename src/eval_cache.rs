@@ -269,6 +269,17 @@ pub struct TranscriptRunKeyInput<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct ChoreographyProjectionKeyInput<'a> {
+    pub protocol_artifact_ref: &'a str,
+    pub role_ref: &'a str,
+    pub closure_hash: &'a str,
+    pub dependency_refs: &'a [String],
+    pub projector_ref: &'a str,
+    pub projector_version: &'a str,
+    pub policy_refs: &'a [String],
+}
+
+#[derive(Debug, Clone, Copy)]
 struct EvalCacheReceiptValueInput<'a> {
     operation: &'a str,
     decision: &'a str,
@@ -988,6 +999,31 @@ pub fn artifact_closure_key_input(input: &ArtifactClosureKeyInput<'_>) -> Result
         revocation_refs: Vec::new(),
         tool_ref: input.tool_ref.to_string(),
         tool_version: input.tool_version.to_string(),
+        assumption_refs: Vec::new(),
+    })
+}
+
+pub fn choreography_projection_key_input(input: &ChoreographyProjectionKeyInput<'_>) -> Result<EvalCacheKeyInput> {
+    validate_ref(input.protocol_artifact_ref, "choreography protocol artifact ref")?;
+    validate_ref(input.role_ref, "choreography role ref")?;
+    validate_ref(input.closure_hash, "choreography closure hash")?;
+    validate_refs(input.dependency_refs, "choreography dependency ref")?;
+    validate_ref(input.projector_ref, "choreography projector ref")?;
+    Ok(EvalCacheKeyInput {
+        operation: "choreography-projection".to_string(),
+        version: "v1".to_string(),
+        input_ref: canonical_hash(&record("eval-cache-choreography-projection-input", vec![
+            string(input.protocol_artifact_ref),
+            string(input.role_ref),
+        ]))?,
+        dependency_closure_hash: input.closure_hash.to_string(),
+        dependency_refs: input.dependency_refs.to_vec(),
+        handler_profile_ref: None,
+        policy_refs: input.policy_refs.to_vec(),
+        capability_refs: Vec::new(),
+        revocation_refs: Vec::new(),
+        tool_ref: input.projector_ref.to_string(),
+        tool_version: input.projector_version.to_string(),
         assumption_refs: Vec::new(),
     })
 }
@@ -1941,9 +1977,32 @@ mod tests {
         })
         .expect("closure key");
         assert_eq!(closure.operation, "artifact-closure");
+        let choreography = choreography_projection_key_input(&ChoreographyProjectionKeyInput {
+            protocol_artifact_ref: &test_ref("protocol"),
+            role_ref: &test_ref("role"),
+            closure_hash: &fingerprint,
+            dependency_refs: &[test_ref("protocol-dep")],
+            projector_ref: &test_ref("trellis-projector"),
+            projector_version: "v1",
+            policy_refs: &[test_ref("projection-policy")],
+        })
+        .expect("choreography projection key");
+        assert_eq!(choreography.operation, "choreography-projection");
+        assert!(choreography.dependency_refs.contains(&test_ref("protocol-dep")));
         let wasm =
             wasm_inspection_key_placeholder(&test_ref("module"), &test_ref("inspector"), "v1").expect("wasm key");
         assert_eq!(wasm.operation, "wasm-inspection");
+        let transcript = transcript_run_key_placeholder(&TranscriptRunKeyInput {
+            transcript_ref: &test_ref("transcript"),
+            closure_hash: &fingerprint,
+            dependency_refs: &[test_ref("transcript-dep")],
+            handler_profile_ref: &test_ref("handler-profile"),
+            harness_ref: &test_ref("harness"),
+            harness_version: "v1",
+        })
+        .expect("transcript key");
+        assert_eq!(transcript.operation, "transcript-run");
+        assert_eq!(transcript.handler_profile_ref, Some(test_ref("handler-profile")));
     }
 
     #[hegel::test(test_cases = 16)]
