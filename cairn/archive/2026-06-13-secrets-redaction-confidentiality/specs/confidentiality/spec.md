@@ -1,8 +1,4 @@
-# Confidentiality Specification
-
-## Purpose
-
-Defines Molten's secret reference, redaction, encrypted-ref, reveal/decrypt, replay commitment, and private bundle confidentiality capability.
+# Confidentiality Delta: Secrets, Redaction, and Encrypted Refs
 
 ## Requirements
 
