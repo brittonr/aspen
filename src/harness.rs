@@ -60,7 +60,6 @@ pub use schema::failure_summary;
 pub use schema::failure_value;
 pub use schema::golden_trace_update_receipt_value;
 pub use schema::harness_run_receipt_value;
-pub use schema::upgrade_replay_receipt_value;
 pub use schema::parse_budget_gate;
 pub use schema::parse_capabilities;
 pub use schema::parse_capability_gate;
@@ -71,10 +70,6 @@ pub use schema::parse_policy_gate;
 pub use schema::parse_repro_bundle;
 pub use schema::parse_suite;
 pub use schema::policy_gate_value;
-pub use schema::validate_deterministic_multipeer_receipt;
-pub use schema::validate_golden_trace_update_receipt;
-pub use schema::validate_harness_run_receipt;
-pub use schema::validate_upgrade_replay_receipt;
 pub use schema::policy_value;
 pub use schema::report_failure_value;
 pub use schema::report_suite_value;
@@ -83,6 +78,11 @@ pub use schema::repro_bundle_summary;
 pub use schema::repro_bundle_value;
 pub use schema::repro_bundle_value_with_command;
 pub use schema::suite_failure_value;
+pub use schema::upgrade_replay_receipt_value;
+pub use schema::validate_deterministic_multipeer_receipt;
+pub use schema::validate_golden_trace_update_receipt;
+pub use schema::validate_harness_run_receipt;
+pub use schema::validate_upgrade_replay_receipt;
 
 #[cfg(test)]
 mod tests {
@@ -95,12 +95,11 @@ mod tests {
     use super::deterministic_multipeer_receipt_value;
     use super::failure_repro_bundle_value;
     use super::failure_value;
-    use super::golden_trace_update_receipt_value;
-    use super::harness_run_receipt_value;
-    use super::upgrade_replay_receipt_value;
     use super::gate_check_value;
     use super::gate_receipt_summary;
     use super::gate_receipt_value;
+    use super::golden_trace_update_receipt_value;
+    use super::harness_run_receipt_value;
     use super::parse_failure;
     use super::parse_gate_receipt;
     use super::parse_repro_bundle;
@@ -117,6 +116,7 @@ mod tests {
     use super::schema::snapshot_value;
     use super::sealed_repro_bundle_value_with_command;
     use super::suite_failure_value;
+    use super::upgrade_replay_receipt_value;
     use super::validate_deterministic_multipeer_receipt;
     use super::validate_golden_trace_update_receipt;
     use super::validate_harness_run_receipt;
@@ -1561,7 +1561,8 @@ mod tests {
     fn golden_trace_update_receipt_binds_report_trace_state_and_reason() {
         let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
         let run = run_suite_value(&suite).expect("run suite");
-        let reviewer_ref = canonical_hash(&parse_text("<reviewer \"alice\">").expect("reviewer")).expect("reviewer ref");
+        let reviewer_ref =
+            canonical_hash(&parse_text("<reviewer \"alice\">").expect("reviewer")).expect("reviewer ref");
         let receipt = golden_trace_update_receipt_value(None, &run.report_value, "bug-fix", &reviewer_ref)
             .expect("golden update receipt");
         let receipt_text = to_text(&receipt).expect("render golden receipt");
@@ -1595,14 +1596,27 @@ mod tests {
     fn deterministic_multipeer_receipt_is_stable_for_same_seed_and_partition_profile() {
         let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
         let run = run_suite_value(&suite).expect("run suite");
-        let events = ["deliver", "partition", "drop", "reorder", "reconnect", "gossip", "doc", "blob", "resource-limit"];
+        let events = [
+            "deliver",
+            "partition",
+            "drop",
+            "reorder",
+            "reconnect",
+            "gossip",
+            "doc",
+            "blob",
+            "resource-limit",
+        ];
         let receipt_a = deterministic_multipeer_receipt_value(&run.report_value, 42, "seeded", &events)
             .expect("multi-peer receipt a");
         let receipt_b = deterministic_multipeer_receipt_value(&run.report_value, 42, "seeded", &events)
             .expect("multi-peer receipt b");
         let receipt_text = to_text(&receipt_a).expect("render multi-peer receipt");
 
-        assert_eq!(canonical_hash(&receipt_a).expect("receipt a hash"), canonical_hash(&receipt_b).expect("receipt b hash"));
+        assert_eq!(
+            canonical_hash(&receipt_a).expect("receipt a hash"),
+            canonical_hash(&receipt_b).expect("receipt b hash")
+        );
         assert!(receipt_text.contains("deterministic-multipeer-receipt-v1"));
         assert!(receipt_text.contains("<replay \"stable\">"));
         assert!(receipt_text.contains("partition-replay-stable"));
@@ -1649,8 +1663,9 @@ mod tests {
             .expect_err("unexplained drift fails");
         assert!(error.to_string().contains("trace drift requires migration receipt"), "{error}");
 
-        let diagnostic_ref = canonical_hash(&parse_text("<compatibility-diagnostic \"intentional\">").expect("diagnostic"))
-            .expect("diagnostic ref");
+        let diagnostic_ref =
+            canonical_hash(&parse_text("<compatibility-diagnostic \"intentional\">").expect("diagnostic"))
+                .expect("diagnostic ref");
         let explained = upgrade_replay_receipt_value(&run.report_value, &drifted_report, None, Some(&diagnostic_ref))
             .expect("diagnosed drift passes");
         let explained_text = to_text(&explained).expect("render explained upgrade receipt");
@@ -1663,7 +1678,8 @@ mod tests {
     fn golden_trace_update_receipt_rejects_unclassified_reason() {
         let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
         let run = run_suite_value(&suite).expect("run suite");
-        let reviewer_ref = canonical_hash(&parse_text("<reviewer \"alice\">").expect("reviewer")).expect("reviewer ref");
+        let reviewer_ref =
+            canonical_hash(&parse_text("<reviewer \"alice\">").expect("reviewer")).expect("reviewer ref");
         let error = golden_trace_update_receipt_value(None, &run.report_value, "because", &reviewer_ref)
             .expect_err("unclassified golden reason fails");
         assert!(error.to_string().contains("unsupported golden trace update reason"), "{error}");
@@ -1679,10 +1695,7 @@ mod tests {
 
         let error = gate_check_value(&exploratory_report)
             .expect_err("non-replayable pass report cannot satisfy deterministic gate");
-        assert!(
-            error.to_string().contains("unsupported evidence replay status non-replayable"),
-            "{error}"
-        );
+        assert!(error.to_string().contains("unsupported evidence replay status non-replayable"), "{error}");
     }
 
     #[test]

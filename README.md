@@ -19,7 +19,7 @@ Molten is a policy-gated distributed runtime built around a canonical Preserves 
 - Basalt/UCAN, Nickel contracts, reviewed Steel predicates, Trellis predicates, Cairn receipts, and Octet/Valence evidence gate side effects.
 - Iroh bridges envelopes, blobs, and docs across peers; Wasmtime actors run behind deny-by-default hostcalls; Redb stores local durable metadata and indexes.
 
-Current Cairn roadmap changes live under `cairn/changes/`:
+Cairn roadmap status: `cairn/changes/` is currently empty. Accepted requirements live under `cairn/specs/`, and completed roadmap slices are archived under `cairn/archive/`. The drained/archived roadmap includes:
 
 - `runtime-spine`
 - `synit-sam-runtime`
@@ -564,7 +564,7 @@ Release bundle commands can be run manually against a realized check output: `mo
 
 Operator receipt readback is available for local dogfood ledgers: `molten receipts list --ledger STATE/ledger`, `molten receipts show REF --ledger STATE/ledger`, `molten receipts validate REF --ledger STATE/ledger`, and `molten receipts export REF --ledger STATE/ledger --out receipt.preserves`. The commands read canonical Preserves artifacts from the content-addressed ledger, validate supported dogfood/operator receipt kinds, render only non-normative summaries by default, and keep logs auxiliary rather than primary evidence.
 
-For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` -> `/nix/store/j216rh0889qyqjb7zg0kwzkv6in5dbai-molten-nextest`.
+For the current private OnixResearch git dependencies, the flake locks local Cargo checkout sources as `*-src` path inputs and unit2nix serves those checkouts to Cargo's git cache. This keeps the Nix builder from needing SSH access to GitHub. Latest local Nix nextest evidence: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` -> `/nix/store/x684p7da0yhf69cxd5gqjq6nf8m5c32r-molten-nextest`.
 
 Strict Octet source-gate sequence:
 
@@ -602,7 +602,7 @@ cargo run --manifest-path /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615
   --strict
 ```
 
-The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 2544 objects (`b3:26c0febc2b2c6855675128e10f62c37e4c8b155c9db76d2e686b4cf2fca70fc5`); latest artifact import receipt is `blake3:67e445fdeac133d439b614f9486dca0e59c5be0520c7f83ef1bf282dedb4701f`, latest strict pass receipt is `blake3:ab8d39bb014e0f5cd6713d107fac66b02c34a7399b40e43667c0240b70625778`, and latest remediation plan receipt is `blake3:d06f52ee7ebf09e8f072ab70f1cb7b15516507ed609beef8096c91ad606aec1a`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
+The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 2647 objects (`b3:1087c9580dc2b00716c61e5a76c135b85b49a0148c85e094caa8e382e8989c66`); latest artifact import receipt is `blake3:75aa13d5b329fa394d9157f8feb4ddeab5f9eb5ab48bd6476b19457eb399cbb7`, latest strict pass receipt is `blake3:340eb1cf2cd54044137806b399ae7f91049bbf88c7008a692d18e7a43d2fc209`, and latest remediation plan receipt is `blake3:7a1f5960131dbcffa8dabb6b2533761c85a144161149c936957371bf8b7909f5`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
 
 ```sh
 cargo run -- test octet baseline write \

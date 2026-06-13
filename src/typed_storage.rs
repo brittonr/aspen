@@ -2029,7 +2029,9 @@ mod tests {
         let error =
             get_value(&root, "large", "payload", Some(&put.schema_ref), &TypedStorageAdmission::local_fixture("large"))
                 .expect_err("tampered chunk denies before typed storage load");
-        assert!(error.to_string().contains("chunk") || error.to_string().contains("hash"), "{error}");
+        let message = error.to_string();
+        let is_integrity_boundary_mentioned = message.contains("chunk") || message.contains("hash");
+        assert!(is_integrity_boundary_mentioned, "{message}");
     }
 
     #[test]

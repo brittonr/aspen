@@ -343,7 +343,7 @@ Persistence must preserve authority graphs. Object snapshots should not be able 
 
 ## Roadmap Cairn changes
 
-Current architectural changes are recorded under `cairn/changes/`:
+`cairn/changes/` is currently empty. Accepted requirements are recorded under `cairn/specs/`, and completed architectural slices are preserved under `cairn/archive/`. The drained/archived roadmap includes:
 
 - `runtime-spine` — canonical envelope, Preserves boundary, adapters, policy/evidence/storage gates.
 - `synit-sam-runtime` — dataspace assertions, Observe patterns, turn semantics, service dependency assertions, tracing.

@@ -1074,7 +1074,7 @@ mod tests {
         let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(5));
         let actor = format!("actor-{salt}");
         let mut state = RuntimeState::new(1);
-        for index in 0..=((salt % 2) as usize) {
+        for index in 0..=(salt % 2) {
             state.apply_step(&RuntimeStep::Assert {
                 actor: actor.clone(),
                 value: RuntimeValue::string(format!("service.ready.{index}")).expect("runtime value"),

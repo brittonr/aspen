@@ -1201,7 +1201,11 @@ mod tests {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let id = COUNTER.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!("molten-{label}-{}-{id}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&path);
+        match std::fs::remove_dir_all(&path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => panic!("remove stale temp dir {path:?}: {error}"),
+        }
         std::fs::create_dir_all(&path).expect("create temp dir");
         path
     }

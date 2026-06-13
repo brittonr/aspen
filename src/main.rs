@@ -4202,7 +4202,7 @@ fn run_replay_fixture_command(command: ReplayFixtureCommand) -> Result<()> {
             Ok(())
         }
         ReplayFixtureCommand::Rollup { receipts, out } => {
-            let mut inputs = Vec::new();
+            let mut inputs = Vec::with_capacity(receipts.len());
             for receipt in receipts {
                 let value = read_preserves_file(&receipt)?;
                 inputs.push(deterministic_replay::ReplayRollupInput {
