@@ -16,7 +16,7 @@
 
 - [x] [serial] r[molten.octet_fail_closed_ci.cli_gate] Add a local command shape such as `molten test octet gate --artifacts target/octet --profile strict-ci --receipt-out ...`.
 - [x] [serial] r[molten.octet_fail_closed_ci.ci_command_shape] Document and wire the strict CI sequence: Octet check, object corpus receipt, Octet gate receipt, harness gates, and Cairn strict validation.
-- [ ] [parallel] r[molten.octet_fail_closed_ci.release_admission_binding] Require strict Octet gate receipt refs for release, upgrade, node-runtime startup, and remote admission evidence paths once burn-down completes.
+- [x] [parallel] r[molten.octet_fail_closed_ci.release_admission_binding] Require strict Octet gate receipt refs for release, upgrade, node-runtime startup, and remote admission evidence paths once burn-down completes.
 - [x] [parallel] r[molten.octet_fail_closed_ci.diagnostic_output] Preserve raw Octet status/summary/findings as diagnostic artifacts even when the gate denies.
 
 ## Phase 4: Tests

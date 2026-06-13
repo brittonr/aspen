@@ -1,6 +1,6 @@
 ## Why
 
-The first Octet/TigerStyle run is now wired enough to produce artifacts, but the current result is `warning-only` rather than an admissible fail-closed gate. The full workspace run produced `3763` warning findings and the lib-focused run produced `1586` warning findings. Treating those artifacts as informational would repeat the pattern Molten is trying to avoid: evidence exists, but CI/release/admission can still proceed without enforcing it.
+The first Octet/TigerStyle run showed why source evidence must be fail-closed: `cargo-octet` can produce artifacts and exit successfully while still reporting `warning-only`. Treating those artifacts as informational would repeat the pattern Molten is trying to avoid: evidence exists, but CI/release/admission can still proceed without enforcing it. Current strict runs are configuration-clean, and this change records the canonical gate that makes warning-only, stale, malformed, missing, or disconnected artifacts deny.
 
 Molten needs a canonical Octet gate that fails closed when artifacts are missing, stale, malformed, warning-only, or disconnected from the source/config/profile that produced them. The gate must be explicit about transition profiles: a temporary quarantine profile may exist while warnings are burned down, but strict CI/release/admission gates must reject unreviewed findings.
 
@@ -14,4 +14,4 @@ Molten needs a canonical Octet gate that fails closed when artifacts are missing
 
 ## Impact
 
-This turns Octet from an advisory warning report into a first-class fail-closed evidence gate. It gives the warning burn-down work a concrete target: strict profiles cannot pass with warning-only status, stale artifacts, or unaudited suppressions. It also preserves reproducibility by binding every gate decision to the exact command/config/toolchain/artifact refs that produced it.
+This turns Octet from an advisory warning report into a first-class fail-closed evidence gate. Strict profiles cannot pass with warning-only status, stale artifacts, missing object-corpus/fingerprint evidence, unaudited critical findings, or raw process output. It also preserves reproducibility by binding every gate decision to the exact command/config/toolchain/artifact refs that produced it and by requiring downstream source-gate validation before node startup, remote admission, upgrades, or release evidence can claim a pass.

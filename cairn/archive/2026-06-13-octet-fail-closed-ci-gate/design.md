@@ -8,13 +8,7 @@ Octet now loads from `[workspace.metadata.octet]` and writes deterministic run a
 - optional structured results such as JSONL/SARIF
 - Valence/object corpus receipts such as `target/octet/object-corpus-receipt.json`
 
-The first run established useful evidence but not a pass condition:
-
-- full workspace: `status=warning-only`, `exit_code=0`, `3763` warnings, config hash `b3:62df4300eb1338958f1b4eb722e890caefa2b404941d8c8e4f13668dfcadbc4c`
-- lib-only: `status=warning-only`, `exit_code=0`, `1586` warnings
-- focused object corpus: `254` objects, object-set hash `b3:6025702070cc19a7d4e9752c3bcaa203271c5b498f712dcd8779526191c2d923`, all currently pure-cache blocked by unresolved caveats
-
-A fail-closed gate must not confuse `cargo octet` process success with source admissibility. `warning-only` means the tool ran and produced evidence; it does not mean the source passed Molten's evidence policy.
+The first runs established useful evidence but showed that process success is not a pass condition: `warning-only` means the tool ran and produced evidence; it does not mean the source passed Molten's evidence policy. Current strict runs are configuration-clean with disabled lint families documented as caveats. A fail-closed gate must not confuse `cargo octet` process success, raw summaries, or quarantine evidence with strict source admissibility.
 
 ## Gate policy
 
@@ -84,12 +78,15 @@ Initial strict command sequence:
 
 ```text
 cargo octet check --artifact-dir target/octet
+cargo octet check -p molten --artifact-dir target/octet-lib -- --lib
 cargo octet object corpus receipt --output target/octet/object-corpus-receipt.json <critical paths>
+molten test octet artifacts import --artifacts target/octet --ledger target/octet-ledger --receipt-out target/octet/artifact-ledger-receipt.preserves
 molten test octet gate --artifacts target/octet --profile strict-ci --receipt-out target/octet/gate-receipt.preserves
+molten test octet remediation plan --artifacts target/octet --lib-artifacts target/octet-lib --focused-object-corpus target/octet/object-corpus-receipt.json --receipt-out target/octet/remediation-plan.preserves
 cairn validate --strict
 ```
 
-During burn-down, CI may use a separate `quarantine-ci` profile to block new warnings while preserving the current warning snapshot. Release/admission/upgrade profiles should require `strict-ci` as soon as the warning burn-down tasks are complete.
+During burn-down, CI may use a separate `quarantine-ci` profile to block new warnings while preserving the current warning snapshot. Release/admission/upgrade/node startup profiles require strict validation receipts before claiming source-gate pass evidence.
 
 ## Non-goals
 
