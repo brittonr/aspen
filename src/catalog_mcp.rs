@@ -40,6 +40,8 @@ pub const READ_ONLY_TOOLS: &[&str] = &[
     "search_provenance",
     "search_retention_gc",
     "search_replay_evidence",
+    "catalog.chunk_store",
+    "search_chunk_store",
     "short_id_resolve",
 ];
 
@@ -127,6 +129,15 @@ pub fn mcp_request_value(tool: &str, args: Vec<IOValue>) -> Result<IOValue> {
 }
 
 pub fn call(registry_root: &Path, ledger_root: Option<&Path>, request_value: &IOValue) -> Result<CatalogMcpCall> {
+    call_with_chunk_store(registry_root, ledger_root, None, request_value)
+}
+
+pub fn call_with_chunk_store(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    chunk_root: Option<&Path>,
+    request_value: &IOValue,
+) -> Result<CatalogMcpCall> {
     let request = parse_mcp_request(request_value)?;
     if !READ_ONLY_TOOLS.contains(&request.tool.as_str()) {
         return build_call(BuildCallInput {
@@ -144,7 +155,7 @@ pub fn call(registry_root: &Path, ledger_root: Option<&Path>, request_value: &IO
             ],
         });
     }
-    match dispatch_read_only(registry_root, ledger_root, &request) {
+    match dispatch_read_only(registry_root, ledger_root, chunk_root, &request) {
         Ok(payload) => build_call(BuildCallInput {
             request,
             decision: payload.decision.as_str(),
@@ -242,6 +253,7 @@ struct DispatchPayload {
 fn dispatch_read_only(
     registry_root: &Path,
     ledger_root: Option<&Path>,
+    chunk_root: Option<&Path>,
     request: &CatalogMcpRequest,
 ) -> Result<DispatchPayload> {
     let result = match request.tool.as_str() {
@@ -438,6 +450,17 @@ fn dispatch_read_only(
                 include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
                 include_dependents: arg_bool(&request.args, "include-dependents", true)?,
                 filters,
+                visibility: request.visibility.clone(),
+            })
+            .map(CoreResult::Query)
+        }
+        "catalog.chunk_store" | "search_chunk_store" => {
+            let Some(chunk_root) = chunk_root else {
+                return Err(MoltenError::invalid_harness(
+                    "catalog MCP chunk-store tool requires a chunk store root supplied by the caller",
+                ));
+            };
+            catalog::chunk_store(chunk_root, &catalog::CatalogChunkStoreInput {
                 visibility: request.visibility.clone(),
             })
             .map(CoreResult::Query)
@@ -972,6 +995,22 @@ mod tests {
         assert!(response_text.contains(&doc.artifact_ref));
         let receipt = parse_mcp_receipt(&call.receipt_value).expect("mcp receipt");
         assert_eq!(receipt.tool, "catalog.search");
+    }
+
+    #[test]
+    fn chunk_store_tool_exposes_readonly_status_when_chunk_root_supplied() {
+        let registry = temp_dir("catalog-mcp-chunk-registry");
+        let chunks = temp_dir("catalog-mcp-chunks");
+        let put = crate::chunk_store::put_bytes(&chunks, "artifact", b"aaaabbbb", 4).expect("chunk put");
+        crate::chunk_store::pin_manifest(&chunks, &put.manifest_ref).expect("pin manifest");
+        let request = mcp_request_value("catalog.chunk_store", Vec::new()).expect("chunk MCP request");
+        let call = call_with_chunk_store(&registry, None, Some(&chunks), &request).expect("chunk MCP call");
+        assert_eq!(call.decision, "pass");
+        assert!(call.catalog_receipt_ref.is_some());
+        let response_text = to_text(&call.response_value).expect("chunk MCP response");
+        assert!(response_text.contains("chunk-store-catalog-v1"));
+        assert!(response_text.contains(&put.manifest_ref));
+        assert!(response_text.contains("chunk-store-pin:pinned"));
     }
 
     #[test]

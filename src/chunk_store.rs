@@ -1487,6 +1487,18 @@ pub fn unpin_chunk(root: &Path, chunk_ref: &str) -> Result<ChunkStorePin> {
     })
 }
 
+pub fn manifest_is_pinned(root: &Path, manifest_ref: &str) -> Result<bool> {
+    validate_content_ref(manifest_ref)
+        .map_err(|error| MoltenError::invalid_harness(format!("chunk manifest pin ref is invalid: {error}")))?;
+    Ok(manifest_pin_path(root, manifest_ref)?.exists())
+}
+
+pub fn chunk_is_pinned(root: &Path, chunk_ref: &str) -> Result<bool> {
+    validate_content_ref(chunk_ref)
+        .map_err(|error| MoltenError::invalid_harness(format!("chunk pin ref is invalid: {error}")))?;
+    Ok(chunk_pin_path(root, chunk_ref)?.exists())
+}
+
 fn pass_or_fail(value: bool) -> &'static str {
     if value { "pass" } else { "fail" }
 }

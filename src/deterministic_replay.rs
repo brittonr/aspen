@@ -1401,7 +1401,7 @@ mod tests {
         let trace_text = to_text(&trace_a.value).expect("render fixture record");
         assert!(trace_text.contains("no-ambient-observations"));
 
-        let variant = if salt % 2 == 0 {
+        let variant = if salt.is_multiple_of(2) {
             ReplayFixtureVariant::ChangedScheduler
         } else {
             ReplayFixtureVariant::Baseline
@@ -1414,9 +1414,9 @@ mod tests {
             assert_eq!(scheduler_check.decision, "pass");
         }
 
-        let snapshot_ref = canonical_hash(&string(&format!("snapshot-{salt}"))).expect("snapshot ref");
-        let admitted_ref = canonical_hash(&string(&format!("admitted-{salt}"))).expect("admitted ref");
-        let redacted_ref = canonical_hash(&string(&format!("redacted-{salt}"))).expect("redacted ref");
+        let snapshot_ref = canonical_hash(&string(format!("snapshot-{salt}"))).expect("snapshot ref");
+        let admitted_ref = canonical_hash(&string(format!("admitted-{salt}"))).expect("admitted ref");
+        let redacted_ref = canonical_hash(&string(format!("redacted-{salt}"))).expect("redacted ref");
         let mut requested_refs = vec![admitted_ref.clone(), redacted_ref.clone()];
         requested_refs.sort();
         let snapshot_state = RuntimeSnapshotAuthorityState {

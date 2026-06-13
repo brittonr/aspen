@@ -2466,12 +2466,22 @@ enum CatalogCommand {
         #[arg(long)]
         receipt_out: Option<PathBuf>,
     },
+    Chunks {
+        #[arg(long)]
+        chunks: PathBuf,
+        #[arg(long = "hide-ref")]
+        hidden_refs: Vec<String>,
+        #[arg(long)]
+        receipt_out: Option<PathBuf>,
+    },
     McpCall {
         request: PathBuf,
         #[arg(long)]
         registry: PathBuf,
         #[arg(long)]
         ledger: Option<PathBuf>,
+        #[arg(long)]
+        chunks: Option<PathBuf>,
         #[arg(long)]
         out: Option<PathBuf>,
         #[arg(long)]
@@ -6110,15 +6120,30 @@ fn run_catalog_command(command: CatalogCommand) -> Result<()> {
             }
             Ok(())
         }
+        CatalogCommand::Chunks {
+            chunks,
+            hidden_refs,
+            receipt_out,
+        } => {
+            let result = catalog::chunk_store(&chunks, &catalog::CatalogChunkStoreInput {
+                visibility: catalog_visibility(hidden_refs),
+            })?;
+            emit_named_receipt(receipt_out.as_ref(), "catalog receipt", &result.receipt_value)?;
+            print_catalog_items(&result.items)?;
+            eprintln!("catalog chunks items={} result={}", result.items.len(), result.result_ref);
+            Ok(())
+        }
         CatalogCommand::McpCall {
             request,
             registry,
             ledger,
+            chunks,
             out,
             receipt_out,
         } => {
             let request_value = read_preserves_file(&request)?;
-            let call = catalog_mcp::call(&registry, ledger.as_deref(), &request_value)?;
+            let call =
+                catalog_mcp::call_with_chunk_store(&registry, ledger.as_deref(), chunks.as_deref(), &request_value)?;
             if let Some(path) = out.as_ref() {
                 write_file(path, &to_text(&call.response_value)?)?;
             } else {
@@ -13818,6 +13843,7 @@ mod tests {
             request: mcp_request,
             registry,
             ledger: Some(ledger_root),
+            chunks: None,
             out: Some(mcp_response.clone()),
             receipt_out: Some(mcp_receipt.clone()),
         })

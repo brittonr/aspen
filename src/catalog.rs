@@ -110,6 +110,11 @@ pub struct CatalogShortIdInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogChunkStoreInput {
+    pub visibility: CatalogVisibilityInput,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogSummary {
     pub artifact_ref: String,
     pub artifact_kind: String,
@@ -301,6 +306,139 @@ pub fn receipts(
     finish_query("receipts", query_value, items, Vec::new())
 }
 
+pub fn chunk_store(chunk_root: &Path, input: &CatalogChunkStoreInput) -> Result<CatalogQueryResult> {
+    validate_visibility(&input.visibility)?;
+    let hidden = hidden_set(&input.visibility);
+    let manifest_refs = crate::chunk_store::list_manifest_refs(chunk_root)?;
+    let available_chunk_refs = crate::chunk_store::list_chunk_refs(chunk_root)?.into_iter().collect::<BTreeSet<_>>();
+    let mut visible_manifest_refs = Vec::new();
+    let mut manifest_items = Vec::new();
+    let mut total_chunk_refs = 0usize;
+    let mut visible_unique_chunks = BTreeSet::new();
+    let mut visible_available_chunks = BTreeSet::new();
+    let mut visible_missing_chunks = BTreeSet::new();
+    let mut visible_manifest_pins = 0usize;
+    let mut visible_chunk_pins = BTreeSet::new();
+    for manifest_ref in manifest_refs {
+        if hidden.contains(&manifest_ref) {
+            continue;
+        }
+        let manifest = crate::chunk_store::read_manifest(chunk_root, &manifest_ref)?;
+        if hidden.contains(&manifest.root_ref) {
+            continue;
+        }
+        push_bounded(
+            &mut visible_manifest_refs,
+            manifest_ref.clone(),
+            MAX_CATALOG_REFS,
+            "chunk catalog manifest refs",
+        )?;
+        let manifest_pinned = crate::chunk_store::manifest_is_pinned(chunk_root, &manifest_ref)?;
+        if manifest_pinned {
+            visible_manifest_pins =
+                checked_count_sum(visible_manifest_pins, 1, MAX_CATALOG_REFS, "chunk catalog pins")?;
+        }
+        let mut visible_chunks = Vec::new();
+        let mut hidden_chunk_count = 0usize;
+        let mut manifest_available = 0usize;
+        let mut manifest_missing = 0usize;
+        let mut manifest_chunk_pins = 0usize;
+        for chunk in &manifest.chunks {
+            total_chunk_refs = checked_count_sum(total_chunk_refs, 1, MAX_CATALOG_REFS, "chunk catalog chunk refs")?;
+            if hidden.contains(&chunk.chunk_ref) {
+                hidden_chunk_count =
+                    checked_count_sum(hidden_chunk_count, 1, MAX_CATALOG_REFS, "chunk catalog hidden chunks")?;
+                continue;
+            }
+            insert_bounded(
+                &mut visible_unique_chunks,
+                chunk.chunk_ref.clone(),
+                MAX_CATALOG_REFS,
+                "chunk catalog unique chunks",
+            )?;
+            push_bounded(
+                &mut visible_chunks,
+                chunk.chunk_ref.clone(),
+                MAX_CATALOG_REFS,
+                "chunk catalog visible chunks",
+            )?;
+            if available_chunk_refs.contains(&chunk.chunk_ref) {
+                manifest_available =
+                    checked_count_sum(manifest_available, 1, MAX_CATALOG_REFS, "chunk catalog available")?;
+                insert_bounded(
+                    &mut visible_available_chunks,
+                    chunk.chunk_ref.clone(),
+                    MAX_CATALOG_REFS,
+                    "chunk catalog available chunks",
+                )?;
+            } else {
+                manifest_missing = checked_count_sum(manifest_missing, 1, MAX_CATALOG_REFS, "chunk catalog missing")?;
+                insert_bounded(
+                    &mut visible_missing_chunks,
+                    chunk.chunk_ref.clone(),
+                    MAX_CATALOG_REFS,
+                    "chunk catalog missing chunks",
+                )?;
+            }
+            if crate::chunk_store::chunk_is_pinned(chunk_root, &chunk.chunk_ref)? {
+                manifest_chunk_pins =
+                    checked_count_sum(manifest_chunk_pins, 1, MAX_CATALOG_REFS, "chunk catalog chunk pins")?;
+                insert_bounded(
+                    &mut visible_chunk_pins,
+                    chunk.chunk_ref.clone(),
+                    MAX_CATALOG_REFS,
+                    "chunk catalog pinned chunks",
+                )?;
+            }
+        }
+        push_bounded(
+            &mut manifest_items,
+            chunk_manifest_catalog_value(
+                &manifest,
+                manifest_pinned,
+                manifest_available,
+                manifest_missing,
+                manifest_chunk_pins,
+                hidden_chunk_count,
+                &visible_chunks,
+            )?,
+            MAX_CATALOG_ITEMS,
+            "chunk catalog items",
+        )?;
+    }
+    let dedup_hits = total_chunk_refs.saturating_sub(visible_unique_chunks.len());
+    let mut items = Vec::new();
+    push_bounded(
+        &mut items,
+        chunk_store_catalog_status_value(
+            &visible_manifest_refs,
+            total_chunk_refs,
+            visible_unique_chunks.len(),
+            visible_available_chunks.len(),
+            visible_missing_chunks.len(),
+            visible_manifest_pins,
+            visible_chunk_pins.len(),
+            dedup_hits,
+        )?,
+        MAX_CATALOG_ITEMS,
+        "chunk catalog items",
+    )?;
+    for item in manifest_items {
+        push_bounded(&mut items, item, MAX_CATALOG_ITEMS, "chunk catalog items")?;
+    }
+    let query_value = catalog_query_value(&CatalogQueryValueInput {
+        operation: "chunk-store",
+        root_refs: &visible_manifest_refs,
+        include_dependencies: false,
+        include_dependents: false,
+        filters: &[CatalogFilter::Text("chunk-store:".to_string())],
+        visibility: &input.visibility,
+        render_mode: "chunk-store-status",
+        include_payload: false,
+    })?;
+    finish_query("chunk-store", query_value, items, Vec::new())
+}
+
 pub fn resolve_short_id(
     registry_root: &Path,
     ledger_root: Option<&Path>,
@@ -429,6 +567,12 @@ pub fn catalog_summary(value: &IOValue) -> Result<String> {
     }
     if value.collect_simple_record("catalog-view-v1", Some(7)).is_some() {
         return Ok(format!("catalog view ref={}", canonical_hash(value)?));
+    }
+    if value.collect_simple_record("chunk-store-catalog-v1", Some(7)).is_some() {
+        return Ok(format!("chunk store catalog ref={}", canonical_hash(value)?));
+    }
+    if value.collect_simple_record("chunk-manifest-catalog-v1", Some(8)).is_some() {
+        return Ok(format!("chunk manifest catalog ref={}", canonical_hash(value)?));
     }
     Err(MoltenError::invalid_harness("unsupported catalog artifact for show"))
 }
@@ -1712,6 +1856,120 @@ fn short_id_resolution_value(
     ]))
 }
 
+fn chunk_store_catalog_status_value(
+    manifest_refs: &[String],
+    total_chunk_refs: usize,
+    unique_chunks: usize,
+    available_chunks: usize,
+    missing_chunks: usize,
+    manifest_pins: usize,
+    chunk_pins: usize,
+    dedup_hits: usize,
+) -> Result<IOValue> {
+    validate_refs(manifest_refs, "chunk catalog manifest ref")?;
+    Ok(record("chunk-store-catalog-v1", vec![
+        string("molten.catalog.chunk-store.v1"),
+        record("manifests", vec![
+            crate::preserves_rail::u64_value(usize_to_u64(manifest_refs.len(), "chunk catalog manifests")?),
+            refs_sequence(manifest_refs),
+        ]),
+        record("chunks", vec![
+            crate::preserves_rail::u64_value(usize_to_u64(total_chunk_refs, "chunk catalog total chunks")?),
+            crate::preserves_rail::u64_value(usize_to_u64(unique_chunks, "chunk catalog unique chunks")?),
+            crate::preserves_rail::u64_value(usize_to_u64(available_chunks, "chunk catalog available chunks")?),
+            crate::preserves_rail::u64_value(usize_to_u64(missing_chunks, "chunk catalog missing chunks")?),
+        ]),
+        record("pins", vec![
+            crate::preserves_rail::u64_value(usize_to_u64(manifest_pins, "chunk catalog manifest pins")?),
+            crate::preserves_rail::u64_value(usize_to_u64(chunk_pins, "chunk catalog chunk pins")?),
+        ]),
+        record("dedup", vec![
+            crate::preserves_rail::u64_value(usize_to_u64(dedup_hits, "chunk catalog dedup hits")?),
+            crate::preserves_rail::u64_value(dedup_ratio_bps(total_chunk_refs, dedup_hits)?),
+        ]),
+        record("classifications", vec![sequence(vec![
+            string("chunk-store:status"),
+            string("chunk-store:availability"),
+            string("chunk-store:dedup"),
+            string("chunk-store:pins"),
+        ])]),
+        checks_value(&["chunk-availability-visible", "pin-state-visible", "dedup-ratio-derived"]),
+    ]))
+}
+
+fn chunk_manifest_catalog_value(
+    manifest: &crate::chunk_store::ChunkManifest,
+    manifest_pinned: bool,
+    available_chunks: usize,
+    missing_chunks: usize,
+    chunk_pins: usize,
+    hidden_chunk_count: usize,
+    visible_chunks: &[String],
+) -> Result<IOValue> {
+    validate_ref(&manifest.manifest_ref, "chunk catalog manifest ref")?;
+    validate_ref(&manifest.root_ref, "chunk catalog root ref")?;
+    validate_refs(visible_chunks, "chunk catalog chunk ref")?;
+    let availability = if missing_chunks == 0 {
+        "complete"
+    } else if available_chunks == 0 {
+        "missing"
+    } else {
+        "partial"
+    };
+    Ok(record("chunk-manifest-catalog-v1", vec![
+        string("molten.catalog.chunk-manifest.v1"),
+        record("manifest", vec![
+            string(&manifest.manifest_ref),
+            string(&manifest.object_kind),
+            string(&manifest.root_ref),
+        ]),
+        record("size", vec![
+            crate::preserves_rail::u64_value(manifest.total_len),
+            crate::preserves_rail::u64_value(manifest.chunk_size),
+            crate::preserves_rail::u64_value(usize_to_u64(manifest.chunks.len(), "chunk catalog manifest chunks")?),
+        ]),
+        record("availability", vec![
+            string(availability),
+            crate::preserves_rail::u64_value(usize_to_u64(available_chunks, "chunk catalog available chunks")?),
+            crate::preserves_rail::u64_value(usize_to_u64(missing_chunks, "chunk catalog missing chunks")?),
+            refs_sequence(visible_chunks),
+        ]),
+        record("pins", vec![
+            bool_value(manifest_pinned),
+            crate::preserves_rail::u64_value(usize_to_u64(chunk_pins, "chunk catalog chunk pins")?),
+        ]),
+        record("redaction", vec![crate::preserves_rail::u64_value(usize_to_u64(
+            hidden_chunk_count,
+            "chunk catalog hidden chunks",
+        )?)]),
+        record("classifications", vec![sequence(vec![
+            string("chunk-store:manifest"),
+            string(format!("chunk-store-object-kind:{}", manifest.object_kind)),
+            string(format!("chunk-store-availability:{availability}")),
+            string(if manifest_pinned {
+                "chunk-store-pin:pinned"
+            } else {
+                "chunk-store-pin:unpinned"
+            }),
+        ])]),
+        checks_value(&["manifest-identity", "chunk-availability-visible", "pin-state-visible"]),
+    ]))
+}
+
+fn dedup_ratio_bps(total_chunk_refs: usize, dedup_hits: usize) -> Result<u64> {
+    if total_chunk_refs == 0 {
+        return Ok(0);
+    }
+    let numerator = dedup_hits
+        .checked_mul(10_000)
+        .ok_or_else(|| MoltenError::invalid_harness("chunk catalog dedup ratio overflow"))?;
+    usize_to_u64(numerator / total_chunk_refs, "chunk catalog dedup ratio")
+}
+
+fn usize_to_u64(value: usize, label: &str) -> Result<u64> {
+    u64::try_from(value).map_err(|_| MoltenError::invalid_harness(format!("{label} count exceeds u64")))
+}
+
 fn filter_value(filter: &CatalogFilter) -> Result<IOValue> {
     let (kind, value) = match filter {
         CatalogFilter::Ref(value) => ("ref", value.as_str()),
@@ -2093,6 +2351,44 @@ mod tests {
         assert!(["docs/main", "catalog-summary-v1"].iter().any(|needle| text.contains(needle)));
         assert!(text.contains(&base.artifact_ref));
         assert!(text.contains("ledger-kind:artifact-registry-artifact"));
+    }
+
+    #[test]
+    fn chunk_store_catalog_exposes_availability_dedup_and_pins() {
+        let dir = temp_dir("catalog-chunk-store");
+        let chunks = dir.join("chunks");
+        let first = crate::chunk_store::put_bytes(&chunks, "artifact", b"aaaabbbb", 4).expect("first chunk put");
+        let second = crate::chunk_store::put_bytes(&chunks, "artifact", b"aaaacccc", 4).expect("second chunk put");
+        crate::chunk_store::pin_manifest(&chunks, &first.manifest_ref).expect("pin manifest");
+        crate::chunk_store::pin_chunk(&chunks, &first.chunk_refs[0]).expect("pin chunk");
+        let result = chunk_store(&chunks, &CatalogChunkStoreInput {
+            visibility: CatalogVisibilityInput::default(),
+        })
+        .expect("catalog chunk store");
+        assert_eq!(result.decision, "pass");
+        let text = result.items.iter().map(|item| to_text(item).expect("render chunk catalog")).collect::<String>();
+        assert!(text.contains("chunk-store-catalog-v1"));
+        assert!(text.contains("chunk-manifest-catalog-v1"));
+        assert!(text.contains("chunk-store:dedup"));
+        assert!(text.contains("chunk-store-pin:pinned"));
+        assert!(text.contains("chunk-store-availability:complete"));
+        assert!(text.contains(&second.manifest_ref));
+        assert!(text.contains(&first.chunk_refs[0]));
+
+        let hidden = chunk_store(&chunks, &CatalogChunkStoreInput {
+            visibility: CatalogVisibilityInput {
+                hidden_refs: vec![first.chunk_refs[0].clone()],
+                ..CatalogVisibilityInput::default()
+            },
+        })
+        .expect("catalog chunk store with hidden chunk");
+        let hidden_text = hidden
+            .items
+            .iter()
+            .map(|item| to_text(item).expect("render hidden chunk catalog"))
+            .collect::<String>();
+        assert!(!hidden_text.contains(&first.chunk_refs[0]));
+        assert!(hidden_text.contains("redaction"));
     }
 
     #[test]
