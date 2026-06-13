@@ -52,6 +52,7 @@ pub use schema::budget_gate_value;
 pub use schema::budget_limits_value;
 pub use schema::capabilities_value;
 pub use schema::capability_gate_value;
+pub use schema::deterministic_multipeer_receipt_value;
 pub use schema::executor_preflights_value;
 pub use schema::failure_repro_bundle_value;
 pub use schema::failure_repro_bundle_value_with_command;
@@ -69,6 +70,7 @@ pub use schema::parse_policy_gate;
 pub use schema::parse_repro_bundle;
 pub use schema::parse_suite;
 pub use schema::policy_gate_value;
+pub use schema::validate_deterministic_multipeer_receipt;
 pub use schema::validate_golden_trace_update_receipt;
 pub use schema::validate_upgrade_replay_receipt;
 pub use schema::policy_value;
@@ -88,6 +90,7 @@ mod tests {
     use super::core::CoreStep;
     use super::core::RuntimeState;
     use super::core::RuntimeValue;
+    use super::deterministic_multipeer_receipt_value;
     use super::failure_repro_bundle_value;
     use super::failure_value;
     use super::golden_trace_update_receipt_value;
@@ -111,6 +114,7 @@ mod tests {
     use super::schema::snapshot_value;
     use super::sealed_repro_bundle_value_with_command;
     use super::suite_failure_value;
+    use super::validate_deterministic_multipeer_receipt;
     use super::validate_golden_trace_update_receipt;
     use super::validate_report_value;
     use super::validate_upgrade_replay_receipt;
@@ -1564,6 +1568,35 @@ mod tests {
         assert!(receipt_text.contains(&run.report_ref));
         assert!(receipt_text.contains(&run.final_state_hash));
         validate_golden_trace_update_receipt(&receipt, &run.report_value).expect("validate golden update receipt");
+    }
+
+    #[test]
+    fn deterministic_multipeer_receipt_is_stable_for_same_seed_and_partition_profile() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let events = ["deliver", "partition", "drop", "reorder", "reconnect", "gossip", "doc", "blob", "resource-limit"];
+        let receipt_a = deterministic_multipeer_receipt_value(&run.report_value, 42, "seeded", &events)
+            .expect("multi-peer receipt a");
+        let receipt_b = deterministic_multipeer_receipt_value(&run.report_value, 42, "seeded", &events)
+            .expect("multi-peer receipt b");
+        let receipt_text = to_text(&receipt_a).expect("render multi-peer receipt");
+
+        assert_eq!(canonical_hash(&receipt_a).expect("receipt a hash"), canonical_hash(&receipt_b).expect("receipt b hash"));
+        assert!(receipt_text.contains("deterministic-multipeer-receipt-v1"));
+        assert!(receipt_text.contains("<replay \"stable\">"));
+        assert!(receipt_text.contains("partition-replay-stable"));
+        assert!(receipt_text.contains("no-live-unrecorded-peer-io"));
+        validate_deterministic_multipeer_receipt(&receipt_a, &run.report_value, 42, "seeded", &events)
+            .expect("validate deterministic multi-peer receipt");
+    }
+
+    #[test]
+    fn deterministic_multipeer_receipt_rejects_live_unrecorded_peer_delivery() {
+        let suite = parse_text(TWO_ACTOR_SUITE).expect("parse suite");
+        let run = run_suite_value(&suite).expect("run suite");
+        let error = deterministic_multipeer_receipt_value(&run.report_value, 42, "seeded", &["deliver", "live"])
+            .expect_err("live event fails");
+        assert!(error.to_string().contains("live or unrecorded peer delivery"), "{error}");
     }
 
     #[test]

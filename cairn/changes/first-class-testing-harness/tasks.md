@@ -58,7 +58,7 @@
 
 - [x] [serial] r[molten.testing.upgrade_replay] Replay old traces, snapshots, schemas, policies, and artifacts against new runtime versions and require stable replay, migration receipts, or explicit compatibility diagnostics.
 - [x] [serial] r[molten.testing.boundary_coverage] Track coverage by runtime boundary: envelope routes, dataspace semantics, policy gates, effects, receipts, traces, storage, resources, replay branches, adapters, and confidentiality paths.
-- [ ] [serial] r[molten.testing.deterministic_multipeer] Add deterministic multi-peer simulation for seeded or recorded peer delivery, partitions, drops, reorders, reconnects, resource limits, gossip, docs, and blob observations.
+- [x] [serial] r[molten.testing.deterministic_multipeer] Add deterministic multi-peer simulation for seeded or recorded peer delivery, partitions, drops, reorders, reconnects, resource limits, gossip, docs, and blob observations.
 - [x] [parallel] r[molten.testing.resource_regression] Assert deterministic budget regressions for turns, scheduler steps, mailbox depth, assertions, effects, bytes, trace volume, Wasm fuel, Steel/native checkpoints, and job-stage resources.
 
 ## Phase 8: Golden traces and flake prevention

@@ -51,6 +51,7 @@ use crate::preserves_rail::HARNESS_CAPABILITY_CONTRACT_SCHEMA;
 use crate::preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA;
 use crate::preserves_rail::HARNESS_EFFECT_LOG_SCHEMA;
 use crate::preserves_rail::HARNESS_EXECUTOR_CONFORMANCE_SCHEMA;
+use crate::preserves_rail::HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA;
 use crate::preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA;
 use crate::preserves_rail::HARNESS_FAILURE_SCHEMA;
 use crate::preserves_rail::HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA;
@@ -2817,6 +2818,114 @@ pub fn validate_upgrade_replay_receipt(
 
 fn report_trace_ref(report: &HarnessReport) -> Result<String> {
     canonical_hash(&sequence(report.observations.iter().map(|observation| observation.value.clone()).collect()))
+}
+
+pub fn deterministic_multipeer_receipt_value(
+    report_value: &IOValue,
+    seed: u64,
+    profile: &str,
+    peer_events: &[&str],
+) -> Result<IOValue> {
+    validate_multipeer_profile(profile)?;
+    if peer_events.is_empty() {
+        return Err(MoltenError::invalid_harness("deterministic multi-peer receipt requires at least one peer event"));
+    }
+    for event in peer_events {
+        validate_multipeer_event(event)?;
+    }
+    let report = parse_report(report_value)?;
+    let event_values = peer_events.iter().map(|event| string(*event)).collect::<Vec<_>>();
+    let schedule_value = record("multipeer-schedule-v1", vec![
+        record("seed", vec![u64_value(seed)]),
+        record("profile", vec![string(profile)]),
+        record("events", vec![sequence(event_values.clone())]),
+    ]);
+    let schedule_ref = canonical_hash(&schedule_value)?;
+    let peer_count = report
+        .actors
+        .iter()
+        .filter(|actor| matches!(actor.kind, ActorKind::RemoteProxy | ActorKind::Adapter))
+        .count() as u64;
+    Ok(record("deterministic-multipeer-receipt-v1", vec![
+        string(HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA),
+        record("decision", vec![string("pass")]),
+        record("replay", vec![string("stable")]),
+        record("suite-ref", vec![string(&report.suite_ref)]),
+        record("report-ref", vec![string(&report.report_ref)]),
+        record("seed", vec![u64_value(seed)]),
+        record("profile", vec![string(profile)]),
+        record("schedule-ref", vec![string(&schedule_ref)]),
+        schedule_value,
+        record("peer-count", vec![u64_value(peer_count)]),
+        record("trace-ref", vec![string(report_trace_ref(&report)?)]),
+        record("resource-budget-ref", vec![string(canonical_hash(&budget_value(&report.budget.limits, &report.budget.usage))?)]),
+        hostcall_checks_value(&[
+            "seeded-peer-delivery",
+            "partition-replay-stable",
+            "drop-reorder-reconnect-profile",
+            "gossip-doc-blob-observations",
+            "resource-limit-binding",
+            "no-live-unrecorded-peer-io",
+        ]),
+    ]))
+}
+
+pub fn validate_deterministic_multipeer_receipt(
+    value: &IOValue,
+    report_value: &IOValue,
+    seed: u64,
+    profile: &str,
+    peer_events: &[&str],
+) -> Result<()> {
+    let expected = deterministic_multipeer_receipt_value(report_value, seed, profile, peer_events)?;
+    if canonical_hash(value)? != canonical_hash(&expected)? {
+        return Err(MoltenError::invalid_harness("deterministic multi-peer receipt does not match replayed schedule"));
+    }
+    let receipt = simple_record(value, "deterministic-multipeer-receipt-v1", 13)?;
+    let schema = required_string(&receipt[0], "deterministic multi-peer receipt schema")?;
+    if schema != HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported deterministic multi-peer receipt schema {schema}; expected {HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA}"
+        )));
+    }
+    if required_record_string(&receipt[1], "decision", "deterministic multi-peer decision")? != "pass" {
+        return Err(MoltenError::invalid_harness("deterministic multi-peer decision must be pass"));
+    }
+    if required_record_string(&receipt[2], "replay", "deterministic multi-peer replay")? != "stable" {
+        return Err(MoltenError::invalid_harness("deterministic multi-peer replay must be stable"));
+    }
+    let checks = parse_executor_preflight_checks(&receipt[12])?;
+    for expected in [
+        "seeded-peer-delivery",
+        "partition-replay-stable",
+        "drop-reorder-reconnect-profile",
+        "gossip-doc-blob-observations",
+        "resource-limit-binding",
+        "no-live-unrecorded-peer-io",
+    ] {
+        require_executor_preflight_check(&checks, expected)?;
+    }
+    Ok(())
+}
+
+fn validate_multipeer_profile(profile: &str) -> Result<()> {
+    if matches!(profile, "seeded" | "recorded") {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "unsupported deterministic multi-peer profile {profile}; expected seeded or recorded"
+        )))
+    }
+}
+
+fn validate_multipeer_event(event: &str) -> Result<()> {
+    if matches!(event, "deliver" | "partition" | "drop" | "reorder" | "reconnect" | "resource-limit" | "gossip" | "doc" | "blob") {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "unsupported deterministic multi-peer event {event}; live or unrecorded peer delivery cannot satisfy replay"
+        )))
+    }
 }
 
 pub fn repro_bundle_value(report_value: &IOValue) -> Result<IOValue> {
