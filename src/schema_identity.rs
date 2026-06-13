@@ -312,9 +312,42 @@ pub fn compatibility_admits_storage(
     expected_schema_ref: &str,
     actual_schema_ref: &str,
 ) -> Result<bool> {
+    compatibility_admits_scope(value, expected_schema_ref, actual_schema_ref, "typed storage request")
+}
+
+pub fn compatibility_admits_protocol_payload(
+    value: &IOValue,
+    expected_schema_ref: &str,
+    actual_schema_ref: &str,
+) -> Result<bool> {
+    compatibility_admits_scope(value, expected_schema_ref, actual_schema_ref, "protocol payload request")
+}
+
+pub fn compatibility_admits_effect_schema(
+    value: &IOValue,
+    expected_schema_ref: &str,
+    actual_schema_ref: &str,
+) -> Result<bool> {
+    compatibility_admits_scope(value, expected_schema_ref, actual_schema_ref, "effect schema request")
+}
+
+pub fn compatibility_admits_policy_contract_schema(
+    value: &IOValue,
+    expected_schema_ref: &str,
+    actual_schema_ref: &str,
+) -> Result<bool> {
+    compatibility_admits_scope(value, expected_schema_ref, actual_schema_ref, "policy contract schema request")
+}
+
+fn compatibility_admits_scope(
+    value: &IOValue,
+    expected_schema_ref: &str,
+    actual_schema_ref: &str,
+    context: &str,
+) -> Result<bool> {
     let parsed = parse_schema_compatibility(value)?;
     if parsed.expected_schema_ref != expected_schema_ref || parsed.actual_schema_ref != actual_schema_ref {
-        return Err(MoltenError::invalid_harness("schema compatibility refs do not match typed storage request"));
+        return Err(MoltenError::invalid_harness(format!("schema compatibility refs do not match {context}")));
     }
     Ok(matches!(
         parsed.decision.as_str(),
@@ -393,7 +426,7 @@ fn compatibility_decision(input: &SchemaCompatibilityInput) -> Result<String> {
     if let Some(alias) = input.alias.as_ref()
         && alias.from_schema_ref == input.actual.schema_ref
         && alias.to_schema_ref == input.expected.schema_ref
-        && matches!(alias.scope.as_str(), "storage" | "global-local-fixture")
+        && matches!(alias.scope.as_str(), "storage" | "effect" | "protocol" | "policy" | "global-local-fixture")
     {
         return Ok(DECISION_ADMITTED_ALIAS.to_string());
     }
@@ -789,6 +822,49 @@ mod tests {
         })
         .expect("brand compat");
         assert_eq!(parse_schema_compatibility(&branded).expect("parse brand").decision, DECISION_BRAND_MATCH);
+    }
+
+    #[test]
+    fn compatibility_helpers_cover_storage_protocol_effect_and_policy_contracts() {
+        let shape =
+            parse_text(r#"<shape "record" "event" [<shape "field" "payload" <shape "bytes">>]>"#).expect("shape");
+        let expected = identity(MODE_UNIQUE, "expected-event", &shape, None);
+        let actual = identity(MODE_UNIQUE, "actual-event", &shape, None);
+        for (scope, admits) in [
+            ("storage", compatibility_admits_storage as fn(&IOValue, &str, &str) -> Result<bool>),
+            ("protocol", compatibility_admits_protocol_payload),
+            ("effect", compatibility_admits_effect_schema),
+            ("policy", compatibility_admits_policy_contract_schema),
+        ] {
+            let alias = parse_schema_alias(
+                &schema_alias_value(&SchemaAliasInput {
+                    from_schema_ref: actual.schema_ref.clone(),
+                    to_schema_ref: expected.schema_ref.clone(),
+                    scope: scope.to_string(),
+                    policy_refs: vec![test_ref(&format!("{scope}-policy"))],
+                    evidence_refs: vec![test_ref(&format!("{scope}-evidence"))],
+                })
+                .expect("alias value"),
+            )
+            .expect("alias");
+            let compatibility = compatibility_decision_value(&SchemaCompatibilityInput {
+                expected: expected.clone(),
+                actual: actual.clone(),
+                alias: Some(alias),
+                migration_ref: None,
+                policy_refs: vec![test_ref("policy")],
+                evidence_refs: vec![test_ref("evidence")],
+                deny_by_policy: false,
+            })
+            .expect("compatibility");
+            assert_eq!(
+                parse_schema_compatibility(&compatibility).expect("parse compatibility").decision,
+                DECISION_ADMITTED_ALIAS
+            );
+            assert!(admits(&compatibility, &expected.schema_ref, &actual.schema_ref).expect("admitted"));
+            let receipt = compatibility_receipt_value(scope, &compatibility).expect("receipt");
+            assert_eq!(parse_compatibility_receipt(&receipt).expect("parse receipt").decision, "pass");
+        }
     }
 
     #[test]
