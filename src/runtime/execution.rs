@@ -92,7 +92,7 @@ pub fn admit_hostcall(
 
 pub fn inspect_component_imports(imports: &[String], allowed: &[RuntimeHostcall]) -> ComponentInspection {
     let allowed_names: Vec<&str> = allowed.iter().map(|hostcall| hostcall.capability_name()).collect();
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = Vec::with_capacity(imports.len());
     for import in imports {
         if !allowed_names.contains(&import.as_str()) {
             diagnostics.push(format!("unsupported component import {import}"));
@@ -119,8 +119,9 @@ pub fn steel_orchestration_record(
     })
 }
 
-pub fn capability(value: RuntimeHostcall) -> Capability {
-    Capability::parse(value.capability_name()).expect("static hostcall capability")
+pub fn hostcall_capability(value: RuntimeHostcall) -> std::result::Result<Capability, RuntimeBoundaryError> {
+    Capability::parse(value.capability_name())
+        .map_err(|error| RuntimeBoundaryError::invalid_input("hostcall-capability", error.to_string()))
 }
 
 #[cfg(test)]
@@ -128,7 +129,7 @@ mod tests {
     use super::RuntimeHostcall;
     use super::WasiCapabilityProfile;
     use super::admit_hostcall;
-    use super::capability;
+    use super::hostcall_capability;
     use super::inspect_component_imports;
     use super::steel_orchestration_record;
     use crate::preserves_rail::content_ref_from_bytes;
@@ -154,7 +155,7 @@ mod tests {
 
     #[test]
     fn wasmtime_hostcall_requires_matching_capability() {
-        let envelope = envelope_with_caps(vec![capability(RuntimeHostcall::Send)]);
+        let envelope = envelope_with_caps(vec![hostcall_capability(RuntimeHostcall::Send).expect("hostcall cap")]);
         let admission = admit_hostcall(&envelope, RuntimeHostcall::Send).expect("send admitted");
         assert_eq!(admission.capability, "hostcall:send");
 
@@ -178,7 +179,7 @@ mod tests {
 
     #[test]
     fn steel_orchestration_binds_script_operation_and_envelope() {
-        let envelope = envelope_with_caps(vec![capability(RuntimeHostcall::Subscribe)]);
+        let envelope = envelope_with_caps(vec![hostcall_capability(RuntimeHostcall::Subscribe).expect("hostcall cap")]);
         let record = steel_orchestration_record(content_ref_from_bytes(b"script"), "spawn-inspect", &envelope)
             .expect("steel record");
         assert_eq!(record.operation, "spawn-inspect");

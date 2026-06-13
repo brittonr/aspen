@@ -264,6 +264,10 @@ molten test delivery check --root target/delivery-store \
 
 `first` receipts permit the caller to commit its side effect; exact duplicates emit `duplicate` receipts with side effect `suppress` and a prior receipt ref; conflicts, stale sequences, and gaps deny or retry before side effects. These receipts are replay/dedup evidence only and do not grant transport, authority, provenance, policy, resource, or execution trust.
 
+## Upgrade session protocol drains
+
+Upgrade `drain-sessions` tasks now bind protocol lifecycle evidence before task completion. A passing drain requires a ledger-resolved `protocol-session-gate-receipt-v1` for the affected old protocol artifact, a `pass` decision, non-empty terminal session-state refs, and a protocol ref matching the task's `from_ref` (or fallback affected/compatibility refs). Missing, denied, stale, or wrong-protocol gate receipts emit deny `upgrade-receipt-v1` diagnostics before cutover side effects. These drain receipts are upgrade coordination evidence only; they do not grant protocol authority, transport, policy, resource, provenance, or execution trust.
+
 ## Retention and GC pinning diagnostics
 
 Retention diagnostics make deletion eligibility explicit before any object is removed, redacted, tombstoned, or compacted:

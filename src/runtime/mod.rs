@@ -52,7 +52,7 @@ pub use execution::RuntimeHostcall;
 pub use execution::SteelOrchestrationRecord;
 pub use execution::WasiCapabilityProfile;
 pub use execution::admit_hostcall;
-pub use execution::capability as hostcall_capability;
+pub use execution::hostcall_capability;
 pub use execution::inspect_component_imports;
 pub use execution::steel_orchestration_record;
 pub use predicates::ActormapTransactionResult;

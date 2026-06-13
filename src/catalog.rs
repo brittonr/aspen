@@ -333,8 +333,8 @@ pub fn chunk_store(chunk_root: &Path, input: &CatalogChunkStoreInput) -> Result<
             MAX_CATALOG_REFS,
             "chunk catalog manifest refs",
         )?;
-        let manifest_pinned = crate::chunk_store::manifest_is_pinned(chunk_root, &manifest_ref)?;
-        if manifest_pinned {
+        let is_manifest_pinned = crate::chunk_store::manifest_is_pinned(chunk_root, &manifest_ref)?;
+        if is_manifest_pinned {
             visible_manifest_pins =
                 checked_count_sum(visible_manifest_pins, 1, MAX_CATALOG_REFS, "chunk catalog pins")?;
         }
@@ -393,15 +393,15 @@ pub fn chunk_store(chunk_root: &Path, input: &CatalogChunkStoreInput) -> Result<
         }
         push_bounded(
             &mut manifest_items,
-            chunk_manifest_catalog_value(
-                &manifest,
-                manifest_pinned,
-                manifest_available,
-                manifest_missing,
-                manifest_chunk_pins,
+            chunk_manifest_catalog_value(&ChunkManifestCatalogInput {
+                manifest: &manifest,
+                is_manifest_pinned,
+                available_chunks: manifest_available,
+                missing_chunks: manifest_missing,
+                chunk_pins: manifest_chunk_pins,
                 hidden_chunk_count,
-                &visible_chunks,
-            )?,
+                visible_chunks: &visible_chunks,
+            })?,
             MAX_CATALOG_ITEMS,
             "chunk catalog items",
         )?;
@@ -410,16 +410,16 @@ pub fn chunk_store(chunk_root: &Path, input: &CatalogChunkStoreInput) -> Result<
     let mut items = Vec::new();
     push_bounded(
         &mut items,
-        chunk_store_catalog_status_value(
-            &visible_manifest_refs,
+        chunk_store_catalog_status_value(&ChunkStoreCatalogStatusInput {
+            manifest_refs: &visible_manifest_refs,
             total_chunk_refs,
-            visible_unique_chunks.len(),
-            visible_available_chunks.len(),
-            visible_missing_chunks.len(),
-            visible_manifest_pins,
-            visible_chunk_pins.len(),
+            unique_chunks: visible_unique_chunks.len(),
+            available_chunks: visible_available_chunks.len(),
+            missing_chunks: visible_missing_chunks.len(),
+            manifest_pins: visible_manifest_pins,
+            chunk_pins: visible_chunk_pins.len(),
             dedup_hits,
-        )?,
+        })?,
         MAX_CATALOG_ITEMS,
         "chunk catalog items",
     )?;
@@ -1856,8 +1856,8 @@ fn short_id_resolution_value(
     ]))
 }
 
-fn chunk_store_catalog_status_value(
-    manifest_refs: &[String],
+struct ChunkStoreCatalogStatusInput<'a> {
+    manifest_refs: &'a [String],
     total_chunk_refs: usize,
     unique_chunks: usize,
     available_chunks: usize,
@@ -1865,27 +1865,29 @@ fn chunk_store_catalog_status_value(
     manifest_pins: usize,
     chunk_pins: usize,
     dedup_hits: usize,
-) -> Result<IOValue> {
-    validate_refs(manifest_refs, "chunk catalog manifest ref")?;
+}
+
+fn chunk_store_catalog_status_value(input: &ChunkStoreCatalogStatusInput<'_>) -> Result<IOValue> {
+    validate_refs(input.manifest_refs, "chunk catalog manifest ref")?;
     Ok(record("chunk-store-catalog-v1", vec![
         string("molten.catalog.chunk-store.v1"),
         record("manifests", vec![
-            crate::preserves_rail::u64_value(usize_to_u64(manifest_refs.len(), "chunk catalog manifests")?),
-            refs_sequence(manifest_refs),
+            crate::preserves_rail::u64_value(usize_to_u64(input.manifest_refs.len(), "chunk catalog manifests")?),
+            refs_sequence(input.manifest_refs),
         ]),
         record("chunks", vec![
-            crate::preserves_rail::u64_value(usize_to_u64(total_chunk_refs, "chunk catalog total chunks")?),
-            crate::preserves_rail::u64_value(usize_to_u64(unique_chunks, "chunk catalog unique chunks")?),
-            crate::preserves_rail::u64_value(usize_to_u64(available_chunks, "chunk catalog available chunks")?),
-            crate::preserves_rail::u64_value(usize_to_u64(missing_chunks, "chunk catalog missing chunks")?),
+            crate::preserves_rail::u64_value(usize_to_u64(input.total_chunk_refs, "chunk catalog total chunks")?),
+            crate::preserves_rail::u64_value(usize_to_u64(input.unique_chunks, "chunk catalog unique chunks")?),
+            crate::preserves_rail::u64_value(usize_to_u64(input.available_chunks, "chunk catalog available chunks")?),
+            crate::preserves_rail::u64_value(usize_to_u64(input.missing_chunks, "chunk catalog missing chunks")?),
         ]),
         record("pins", vec![
-            crate::preserves_rail::u64_value(usize_to_u64(manifest_pins, "chunk catalog manifest pins")?),
-            crate::preserves_rail::u64_value(usize_to_u64(chunk_pins, "chunk catalog chunk pins")?),
+            crate::preserves_rail::u64_value(usize_to_u64(input.manifest_pins, "chunk catalog manifest pins")?),
+            crate::preserves_rail::u64_value(usize_to_u64(input.chunk_pins, "chunk catalog chunk pins")?),
         ]),
         record("dedup", vec![
-            crate::preserves_rail::u64_value(usize_to_u64(dedup_hits, "chunk catalog dedup hits")?),
-            crate::preserves_rail::u64_value(dedup_ratio_bps(total_chunk_refs, dedup_hits)?),
+            crate::preserves_rail::u64_value(usize_to_u64(input.dedup_hits, "chunk catalog dedup hits")?),
+            crate::preserves_rail::u64_value(dedup_ratio_bps(input.total_chunk_refs, input.dedup_hits)?),
         ]),
         record("classifications", vec![sequence(vec![
             string("chunk-store:status"),
@@ -1897,21 +1899,24 @@ fn chunk_store_catalog_status_value(
     ]))
 }
 
-fn chunk_manifest_catalog_value(
-    manifest: &crate::chunk_store::ChunkManifest,
-    manifest_pinned: bool,
+struct ChunkManifestCatalogInput<'a> {
+    manifest: &'a crate::chunk_store::ChunkManifest,
+    is_manifest_pinned: bool,
     available_chunks: usize,
     missing_chunks: usize,
     chunk_pins: usize,
     hidden_chunk_count: usize,
-    visible_chunks: &[String],
-) -> Result<IOValue> {
+    visible_chunks: &'a [String],
+}
+
+fn chunk_manifest_catalog_value(input: &ChunkManifestCatalogInput<'_>) -> Result<IOValue> {
+    let manifest = input.manifest;
     validate_ref(&manifest.manifest_ref, "chunk catalog manifest ref")?;
     validate_ref(&manifest.root_ref, "chunk catalog root ref")?;
-    validate_refs(visible_chunks, "chunk catalog chunk ref")?;
-    let availability = if missing_chunks == 0 {
+    validate_refs(input.visible_chunks, "chunk catalog chunk ref")?;
+    let availability = if input.missing_chunks == 0 {
         "complete"
-    } else if available_chunks == 0 {
+    } else if input.available_chunks == 0 {
         "missing"
     } else {
         "partial"
@@ -1930,23 +1935,23 @@ fn chunk_manifest_catalog_value(
         ]),
         record("availability", vec![
             string(availability),
-            crate::preserves_rail::u64_value(usize_to_u64(available_chunks, "chunk catalog available chunks")?),
-            crate::preserves_rail::u64_value(usize_to_u64(missing_chunks, "chunk catalog missing chunks")?),
-            refs_sequence(visible_chunks),
+            crate::preserves_rail::u64_value(usize_to_u64(input.available_chunks, "chunk catalog available chunks")?),
+            crate::preserves_rail::u64_value(usize_to_u64(input.missing_chunks, "chunk catalog missing chunks")?),
+            refs_sequence(input.visible_chunks),
         ]),
         record("pins", vec![
-            bool_value(manifest_pinned),
-            crate::preserves_rail::u64_value(usize_to_u64(chunk_pins, "chunk catalog chunk pins")?),
+            bool_value(input.is_manifest_pinned),
+            crate::preserves_rail::u64_value(usize_to_u64(input.chunk_pins, "chunk catalog chunk pins")?),
         ]),
         record("redaction", vec![crate::preserves_rail::u64_value(usize_to_u64(
-            hidden_chunk_count,
+            input.hidden_chunk_count,
             "chunk catalog hidden chunks",
         )?)]),
         record("classifications", vec![sequence(vec![
             string("chunk-store:manifest"),
             string(format!("chunk-store-object-kind:{}", manifest.object_kind)),
             string(format!("chunk-store-availability:{availability}")),
-            string(if manifest_pinned {
+            string(if input.is_manifest_pinned {
                 "chunk-store-pin:pinned"
             } else {
                 "chunk-store-pin:unpinned"
@@ -1963,7 +1968,10 @@ fn dedup_ratio_bps(total_chunk_refs: usize, dedup_hits: usize) -> Result<u64> {
     let numerator = dedup_hits
         .checked_mul(10_000)
         .ok_or_else(|| MoltenError::invalid_harness("chunk catalog dedup ratio overflow"))?;
-    usize_to_u64(numerator / total_chunk_refs, "chunk catalog dedup ratio")
+    let ratio = numerator
+        .checked_div(total_chunk_refs)
+        .ok_or_else(|| MoltenError::invalid_harness("chunk catalog dedup ratio divisor is zero"))?;
+    usize_to_u64(ratio, "chunk catalog dedup ratio")
 }
 
 fn usize_to_u64(value: usize, label: &str) -> Result<u64> {

@@ -260,15 +260,15 @@ impl RuntimeState {
     }
 
     pub fn cleanup_actor_scope(&mut self, actor: &str) -> Result<RuntimeScopeCleanup> {
-        let mut assertion_refs = Vec::new();
+        let mut assertion_refs = Vec::with_capacity(self.assertions.len());
         for assertion in self.assertions.iter().filter(|assertion| assertion.actor == actor) {
             assertion_refs.push(assertion.assertion_ref()?);
         }
-        let mut observer_refs = Vec::new();
+        let mut observer_refs = Vec::with_capacity(self.observers.len());
         for observer in self.observers.iter().filter(|observer| observer.actor == actor) {
             observer_refs.push(observer.observer_ref()?);
         }
-        let mut message_refs = Vec::new();
+        let mut message_refs = Vec::with_capacity(self.messages.len());
         for message in self.messages.iter().filter(|message| message.from == actor || message.to == actor) {
             message_refs.push(message.message_ref()?);
         }

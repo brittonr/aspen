@@ -577,10 +577,10 @@ fn validate_refs(label: &str, refs: &[String]) -> Result<()> {
     let mut prior: Option<&str> = None;
     for reference in refs {
         validate_content_ref(reference)?;
-        if let Some(prior_ref) = prior {
-            if prior_ref >= reference.as_str() {
-                return Err(MoltenError::invalid_harness(format!("{label} refs must be sorted and unique")));
-            }
+        if let Some(prior_ref) = prior
+            && prior_ref >= reference.as_str()
+        {
+            return Err(MoltenError::invalid_harness(format!("{label} refs must be sorted and unique")));
         }
         prior = Some(reference);
     }
@@ -634,10 +634,10 @@ fn validate_supervisor_input(input: &SupervisorDecisionInput<'_>) -> Result<()> 
     validate_content_ref(input.child_failure_ref)?;
     validate_refs("policy", &input.policy.policy_refs)?;
     validate_refs("evidence", input.evidence_refs)?;
-    if let Some(window) = input.policy.restart_window.as_ref() {
-        if window.end_step < window.start_step {
-            return Err(MoltenError::invalid_harness("restart window end precedes start"));
-        }
+    if let Some(window) = input.policy.restart_window.as_ref()
+        && window.end_step < window.start_step
+    {
+        return Err(MoltenError::invalid_harness("restart window end precedes start"));
     }
     Ok(())
 }

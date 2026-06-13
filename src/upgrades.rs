@@ -26,6 +26,7 @@ use crate::preserves_rail::to_text;
 use crate::preserves_rail::u64_value;
 use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
+use crate::protocol_session;
 
 pub const SUPPORTED_TASK_KINDS: &[&str] = &[
     "install-artifact",
@@ -54,6 +55,9 @@ const _: () = assert!(MAX_UPGRADE_DIAGNOSTICS <= 100_000);
 const _: () = assert!(MAX_UPGRADE_TASKS <= 10_000);
 const _: () = assert!(MAX_UPGRADE_POINTERS <= 1_000_000);
 const _: () = assert!(MAX_UPGRADE_SOURCE_GATES <= 1_000);
+
+type UpgradeCheckPair = (&'static str, &'static str);
+type UpgradeTaskOutcome = (&'static str, Vec<String>, Vec<UpgradeCheckPair>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UpgradeTaskInput {
@@ -531,10 +535,10 @@ pub fn execute_task(root: &Path, ledger_root: &Path, plan_ref: &str, task_id: &s
                 )])
             }
         }
+        "drain-sessions" => protocol_drain_task_outcome(ledger_root, &plan, &task)?,
         "install-artifact"
         | "deprecate"
         | "install-protocol-bridge"
-        | "drain-sessions"
         | "update-handler-policy"
         | "update-docs"
         | "rollback-pointer" => {
@@ -692,6 +696,153 @@ pub fn cleanup_admission_with_registry(
     let receipt = parse_upgrade_receipt(&receipt_value)?;
     store_receipt(root, &receipt_value)?;
     Ok(receipt)
+}
+
+fn protocol_drain_task_outcome(
+    ledger_root: &Path,
+    plan: &UpgradePlan,
+    task: &UpgradeTask,
+) -> Result<UpgradeTaskOutcome> {
+    let evidence_refs = protocol_drain_evidence_refs(task)?;
+    let expected_protocol_refs = protocol_drain_expected_protocol_refs(plan, task)?;
+    let mut diagnostics = Vec::new();
+    let mut has_gate = false;
+    let mut has_gate_decision_pass = false;
+    let mut has_terminal_state = false;
+    let mut has_protocol_match = false;
+    let mut has_drained_gate = false;
+    if evidence_refs.is_empty() {
+        push_bounded(
+            &mut diagnostics,
+            "drain-sessions task requires a protocol-session-gate-receipt-v1 precondition or postcondition ref"
+                .to_string(),
+            MAX_UPGRADE_DIAGNOSTICS,
+            "upgrade protocol drain diagnostics",
+        )?;
+    }
+    for evidence_ref in &evidence_refs {
+        let value = match ledger::read_artifact(ledger_root, evidence_ref) {
+            Ok(value) => value,
+            Err(error) => {
+                push_bounded(
+                    &mut diagnostics,
+                    format!("protocol drain evidence {evidence_ref} is not readable from ledger: {error}"),
+                    MAX_UPGRADE_DIAGNOSTICS,
+                    "upgrade protocol drain diagnostics",
+                )?;
+                continue;
+            }
+        };
+        let gate = match protocol_session::parse_protocol_session_gate_receipt(&value) {
+            Ok(gate) => gate,
+            Err(error) => {
+                push_bounded(
+                    &mut diagnostics,
+                    format!("protocol drain evidence {evidence_ref} is not a protocol session gate receipt: {error}"),
+                    MAX_UPGRADE_DIAGNOSTICS,
+                    "upgrade protocol drain diagnostics",
+                )?;
+                continue;
+            }
+        };
+        has_gate = true;
+        let is_decision_pass = gate.decision == "pass";
+        let is_terminal = !gate.session_ids.is_empty() && !gate.final_state_refs.is_empty();
+        let is_protocol_match = expected_protocol_refs.iter().any(|expected| expected == &gate.protocol_ref);
+        has_gate_decision_pass |= is_decision_pass;
+        has_terminal_state |= is_terminal;
+        has_protocol_match |= is_protocol_match;
+        if !is_decision_pass {
+            push_bounded(
+                &mut diagnostics,
+                format!("protocol drain gate {} denied with decision {}", gate.receipt_ref, gate.decision),
+                MAX_UPGRADE_DIAGNOSTICS,
+                "upgrade protocol drain diagnostics",
+            )?;
+        }
+        if !is_terminal {
+            push_bounded(
+                &mut diagnostics,
+                format!("protocol drain gate {} does not bind terminal session state", gate.receipt_ref),
+                MAX_UPGRADE_DIAGNOSTICS,
+                "upgrade protocol drain diagnostics",
+            )?;
+        }
+        if !is_protocol_match {
+            push_bounded(
+                &mut diagnostics,
+                format!(
+                    "protocol drain gate {} is for {}, expected one of {}",
+                    gate.receipt_ref,
+                    gate.protocol_ref,
+                    expected_protocol_refs.join(",")
+                ),
+                MAX_UPGRADE_DIAGNOSTICS,
+                "upgrade protocol drain diagnostics",
+            )?;
+        }
+        if is_decision_pass && is_terminal && is_protocol_match {
+            has_drained_gate = true;
+        }
+    }
+    if !evidence_refs.is_empty() && !has_gate {
+        push_bounded(
+            &mut diagnostics,
+            "drain-sessions task did not bind any readable protocol session gate receipts".to_string(),
+            MAX_UPGRADE_DIAGNOSTICS,
+            "upgrade protocol drain diagnostics",
+        )?;
+    }
+    let decision = if diagnostics.is_empty() && has_drained_gate {
+        "pass"
+    } else {
+        "deny"
+    };
+    Ok((decision, diagnostics, vec![
+        ("protocol-session-gate-bound", pass_fail(has_gate)),
+        ("protocol-session-gate-pass", pass_fail(has_gate_decision_pass)),
+        ("protocol-terminal-state", pass_fail(has_terminal_state)),
+        ("protocol-ref-bound", pass_fail(has_protocol_match)),
+        ("protocol-session-drain", pass_fail(has_drained_gate)),
+        ("protocol-drain-is-not-authority", "pass"),
+    ]))
+}
+
+fn protocol_drain_evidence_refs(task: &UpgradeTask) -> Result<Vec<String>> {
+    let mut refs = BTreeSet::new();
+    refs.extend(task.precondition_refs.iter().cloned());
+    refs.extend(task.postcondition_refs.iter().cloned());
+    let refs: Vec<String> = refs.into_iter().collect();
+    validate_refs(&refs, "upgrade protocol drain evidence ref")?;
+    Ok(refs)
+}
+
+fn protocol_drain_expected_protocol_refs(plan: &UpgradePlan, task: &UpgradeTask) -> Result<Vec<String>> {
+    let mut refs = BTreeSet::new();
+    if let Some(from_ref) = task.from_ref.as_ref() {
+        refs.insert(from_ref.clone());
+    } else if is_canonical_ref(&task.subject) {
+        refs.insert(task.subject.clone());
+    } else {
+        refs.extend(plan.compatibility.old_refs.iter().cloned());
+        if refs.is_empty() {
+            refs.extend(plan.affected_refs.iter().cloned());
+        }
+    }
+    if refs.is_empty() {
+        return Err(MoltenError::invalid_harness("drain-sessions task has no protocol ref binding"));
+    }
+    let refs: Vec<String> = refs.into_iter().collect();
+    validate_refs(&refs, "upgrade protocol drain expected protocol ref")?;
+    Ok(refs)
+}
+
+fn is_canonical_ref(value: &str) -> bool {
+    validate_content_ref(value).is_ok()
+}
+
+fn pass_fail(is_pass: bool) -> &'static str {
+    if is_pass { "pass" } else { "fail" }
 }
 
 pub fn status(root: &Path, plan_ref: &str) -> Result<UpgradeStatus> {
@@ -967,7 +1118,7 @@ fn parse_task(value: &IOValue) -> Result<UpgradeTask> {
     })
 }
 
-fn parse_upgrade_receipt(value: &IOValue) -> Result<UpgradeReceipt> {
+pub fn parse_upgrade_receipt(value: &IOValue) -> Result<UpgradeReceipt> {
     let fields = value
         .collect_simple_record("upgrade-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <upgrade-receipt-v1 ...>"))?;
@@ -1614,6 +1765,66 @@ mod tests {
     }
 
     #[test]
+    fn protocol_drain_task_requires_passing_protocol_gate_evidence() {
+        let root = temp_dir("upgrade-protocol-drain");
+        let ledger_root = root.join("ledger");
+        let store = root.join("upgrades");
+        let gate = protocol_drain_gate();
+        let gate_ref = ledger::import_artifact(&ledger_root, &gate.value).expect("import gate").artifact_ref;
+        assert_eq!(gate_ref, gate.receipt_ref);
+        let new_protocol_ref = test_ref("protocol-v2");
+        let plan_value =
+            protocol_drain_plan_value(&gate_ref, &gate.protocol_ref, &new_protocol_ref).expect("protocol drain plan");
+        let created = create_session(&store, &plan_value).expect("create session");
+        let executed =
+            execute_task(&store, &ledger_root, &created.plan.plan_ref, "drain-sessions").expect("execute drain task");
+        assert_eq!(executed.receipt.decision, "pass");
+        let text = to_text(&executed.receipt.value).expect("receipt text");
+        assert!(text.contains("protocol-session-drain"));
+        assert!(status(&store, &created.plan.plan_ref).expect("status").remaining_task_ids.is_empty());
+    }
+
+    #[test]
+    fn protocol_drain_task_denies_missing_stale_or_mismatched_gate_evidence() {
+        let root = temp_dir("upgrade-protocol-drain-deny");
+        let ledger_root = root.join("ledger");
+        let missing_store = root.join("missing-upgrades");
+        let gate = protocol_drain_gate();
+        let new_protocol_ref = test_ref("protocol-v2");
+        let missing_gate_ref = test_ref("missing-protocol-gate");
+        let missing_plan =
+            protocol_drain_plan_value(&missing_gate_ref, &gate.protocol_ref, &new_protocol_ref).expect("missing plan");
+        let missing_created = create_session(&missing_store, &missing_plan).expect("create missing session");
+        let missing = execute_task(&missing_store, &ledger_root, &missing_created.plan.plan_ref, "drain-sessions")
+            .expect("execute missing drain");
+        assert_eq!(missing.receipt.decision, "deny");
+        assert!(to_text(&missing.receipt.value).expect("missing text").contains("not readable from ledger"));
+
+        let denied_store = root.join("denied-upgrades");
+        let denied_gate = protocol_drain_gate_with_diagnostics(vec!["stale protocol lifecycle evidence".to_string()]);
+        let denied_gate_ref =
+            ledger::import_artifact(&ledger_root, &denied_gate.value).expect("import denied gate").artifact_ref;
+        let denied_plan =
+            protocol_drain_plan_value(&denied_gate_ref, &gate.protocol_ref, &new_protocol_ref).expect("denied plan");
+        let denied_created = create_session(&denied_store, &denied_plan).expect("create denied session");
+        let denied = execute_task(&denied_store, &ledger_root, &denied_created.plan.plan_ref, "drain-sessions")
+            .expect("execute denied drain");
+        assert_eq!(denied.receipt.decision, "deny");
+        assert!(to_text(&denied.receipt.value).expect("denied text").contains("denied with decision"));
+
+        let mismatch_store = root.join("mismatch-upgrades");
+        let gate_ref = ledger::import_artifact(&ledger_root, &gate.value).expect("import pass gate").artifact_ref;
+        let wrong_protocol_ref = test_ref("wrong-protocol");
+        let mismatch_plan =
+            protocol_drain_plan_value(&gate_ref, &wrong_protocol_ref, &new_protocol_ref).expect("mismatch plan");
+        let mismatch_created = create_session(&mismatch_store, &mismatch_plan).expect("create mismatch session");
+        let mismatch = execute_task(&mismatch_store, &ledger_root, &mismatch_created.plan.plan_ref, "drain-sessions")
+            .expect("execute mismatch drain");
+        assert_eq!(mismatch.receipt.decision, "deny");
+        assert!(to_text(&mismatch.receipt.value).expect("mismatch text").contains("expected one of"));
+    }
+
+    #[test]
     fn cleanup_passes_only_without_active_references() {
         let root = temp_dir("upgrade-cleanup");
         let ledger_root = root.join("ledger");
@@ -1673,6 +1884,69 @@ mod tests {
         );
         let old: BTreeSet<_> = plan.compatibility.old_refs.iter().collect();
         assert!(plan.compatibility.new_refs.iter().all(|new_ref| !old.contains(new_ref)));
+    }
+
+    fn protocol_drain_gate() -> protocol_session::ProtocolSessionGate {
+        protocol_drain_gate_with_diagnostics(Vec::new())
+    }
+
+    fn protocol_drain_gate_with_diagnostics(extra_diagnostics: Vec<String>) -> protocol_session::ProtocolSessionGate {
+        let lifecycle = protocol_session::request_response_lifecycle().expect("protocol lifecycle");
+        protocol_session::gate_protocol_session_lifecycle_with_diagnostics(
+            protocol_session::ProtocolSessionGateInput {
+                install_receipt: lifecycle.install.value.clone(),
+                initial_states: lifecycle.initial_states.iter().map(|state| state.value.clone()).collect(),
+                operation_receipts: lifecycle
+                    .operations
+                    .iter()
+                    .map(|operation| operation.receipt.value.clone())
+                    .collect(),
+                messages: lifecycle
+                    .operations
+                    .iter()
+                    .filter_map(|operation| operation.message.as_ref().map(|message| message.value.clone()))
+                    .collect(),
+                next_states: lifecycle
+                    .operations
+                    .iter()
+                    .filter_map(|operation| operation.next_state.as_ref().map(|state| state.value.clone()))
+                    .collect(),
+            },
+            extra_diagnostics,
+        )
+        .expect("protocol gate")
+    }
+
+    fn protocol_drain_plan_value(gate_ref: &str, old_protocol_ref: &str, new_protocol_ref: &str) -> Result<IOValue> {
+        upgrade_plan_value(&UpgradePlanInput {
+            session_id: "session-protocol-drain".to_string(),
+            reason: "protocol drain".to_string(),
+            summary: "drain protocol sessions before cutover".to_string(),
+            initiator_ref: test_ref("initiator"),
+            capability_refs: vec![test_ref("upgrade-capability")],
+            affected_refs: vec![old_protocol_ref.to_string(), new_protocol_ref.to_string()],
+            impact_refs: vec![old_protocol_ref.to_string()],
+            tasks: vec![UpgradeTaskInput {
+                task_id: "drain-sessions".to_string(),
+                kind: "drain-sessions".to_string(),
+                subject: "request-response-protocol".to_string(),
+                from_ref: Some(old_protocol_ref.to_string()),
+                to_ref: Some(new_protocol_ref.to_string()),
+                precondition_refs: vec![gate_ref.to_string()],
+                postcondition_refs: Vec::new(),
+                reversible: false,
+            }],
+            compatibility: UpgradeCompatibilityWindow {
+                old_refs: vec![old_protocol_ref.to_string()],
+                new_refs: vec![new_protocol_ref.to_string()],
+                expires_at: Some(32),
+                policy_refs: vec![test_ref("compat-policy")],
+            },
+            rollback_refs: vec![old_protocol_ref.to_string()],
+            policy_refs: vec![test_ref("upgrade-policy")],
+            evidence_refs: vec![gate_ref.to_string()],
+            source_gate_receipt_values: source_gate_values(),
+        })
     }
 
     fn artifact_input(kind: &str, label: &str, dependency_refs: &[String]) -> artifacts::ArtifactInstallInput {

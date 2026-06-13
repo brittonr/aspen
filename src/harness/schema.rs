@@ -49,9 +49,9 @@ use crate::preserves_rail::HARNESS_BUDGET_USAGE_SCHEMA;
 use crate::preserves_rail::HARNESS_CAPABILITIES_SCHEMA;
 use crate::preserves_rail::HARNESS_CAPABILITY_CONTRACT_SCHEMA;
 use crate::preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA;
+use crate::preserves_rail::HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA;
 use crate::preserves_rail::HARNESS_EFFECT_LOG_SCHEMA;
 use crate::preserves_rail::HARNESS_EXECUTOR_CONFORMANCE_SCHEMA;
-use crate::preserves_rail::HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA;
 use crate::preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA;
 use crate::preserves_rail::HARNESS_FAILURE_SCHEMA;
 use crate::preserves_rail::HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA;
@@ -2498,15 +2498,24 @@ pub fn boundary_coverage_value(report_value: &IOValue) -> Result<IOValue> {
     let report = parse_report(report_value)?;
     let suite = parse_suite(&report.suite_value)?;
     let mut coverage = Vec::new();
-    push_boundary_coverage(&mut coverage, "envelope-routes", suite.steps.iter().any(|step| matches!(step, CoreStep::Send { .. })));
+    push_boundary_coverage(
+        &mut coverage,
+        "envelope-routes",
+        suite.steps.iter().any(|step| matches!(step, CoreStep::Send { .. })),
+    );
     push_boundary_coverage(
         &mut coverage,
         "dataspace-semantics",
-        suite.steps.iter().any(|step| {
-            matches!(step, CoreStep::Observe { .. } | CoreStep::Assert { .. } | CoreStep::Retract { .. })
-        }),
+        suite
+            .steps
+            .iter()
+            .any(|step| matches!(step, CoreStep::Observe { .. } | CoreStep::Assert { .. } | CoreStep::Retract { .. })),
     );
-    push_boundary_coverage(&mut coverage, "policy-gates", report.policy_gate.is_some() && report.capability_gate.is_some());
+    push_boundary_coverage(
+        &mut coverage,
+        "policy-gates",
+        report.policy_gate.is_some() && report.capability_gate.is_some(),
+    );
     push_boundary_coverage(&mut coverage, "policy-denials", report_has_denied_admission(&report)?);
     push_boundary_coverage(&mut coverage, "effects", !report.effect_log.is_empty());
     push_boundary_coverage(
@@ -2527,7 +2536,11 @@ pub fn boundary_coverage_value(report_value: &IOValue) -> Result<IOValue> {
         "adapters",
         report.actors.iter().any(|actor| !matches!(actor.kind, ActorKind::Native)),
     );
-    push_boundary_coverage(&mut coverage, "confidentiality-paths", report_value_contains_label(report_value, "redaction-gate-v1"));
+    push_boundary_coverage(
+        &mut coverage,
+        "confidentiality-paths",
+        report_value_contains_label(report_value, "redaction-gate-v1"),
+    );
 
     let unexercised = coverage
         .iter()
@@ -2548,8 +2561,8 @@ pub fn boundary_coverage_value(report_value: &IOValue) -> Result<IOValue> {
     ]))
 }
 
-fn push_boundary_coverage(out: &mut Vec<IOValue>, name: &str, exercised: bool) {
-    out.push(record("boundary", vec![
+fn push_boundary_coverage(out: &mut impl crate::bounded::VecSink<IOValue>, name: &str, exercised: bool) {
+    out.push_item(record("boundary", vec![
         string(name),
         string(if exercised { "exercised" } else { "unexercised" }),
     ]));
@@ -2638,9 +2651,8 @@ pub fn validate_golden_trace_update_receipt(value: &IOValue, updated_report_valu
     if suite_ref != report.suite_ref {
         return Err(MoltenError::invalid_harness("golden trace update suite ref does not match updated report"));
     }
-    let expected_trace_ref = canonical_hash(&sequence(
-        report.observations.iter().map(|observation| observation.value.clone()).collect(),
-    ))?;
+    let expected_trace_ref =
+        canonical_hash(&sequence(report.observations.iter().map(|observation| observation.value.clone()).collect()))?;
     let trace_ref = required_record_hash(&receipt[6], "trace-ref", "golden trace ref")?;
     if trace_ref != expected_trace_ref {
         return Err(MoltenError::invalid_harness("golden trace update trace ref does not match report observations"));
@@ -2693,19 +2705,19 @@ pub fn upgrade_replay_receipt_value(
     let new_report = parse_report(new_report_value)?;
     let old_trace_ref = report_trace_ref(&old_report)?;
     let new_trace_ref = report_trace_ref(&new_report)?;
-    let stable_replay = old_trace_ref == new_trace_ref && old_report.final_state_hash == new_report.final_state_hash;
+    let is_stable_replay = old_trace_ref == new_trace_ref && old_report.final_state_hash == new_report.final_state_hash;
     if let Some(migration_receipt_ref) = migration_receipt_ref {
         validate_content_ref(migration_receipt_ref)?;
     }
     if let Some(compatibility_diagnostic_ref) = compatibility_diagnostic_ref {
         validate_content_ref(compatibility_diagnostic_ref)?;
     }
-    if !stable_replay && migration_receipt_ref.is_none() && compatibility_diagnostic_ref.is_none() {
+    if !is_stable_replay && migration_receipt_ref.is_none() && compatibility_diagnostic_ref.is_none() {
         return Err(MoltenError::invalid_harness(
             "upgrade replay trace drift requires migration receipt or compatibility diagnostic",
         ));
     }
-    let outcome = if stable_replay {
+    let outcome = if is_stable_replay {
         "stable"
     } else if migration_receipt_ref.is_some() {
         "migrated"
@@ -2777,24 +2789,21 @@ pub fn validate_upgrade_replay_receipt(
         return Err(MoltenError::invalid_harness("upgrade replay new state ref mismatch"));
     }
     let migration_receipt_ref = required_record_string(&receipt[9], "migration-receipt-ref", "migration receipt ref")?;
-    let compatibility_diagnostic_ref = required_record_string(
-        &receipt[10],
-        "compatibility-diagnostic-ref",
-        "compatibility diagnostic ref",
-    )?;
+    let compatibility_diagnostic_ref =
+        required_record_string(&receipt[10], "compatibility-diagnostic-ref", "compatibility diagnostic ref")?;
     if migration_receipt_ref != "none" {
         validate_content_ref(&migration_receipt_ref)?;
     }
     if compatibility_diagnostic_ref != "none" {
         validate_content_ref(&compatibility_diagnostic_ref)?;
     }
-    let stable_replay = old_trace_ref == new_trace_ref && old_report.final_state_hash == new_report.final_state_hash;
-    if !stable_replay && migration_receipt_ref == "none" && compatibility_diagnostic_ref == "none" {
+    let is_stable_replay = old_trace_ref == new_trace_ref && old_report.final_state_hash == new_report.final_state_hash;
+    if !is_stable_replay && migration_receipt_ref == "none" && compatibility_diagnostic_ref == "none" {
         return Err(MoltenError::invalid_harness(
             "upgrade replay trace drift requires migration receipt or compatibility diagnostic",
         ));
     }
-    let expected_outcome = if stable_replay {
+    let expected_outcome = if is_stable_replay {
         "stable"
     } else if migration_receipt_ref != "none" {
         "migrated"
@@ -2941,7 +2950,10 @@ pub fn deterministic_multipeer_receipt_value(
         schedule_value,
         record("peer-count", vec![u64_value(peer_count)]),
         record("trace-ref", vec![string(report_trace_ref(&report)?)]),
-        record("resource-budget-ref", vec![string(canonical_hash(&budget_value(&report.budget.limits, &report.budget.usage))?)]),
+        record("resource-budget-ref", vec![string(canonical_hash(&budget_value(
+            &report.budget.limits,
+            &report.budget.usage,
+        ))?)]),
         hostcall_checks_value(&[
             "seeded-peer-delivery",
             "partition-replay-stable",
@@ -3002,7 +3014,10 @@ fn validate_multipeer_profile(profile: &str) -> Result<()> {
 }
 
 fn validate_multipeer_event(event: &str) -> Result<()> {
-    if matches!(event, "deliver" | "partition" | "drop" | "reorder" | "reconnect" | "resource-limit" | "gossip" | "doc" | "blob") {
+    if matches!(
+        event,
+        "deliver" | "partition" | "drop" | "reorder" | "reconnect" | "resource-limit" | "gossip" | "doc" | "blob"
+    ) {
         Ok(())
     } else {
         Err(MoltenError::invalid_harness(format!(

@@ -355,7 +355,7 @@ Current architectural changes are recorded under `cairn/changes/`:
 - `unison-effect-handlers` — Unison ability-inspired effect/capability manifests with admitted handler profiles for production, local, chaos, and profiling execution.
 - `unison-remote-artifact-sync` — Iroh-backed dependency closure sync and remote execution envelopes for admitted artifacts, not arbitrary mobile closures.
 - `unison-typed-storage` — schema/type/artifact-bound durable values, typed references, storage handlers, and migration recipe artifacts.
-- `unison-upgrade-sessions` — structured, receipt-backed upgrade/refactor sessions for aliases, artifacts, schemas, protocols, policies, and cleanup.
+- `unison-upgrade-sessions` — structured, receipt-backed upgrade/refactor sessions for aliases, artifacts, schemas, protocols, policies, and cleanup; protocol-affecting `drain-sessions` tasks must bind passing `protocol-session-gate-receipt-v1` evidence with terminal session-state refs for the old protocol artifact before cutover.
 - `unison-schema-identity` — unique vs structural schema identity, compatibility decisions, and schema evidence for storage/protocol/effect boundaries.
 - `unison-evaluation-cache` — deterministic validation/projection/test cache keyed by canonical inputs, dependency closures, handler profiles, and policy refs.
 - `unison-executable-transcripts` — markdown-like executable docs, examples, and bug repros with canonical trace/receipt expectations.

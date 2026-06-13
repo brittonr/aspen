@@ -17,7 +17,7 @@
 - [x] [serial] r[molten.upgrades.name_move_workflow] Implement a minimal workflow that moves a name/alias from one artifact id to another with impact analysis and receipts.
 - [x] [serial] r[molten.upgrades.transcript_gate] Require selected executable transcripts to pass under declared handler profiles before cutover. (First slice binds transcript/handler evidence refs before cutover; actual transcript execution can reuse harness/eval-cache later.)
 - [x] [parallel] r[molten.upgrades.storage_migration_hook] Connect upgrade tasks to typed-storage migration recipe artifacts once typed storage exists.
-- [ ] [parallel] r[molten.upgrades.protocol_drain_hook] Connect upgrade tasks to protocol session drain/compatibility checks once choreography sessions are durable.
+- [x] [parallel] r[molten.upgrades.protocol_drain_hook] Connect upgrade tasks to protocol session drain/compatibility checks once choreography sessions are durable.
 
 ## Phase 4: Cleanup and tests
 
