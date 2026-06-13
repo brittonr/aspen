@@ -35,6 +35,7 @@ pub use config::RuntimeStartupConfig;
 pub use config::RuntimeSubscriptionConfig;
 pub use dataspace::LocalDataspaceAdapter;
 pub use dataspace::LocalEnvelopeDelivery;
+pub use dataspace::RuntimeScopeCleanup;
 pub use dataspace::RuntimeSnapshot;
 pub use dataspace::RuntimeState;
 pub use envelope::ActorId;

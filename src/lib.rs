@@ -18,6 +18,7 @@ pub mod harness;
 pub mod iroh_exchange;
 pub mod job_dag;
 pub mod ledger;
+pub mod lifecycle;
 pub mod node_daemon;
 pub mod node_identity;
 pub mod node_runtime;

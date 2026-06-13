@@ -62,6 +62,14 @@ pub struct RuntimeState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeScopeCleanup {
+    pub actor: String,
+    pub assertion_refs: Vec<String>,
+    pub observer_refs: Vec<String>,
+    pub message_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalEnvelopeDelivery {
     pub actor: ActorId,
     pub boundary: EnvelopeBoundary,
@@ -249,6 +257,33 @@ impl RuntimeState {
         let receipt = evaluate_turn_transition(&before, &turn, &before, TurnOutcome::Denied)?;
         let events = self.rollback_turn(turn, actor, reason);
         Ok((events, receipt))
+    }
+
+    pub fn cleanup_actor_scope(&mut self, actor: &str) -> Result<RuntimeScopeCleanup> {
+        let mut assertion_refs = Vec::new();
+        for assertion in self.assertions.iter().filter(|assertion| assertion.actor == actor) {
+            assertion_refs.push(assertion.assertion_ref()?);
+        }
+        let mut observer_refs = Vec::new();
+        for observer in self.observers.iter().filter(|observer| observer.actor == actor) {
+            observer_refs.push(observer.observer_ref()?);
+        }
+        let mut message_refs = Vec::new();
+        for message in self.messages.iter().filter(|message| message.from == actor || message.to == actor) {
+            message_refs.push(message.message_ref()?);
+        }
+        assertion_refs.sort();
+        observer_refs.sort();
+        message_refs.sort();
+        self.assertions.retain(|assertion| assertion.actor != actor);
+        self.observers.retain(|observer| observer.actor != actor);
+        self.messages.retain(|message| message.from != actor && message.to != actor);
+        Ok(RuntimeScopeCleanup {
+            actor: actor.to_owned(),
+            assertion_refs,
+            observer_refs,
+            message_refs,
+        })
     }
 
     pub fn begin_effect_for_step(&mut self, step: &RuntimeStep) -> Option<RuntimeEvent> {
