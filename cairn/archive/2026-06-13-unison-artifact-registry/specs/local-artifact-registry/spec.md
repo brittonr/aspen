@@ -1,8 +1,4 @@
-# Local Artifact Registry Specification
-
-## Purpose
-
-Defines Molten's local artifact registry capability: canonical artifact DTOs, domain-separated identity, mutable name metadata, Redb-backed indexes, dependency closure/impact queries, receipts, CLI operations, and upgrade-session integration.
+# Local Artifact Registry Delta Spec
 
 ## Requirements
 
