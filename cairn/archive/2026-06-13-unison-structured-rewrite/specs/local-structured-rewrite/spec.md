@@ -1,8 +1,4 @@
-# Local Structured Rewrite Specification
-
-## Purpose
-
-Defines Molten's local structured rewrite capability for canonical artifact queries, dry-run previews, immutable artifact creation, and upgrade-session integration.
+# Local Structured Rewrite Delta Spec
 
 ## Requirements
 
