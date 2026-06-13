@@ -2012,11 +2012,24 @@ mod tests {
         })
         .expect("put large");
         let parsed = parse_typed_ref_value(&put.typed_ref_value).expect("parse typed ref");
-        assert!(matches!(parsed.payload, TypedStoragePayload::ContentRef { .. }));
+        let TypedStoragePayload::ContentRef { manifest_ref, .. } = &parsed.payload else {
+            panic!("large typed storage value must use chunk manifest ref");
+        };
+        let manifest =
+            chunk_store::read_manifest(&chunk_root(&root), manifest_ref).expect("read typed storage chunk manifest");
+        assert_eq!(manifest.object_kind, "typed-storage-value");
         let get =
             get_value(&root, "large", "payload", Some(&put.schema_ref), &TypedStorageAdmission::local_fixture("large"))
                 .expect("get large");
         assert_eq!(get.value.as_string().expect("string").as_ref(), large);
+
+        let chunk_hex = crate::preserves_rail::content_ref_hex(&manifest.chunks[0].chunk_ref).expect("chunk hex");
+        fs::write(chunk_root(&root).join("chunks").join(format!("blake3_{chunk_hex}.bin")), b"tampered")
+            .expect("tamper typed storage chunk");
+        let error =
+            get_value(&root, "large", "payload", Some(&put.schema_ref), &TypedStorageAdmission::local_fixture("large"))
+                .expect_err("tampered chunk denies before typed storage load");
+        assert!(error.to_string().contains("chunk") || error.to_string().contains("hash"), "{error}");
     }
 
     #[test]

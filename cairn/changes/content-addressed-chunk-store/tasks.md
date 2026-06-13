@@ -23,8 +23,8 @@
 
 - [x] [serial] r[molten.chunk_store.iroh_adapter] Map chunk and manifest fetch/store to Iroh blobs while preserving canonical manifest identity.
 - [x] [serial] r[molten.chunk_store.remote_sync] Use manifests for remote artifact sync missing-chunk calculation and resumable fetch.
-- [ ] [parallel] r[molten.chunk_store.typed_storage] Store large typed-storage values as manifest refs and verify chunks before load.
-- [ ] [parallel] r[molten.chunk_store.replay_snapshots] Use manifest refs for replay snapshots/logs and allow partial chunk fetch for first-divergence debugging.
+- [x] [parallel] r[molten.chunk_store.typed_storage] Store large typed-storage values as manifest refs and verify chunks before load.
+- [x] [parallel] r[molten.chunk_store.replay_snapshots] Use manifest refs for replay snapshots/logs and allow partial chunk fetch for first-divergence debugging.
 - [x] [parallel] r[molten.chunk_store.catalog] Expose manifest/chunk availability, dedup ratio, and pin state through catalog/MCP subject to visibility policy.
 
 ## Phase 5: Tests

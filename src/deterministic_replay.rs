@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::path::Path;
 
 use preserves::IOValue;
 use preserves::Value;
 
+use crate::chunk_store;
+use crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 use crate::error::Result;
 use crate::preserves_rail::DETERMINISTIC_CHAOS_SCHEDULE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_EFFECT_LOG_SCHEMA;
@@ -98,6 +101,17 @@ pub struct ReplayFixtureRecord {
     pub effect_log_ref: String,
     pub final_state_ref: String,
     pub output_ref: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplaySnapshotManifestBundle {
+    pub value: IOValue,
+    pub bundle_ref: String,
+    pub effect_log_manifest_ref: String,
+    pub turn_journal_manifest_ref: String,
+    pub snapshot_manifest_ref: String,
+    pub first_divergence_manifest_ref: Option<String>,
+    pub debug_range_receipt_ref: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -260,6 +274,69 @@ pub fn record_fixture_value() -> Result<ReplayFixtureRecord> {
         final_state_ref: parts.after_state_ref,
         output_ref: parts.output_ref,
     })
+}
+
+pub fn replay_snapshot_manifest_bundle(
+    chunk_root: &Path,
+    variant: ReplayFixtureVariant,
+) -> Result<ReplaySnapshotManifestBundle> {
+    let expected = replay_run_parts(ReplayFixtureVariant::Baseline)?;
+    let actual = replay_run_parts(variant)?;
+    let snapshot = record("deterministic-replay-snapshot-v1", vec![
+        string("molten.deterministic-replay.snapshot.v1"),
+        record("identity-ref", vec![string(&expected.identity_ref)]),
+        record("final-state-ref", vec![string(&expected.after_state_ref)]),
+        record("turn-journal-ref", vec![string(&expected.turn_journal_ref)]),
+        record("effect-log-ref", vec![string(&expected.effect_log_ref)]),
+        sequence(vec![string("manifest-backed"), string("partial-debug-fetch")]),
+    ]);
+    let effect_log_manifest_ref = store_replay_manifest(chunk_root, "replay-effect-log", &expected.effect_log)?;
+    let turn_journal_manifest_ref = store_replay_manifest(chunk_root, "replay-turn-journal", &expected.turn_journal)?;
+    let snapshot_manifest_ref = store_replay_manifest(chunk_root, "replay-snapshot", &snapshot)?;
+    let divergence = first_divergence(&expected, &actual, variant);
+    let (first_divergence_manifest_ref, debug_range_receipt_ref) = if divergence == ReplayDivergenceKind::None {
+        (None, None)
+    } else {
+        let divergence_value = first_divergence_value(divergence, &expected, &actual)?;
+        let manifest_ref = store_replay_manifest(chunk_root, "replay-first-divergence", &divergence_value)?;
+        let range = chunk_store::range_read(chunk_root, &manifest_ref, 0, 32)?;
+        (Some(manifest_ref), Some(canonical_hash(&range.receipt_value)?))
+    };
+    let value = record("deterministic-replay-snapshot-manifests-v1", vec![
+        string("molten.deterministic-replay.snapshot-manifests.v1"),
+        record("effect-log-manifest-ref", vec![string(&effect_log_manifest_ref)]),
+        record("turn-journal-manifest-ref", vec![string(&turn_journal_manifest_ref)]),
+        record("snapshot-manifest-ref", vec![string(&snapshot_manifest_ref)]),
+        record("first-divergence-manifest-ref", vec![optional_ref_value(first_divergence_manifest_ref.as_deref())]),
+        record("debug-range-receipt-ref", vec![optional_ref_value(debug_range_receipt_ref.as_deref())]),
+        sequence(vec![
+            string("manifest-backed-replay"),
+            string("verified-before-load"),
+            string("partial-divergence-debug-fetch"),
+        ]),
+    ]);
+    let bundle_ref = canonical_hash(&value)?;
+    Ok(ReplaySnapshotManifestBundle {
+        value,
+        bundle_ref,
+        effect_log_manifest_ref,
+        turn_journal_manifest_ref,
+        snapshot_manifest_ref,
+        first_divergence_manifest_ref,
+        debug_range_receipt_ref,
+    })
+}
+
+fn store_replay_manifest(chunk_root: &Path, object_kind: &str, value: &IOValue) -> Result<String> {
+    let bytes = crate::preserves_rail::canonical_bytes(value)?;
+    Ok(chunk_store::put_bytes(chunk_root, object_kind, &bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?.manifest_ref)
+}
+
+fn optional_ref_value(value: Option<&str>) -> IOValue {
+    match value {
+        Some(value) => record("some", vec![string(value)]),
+        None => record("none", Vec::new()),
+    }
 }
 
 pub fn verify_fixture_value(variant: ReplayFixtureVariant) -> Result<ReplayVerifyReceipt> {
@@ -1084,6 +1161,10 @@ fn validate_divergence_ref(reference: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
+
     use hegel::TestCase;
     use hegel::generators;
 
@@ -1104,15 +1185,26 @@ mod tests {
     use super::deterministic_integration_receipt;
     use super::index_replay_evidence;
     use super::record_fixture_value;
+    use super::replay_snapshot_manifest_bundle;
     use super::rollup_replay_receipts;
     use super::trace_privacy_receipt;
     use super::verify_fixture_value;
+    use crate::chunk_store;
     use crate::preserves_rail::canonical_hash;
     use crate::preserves_rail::string;
     use crate::preserves_rail::to_text;
     use crate::runtime::PredicateDecision;
     use crate::runtime::RuntimeSnapshotAuthorityState;
     use crate::runtime::evaluate_snapshot_authority;
+
+    fn temp_dir(label: &str) -> PathBuf {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("molten-{label}-{}-{id}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
 
     #[test]
     fn replay_fixture_record_binds_identity_effects_and_final_state() {
@@ -1222,6 +1314,29 @@ mod tests {
         assert!(text.contains("replay receipt ref mismatch"));
         assert!(text.contains(&wrong_ref));
         assert!(text.contains("all-inputs-readable"));
+    }
+
+    #[test]
+    fn replay_snapshots_and_logs_are_manifest_backed_for_partial_debug_fetch() {
+        let root = temp_dir("replay-snapshot-manifests");
+        let bundle = replay_snapshot_manifest_bundle(&root, ReplayFixtureVariant::ChangedEffectResponse)
+            .expect("snapshot manifest bundle");
+        assert!(bundle.bundle_ref.starts_with("blake3:"));
+        assert!(bundle.effect_log_manifest_ref.starts_with("blake3:"));
+        assert!(bundle.turn_journal_manifest_ref.starts_with("blake3:"));
+        assert!(bundle.snapshot_manifest_ref.starts_with("blake3:"));
+        let first_divergence_manifest_ref =
+            bundle.first_divergence_manifest_ref.as_ref().expect("first divergence manifest ref");
+        assert!(first_divergence_manifest_ref.starts_with("blake3:"));
+        assert!(bundle.debug_range_receipt_ref.as_ref().expect("range receipt").starts_with("blake3:"));
+        let effect_log_read =
+            chunk_store::read_object(&root, &bundle.effect_log_manifest_ref).expect("read effect log");
+        assert!(crate::preserves_rail::parse_canonical_bytes(&effect_log_read.bytes).is_ok());
+        let range =
+            chunk_store::range_read(&root, first_divergence_manifest_ref, 0, 16).expect("partial divergence range");
+        assert_eq!(range.bytes.len(), 16);
+        let text = crate::preserves_rail::to_text(&bundle.value).expect("render bundle");
+        assert!(text.contains("partial-divergence-debug-fetch"));
     }
 
     #[test]
