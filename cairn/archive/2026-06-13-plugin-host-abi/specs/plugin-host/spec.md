@@ -1,10 +1,4 @@
-# Plugin Host Specification
-
-## Purpose
-
-Defines the `plugin-host` capability and the receipt-backed Molten plugin host ABI boundary for artifact-backed plugins, lifecycle callbacks, admitted hostcalls, health/cleanup, and compatibility-gated upgrades.
-
-## Requirements
+# Plugin Host Delta: Host ABI Contract
 
 ### Requirement: Host ABI artifacts are canonical
 r[molten.host_abi.artifact_model] Molten MUST represent plugin host ABI boundaries with canonical plugin manifests that bind plugin id, artifact ref, ABI id/version, lifecycle callbacks, effect manifest refs, hostcall refs, schema refs, policy refs, resource refs, and supply-chain evidence refs. The manifest MUST remain an install/activation input and MUST NOT grant authority by itself.
