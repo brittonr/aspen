@@ -52,7 +52,7 @@ fn inject_fixture(...) -> FixtureResult { ... }
 struct SecretRef(...);
 ```
 
-The exact marker syntax can evolve. The important requirement is that Octet can classify surfaces and apply the correct lint/fingerprint/evidence gates. Marker use is evidence metadata, not authority.
+The exact marker syntax can evolve. The completed slice uses workspace Octet metadata, object-corpus source paths, remediation-plan critical-surface inventories, and downstream consumer source scopes as the initial classification model. Marker attributes remain future-compatible evidence metadata, not authority.
 
 ## Core purity gate
 
@@ -158,20 +158,11 @@ Evidence consumers must display caveats clearly. For example, a Valence function
 
 ## Initial CI shape
 
-An initial CI/release gate can require:
-
-```text
-cargo octet check --artifact-dir artifacts/octet
-cargo octet fingerprint --check --review-manifest artifacts/fingerprint-review.json <critical paths>
-molten test run <core/harness/conformance suites>
-cairn validate --strict
-```
-
-The exact commands may evolve, but the gate accepts the run only if Octet artifacts, harness canonical reports, and Cairn validation all agree that required evidence exists.
+The current strict source-gate sequence requires workspace and lib-only Octet checks, focused object-corpus/fingerprint receipt generation, Octet artifact import, `octet-gate-receipt-v1` strict evaluation, remediation-plan evidence, harness/tests, Clippy, and Cairn strict validation. The exact commands may evolve, but the gate accepts the run only if Octet artifacts, harness canonical reports, and Cairn validation all agree that required evidence exists.
 
 ## Open Questions
 
-- Should marker attributes be inert Rust attributes, macro attributes, module-level manifests, or external Octet config first?
-- Which core transition functions should be fingerprinted in the first implementation slice?
-- How should review manifests link to Cairn receipts: direct receipt refs, content refs, or both?
-- Which Octet lints already cover the first gate and which require custom Molten rules?
+- Should future marker attributes be inert Rust attributes, macro attributes, module-level manifests, or external Octet config?
+- Which additional core transition and adapter functions should join the focused object-corpus/fingerprint scope beyond the current strict consumers?
+- How should review manifests link to Cairn receipts long-term: direct receipt refs, content refs, or both?
+- Which remaining Octet lints should become mandatory source-remediated zero rather than documented configuration-clean caveats?
