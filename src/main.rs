@@ -128,6 +128,18 @@ enum Command {
         #[command(subcommand)]
         command: NodeCommand,
     },
+    Runtime {
+        #[command(subcommand)]
+        command: RuntimeCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum RuntimeCommand {
+    Config {
+        #[arg(long)]
+        config: PathBuf,
+    },
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -3641,6 +3653,22 @@ fn run() -> Result<()> {
         Some(Command::Dogfood { command }) => run_dogfood_command(command),
         Some(Command::Receipts { command }) => run_receipts_command(command),
         Some(Command::Node { command }) => run_node_command(command),
+        Some(Command::Runtime { command }) => run_runtime_command(command),
+    }
+}
+
+fn run_runtime_command(command: RuntimeCommand) -> Result<()> {
+    match command {
+        RuntimeCommand::Config { config } => {
+            let source = fs::read_to_string(&config).map_err(MoltenError::from)?;
+            let startup = molten::runtime::RuntimeStartupConfig::from_nickel_export_json(&source)?;
+            println!(
+                "runtime config ok source=nickel actors={} subscriptions={}",
+                startup.actors.len(),
+                startup.subscriptions.len()
+            );
+            Ok(())
+        }
     }
 }
 
@@ -11971,6 +11999,23 @@ mod tests {
     use molten::harness::parse_repro_bundle;
 
     use super::*;
+
+    #[test]
+    fn runtime_config_command_accepts_typed_config_path() {
+        let dir = temp_dir("runtime-config");
+        let config = dir.join("runtime.json");
+        write_file(
+            &config,
+            r#"{
+                "source_language": "nickel",
+                "actors": [{ "id": "actor:consumer", "kind": "native" }],
+                "subscriptions": [{ "actor": "actor:consumer", "subject_preserves": "\"service.ready\"" }]
+            }"#,
+        )
+        .expect("write config");
+
+        run_runtime_command(RuntimeCommand::Config { config }).expect("runtime config command");
+    }
 
     #[test]
     fn cli_run_writes_canonical_failure_file() {

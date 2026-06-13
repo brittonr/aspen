@@ -74,6 +74,19 @@ Communication surfaces that need canonical Preserves representations include:
 - receipts and evidence references,
 - durable records whose identity matters.
 
+## Runtime reference boundaries: BEAM/OTP and Lunatic
+
+BEAM/OTP and Lunatic are design references only. Molten borrows patterns, not protocols or APIs:
+
+- BEAM/OTP-style actor lifecycle maps to Molten actors/services with explicit envelope, policy, and evidence boundaries.
+- OTP supervision maps to Molten supervisor-policy receipts and lifecycle evidence, not Erlang/Elixir supervisor behavior compatibility.
+- Mailboxes map to admitted envelope queues and dataspace observations; envelope identity remains canonical Preserves bytes plus Blake3 refs.
+- Links and monitors map to explicit lifecycle assertions, failure receipts, and policy-gated restart decisions.
+- Scheduling guidance maps to deterministic turn boundaries and replayable traces, not BEAM scheduler semantics.
+- Lunatic-style Wasm ergonomics map to Wasmtime hostcalls that must enter through Molten admission gates and deny ambient WASI by default.
+
+Molten does not claim BEAM distribution compatibility, OTP behavior compatibility, Erlang/Elixir API compatibility, Lunatic API compatibility, or wire/protocol compatibility with those systems. Any borrowed pattern must be described in Molten-specific terms: envelope shape, capability authority, policy admission, evidence refs, adapter effects, and deterministic replay boundaries.
+
 ## Dataspace layer: Synit/SAM-inspired
 
 The local runtime is based on reactive conversational state rather than only one-shot messages.

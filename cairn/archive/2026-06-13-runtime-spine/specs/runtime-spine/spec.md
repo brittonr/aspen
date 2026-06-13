@@ -111,6 +111,15 @@ r[molten.runtime_spine.remote_bridge.blob_reference]
 - WHEN one peer publishes an envelope with a content reference
 - THEN the other peer receives the envelope over gossip and can fetch the referenced payload through the blob adapter
 
+### Requirement: Blob reference bridge
+r[molten.runtime_spine.blob_refs] The system MUST provide a blob adapter for content-addressed payload references carried by runtime envelopes, while keeping large payload bytes out of the canonical envelope body.
+
+#### Scenario: Envelope declares external blob reference
+r[molten.runtime_spine.blob_refs.declared]
+- GIVEN an envelope carrying a canonical content reference for an external payload
+- WHEN the blob adapter stores or fetches the payload
+- THEN the adapter verifies the bytes against the declared reference before the payload is admitted
+
 ### Requirement: Iroh docs bridge
 r[molten.runtime_spine.docs_bridge] The system MUST expose Iroh docs through a runtime adapter that records envelope-level evidence for application-visible document mutations.
 
@@ -233,6 +242,15 @@ r[molten.runtime_spine.redb_store.receipt_index]
 - GIVEN an admitted runtime operation that emits a receipt reference
 - WHEN the Redb store adapter persists the local index entry
 - THEN later inspection can recover the receipt reference without re-running pure admission logic
+
+### Requirement: Integration evidence
+r[molten.runtime_spine.integration_evidence] The system MUST provide end-to-end evidence that runtime configuration, local routing, remote bridge handling, and policy admission preserve envelope boundaries across adapters.
+
+#### Scenario: Configured route emits boundary evidence
+r[molten.runtime_spine.integration_evidence.config_route]
+- GIVEN a runtime configuration that starts a local actor, remote bridge, and policy gate
+- WHEN an admitted envelope traverses those adapters
+- THEN the emitted evidence links the configuration, local route, remote bridge, and policy decision without granting extra authority
 
 ### Requirement: Hegel property tests
 r[molten.runtime_spine.property_tests] The system MUST use Hegel property-based tests for envelope, admission, and adapter invariants that are too broad for hand-written examples alone.

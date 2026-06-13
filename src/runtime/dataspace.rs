@@ -1,5 +1,9 @@
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
+use super::ActorId;
+use super::Envelope;
+use super::EnvelopeBoundary;
 use super::PendingTurn;
 use super::PredicateDecision;
 use super::RuntimeAssertion;
@@ -9,6 +13,7 @@ use super::RuntimeMessage;
 use super::RuntimeObserver;
 use super::RuntimePredicateReceipt;
 use super::RuntimeStep;
+use super::RuntimeValue;
 use super::TurnAction;
 use super::TurnOutcome;
 use super::evaluate_turn_transition;
@@ -54,6 +59,54 @@ pub struct RuntimeState {
     messages: BTreeSet<RuntimeMessage>,
     assertions: BTreeSet<RuntimeAssertion>,
     observers: BTreeSet<RuntimeObserver>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalEnvelopeDelivery {
+    pub actor: ActorId,
+    pub boundary: EnvelopeBoundary,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LocalDataspaceAdapter {
+    subscriptions: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl LocalDataspaceAdapter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn register_actor(&mut self, actor: ActorId) {
+        self.subscriptions.entry(actor.into_string()).or_default();
+    }
+
+    pub fn observe_subject(&mut self, actor: ActorId, subject: &RuntimeValue) {
+        self.subscriptions.entry(actor.into_string()).or_default().insert(subject.value_ref().to_string());
+    }
+
+    pub fn route_envelope(&self, envelope: &Envelope) -> Result<Vec<LocalEnvelopeDelivery>> {
+        let subject_ref = envelope.subject.value_ref();
+        let boundary = envelope.boundary()?;
+        let mut deliveries = Vec::with_capacity(self.subscriptions.len());
+        for (actor, subjects) in &self.subscriptions {
+            if subjects.contains(subject_ref) {
+                deliveries.push(LocalEnvelopeDelivery {
+                    actor: ActorId::parse(actor.clone())?,
+                    boundary: boundary.clone(),
+                });
+            }
+        }
+        tracing::event!(
+            tracing::Level::DEBUG,
+            adapter = "local-dataspace",
+            decision = "route",
+            subject_ref = subject_ref,
+            deliveries = deliveries.len(),
+            "runtime adapter decision"
+        );
+        Ok(deliveries)
+    }
 }
 
 fn effect_response(
@@ -346,13 +399,44 @@ impl RuntimeState {
 
 #[cfg(test)]
 mod tests {
+    use super::LocalDataspaceAdapter;
     use super::RuntimeState;
     use crate::preserves_rail::canonical_hash;
+    use crate::preserves_rail::content_ref_from_bytes;
     use crate::preserves_rail::validate_content_ref;
+    use crate::runtime::ActorId;
+    use crate::runtime::Capability;
+    use crate::runtime::ContentRef;
+    use crate::runtime::Envelope;
+    use crate::runtime::EnvelopeInput;
+    use crate::runtime::EvidenceRef;
     use crate::runtime::RuntimeEvent;
     use crate::runtime::RuntimeMessage;
     use crate::runtime::RuntimeStep;
     use crate::runtime::RuntimeValue;
+
+    #[test]
+    fn local_dataspace_routes_matching_envelope_subject() {
+        let subject = RuntimeValue::string("service.ready").expect("subject");
+        let envelope = Envelope::new(EnvelopeInput {
+            sender: ActorId::parse("actor:producer").expect("sender"),
+            subject: subject.clone(),
+            body: RuntimeValue::string("ready").expect("body"),
+            blob_refs: vec![ContentRef::parse(content_ref_from_bytes(b"payload")).expect("blob")],
+            capabilities: vec![Capability::parse("send:service.ready").expect("capability")],
+            evidence_refs: vec![EvidenceRef::parse(content_ref_from_bytes(b"route-evidence")).expect("evidence")],
+        })
+        .expect("envelope");
+        let mut adapter = LocalDataspaceAdapter::new();
+        adapter.register_actor(ActorId::parse("actor:ignored").expect("ignored actor"));
+        adapter.observe_subject(ActorId::parse("actor:consumer").expect("consumer"), &subject);
+
+        let deliveries = adapter.route_envelope(&envelope).expect("deliveries");
+        assert_eq!(deliveries.len(), 1);
+        assert_eq!(deliveries[0].actor.as_str(), "actor:consumer");
+        assert_eq!(deliveries[0].boundary.subject_ref, subject.value_ref());
+        assert_eq!(deliveries[0].boundary.envelope_ref, envelope.canonical_hash().expect("envelope ref"));
+    }
 
     #[test]
     fn runtime_values_and_events_expose_stable_content_refs() {
