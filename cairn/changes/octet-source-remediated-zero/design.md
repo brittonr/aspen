@@ -14,9 +14,9 @@ Create binary-local CLI modules that own self-contained command groups:
 - `src/cli_retention.rs` owns `RetentionCommand`, retention dispatch, and local Preserves file read/write helpers needed by retention class, pin, clearance, bundle, plan, audit, check, fixture, and show commands.
 - `src/cli_delivery.rs` owns `DeliveryCommand`, delivery dispatch, and local Preserves file read/write helpers needed by delivery scope, operation-id, idempotency check, receipt-show, and show commands.
 - `src/cli_provenance.rs` owns `ProvenanceCommand`, provenance dispatch, bounded CLI evidence parsing, and local Preserves file read/write helpers needed by build-record, verify-build, record, fixture, evaluate, and show commands.
-- Next, `src/cli_protocol.rs` will own `ProtocolCommand`, protocol dispatch, lifecycle/index helpers, and local Preserves file read/write helpers needed by install, run-request-response, gate-lifecycle, and show commands.
+- `src/cli_protocol.rs` owns `ProtocolCommand`, protocol dispatch, lifecycle/index helpers, and local Preserves file read/write helpers needed by install, run-request-response, gate-lifecycle, and show commands.
 
-`src/main.rs` remains the top-level Clap shell, but its `TestCommand::Octet`, `TestCommand::Delivery`, `TestCommand::Provenance`, `TestCommand::Retention`, and eventually `TestCommand::Protocol` variants reference module-local command enums, and dispatch delegates to module-local runners.
+`src/main.rs` remains the top-level Clap shell, but its `TestCommand::Octet`, `TestCommand::Delivery`, `TestCommand::Protocol`, `TestCommand::Provenance`, and `TestCommand::Retention` variants reference module-local command enums, and dispatch delegates to module-local runners.
 
 ### Semantic preservation
 
