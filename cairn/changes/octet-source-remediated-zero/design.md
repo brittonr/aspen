@@ -2,7 +2,7 @@
 
 `docs/octet-tigerstyle-remediation.md` records that current Octet evidence is clean but configuration-clean: `dylint.toml` disables broad/high-noise lint families such as file length, function length, repeated path segments, and module count. The archived `octet-tigerstyle-remediation` change deliberately did not claim source-remediated zero for those families.
 
-`src/main.rs` is the largest imperative shell and is the best first target for incremental, behavior-preserving splits. The Octet command group was self-contained enough to move first because it depends mostly on `molten::octet_gate`, `molten::octet_remediation`, Preserves file IO, and receipt emission helpers. The Retention command group followed because it is operator-facing, self-contained around `molten::retention`, and large enough to materially reduce the monolithic CLI file while preserving receipt behavior. The Delivery command group is a smaller split around `molten::delivery_idempotency`; the Provenance command group follows the same low-risk pattern around `molten::provenance`. The Protocol command group is the next candidate because it is self-contained around `molten::protocol_session` and has existing CLI coverage.
+`src/main.rs` is the largest imperative shell and is the best first target for incremental, behavior-preserving splits. The Octet command group was self-contained enough to move first because it depends mostly on `molten::octet_gate`, `molten::octet_remediation`, Preserves file IO, and receipt emission helpers. The Retention command group followed because it is operator-facing, self-contained around `molten::retention`, and large enough to materially reduce the monolithic CLI file while preserving receipt behavior. The Delivery command group is a smaller split around `molten::delivery_idempotency`; the Provenance command group follows the same low-risk pattern around `molten::provenance`. The Protocol command group is self-contained around `molten::protocol_session` and has existing CLI coverage. The Job command group is the next hotspot split because its dispatch is large but remains a CLI shell over `molten::job_dag`, coordination scheduling evidence, local-gossip worker fixtures, and receipt IO.
 
 ## Design
 
@@ -15,6 +15,7 @@ Create binary-local CLI modules that own self-contained command groups:
 - `src/cli_delivery.rs` owns `DeliveryCommand`, delivery dispatch, and local Preserves file read/write helpers needed by delivery scope, operation-id, idempotency check, receipt-show, and show commands.
 - `src/cli_provenance.rs` owns `ProvenanceCommand`, provenance dispatch, bounded CLI evidence parsing, and local Preserves file read/write helpers needed by build-record, verify-build, record, fixture, evaluate, and show commands.
 - `src/cli_protocol.rs` owns `ProtocolCommand`, protocol dispatch, lifecycle/index helpers, and local Preserves file read/write helpers needed by install, run-request-response, gate-lifecycle, and show commands.
+- `src/cli_job.rs` owns `JobCommand`, job dispatch, worker scheduling helpers, local-gossip worker fixture helpers, and local Preserves file read/write helpers needed by install, run, plan/profile/fusion, sync, admission, execution, worker, ref-submit/ref-execute, status, and receipt-show commands.
 
 `src/main.rs` remains the top-level Clap shell, but its `TestCommand::Octet`, `TestCommand::Delivery`, `TestCommand::Protocol`, `TestCommand::Provenance`, and `TestCommand::Retention` variants reference module-local command enums, and dispatch delegates to module-local runners.
 
@@ -22,7 +23,7 @@ Create binary-local CLI modules that own self-contained command groups:
 
 The split must preserve:
 
-- command paths and flags for `molten test octet ...`, `molten test delivery ...`, `molten test provenance ...`, `molten test protocol ...`, and `molten test retention ...`;
+- command paths and flags for `molten test octet ...`, `molten test delivery ...`, `molten test provenance ...`, `molten test protocol ...`, `molten test retention ...`, and `molten test job ...`;
 - receipt labels and stdout/stderr behavior;
 - fail-closed denial errors for strict gate, source-gate validation, and baseline checks;
 - canonical output values produced by the underlying core helpers.
