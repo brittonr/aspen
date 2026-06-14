@@ -11,7 +11,6 @@ use molten::catalog_mcp;
 use molten::chunk_store;
 use molten::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 use molten::coordination;
-use molten::delivery_idempotency;
 use molten::deterministic_replay;
 use molten::error::MoltenError;
 use molten::error::Result;
@@ -89,6 +88,7 @@ use molten::transcripts;
 use molten::typed_storage;
 use molten::upgrades;
 
+mod cli_delivery;
 mod cli_octet;
 mod cli_retention;
 
@@ -228,7 +228,7 @@ enum TestCommand {
     },
     Delivery {
         #[command(subcommand)]
-        command: DeliveryCommand,
+        command: cli_delivery::DeliveryCommand,
     },
     Retention {
         #[command(subcommand)]
@@ -2761,80 +2761,6 @@ enum RemoteCommand {
     },
 }
 
-#[derive(Debug, Subcommand)]
-enum DeliveryCommand {
-    Scope {
-        #[arg(long)]
-        scope_profile: String,
-        #[arg(long)]
-        scope_name: String,
-        #[arg(long = "retention-ref")]
-        retention_refs: Vec<String>,
-        #[arg(long)]
-        out: Option<PathBuf>,
-    },
-    OperationId {
-        #[arg(long)]
-        scope_profile: String,
-        #[arg(long)]
-        scope_name: Option<String>,
-        #[arg(long)]
-        scope_ref: Option<String>,
-        #[arg(long)]
-        producer: String,
-        #[arg(long)]
-        consumer: String,
-        #[arg(long)]
-        sequence: u64,
-        #[arg(long)]
-        intent: String,
-        #[arg(long)]
-        payload_ref: String,
-        #[arg(long = "policy-ref")]
-        policy_refs: Vec<String>,
-        #[arg(long)]
-        out: Option<PathBuf>,
-    },
-    Check {
-        #[arg(long)]
-        root: PathBuf,
-        #[arg(long)]
-        scope_profile: String,
-        #[arg(long)]
-        scope_name: Option<String>,
-        #[arg(long)]
-        scope_ref: Option<String>,
-        #[arg(long)]
-        producer: String,
-        #[arg(long)]
-        consumer: String,
-        #[arg(long)]
-        sequence: u64,
-        #[arg(long)]
-        intent: String,
-        #[arg(long)]
-        payload_ref: String,
-        #[arg(long = "policy-ref")]
-        policy_refs: Vec<String>,
-        #[arg(long = "evidence-ref")]
-        evidence_refs: Vec<String>,
-        #[arg(long)]
-        semantic_result_ref: Option<String>,
-        #[arg(long, default_value = "deny")]
-        gap_policy: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    ReceiptShow {
-        receipt_ref: String,
-        #[arg(long)]
-        root: PathBuf,
-    },
-    Show {
-        artifact: PathBuf,
-    },
-}
-
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Subcommand)]
 enum ProvenanceCommand {
@@ -3512,7 +3438,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Catalog { command } => run_catalog_command(command),
         TestCommand::Job { command } => run_job_command(command),
         TestCommand::Remote { command } => run_remote_command(command),
-        TestCommand::Delivery { command } => run_delivery_command(command),
+        TestCommand::Delivery { command } => cli_delivery::run_delivery_command(command),
         TestCommand::Retention { command } => cli_retention::run_retention_command(command),
         TestCommand::Provenance { command } => run_provenance_command(command),
         TestCommand::Protocol { command } => run_protocol_command(command),
@@ -7004,137 +6930,6 @@ fn print_or_log_summary(is_written_to_file: bool, summary: &str) {
     }
 }
 
-fn run_delivery_command(command: DeliveryCommand) -> Result<()> {
-    match command {
-        DeliveryCommand::Scope {
-            scope_profile,
-            scope_name,
-            retention_refs,
-            out,
-        } => {
-            let value = delivery_idempotency::scope_profile_value(&scope_profile, &scope_name, &retention_refs)?;
-            let reference = canonical_hash(&value)?;
-            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
-            print_or_log_summary(
-                is_written_to_file,
-                &format!("delivery scope ref={reference} profile={scope_profile} name={scope_name}"),
-            );
-            Ok(())
-        }
-        DeliveryCommand::OperationId {
-            scope_profile,
-            scope_name,
-            scope_ref,
-            producer,
-            consumer,
-            sequence,
-            intent,
-            payload_ref,
-            policy_refs,
-            out,
-        } => {
-            let resolved_scope_ref =
-                resolve_delivery_scope_ref(&scope_profile, scope_name.as_deref(), scope_ref.as_deref())?;
-            let operation = delivery_idempotency::derive_operation_id(delivery_idempotency::OperationIdInput {
-                scope_ref: resolved_scope_ref,
-                producer,
-                consumer,
-                sequence,
-                intent,
-                payload_ref,
-                policy_refs,
-            })?;
-            let is_written_to_file = write_optional_preserves(out.as_ref(), &operation.value)?;
-            print_or_log_summary(
-                is_written_to_file,
-                &format!(
-                    "delivery operation ref={} scope={} sequence={} intent={}",
-                    operation.operation_ref, operation.scope_ref, operation.sequence, operation.intent
-                ),
-            );
-            Ok(())
-        }
-        DeliveryCommand::Check {
-            root,
-            scope_profile,
-            scope_name,
-            scope_ref,
-            producer,
-            consumer,
-            sequence,
-            intent,
-            payload_ref,
-            policy_refs,
-            evidence_refs,
-            semantic_result_ref,
-            gap_policy,
-            receipt_out,
-        } => {
-            let resolved_scope_ref =
-                resolve_delivery_scope_ref(&scope_profile, scope_name.as_deref(), scope_ref.as_deref())?;
-            let delivery = delivery_idempotency::check_delivery(delivery_idempotency::DeliveryCheckInput {
-                root: &root,
-                scope_profile: &scope_profile,
-                scope_ref: &resolved_scope_ref,
-                producer: &producer,
-                consumer: &consumer,
-                sequence,
-                intent: &intent,
-                payload_ref: &payload_ref,
-                policy_refs: &policy_refs,
-                evidence_refs: &evidence_refs,
-                semantic_result_ref: semantic_result_ref.as_deref(),
-                gap_policy: parse_delivery_gap_policy(&gap_policy)?,
-            })?;
-            let is_written_to_file = write_optional_preserves(receipt_out.as_ref(), &delivery.receipt.value)?;
-            print_or_log_summary(
-                is_written_to_file,
-                &format!(
-                    "delivery idempotency decision={} operation={} receipt={} side_effect={} prior={}",
-                    delivery.receipt.decision,
-                    delivery.operation.operation_ref,
-                    delivery.receipt.receipt_ref,
-                    delivery.receipt.side_effect,
-                    delivery.prior_semantic_result_ref.as_deref().unwrap_or("none")
-                ),
-            );
-            Ok(())
-        }
-        DeliveryCommand::ReceiptShow { receipt_ref, root } => {
-            let value = delivery_idempotency::read_idempotency_receipt(&root, &receipt_ref)?;
-            println!("{}", delivery_idempotency::delivery_summary(&value)?);
-            Ok(())
-        }
-        DeliveryCommand::Show { artifact } => {
-            let value = read_preserves_file(&artifact)?;
-            println!("{}", delivery_idempotency::delivery_summary(&value)?);
-            Ok(())
-        }
-    }
-}
-
-fn resolve_delivery_scope_ref(
-    scope_profile: &str,
-    scope_name: Option<&str>,
-    scope_ref: Option<&str>,
-) -> Result<String> {
-    match (scope_name, scope_ref) {
-        (_, Some(reference)) => Ok(reference.to_string()),
-        (Some(name), None) => delivery_idempotency::scope_ref(scope_profile, name),
-        (None, None) => Err(MoltenError::invalid_harness("delivery command requires --scope-ref or --scope-name")),
-    }
-}
-
-fn parse_delivery_gap_policy(value: &str) -> Result<delivery_idempotency::GapPolicy> {
-    match value {
-        "deny" => Ok(delivery_idempotency::GapPolicy::Deny),
-        "retry" => Ok(delivery_idempotency::GapPolicy::Retry),
-        other => Err(MoltenError::invalid_harness(format!(
-            "unsupported delivery gap policy {other}; expected deny or retry"
-        ))),
-    }
-}
-
 fn parse_provenance_build_params(values: &[String]) -> Result<Vec<provenance::BuildParam>> {
     let mut params = CliBoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "provenance build params");
     for value in values {
@@ -10344,9 +10139,12 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     use molten::authority;
+    use molten::delivery_idempotency;
     use molten::harness::parse_repro_bundle;
 
     use super::*;
+    use crate::cli_delivery::DeliveryCommand;
+    use crate::cli_delivery::run_delivery_command;
     use crate::cli_retention::RetentionCommand;
     use crate::cli_retention::run_retention_command;
 

@@ -485,7 +485,12 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
         },
         SurfaceDefinition {
             name: "cli-artifact-output",
-            files: &["src/main.rs", "src/cli_octet.rs", "src/cli_retention.rs"],
+            files: &[
+                "src/main.rs",
+                "src/cli_delivery.rs",
+                "src/cli_octet.rs",
+                "src/cli_retention.rs",
+            ],
             reason: "the CLI is the imperative shell that materializes canonical artifacts",
         },
     ]
