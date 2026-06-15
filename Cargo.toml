@@ -29,10 +29,10 @@ basalt = { git = "ssh://git@github.com/OnixResearch/basalt.git", version = "0.1.
 blake3 = "1"
 cairn = { git = "ssh://git@github.com/OnixResearch/cairn.git", package = "cairn-core" }
 clap = { version = "4", features = ["derive"] }
-iroh = "1.0.0-rc.1"
-iroh-blobs = "0.102.0"
-iroh-docs = "0.100.0"
-iroh-gossip = "0.100.0"
+iroh = "1.0.0"
+iroh-blobs = "0.103.0"
+iroh-docs = "0.101.0"
+iroh-gossip = "0.101.0"
 n0-future = "0.3.2"
 nickel-lang = "2.1.0"
 octet = { git = "ssh://git@github.com/OnixResearch/octet.git", package = "valence-core" }
