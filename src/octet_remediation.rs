@@ -488,6 +488,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
             files: &[
                 "src/main.rs",
                 "src/cli_catalog.rs",
+                "src/cli_chunk.rs",
                 "src/cli_delivery.rs",
                 "src/cli_node.rs",
                 "src/cli_job.rs",
