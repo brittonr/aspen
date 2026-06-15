@@ -494,6 +494,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli_plugin.rs",
                 "src/cli_protocol.rs",
                 "src/cli_provenance.rs",
+                "src/cli_repro.rs",
                 "src/cli_retention.rs",
                 "src/cli_secrets.rs",
             ],
