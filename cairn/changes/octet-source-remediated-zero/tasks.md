@@ -15,4 +15,5 @@
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Protocol command parsing and dispatch from `src/main.rs` into `src/cli_protocol.rs` as the next focused CLI shell burn-down slice.
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Job command parsing and dispatch from `src/main.rs` into `src/cli_job.rs` as the next CLI shell hotspot burn-down slice.
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Secrets and Plugin command parsing and dispatch from `src/main.rs` into `src/cli_secrets.rs` and `src/cli_plugin.rs` as a low-risk CLI shell burn-down slice.
+- [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Node command parsing and dispatch from `src/main.rs` into `src/cli_node.rs` as the next top-level CLI shell hotspot burn-down slice.
 - [ ] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Continue splitting CLI/module hotspots and remove or narrow disabled lint families when source-remediated-zero evidence can replace the current configuration-clean caveat.
