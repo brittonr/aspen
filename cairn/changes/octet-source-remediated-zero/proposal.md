@@ -12,7 +12,8 @@ Strict release evidence should eventually distinguish a true source-shaped zero 
 - Move Provenance command enums and dispatch from `src/main.rs` into a focused `src/cli_provenance.rs` module as a CLI shell burn-down step.
 - Move Protocol command enums and dispatch from `src/main.rs` into a focused `src/cli_protocol.rs` module as a CLI shell burn-down step.
 - Move Job command enums and dispatch from `src/main.rs` into a focused `src/cli_job.rs` module as the next CLI shell burn-down step.
-- Preserve existing `molten test octet ...`, `molten test retention ...`, `molten test delivery ...`, `molten test provenance ...`, `molten test protocol ...`, and `molten test job ...` command syntax, receipt output, denial behavior, and canonical Preserves values.
+- Move Secrets and Plugin command enums and dispatch from `src/main.rs` into focused `src/cli_secrets.rs` and `src/cli_plugin.rs` modules as a small low-risk follow-up split.
+- Preserve existing `molten test octet ...`, `molten test retention ...`, `molten test delivery ...`, `molten test provenance ...`, `molten test protocol ...`, `molten test job ...`, `molten test secrets ...`, and `molten test plugin ...` command syntax, receipt output, denial behavior, and canonical Preserves values.
 - Track the remaining disabled lint family burn-down as explicit future work rather than claiming the full source-remediated-zero state is complete.
 - Require focused validation and refreshed Octet evidence before claiming source-gate improvements.
 

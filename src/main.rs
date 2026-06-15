@@ -68,6 +68,7 @@ use molten::node_runtime;
 #[cfg(test)]
 use molten::octet_gate;
 use molten::operator_dogfood;
+#[cfg(test)]
 use molten::plugin_host;
 use molten::preserves_rail::canonical_hash;
 use molten::preserves_rail::parse_text;
@@ -90,9 +91,11 @@ use molten::upgrades;
 mod cli_delivery;
 mod cli_job;
 mod cli_octet;
+mod cli_plugin;
 mod cli_protocol;
 mod cli_provenance;
 mod cli_retention;
+mod cli_secrets;
 
 const COORDINATION_CLI_BATCH_REF_LIMIT: usize = 4096;
 const COORDINATION_CLI_BATCH_EVIDENCE_LIMIT: usize = 16384;
@@ -246,7 +249,7 @@ enum TestCommand {
     },
     Plugin {
         #[command(subcommand)]
-        command: PluginCommand,
+        command: cli_plugin::PluginCommand,
     },
     Coordination {
         #[command(subcommand)]
@@ -254,7 +257,7 @@ enum TestCommand {
     },
     Secrets {
         #[command(subcommand)]
-        command: SecretsCommand,
+        command: cli_secrets::SecretsCommand,
     },
     Service {
         #[command(subcommand)]
@@ -381,37 +384,6 @@ enum CoordinationCommand {
         out: PathBuf,
     },
     RunFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    Show {
-        artifact: PathBuf,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum SecretsCommand {
-    RunFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    Show {
-        artifact: PathBuf,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum PluginCommand {
-    Install {
-        manifest: PathBuf,
-        #[arg(long)]
-        registry: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-    },
-    RunFixture {
-        #[arg(long)]
-        state_root: PathBuf,
         #[arg(long)]
         out: PathBuf,
     },
@@ -3007,9 +2979,9 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Provenance { command } => cli_provenance::run_provenance_command(command),
         TestCommand::Protocol { command } => cli_protocol::run_protocol_command(command),
         TestCommand::Raft { command } => run_raft_command(command),
-        TestCommand::Plugin { command } => run_plugin_command(command),
+        TestCommand::Plugin { command } => cli_plugin::run_plugin_command(command),
         TestCommand::Coordination { command } => run_coordination_command(command),
-        TestCommand::Secrets { command } => run_secrets_command(command),
+        TestCommand::Secrets { command } => cli_secrets::run_secrets_command(command),
         TestCommand::Service { command } => run_service_command(command),
         TestCommand::Vat { command } => run_vat_command(command),
         TestCommand::Octet { command } => cli_octet::run_octet_command(command),
@@ -5458,82 +5430,6 @@ fn run_coordination_command(command: CoordinationCommand) -> Result<()> {
         CoordinationCommand::Show { artifact } => {
             let value = read_preserves_file(&artifact)?;
             println!("{}", coordination::coordination_summary(&value)?);
-            Ok(())
-        }
-    }
-}
-
-fn run_secrets_command(command: SecretsCommand) -> Result<()> {
-    match command {
-        SecretsCommand::RunFixture { out } => {
-            let run = secrets::run_secrets_fixture()?;
-            fs::create_dir_all(&out).map_err(MoltenError::from)?;
-            write_file(&out.join("report.preserves"), &to_text(&run.value)?)?;
-            write_file(&out.join("secret.preserves"), &to_text(&run.secret.value)?)?;
-            write_file(&out.join("encrypted-ref.preserves"), &to_text(&run.encrypted.value)?)?;
-            write_file(&out.join("redaction-marker.preserves"), &to_text(&run.marker.value)?)?;
-            write_file(&out.join("redaction-transform.preserves"), &to_text(&run.transform.value)?)?;
-            write_file(&out.join("reveal-denied.preserves"), &to_text(&run.reveal_denied.value)?)?;
-            write_file(&out.join("reveal-pass.preserves"), &to_text(&run.reveal_pass.value)?)?;
-            write_file(&out.join("decrypt-denied.preserves"), &to_text(&run.decrypt_denied.value)?)?;
-            write_file(&out.join("decrypt-pass.preserves"), &to_text(&run.decrypt_pass.value)?)?;
-            write_file(&out.join("commitment-replay.preserves"), &to_text(&run.replay.value)?)?;
-            write_file(&out.join("cleanup.preserves"), &to_text(&run.cleanup.value)?)?;
-            write_file(&out.join("private-bundle-profile.preserves"), &to_text(&run.private_bundle.value)?)?;
-            write_indexed_values(&out, "evidence", &run.evidence_values)?;
-            write_file(&out.join("summary.txt"), &secrets::fixture_report_summary(&run.value)?)?;
-            println!("secrets fixture ok report={} out={}", run.report_ref, out.display());
-            Ok(())
-        }
-        SecretsCommand::Show { artifact } => {
-            let value = read_preserves_file(&artifact)?;
-            match secrets::fixture_report_summary(&value) {
-                Ok(summary) => println!("{summary}"),
-                Err(_) => println!("{}", secrets::secrets_summary(&value)?),
-            }
-            Ok(())
-        }
-    }
-}
-
-fn run_plugin_command(command: PluginCommand) -> Result<()> {
-    match command {
-        PluginCommand::Install {
-            manifest,
-            registry,
-            out,
-        } => {
-            let manifest_value = read_preserves_file(&manifest)?;
-            let receipt = plugin_host::install_plugin(&registry, &manifest_value)?;
-            write_file(&out, &to_text(&receipt.value)?)?;
-            println!(
-                "plugin install decision={} receipt={} manifest={} out={}",
-                receipt.decision,
-                receipt.receipt_ref,
-                receipt.manifest_ref,
-                out.display()
-            );
-            Ok(())
-        }
-        PluginCommand::RunFixture { state_root, out } => {
-            let run = plugin_host::minimal_plugin_fixture(&state_root)?;
-            fs::create_dir_all(&out).map_err(MoltenError::from)?;
-            write_file(&out.join("report.preserves"), &to_text(&run.report_value)?)?;
-            write_indexed_values(&out, "evidence", &run.evidence_values)?;
-            println!(
-                "plugin fixture decision={} manifest={} install={} health={} removal={} out={}",
-                run.decision,
-                run.manifest_ref,
-                run.install_receipt_ref,
-                run.health_receipt_ref,
-                run.removal_receipt_ref,
-                out.display()
-            );
-            Ok(())
-        }
-        PluginCommand::Show { artifact } => {
-            let value = read_preserves_file(&artifact)?;
-            println!("{}", plugin_host::plugin_summary(&value)?);
             Ok(())
         }
     }
@@ -8088,12 +7984,16 @@ mod tests {
     use crate::cli_delivery::run_delivery_command;
     use crate::cli_job::JobCommand;
     use crate::cli_job::run_job_command;
+    use crate::cli_plugin::PluginCommand;
+    use crate::cli_plugin::run_plugin_command;
     use crate::cli_protocol::ProtocolCommand;
     use crate::cli_protocol::run_protocol_command;
     use crate::cli_provenance::ProvenanceCommand;
     use crate::cli_provenance::run_provenance_command;
     use crate::cli_retention::RetentionCommand;
     use crate::cli_retention::run_retention_command;
+    use crate::cli_secrets::SecretsCommand;
+    use crate::cli_secrets::run_secrets_command;
 
     #[test]
     fn runtime_config_command_accepts_typed_config_path() {
