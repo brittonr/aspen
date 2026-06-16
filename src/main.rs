@@ -88,6 +88,7 @@ mod cli_service;
 mod cli_storage;
 mod cli_transcript;
 mod cli_upgrade;
+mod cli_vat;
 
 const COORDINATION_CLI_BATCH_REF_LIMIT: usize = 4096;
 const COORDINATION_CLI_BATCH_EVIDENCE_LIMIT: usize = 16384;
@@ -255,7 +256,7 @@ enum TestCommand {
     },
     Vat {
         #[command(subcommand)]
-        command: VatCommand,
+        command: cli_vat::VatCommand,
     },
     NixosVm {
         #[command(subcommand)]
@@ -387,57 +388,6 @@ enum CoordinationCommand {
     },
     Show {
         artifact: PathBuf,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum VatCommand {
-    RunFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    SnapshotFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    RestoreFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    PromiseFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    AmbientAuthorityFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    RightsFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    DistributedRefFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    TimeTravelFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    ReplayFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    AuthorityGraphFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    PortableStorageFixture {
-        #[arg(long)]
-        out: PathBuf,
-    },
-    Show {
-        report: PathBuf,
     },
 }
 
@@ -778,7 +728,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Coordination { command } => run_coordination_command(command),
         TestCommand::Secrets { command } => cli_secrets::run_secrets_command(command),
         TestCommand::Service { command } => cli_service::run_service_command(command),
-        TestCommand::Vat { command } => run_vat_command(command),
+        TestCommand::Vat { command } => cli_vat::run_vat_command(command),
         TestCommand::NixosVm { command } => cli_nixos_vm::run_nixos_vm_command(command),
         TestCommand::ProdSoak { command } => cli_prod_soak::run_prod_soak_command(command),
         TestCommand::Octet { command } => cli_octet::run_octet_command(command),
@@ -1387,82 +1337,6 @@ fn run_coordination_command(command: CoordinationCommand) -> Result<()> {
         CoordinationCommand::Show { artifact } => {
             let value = read_preserves_file(&artifact)?;
             println!("{}", coordination::coordination_summary(&value)?);
-            Ok(())
-        }
-    }
-}
-
-fn run_vat_command(command: VatCommand) -> Result<()> {
-    match command {
-        VatCommand::RunFixture { out } => {
-            let run = molten::runtime::run_vat_fixture()?;
-            write_file(&out, &to_text(&run.value)?)?;
-            println!("vat fixture run: {}", run.run_ref);
-            Ok(())
-        }
-        VatCommand::SnapshotFixture { out } => {
-            let snapshot = molten::runtime::run_vat_snapshot_fixture()?;
-            write_file(&out, &to_text(&snapshot.value)?)?;
-            println!("vat snapshot fixture: {}", snapshot.fixture_ref);
-            Ok(())
-        }
-        VatCommand::RestoreFixture { out } => {
-            let restore = molten::runtime::run_vat_restore_fixture()?;
-            write_file(&out, &to_text(&restore.value)?)?;
-            println!("vat restore fixture: {}", restore.fixture_ref);
-            Ok(())
-        }
-        VatCommand::PromiseFixture { out } => {
-            let promise = molten::runtime::run_vat_promise_fixture()?;
-            write_file(&out, &to_text(&promise.value)?)?;
-            println!("vat promise fixture: {}", promise.fixture_ref);
-            Ok(())
-        }
-        VatCommand::AmbientAuthorityFixture { out } => {
-            let authority = molten::runtime::run_vat_ambient_authority_fixture()?;
-            write_file(&out, &to_text(&authority.value)?)?;
-            println!("vat ambient authority fixture: {}", authority.fixture_ref);
-            Ok(())
-        }
-        VatCommand::RightsFixture { out } => {
-            let rights = molten::runtime::run_vat_rights_fixture()?;
-            write_file(&out, &to_text(&rights.value)?)?;
-            println!("vat rights fixture: {}", rights.fixture_ref);
-            Ok(())
-        }
-        VatCommand::DistributedRefFixture { out } => {
-            let distributed_ref = molten::runtime::run_vat_distributed_ref_fixture()?;
-            write_file(&out, &to_text(&distributed_ref.value)?)?;
-            println!("vat distributed ref fixture: {}", distributed_ref.fixture_ref);
-            Ok(())
-        }
-        VatCommand::TimeTravelFixture { out } => {
-            let debug = molten::runtime::run_vat_time_travel_fixture()?;
-            write_file(&out, &to_text(&debug.value)?)?;
-            println!("vat time travel fixture: {}", debug.fixture_ref);
-            Ok(())
-        }
-        VatCommand::ReplayFixture { out } => {
-            let replay = molten::runtime::run_vat_replay_fixture()?;
-            write_file(&out, &to_text(&replay.value)?)?;
-            println!("vat replay fixture: {}", replay.fixture_ref);
-            Ok(())
-        }
-        VatCommand::AuthorityGraphFixture { out } => {
-            let graph = molten::runtime::run_vat_authority_graph_fixture()?;
-            write_file(&out, &to_text(&graph.value)?)?;
-            println!("vat authority graph fixture: {}", graph.fixture_ref);
-            Ok(())
-        }
-        VatCommand::PortableStorageFixture { out } => {
-            let storage = molten::runtime::run_vat_portable_storage_fixture()?;
-            write_file(&out, &to_text(&storage.value)?)?;
-            println!("vat portable storage fixture: {}", storage.fixture_ref);
-            Ok(())
-        }
-        VatCommand::Show { report } => {
-            let value = read_preserves_file(&report)?;
-            println!("{}", molten::runtime::vat_fixture_summary(&value)?);
             Ok(())
         }
     }

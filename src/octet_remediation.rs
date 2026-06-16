@@ -517,6 +517,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli_storage.rs",
                 "src/cli_transcript.rs",
                 "src/cli_upgrade.rs",
+                "src/cli_vat.rs",
             ],
             reason: "the CLI is the imperative shell that materializes canonical artifacts",
         },
