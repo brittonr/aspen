@@ -26,17 +26,18 @@ Strict release evidence should eventually distinguish a true source-shaped zero 
 - Move Rewrite command enums and dispatch from `src/main.rs` into a focused `src/cli_rewrite.rs` module as the next structured-rewrite CLI shell hotspot split.
 - Move Remote command enums and dispatch from `src/main.rs` into a focused `src/cli_remote.rs` module as the next remote-dataspace CLI shell hotspot split.
 - Move Ledger and Chain command enums and dispatch from `src/main.rs` into a focused `src/cli_ledger.rs` module as the next evidence-ledger CLI shell hotspot split.
-- Move Receipts command enums and dispatch from `src/main.rs` into a focused `src/cli_receipts.rs` module as the next operator-receipt CLI shell hotspot split.
+- Move Receipts command enums and dispatch from `src/main.rs` into a focused `src/cli/receipts.rs` module as the next operator-receipt CLI shell hotspot split.
 - Move Service command enums and dispatch from `src/main.rs` into a focused `src/cli_service.rs` module as the next service-runtime CLI shell hotspot split.
 - Move Vat command enums and dispatch from `src/main.rs` into a focused `src/cli_vat.rs` module as the next runtime-vat CLI shell hotspot split.
 - Move Coordination command enums and dispatch from `src/main.rs` into a focused `src/cli_coordination.rs` module as the next coordination CLI shell hotspot split.
 - Move Dogfood command enums and dispatch from `src/main.rs` into a focused `src/cli_dogfood.rs` module as the next operator-dogfood CLI shell hotspot split.
 - Move Raft command enums and dispatch from `src/main.rs` into a focused `src/cli_raft.rs` module as the next control-plane CLI shell hotspot split.
-- Move replay-fixture command enums and dispatch from `src/main.rs` into a focused `src/cli_replay_fixture.rs` module as the next deterministic-replay CLI shell hotspot split.
-- Move Report command enums and dispatch from `src/main.rs` into a focused `src/cli_report.rs` module as the next report validation/show CLI shell hotspot split.
-- Move Gate command enums and dispatch from `src/main.rs` into a focused `src/cli_gate.rs` module as the next gate-check CLI shell hotspot split.
-- Move test Receipt command enums and dispatch from `src/main.rs` into `src/cli_receipts.rs` alongside the top-level receipt operator shell as the next signed-receipt CLI hotspot split.
-- Move test Run/Replay command handling, harness failure receipt emission, and report output IO from `src/main.rs` into `src/cli_harness.rs` as the next harness CLI shell hotspot split.
+- Move replay-fixture command enums and dispatch from `src/main.rs` into a focused `src/cli/replayfixture.rs` module as the next deterministic-replay CLI shell hotspot split.
+- Move Report command enums and dispatch from `src/main.rs` into a focused `src/cli/report.rs` module as the next report validation/show CLI shell hotspot split.
+- Move Gate command enums and dispatch from `src/main.rs` into a focused `src/cli/gate.rs` module as the next gate-check CLI shell hotspot split.
+- Move test Receipt command enums and dispatch from `src/main.rs` into `src/cli/receipts.rs` alongside the top-level receipt operator shell as the next signed-receipt CLI hotspot split.
+- Move test Run/Replay command handling, harness failure receipt emission, and report output IO from `src/main.rs` into `src/cli/harness.rs` as the next harness CLI shell hotspot split.
+- Relocate the recent Gate, Harness, Receipts, replay-fixture, and Report CLI shells under `src/cli/` with path-mapped module declarations to narrow root module-file-count and underscore-filename pressure without changing command semantics.
 - Preserve existing `molten test octet ...`, `molten test retention ...`, `molten test delivery ...`, `molten test provenance ...`, `molten test protocol ...`, `molten test job ...`, `molten test secrets ...`, `molten test plugin ...`, `molten test repro ...`, `molten test catalog ...`, `molten test chunk ...`, `molten test cache ...`, `molten test artifact ...`, `molten test storage ...`, `molten test schema ...`, `molten test upgrade ...`, `molten test transcript ...`, `molten test rewrite ...`, `molten test remote ...`, `molten test ledger ...`, `molten test chain ...`, `molten test service ...`, `molten test vat ...`, `molten test coordination ...`, `molten test raft ...`, `molten test replay-fixture ...`, `molten test report ...`, `molten test gate ...`, `molten test receipt ...`, `molten test run ...`, `molten test replay ...`, `molten dogfood ...`, `molten receipts ...`, and `molten node ...` command syntax, receipt output, denial behavior, and canonical Preserves values.
 - Track the remaining disabled lint family burn-down as explicit future work rather than claiming the full source-remediated-zero state is complete.
 - Require focused validation and refreshed Octet evidence before claiming source-gate improvements.

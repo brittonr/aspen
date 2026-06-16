@@ -61,7 +61,9 @@ mod cli_chunk;
 mod cli_coordination;
 mod cli_delivery;
 mod cli_dogfood;
+#[path = "cli/gate.rs"]
 mod cli_gate;
+#[path = "cli/harness.rs"]
 mod cli_harness;
 mod cli_job;
 mod cli_ledger;
@@ -73,9 +75,12 @@ mod cli_prod_soak;
 mod cli_protocol;
 mod cli_provenance;
 mod cli_raft;
+#[path = "cli/receipts.rs"]
 mod cli_receipts;
 mod cli_remote;
+#[path = "cli/replayfixture.rs"]
 mod cli_replay_fixture;
+#[path = "cli/report.rs"]
 mod cli_report;
 mod cli_repro;
 mod cli_retention;
