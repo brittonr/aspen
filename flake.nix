@@ -462,10 +462,10 @@
                   machine.succeed("grep -q node-health-receipt-v1 /var/lib/molten/vm-evidence/health.preserves")
                   machine.succeed("grep -q node-control-loop-receipt-v1 /var/lib/molten/vm-evidence/control-loop.preserves")
 
-              node_a.succeed("getent hosts node_b")
-              node_b.succeed("getent hosts node_a")
-              node_a.succeed("ping -c 1 node_b")
-              node_b.succeed("ping -c 1 node_a")
+              node_a.succeed("getent hosts node-b")
+              node_b.succeed("getent hosts node-a")
+              node_a.succeed("ping -c 1 node-b")
+              node_b.succeed("ping -c 1 node-a")
 
               node_b.succeed("""
                 set -euo pipefail
