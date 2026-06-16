@@ -130,6 +130,10 @@
           virtualisation.graphics = false;
           networking.hostName = nodeId;
           networking.firewall.enable = false;
+          networking.extraHosts = ''
+            192.168.1.1 node-a node_a
+            192.168.1.2 node-b node_b
+          '';
           environment.systemPackages = [ moltenPkg pkgs.coreutils pkgs.gnugrep pkgs.iputils ];
           systemd.services.molten-node = {
             description = "Molten node VM integration service";
@@ -141,6 +145,7 @@
               Type = "oneshot";
               RemainAfterExit = true;
               StateDirectory = "molten";
+              WorkingDirectory = "${sourceForConfigChecks}";
               ExecStop = "${moltenPkg}/bin/molten node stop --state-root /var/lib/molten --shutdown-out /var/lib/molten/vm-evidence/shutdown.preserves --receipt-out /var/lib/molten/vm-evidence/shutdown-control.preserves";
             };
             script = ''
@@ -167,7 +172,7 @@
                 > "$evidence/status.txt"
               molten node run-loop \
                 --state-root "$state" \
-                --max-requests 0 \
+                --max-requests 1 \
                 --receipt-out "$evidence/control-loop.preserves" \
                 --heartbeat-out "$evidence/heartbeat.preserves" \
                 > "$evidence/run-loop.txt"
@@ -462,7 +467,199 @@
               node_a.succeed("ping -c 1 node_b")
               node_b.succeed("ping -c 1 node_a")
 
-              node_b.succeed('''
+              node_b.succeed("""
+                set -euo pipefail
+                cd '${sourceForConfigChecks}'
+                root=/var/lib/molten-cross/node-b
+                evidence=/var/lib/molten/vm-evidence/live-control
+                rm -rf "$root" "$evidence"
+                mkdir -p "$evidence"
+                molten node init \
+                  --state-root "$root" \
+                  --node-id node:node-b \
+                  --config-out "$evidence/node-config.preserves" \
+                  --identity-receipt-out "$evidence/identity.preserves" \
+                  > "$evidence/init.txt"
+                molten node run \
+                  --state-root "$root" \
+                  --startup-out "$evidence/startup.preserves" \
+                  > "$evidence/run.txt"
+                molten node serve \
+                  --state-root "$root" \
+                  --live-iroh \
+                  --live-max-events 1 \
+                  --live-event-timeout-ms 1 \
+                  --max-requests-per-tick 1 \
+                  --service-receipt-out "$evidence/live-service.preserves" \
+                  --live-ticket-out "$evidence/ticket.preserves" \
+                  --receipt-out "$evidence/listener.preserves" \
+                  > "$evidence/live-serve.txt"
+                molten node live-peer-admit \
+                  --state-root "$root" \
+                  --peer node:node-a \
+                  --receipt-out "$evidence/peer-admission.preserves" \
+                  "$evidence/ticket.preserves" \
+                  > "$evidence/admit.txt"
+                molten node authority-grant-fixture \
+                  --state-root "$root" \
+                  --peer node:node-a \
+                  --node node:node-b \
+                  --operation status \
+                  --target-scope '*' \
+                  --resource-scope '*' \
+                  --out "$evidence/authority-grant.preserves" \
+                  > "$evidence/authority.txt"
+                peer_summary=$(molten test nixos-vm show "$evidence/peer-admission.preserves")
+                peer_ref=''${peer_summary#* ref=}
+                peer_ref=''${peer_ref%% *}
+                authority_summary=$(molten test nixos-vm show "$evidence/authority-grant.preserves")
+                authority_ref=''${authority_summary#* ref=}
+                authority_ref=''${authority_ref%% *}
+                printf '%s\n' "$peer_ref" > "$evidence/peer.ref"
+                printf '%s\n' "$authority_ref" > "$evidence/authority.ref"
+                molten node control-request \
+                  --operation status \
+                  --authority "$authority_ref" \
+                  --policy "$peer_ref" \
+                  --resource "$authority_ref" \
+                  --out "$evidence/request.preserves" \
+                  > "$evidence/request.txt"
+                molten node control-ingress-live-loopback \
+                  --state-root "$root" \
+                  "$evidence/request.preserves" \
+                  --from-peer node:node-a \
+                  --to-node node:node-b \
+                  --sequence 1 \
+                  --peer-bootstrap "$peer_ref" \
+                  --authority "$authority_ref" \
+                  --policy "$peer_ref" \
+                  --resource "$authority_ref" \
+                  --publish-receipt-out "$evidence/live-publish.preserves" \
+                  --receive-receipt-out "$evidence/live-receive.preserves" \
+                  > "$evidence/live-loopback.txt"
+                molten node run-loop \
+                  --state-root "$root" \
+                  --max-requests 1 \
+                  --receipt-out "$evidence/live-control-loop.preserves" \
+                  --heartbeat-out "$evidence/live-heartbeat.preserves" \
+                  > "$evidence/live-run-loop.txt"
+                cp "$root"/control/iroh-ingress/receipts/*.deliver.receipt.preserves "$evidence/ingress.preserves"
+                cp "$root"/control/inbox/*.queue-receipt.preserves "$evidence/queue.preserves"
+                cp "$root"/control/outbox/*.control-receipt.preserves "$evidence/control.preserves"
+                molten node live-workflow-bundle-export \
+                  --ticket "$evidence/ticket.preserves" \
+                  --peer-admission "$evidence/peer-admission.preserves" \
+                  --authority-grant "$evidence/authority-grant.preserves" \
+                  --receipt "$evidence/listener.preserves" \
+                  --receipt "$evidence/live-service.preserves" \
+                  --receipt "$evidence/live-receive.preserves" \
+                  --out "$evidence/bundle.preserves" \
+                  --receipt-out "$evidence/bundle-export.preserves" \
+                  > "$evidence/bundle-export.txt"
+                grep -q node-control-live-workflow-bundle-v1 "$evidence/bundle.preserves"
+                grep -q node-control-live-transport-receipt-v1 "$evidence/live-receive.preserves"
+              """)
+              node_a.succeed("mkdir -p /var/lib/molten/vm-evidence/live-control")
+              for artifact in [
+                  "bundle.preserves",
+                  "request.preserves",
+                  "ingress.preserves",
+                  "queue.preserves",
+                  "control.preserves",
+                  "peer.ref",
+                  "authority.ref",
+                  "live-loopback.txt",
+              ]:
+                  content = node_b.succeed(f"cat /var/lib/molten/vm-evidence/live-control/{artifact}")
+                  node_a.succeed(f"cat > /var/lib/molten/vm-evidence/live-control/{artifact} <<'EOF'\n" + content + "\nEOF")
+              node_a.succeed("""
+                set -euo pipefail
+                cd '${sourceForConfigChecks}'
+                root=/var/lib/molten-cross/node-a
+                evidence=/var/lib/molten/vm-evidence/live-control
+                peer_ref=$(cat "$evidence/peer.ref")
+                authority_ref=$(cat "$evidence/authority.ref")
+                rm -rf "$root"
+                molten node init \
+                  --state-root "$root" \
+                  --node-id node:node-a \
+                  --config-out "$evidence/sender-node-config.preserves" \
+                  --identity-receipt-out "$evidence/sender-identity.preserves" \
+                  > "$evidence/sender-init.txt"
+                molten node run \
+                  --state-root "$root" \
+                  --startup-out "$evidence/sender-startup.preserves" \
+                  > "$evidence/sender-run.txt"
+                molten node live-workflow-bundle-verify \
+                  "$evidence/bundle.preserves" \
+                  --expected-node node:node-b \
+                  --expected-peer node:node-a \
+                  --operation status \
+                  --receipt-out "$evidence/verify.preserves" \
+                  > "$evidence/verify.txt"
+                molten node live-workflow-bundle-gate \
+                  "$evidence/bundle.preserves" \
+                  --verify-receipt "$evidence/verify.preserves" \
+                  --require-verify-receipt \
+                  --expected-node node:node-b \
+                  --expected-peer node:node-a \
+                  --operation status \
+                  --receipt-out "$evidence/gate.preserves" \
+                  > "$evidence/gate.txt"
+                molten node live-workflow-bundle-apply \
+                  --state-root "$root" \
+                  "$evidence/bundle.preserves" \
+                  --gate-receipt "$evidence/gate.preserves" \
+                  --require-gate-receipt \
+                  --request "$evidence/request.preserves" \
+                  --from-peer node:node-a \
+                  --sequence 1 \
+                  --peer-bootstrap "$peer_ref" \
+                  --authority "$authority_ref" \
+                  --policy "$peer_ref" \
+                  --resource "$authority_ref" \
+                  --expected-node node:node-b \
+                  --expected-peer node:node-a \
+                  --operation status \
+                  --receipt-out "$evidence/apply.preserves" \
+                  > "$evidence/apply.txt"
+                molten node live-workflow-bundle-reconcile \
+                  "$evidence/apply.preserves" \
+                  --ingress-receipt "$evidence/ingress.preserves" \
+                  --queue-receipt "$evidence/queue.preserves" \
+                  --control-receipt "$evidence/control.preserves" \
+                  --receipt-out "$evidence/reconcile.preserves" \
+                  > "$evidence/reconcile.txt"
+                molten node live-workflow-bundle-ack-export \
+                  "$evidence/apply.preserves" \
+                  --ingress-receipt "$evidence/ingress.preserves" \
+                  --queue-receipt "$evidence/queue.preserves" \
+                  --control-receipt "$evidence/control.preserves" \
+                  --reconcile-receipt "$evidence/reconcile.preserves" \
+                  --out "$evidence/ack.preserves" \
+                  --receipt-out "$evidence/ack-export.preserves" \
+                  > "$evidence/ack-export.txt"
+                molten node live-workflow-bundle-ack-import \
+                  --state-root "$root" \
+                  "$evidence/ack.preserves" \
+                  --receipt-out "$evidence/ack-import.preserves" \
+                  > "$evidence/ack-import.txt"
+                molten node live-workflow-bundle-protocol-gate \
+                  "$evidence/bundle.preserves" \
+                  --gate-receipt "$evidence/gate.preserves" \
+                  --apply-receipt "$evidence/apply.preserves" \
+                  --reconcile-receipt "$evidence/reconcile.preserves" \
+                  --ack "$evidence/ack.preserves" \
+                  --receipt-out "$evidence/protocol-gate.preserves" \
+                  > "$evidence/protocol-gate.txt"
+                grep -q 'decision "pass"' "$evidence/apply.preserves"
+                grep -q 'decision "pass"' "$evidence/reconcile.preserves"
+                grep -q 'decision "pass"' "$evidence/ack-export.preserves"
+                grep -q 'decision "pass"' "$evidence/ack-import.preserves"
+                grep -q 'decision "pass"' "$evidence/protocol-gate.preserves"
+              """)
+
+              node_b.succeed("""
                 molten node control-request \
                   --operation status \
                   --out /var/lib/molten/vm-evidence/restart-status-request.preserves
@@ -470,19 +667,11 @@
                   --state-root /var/lib/molten \
                   /var/lib/molten/vm-evidence/restart-status-request.preserves \
                   --receipt-out /var/lib/molten/vm-evidence/restart-queue.preserves
-              ''')
+              """)
               node_b.succeed("systemctl restart molten-node.service")
               node_b.wait_for_unit("molten-node.service")
-              node_b.succeed('''
-                molten node run-loop \
-                  --state-root /var/lib/molten \
-                  --max-requests 1 \
-                  --receipt-out /var/lib/molten/vm-evidence/restart-control-loop.preserves \
-                  --heartbeat-out /var/lib/molten/vm-evidence/restart-heartbeat.preserves \
-                  > /var/lib/molten/vm-evidence/restart-run-loop.txt
-              ''')
-              node_b.succeed("grep -q processed=1 /var/lib/molten/vm-evidence/restart-run-loop.txt")
-              node_b.succeed("grep -q node-control-loop-receipt-v1 /var/lib/molten/vm-evidence/restart-control-loop.preserves")
+              node_b.succeed("grep -q processed=1 /var/lib/molten/vm-evidence/run-loop.txt")
+              node_b.succeed("grep -q node-control-loop-receipt-v1 /var/lib/molten/vm-evidence/control-loop.preserves")
 
               node_a.succeed("systemctl stop molten-node.service")
               node_b.succeed("systemctl stop molten-node.service")
@@ -490,7 +679,7 @@
                   machine.succeed("test -s /var/lib/molten/vm-evidence/shutdown.preserves")
                   machine.succeed("grep -q node-shutdown-receipt-v1 /var/lib/molten/vm-evidence/shutdown.preserves")
 
-              node_a.succeed('''
+              node_a.succeed("""
                 molten test nixos-vm topology \
                   --node node_a \
                   --node node_b \
@@ -500,9 +689,9 @@
                   --nix-input 'source:${sourceForConfigChecks}' \
                   --caveat 'vm evidence is platform integration evidence only' \
                   --out /var/lib/molten/vm-evidence/topology.preserves
-              ''')
+              """)
               for machine, node_name in [(node_a, "node_a"), (node_b, "node_b")]:
-                  machine.succeed(f'''
+                  machine.succeed(f"""
                     molten test nixos-vm node-evidence \
                       --node {node_name} \
                       --state-root /var/lib/molten \
@@ -517,22 +706,37 @@
                       --log /var/lib/molten/vm-evidence/status.txt \
                       --log /var/lib/molten/vm-evidence/run-loop.txt \
                       --out /var/lib/molten/vm-evidence/node-evidence.preserves
-                  ''')
+                  """)
               node_b_evidence = node_b.succeed("cat /var/lib/molten/vm-evidence/node-evidence.preserves")
               node_a.succeed("cat > /var/lib/molten/vm-evidence/node-b-evidence.preserves <<'EOF'\n" + node_b_evidence + "\nEOF")
-              node_a.succeed('''
+              node_a.succeed("""
+                protocol_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/live-control/protocol-gate.preserves)
+                protocol_ref=''${protocol_summary#* ref=}
+                protocol_ref=''${protocol_ref%% *}
+                reconcile_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/live-control/reconcile.preserves)
+                reconcile_ref=''${reconcile_summary#* ref=}
+                reconcile_ref=''${reconcile_ref%% *}
+                ack_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/live-control/ack-export.preserves)
+                ack_ref=''${ack_summary#* ref=}
+                ack_ref=''${ack_ref%% *}
                 molten test nixos-vm run-receipt \
                   --topology /var/lib/molten/vm-evidence/topology.preserves \
                   --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
                   --node-evidence /var/lib/molten/vm-evidence/node-b-evidence.preserves \
-                  --scenario phase1-node-service \
+                  --scenario phase2-live-control-restart \
                   --fault-profile none \
+                  --child-ref "$protocol_ref" \
+                  --child-ref "$reconcile_ref" \
+                  --child-ref "$ack_ref" \
+                  --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
+                  --log /var/lib/molten/vm-evidence/live-control/reconcile.txt \
+                  --log /var/lib/molten/vm-evidence/live-control/live-loopback.txt \
                   --decision pass \
                   --replay-status non-replayable-vm-observations \
                   --caveat 'vm observations are diagnostic unless separately replayed' \
                   --caveat 'vm evidence does not grant authority or policy trust' \
                   --out /var/lib/molten/vm-evidence/vm-test-run.preserves
-              ''')
+              """)
               node_a.succeed("grep -q nixos-vm-topology-v1 /var/lib/molten/vm-evidence/topology.preserves")
               node_a.succeed("grep -q nixos-vm-node-evidence-v1 /var/lib/molten/vm-evidence/node-evidence.preserves")
               node_a.succeed("grep -q nixos-vm-test-run-v1 /var/lib/molten/vm-evidence/vm-test-run.preserves")
