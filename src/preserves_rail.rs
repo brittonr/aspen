@@ -159,6 +159,7 @@ pub const PROD_SOAK_EVIDENCE_EXPORT_SCHEMA: &str = "molten.prod-soak.evidence-ex
 pub const PROD_SOAK_DURABILITY_SCHEMA: &str = "molten.prod-soak.durability.v1";
 pub const PROD_SOAK_FAULT_CASE_SCHEMA: &str = "molten.prod-soak.fault-case.v1";
 pub const PROD_SOAK_FAULT_MATRIX_SCHEMA: &str = "molten.prod-soak.fault-matrix.v1";
+pub const PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA: &str = "molten.prod-soak.resource-envelope.v1";
 pub const PROD_SOAK_RUN_SCHEMA: &str = "molten.prod-soak.run.v1";
 pub const NODE_IDENTITY_SCHEMA: &str = "molten.node.identity.v1";
 pub const NODE_IDENTITY_RECEIPT_SCHEMA: &str = "molten.node.identity-receipt.v1";

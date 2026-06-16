@@ -73,6 +73,42 @@ pub(crate) enum ProdSoakCommand {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    ResourceEnvelope {
+        #[arg(long)]
+        scenario: String,
+        #[arg(long)]
+        queue_depth: u64,
+        #[arg(long)]
+        max_queue_depth: u64,
+        #[arg(long)]
+        receipt_bytes: u64,
+        #[arg(long)]
+        max_receipt_bytes: u64,
+        #[arg(long)]
+        store_bytes: u64,
+        #[arg(long)]
+        max_store_bytes: u64,
+        #[arg(long)]
+        delivery_latency_ms: u64,
+        #[arg(long)]
+        max_delivery_latency_ms: u64,
+        #[arg(long)]
+        recovery_time_ms: u64,
+        #[arg(long)]
+        max_recovery_time_ms: u64,
+        #[arg(long = "pressure-ref")]
+        pressure_refs: Vec<String>,
+        #[arg(long = "denial-ref")]
+        denial_refs: Vec<String>,
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     FaultMatrix {
         #[arg(long)]
         scenario: String,
@@ -114,6 +150,8 @@ pub(crate) enum ProdSoakCommand {
         fault_refs: Vec<String>,
         #[arg(long = "durability-ref")]
         durability_refs: Vec<String>,
+        #[arg(long = "resource-ref")]
+        resource_refs: Vec<String>,
         #[arg(long, default_value = "pass")]
         decision: String,
         #[arg(long, default_value = "non-replayable-live-observations")]
@@ -219,6 +257,53 @@ pub(crate) fn run_prod_soak_command(command: ProdSoakCommand) -> Result<()> {
             );
             Ok(())
         }
+        ProdSoakCommand::ResourceEnvelope {
+            scenario,
+            queue_depth,
+            max_queue_depth,
+            receipt_bytes,
+            max_receipt_bytes,
+            store_bytes,
+            max_store_bytes,
+            delivery_latency_ms,
+            max_delivery_latency_ms,
+            recovery_time_ms,
+            max_recovery_time_ms,
+            pressure_refs,
+            denial_refs,
+            decision,
+            diagnostics,
+            caveats,
+            out,
+        } => {
+            let value = prod_soak::resource_envelope_value(&prod_soak::ProdSoakResourceEnvelopeInput {
+                decision: &decision,
+                scenario: &scenario,
+                queue_depth,
+                max_queue_depth,
+                receipt_bytes,
+                max_receipt_bytes,
+                store_bytes,
+                max_store_bytes,
+                delivery_latency_ms,
+                max_delivery_latency_ms,
+                recovery_time_ms,
+                max_recovery_time_ms,
+                pressure_refs: &pressure_refs,
+                denial_refs: &denial_refs,
+                diagnostics: &diagnostics,
+                caveats: &caveats,
+            })?;
+            let reference = canonical_hash(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!(
+                    "prod-soak resource-envelope ref={reference} decision={decision} queue={queue_depth}/{max_queue_depth}"
+                ),
+            );
+            Ok(())
+        }
         ProdSoakCommand::FaultMatrix {
             scenario,
             fault_cases,
@@ -258,6 +343,7 @@ pub(crate) fn run_prod_soak_command(command: ProdSoakCommand) -> Result<()> {
             evidence_exports,
             fault_refs,
             durability_refs,
+            resource_refs,
             decision,
             replay_status,
             diagnostics,
@@ -283,6 +369,7 @@ pub(crate) fn run_prod_soak_command(command: ProdSoakCommand) -> Result<()> {
                 evidence_export_refs: &evidence_export_refs,
                 fault_refs: &fault_refs,
                 durability_refs: &durability_refs,
+                resource_refs: &resource_refs,
                 replay_status: &replay_status,
                 diagnostics: &diagnostics,
                 log_refs: &log_refs,
@@ -371,6 +458,8 @@ fn prod_soak_kind(text: &str) -> &'static str {
         "durability"
     } else if text.contains("prod-soak-fault-case-v1") {
         "fault-case"
+    } else if text.contains("prod-soak-resource-envelope-v1") {
+        "resource-envelope"
     } else if text.contains("prod-soak-fault-matrix-v1") {
         "fault-matrix"
     } else if text.contains("prod-soak-run-v1") {

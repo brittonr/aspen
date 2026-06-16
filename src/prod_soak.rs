@@ -8,10 +8,12 @@ use crate::preserves_rail::PROD_SOAK_DURABILITY_SCHEMA;
 use crate::preserves_rail::PROD_SOAK_EVIDENCE_EXPORT_SCHEMA;
 use crate::preserves_rail::PROD_SOAK_FAULT_CASE_SCHEMA;
 use crate::preserves_rail::PROD_SOAK_FAULT_MATRIX_SCHEMA;
+use crate::preserves_rail::PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA;
 use crate::preserves_rail::PROD_SOAK_RUN_SCHEMA;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::preserves_rail::u64_value;
 use crate::preserves_rail::validate_content_ref;
 
 const MAX_SOAK_REFS: usize = 512;
@@ -52,6 +54,7 @@ pub struct ProdSoakRunInput<'a> {
     pub evidence_export_refs: &'a [String],
     pub fault_refs: &'a [String],
     pub durability_refs: &'a [String],
+    pub resource_refs: &'a [String],
     pub replay_status: &'a str,
     pub diagnostics: &'a [String],
     pub log_refs: &'a [String],
@@ -79,6 +82,25 @@ pub struct ProdSoakFaultCaseInput<'a> {
     pub evidence_refs: &'a [String],
     pub denial_refs: &'a [String],
     pub replay_status: &'a str,
+    pub diagnostics: &'a [String],
+    pub caveats: &'a [String],
+}
+
+pub struct ProdSoakResourceEnvelopeInput<'a> {
+    pub decision: &'a str,
+    pub scenario: &'a str,
+    pub queue_depth: u64,
+    pub max_queue_depth: u64,
+    pub receipt_bytes: u64,
+    pub max_receipt_bytes: u64,
+    pub store_bytes: u64,
+    pub max_store_bytes: u64,
+    pub delivery_latency_ms: u64,
+    pub max_delivery_latency_ms: u64,
+    pub recovery_time_ms: u64,
+    pub max_recovery_time_ms: u64,
+    pub pressure_refs: &'a [String],
+    pub denial_refs: &'a [String],
     pub diagnostics: &'a [String],
     pub caveats: &'a [String],
 }
@@ -126,6 +148,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
     validate_ref_slice("evidence export", input.evidence_export_refs)?;
     validate_ref_slice("fault", input.fault_refs)?;
     validate_ref_slice("durability", input.durability_refs)?;
+    validate_ref_slice("resource", input.resource_refs)?;
     validate_text_field("replay status", input.replay_status)?;
     validate_ref_slice("log", input.log_refs)?;
     validate_pass_category("node evidence", input.node_evidence_refs, input.decision)?;
@@ -152,6 +175,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
         record("evidence-exports", vec![sequence(ref_values(input.evidence_export_refs)?)]),
         record("faults", vec![sequence(ref_values(input.fault_refs)?)]),
         record("durability", vec![sequence(ref_values(input.durability_refs)?)]),
+        record("resources", vec![sequence(ref_values(input.resource_refs)?)]),
         record("replay-status", vec![string(input.replay_status)]),
         record("diagnostics", vec![sequence(string_values(
             "diagnostic",
@@ -213,6 +237,56 @@ pub fn durability_value(input: &ProdSoakDurabilityInput<'_>) -> Result<IOValue> 
             check_value("chunk-artifacts-bound", "pass"),
             check_value("retention-state-bound", "pass"),
             check_value("durability-evidence-does-not-grant-authority", "pass"),
+        ])]),
+    ]))
+}
+
+pub fn resource_envelope_value(input: &ProdSoakResourceEnvelopeInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    validate_text_field("scenario", input.scenario)?;
+    validate_metric_bound("queue depth", input.queue_depth, input.max_queue_depth)?;
+    validate_metric_bound("receipt bytes", input.receipt_bytes, input.max_receipt_bytes)?;
+    validate_metric_bound("store bytes", input.store_bytes, input.max_store_bytes)?;
+    validate_metric_bound("delivery latency ms", input.delivery_latency_ms, input.max_delivery_latency_ms)?;
+    validate_metric_bound("recovery time ms", input.recovery_time_ms, input.max_recovery_time_ms)?;
+    validate_ref_slice("resource pressure", input.pressure_refs)?;
+    validate_ref_slice("resource denial", input.denial_refs)?;
+    validate_pass_category("resource pressure", input.pressure_refs, input.decision)?;
+    validate_pass_category("resource denial", input.denial_refs, input.decision)?;
+    validate_pass_caveats(input.caveats, input.decision)?;
+    Ok(record("prod-soak-resource-envelope-v1", vec![
+        string(PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("scenario", vec![string(input.scenario)]),
+        record("queue-depth", vec![u64_value(input.queue_depth)]),
+        record("max-queue-depth", vec![u64_value(input.max_queue_depth)]),
+        record("receipt-bytes", vec![u64_value(input.receipt_bytes)]),
+        record("max-receipt-bytes", vec![u64_value(input.max_receipt_bytes)]),
+        record("store-bytes", vec![u64_value(input.store_bytes)]),
+        record("max-store-bytes", vec![u64_value(input.max_store_bytes)]),
+        record("delivery-latency-ms", vec![u64_value(input.delivery_latency_ms)]),
+        record("max-delivery-latency-ms", vec![u64_value(input.max_delivery_latency_ms)]),
+        record("recovery-time-ms", vec![u64_value(input.recovery_time_ms)]),
+        record("max-recovery-time-ms", vec![u64_value(input.max_recovery_time_ms)]),
+        record("pressure", vec![sequence(ref_values(input.pressure_refs)?)]),
+        record("denials", vec![sequence(ref_values(input.denial_refs)?)]),
+        record("diagnostics", vec![sequence(string_values(
+            "resource diagnostic",
+            input.diagnostics,
+            MAX_SOAK_TEXT_FIELDS,
+        )?)]),
+        record("caveats", vec![sequence(string_values(
+            "resource caveat",
+            input.caveats,
+            MAX_SOAK_TEXT_FIELDS,
+        )?)]),
+        record("checks", vec![sequence(vec![
+            check_value("queue-depth-bound", "pass"),
+            check_value("receipt-growth-bound", "pass"),
+            check_value("store-growth-bound", "pass"),
+            check_value("delivery-latency-bound", "pass"),
+            check_value("recovery-time-bound", "pass"),
+            check_value("resource-pressure-denial-bound", "pass"),
         ])]),
     ]))
 }
@@ -293,6 +367,14 @@ pub fn fault_matrix_value(input: &ProdSoakFaultMatrixInput<'_>) -> Result<IOValu
             check_value("simulated-faults-marked-diagnostic", "pass"),
         ])]),
     ]))
+}
+
+fn validate_metric_bound(label: &str, actual: u64, maximum: u64) -> Result<()> {
+    if actual > maximum {
+        Err(MoltenError::invalid_harness(format!("prod soak {label} {actual} exceeds bound {maximum}")))
+    } else {
+        Ok(())
+    }
 }
 
 fn validate_pass_category(label: &str, refs: &[String], decision: &str) -> Result<()> {
@@ -491,6 +573,7 @@ mod tests {
             evidence_export_refs: &evidence_export,
             fault_refs: &[],
             durability_refs: &[],
+            resource_refs: &[],
             replay_status: "non-replayable-live-observations",
             diagnostics: &[],
             log_refs: &[local_ref("log")],
@@ -521,6 +604,7 @@ mod tests {
             evidence_export_refs: &[local_ref("export")],
             fault_refs: &[],
             durability_refs: &[],
+            resource_refs: &[],
             replay_status: "non-replayable-live-observations",
             diagnostics: &[],
             log_refs: &[],
@@ -547,6 +631,32 @@ mod tests {
         let text = to_text(&value).expect("text");
         assert!(text.contains("prod-soak-durability-v1"));
         assert!(text.contains("restart-durability"));
+    }
+
+    #[test]
+    fn resource_envelope_receipt_binds_bounds_and_denials() {
+        let value = resource_envelope_value(&ProdSoakResourceEnvelopeInput {
+            decision: "pass",
+            scenario: "pilot-resource-envelope",
+            queue_depth: 1,
+            max_queue_depth: 8,
+            receipt_bytes: 4096,
+            max_receipt_bytes: 1_000_000,
+            store_bytes: 65_536,
+            max_store_bytes: 10_000_000,
+            delivery_latency_ms: 50,
+            max_delivery_latency_ms: 5_000,
+            recovery_time_ms: 100,
+            max_recovery_time_ms: 10_000,
+            pressure_refs: &[local_ref("pressure")],
+            denial_refs: &[local_ref("denial")],
+            diagnostics: &[],
+            caveats: &["resource envelope evidence is pilot scoped".to_string()],
+        })
+        .expect("resource envelope");
+        let text = to_text(&value).expect("text");
+        assert!(text.contains("prod-soak-resource-envelope-v1"));
+        assert!(text.contains("queue-depth-bound"));
     }
 
     #[test]

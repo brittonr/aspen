@@ -10,5 +10,5 @@
 
 ## Phase 3: Resource envelope
 
-- [ ] [parallel] r[molten.prod_soak.performance_resource_envelope] Track queue depth, receipt growth, store growth, delivery latency, recovery time, and resource pressure with explicit bounds and denial behavior.
-- [ ] [serial] r[molten.prod_soak.multi_node_live_workflow] Document which soak evidence is sufficient for internal pilot and which broad production claims remain out of scope.
+- [x] [parallel] r[molten.prod_soak.performance_resource_envelope] Track queue depth, receipt growth, store growth, delivery latency, recovery time, and resource pressure with explicit bounds and denial behavior.
+- [x] [serial] r[molten.prod_soak.multi_node_live_workflow] Document which soak evidence is sufficient for internal pilot and which broad production claims remain out of scope.

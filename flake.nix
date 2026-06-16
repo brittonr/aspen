@@ -1026,6 +1026,29 @@
                 durability_summary=$(molten test prod-soak show /var/lib/molten/vm-evidence/prod-soak-durability.preserves)
                 durability_ref=''${durability_summary#* ref=}
                 durability_ref=''${durability_ref%% *}
+                receipt_bytes=$(stat -c%s "$fault_dir/matrix.preserves")
+                store_bytes=$(du -sb /var/lib/molten/vm-evidence | cut -f1)
+                molten test prod-soak resource-envelope \
+                  --scenario pilot-resource-envelope \
+                  --queue-depth 1 \
+                  --max-queue-depth 8 \
+                  --receipt-bytes "$receipt_bytes" \
+                  --max-receipt-bytes 1000000 \
+                  --store-bytes "$store_bytes" \
+                  --max-store-bytes 100000000 \
+                  --delivery-latency-ms 0 \
+                  --max-delivery-latency-ms 60000 \
+                  --recovery-time-ms 0 \
+                  --max-recovery-time-ms 60000 \
+                  --pressure-ref "$fault_matrix_ref" \
+                  --denial-ref "$stale_denial_ref" \
+                  --denial-ref "$wrong_authority_denial_ref" \
+                  --decision pass \
+                  --caveat 'resource metrics are single-VM pilot bounds and are not SLO evidence' \
+                  --out /var/lib/molten/vm-evidence/prod-soak-resource-envelope.preserves
+                resource_summary=$(molten test prod-soak show /var/lib/molten/vm-evidence/prod-soak-resource-envelope.preserves)
+                resource_ref=''${resource_summary#* ref=}
+                resource_ref=''${resource_ref%% *}
                 molten test prod-soak evidence-export \
                   --node node_a \
                   --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
@@ -1033,6 +1056,7 @@
                   --artifact /var/lib/molten/vm-evidence/live-control/ack-export.preserves \
                   --artifact /var/lib/molten/vm-evidence/service-job/remote-deliver.preserves \
                   --artifact /var/lib/molten/vm-evidence/prod-soak-durability.preserves \
+                  --artifact /var/lib/molten/vm-evidence/prod-soak-resource-envelope.preserves \
                   --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
                   --out /var/lib/molten/vm-evidence/prod-soak-node-a-export.preserves
                 molten test prod-soak evidence-export \
@@ -1060,6 +1084,7 @@
                   --coordination-ref "$coordination_ref" \
                   --fault-ref "$fault_matrix_ref" \
                   --durability-ref "$durability_ref" \
+                  --resource-ref "$resource_ref" \
                   --evidence-export /var/lib/molten/vm-evidence/prod-soak-node-a-export.preserves \
                   --evidence-export /var/lib/molten/vm-evidence/prod-soak-node-b-export.preserves \
                   --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
