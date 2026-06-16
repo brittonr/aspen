@@ -38,4 +38,5 @@
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Report command parsing and dispatch from `src/main.rs` into `src/cli_report.rs` as the next report validation/show CLI shell hotspot split.
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Gate command parsing and dispatch from `src/main.rs` into `src/cli_gate.rs` as the next gate-check CLI shell hotspot split.
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract test Receipt command parsing and dispatch from `src/main.rs` into `src/cli_receipts.rs` as the next signed-receipt CLI shell hotspot split.
+- [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract harness Run/Replay command handling and failure receipt IO from `src/main.rs` into `src/cli_harness.rs` as the next harness CLI shell hotspot split.
 - [ ] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Continue splitting CLI/module hotspots and remove or narrow disabled lint families when source-remediated-zero evidence can replace the current configuration-clean caveat.
