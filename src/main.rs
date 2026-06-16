@@ -20,22 +20,15 @@ use molten::evidence::SignReceiptInput;
 use molten::evidence::VerifySignedReceiptKeyringPolicy;
 use molten::evidence::VerifySignedReceiptPolicy;
 use molten::evidence::sign_receipt;
-use molten::evidence::signed_receipt_summary;
 use molten::evidence::verify_signed_receipt_with_keyring_policy;
 use molten::evidence::verify_signed_receipt_with_policy;
-use molten::harness::failure_summary;
 use molten::harness::failure_value;
 use molten::harness::gate_check_value;
-use molten::harness::gate_receipt_summary;
 use molten::harness::gate_receipt_value;
 use molten::harness::replay_report_value;
 use molten::harness::report_failure_value;
-use molten::harness::report_summary;
-use molten::harness::repro_bundle_summary;
-use molten::harness::repro_verify_receipt_summary;
 use molten::harness::run_suite_value;
 use molten::harness::suite_failure_value;
-use molten::harness::validate_report_value;
 #[cfg(test)]
 use molten::job_dag;
 #[cfg(test)]
@@ -59,6 +52,7 @@ use molten::provenance;
 use molten::retention;
 #[cfg(test)]
 use molten::schema_identity;
+#[cfg(test)]
 use molten::secrets;
 #[cfg(test)]
 use molten::service_supervision;
@@ -87,6 +81,7 @@ mod cli_raft;
 mod cli_receipts;
 mod cli_remote;
 mod cli_replay_fixture;
+mod cli_report;
 mod cli_repro;
 mod cli_retention;
 mod cli_rewrite;
@@ -157,7 +152,7 @@ enum TestCommand {
     },
     Report {
         #[command(subcommand)]
-        command: ReportCommand,
+        command: cli_report::ReportCommand,
     },
     Gate {
         #[command(subcommand)]
@@ -278,18 +273,6 @@ enum TestCommand {
     Repro {
         #[command(subcommand)]
         command: cli_repro::ReproCommand,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum ReportCommand {
-    Show {
-        report: PathBuf,
-    },
-    Validate {
-        report: PathBuf,
-        #[arg(long)]
-        failure_out: Option<PathBuf>,
     },
 }
 
@@ -474,7 +457,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
             Ok(())
         }
         TestCommand::ReplayFixture { command } => cli_replay_fixture::run_replay_fixture_command(command),
-        TestCommand::Report { command } => run_report_command(command),
+        TestCommand::Report { command } => cli_report::run_report_command(command),
         TestCommand::Gate { command } => run_gate_command(command),
         TestCommand::Receipt { command } => run_receipt_command(command),
         TestCommand::Ledger { command } => cli_ledger::run_ledger_command(command),
@@ -506,74 +489,6 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Node { command } => cli_node::run_node_command(command),
         TestCommand::Repro { command } => cli_repro::run_repro_command(command),
     }
-}
-
-fn run_report_command(command: ReportCommand) -> Result<()> {
-    match command {
-        ReportCommand::Show { report } => {
-            let report_value = read_preserves_file(&report)?;
-            println!("{}", report_show_summary(&report_value)?);
-            Ok(())
-        }
-        ReportCommand::Validate { report, failure_out } => {
-            let report_value = read_preserves_file_with_failure(&report, failure_out.as_ref(), "validate")?;
-            let validation = match validate_report_value(&report_value) {
-                Ok(validation) => validation,
-                Err(error) => {
-                    write_optional_report_failure(failure_out.as_ref(), "validate", &error, &report_value)?;
-                    return Err(error);
-                }
-            };
-            let replay = match replay_report_value(&report_value) {
-                Ok(replay) => replay,
-                Err(error) => {
-                    write_optional_report_failure(failure_out.as_ref(), "validate", &error, &report_value)?;
-                    return Err(error);
-                }
-            };
-            println!(
-                "report validate ok report={} suite={} observations={} final_state={} replay_actual={}",
-                validation.report_ref,
-                validation.suite_ref,
-                validation.observations,
-                validation.final_state_hash,
-                replay.actual_report_ref
-            );
-            Ok(())
-        }
-    }
-}
-
-fn report_show_summary(report_value: &preserves::IOValue) -> Result<String> {
-    let report_error = match report_summary(report_value) {
-        Ok(summary) => return Ok(summary),
-        Err(error) => error,
-    };
-    if let Ok(summary) = failure_summary(report_value) {
-        return Ok(summary);
-    }
-    if let Ok(summary) = repro_bundle_summary(report_value) {
-        return Ok(summary);
-    }
-    if let Ok(summary) = gate_receipt_summary(report_value) {
-        return Ok(summary);
-    }
-    if let Ok(summary) = repro_verify_receipt_summary(report_value) {
-        return Ok(summary);
-    }
-    if let Ok(summary) = signed_receipt_summary(report_value) {
-        return Ok(summary);
-    }
-    if let Ok(summary) = secrets::fixture_report_summary(report_value) {
-        return Ok(summary);
-    }
-    if let Ok(summary) = secrets::secrets_summary(report_value) {
-        return Ok(summary);
-    }
-    if let Ok(summary) = cli_remote::remote_dataspace_gate_summary(report_value) {
-        return Ok(summary);
-    }
-    Err(report_error)
 }
 
 fn run_gate_command(command: GateCommand) -> Result<()> {

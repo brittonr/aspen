@@ -508,6 +508,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli_prod_soak.rs",
                 "src/cli_receipts.rs",
                 "src/cli_raft.rs",
+                "src/cli_report.rs",
                 "src/cli_protocol.rs",
                 "src/cli_provenance.rs",
                 "src/cli_remote.rs",
