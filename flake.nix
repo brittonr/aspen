@@ -462,6 +462,28 @@
               node_a.succeed("ping -c 1 node_b")
               node_b.succeed("ping -c 1 node_a")
 
+              node_b.succeed('''
+                molten node control-request \
+                  --operation status \
+                  --out /var/lib/molten/vm-evidence/restart-status-request.preserves
+                molten node control-submit \
+                  --state-root /var/lib/molten \
+                  /var/lib/molten/vm-evidence/restart-status-request.preserves \
+                  --receipt-out /var/lib/molten/vm-evidence/restart-queue.preserves
+              ''')
+              node_b.succeed("systemctl restart molten-node.service")
+              node_b.wait_for_unit("molten-node.service")
+              node_b.succeed('''
+                molten node run-loop \
+                  --state-root /var/lib/molten \
+                  --max-requests 1 \
+                  --receipt-out /var/lib/molten/vm-evidence/restart-control-loop.preserves \
+                  --heartbeat-out /var/lib/molten/vm-evidence/restart-heartbeat.preserves \
+                  > /var/lib/molten/vm-evidence/restart-run-loop.txt
+              ''')
+              node_b.succeed("grep -q processed=1 /var/lib/molten/vm-evidence/restart-run-loop.txt")
+              node_b.succeed("grep -q node-control-loop-receipt-v1 /var/lib/molten/vm-evidence/restart-control-loop.preserves")
+
               node_a.succeed("systemctl stop molten-node.service")
               node_b.succeed("systemctl stop molten-node.service")
               for machine in [node_a, node_b]:

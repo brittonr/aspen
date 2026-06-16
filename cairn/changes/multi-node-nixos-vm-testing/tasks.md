@@ -7,7 +7,7 @@
 
 - [ ] [serial] r[molten.testing.nixos_vm_multinode.control_workflow] Exercise cross-node live node-control workflow bundle handoff, apply/reconcile/ack, and protocol-gate evidence between VM nodes.
 - [ ] [parallel] r[molten.testing.nixos_vm_multinode.service_job_coordination] Exercise at least one remote dataspace or service exchange, one job worker path, and one coordination operation across the VM nodes.
-- [ ] [parallel] r[molten.testing.nixos_vm_multinode.restart_durability] Add a restart/durability scenario for queued control work, ledger readback, active locks, and idempotent or fail-closed recovery.
+- [x] [parallel] r[molten.testing.nixos_vm_multinode.restart_durability] Add a restart/durability scenario for queued control work, ledger readback, active locks, and idempotent or fail-closed recovery.
 
 ## Phase 3: Evidence and CI surface
 
