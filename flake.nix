@@ -911,6 +911,84 @@
                 authority_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/live-control/authority-grant.preserves)
                 authority_ref=''${authority_summary#* ref=}
                 authority_ref=''${authority_ref%% *}
+                fault_dir=/var/lib/molten/vm-evidence/prod-soak-faults
+                mkdir -p "$fault_dir"
+                molten node live-workflow-bundle-gate \
+                  /var/lib/molten/vm-evidence/live-control/bundle.preserves \
+                  --expected-peer node:stale-peer \
+                  --receipt-out "$fault_dir/stale-ticket-gate.preserves" \
+                  > "$fault_dir/stale-ticket-gate.txt"
+                grep -q 'decision "deny"' "$fault_dir/stale-ticket-gate.preserves"
+                stale_summary=$(molten test prod-soak show "$fault_dir/stale-ticket-gate.preserves")
+                stale_denial_ref=''${stale_summary#* ref=}
+                stale_denial_ref=''${stale_denial_ref%% *}
+                molten node live-workflow-bundle-gate \
+                  /var/lib/molten/vm-evidence/live-control/bundle.preserves \
+                  --expected-node node:wrong-authority \
+                  --receipt-out "$fault_dir/wrong-authority-gate.preserves" \
+                  > "$fault_dir/wrong-authority-gate.txt"
+                grep -q 'decision "deny"' "$fault_dir/wrong-authority-gate.preserves"
+                wrong_authority_summary=$(molten test prod-soak show "$fault_dir/wrong-authority-gate.preserves")
+                wrong_authority_denial_ref=''${wrong_authority_summary#* ref=}
+                wrong_authority_denial_ref=''${wrong_authority_denial_ref%% *}
+                fault_case() {
+                  kind=$1
+                  expected=$2
+                  denial_ref=''${3:-}
+                  out="$fault_dir/$kind.preserves"
+                  if [ -n "$denial_ref" ]; then
+                    molten test prod-soak fault-case \
+                      --scenario network-transport-fault-matrix \
+                      --fault-kind "$kind" \
+                      --injection simulated-vm-fault \
+                      --expected-outcome "$expected" \
+                      --evidence-ref "$protocol_ref" \
+                      --evidence-ref "$remote_ref" \
+                      --denial-ref "$denial_ref" \
+                      --decision pass \
+                      --replay-status simulated-fault \
+                      --caveat 'fault evidence is simulated diagnostic evidence for pilot scoping' \
+                      --out "$out"
+                  else
+                    molten test prod-soak fault-case \
+                      --scenario network-transport-fault-matrix \
+                      --fault-kind "$kind" \
+                      --injection simulated-vm-fault \
+                      --expected-outcome "$expected" \
+                      --evidence-ref "$protocol_ref" \
+                      --evidence-ref "$remote_ref" \
+                      --decision pass \
+                      --replay-status simulated-fault \
+                      --caveat 'fault evidence is simulated diagnostic evidence for pilot scoping' \
+                      --out "$out"
+                  fi
+                }
+                fault_case delay bounded-diagnostic
+                fault_case drop bounded-diagnostic
+                fault_case partition bounded-diagnostic
+                fault_case rejoin bounded-diagnostic
+                fault_case stale-ticket deny-before-side-effects "$stale_denial_ref"
+                fault_case wrong-authority deny-before-side-effects "$wrong_authority_denial_ref"
+                fault_case duplicate-operation idempotent-replay
+                fault_case conflicting-operation-id deny-before-side-effects "$wrong_authority_denial_ref"
+                fault_case corrupted-transport-receipt deny-before-side-effects "$stale_denial_ref"
+                molten test prod-soak fault-matrix \
+                  --scenario network-transport-fault-matrix \
+                  --fault-case "$fault_dir/delay.preserves" --fault-kind delay \
+                  --fault-case "$fault_dir/drop.preserves" --fault-kind drop \
+                  --fault-case "$fault_dir/partition.preserves" --fault-kind partition \
+                  --fault-case "$fault_dir/rejoin.preserves" --fault-kind rejoin \
+                  --fault-case "$fault_dir/stale-ticket.preserves" --fault-kind stale-ticket \
+                  --fault-case "$fault_dir/wrong-authority.preserves" --fault-kind wrong-authority \
+                  --fault-case "$fault_dir/duplicate-operation.preserves" --fault-kind duplicate-operation \
+                  --fault-case "$fault_dir/conflicting-operation-id.preserves" --fault-kind conflicting-operation-id \
+                  --fault-case "$fault_dir/corrupted-transport-receipt.preserves" --fault-kind corrupted-transport-receipt \
+                  --decision pass \
+                  --caveat 'fault matrix evidence is diagnostic and does not prove transport correctness beyond this topology' \
+                  --out "$fault_dir/matrix.preserves"
+                fault_matrix_summary=$(molten test prod-soak show "$fault_dir/matrix.preserves")
+                fault_matrix_ref=''${fault_matrix_summary#* ref=}
+                fault_matrix_ref=''${fault_matrix_ref%% *}
                 molten test prod-soak evidence-export \
                   --node node_a \
                   --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
@@ -932,7 +1010,7 @@
                   --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
                   --node-evidence /var/lib/molten/vm-evidence/node-b-evidence.preserves \
                   --scenario production-shaped-vm-live-workflow \
-                  --fault-profile none \
+                  --fault-profile network-transport-fault-matrix \
                   --peer-ticket-ref "$ticket_ref" \
                   --peer-ticket-ref "$peer_admission_ref" \
                   --peer-ticket-ref "$authority_ref" \
@@ -942,12 +1020,14 @@
                   --remote-service-ref "$remote_ref" \
                   --job-ref "$job_ref" \
                   --coordination-ref "$coordination_ref" \
+                  --fault-ref "$fault_matrix_ref" \
                   --evidence-export /var/lib/molten/vm-evidence/prod-soak-node-a-export.preserves \
                   --evidence-export /var/lib/molten/vm-evidence/prod-soak-node-b-export.preserves \
                   --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
                   --log /var/lib/molten/vm-evidence/service-job/remote-deliver.txt \
                   --log /var/lib/molten/vm-evidence/service-job/job-ref-execute.txt \
                   --log /var/lib/molten/vm-evidence/service-job/coord-apply.txt \
+                  --log /var/lib/molten/vm-evidence/prod-soak-faults/stale-ticket-gate.txt \
                   --decision pass \
                   --replay-status non-replayable-live-observations \
                   --caveat 'soak evidence is pilot-scoped and diagnostic unless separately replayed' \

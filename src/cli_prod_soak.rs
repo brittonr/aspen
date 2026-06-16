@@ -27,6 +27,46 @@ pub(crate) enum ProdSoakCommand {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    FaultCase {
+        #[arg(long)]
+        scenario: String,
+        #[arg(long)]
+        fault_kind: String,
+        #[arg(long, default_value = "simulated")]
+        injection: String,
+        #[arg(long, default_value = "deny-before-side-effects")]
+        expected_outcome: String,
+        #[arg(long = "evidence-ref")]
+        evidence_refs: Vec<String>,
+        #[arg(long = "denial-ref")]
+        denial_refs: Vec<String>,
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long, default_value = "simulated-fault")]
+        replay_status: String,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    FaultMatrix {
+        #[arg(long)]
+        scenario: String,
+        #[arg(long = "fault-case")]
+        fault_cases: Vec<PathBuf>,
+        #[arg(long = "fault-kind")]
+        fault_kinds: Vec<String>,
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     RunReceipt {
         #[arg(long)]
         topology: PathBuf,
@@ -48,6 +88,8 @@ pub(crate) enum ProdSoakCommand {
         coordination_refs: Vec<String>,
         #[arg(long = "evidence-export")]
         evidence_exports: Vec<PathBuf>,
+        #[arg(long = "fault-ref")]
+        fault_refs: Vec<String>,
         #[arg(long, default_value = "pass")]
         decision: String,
         #[arg(long, default_value = "non-replayable-live-observations")]
@@ -89,6 +131,65 @@ pub(crate) fn run_prod_soak_command(command: ProdSoakCommand) -> Result<()> {
             print_or_log_summary(is_written_to_file, &format!("prod-soak evidence-export ref={reference} node={node}"));
             Ok(())
         }
+        ProdSoakCommand::FaultCase {
+            scenario,
+            fault_kind,
+            injection,
+            expected_outcome,
+            evidence_refs,
+            denial_refs,
+            decision,
+            replay_status,
+            diagnostics,
+            caveats,
+            out,
+        } => {
+            let value = prod_soak::fault_case_value(&prod_soak::ProdSoakFaultCaseInput {
+                decision: &decision,
+                scenario: &scenario,
+                fault_kind: &fault_kind,
+                injection: &injection,
+                expected_outcome: &expected_outcome,
+                evidence_refs: &evidence_refs,
+                denial_refs: &denial_refs,
+                replay_status: &replay_status,
+                diagnostics: &diagnostics,
+                caveats: &caveats,
+            })?;
+            let reference = canonical_hash(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!("prod-soak fault-case ref={reference} decision={decision} fault={fault_kind}"),
+            );
+            Ok(())
+        }
+        ProdSoakCommand::FaultMatrix {
+            scenario,
+            fault_cases,
+            fault_kinds,
+            decision,
+            diagnostics,
+            caveats,
+            out,
+        } => {
+            let fault_case_refs = preserves_file_refs(&fault_cases)?;
+            let value = prod_soak::fault_matrix_value(&prod_soak::ProdSoakFaultMatrixInput {
+                decision: &decision,
+                scenario: &scenario,
+                fault_case_refs: &fault_case_refs,
+                fault_kinds: &fault_kinds,
+                diagnostics: &diagnostics,
+                caveats: &caveats,
+            })?;
+            let reference = canonical_hash(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!("prod-soak fault-matrix ref={reference} decision={decision} faults={}", fault_kinds.len()),
+            );
+            Ok(())
+        }
         ProdSoakCommand::RunReceipt {
             topology,
             node_evidence,
@@ -100,6 +201,7 @@ pub(crate) fn run_prod_soak_command(command: ProdSoakCommand) -> Result<()> {
             job_refs,
             coordination_refs,
             evidence_exports,
+            fault_refs,
             decision,
             replay_status,
             diagnostics,
@@ -123,6 +225,7 @@ pub(crate) fn run_prod_soak_command(command: ProdSoakCommand) -> Result<()> {
                 job_refs: &job_refs,
                 coordination_refs: &coordination_refs,
                 evidence_export_refs: &evidence_export_refs,
+                fault_refs: &fault_refs,
                 replay_status: &replay_status,
                 diagnostics: &diagnostics,
                 log_refs: &log_refs,
@@ -207,6 +310,10 @@ fn print_or_log_summary(is_written_to_file: bool, summary: &str) {
 fn prod_soak_kind(text: &str) -> &'static str {
     if text.contains("prod-soak-evidence-export-v1") {
         "evidence-export"
+    } else if text.contains("prod-soak-fault-case-v1") {
+        "fault-case"
+    } else if text.contains("prod-soak-fault-matrix-v1") {
+        "fault-matrix"
     } else if text.contains("prod-soak-run-v1") {
         "run"
     } else {

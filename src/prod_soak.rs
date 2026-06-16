@@ -1,8 +1,12 @@
+use std::collections::BTreeSet;
+
 use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::PROD_SOAK_EVIDENCE_EXPORT_SCHEMA;
+use crate::preserves_rail::PROD_SOAK_FAULT_CASE_SCHEMA;
+use crate::preserves_rail::PROD_SOAK_FAULT_MATRIX_SCHEMA;
 use crate::preserves_rail::PROD_SOAK_RUN_SCHEMA;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -13,6 +17,18 @@ const MAX_SOAK_REFS: usize = 512;
 const MAX_SOAK_TEXT_FIELDS: usize = 128;
 const _: () = assert!(MAX_SOAK_REFS <= 100_000);
 const _: () = assert!(MAX_SOAK_TEXT_FIELDS <= 100_000);
+
+const REQUIRED_NETWORK_FAULTS: &[&str] = &[
+    "delay",
+    "drop",
+    "partition",
+    "rejoin",
+    "stale-ticket",
+    "wrong-authority",
+    "duplicate-operation",
+    "conflicting-operation-id",
+    "corrupted-transport-receipt",
+];
 
 pub struct ProdSoakEvidenceExportInput<'a> {
     pub node: &'a str,
@@ -33,9 +49,32 @@ pub struct ProdSoakRunInput<'a> {
     pub job_refs: &'a [String],
     pub coordination_refs: &'a [String],
     pub evidence_export_refs: &'a [String],
+    pub fault_refs: &'a [String],
     pub replay_status: &'a str,
     pub diagnostics: &'a [String],
     pub log_refs: &'a [String],
+    pub caveats: &'a [String],
+}
+
+pub struct ProdSoakFaultCaseInput<'a> {
+    pub decision: &'a str,
+    pub scenario: &'a str,
+    pub fault_kind: &'a str,
+    pub injection: &'a str,
+    pub expected_outcome: &'a str,
+    pub evidence_refs: &'a [String],
+    pub denial_refs: &'a [String],
+    pub replay_status: &'a str,
+    pub diagnostics: &'a [String],
+    pub caveats: &'a [String],
+}
+
+pub struct ProdSoakFaultMatrixInput<'a> {
+    pub decision: &'a str,
+    pub scenario: &'a str,
+    pub fault_case_refs: &'a [String],
+    pub fault_kinds: &'a [String],
+    pub diagnostics: &'a [String],
     pub caveats: &'a [String],
 }
 
@@ -71,6 +110,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
     validate_ref_slice("job", input.job_refs)?;
     validate_ref_slice("coordination", input.coordination_refs)?;
     validate_ref_slice("evidence export", input.evidence_export_refs)?;
+    validate_ref_slice("fault", input.fault_refs)?;
     validate_text_field("replay status", input.replay_status)?;
     validate_ref_slice("log", input.log_refs)?;
     validate_pass_category("node evidence", input.node_evidence_refs, input.decision)?;
@@ -80,6 +120,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
     validate_pass_category("job", input.job_refs, input.decision)?;
     validate_pass_category("coordination", input.coordination_refs, input.decision)?;
     validate_pass_category("evidence export", input.evidence_export_refs, input.decision)?;
+    validate_fault_profile_refs(input.fault_profile, input.fault_refs, input.decision)?;
     validate_pass_caveats(input.caveats, input.decision)?;
     Ok(record("prod-soak-run-v1", vec![
         string(PROD_SOAK_RUN_SCHEMA),
@@ -94,6 +135,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
         record("job-workers", vec![sequence(ref_values(input.job_refs)?)]),
         record("coordination", vec![sequence(ref_values(input.coordination_refs)?)]),
         record("evidence-exports", vec![sequence(ref_values(input.evidence_export_refs)?)]),
+        record("faults", vec![sequence(ref_values(input.fault_refs)?)]),
         record("replay-status", vec![string(input.replay_status)]),
         record("diagnostics", vec![sequence(string_values(
             "diagnostic",
@@ -115,6 +157,84 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
     ]))
 }
 
+pub fn fault_case_value(input: &ProdSoakFaultCaseInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    validate_text_field("scenario", input.scenario)?;
+    validate_fault_kind(input.fault_kind)?;
+    validate_text_field("injection", input.injection)?;
+    validate_text_field("expected outcome", input.expected_outcome)?;
+    validate_ref_slice("fault evidence", input.evidence_refs)?;
+    validate_ref_slice("fault denial", input.denial_refs)?;
+    validate_text_field("replay status", input.replay_status)?;
+    validate_pass_category("fault evidence", input.evidence_refs, input.decision)?;
+    validate_pass_fault_denials(input.expected_outcome, input.denial_refs, input.decision)?;
+    validate_pass_caveats(input.caveats, input.decision)?;
+    Ok(record("prod-soak-fault-case-v1", vec![
+        string(PROD_SOAK_FAULT_CASE_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("scenario", vec![string(input.scenario)]),
+        record("fault-kind", vec![string(input.fault_kind)]),
+        record("injection", vec![string(input.injection)]),
+        record("expected-outcome", vec![string(input.expected_outcome)]),
+        record("evidence", vec![sequence(ref_values(input.evidence_refs)?)]),
+        record("denials", vec![sequence(ref_values(input.denial_refs)?)]),
+        record("replay-status", vec![string(input.replay_status)]),
+        record("diagnostics", vec![sequence(string_values(
+            "fault diagnostic",
+            input.diagnostics,
+            MAX_SOAK_TEXT_FIELDS,
+        )?)]),
+        record("caveats", vec![sequence(string_values(
+            "fault caveat",
+            input.caveats,
+            MAX_SOAK_TEXT_FIELDS,
+        )?)]),
+        record("checks", vec![sequence(vec![
+            check_value("fault-kind-covered", "pass"),
+            check_value("fault-evidence-bound", "pass"),
+            check_value(
+                "deny-before-side-effects-bound",
+                status(denial_required(input.expected_outcome) && input.denial_refs.is_empty()),
+            ),
+            check_value("fault-evidence-does-not-grant-authority", "pass"),
+        ])]),
+    ]))
+}
+
+pub fn fault_matrix_value(input: &ProdSoakFaultMatrixInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    validate_text_field("scenario", input.scenario)?;
+    validate_ref_slice("fault case", input.fault_case_refs)?;
+    validate_fault_kinds(input.fault_kinds)?;
+    validate_pass_category("fault case", input.fault_case_refs, input.decision)?;
+    validate_fault_matrix_coverage(input.fault_kinds, input.decision)?;
+    validate_pass_caveats(input.caveats, input.decision)?;
+    Ok(record("prod-soak-fault-matrix-v1", vec![
+        string(PROD_SOAK_FAULT_MATRIX_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("scenario", vec![string(input.scenario)]),
+        record("fault-cases", vec![sequence(ref_values(input.fault_case_refs)?)]),
+        record("fault-kinds", vec![sequence(input.fault_kinds.iter().map(string).collect())]),
+        record("required-faults", vec![sequence(REQUIRED_NETWORK_FAULTS.iter().map(string).collect())]),
+        record("diagnostics", vec![sequence(string_values(
+            "fault matrix diagnostic",
+            input.diagnostics,
+            MAX_SOAK_TEXT_FIELDS,
+        )?)]),
+        record("caveats", vec![sequence(string_values(
+            "fault matrix caveat",
+            input.caveats,
+            MAX_SOAK_TEXT_FIELDS,
+        )?)]),
+        record("checks", vec![sequence(vec![
+            check_value("network-transport-fault-matrix", "pass"),
+            check_value("required-fault-kinds-covered", status(missing_required_faults(input.fault_kinds).is_some())),
+            check_value("fault-cases-bound", status(input.fault_case_refs.is_empty())),
+            check_value("simulated-faults-marked-diagnostic", "pass"),
+        ])]),
+    ]))
+}
+
 fn validate_pass_category(label: &str, refs: &[String], decision: &str) -> Result<()> {
     if decision == "pass" && refs.is_empty() {
         Err(MoltenError::invalid_harness(format!("passing prod soak run requires at least one {label} ref")))
@@ -129,6 +249,77 @@ fn validate_pass_caveats(caveats: &[String], decision: &str) -> Result<()> {
     } else {
         Ok(())
     }
+}
+
+fn validate_fault_profile_refs(fault_profile: &str, fault_refs: &[String], decision: &str) -> Result<()> {
+    if decision == "pass" && fault_profile != "none" && fault_refs.is_empty() {
+        Err(MoltenError::invalid_harness(
+            "passing prod soak run with non-none fault profile requires fault refs",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_pass_fault_denials(expected_outcome: &str, denial_refs: &[String], decision: &str) -> Result<()> {
+    if decision == "pass" && denial_required(expected_outcome) && denial_refs.is_empty() {
+        Err(MoltenError::invalid_harness(
+            "passing prod soak deny-before-side-effects fault requires denial refs",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn denial_required(expected_outcome: &str) -> bool {
+    expected_outcome.contains("deny") || expected_outcome.contains("fail-closed")
+}
+
+fn validate_fault_kind(kind: &str) -> Result<()> {
+    if REQUIRED_NETWORK_FAULTS.contains(&kind) {
+        Ok(())
+    } else {
+        Err(MoltenError::invalid_harness(format!(
+            "unsupported prod soak fault kind {kind}; expected one of {}",
+            REQUIRED_NETWORK_FAULTS.join(", ")
+        )))
+    }
+}
+
+fn validate_fault_kinds(kinds: &[String]) -> Result<()> {
+    if kinds.len() > MAX_SOAK_TEXT_FIELDS {
+        return Err(MoltenError::invalid_harness(format!(
+            "prod soak fault kind count {} exceeds bound {MAX_SOAK_TEXT_FIELDS}",
+            kinds.len()
+        )));
+    }
+    for kind in kinds {
+        validate_fault_kind(kind)?;
+    }
+    Ok(())
+}
+
+fn validate_fault_matrix_coverage(kinds: &[String], decision: &str) -> Result<()> {
+    if decision == "pass"
+        && let Some(missing) = missing_required_faults(kinds)
+    {
+        Err(MoltenError::invalid_harness(format!(
+            "passing prod soak fault matrix missing fault kinds: {}",
+            missing.join(", ")
+        )))
+    } else {
+        Ok(())
+    }
+}
+
+fn missing_required_faults(kinds: &[String]) -> Option<Vec<String>> {
+    let present = kinds.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let missing = REQUIRED_NETWORK_FAULTS
+        .iter()
+        .filter(|kind| !present.contains(**kind))
+        .map(|kind| (*kind).to_string())
+        .collect::<Vec<_>>();
+    if missing.is_empty() { None } else { Some(missing) }
 }
 
 fn validate_text_field(label: &str, value: &str) -> Result<()> {
@@ -238,6 +429,7 @@ mod tests {
             job_refs: &job,
             coordination_refs: &coordination,
             evidence_export_refs: &evidence_export,
+            fault_refs: &[],
             replay_status: "non-replayable-live-observations",
             diagnostics: &[],
             log_refs: &[local_ref("log")],
@@ -266,6 +458,7 @@ mod tests {
             job_refs: &[local_ref("job")],
             coordination_refs: &[local_ref("coordination")],
             evidence_export_refs: &[local_ref("export")],
+            fault_refs: &[],
             replay_status: "non-replayable-live-observations",
             diagnostics: &[],
             log_refs: &[],
@@ -273,5 +466,55 @@ mod tests {
         })
         .expect_err("missing remote should deny pass");
         assert!(error.to_string().contains("remote service"));
+    }
+
+    #[test]
+    fn fault_case_binds_denial_for_stale_ticket() {
+        let denial = vec![local_ref("stale-ticket-denial")];
+        let evidence = vec![local_ref("ticket")];
+        let value = fault_case_value(&ProdSoakFaultCaseInput {
+            decision: "pass",
+            scenario: "network-faults",
+            fault_kind: "stale-ticket",
+            injection: "simulated-live-gate",
+            expected_outcome: "deny-before-side-effects",
+            evidence_refs: &evidence,
+            denial_refs: &denial,
+            replay_status: "simulated-fault",
+            diagnostics: &["stale ticket denied before control side effects".to_string()],
+            caveats: &["simulated fault evidence is diagnostic".to_string()],
+        })
+        .expect("fault case");
+        let text = to_text(&value).expect("text");
+        assert!(text.contains("prod-soak-fault-case-v1"));
+        assert!(text.contains(&denial[0]));
+    }
+
+    #[test]
+    fn fault_matrix_requires_all_network_faults_for_pass() {
+        let fault_cases = vec![local_ref("case")];
+        let incomplete = vec!["delay".to_string()];
+        let error = fault_matrix_value(&ProdSoakFaultMatrixInput {
+            decision: "pass",
+            scenario: "network-faults",
+            fault_case_refs: &fault_cases,
+            fault_kinds: &incomplete,
+            diagnostics: &[],
+            caveats: &["simulated faults are diagnostic".to_string()],
+        })
+        .expect_err("missing faults deny pass");
+        assert!(error.to_string().contains("drop"));
+
+        let complete = REQUIRED_NETWORK_FAULTS.iter().map(|kind| (*kind).to_string()).collect::<Vec<_>>();
+        let value = fault_matrix_value(&ProdSoakFaultMatrixInput {
+            decision: "pass",
+            scenario: "network-faults",
+            fault_case_refs: &fault_cases,
+            fault_kinds: &complete,
+            diagnostics: &[],
+            caveats: &["simulated faults are diagnostic".to_string()],
+        })
+        .expect("complete matrix");
+        assert!(to_text(&value).expect("text").contains("prod-soak-fault-matrix-v1"));
     }
 }
