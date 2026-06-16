@@ -74,7 +74,6 @@ use molten::schema_identity;
 use molten::secrets;
 use molten::service_runtime;
 use molten::service_supervision;
-use molten::transcripts;
 #[cfg(test)]
 use molten::typed_storage;
 #[cfg(test)]
@@ -96,6 +95,7 @@ mod cli_retention;
 mod cli_schema;
 mod cli_secrets;
 mod cli_storage;
+mod cli_transcript;
 mod cli_upgrade;
 
 const COORDINATION_CLI_BATCH_REF_LIMIT: usize = 4096;
@@ -210,7 +210,7 @@ enum TestCommand {
     },
     Transcript {
         #[command(subcommand)]
-        command: TranscriptCommand,
+        command: cli_transcript::TranscriptCommand,
     },
     Rewrite {
         #[command(subcommand)]
@@ -905,56 +905,6 @@ enum ChainCommand {
 }
 
 #[derive(Debug, Subcommand)]
-enum TranscriptCommand {
-    Parse {
-        markdown: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long = "dependency")]
-        dependency_refs: Vec<String>,
-        #[arg(long = "dependency-closure-hash")]
-        dependency_closure_hash: Option<String>,
-        #[arg(long = "handler-profile-ref")]
-        handler_profile_ref: Option<String>,
-        #[arg(long = "policy-ref")]
-        policy_refs: Vec<String>,
-        #[arg(long = "capability-ref")]
-        capability_refs: Vec<String>,
-        #[arg(long = "revocation-ref")]
-        revocation_refs: Vec<String>,
-        #[arg(long = "seed-ref")]
-        seed_ref: Option<String>,
-        #[arg(long = "expected-ref")]
-        expected_refs: Vec<String>,
-    },
-    Run {
-        transcript: PathBuf,
-        #[arg(long)]
-        cache: Option<PathBuf>,
-        #[arg(long, default_value = "fresh")]
-        state: String,
-        #[arg(long)]
-        save_root: Option<PathBuf>,
-        #[arg(long)]
-        out: Option<PathBuf>,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-        #[arg(long)]
-        failure_out: Option<PathBuf>,
-    },
-    Show {
-        transcript: PathBuf,
-    },
-    Render {
-        transcript: PathBuf,
-        #[arg(long)]
-        receipt: Option<PathBuf>,
-        #[arg(long)]
-        out: PathBuf,
-    },
-}
-
-#[derive(Debug, Subcommand)]
 enum RewriteCommand {
     Find {
         #[arg(long)]
@@ -1601,7 +1551,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Schema { command } => cli_schema::run_schema_command(command),
         TestCommand::Cache { command } => cli_cache::run_cache_command(command),
         TestCommand::Upgrade { command } => cli_upgrade::run_upgrade_command(command),
-        TestCommand::Transcript { command } => run_transcript_command(command),
+        TestCommand::Transcript { command } => cli_transcript::run_transcript_command(command),
         TestCommand::Rewrite { command } => run_rewrite_command(command),
         TestCommand::Catalog { command } => cli_catalog::run_catalog_command(command),
         TestCommand::Job { command } => cli_job::run_job_command(command),
@@ -2060,111 +2010,6 @@ fn parse_chain_fork_policy(value: &str) -> Result<ChainForkPolicy> {
     }
 }
 
-fn run_transcript_command(command: TranscriptCommand) -> Result<()> {
-    match command {
-        TranscriptCommand::Parse {
-            markdown,
-            out,
-            dependency_refs,
-            dependency_closure_hash,
-            handler_profile_ref,
-            policy_refs,
-            capability_refs,
-            revocation_refs,
-            seed_ref,
-            expected_refs,
-        } => {
-            let source = fs::read_to_string(&markdown).map_err(MoltenError::from)?;
-            let transcript = transcripts::parse_markdown(&source, &transcripts::TranscriptParseInput {
-                dependency_refs,
-                dependency_closure_hash,
-                handler_profile_ref,
-                policy_refs,
-                capability_refs,
-                revocation_refs,
-                seed_ref,
-                expected_refs,
-            })?;
-            write_file(&out, &to_text(&transcript.value)?)?;
-            println!(
-                "transcript parse ok transcript={} stanzas={} out={}",
-                transcript.transcript_ref,
-                transcript.stanzas.len(),
-                out.display()
-            );
-            Ok(())
-        }
-        TranscriptCommand::Run {
-            transcript,
-            cache,
-            state,
-            save_root,
-            out,
-            receipt_out,
-            failure_out,
-        } => {
-            let artifact = match read_transcript_input(&transcript) {
-                Ok(artifact) => artifact,
-                Err(error) => {
-                    write_optional_failure(failure_out.as_ref(), "parse", &error, None)?;
-                    return Err(error);
-                }
-            };
-            let mode = transcripts::TranscriptRunMode::parse(&state)?;
-            let run = transcripts::run_transcript(&artifact, &transcripts::TranscriptRunInput {
-                mode,
-                cache_root: cache,
-                save_root,
-            })?;
-            if let Some(path) = out.as_ref() {
-                write_file(path, &transcripts::render_transcript(&artifact, Some(&run))?)?;
-            }
-            emit_named_receipt(receipt_out.as_ref(), "transcript run receipt", &run.receipt_value)?;
-            eprintln!(
-                "transcript run decision={} transcript={} receipt={}",
-                run.decision, run.transcript_ref, run.receipt_ref
-            );
-            if run.decision == "deny" || run.decision == "error" {
-                let error = MoltenError::invalid_harness(format!("transcript run decision {}", run.decision));
-                write_optional_failure(failure_out.as_ref(), "run", &error, Some(vec![run.receipt_value]))?;
-                return Err(error);
-            }
-            Ok(())
-        }
-        TranscriptCommand::Show { transcript } => {
-            let artifact = read_transcript_input(&transcript)?;
-            println!("{}", to_text(&artifact.value)?);
-            Ok(())
-        }
-        TranscriptCommand::Render {
-            transcript,
-            receipt,
-            out,
-        } => {
-            let artifact = read_transcript_input(&transcript)?;
-            let run = receipt
-                .as_ref()
-                .map(|path| {
-                    let receipt_value = read_preserves_file(path)?;
-                    let receipt = transcripts::parse_transcript_run_receipt(&receipt_value)?;
-                    Ok::<transcripts::TranscriptRun, MoltenError>(transcripts::TranscriptRun {
-                        transcript_ref: receipt.transcript_ref,
-                        decision: receipt.decision,
-                        stanza_outcomes: Vec::new(),
-                        receipt_ref: receipt.receipt_ref,
-                        receipt_value,
-                        cache_receipt_value: None,
-                        state_root: None,
-                    })
-                })
-                .transpose()?;
-            write_file(&out, &transcripts::render_transcript(&artifact, run.as_ref())?)?;
-            println!("transcript render ok transcript={} out={}", artifact.transcript_ref, out.display());
-            Ok(())
-        }
-    }
-}
-
 fn run_rewrite_command(command: RewriteCommand) -> Result<()> {
     match command {
         RewriteCommand::Find {
@@ -2358,25 +2203,6 @@ fn cli_rewrite_pattern(kind: &str, pattern: &str) -> Result<rewrites::RewritePat
 
 fn cli_rewrite_ref(kind: &str, label: &str) -> Result<String> {
     rewrites::default_local_ref(kind, label)
-}
-
-fn read_transcript_input(path: &Path) -> Result<transcripts::TranscriptArtifact> {
-    let text = fs::read_to_string(path).map_err(MoltenError::from)?;
-    if let Ok(value) = parse_text(&text)
-        && let Ok(transcript) = transcripts::parse_transcript_artifact(&value)
-    {
-        return Ok(transcript);
-    }
-    transcripts::parse_markdown(&text, &transcripts::TranscriptParseInput {
-        dependency_refs: Vec::new(),
-        dependency_closure_hash: None,
-        handler_profile_ref: None,
-        policy_refs: Vec::new(),
-        capability_refs: Vec::new(),
-        revocation_refs: Vec::new(),
-        seed_ref: None,
-        expected_refs: Vec::new(),
-    })
 }
 
 fn write_optional_preserves(out: Option<&PathBuf>, value: &preserves::IOValue) -> Result<bool> {
@@ -3586,6 +3412,8 @@ mod tests {
     use crate::cli_secrets::run_secrets_command;
     use crate::cli_storage::StorageCommand;
     use crate::cli_storage::run_storage_command;
+    use crate::cli_transcript::TranscriptCommand;
+    use crate::cli_transcript::run_transcript_command;
     use crate::cli_upgrade::UpgradeCommand;
     use crate::cli_upgrade::run_upgrade_command;
 
