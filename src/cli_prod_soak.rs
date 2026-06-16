@@ -27,6 +27,28 @@ pub(crate) enum ProdSoakCommand {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    Durability {
+        #[arg(long)]
+        scenario: String,
+        #[arg(long = "queued-control-ref")]
+        queued_control_refs: Vec<String>,
+        #[arg(long = "recovery-ref")]
+        recovery_refs: Vec<String>,
+        #[arg(long = "ledger-ref")]
+        ledger_refs: Vec<String>,
+        #[arg(long = "chunk-ref")]
+        chunk_refs: Vec<String>,
+        #[arg(long = "retention-ref")]
+        retention_refs: Vec<String>,
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
     FaultCase {
         #[arg(long)]
         scenario: String,
@@ -90,6 +112,8 @@ pub(crate) enum ProdSoakCommand {
         evidence_exports: Vec<PathBuf>,
         #[arg(long = "fault-ref")]
         fault_refs: Vec<String>,
+        #[arg(long = "durability-ref")]
+        durability_refs: Vec<String>,
         #[arg(long, default_value = "pass")]
         decision: String,
         #[arg(long, default_value = "non-replayable-live-observations")]
@@ -129,6 +153,37 @@ pub(crate) fn run_prod_soak_command(command: ProdSoakCommand) -> Result<()> {
             let reference = canonical_hash(&value)?;
             let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
             print_or_log_summary(is_written_to_file, &format!("prod-soak evidence-export ref={reference} node={node}"));
+            Ok(())
+        }
+        ProdSoakCommand::Durability {
+            scenario,
+            queued_control_refs,
+            recovery_refs,
+            ledger_refs,
+            chunk_refs,
+            retention_refs,
+            decision,
+            diagnostics,
+            caveats,
+            out,
+        } => {
+            let value = prod_soak::durability_value(&prod_soak::ProdSoakDurabilityInput {
+                decision: &decision,
+                scenario: &scenario,
+                queued_control_refs: &queued_control_refs,
+                recovery_refs: &recovery_refs,
+                ledger_refs: &ledger_refs,
+                chunk_refs: &chunk_refs,
+                retention_refs: &retention_refs,
+                diagnostics: &diagnostics,
+                caveats: &caveats,
+            })?;
+            let reference = canonical_hash(&value)?;
+            let is_written_to_file = write_optional_preserves(out.as_ref(), &value)?;
+            print_or_log_summary(
+                is_written_to_file,
+                &format!("prod-soak durability ref={reference} decision={decision} scenario={scenario}"),
+            );
             Ok(())
         }
         ProdSoakCommand::FaultCase {
@@ -202,6 +257,7 @@ pub(crate) fn run_prod_soak_command(command: ProdSoakCommand) -> Result<()> {
             coordination_refs,
             evidence_exports,
             fault_refs,
+            durability_refs,
             decision,
             replay_status,
             diagnostics,
@@ -226,6 +282,7 @@ pub(crate) fn run_prod_soak_command(command: ProdSoakCommand) -> Result<()> {
                 coordination_refs: &coordination_refs,
                 evidence_export_refs: &evidence_export_refs,
                 fault_refs: &fault_refs,
+                durability_refs: &durability_refs,
                 replay_status: &replay_status,
                 diagnostics: &diagnostics,
                 log_refs: &log_refs,
@@ -310,6 +367,8 @@ fn print_or_log_summary(is_written_to_file: bool, summary: &str) {
 fn prod_soak_kind(text: &str) -> &'static str {
     if text.contains("prod-soak-evidence-export-v1") {
         "evidence-export"
+    } else if text.contains("prod-soak-durability-v1") {
+        "durability"
     } else if text.contains("prod-soak-fault-case-v1") {
         "fault-case"
     } else if text.contains("prod-soak-fault-matrix-v1") {

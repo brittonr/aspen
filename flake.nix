@@ -827,6 +827,8 @@
                   "remote-deliver.txt",
                   "job-ref.receipt.preserves",
                   "job-ref-execute.txt",
+                  "target-executable-put.preserves",
+                  "target-input-put.preserves",
                   "coord-apply/report.preserves",
                   "coord-apply.txt",
               ]:
@@ -883,6 +885,14 @@
                   """)
               node_b_evidence = node_b.succeed("cat /var/lib/molten/vm-evidence/node-evidence.preserves")
               node_a.succeed("cat > /var/lib/molten/vm-evidence/node-b-evidence.preserves <<'EOF'\n" + node_b_evidence + "\nEOF")
+              for artifact in [
+                  "restart-queue.preserves",
+                  "control-loop.preserves",
+                  "heartbeat.preserves",
+                  "shutdown.preserves",
+              ]:
+                  content = node_b.succeed(f"cat /var/lib/molten/vm-evidence/{artifact}")
+                  node_a.succeed(f"cat > /var/lib/molten/vm-evidence/node-b-{artifact} <<'EOF'\n" + content + "\nEOF")
               node_a.succeed("""
                 protocol_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/live-control/protocol-gate.preserves)
                 protocol_ref=''${protocol_summary#* ref=}
@@ -989,12 +999,40 @@
                 fault_matrix_summary=$(molten test prod-soak show "$fault_dir/matrix.preserves")
                 fault_matrix_ref=''${fault_matrix_summary#* ref=}
                 fault_matrix_ref=''${fault_matrix_ref%% *}
+                restart_queue_summary=$(molten test prod-soak show /var/lib/molten/vm-evidence/node-b-restart-queue.preserves)
+                restart_queue_ref=''${restart_queue_summary#* ref=}
+                restart_queue_ref=''${restart_queue_ref%% *}
+                recovery_summary=$(molten test prod-soak show /var/lib/molten/vm-evidence/node-b-control-loop.preserves)
+                recovery_ref=''${recovery_summary#* ref=}
+                recovery_ref=''${recovery_ref%% *}
+                executable_put_summary=$(molten test prod-soak show /var/lib/molten/vm-evidence/service-job/target-executable-put.preserves)
+                executable_put_ref=''${executable_put_summary#* ref=}
+                executable_put_ref=''${executable_put_ref%% *}
+                input_put_summary=$(molten test prod-soak show /var/lib/molten/vm-evidence/service-job/target-input-put.preserves)
+                input_put_ref=''${input_put_summary#* ref=}
+                input_put_ref=''${input_put_ref%% *}
+                molten test prod-soak durability \
+                  --scenario restart-durability \
+                  --queued-control-ref "$restart_queue_ref" \
+                  --recovery-ref "$recovery_ref" \
+                  --ledger-ref "$job_ref" \
+                  --chunk-ref "$executable_put_ref" \
+                  --chunk-ref "$input_put_ref" \
+                  --retention-ref "$job_ref" \
+                  --retention-ref "$coordination_ref" \
+                  --decision pass \
+                  --caveat 'durability evidence is scoped to this VM topology and remains diagnostic' \
+                  --out /var/lib/molten/vm-evidence/prod-soak-durability.preserves
+                durability_summary=$(molten test prod-soak show /var/lib/molten/vm-evidence/prod-soak-durability.preserves)
+                durability_ref=''${durability_summary#* ref=}
+                durability_ref=''${durability_ref%% *}
                 molten test prod-soak evidence-export \
                   --node node_a \
                   --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
                   --artifact /var/lib/molten/vm-evidence/live-control/protocol-gate.preserves \
                   --artifact /var/lib/molten/vm-evidence/live-control/ack-export.preserves \
                   --artifact /var/lib/molten/vm-evidence/service-job/remote-deliver.preserves \
+                  --artifact /var/lib/molten/vm-evidence/prod-soak-durability.preserves \
                   --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
                   --out /var/lib/molten/vm-evidence/prod-soak-node-a-export.preserves
                 molten test prod-soak evidence-export \
@@ -1021,6 +1059,7 @@
                   --job-ref "$job_ref" \
                   --coordination-ref "$coordination_ref" \
                   --fault-ref "$fault_matrix_ref" \
+                  --durability-ref "$durability_ref" \
                   --evidence-export /var/lib/molten/vm-evidence/prod-soak-node-a-export.preserves \
                   --evidence-export /var/lib/molten/vm-evidence/prod-soak-node-b-export.preserves \
                   --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \

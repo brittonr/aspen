@@ -4,6 +4,7 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
+use crate::preserves_rail::PROD_SOAK_DURABILITY_SCHEMA;
 use crate::preserves_rail::PROD_SOAK_EVIDENCE_EXPORT_SCHEMA;
 use crate::preserves_rail::PROD_SOAK_FAULT_CASE_SCHEMA;
 use crate::preserves_rail::PROD_SOAK_FAULT_MATRIX_SCHEMA;
@@ -50,9 +51,22 @@ pub struct ProdSoakRunInput<'a> {
     pub coordination_refs: &'a [String],
     pub evidence_export_refs: &'a [String],
     pub fault_refs: &'a [String],
+    pub durability_refs: &'a [String],
     pub replay_status: &'a str,
     pub diagnostics: &'a [String],
     pub log_refs: &'a [String],
+    pub caveats: &'a [String],
+}
+
+pub struct ProdSoakDurabilityInput<'a> {
+    pub decision: &'a str,
+    pub scenario: &'a str,
+    pub queued_control_refs: &'a [String],
+    pub recovery_refs: &'a [String],
+    pub ledger_refs: &'a [String],
+    pub chunk_refs: &'a [String],
+    pub retention_refs: &'a [String],
+    pub diagnostics: &'a [String],
     pub caveats: &'a [String],
 }
 
@@ -111,6 +125,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
     validate_ref_slice("coordination", input.coordination_refs)?;
     validate_ref_slice("evidence export", input.evidence_export_refs)?;
     validate_ref_slice("fault", input.fault_refs)?;
+    validate_ref_slice("durability", input.durability_refs)?;
     validate_text_field("replay status", input.replay_status)?;
     validate_ref_slice("log", input.log_refs)?;
     validate_pass_category("node evidence", input.node_evidence_refs, input.decision)?;
@@ -136,6 +151,7 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
         record("coordination", vec![sequence(ref_values(input.coordination_refs)?)]),
         record("evidence-exports", vec![sequence(ref_values(input.evidence_export_refs)?)]),
         record("faults", vec![sequence(ref_values(input.fault_refs)?)]),
+        record("durability", vec![sequence(ref_values(input.durability_refs)?)]),
         record("replay-status", vec![string(input.replay_status)]),
         record("diagnostics", vec![sequence(string_values(
             "diagnostic",
@@ -153,6 +169,50 @@ pub fn run_value(input: &ProdSoakRunInput<'_>) -> Result<IOValue> {
             check_value("replay-boundary-explicit", "pass"),
             check_value("live-caveats-explicit", status(input.caveats.is_empty())),
             check_value("soak-evidence-does-not-grant-authority", "pass"),
+        ])]),
+    ]))
+}
+
+pub fn durability_value(input: &ProdSoakDurabilityInput<'_>) -> Result<IOValue> {
+    validate_decision(input.decision)?;
+    validate_text_field("scenario", input.scenario)?;
+    validate_ref_slice("durability queued control", input.queued_control_refs)?;
+    validate_ref_slice("durability recovery", input.recovery_refs)?;
+    validate_ref_slice("durability ledger", input.ledger_refs)?;
+    validate_ref_slice("durability chunk", input.chunk_refs)?;
+    validate_ref_slice("durability retention", input.retention_refs)?;
+    validate_pass_category("queued control", input.queued_control_refs, input.decision)?;
+    validate_pass_category("recovery", input.recovery_refs, input.decision)?;
+    validate_pass_category("ledger", input.ledger_refs, input.decision)?;
+    validate_pass_category("chunk", input.chunk_refs, input.decision)?;
+    validate_pass_category("retention", input.retention_refs, input.decision)?;
+    validate_pass_caveats(input.caveats, input.decision)?;
+    Ok(record("prod-soak-durability-v1", vec![
+        string(PROD_SOAK_DURABILITY_SCHEMA),
+        record("decision", vec![string(input.decision)]),
+        record("scenario", vec![string(input.scenario)]),
+        record("queued-control", vec![sequence(ref_values(input.queued_control_refs)?)]),
+        record("recovery", vec![sequence(ref_values(input.recovery_refs)?)]),
+        record("ledger-readback", vec![sequence(ref_values(input.ledger_refs)?)]),
+        record("chunk-artifacts", vec![sequence(ref_values(input.chunk_refs)?)]),
+        record("retention-state", vec![sequence(ref_values(input.retention_refs)?)]),
+        record("diagnostics", vec![sequence(string_values(
+            "durability diagnostic",
+            input.diagnostics,
+            MAX_SOAK_TEXT_FIELDS,
+        )?)]),
+        record("caveats", vec![sequence(string_values(
+            "durability caveat",
+            input.caveats,
+            MAX_SOAK_TEXT_FIELDS,
+        )?)]),
+        record("checks", vec![sequence(vec![
+            check_value("queued-control-bound", "pass"),
+            check_value("recovery-receipts-bound", "pass"),
+            check_value("ledger-readback-bound", "pass"),
+            check_value("chunk-artifacts-bound", "pass"),
+            check_value("retention-state-bound", "pass"),
+            check_value("durability-evidence-does-not-grant-authority", "pass"),
         ])]),
     ]))
 }
@@ -430,6 +490,7 @@ mod tests {
             coordination_refs: &coordination,
             evidence_export_refs: &evidence_export,
             fault_refs: &[],
+            durability_refs: &[],
             replay_status: "non-replayable-live-observations",
             diagnostics: &[],
             log_refs: &[local_ref("log")],
@@ -459,6 +520,7 @@ mod tests {
             coordination_refs: &[local_ref("coordination")],
             evidence_export_refs: &[local_ref("export")],
             fault_refs: &[],
+            durability_refs: &[],
             replay_status: "non-replayable-live-observations",
             diagnostics: &[],
             log_refs: &[],
@@ -466,6 +528,25 @@ mod tests {
         })
         .expect_err("missing remote should deny pass");
         assert!(error.to_string().contains("remote service"));
+    }
+
+    #[test]
+    fn durability_receipt_requires_restart_and_state_refs() {
+        let value = durability_value(&ProdSoakDurabilityInput {
+            decision: "pass",
+            scenario: "restart-durability",
+            queued_control_refs: &[local_ref("restart-queue")],
+            recovery_refs: &[local_ref("control-loop")],
+            ledger_refs: &[local_ref("ledger-readback")],
+            chunk_refs: &[local_ref("chunk-put")],
+            retention_refs: &[local_ref("retention-pin")],
+            diagnostics: &[],
+            caveats: &["durability evidence is pilot scoped".to_string()],
+        })
+        .expect("durability");
+        let text = to_text(&value).expect("text");
+        assert!(text.contains("prod-soak-durability-v1"));
+        assert!(text.contains("restart-durability"));
     }
 
     #[test]

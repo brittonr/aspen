@@ -6,7 +6,7 @@
 ## Phase 2: Fault matrix
 
 - [x] [parallel] r[molten.prod_soak.network_fault_matrix] Add network and transport fault scenarios for delay, drop, partition, rejoin, stale ticket, wrong authority, duplicate operation, and conflicting operation ids.
-- [ ] [parallel] r[molten.prod_soak.durability_restart] Add restart and durability scenarios covering queued control requests, ledger/readback, chunk/artifact availability, retention state, and recovery receipts.
+- [x] [parallel] r[molten.prod_soak.durability_restart] Add restart and durability scenarios covering queued control requests, ledger/readback, chunk/artifact availability, retention state, and recovery receipts.
 
 ## Phase 3: Resource envelope
 

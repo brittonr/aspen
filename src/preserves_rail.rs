@@ -156,6 +156,7 @@ pub const NIXOS_VM_TOPOLOGY_SCHEMA: &str = "molten.testing.nixos-vm.topology.v1"
 pub const NIXOS_VM_NODE_EVIDENCE_SCHEMA: &str = "molten.testing.nixos-vm.node-evidence.v1";
 pub const NIXOS_VM_TEST_RUN_SCHEMA: &str = "molten.testing.nixos-vm.test-run.v1";
 pub const PROD_SOAK_EVIDENCE_EXPORT_SCHEMA: &str = "molten.prod-soak.evidence-export.v1";
+pub const PROD_SOAK_DURABILITY_SCHEMA: &str = "molten.prod-soak.durability.v1";
 pub const PROD_SOAK_FAULT_CASE_SCHEMA: &str = "molten.prod-soak.fault-case.v1";
 pub const PROD_SOAK_FAULT_MATRIX_SCHEMA: &str = "molten.prod-soak.fault-matrix.v1";
 pub const PROD_SOAK_RUN_SCHEMA: &str = "molten.prod-soak.run.v1";
