@@ -21,8 +21,8 @@ r[molten.catalog_mcp.no_path_identity] The system MUST Keep registry/ledger file
 ### Requirement: System MUST Implement a read-only allow-list for `catalog.list`, `catalog.view`, `catalog.search`, `catalog.deps`, `catalog.dependents`, and `catalog.short_id`
 r[molten.catalog_mcp.allowlist] The system MUST Implement a read-only allow-list for `catalog.list`, `catalog.view`, `catalog.search`, `catalog.deps`, `catalog.dependents`, and `catalog.short_id`.
 
-### Requirement: System MUST Route read-only calls through `src/catalog.rs` and embed/bind the resulting catalog receipt
-r[molten.catalog_mcp.catalog_core_binding] The system MUST Route read-only calls through `src/catalog.rs` and embed/bind the resulting catalog receipt.
+### Requirement: System MUST Route read-only calls through `src/catalog/mod.rs` and embed/bind the resulting catalog receipt
+r[molten.catalog_mcp.catalog_core_binding] The system MUST Route read-only calls through `src/catalog/mod.rs` and embed/bind the resulting catalog receipt.
 
 ### Requirement: System MUST Return canonical deny responses for unknown or mutating tool names
 r[molten.catalog_mcp.fail_closed_mutation] The system MUST Return canonical deny responses for unknown or mutating tool names.

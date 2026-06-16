@@ -434,7 +434,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/octet/gate.rs",
                 "src/node/runtime.rs",
                 "src/job/dag.rs",
-                "src/upgrades.rs",
+                "src/upgrades/mod.rs",
             ],
             reason: "strict source-gate, startup, job admission, and upgrade evidence paths must fail closed",
         },
@@ -450,14 +450,14 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
         },
         SurfaceDefinition {
             name: "node-runtime-startup",
-            files: &["src/node/runtime.rs", "src/node/identity.rs", "src/resources.rs"],
+            files: &["src/node/runtime.rs", "src/node/identity.rs", "src/resources/mod.rs"],
             reason: "node startup binds identity, resources, adapters, and source gates before side effects",
         },
         SurfaceDefinition {
             name: "job-execution",
             files: &[
                 "src/job/dag.rs",
-                "src/artifacts.rs",
+                "src/artifacts/mod.rs",
                 "src/typed/storage.rs",
                 "src/eval/cache.rs",
             ],
@@ -465,7 +465,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
         },
         SurfaceDefinition {
             name: "ledger-and-evidence",
-            files: &["src/ledger.rs", "src/evidence.rs", "src/evidence/chain.rs"],
+            files: &["src/ledger/mod.rs", "src/evidence/mod.rs", "src/evidence/chain.rs"],
             reason: "ledger imports and chain receipts are the evidence substrate",
         },
         SurfaceDefinition {
@@ -473,7 +473,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
             files: &[
                 "src/harness/wasm/executor.rs",
                 "src/harness/steel/executor.rs",
-                "src/effects.rs",
+                "src/effects/mod.rs",
                 "src/remote/dataspace.rs",
             ],
             reason: "executor and remote boundaries must deny ambient authority before side effects",
@@ -481,9 +481,9 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
         SurfaceDefinition {
             name: "redaction-and-export",
             files: &[
-                "src/catalog.rs",
+                "src/catalog/mod.rs",
                 "src/catalog/mcp.rs",
-                "src/transcripts.rs",
+                "src/transcripts/mod.rs",
                 "src/harness/repro.rs",
             ],
             reason: "rendering and export paths must not leak confidential evidence",

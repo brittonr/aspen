@@ -4,9 +4,9 @@ mod gate;
 mod replay;
 mod runner;
 mod schema;
-#[path = "harness/steel/executor.rs"]
+#[path = "steel/executor.rs"]
 mod steel_executor;
-#[path = "harness/wasm/executor.rs"]
+#[path = "wasm/executor.rs"]
 mod wasm_executor;
 
 pub type HarnessStep = core::CoreStep;

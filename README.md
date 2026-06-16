@@ -576,14 +576,14 @@ cargo octet check --artifact-dir target/octet
 cargo octet check -p molten --artifact-dir target/octet-lib -- --lib
 cargo octet object corpus receipt \
   --output target/octet/object-corpus-receipt.json \
-  src/artifacts.rs src/catalog.rs src/catalog/mcp.rs \
-  src/chunk/store.rs src/cli/core/artifact.rs src/cli/core/cache.rs src/cli/core/catalog.rs src/cli/core/chunk.rs src/cli/workflow/coordination.rs src/cli/workflow/delivery.rs src/cli/ops/dogfood.rs src/cli/evidence/gate.rs src/cli/test/harness.rs src/cli/workflow/job.rs src/cli/ops/ledger.rs src/cli/ops/node.rs src/cli/evidence/receipts.rs src/cli/ops/nixosvm.rs src/cli/ops/octet.rs src/cli/ops/plugin.rs src/cli/ops/prodsoak.rs src/cli/workflow/protocol.rs src/cli/workflow/provenance.rs src/cli/runtime/raft.rs src/cli/workflow/remote.rs src/cli/evidence/report.rs src/cli/test/replayfixture.rs src/cli/runtime/repro.rs src/cli/workflow/retention.rs src/cli/runtime/rewrite.rs src/cli/core/schema.rs src/cli/runtime/secrets.rs src/cli/runtime/service.rs src/cli/core/storage.rs src/cli/core/transcript.rs src/cli/runtime/upgrade.rs src/cli/runtime/vat.rs src/coordination.rs src/delivery/idempotency.rs \
-  src/eval/cache.rs src/job/dag.rs src/ledger.rs src/main.rs \
+  src/artifacts/mod.rs src/catalog/mod.rs src/catalog/mcp.rs \
+  src/chunk/store.rs src/cli/core/artifact.rs src/cli/core/cache.rs src/cli/core/catalog.rs src/cli/core/chunk.rs src/cli/workflow/coordination.rs src/cli/workflow/delivery.rs src/cli/ops/dogfood.rs src/cli/evidence/gate.rs src/cli/test/harness.rs src/cli/workflow/job.rs src/cli/ops/ledger.rs src/cli/ops/node.rs src/cli/evidence/receipts.rs src/cli/ops/nixosvm.rs src/cli/ops/octet.rs src/cli/ops/plugin.rs src/cli/ops/prodsoak.rs src/cli/workflow/protocol.rs src/cli/workflow/provenance.rs src/cli/runtime/raft.rs src/cli/workflow/remote.rs src/cli/evidence/report.rs src/cli/test/replayfixture.rs src/cli/runtime/repro.rs src/cli/workflow/retention.rs src/cli/runtime/rewrite.rs src/cli/core/schema.rs src/cli/runtime/secrets.rs src/cli/runtime/service.rs src/cli/core/storage.rs src/cli/core/transcript.rs src/cli/runtime/upgrade.rs src/cli/runtime/vat.rs src/coordination/mod.rs src/delivery/idempotency.rs \
+  src/eval/cache.rs src/job/dag.rs src/ledger/mod.rs src/main.rs \
   src/node/daemon.rs src/node/runtime.rs src/nixos/vm.rs src/octet/gate.rs src/octet/remediation.rs \
   src/operator/dogfood.rs src/plugin/host.rs src/preserves/rail.rs \
-  src/prod/soak.rs src/protocol/session.rs src/provenance.rs src/raft/control/plane.rs \
-  src/remote/dataspace.rs src/retention.rs src/runtime/predicates.rs \
-  src/secrets.rs src/service/supervision.rs src/transcripts.rs
+  src/prod/soak.rs src/protocol/session.rs src/provenance/mod.rs src/raft/control/plane.rs \
+  src/remote/dataspace.rs src/retention/mod.rs src/runtime/predicates/mod.rs \
+  src/secrets/mod.rs src/service/supervision.rs src/transcripts/mod.rs
 cargo run -- test octet artifacts import \
   --artifacts target/octet \
   --ledger target/octet-ledger \
@@ -605,7 +605,7 @@ cargo run --manifest-path /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615
   --strict
 ```
 
-The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 2870 objects (`b3:4e05f6ae5d0f3acc36b5cf8a2c0b8f30202ace843165b3e35c7b0ff12b2d5c8a`); latest artifact import receipt is `blake3:19a0239d4fb8598921159669568acbcbe486ade41cb4708ea21c7f05bbce0cf0`, latest strict pass receipt is `blake3:8e6c5f9f51e220893dbbae355e1091ea0fb8e59b2c6d9983c00d8812575e5404`, and latest remediation plan receipt is `blake3:252232dd954e07a924b55146e7a97efce1df1f147fc4835c2fe468392f9c2b7a`. Caveat: this is configuration-clean with the remaining broad high-noise lint families explicitly disabled in `dylint.toml`; `underscore_in_module_filename` has been removed from the disabled set, while source-remediated zero for the remaining disabled families remains separate follow-up work. Nix/dogfood was not rerun for this source-layout disabled-lint burn-down slice. During warning burn-down only, use the explicit quarantine flow:
+The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 2870 objects (`b3:fff56689b06de4e5faed535f88faad02dee0d6742868a9baf43f0868a8f174be`); latest artifact import receipt is `blake3:e7d820b634107b9640add9b7ac7d2bdbe879eb047846dbdcc510786f2408f653`, latest strict pass receipt is `blake3:4b0adb5e1dcb2441bd958d2405e40b8e897bf26b6dfcf03f384955ea0462f5f7`, and latest remediation plan receipt is `blake3:998ea20ea5935b157012911d02d1c9fca33e269e4f08cd496e77954eac2e1f68`. Caveat: this is configuration-clean with the remaining broad high-noise lint families explicitly disabled in `dylint.toml`; `underscore_in_module_filename` has been removed from the disabled set, and Molten source now has no `module_file_count` findings, while source-remediated zero for the remaining disabled families and external `module_file_count` handling remains separate follow-up work. Nix/dogfood was not rerun for this source-layout disabled-lint burn-down slice. During warning burn-down only, use the explicit quarantine flow:
 
 ```sh
 cargo run -- test octet baseline write \

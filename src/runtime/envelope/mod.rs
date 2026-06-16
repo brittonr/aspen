@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn envelope_core_source_excludes_adapter_effects() {
-        let source = include_str!("envelope.rs");
+        let source = include_str!("mod.rs");
         for (prefix, suffix) in [
             ("std", "::fs"),
             ("std", "::net"),
