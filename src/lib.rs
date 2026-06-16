@@ -29,6 +29,7 @@ pub mod operator_dogfood;
 pub mod peer_bootstrap;
 pub mod plugin_host;
 pub mod preserves_rail;
+pub mod prod_soak;
 pub mod protocol_session;
 pub mod provenance;
 pub mod raft_control_plane;

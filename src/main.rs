@@ -88,6 +88,7 @@ mod cli_nixos_vm;
 mod cli_node;
 mod cli_octet;
 mod cli_plugin;
+mod cli_prod_soak;
 mod cli_protocol;
 mod cli_provenance;
 mod cli_repro;
@@ -272,6 +273,10 @@ enum TestCommand {
     NixosVm {
         #[command(subcommand)]
         command: cli_nixos_vm::NixosVmCommand,
+    },
+    ProdSoak {
+        #[command(subcommand)]
+        command: cli_prod_soak::ProdSoakCommand,
     },
     Octet {
         #[command(subcommand)]
@@ -1501,6 +1506,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Service { command } => run_service_command(command),
         TestCommand::Vat { command } => run_vat_command(command),
         TestCommand::NixosVm { command } => cli_nixos_vm::run_nixos_vm_command(command),
+        TestCommand::ProdSoak { command } => cli_prod_soak::run_prod_soak_command(command),
         TestCommand::Octet { command } => cli_octet::run_octet_command(command),
         TestCommand::Node { command } => cli_node::run_node_command(command),
         TestCommand::Repro { command } => cli_repro::run_repro_command(command),

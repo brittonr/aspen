@@ -1,7 +1,7 @@
 ## Phase 1: Soak harness
 
-- [ ] [serial] r[molten.prod_soak.multi_node_live_workflow] Define and implement a production-shaped multi-node live workflow that covers peer tickets, node-control bundle lifecycle, remote dataspace/service exchange, job worker execution, coordination operation, and evidence export.
-- [ ] [serial] r[molten.prod_soak.replay_and_evidence] Emit canonical soak run receipts with topology, fault profile, node evidence, replay status, diagnostics, and non-replayable caveats.
+- [x] [serial] r[molten.prod_soak.multi_node_live_workflow] Define and implement a production-shaped multi-node live workflow that covers peer tickets, node-control bundle lifecycle, remote dataspace/service exchange, job worker execution, coordination operation, and evidence export.
+- [x] [serial] r[molten.prod_soak.replay_and_evidence] Emit canonical soak run receipts with topology, fault profile, node evidence, replay status, diagnostics, and non-replayable caveats.
 
 ## Phase 2: Fault matrix
 

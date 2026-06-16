@@ -561,6 +561,9 @@
               """)
               node_a.succeed("mkdir -p /var/lib/molten/vm-evidence/live-control")
               for artifact in [
+                  "ticket.preserves",
+                  "peer-admission.preserves",
+                  "authority-grant.preserves",
                   "bundle.preserves",
                   "request.preserves",
                   "ingress.preserves",
@@ -899,6 +902,60 @@
                 coordination_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/service-job/coord-apply/report.preserves)
                 coordination_ref=''${coordination_summary#* ref=}
                 coordination_ref=''${coordination_ref%% *}
+                ticket_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/live-control/ticket.preserves)
+                ticket_ref=''${ticket_summary#* ref=}
+                ticket_ref=''${ticket_ref%% *}
+                peer_admission_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/live-control/peer-admission.preserves)
+                peer_admission_ref=''${peer_admission_summary#* ref=}
+                peer_admission_ref=''${peer_admission_ref%% *}
+                authority_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/live-control/authority-grant.preserves)
+                authority_ref=''${authority_summary#* ref=}
+                authority_ref=''${authority_ref%% *}
+                molten test prod-soak evidence-export \
+                  --node node_a \
+                  --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
+                  --artifact /var/lib/molten/vm-evidence/live-control/protocol-gate.preserves \
+                  --artifact /var/lib/molten/vm-evidence/live-control/ack-export.preserves \
+                  --artifact /var/lib/molten/vm-evidence/service-job/remote-deliver.preserves \
+                  --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
+                  --out /var/lib/molten/vm-evidence/prod-soak-node-a-export.preserves
+                molten test prod-soak evidence-export \
+                  --node node_b \
+                  --node-evidence /var/lib/molten/vm-evidence/node-b-evidence.preserves \
+                  --artifact /var/lib/molten/vm-evidence/service-job/job-ref.receipt.preserves \
+                  --artifact /var/lib/molten/vm-evidence/service-job/coord-apply/report.preserves \
+                  --artifact /var/lib/molten/vm-evidence/live-control/reconcile.preserves \
+                  --log /var/lib/molten/vm-evidence/service-job/job-ref-execute.txt \
+                  --out /var/lib/molten/vm-evidence/prod-soak-node-b-export.preserves
+                molten test prod-soak run-receipt \
+                  --topology /var/lib/molten/vm-evidence/topology.preserves \
+                  --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
+                  --node-evidence /var/lib/molten/vm-evidence/node-b-evidence.preserves \
+                  --scenario production-shaped-vm-live-workflow \
+                  --fault-profile none \
+                  --peer-ticket-ref "$ticket_ref" \
+                  --peer-ticket-ref "$peer_admission_ref" \
+                  --peer-ticket-ref "$authority_ref" \
+                  --node-control-ref "$protocol_ref" \
+                  --node-control-ref "$reconcile_ref" \
+                  --node-control-ref "$ack_ref" \
+                  --remote-service-ref "$remote_ref" \
+                  --job-ref "$job_ref" \
+                  --coordination-ref "$coordination_ref" \
+                  --evidence-export /var/lib/molten/vm-evidence/prod-soak-node-a-export.preserves \
+                  --evidence-export /var/lib/molten/vm-evidence/prod-soak-node-b-export.preserves \
+                  --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
+                  --log /var/lib/molten/vm-evidence/service-job/remote-deliver.txt \
+                  --log /var/lib/molten/vm-evidence/service-job/job-ref-execute.txt \
+                  --log /var/lib/molten/vm-evidence/service-job/coord-apply.txt \
+                  --decision pass \
+                  --replay-status non-replayable-live-observations \
+                  --caveat 'soak evidence is pilot-scoped and diagnostic unless separately replayed' \
+                  --caveat 'soak evidence does not grant authority, policy, resource, provenance, or source-gate trust' \
+                  --out /var/lib/molten/vm-evidence/prod-soak-run.preserves
+                soak_summary=$(molten test prod-soak show /var/lib/molten/vm-evidence/prod-soak-run.preserves)
+                soak_ref=''${soak_summary#* ref=}
+                soak_ref=''${soak_ref%% *}
                 molten test nixos-vm run-receipt \
                   --topology /var/lib/molten/vm-evidence/topology.preserves \
                   --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
@@ -911,6 +968,7 @@
                   --child-ref "$remote_ref" \
                   --child-ref "$job_ref" \
                   --child-ref "$coordination_ref" \
+                  --child-ref "$soak_ref" \
                   --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
                   --log /var/lib/molten/vm-evidence/live-control/reconcile.txt \
                   --log /var/lib/molten/vm-evidence/live-control/live-loopback.txt \
@@ -926,6 +984,7 @@
               node_a.succeed("grep -q nixos-vm-topology-v1 /var/lib/molten/vm-evidence/topology.preserves")
               node_a.succeed("grep -q nixos-vm-node-evidence-v1 /var/lib/molten/vm-evidence/node-evidence.preserves")
               node_a.succeed("grep -q nixos-vm-test-run-v1 /var/lib/molten/vm-evidence/vm-test-run.preserves")
+              node_a.succeed("grep -q prod-soak-run-v1 /var/lib/molten/vm-evidence/prod-soak-run.preserves")
             '';
           };
 
