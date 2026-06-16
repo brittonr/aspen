@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
+#[cfg(test)]
 use molten::artifacts;
 #[cfg(test)]
 use molten::chunk_store;
@@ -76,6 +77,7 @@ use molten::transcripts;
 use molten::typed_storage;
 use molten::upgrades;
 
+mod cli_artifact;
 mod cli_cache;
 mod cli_catalog;
 mod cli_chunk;
@@ -186,7 +188,7 @@ enum TestCommand {
     },
     Artifact {
         #[command(subcommand)]
-        command: ArtifactCommand,
+        command: cli_artifact::ArtifactCommand,
     },
     Schema {
         #[command(subcommand)]
@@ -942,86 +944,6 @@ enum SchemaCommand {
         registry: PathBuf,
         #[arg(long)]
         fingerprint: String,
-    },
-}
-
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Subcommand)]
-enum ArtifactCommand {
-    Install {
-        payload: PathBuf,
-        #[arg(long)]
-        registry: PathBuf,
-        #[arg(long, default_value = "artifact")]
-        kind: String,
-        #[arg(long = "dependency")]
-        dependencies: Vec<String>,
-        #[arg(long = "schema-ref")]
-        schema_refs: Vec<String>,
-        #[arg(long)]
-        effect_manifest_ref: Option<String>,
-        #[arg(long)]
-        artifact_out: Option<PathBuf>,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    List {
-        #[arg(long)]
-        registry: PathBuf,
-        #[arg(long)]
-        kind: Option<String>,
-    },
-    View {
-        artifact_ref: String,
-        #[arg(long)]
-        registry: PathBuf,
-        #[arg(long)]
-        payload: bool,
-    },
-    NameSet {
-        #[arg(long)]
-        registry: PathBuf,
-        #[arg(long, default_value = "name")]
-        kind: String,
-        #[arg(long)]
-        name: String,
-        #[arg(long)]
-        artifact_ref: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    NameShow {
-        #[arg(long)]
-        registry: PathBuf,
-        #[arg(long, default_value = "name")]
-        kind: String,
-        #[arg(long)]
-        name: String,
-    },
-    Deps {
-        artifact_ref: String,
-        #[arg(long)]
-        registry: PathBuf,
-    },
-    Closure {
-        artifact_ref: String,
-        #[arg(long)]
-        registry: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Impact {
-        artifact_ref: String,
-        #[arg(long)]
-        registry: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    IndexRebuild {
-        #[arg(long)]
-        registry: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
     },
 }
 
@@ -1870,7 +1792,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Chain { command } => run_chain_command(command),
         TestCommand::Chunk { command } => cli_chunk::run_chunk_command(command),
         TestCommand::Storage { command } => run_storage_command(command),
-        TestCommand::Artifact { command } => run_artifact_command(command),
+        TestCommand::Artifact { command } => cli_artifact::run_artifact_command(command),
         TestCommand::Schema { command } => run_schema_command(command),
         TestCommand::Cache { command } => cli_cache::run_cache_command(command),
         TestCommand::Upgrade { command } => run_upgrade_command(command),
@@ -2476,150 +2398,6 @@ fn local_unique_schema_identity(schema_ref: &str) -> Result<schema_identity::Sch
 
 fn cli_schema_ref(kind: &str, label: &str) -> Result<String> {
     canonical_hash(&record("schema-cli-ref", vec![string(kind), string(label)]))
-}
-
-fn run_artifact_command(command: ArtifactCommand) -> Result<()> {
-    match command {
-        ArtifactCommand::Install {
-            payload,
-            registry,
-            kind,
-            dependencies,
-            schema_refs,
-            effect_manifest_ref,
-            artifact_out,
-            receipt_out,
-        } => {
-            let payload = read_preserves_file(&payload)?;
-            let schemas = if schema_refs.is_empty() {
-                vec![cli_artifact_ref("schema", &kind)?]
-            } else {
-                schema_refs
-            };
-            let install = artifacts::install_artifact(&registry, &artifacts::ArtifactInstallInput {
-                kind: kind.clone(),
-                payload,
-                schema_refs: schemas,
-                dependency_refs: dependencies,
-                effect_manifest_ref,
-                policy_refs: vec![cli_artifact_ref("policy", &kind)?],
-                evidence_refs: vec![cli_artifact_ref("evidence", &kind)?],
-                installer_ref: cli_artifact_ref("installer", &kind)?,
-                capability_refs: vec![cli_artifact_ref("capability", &kind)?],
-            })?;
-            if let Some(path) = artifact_out.as_ref() {
-                write_file(path, &to_text(&install.artifact.value)?)?;
-            }
-            emit_named_receipt(receipt_out.as_ref(), "artifact receipt", &install.receipt_value)?;
-            println!(
-                "artifact install {} artifact={} kind={} registry={}",
-                install.decision,
-                install.artifact_ref,
-                install.artifact.kind,
-                registry.display()
-            );
-            Ok(())
-        }
-        ArtifactCommand::List { registry, kind } => {
-            for artifact in artifacts::list_artifacts(&registry, kind.as_deref())? {
-                println!("{} {}", artifact.artifact_ref, artifact.kind);
-            }
-            Ok(())
-        }
-        ArtifactCommand::View {
-            artifact_ref,
-            registry,
-            payload,
-        } => {
-            if payload {
-                println!("{}", to_text(&artifacts::read_payload(&registry, &artifact_ref)?)?);
-            } else {
-                let artifact = artifacts::read_artifact(&registry, &artifact_ref)?;
-                println!("{}", to_text(&artifact.value)?);
-            }
-            Ok(())
-        }
-        ArtifactCommand::NameSet {
-            registry,
-            kind,
-            name,
-            artifact_ref,
-            receipt_out,
-        } => {
-            let policy_refs = [cli_artifact_ref("policy", &name)?];
-            let evidence_refs = [cli_artifact_ref("evidence", &name)?];
-            let pointer = artifacts::set_name_pointer(&registry, &artifacts::SetNamePointerInput {
-                pointer_kind: &kind,
-                name: &name,
-                artifact_ref: &artifact_ref,
-                policy_refs: &policy_refs,
-                evidence_refs: &evidence_refs,
-            })?;
-            let receipt = artifacts::read_receipt(&registry, &pointer.receipt_ref)?;
-            emit_named_receipt(receipt_out.as_ref(), "artifact receipt", &receipt.value)?;
-            println!(
-                "artifact name-set ok kind={} name={} artifact={} pointer={}",
-                pointer.pointer_kind, pointer.name, pointer.artifact_ref, pointer.pointer_ref
-            );
-            Ok(())
-        }
-        ArtifactCommand::NameShow { registry, kind, name } => {
-            let pointer = artifacts::read_name_pointer(&registry, &kind, &name)?
-                .ok_or_else(|| MoltenError::invalid_harness(format!("artifact pointer {kind}:{name} not found")))?;
-            println!("{} {} {}", pointer.pointer_kind, pointer.name, pointer.artifact_ref);
-            Ok(())
-        }
-        ArtifactCommand::Deps { artifact_ref, registry } => {
-            for dependency in artifacts::direct_dependencies(&registry, &artifact_ref)? {
-                println!("{dependency}");
-            }
-            Ok(())
-        }
-        ArtifactCommand::Closure {
-            artifact_ref,
-            registry,
-            receipt_out,
-        } => {
-            let closure = artifacts::dependency_closure(&registry, &[artifact_ref])?;
-            emit_named_receipt(receipt_out.as_ref(), "artifact receipt", &closure.receipt_value)?;
-            for reference in &closure.closure_refs {
-                println!("{reference}");
-            }
-            if !closure.missing_refs.is_empty() {
-                eprintln!("missing dependencies: {}", closure.missing_refs.join(","));
-            }
-            eprintln!("artifact closure {} refs={}", closure.closure_hash, closure.closure_refs.len());
-            Ok(())
-        }
-        ArtifactCommand::Impact {
-            artifact_ref,
-            registry,
-            receipt_out,
-        } => {
-            let impact = artifacts::impact(&registry, &[artifact_ref])?;
-            emit_named_receipt(receipt_out.as_ref(), "artifact receipt", &impact.receipt_value)?;
-            for reference in &impact.impacted_refs {
-                println!("{reference}");
-            }
-            eprintln!("artifact impact {} refs={}", impact.impact_hash, impact.impacted_refs.len());
-            Ok(())
-        }
-        ArtifactCommand::IndexRebuild { registry, receipt_out } => {
-            let rebuild = artifacts::rebuild_index(&registry)?;
-            emit_named_receipt(receipt_out.as_ref(), "artifact receipt", &rebuild.receipt_value)?;
-            println!(
-                "artifact index-rebuild ok artifacts={} names={} registry={}",
-                rebuild.artifacts,
-                rebuild.names,
-                registry.display()
-            );
-            Ok(())
-        }
-    }
-}
-
-fn cli_artifact_ref(kind: &str, label: &str) -> Result<String> {
-    canonical_hash(&record("artifact-cli-ref", vec![string(kind), string(label)]))
 }
 
 fn run_storage_command(command: StorageCommand) -> Result<()> {
@@ -4416,6 +4194,8 @@ mod tests {
     use molten::protocol_session;
 
     use super::*;
+    use crate::cli_artifact::ArtifactCommand;
+    use crate::cli_artifact::run_artifact_command;
     use crate::cli_cache::CacheCommand;
     use crate::cli_cache::run_cache_command;
     use crate::cli_catalog::CatalogCommand;

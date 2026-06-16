@@ -20,4 +20,5 @@
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Catalog command parsing and dispatch from `src/main.rs` into `src/cli_catalog.rs` as the next catalog/MCP CLI shell hotspot burn-down slice.
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Chunk command parsing and dispatch from `src/main.rs` into `src/cli_chunk.rs` as the next chunk-store CLI shell hotspot burn-down slice.
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Cache command parsing and dispatch from `src/main.rs` into `src/cli_cache.rs` as the next eval-cache CLI shell hotspot burn-down slice.
+- [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Artifact command parsing and dispatch from `src/main.rs` into `src/cli_artifact.rs` as the next artifact-registry CLI shell hotspot burn-down slice.
 - [ ] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Continue splitting CLI/module hotspots and remove or narrow disabled lint families when source-remediated-zero evidence can replace the current configuration-clean caveat.

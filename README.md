@@ -574,7 +574,7 @@ cargo octet check -p molten --artifact-dir target/octet-lib -- --lib
 cargo octet object corpus receipt \
   --output target/octet/object-corpus-receipt.json \
   src/artifacts.rs src/catalog.rs src/catalog_mcp.rs \
-  src/chunk_store.rs src/cli_cache.rs src/cli_catalog.rs src/cli_chunk.rs src/cli_delivery.rs src/cli_job.rs src/cli_node.rs src/cli_octet.rs src/cli_plugin.rs src/cli_protocol.rs src/cli_provenance.rs src/cli_repro.rs src/cli_retention.rs src/cli_secrets.rs src/coordination.rs src/delivery_idempotency.rs \
+  src/chunk_store.rs src/cli_artifact.rs src/cli_cache.rs src/cli_catalog.rs src/cli_chunk.rs src/cli_delivery.rs src/cli_job.rs src/cli_node.rs src/cli_octet.rs src/cli_plugin.rs src/cli_protocol.rs src/cli_provenance.rs src/cli_repro.rs src/cli_retention.rs src/cli_secrets.rs src/coordination.rs src/delivery_idempotency.rs \
   src/eval_cache.rs src/job_dag.rs src/ledger.rs src/main.rs \
   src/node_daemon.rs src/node_runtime.rs src/octet_gate.rs src/octet_remediation.rs \
   src/operator_dogfood.rs src/plugin_host.rs src/preserves_rail.rs \
@@ -602,7 +602,7 @@ cargo run --manifest-path /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615
   --strict
 ```
 
-The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 2740 objects (`b3:dac54b9d687b9d9652a1a3e6bd1b039560c00dd230586768b219b02fc2ff2d89`); latest artifact import receipt is `blake3:b96b5954861288fb4a7b481fbbd502cfeef489093b2dd4720e80cea3a667ab40`, latest strict pass receipt is `blake3:564bdb2da824b75fd6681acea294c851d608c22b67a86491c44cd46d239210f4`, and latest remediation plan receipt is `blake3:cc5046de1b9610c1488926b721ebb1b63e63d3400e9410adb202f763498ccd3c`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
+The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 2743 objects (`b3:80b34f657c51f1188c722d925826833153c96383c5980f4d3355229e8219a230`); latest artifact import receipt is `blake3:6bf9a2f39bc668977d3eaba553fc13a27580b6babc0fd0af52367b1aeacd9e08`, latest strict pass receipt is `blake3:7429749bb1b658e3aa32b227d8adb2fafed8040b9478786c5c12b992b399769a`, and latest remediation plan receipt is `blake3:958e5dde913547c32eb595e85f708c472a423522d44defd1bf98dbd1f9846e32`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. During warning burn-down only, use the explicit quarantine flow:
 
 ```sh
 cargo run -- test octet baseline write \
