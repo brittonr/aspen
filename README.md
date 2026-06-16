@@ -576,14 +576,14 @@ cargo octet check --artifact-dir target/octet
 cargo octet check -p molten --artifact-dir target/octet-lib -- --lib
 cargo octet object corpus receipt \
   --output target/octet/object-corpus-receipt.json \
-  src/artifacts.rs src/catalog.rs src/catalog_mcp.rs \
-  src/chunk_store.rs src/cli/core/artifact.rs src/cli/core/cache.rs src/cli/core/catalog.rs src/cli/core/chunk.rs src/cli/workflow/coordination.rs src/cli/workflow/delivery.rs src/cli/ops/dogfood.rs src/cli/evidence/gate.rs src/cli/test/harness.rs src/cli/workflow/job.rs src/cli/ops/ledger.rs src/cli/ops/node.rs src/cli/evidence/receipts.rs src/cli/ops/nixosvm.rs src/cli/ops/octet.rs src/cli/ops/plugin.rs src/cli/ops/prodsoak.rs src/cli/workflow/protocol.rs src/cli/workflow/provenance.rs src/cli/runtime/raft.rs src/cli/workflow/remote.rs src/cli/evidence/report.rs src/cli/test/replayfixture.rs src/cli/runtime/repro.rs src/cli/workflow/retention.rs src/cli/runtime/rewrite.rs src/cli/core/schema.rs src/cli/runtime/secrets.rs src/cli/runtime/service.rs src/cli/core/storage.rs src/cli/core/transcript.rs src/cli/runtime/upgrade.rs src/cli/runtime/vat.rs src/coordination.rs src/delivery_idempotency.rs \
-  src/eval_cache.rs src/job_dag.rs src/ledger.rs src/main.rs \
-  src/node_daemon.rs src/node_runtime.rs src/nixos_vm.rs src/octet_gate.rs src/octet_remediation.rs \
-  src/operator_dogfood.rs src/plugin_host.rs src/preserves_rail.rs \
-  src/prod_soak.rs src/protocol_session.rs src/provenance.rs src/raft_control_plane.rs \
-  src/remote_dataspace.rs src/retention.rs src/runtime/predicates.rs \
-  src/secrets.rs src/service_supervision.rs src/transcripts.rs
+  src/artifacts.rs src/catalog.rs src/catalog/mcp.rs \
+  src/chunk/store.rs src/cli/core/artifact.rs src/cli/core/cache.rs src/cli/core/catalog.rs src/cli/core/chunk.rs src/cli/workflow/coordination.rs src/cli/workflow/delivery.rs src/cli/ops/dogfood.rs src/cli/evidence/gate.rs src/cli/test/harness.rs src/cli/workflow/job.rs src/cli/ops/ledger.rs src/cli/ops/node.rs src/cli/evidence/receipts.rs src/cli/ops/nixosvm.rs src/cli/ops/octet.rs src/cli/ops/plugin.rs src/cli/ops/prodsoak.rs src/cli/workflow/protocol.rs src/cli/workflow/provenance.rs src/cli/runtime/raft.rs src/cli/workflow/remote.rs src/cli/evidence/report.rs src/cli/test/replayfixture.rs src/cli/runtime/repro.rs src/cli/workflow/retention.rs src/cli/runtime/rewrite.rs src/cli/core/schema.rs src/cli/runtime/secrets.rs src/cli/runtime/service.rs src/cli/core/storage.rs src/cli/core/transcript.rs src/cli/runtime/upgrade.rs src/cli/runtime/vat.rs src/coordination.rs src/delivery/idempotency.rs \
+  src/eval/cache.rs src/job/dag.rs src/ledger.rs src/main.rs \
+  src/node/daemon.rs src/node/runtime.rs src/nixos/vm.rs src/octet/gate.rs src/octet/remediation.rs \
+  src/operator/dogfood.rs src/plugin/host.rs src/preserves/rail.rs \
+  src/prod/soak.rs src/protocol/session.rs src/provenance.rs src/raft/control/plane.rs \
+  src/remote/dataspace.rs src/retention.rs src/runtime/predicates.rs \
+  src/secrets.rs src/service/supervision.rs src/transcripts.rs
 cargo run -- test octet artifacts import \
   --artifacts target/octet \
   --ledger target/octet-ledger \
@@ -605,7 +605,7 @@ cargo run --manifest-path /home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615
   --strict
 ```
 
-The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 2870 objects (`b3:3e2e54505bd5f69db2dd62f2814361a775542d5cdab357036da8b185c1923c22`); latest artifact import receipt is `blake3:91957e379854cdc24afa45a5abf920b47dd35d5daaf3cecc056b70d0d5edf836`, latest strict pass receipt is `blake3:4ce35d68587f2235945a15a6b7c8b124db7c2f9ae08b5da60ebc27643ee45170`, and latest remediation plan receipt is `blake3:41dd47456010e5ae076d810acd5ff48ade13fddd06a8a6f2961724d1a4e81bfa`. Caveat: this is configuration-clean with the broad high-noise lint families explicitly disabled in `dylint.toml`; source-remediated zero for those disabled families remains separate follow-up work. Nix/dogfood was not rerun for the CLI-directory disabled-lint burn-down slice. During warning burn-down only, use the explicit quarantine flow:
+The strict gate is fail-closed: `warning-only` denies even when `cargo-octet` exits `0`, and `command.txt`, `status.json`, `summary.txt`, structured finding keys, object corpus receipts, and fingerprint evidence are bound by canonical refs in the Octet receipt. Current remediation snapshot: workspace and lib-only Octet are `clean` with 0 findings, 0 warnings, and 0 errors; focused object corpus has 2870 objects (`b3:4e05f6ae5d0f3acc36b5cf8a2c0b8f30202ace843165b3e35c7b0ff12b2d5c8a`); latest artifact import receipt is `blake3:19a0239d4fb8598921159669568acbcbe486ade41cb4708ea21c7f05bbce0cf0`, latest strict pass receipt is `blake3:8e6c5f9f51e220893dbbae355e1091ea0fb8e59b2c6d9983c00d8812575e5404`, and latest remediation plan receipt is `blake3:252232dd954e07a924b55146e7a97efce1df1f147fc4835c2fe468392f9c2b7a`. Caveat: this is configuration-clean with the remaining broad high-noise lint families explicitly disabled in `dylint.toml`; `underscore_in_module_filename` has been removed from the disabled set, while source-remediated zero for the remaining disabled families remains separate follow-up work. Nix/dogfood was not rerun for this source-layout disabled-lint burn-down slice. During warning burn-down only, use the explicit quarantine flow:
 
 ```sh
 cargo run -- test octet baseline write \

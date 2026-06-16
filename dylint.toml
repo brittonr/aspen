@@ -4,6 +4,5 @@ disabled_lints = [
   "path_segment_repetition",
   "function_length",
   "excessive_file_length",
-  "underscore_in_module_filename",
   "module_file_count",
 ]

@@ -4,24 +4,24 @@ This file records the current Octet source-gate evidence and the remaining cavea
 
 Canonical plan receipt: `target/octet/remediation-plan.preserves`
 
-Plan ref: `blake3:41dd47456010e5ae076d810acd5ff48ade13fddd06a8a6f2961724d1a4e81bfa`
+Plan ref: `blake3:252232dd954e07a924b55146e7a97efce1df1f147fc4835c2fe468392f9c2b7a`
 
-Latest Octet receipt refs: artifact import `blake3:91957e379854cdc24afa45a5abf920b47dd35d5daaf3cecc056b70d0d5edf836`; strict gate pass `blake3:4ce35d68587f2235945a15a6b7c8b124db7c2f9ae08b5da60ebc27643ee45170`; remediation plan `blake3:41dd47456010e5ae076d810acd5ff48ade13fddd06a8a6f2961724d1a4e81bfa`.
+Latest Octet receipt refs: artifact import `blake3:19a0239d4fb8598921159669568acbcbe486ade41cb4708ea21c7f05bbce0cf0`; strict gate pass `blake3:8e6c5f9f51e220893dbbae355e1091ea0fb8e59b2c6d9983c00d8812575e5404`; remediation plan `blake3:252232dd954e07a924b55146e7a97efce1df1f147fc4835c2fe468392f9c2b7a`.
 
 ## Artifact refs
 
 | Scope | Artifact | Content/canonical ref |
 |---|---|---|
-| workspace | `target/octet/status.json` | `blake3:b7d8427de38c6be94349af9d01e5624e8b79682857070ba2a9c8eeb3180fb3ea` |
-| workspace | `target/octet/summary.txt` | `blake3:7345c34c8139e4a835994ed958782191b719268cc80f3a04359be1b6b9cd973d` |
-| workspace/focused | `target/octet/object-corpus-receipt.json` | `blake3:fcae66784b54d17faec80bb6197aa09e5a43deed91fdf9007a724268ffcfbba4` |
-| lib-only | `target/octet-lib/status.json` | `blake3:014a24541d5c7c4b0fb28e2b7bcbffef6ffc2ad6573d38adb8fc607627783058` |
-| lib-only | `target/octet-lib/summary.txt` | `blake3:f8346ca8bb0b0a97bc1e5525232be18f924852d5e8ea96394f9769489e71e4de` |
-| workspace/import | `target/octet/artifact-ledger-receipt.preserves` | `blake3:91957e379854cdc24afa45a5abf920b47dd35d5daaf3cecc056b70d0d5edf836` |
-| workspace/gate | `target/octet/gate-receipt.preserves` | `blake3:4ce35d68587f2235945a15a6b7c8b124db7c2f9ae08b5da60ebc27643ee45170` |
-| workspace/plan | `target/octet/remediation-plan.preserves` | `blake3:41dd47456010e5ae076d810acd5ff48ade13fddd06a8a6f2961724d1a4e81bfa` |
+| workspace | `target/octet/status.json` | `blake3:ec97a472d085fa845ce8164a47e108cdfa2df371bb8b7e87afa961bc69bb0772` |
+| workspace | `target/octet/summary.txt` | `blake3:21a845f9bc28be78102a6700708b8aceaaa6ffde8817fc046f70073c58c2d60c` |
+| workspace/focused | `target/octet/object-corpus-receipt.json` | `blake3:96a237d919494ba0fcc1242c9cd33115440bba93deb70ced810e7d1312734d15` |
+| lib-only | `target/octet-lib/status.json` | `blake3:e9524c30eae46b20933a45578890f9dfaec8c6ebb79f75f9f7486b9d381d4f68` |
+| lib-only | `target/octet-lib/summary.txt` | `blake3:5d978afb3680d3b0bf749eb6fefbb42c063005fd51b4ac62939a76fd56e4b453` |
+| workspace/import | `target/octet/artifact-ledger-receipt.preserves` | `blake3:19a0239d4fb8598921159669568acbcbe486ade41cb4708ea21c7f05bbce0cf0` |
+| workspace/gate | `target/octet/gate-receipt.preserves` | `blake3:8e6c5f9f51e220893dbbae355e1091ea0fb8e59b2c6d9983c00d8812575e5404` |
+| workspace/plan | `target/octet/remediation-plan.preserves` | `blake3:252232dd954e07a924b55146e7a97efce1df1f147fc4835c2fe468392f9c2b7a` |
 
-Focused object corpus: object-set hash `b3:3e2e54505bd5f69db2dd62f2814361a775542d5cdab357036da8b185c1923c22`, 2870 objects, 2870 pure-cache blocked, source paths include `src/cli/core/artifact.rs`, `src/cli/core/cache.rs`, `src/cli/core/catalog.rs`, `src/cli/core/chunk.rs`, `src/cli/workflow/coordination.rs`, `src/cli/workflow/delivery.rs`, `src/cli/ops/dogfood.rs`, `src/cli/evidence/gate.rs`, `src/cli/test/harness.rs`, `src/cli/workflow/job.rs`, `src/cli/ops/ledger.rs`, `src/cli/ops/node.rs`, `src/cli/ops/nixosvm.rs`, `src/cli/ops/octet.rs`, `src/cli/ops/plugin.rs`, `src/cli/evidence/receipts.rs`, `src/cli/ops/prodsoak.rs`, `src/cli/workflow/protocol.rs`, `src/cli/workflow/provenance.rs`, `src/cli/runtime/raft.rs`, `src/cli/workflow/remote.rs`, `src/cli/test/replayfixture.rs`, `src/cli/evidence/report.rs`, `src/cli/runtime/repro.rs`, `src/cli/workflow/retention.rs`, `src/cli/runtime/rewrite.rs`, `src/cli/core/schema.rs`, `src/cli/runtime/secrets.rs`, `src/cli/runtime/service.rs`, `src/cli/core/storage.rs`, `src/cli/core/transcript.rs`, `src/cli/runtime/upgrade.rs`, `src/cli/runtime/vat.rs`, `src/prod_soak.rs`, and `src/octet_remediation.rs` plus the critical runtime, node, job, retention, secrets, protocol, catalog, and CLI paths listed in `target/octet/object-corpus-receipt.json`.
+Focused object corpus: object-set hash `b3:4e05f6ae5d0f3acc36b5cf8a2c0b8f30202ace843165b3e35c7b0ff12b2d5c8a`, 2870 objects, 2870 pure-cache blocked, source paths include `src/cli/core/artifact.rs`, `src/cli/core/cache.rs`, `src/cli/core/catalog.rs`, `src/cli/core/chunk.rs`, `src/cli/workflow/coordination.rs`, `src/cli/workflow/delivery.rs`, `src/cli/ops/dogfood.rs`, `src/cli/evidence/gate.rs`, `src/cli/test/harness.rs`, `src/cli/workflow/job.rs`, `src/cli/ops/ledger.rs`, `src/cli/ops/node.rs`, `src/cli/ops/nixosvm.rs`, `src/cli/ops/octet.rs`, `src/cli/ops/plugin.rs`, `src/cli/evidence/receipts.rs`, `src/cli/ops/prodsoak.rs`, `src/cli/workflow/protocol.rs`, `src/cli/workflow/provenance.rs`, `src/cli/runtime/raft.rs`, `src/cli/workflow/remote.rs`, `src/cli/test/replayfixture.rs`, `src/cli/evidence/report.rs`, `src/cli/runtime/repro.rs`, `src/cli/workflow/retention.rs`, `src/cli/runtime/rewrite.rs`, `src/cli/core/schema.rs`, `src/cli/runtime/secrets.rs`, `src/cli/runtime/service.rs`, `src/cli/core/storage.rs`, `src/cli/core/transcript.rs`, `src/cli/runtime/upgrade.rs`, `src/cli/runtime/vat.rs`, `src/prod/soak.rs`, and `src/octet/remediation.rs` plus the critical runtime, node, job, retention, secrets, protocol, catalog, and CLI paths listed in `target/octet/object-corpus-receipt.json`.
 
 ## Counts
 
@@ -34,7 +34,9 @@ Top workspace lint counts: none.
 
 Top lib-only lint counts: none.
 
-Critical caveat pass: the latest lib-only and workspace runs have no active Octet findings, and the strict source gate passes. The zero finding state is configuration-clean: `dylint.toml` explicitly disables `non_trait_imports`, `path_segment_repetition`, `function_length`, `excessive_file_length`, `underscore_in_module_filename`, and `module_file_count`. Nix/dogfood was not rerun for the CLI-directory disabled-lint burn-down slice. If project policy requires source-remediated zero rather than config-clean zero, those disabled families remain the follow-up burn-down.
+Latest no-disabled-lints probe (`target/octet-probe-relocated-source`) is still `warning-only` with 8271 warnings: `non_trait_imports` 4635, `path_segment_repetition` 3040, `function_length` 436, `excessive_file_length` 137, `module_file_count` 23, and no `underscore_in_module_filename` findings.
+
+Critical caveat pass: the latest lib-only and workspace runs have no active Octet findings, and the strict source gate passes. The zero finding state is configuration-clean: `dylint.toml` explicitly disables `non_trait_imports`, `path_segment_repetition`, `function_length`, `excessive_file_length`, and `module_file_count`. `underscore_in_module_filename` is no longer disabled after the source-layout relocation probe reported zero underscore-filename findings. Nix/dogfood was not rerun for this partial disabled-lint burn-down slice. If project policy requires source-remediated zero rather than config-clean zero, the remaining disabled families remain the follow-up burn-down.
 
 Additional validation after the Nix fetch fix: `nix build .#checks.x86_64-linux.nextest --no-link --print-out-paths --option eval-cache false --option substituters https://cache.nixos.org/ --option builders "" --option auto-optimise-store false --option min-free 0 --option max-free 0` completed successfully at `/nix/store/8fcxgyj17dkigp5idpvnzb5dv78nd4nz-molten-nextest`. The flake now maps private OnixResearch git dependencies to locked local `*-src` path inputs for unit2nix git-cache population, so the Nix builder no longer needs SSH access.
 
@@ -44,23 +46,22 @@ Release dogfood validation for the active `octet-source-remediated-zero` first s
 
 | Surface | Files | Workspace findings | Critical findings |
 |---|---|---:|---:|
-| source-gate-and-admission | `src/octet_gate.rs`, `src/node_runtime.rs`, `src/job_dag.rs`, `src/upgrades.rs` | 0 | 0 |
-| harness-and-gates | `src/harness/gate.rs`, `src/harness/schema.rs`, `src/harness/runner.rs`, `src/nixos_vm.rs` | 0 | 0 |
-| node-runtime-startup | `src/node_runtime.rs`, `src/node_identity.rs`, `src/resources.rs` | 0 | 0 |
-| job-execution | `src/job_dag.rs`, `src/artifacts.rs`, `src/typed_storage.rs`, `src/eval_cache.rs` | 0 | 0 |
-| ledger-and-evidence | `src/ledger.rs`, `src/evidence.rs`, `src/evidence_chain.rs` | 0 | 0 |
-| adapter-boundaries | `src/harness/wasm_executor.rs`, `src/harness/steel_executor.rs`, `src/effects.rs`, `src/remote_dataspace.rs` | 0 | 0 |
-| redaction-and-export | `src/catalog.rs`, `src/catalog_mcp.rs`, `src/transcripts.rs`, `src/harness/repro.rs` | 0 | 0 |
+| source-gate-and-admission | `src/octet/gate.rs`, `src/node/runtime.rs`, `src/job/dag.rs`, `src/upgrades.rs` | 0 | 0 |
+| harness-and-gates | `src/harness/gate.rs`, `src/harness/schema.rs`, `src/harness/runner.rs`, `src/nixos/vm.rs` | 0 | 0 |
+| node-runtime-startup | `src/node/runtime.rs`, `src/node/identity.rs`, `src/resources.rs` | 0 | 0 |
+| job-execution | `src/job/dag.rs`, `src/artifacts.rs`, `src/typed/storage.rs`, `src/eval/cache.rs` | 0 | 0 |
+| ledger-and-evidence | `src/ledger.rs`, `src/evidence.rs`, `src/evidence/chain.rs` | 0 | 0 |
+| adapter-boundaries | `src/harness/wasm/executor.rs`, `src/harness/steel/executor.rs`, `src/effects.rs`, `src/remote/dataspace.rs` | 0 | 0 |
+| redaction-and-export | `src/catalog.rs`, `src/catalog/mcp.rs`, `src/transcripts.rs`, `src/harness/repro.rs` | 0 | 0 |
 | cli-artifact-output | `src/main.rs`, `src/cli/core/artifact.rs`, `src/cli/core/cache.rs`, `src/cli/core/catalog.rs`, `src/cli/core/chunk.rs`, `src/cli/workflow/coordination.rs`, `src/cli/workflow/delivery.rs`, `src/cli/ops/dogfood.rs`, `src/cli/evidence/gate.rs`, `src/cli/test/harness.rs`, `src/cli/workflow/job.rs`, `src/cli/ops/ledger.rs`, `src/cli/ops/nixosvm.rs`, `src/cli/ops/node.rs`, `src/cli/ops/octet.rs`, `src/cli/ops/plugin.rs`, `src/cli/evidence/receipts.rs`, `src/cli/ops/prodsoak.rs`, `src/cli/workflow/protocol.rs`, `src/cli/workflow/provenance.rs`, `src/cli/runtime/raft.rs`, `src/cli/workflow/remote.rs`, `src/cli/test/replayfixture.rs`, `src/cli/evidence/report.rs`, `src/cli/runtime/repro.rs`, `src/cli/workflow/retention.rs`, `src/cli/runtime/rewrite.rs`, `src/cli/core/schema.rs`, `src/cli/runtime/secrets.rs`, `src/cli/runtime/service.rs`, `src/cli/core/storage.rs`, `src/cli/core/transcript.rs`, `src/cli/runtime/upgrade.rs`, `src/cli/runtime/vat.rs` | 0 | 0 |
 
 ## Burn-down order if source-remediated zero is required
 
-Active burn-down slice: `cairn/changes/octet-source-remediated-zero` has moved Octet, Delivery, Protocol, Provenance, Retention, Job, Secrets, Plugin, Node, Repro, Catalog, Chunk, Cache, Artifact, Storage, Schema, Upgrade, Transcript, Rewrite, Remote, Ledger, Chain, Receipts, test Receipt, Service, Vat, Coordination, Dogfood, Raft, replay-fixture, Report, Gate, and harness run/replay CLI handling out of `src/main.rs`, then relocated the CLI shell corpus under bounded `src/cli/{core,workflow,ops,runtime,evidence,test}/` groups to narrow root module-count and underscore-filename pressure while preserving command semantics. The broader state remains configuration-clean until disabled lint families are removed or narrowed and evidence is refreshed.
+Active burn-down slice: `cairn/changes/octet-source-remediated-zero` has moved Octet, Delivery, Protocol, Provenance, Retention, Job, Secrets, Plugin, Node, Repro, Catalog, Chunk, Cache, Artifact, Storage, Schema, Upgrade, Transcript, Rewrite, Remote, Ledger, Chain, Receipts, test Receipt, Service, Vat, Coordination, Dogfood, Raft, replay-fixture, Report, Gate, and harness run/replay CLI handling out of `src/main.rs`, then relocated the CLI shell corpus under bounded `src/cli/{core,workflow,ops,runtime,evidence,test}/` groups and moved the remaining underscore-named source files to directory/file layouts such as `src/node/runtime.rs`, `src/octet/gate.rs`, and `src/job/dag.rs` to narrow root module-count and underscore-filename pressure while preserving command semantics. The broader state remains configuration-clean until disabled lint families are removed or narrowed and evidence is refreshed.
 
 1. Split or reshape long files/functions instead of relying on `function_length` and `excessive_file_length` disables.
 2. Normalize imports and repeated path segments instead of relying on `non_trait_imports` and `path_segment_repetition` disables.
-3. Decide whether `underscore_in_module_filename` should be fixed by renaming modules or retained as an explicit style exception.
-4. Resolve `module_file_count`, including external registry/rustlib paths, through Octet/config/tooling support rather than repo-only edits if needed.
+3. Resolve `module_file_count`, including external registry/rustlib paths, through Octet/config/tooling support rather than repo-only edits if needed.
 
 ## No-suppression policy
 
@@ -68,4 +69,4 @@ Active burn-down slice: `cairn/changes/octet-source-remediated-zero` has moved O
 - Every retained active warning must have scheduled remediation or an explicit reviewed quarantine receipt.
 - Strict gate keeps treating `warning-only` as deny.
 - Quarantine is only for explicit, expiring, reviewed critical findings during burn-down.
-- Current disabled lint families are explicit in `dylint.toml`; treat them as a documented configuration caveat, not hidden source suppressions.
+- Current remaining disabled lint families are explicit in `dylint.toml`; treat them as a documented configuration caveat, not hidden source suppressions.

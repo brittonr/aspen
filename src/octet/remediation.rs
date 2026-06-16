@@ -431,9 +431,9 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
         SurfaceDefinition {
             name: "source-gate-and-admission",
             files: &[
-                "src/octet_gate.rs",
-                "src/node_runtime.rs",
-                "src/job_dag.rs",
+                "src/octet/gate.rs",
+                "src/node/runtime.rs",
+                "src/job/dag.rs",
                 "src/upgrades.rs",
             ],
             reason: "strict source-gate, startup, job admission, and upgrade evidence paths must fail closed",
@@ -444,37 +444,37 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/harness/gate.rs",
                 "src/harness/schema.rs",
                 "src/harness/runner.rs",
-                "src/nixos_vm.rs",
+                "src/nixos/vm.rs",
             ],
             reason: "deterministic test evidence and gate receipts are release-blocking",
         },
         SurfaceDefinition {
             name: "node-runtime-startup",
-            files: &["src/node_runtime.rs", "src/node_identity.rs", "src/resources.rs"],
+            files: &["src/node/runtime.rs", "src/node/identity.rs", "src/resources.rs"],
             reason: "node startup binds identity, resources, adapters, and source gates before side effects",
         },
         SurfaceDefinition {
             name: "job-execution",
             files: &[
-                "src/job_dag.rs",
+                "src/job/dag.rs",
                 "src/artifacts.rs",
-                "src/typed_storage.rs",
-                "src/eval_cache.rs",
+                "src/typed/storage.rs",
+                "src/eval/cache.rs",
             ],
             reason: "local and remote job execution must preserve artifact and storage evidence",
         },
         SurfaceDefinition {
             name: "ledger-and-evidence",
-            files: &["src/ledger.rs", "src/evidence.rs", "src/evidence_chain.rs"],
+            files: &["src/ledger.rs", "src/evidence.rs", "src/evidence/chain.rs"],
             reason: "ledger imports and chain receipts are the evidence substrate",
         },
         SurfaceDefinition {
             name: "adapter-boundaries",
             files: &[
-                "src/harness/wasm_executor.rs",
-                "src/harness/steel_executor.rs",
+                "src/harness/wasm/executor.rs",
+                "src/harness/steel/executor.rs",
                 "src/effects.rs",
-                "src/remote_dataspace.rs",
+                "src/remote/dataspace.rs",
             ],
             reason: "executor and remote boundaries must deny ambient authority before side effects",
         },
@@ -482,7 +482,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
             name: "redaction-and-export",
             files: &[
                 "src/catalog.rs",
-                "src/catalog_mcp.rs",
+                "src/catalog/mcp.rs",
                 "src/transcripts.rs",
                 "src/harness/repro.rs",
             ],
@@ -833,12 +833,12 @@ By lint:
   unbounded_collection_growth 1
 
 Index:
-  F1     no_unwrap                     molten  src/node_runtime.rs:230
-  F2     unbounded_collection_growth   molten  src/job_dag.rs:1753
+  F1     no_unwrap                     molten  src/node/runtime.rs:230
+  F2     unbounded_collection_growth   molten  src/job/dag.rs:1753
 "#
     }
 
     fn object_corpus_json() -> &'static str {
-        r#"{"object_count":2,"source_paths":["src/job_dag.rs","src/main.rs","src/node_runtime.rs"],"object_set_hash":"b3:objects","pure_cache_blocked_count":2}"#
+        r#"{"object_count":2,"source_paths":["src/job/dag.rs","src/main.rs","src/node/runtime.rs"],"object_set_hash":"b3:objects","pure_cache_blocked_count":2}"#
     }
 }

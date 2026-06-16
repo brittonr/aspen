@@ -1,4 +1,5 @@
 mod admission;
+#[path = "boundary/error.rs"]
 mod boundary_error;
 mod bridge;
 mod config;

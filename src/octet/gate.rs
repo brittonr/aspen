@@ -54,7 +54,7 @@ const SUPPORTED_OCTET_TOOL_VERSION: &str = "0.1.0";
 const _: () = assert!(MAX_OCTET_IMPORTED_REFS <= MAX_OCTET_ARTIFACT_VALUES);
 const _: () = assert!(MAX_OCTET_SUMMARY_LINTS > 0);
 const _: () = assert!(MAX_OCTET_COMMAND_TOKENS > 0);
-const REQUIRED_OBJECT_CORPUS_SOURCE_PATHS: &[&str] = &["src/job_dag.rs", "src/main.rs", "src/node_runtime.rs"];
+const REQUIRED_OBJECT_CORPUS_SOURCE_PATHS: &[&str] = &["src/job/dag.rs", "src/main.rs", "src/node/runtime.rs"];
 const DEFAULT_GATE_COMMAND: &str = "cargo octet check --artifact-dir target/octet";
 const SOURCE_GATE_CONSUMERS: &[&str] = &[
     "node-startup",
@@ -1075,14 +1075,14 @@ fn octet_source_gate_requirement_value(
 
 pub fn default_source_scope(consumer: &str) -> Result<Vec<String>> {
     let scope = match consumer {
-        "node-startup" => vec!["src/main.rs", "src/node_runtime.rs", "src/octet_gate.rs"],
-        "job-remote-admission" => vec!["src/job_dag.rs", "src/main.rs", "src/octet_gate.rs"],
-        "upgrade-plan" => vec!["src/main.rs", "src/octet_gate.rs", "src/upgrades.rs"],
+        "node-startup" => vec!["src/main.rs", "src/node/runtime.rs", "src/octet/gate.rs"],
+        "job-remote-admission" => vec!["src/job/dag.rs", "src/main.rs", "src/octet/gate.rs"],
+        "upgrade-plan" => vec!["src/main.rs", "src/octet/gate.rs", "src/upgrades.rs"],
         "node-control-gate" => vec![
             "src/main.rs",
-            "src/node_daemon.rs",
-            "src/node_runtime.rs",
-            "src/octet_gate.rs",
+            "src/node/daemon.rs",
+            "src/node/runtime.rs",
+            "src/octet/gate.rs",
         ],
         other => return Err(MoltenError::invalid_harness(format!("unsupported octet source-gate consumer {other}"))),
     };
@@ -2829,7 +2829,7 @@ mod tests {
     }
 
     fn object_corpus_json() -> &'static str {
-        r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":3,"source_paths":["src/job_dag.rs","src/main.rs","src/node_runtime.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":3}"#
+        r#"{"schema":"octet.function-object-corpus-receipt.v1","schema_version":1,"object_count":3,"source_paths":["src/job/dag.rs","src/main.rs","src/node/runtime.rs"],"object_set_hash":"b3:test-object-set","pure_cache_blocked_count":3}"#
     }
 
     fn temp_dir(label: &str) -> PathBuf {
