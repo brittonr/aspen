@@ -555,8 +555,11 @@ Nix exposes the CI command and runs nextest through flake checks:
 nix run .#nextest-ci
 nix build .#checks.x86_64-linux.nextest
 nix build .#checks.x86_64-linux.dogfood-local-node
+nix build .#checks.x86_64-linux.nixos-vm-multinode
 nix build .#checks.x86_64-linux.nextest-config
 ```
+
+`nixos-vm-multinode` is an explicit `testers.runNixOSTest` platform integration check. It starts two headless NixOS VMs with the current Molten package, runs the real node init/start/status/control-loop/stop service path under systemd with isolated `/var/lib/molten` roots, checks VM networking, and emits `nixos-vm-topology-v1`, `nixos-vm-node-evidence-v1`, and `nixos-vm-test-run-v1` receipts inside the VM evidence directories. It requires working NixOS VM execution support; missing KVM/QEMU support must fail or report unavailable rather than minting pass evidence.
 
 `dogfood-local-node` depends on the hermetic nextest check, runs `molten dogfood local-node` in a temporary state root, preserves `dogfood-report.preserves`, `release-gate.preserves`, `replay-verify.preserves`, `replay-evidence-index.preserves`, `dogfood-summary.txt`, and an `after-nextest.txt` marker, then emits `nix-dogfood-evidence.preserves` plus `nix-dogfood-verify.preserves` to bind the Nix output path, report ref, release-gate ref, replay verify ref, replay evidence index ref, and nextest dependency marker for release review. It also emits `release-evidence-bundle.preserves`, `release-evidence-bundle-verify.preserves`, `release-promotion-gate.preserves`, `release-promotion-gate.signed.preserves`, `release-promotion-summary.preserves`, `release-export-manifest.preserves`, `release-evidence.tar.zst`, and `release-export-verify.preserves`, which bind the complete release review member set, signed keyring currentness, source/Octet/Cairn evidence markers, a final evidence-only promotion decision, a keyring-verified signature over that exact decision subject ref, a compact readback summary, and a deterministic portable evidence archive plus verification receipt. The check imports a local fixture signing key into a ledger-backed signed receipt keyring, signs the Preserves release members, verifies the bundle with `--require-signed-members` plus `--signed-key-ledger`, runs `release-promote` over the resulting graph, signs the promotion receipt with purpose `release-promotion`, and verifies that signed promotion receipt through the same keyring. These artifacts remain evidence-only and do not grant authority, policy, provenance, resource, transport, source-gate, retention, or destructive-operation trust.
 
@@ -574,9 +577,9 @@ cargo octet check -p molten --artifact-dir target/octet-lib -- --lib
 cargo octet object corpus receipt \
   --output target/octet/object-corpus-receipt.json \
   src/artifacts.rs src/catalog.rs src/catalog_mcp.rs \
-  src/chunk_store.rs src/cli_artifact.rs src/cli_cache.rs src/cli_catalog.rs src/cli_chunk.rs src/cli_delivery.rs src/cli_job.rs src/cli_node.rs src/cli_octet.rs src/cli_plugin.rs src/cli_protocol.rs src/cli_provenance.rs src/cli_repro.rs src/cli_retention.rs src/cli_rewrite.rs src/cli_schema.rs src/cli_secrets.rs src/cli_storage.rs src/cli_transcript.rs src/cli_upgrade.rs src/coordination.rs src/delivery_idempotency.rs \
+  src/chunk_store.rs src/cli_artifact.rs src/cli_cache.rs src/cli_catalog.rs src/cli_chunk.rs src/cli_delivery.rs src/cli_job.rs src/cli_node.rs src/cli_nixos_vm.rs src/cli_octet.rs src/cli_plugin.rs src/cli_protocol.rs src/cli_provenance.rs src/cli_repro.rs src/cli_retention.rs src/cli_rewrite.rs src/cli_schema.rs src/cli_secrets.rs src/cli_storage.rs src/cli_transcript.rs src/cli_upgrade.rs src/coordination.rs src/delivery_idempotency.rs \
   src/eval_cache.rs src/job_dag.rs src/ledger.rs src/main.rs \
-  src/node_daemon.rs src/node_runtime.rs src/octet_gate.rs src/octet_remediation.rs \
+  src/node_daemon.rs src/node_runtime.rs src/nixos_vm.rs src/octet_gate.rs src/octet_remediation.rs \
   src/operator_dogfood.rs src/plugin_host.rs src/preserves_rail.rs \
   src/protocol_session.rs src/provenance.rs src/raft_control_plane.rs \
   src/remote_dataspace.rs src/retention.rs src/runtime/predicates.rs \

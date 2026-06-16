@@ -440,7 +440,12 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
         },
         SurfaceDefinition {
             name: "harness-and-gates",
-            files: &["src/harness/gate.rs", "src/harness/schema.rs", "src/harness/runner.rs"],
+            files: &[
+                "src/harness/gate.rs",
+                "src/harness/schema.rs",
+                "src/harness/runner.rs",
+                "src/nixos_vm.rs",
+            ],
             reason: "deterministic test evidence and gate receipts are release-blocking",
         },
         SurfaceDefinition {
@@ -493,6 +498,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli_chunk.rs",
                 "src/cli_delivery.rs",
                 "src/cli_node.rs",
+                "src/cli_nixos_vm.rs",
                 "src/cli_job.rs",
                 "src/cli_octet.rs",
                 "src/cli_plugin.rs",

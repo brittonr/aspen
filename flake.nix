@@ -125,6 +125,56 @@
             in
               !(base == "target" || base == ".direnv" || base == ".git");
         };
+
+        moltenVmNodeModule = nodeId: { pkgs, ... }: {
+          virtualisation.graphics = false;
+          networking.hostName = nodeId;
+          networking.firewall.enable = false;
+          environment.systemPackages = [ moltenPkg pkgs.coreutils pkgs.gnugrep pkgs.iputils ];
+          systemd.services.molten-node = {
+            description = "Molten node VM integration service";
+            wantedBy = [ "multi-user.target" ];
+            after = [ "network-online.target" ];
+            wants = [ "network-online.target" ];
+            path = [ moltenPkg pkgs.coreutils pkgs.gnugrep ];
+            serviceConfig = {
+              Type = "oneshot";
+              RemainAfterExit = true;
+              StateDirectory = "molten";
+              ExecStop = "${moltenPkg}/bin/molten node stop --state-root /var/lib/molten --shutdown-out /var/lib/molten/vm-evidence/shutdown.preserves --receipt-out /var/lib/molten/vm-evidence/shutdown-control.preserves";
+            };
+            script = ''
+              set -euo pipefail
+              state=/var/lib/molten
+              evidence="$state/vm-evidence"
+              mkdir -p "$evidence"
+              if [ ! -f "$state/config.preserves" ]; then
+                molten node init \
+                  --state-root "$state" \
+                  --node-id "node:${nodeId}" \
+                  --config-out "$evidence/node-config.preserves" \
+                  --identity-receipt-out "$evidence/identity.preserves" \
+                  > "$evidence/init.txt"
+              fi
+              molten node run \
+                --state-root "$state" \
+                --startup-out "$evidence/startup.preserves" \
+                > "$evidence/run.txt"
+              molten node status \
+                --state-root "$state" \
+                --health-out "$evidence/health.preserves" \
+                --receipt-out "$evidence/status.preserves" \
+                > "$evidence/status.txt"
+              molten node run-loop \
+                --state-root "$state" \
+                --max-requests 0 \
+                --receipt-out "$evidence/control-loop.preserves" \
+                --heartbeat-out "$evidence/heartbeat.preserves" \
+                > "$evidence/run-loop.txt"
+            '';
+          };
+          system.stateVersion = "24.11";
+        };
       in
       {
         packages = {
@@ -388,6 +438,84 @@
               | tee "$out/release-export-verify.txt"
             grep -q 'decision=pass' "$out/release-export-verify.txt"
           '';
+
+          nixos-vm-multinode = pkgs.testers.runNixOSTest {
+            name = "molten-nixos-vm-multinode";
+            nodes = {
+              node_a = moltenVmNodeModule "node-a";
+              node_b = moltenVmNodeModule "node-b";
+            };
+            testScript = ''
+              start_all()
+              for machine in [node_a, node_b]:
+                  machine.wait_for_unit("molten-node.service")
+                  machine.succeed("test -s /var/lib/molten/vm-evidence/startup.preserves")
+                  machine.succeed("test -s /var/lib/molten/vm-evidence/health.preserves")
+                  machine.succeed("test -s /var/lib/molten/vm-evidence/control-loop.preserves")
+                  machine.succeed("test -s /var/lib/molten/vm-evidence/heartbeat.preserves")
+                  machine.succeed("grep -q node-startup-receipt-v1 /var/lib/molten/vm-evidence/startup.preserves")
+                  machine.succeed("grep -q node-health-receipt-v1 /var/lib/molten/vm-evidence/health.preserves")
+                  machine.succeed("grep -q node-control-loop-receipt-v1 /var/lib/molten/vm-evidence/control-loop.preserves")
+
+              node_a.succeed("getent hosts node_b")
+              node_b.succeed("getent hosts node_a")
+              node_a.succeed("ping -c 1 node_b")
+              node_b.succeed("ping -c 1 node_a")
+
+              node_a.succeed("systemctl stop molten-node.service")
+              node_b.succeed("systemctl stop molten-node.service")
+              for machine in [node_a, node_b]:
+                  machine.succeed("test -s /var/lib/molten/vm-evidence/shutdown.preserves")
+                  machine.succeed("grep -q node-shutdown-receipt-v1 /var/lib/molten/vm-evidence/shutdown.preserves")
+
+              node_a.succeed('''
+                molten test nixos-vm topology \
+                  --node node_a \
+                  --node node_b \
+                  --package-ref 'store:${moltenPkg}' \
+                  --package-path '${moltenPkg}' \
+                  --network nixos-test-private \
+                  --nix-input 'source:${sourceForConfigChecks}' \
+                  --caveat 'vm evidence is platform integration evidence only' \
+                  --out /var/lib/molten/vm-evidence/topology.preserves
+              ''')
+              for machine, node_name in [(node_a, "node_a"), (node_b, "node_b")]:
+                  machine.succeed(f'''
+                    molten test nixos-vm node-evidence \
+                      --node {node_name} \
+                      --state-root /var/lib/molten \
+                      --identity /var/lib/molten/vm-evidence/identity.preserves \
+                      --startup /var/lib/molten/vm-evidence/startup.preserves \
+                      --health /var/lib/molten/vm-evidence/health.preserves \
+                      --control-loop /var/lib/molten/vm-evidence/control-loop.preserves \
+                      --heartbeat /var/lib/molten/vm-evidence/heartbeat.preserves \
+                      --shutdown /var/lib/molten/vm-evidence/shutdown.preserves \
+                      --log /var/lib/molten/vm-evidence/init.txt \
+                      --log /var/lib/molten/vm-evidence/run.txt \
+                      --log /var/lib/molten/vm-evidence/status.txt \
+                      --log /var/lib/molten/vm-evidence/run-loop.txt \
+                      --out /var/lib/molten/vm-evidence/node-evidence.preserves
+                  ''')
+              node_b_evidence = node_b.succeed("cat /var/lib/molten/vm-evidence/node-evidence.preserves")
+              node_a.succeed("cat > /var/lib/molten/vm-evidence/node-b-evidence.preserves <<'EOF'\n" + node_b_evidence + "\nEOF")
+              node_a.succeed('''
+                molten test nixos-vm run-receipt \
+                  --topology /var/lib/molten/vm-evidence/topology.preserves \
+                  --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
+                  --node-evidence /var/lib/molten/vm-evidence/node-b-evidence.preserves \
+                  --scenario phase1-node-service \
+                  --fault-profile none \
+                  --decision pass \
+                  --replay-status non-replayable-vm-observations \
+                  --caveat 'vm observations are diagnostic unless separately replayed' \
+                  --caveat 'vm evidence does not grant authority or policy trust' \
+                  --out /var/lib/molten/vm-evidence/vm-test-run.preserves
+              ''')
+              node_a.succeed("grep -q nixos-vm-topology-v1 /var/lib/molten/vm-evidence/topology.preserves")
+              node_a.succeed("grep -q nixos-vm-node-evidence-v1 /var/lib/molten/vm-evidence/node-evidence.preserves")
+              node_a.succeed("grep -q nixos-vm-test-run-v1 /var/lib/molten/vm-evidence/vm-test-run.preserves")
+            '';
+          };
 
           nextest-config = pkgs.runCommand "molten-nextest-config-check"
             {

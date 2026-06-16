@@ -1,7 +1,7 @@
 ## Phase 1: NixOS VM topology
 
-- [ ] [serial] r[molten.testing.nixos_vm_multinode.topology] Define a headless `testers.runNixOSTest` topology with at least two Molten NixOS nodes, explicit VM networking, current flake/package inputs, isolated state roots, and no undeclared host state.
-- [ ] [serial] r[molten.testing.nixos_vm_multinode.node_service] Package and run the real Molten node daemon/control loop under systemd in each VM with persistent identity, startup, health, and shutdown receipts.
+- [x] [serial] r[molten.testing.nixos_vm_multinode.topology] Define a headless `testers.runNixOSTest` topology with at least two Molten NixOS nodes, explicit VM networking, current flake/package inputs, isolated state roots, and no undeclared host state.
+- [x] [serial] r[molten.testing.nixos_vm_multinode.node_service] Package and run the real Molten node daemon/control loop under systemd in each VM with persistent identity, startup, health, and shutdown receipts.
 
 ## Phase 2: Cross-node workflows
 
@@ -12,4 +12,4 @@
 ## Phase 3: Evidence and CI surface
 
 - [ ] [serial] r[molten.testing.nixos_vm_multinode.receipts] Emit canonical VM topology, per-node evidence, and VM test run receipts that bind Nix inputs/store refs, child receipts, replay status, diagnostics, logs, and evidence-only caveats.
-- [ ] [serial] r[molten.testing.nixos_vm_multinode.ci_gate] Expose the VM test through an explicit Nix check or app with headless configuration, KVM/CI diagnostics, and no silent skip-as-pass behavior.
+- [x] [serial] r[molten.testing.nixos_vm_multinode.ci_gate] Expose the VM test through an explicit Nix check or app with headless configuration, KVM/CI diagnostics, and no silent skip-as-pass behavior.
