@@ -4,9 +4,9 @@ This file records the current Octet source-gate evidence and the remaining cavea
 
 Canonical plan receipt: `target/octet/remediation-plan.preserves`
 
-Plan ref: `blake3:bde03567f988e320621143ec737b078b944c9ca76acf42c1deff54e90b1836a8`
+Plan ref: `blake3:c0ad1c79e93ea4fdc2f819dc54a9dff3e0d8ea8a5893c0e3eb60efdd337f7864`
 
-Latest Octet receipt refs: artifact import `blake3:d63112b8748d9463c6f43cffec7267fe42f231a0acddbea19efb984f91b1024b`; strict gate pass `blake3:669b27f54b5b600995783da2e3eba8e6f73df80899638aa29ff39ae427250a9b`; remediation plan `blake3:bde03567f988e320621143ec737b078b944c9ca76acf42c1deff54e90b1836a8`.
+Latest Octet receipt refs: artifact import `blake3:0d77c37e539a7a5c984d5fc4d49250a7f4d4064c24e21ea5bdfe44ae0a961b91`; strict gate pass `blake3:712d23f4ef4a4b29c9b88ddb9c92bd75eb5416be7dba3358d53a0b3ba16c544d`; remediation plan `blake3:c0ad1c79e93ea4fdc2f819dc54a9dff3e0d8ea8a5893c0e3eb60efdd337f7864`.
 
 ## Artifact refs
 
@@ -14,14 +14,14 @@ Latest Octet receipt refs: artifact import `blake3:d63112b8748d9463c6f43cffec726
 |---|---|---|
 | workspace | `target/octet/status.json` | `blake3:b7d8427de38c6be94349af9d01e5624e8b79682857070ba2a9c8eeb3180fb3ea` |
 | workspace | `target/octet/summary.txt` | `blake3:7345c34c8139e4a835994ed958782191b719268cc80f3a04359be1b6b9cd973d` |
-| workspace/focused | `target/octet/object-corpus-receipt.json` | `blake3:dc35fc60026a0c60e952c209c97ee1759416aaafa5d4d0f8b6933df33561f4f6` |
+| workspace/focused | `target/octet/object-corpus-receipt.json` | `blake3:f1f334cdf34d231b5daf49d6643eeca3329c6cb99a4164c12d95883d186dab29` |
 | lib-only | `target/octet-lib/status.json` | `blake3:014a24541d5c7c4b0fb28e2b7bcbffef6ffc2ad6573d38adb8fc607627783058` |
 | lib-only | `target/octet-lib/summary.txt` | `blake3:f8346ca8bb0b0a97bc1e5525232be18f924852d5e8ea96394f9769489e71e4de` |
-| workspace/import | `target/octet/artifact-ledger-receipt.preserves` | `blake3:d63112b8748d9463c6f43cffec7267fe42f231a0acddbea19efb984f91b1024b` |
-| workspace/gate | `target/octet/gate-receipt.preserves` | `blake3:669b27f54b5b600995783da2e3eba8e6f73df80899638aa29ff39ae427250a9b` |
-| workspace/plan | `target/octet/remediation-plan.preserves` | `blake3:bde03567f988e320621143ec737b078b944c9ca76acf42c1deff54e90b1836a8` |
+| workspace/import | `target/octet/artifact-ledger-receipt.preserves` | `blake3:0d77c37e539a7a5c984d5fc4d49250a7f4d4064c24e21ea5bdfe44ae0a961b91` |
+| workspace/gate | `target/octet/gate-receipt.preserves` | `blake3:712d23f4ef4a4b29c9b88ddb9c92bd75eb5416be7dba3358d53a0b3ba16c544d` |
+| workspace/plan | `target/octet/remediation-plan.preserves` | `blake3:c0ad1c79e93ea4fdc2f819dc54a9dff3e0d8ea8a5893c0e3eb60efdd337f7864` |
 
-Focused object corpus: object-set hash `b3:7703bd44c9cc9c12744a0997cdac3b0a63ccf4263a5dd1a10a8a6366b3dd2305`, 2746 objects, 2746 pure-cache blocked, source paths include `src/cli_artifact.rs`, `src/cli_cache.rs`, `src/cli_catalog.rs`, `src/cli_chunk.rs`, `src/cli_delivery.rs`, `src/cli_job.rs`, `src/cli_node.rs`, `src/cli_octet.rs`, `src/cli_plugin.rs`, `src/cli_protocol.rs`, `src/cli_provenance.rs`, `src/cli_repro.rs`, `src/cli_retention.rs`, `src/cli_secrets.rs`, `src/cli_storage.rs`, and `src/octet_remediation.rs` plus the critical runtime, node, job, retention, secrets, protocol, catalog, and CLI paths listed in `target/octet/object-corpus-receipt.json`.
+Focused object corpus: object-set hash `b3:4d783164807040b37a96e6e22a1e8c0026185090c68c57220dea520e85891d44`, 2749 objects, 2749 pure-cache blocked, source paths include `src/cli_artifact.rs`, `src/cli_cache.rs`, `src/cli_catalog.rs`, `src/cli_chunk.rs`, `src/cli_delivery.rs`, `src/cli_job.rs`, `src/cli_node.rs`, `src/cli_octet.rs`, `src/cli_plugin.rs`, `src/cli_protocol.rs`, `src/cli_provenance.rs`, `src/cli_repro.rs`, `src/cli_retention.rs`, `src/cli_schema.rs`, `src/cli_secrets.rs`, `src/cli_storage.rs`, and `src/octet_remediation.rs` plus the critical runtime, node, job, retention, secrets, protocol, catalog, and CLI paths listed in `target/octet/object-corpus-receipt.json`.
 
 ## Counts
 
@@ -51,11 +51,11 @@ Release dogfood validation for the active `octet-source-remediated-zero` first s
 | ledger-and-evidence | `src/ledger.rs`, `src/evidence.rs`, `src/evidence_chain.rs` | 0 | 0 |
 | adapter-boundaries | `src/harness/wasm_executor.rs`, `src/harness/steel_executor.rs`, `src/effects.rs`, `src/remote_dataspace.rs` | 0 | 0 |
 | redaction-and-export | `src/catalog.rs`, `src/catalog_mcp.rs`, `src/transcripts.rs`, `src/harness/repro.rs` | 0 | 0 |
-| cli-artifact-output | `src/main.rs`, `src/cli_artifact.rs`, `src/cli_cache.rs`, `src/cli_catalog.rs`, `src/cli_chunk.rs`, `src/cli_delivery.rs, `src/cli_job.rs`, `src/cli_node.rs`, `src/cli_octet.rs`, `src/cli_plugin.rs`, `src/cli_protocol.rs`, `src/cli_provenance.rs`, `src/cli_repro.rs`, `src/cli_retention.rs`, `src/cli_secrets.rs`, `src/cli_storage.rs` | 0 | 0 |
+| cli-artifact-output | `src/main.rs`, `src/cli_artifact.rs`, `src/cli_cache.rs`, `src/cli_catalog.rs`, `src/cli_chunk.rs`, `src/cli_delivery.rs`, `src/cli_job.rs`, `src/cli_node.rs`, `src/cli_octet.rs`, `src/cli_plugin.rs`, `src/cli_protocol.rs`, `src/cli_provenance.rs`, `src/cli_repro.rs`, `src/cli_retention.rs`, `src/cli_schema.rs`, `src/cli_secrets.rs`, `src/cli_storage.rs` | 0 | 0 |
 
 ## Burn-down order if source-remediated zero is required
 
-Active burn-down slice: `cairn/changes/octet-source-remediated-zero` has moved Octet, Delivery, Protocol, Provenance, Retention, Job, Secrets, Plugin, Node, Repro, Catalog, Chunk, Cache, Artifact, and Storage CLI command parsing out of `src/main.rs` into `src/cli_octet.rs`, `src/cli_delivery.rs`, `src/cli_protocol.rs`, `src/cli_provenance.rs`, `src/cli_retention.rs`, `src/cli_job.rs`, `src/cli_secrets.rs`, `src/cli_plugin.rs`, `src/cli_node.rs`, `src/cli_repro.rs`, `src/cli_catalog.rs`, `src/cli_chunk.rs`, `src/cli_cache.rs`, `src/cli_artifact.rs`, and `src/cli_storage.rs` while preserving command semantics. The broader state remains configuration-clean until disabled lint families are removed or narrowed and evidence is refreshed.
+Active burn-down slice: `cairn/changes/octet-source-remediated-zero` has moved Octet, Delivery, Protocol, Provenance, Retention, Job, Secrets, Plugin, Node, Repro, Catalog, Chunk, Cache, Artifact, Storage, and Schema CLI command parsing out of `src/main.rs` into `src/cli_octet.rs`, `src/cli_delivery.rs`, `src/cli_protocol.rs`, `src/cli_provenance.rs`, `src/cli_retention.rs`, `src/cli_job.rs`, `src/cli_secrets.rs`, `src/cli_plugin.rs`, `src/cli_node.rs`, `src/cli_repro.rs`, `src/cli_catalog.rs`, `src/cli_chunk.rs`, `src/cli_cache.rs`, `src/cli_artifact.rs`, `src/cli_storage.rs`, and `src/cli_schema.rs` while preserving command semantics. The broader state remains configuration-clean until disabled lint families are removed or narrowed and evidence is refreshed.
 
 1. Split or reshape long files/functions instead of relying on `function_length` and `excessive_file_length` disables.
 2. Normalize imports and repeated path segments instead of relying on `non_trait_imports` and `path_segment_repetition` disables.

@@ -69,6 +69,7 @@ use molten::raft_control_plane;
 use molten::remote_dataspace;
 use molten::retention;
 use molten::rewrites;
+#[cfg(test)]
 use molten::schema_identity;
 use molten::secrets;
 use molten::service_runtime;
@@ -91,6 +92,7 @@ mod cli_protocol;
 mod cli_provenance;
 mod cli_repro;
 mod cli_retention;
+mod cli_schema;
 mod cli_secrets;
 mod cli_storage;
 
@@ -194,7 +196,7 @@ enum TestCommand {
     },
     Schema {
         #[command(subcommand)]
-        command: SchemaCommand,
+        command: cli_schema::SchemaCommand,
     },
     Cache {
         #[command(subcommand)]
@@ -897,55 +899,6 @@ enum ChainCommand {
         fork_policy: String,
         #[arg(long)]
         receipt_out: Option<PathBuf>,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum SchemaCommand {
-    Identity {
-        shape: PathBuf,
-        #[arg(long)]
-        schema_ref: String,
-        #[arg(long, default_value = "structural")]
-        mode: String,
-        #[arg(long)]
-        brand_ref: Option<String>,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Alias {
-        #[arg(long)]
-        from_ref: String,
-        #[arg(long)]
-        to_ref: String,
-        #[arg(long, default_value = "storage")]
-        scope: String,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Compat {
-        #[arg(long)]
-        expected_identity: PathBuf,
-        #[arg(long)]
-        actual_identity: PathBuf,
-        #[arg(long)]
-        alias: Option<PathBuf>,
-        #[arg(long)]
-        migration_ref: Option<String>,
-        #[arg(long)]
-        out: Option<PathBuf>,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    SearchFingerprint {
-        #[arg(long)]
-        registry: PathBuf,
-        #[arg(long)]
-        fingerprint: String,
     },
 }
 
@@ -1722,7 +1675,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Chunk { command } => cli_chunk::run_chunk_command(command),
         TestCommand::Storage { command } => cli_storage::run_storage_command(command),
         TestCommand::Artifact { command } => cli_artifact::run_artifact_command(command),
-        TestCommand::Schema { command } => run_schema_command(command),
+        TestCommand::Schema { command } => cli_schema::run_schema_command(command),
         TestCommand::Cache { command } => cli_cache::run_cache_command(command),
         TestCommand::Upgrade { command } => run_upgrade_command(command),
         TestCommand::Transcript { command } => run_transcript_command(command),
@@ -2182,151 +2135,6 @@ fn parse_chain_fork_policy(value: &str) -> Result<ChainForkPolicy> {
             "unsupported chain fork policy {other}; expected reject-unexpected-forks or retain-fork-evidence"
         ))),
     }
-}
-
-fn run_schema_command(command: SchemaCommand) -> Result<()> {
-    match command {
-        SchemaCommand::Identity {
-            shape,
-            schema_ref,
-            mode,
-            brand_ref,
-            out,
-            receipt_out,
-        } => {
-            let shape = read_preserves_file(&shape)?;
-            let value = schema_identity::schema_identity_value(&schema_identity::SchemaIdentityInput {
-                mode,
-                schema_ref,
-                shape,
-                brand_ref,
-                metadata_refs: vec![cli_schema_ref("metadata", "identity")?],
-                policy_refs: vec![cli_schema_ref("policy", "identity")?],
-                evidence_refs: vec![cli_schema_ref("evidence", "identity")?],
-            })?;
-            let identity = schema_identity::parse_schema_identity(&value)?;
-            let receipt = schema_identity::compatibility_receipt_value(
-                "fingerprint",
-                &schema_identity::compatibility_decision_value(&schema_identity::SchemaCompatibilityInput {
-                    expected: identity.clone(),
-                    actual: identity.clone(),
-                    alias: None,
-                    migration_ref: None,
-                    policy_refs: identity.policy_refs.clone(),
-                    evidence_refs: identity.evidence_refs.clone(),
-                    deny_by_policy: false,
-                })?,
-            )?;
-            write_file(&out, &to_text(&value)?)?;
-            emit_named_receipt(receipt_out.as_ref(), "schema compatibility receipt", &receipt)?;
-            println!(
-                "schema identity ok identity={} schema={} fingerprint={} out={}",
-                identity.identity_ref,
-                identity.schema_ref,
-                identity.structural_fingerprint,
-                out.display()
-            );
-            Ok(())
-        }
-        SchemaCommand::Alias {
-            from_ref,
-            to_ref,
-            scope,
-            out,
-            receipt_out,
-        } => {
-            let value = schema_identity::schema_alias_value(&schema_identity::SchemaAliasInput {
-                from_schema_ref: from_ref,
-                to_schema_ref: to_ref,
-                scope,
-                policy_refs: vec![cli_schema_ref("policy", "alias")?],
-                evidence_refs: vec![cli_schema_ref("evidence", "alias")?],
-            })?;
-            let alias = schema_identity::parse_schema_alias(&value)?;
-            let expected = local_unique_schema_identity(&alias.to_schema_ref)?;
-            let actual = local_unique_schema_identity(&alias.from_schema_ref)?;
-            let compatibility =
-                schema_identity::compatibility_decision_value(&schema_identity::SchemaCompatibilityInput {
-                    expected,
-                    actual,
-                    alias: Some(alias.clone()),
-                    migration_ref: None,
-                    policy_refs: alias.policy_refs.clone(),
-                    evidence_refs: alias.evidence_refs.clone(),
-                    deny_by_policy: false,
-                })?;
-            let receipt = schema_identity::compatibility_receipt_value("alias-admit", &compatibility)?;
-            write_file(&out, &to_text(&value)?)?;
-            emit_named_receipt(receipt_out.as_ref(), "schema compatibility receipt", &receipt)?;
-            println!(
-                "schema alias ok alias={} from={} to={} out={}",
-                alias.alias_ref,
-                alias.from_schema_ref,
-                alias.to_schema_ref,
-                out.display()
-            );
-            Ok(())
-        }
-        SchemaCommand::Compat {
-            expected_identity,
-            actual_identity,
-            alias,
-            migration_ref,
-            out,
-            receipt_out,
-        } => {
-            let expected = schema_identity::parse_schema_identity(&read_preserves_file(&expected_identity)?)?;
-            let actual = schema_identity::parse_schema_identity(&read_preserves_file(&actual_identity)?)?;
-            let alias = alias
-                .as_ref()
-                .map(|path| read_preserves_file(path).and_then(|value| schema_identity::parse_schema_alias(&value)))
-                .transpose()?;
-            let compatibility =
-                schema_identity::compatibility_decision_value(&schema_identity::SchemaCompatibilityInput {
-                    expected,
-                    actual,
-                    alias,
-                    migration_ref,
-                    policy_refs: vec![cli_schema_ref("policy", "compat")?],
-                    evidence_refs: vec![cli_schema_ref("evidence", "compat")?],
-                    deny_by_policy: false,
-                })?;
-            let parsed = schema_identity::parse_schema_compatibility(&compatibility)?;
-            let receipt = schema_identity::compatibility_receipt_value("compatibility", &compatibility)?;
-            if let Some(path) = out.as_ref() {
-                write_file(path, &to_text(&compatibility)?)?;
-            } else {
-                println!("{}", to_text(&compatibility)?);
-            }
-            emit_named_receipt(receipt_out.as_ref(), "schema compatibility receipt", &receipt)?;
-            eprintln!("schema compat ok decision={} compatibility={}", parsed.decision, parsed.compatibility_ref);
-            Ok(())
-        }
-        SchemaCommand::SearchFingerprint { registry, fingerprint } => {
-            for identity in schema_identity::search_registry_by_fingerprint(&registry, &fingerprint)? {
-                println!("{} {} {}", identity.identity_ref, identity.schema_ref, identity.mode);
-            }
-            Ok(())
-        }
-    }
-}
-
-fn local_unique_schema_identity(schema_ref: &str) -> Result<schema_identity::SchemaIdentity> {
-    let shape = record("shape", vec![string("any-preserves")]);
-    let value = schema_identity::schema_identity_value(&schema_identity::SchemaIdentityInput {
-        mode: schema_identity::MODE_UNIQUE.to_string(),
-        schema_ref: schema_ref.to_string(),
-        shape,
-        brand_ref: None,
-        metadata_refs: vec![cli_schema_ref("metadata", schema_ref)?],
-        policy_refs: vec![cli_schema_ref("policy", schema_ref)?],
-        evidence_refs: vec![cli_schema_ref("evidence", schema_ref)?],
-    })?;
-    schema_identity::parse_schema_identity(&value)
-}
-
-fn cli_schema_ref(kind: &str, label: &str) -> Result<String> {
-    canonical_hash(&record("schema-cli-ref", vec![string(kind), string(label)]))
 }
 
 fn run_upgrade_command(command: UpgradeCommand) -> Result<()> {
@@ -3987,6 +3795,8 @@ mod tests {
     use crate::cli_repro::run_repro_command;
     use crate::cli_retention::RetentionCommand;
     use crate::cli_retention::run_retention_command;
+    use crate::cli_schema::SchemaCommand;
+    use crate::cli_schema::run_schema_command;
     use crate::cli_secrets::SecretsCommand;
     use crate::cli_secrets::run_secrets_command;
     use crate::cli_storage::StorageCommand;
