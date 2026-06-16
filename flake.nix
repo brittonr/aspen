@@ -659,6 +659,177 @@
                 grep -q 'decision "pass"' "$evidence/protocol-gate.preserves"
               """)
 
+              node_a.succeed("""
+                set -euo pipefail
+                cd '${sourceForConfigChecks}'
+                evidence=/var/lib/molten/vm-evidence/service-job
+                rm -rf "$evidence"
+                mkdir -p "$evidence"
+                make_ref() {
+                  label=$1
+                  file="$evidence/ref-$label.preserves"
+                  printf '<vm-synthetic-ref "%s">\n' "$label" > "$file"
+                  summary=$(molten test nixos-vm show "$file")
+                  ref=''${summary#* ref=}
+                  ref=''${ref%% *}
+                  printf '%s\n' "$ref"
+                }
+                printf '<vm-service-message "node_a" "node_b">\n' > "$evidence/remote-payload.preserves"
+                remote_policy_ref=$(make_ref remote-policy)
+                remote_capability_ref=$(make_ref remote-capability)
+                remote_evidence_ref=$(make_ref remote-evidence)
+                molten test remote envelope build \
+                  --from-peer node_a \
+                  --from-actor service-client \
+                  --to-peer node_b \
+                  --topic molten.vm.service \
+                  --operation message \
+                  --payload "$evidence/remote-payload.preserves" \
+                  --capability-ref "$remote_capability_ref" \
+                  --evidence-ref "$remote_evidence_ref" \
+                  --out "$evidence/remote-envelope.preserves" \
+                  > "$evidence/remote-envelope.txt"
+                remote_summary=$(molten test nixos-vm show "$evidence/remote-envelope.preserves")
+                remote_ref=''${remote_summary#* ref=}
+                remote_ref=''${remote_ref%% *}
+                printf '%s\n' "$remote_ref" > "$evidence/remote-envelope.ref"
+                printf 'echo' > "$evidence/executable.bin"
+                printf 'hello' > "$evidence/input.bin"
+                exe_summary=$(molten test chunk put "$evidence/executable.bin" \
+                  --store "$evidence/source-chunks" \
+                  --kind job-executable \
+                  --manifest-out "$evidence/executable-manifest.preserves" \
+                  --receipt-out "$evidence/executable-put.preserves")
+                exe_manifest=''${exe_summary#* manifest=}
+                exe_manifest=''${exe_manifest%% *}
+                input_summary=$(molten test chunk put "$evidence/input.bin" \
+                  --store "$evidence/source-chunks" \
+                  --kind job-input \
+                  --manifest-out "$evidence/input-manifest.preserves" \
+                  --receipt-out "$evidence/input-put.preserves")
+                input_manifest=''${input_summary#* manifest=}
+                input_manifest=''${input_manifest%% *}
+                operation_ref=$(make_ref job-operation)
+                policy_ref=$(make_ref job-policy)
+                provenance_ref=$(make_ref job-provenance)
+                effect_ref=$(make_ref job-effect)
+                authority_ref=$(make_ref job-authority)
+                molten test job ref-submit \
+                  --job-id job:vm-echo \
+                  --operation-id "$operation_ref" \
+                  --executable "$exe_manifest@4@elf-executable" \
+                  --input "$input_manifest@5@bytes" \
+                  --output-mode chunk-manifest \
+                  --handler-profile local-echo-v1 \
+                  --authority-context-ref "$authority_ref" \
+                  --policy-ref "$policy_ref" \
+                  --provenance-ref "$provenance_ref" \
+                  --effect-ref "$effect_ref" \
+                  --evidence-ref "$remote_ref" \
+                  --out "$evidence/job-submission.preserves" \
+                  > "$evidence/job-ref-submit.txt"
+                coord_policy_ref=$(make_ref coordination-policy)
+                coord_resource_ref=$(make_ref coordination-resource)
+                coord_authority_ref=$(make_ref coordination-authority)
+                coord_operation_ref=$(make_ref coordination-operation)
+                printf '%s\n' "$coord_policy_ref" > "$evidence/coord-policy.ref"
+                printf '%s\n' "$coord_resource_ref" > "$evidence/coord-resource.ref"
+                printf '%s\n' "$coord_authority_ref" > "$evidence/coord-authority.ref"
+                printf '<coordination-item "vm-job-worker">\n' > "$evidence/coord-payload.preserves"
+                molten test coordination request \
+                  --service queue \
+                  --operation enqueue \
+                  --key queue:vm-jobs \
+                  --client-session node-a \
+                  --operation-id-ref "$coord_operation_ref" \
+                  --payload "$evidence/coord-payload.preserves" \
+                  --authority-ref "$coord_authority_ref" \
+                  --policy-ref "$coord_policy_ref" \
+                  --resource-ref "$coord_resource_ref" \
+                  --out "$evidence/coord-request.preserves" \
+                  > "$evidence/coord-request.txt"
+              """)
+              node_b.succeed("mkdir -p /var/lib/molten/vm-evidence/service-job")
+              for artifact in [
+                  "remote-envelope.preserves",
+                  "job-submission.preserves",
+                  "coord-request.preserves",
+                  "coord-policy.ref",
+                  "coord-resource.ref",
+                  "coord-authority.ref",
+              ]:
+                  content = node_a.succeed(f"cat /var/lib/molten/vm-evidence/service-job/{artifact}")
+                  node_b.succeed(f"cat > /var/lib/molten/vm-evidence/service-job/{artifact} <<'EOF'\n" + content + "\nEOF")
+              node_b.succeed("""
+                set -euo pipefail
+                cd '${sourceForConfigChecks}'
+                evidence=/var/lib/molten/vm-evidence/service-job
+                rm -rf "$evidence/target-chunks" "$evidence/job-ledger" "$evidence/coord-apply" "$evidence/remote-transport"
+                printf 'echo' > "$evidence/executable.bin"
+                printf 'hello' > "$evidence/input.bin"
+                molten test remote publish-local \
+                  --transport-root "$evidence/remote-transport" \
+                  --envelope "$evidence/remote-envelope.preserves" \
+                  --node node_a \
+                  --receipt-out "$evidence/remote-publish.preserves" \
+                  > "$evidence/remote-publish.txt"
+                remote_summary=$(molten test nixos-vm show "$evidence/remote-envelope.preserves")
+                remote_ref=''${remote_summary#* ref=}
+                remote_ref=''${remote_ref%% *}
+                molten test remote deliver-local \
+                  --transport-root "$evidence/remote-transport" \
+                  --topic molten.vm.service \
+                  --envelope-ref "$remote_ref" \
+                  --receiver-peer node_b \
+                  --out "$evidence/remote-delivered.preserves" \
+                  --receipt-out "$evidence/remote-deliver.preserves" \
+                  > "$evidence/remote-deliver.txt"
+                molten test chunk put "$evidence/executable.bin" \
+                  --store "$evidence/target-chunks" \
+                  --kind job-executable \
+                  --manifest-out "$evidence/target-executable-manifest.preserves" \
+                  --receipt-out "$evidence/target-executable-put.preserves" \
+                  > "$evidence/target-executable-put.txt"
+                molten test chunk put "$evidence/input.bin" \
+                  --store "$evidence/target-chunks" \
+                  --kind job-input \
+                  --manifest-out "$evidence/target-input-manifest.preserves" \
+                  --receipt-out "$evidence/target-input-put.preserves" \
+                  > "$evidence/target-input-put.txt"
+                molten test job ref-execute "$evidence/job-submission.preserves" \
+                  --chunks "$evidence/target-chunks" \
+                  --ledger "$evidence/job-ledger" \
+                  --receipt-out "$evidence/job-ref.receipt.preserves" \
+                  > "$evidence/job-ref-execute.txt"
+                coord_policy_ref=$(cat "$evidence/coord-policy.ref")
+                coord_resource_ref=$(cat "$evidence/coord-resource.ref")
+                molten test coordination manifest \
+                  --service queue \
+                  --policy-ref "$coord_policy_ref" \
+                  --resource-ref "$coord_resource_ref" \
+                  --out "$evidence/coord-manifest.preserves" \
+                  > "$evidence/coord-manifest.txt"
+                molten test coordination apply \
+                  --manifest "$evidence/coord-manifest.preserves" \
+                  --request "$evidence/coord-request.preserves" \
+                  --out "$evidence/coord-apply" \
+                  > "$evidence/coord-apply.txt"
+                grep -q remote-dataspace-transport-receipt-v1 "$evidence/remote-deliver.preserves"
+                grep -q 'decision "pass"' "$evidence/job-ref.receipt.preserves"
+                grep -q coordination-apply-report-v1 "$evidence/coord-apply/report.preserves"
+              """)
+              node_a.succeed("mkdir -p /var/lib/molten/vm-evidence/service-job/coord-apply")
+              for artifact in [
+                  "remote-deliver.preserves",
+                  "remote-deliver.txt",
+                  "job-ref.receipt.preserves",
+                  "job-ref-execute.txt",
+                  "coord-apply/report.preserves",
+                  "coord-apply.txt",
+              ]:
+                  content = node_b.succeed(f"cat /var/lib/molten/vm-evidence/service-job/{artifact}")
+                  node_a.succeed(f"cat > /var/lib/molten/vm-evidence/service-job/{artifact} <<'EOF'\n" + content + "\nEOF")
+
               node_b.succeed("""
                 molten node control-request \
                   --operation status \
@@ -719,18 +890,33 @@
                 ack_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/live-control/ack-export.preserves)
                 ack_ref=''${ack_summary#* ref=}
                 ack_ref=''${ack_ref%% *}
+                remote_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/service-job/remote-deliver.preserves)
+                remote_ref=''${remote_summary#* ref=}
+                remote_ref=''${remote_ref%% *}
+                job_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/service-job/job-ref.receipt.preserves)
+                job_ref=''${job_summary#* ref=}
+                job_ref=''${job_ref%% *}
+                coordination_summary=$(molten test nixos-vm show /var/lib/molten/vm-evidence/service-job/coord-apply/report.preserves)
+                coordination_ref=''${coordination_summary#* ref=}
+                coordination_ref=''${coordination_ref%% *}
                 molten test nixos-vm run-receipt \
                   --topology /var/lib/molten/vm-evidence/topology.preserves \
                   --node-evidence /var/lib/molten/vm-evidence/node-evidence.preserves \
                   --node-evidence /var/lib/molten/vm-evidence/node-b-evidence.preserves \
-                  --scenario phase2-live-control-restart \
+                  --scenario phase2-live-control-service-job-restart \
                   --fault-profile none \
                   --child-ref "$protocol_ref" \
                   --child-ref "$reconcile_ref" \
                   --child-ref "$ack_ref" \
+                  --child-ref "$remote_ref" \
+                  --child-ref "$job_ref" \
+                  --child-ref "$coordination_ref" \
                   --log /var/lib/molten/vm-evidence/live-control/protocol-gate.txt \
                   --log /var/lib/molten/vm-evidence/live-control/reconcile.txt \
                   --log /var/lib/molten/vm-evidence/live-control/live-loopback.txt \
+                  --log /var/lib/molten/vm-evidence/service-job/remote-deliver.txt \
+                  --log /var/lib/molten/vm-evidence/service-job/job-ref-execute.txt \
+                  --log /var/lib/molten/vm-evidence/service-job/coord-apply.txt \
                   --decision pass \
                   --replay-status non-replayable-vm-observations \
                   --caveat 'vm observations are diagnostic unless separately replayed' \
