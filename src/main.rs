@@ -15,13 +15,8 @@ use molten::error::MoltenError;
 use molten::error::Result;
 #[cfg(test)]
 use molten::eval_cache;
+#[cfg(test)]
 use molten::evidence::PASS_EVIDENCE_PURPOSE;
-use molten::evidence::SignReceiptInput;
-use molten::evidence::VerifySignedReceiptKeyringPolicy;
-use molten::evidence::VerifySignedReceiptPolicy;
-use molten::evidence::sign_receipt;
-use molten::evidence::verify_signed_receipt_with_keyring_policy;
-use molten::evidence::verify_signed_receipt_with_policy;
 use molten::harness::failure_value;
 use molten::harness::replay_report_value;
 use molten::harness::report_failure_value;
@@ -159,7 +154,7 @@ enum TestCommand {
     },
     Receipt {
         #[command(subcommand)]
-        command: ReceiptCommand,
+        command: cli_receipts::ReceiptCommand,
     },
     Ledger {
         #[command(subcommand)]
@@ -272,44 +267,6 @@ enum TestCommand {
     Repro {
         #[command(subcommand)]
         command: cli_repro::ReproCommand,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum ReceiptCommand {
-    Sign {
-        receipt: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long, default_value = "local-signer")]
-        signer: String,
-        #[arg(long, default_value = PASS_EVIDENCE_PURPOSE)]
-        purpose: String,
-        #[arg(long, default_value = "local-trust-root")]
-        trust_root: String,
-        #[arg(long, default_value = "local-dev-key")]
-        key: String,
-        #[arg(long = "parent")]
-        parents: Vec<String>,
-    },
-    Verify {
-        signed_receipt: PathBuf,
-        #[arg(long, default_value = PASS_EVIDENCE_PURPOSE)]
-        purpose: String,
-        #[arg(long, default_value = "local-trust-root")]
-        trust_root: String,
-        #[arg(long, default_value = "local-dev-key")]
-        key: String,
-        #[arg(long)]
-        key_ledger: Option<PathBuf>,
-        #[arg(long)]
-        key_ref: Option<String>,
-        #[arg(long)]
-        key_id: Option<String>,
-        #[arg(long)]
-        signer: Option<String>,
-        #[arg(long)]
-        subject_ref: Option<String>,
     },
 }
 
@@ -447,7 +404,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::ReplayFixture { command } => cli_replay_fixture::run_replay_fixture_command(command),
         TestCommand::Report { command } => cli_report::run_report_command(command),
         TestCommand::Gate { command } => cli_gate::run_gate_command(command),
-        TestCommand::Receipt { command } => run_receipt_command(command),
+        TestCommand::Receipt { command } => cli_receipts::run_receipt_command(command),
         TestCommand::Ledger { command } => cli_ledger::run_ledger_command(command),
         TestCommand::Chain { command } => cli_ledger::run_chain_command(command),
         TestCommand::Chunk { command } => cli_chunk::run_chunk_command(command),
@@ -479,92 +436,12 @@ fn run_test_command(command: TestCommand) -> Result<()> {
     }
 }
 
-fn run_receipt_command(command: ReceiptCommand) -> Result<()> {
-    match command {
-        ReceiptCommand::Sign {
-            receipt,
-            out,
-            signer,
-            purpose,
-            trust_root,
-            key,
-            parents,
-        } => {
-            let receipt_value = read_preserves_file(&receipt)?;
-            let signed = sign_receipt(&SignReceiptInput {
-                receipt: &receipt_value,
-                signer: &signer,
-                purpose: &purpose,
-                trust_root: &trust_root,
-                key: &key,
-                parents: &parents,
-            })?;
-            write_file(&out, &to_text(&signed)?)?;
-            println!("signed receipt written to {}", out.display());
-            Ok(())
-        }
-        ReceiptCommand::Verify {
-            signed_receipt,
-            purpose,
-            trust_root,
-            key,
-            key_ledger,
-            key_ref,
-            key_id,
-            signer,
-            subject_ref,
-        } => {
-            let signed_value = read_preserves_file(&signed_receipt)?;
-            cli_receipts::ensure_keyring_selector_has_ledger(
-                key_ledger.as_deref(),
-                key_ref.as_deref(),
-                key_id.as_deref(),
-            )?;
-            if let Some(ledger) = key_ledger {
-                let keyring = cli_receipts::load_signed_receipt_keyring(&ledger)?;
-                let verified =
-                    verify_signed_receipt_with_keyring_policy(&signed_value, &VerifySignedReceiptKeyringPolicy {
-                        required_purpose: &purpose,
-                        trust_root: &trust_root,
-                        expected_signer: signer.as_deref(),
-                        expected_subject_ref: subject_ref.as_deref(),
-                        required_key_ref: key_ref.as_deref(),
-                        required_key_id: key_id.as_deref(),
-                        keys: &keyring.keys,
-                        revocations: &keyring.revocations,
-                    })?;
-                println!(
-                    "signed receipt verify ok envelope={} subject={} signer={} purpose={} key={} key-id={}",
-                    verified.receipt.envelope_ref,
-                    verified.receipt.subject_ref,
-                    verified.receipt.signer,
-                    verified.receipt.purpose,
-                    verified.key_ref,
-                    verified.key_id
-                );
-            } else {
-                let verified = verify_signed_receipt_with_policy(&signed_value, &VerifySignedReceiptPolicy {
-                    required_purpose: &purpose,
-                    trust_root: &trust_root,
-                    key: &key,
-                    expected_signer: signer.as_deref(),
-                    expected_subject_ref: subject_ref.as_deref(),
-                })?;
-                println!(
-                    "signed receipt verify ok envelope={} subject={} signer={} purpose={}",
-                    verified.envelope_ref, verified.subject_ref, verified.signer, verified.purpose
-                );
-            }
-            Ok(())
-        }
-    }
-}
-
 #[cfg(test)]
 fn cli_synthetic_ref(label: &str) -> Result<String> {
     canonical_hash(&record("remote-cli-ref", vec![string(label)]))
 }
 
+#[cfg(test)]
 fn read_preserves_file(path: &Path) -> Result<preserves::IOValue> {
     let text = fs::read_to_string(path).map_err(MoltenError::from)?;
     parse_text(&text)
@@ -692,7 +569,9 @@ mod tests {
     use crate::cli_provenance::run_provenance_command;
     use crate::cli_raft::RaftCommand;
     use crate::cli_raft::run_raft_command;
+    use crate::cli_receipts::ReceiptCommand;
     use crate::cli_receipts::ReceiptsCommand;
+    use crate::cli_receipts::run_receipt_command;
     use crate::cli_receipts::run_receipts_command;
     use crate::cli_remote::RemoteCommand;
     use crate::cli_remote::RemoteEnvelopeCommand;
