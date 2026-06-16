@@ -500,6 +500,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli_node.rs",
                 "src/cli_nixos_vm.rs",
                 "src/cli_job.rs",
+                "src/cli_ledger.rs",
                 "src/cli_octet.rs",
                 "src/cli_plugin.rs",
                 "src/cli_prod_soak.rs",
