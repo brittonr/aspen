@@ -23,8 +23,6 @@ use molten::evidence::sign_receipt;
 use molten::evidence::verify_signed_receipt_with_keyring_policy;
 use molten::evidence::verify_signed_receipt_with_policy;
 use molten::harness::failure_value;
-use molten::harness::gate_check_value;
-use molten::harness::gate_receipt_value;
 use molten::harness::replay_report_value;
 use molten::harness::report_failure_value;
 use molten::harness::run_suite_value;
@@ -68,6 +66,7 @@ mod cli_chunk;
 mod cli_coordination;
 mod cli_delivery;
 mod cli_dogfood;
+mod cli_gate;
 mod cli_job;
 mod cli_ledger;
 mod cli_nixos_vm;
@@ -156,7 +155,7 @@ enum TestCommand {
     },
     Gate {
         #[command(subcommand)]
-        command: GateCommand,
+        command: cli_gate::GateCommand,
     },
     Receipt {
         #[command(subcommand)]
@@ -273,17 +272,6 @@ enum TestCommand {
     Repro {
         #[command(subcommand)]
         command: cli_repro::ReproCommand,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum GateCommand {
-    Check {
-        artifact: PathBuf,
-        #[arg(long)]
-        failure_out: Option<PathBuf>,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
     },
 }
 
@@ -458,7 +446,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         }
         TestCommand::ReplayFixture { command } => cli_replay_fixture::run_replay_fixture_command(command),
         TestCommand::Report { command } => cli_report::run_report_command(command),
-        TestCommand::Gate { command } => run_gate_command(command),
+        TestCommand::Gate { command } => cli_gate::run_gate_command(command),
         TestCommand::Receipt { command } => run_receipt_command(command),
         TestCommand::Ledger { command } => cli_ledger::run_ledger_command(command),
         TestCommand::Chain { command } => cli_ledger::run_chain_command(command),
@@ -488,31 +476,6 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Octet { command } => cli_octet::run_octet_command(command),
         TestCommand::Node { command } => cli_node::run_node_command(command),
         TestCommand::Repro { command } => cli_repro::run_repro_command(command),
-    }
-}
-
-fn run_gate_command(command: GateCommand) -> Result<()> {
-    match command {
-        GateCommand::Check {
-            artifact,
-            failure_out,
-            receipt_out,
-        } => {
-            let artifact_value = read_preserves_file_with_failure(&artifact, failure_out.as_ref(), "validate")?;
-            let check = match gate_check_value(&artifact_value) {
-                Ok(check) => check,
-                Err(error) => {
-                    write_optional_artifact_failure(failure_out.as_ref(), "validate", &error, &artifact_value)?;
-                    return Err(error);
-                }
-            };
-            let receipt = gate_receipt_value(&check);
-            if let Err(error) = emit_gate_receipt(receipt_out.as_ref(), &receipt) {
-                write_optional_artifact_failure(failure_out.as_ref(), "export", &error, &artifact_value)?;
-                return Err(error);
-            }
-            Ok(())
-        }
     }
 }
 
@@ -665,37 +628,6 @@ fn write_optional_report_failure(
     emit_failure(path, &failure)
 }
 
-fn write_optional_artifact_failure(
-    path: Option<&PathBuf>,
-    phase: &'static str,
-    error: &MoltenError,
-    artifact_value: &preserves::IOValue,
-) -> Result<()> {
-    let artifact_ref = molten::preserves_rail::canonical_hash(artifact_value)?;
-    write_optional_failure(
-        path,
-        phase,
-        error,
-        Some(vec![
-            molten::preserves_rail::record("artifact-ref", vec![molten::preserves_rail::string(&artifact_ref)]),
-            molten::preserves_rail::record("artifact", vec![artifact_value.clone()]),
-        ]),
-    )
-}
-
-fn emit_gate_receipt(path: Option<&PathBuf>, receipt: &preserves::IOValue) -> Result<()> {
-    let receipt_text = to_text(receipt)?;
-    let receipt_ref = molten::preserves_rail::canonical_hash(receipt)?;
-    if let Some(path) = path {
-        write_file(path, &receipt_text)?;
-        println!("gate receipt {receipt_ref} written to {}", path.display());
-    } else {
-        println!("{receipt_text}");
-        eprintln!("gate receipt {receipt_ref}");
-    }
-    Ok(())
-}
-
 fn emit_failure(path: Option<&PathBuf>, failure: &preserves::IOValue) -> Result<()> {
     let failure_text = to_text(failure)?;
     let failure_ref = molten::preserves_rail::canonical_hash(failure)?;
@@ -744,6 +676,8 @@ mod tests {
     use crate::cli_delivery::run_delivery_command;
     use crate::cli_dogfood::DogfoodCommand;
     use crate::cli_dogfood::run_dogfood_command;
+    use crate::cli_gate::GateCommand;
+    use crate::cli_gate::run_gate_command;
     use crate::cli_job::JobCommand;
     use crate::cli_job::run_job_command;
     use crate::cli_ledger::ChainCommand;
