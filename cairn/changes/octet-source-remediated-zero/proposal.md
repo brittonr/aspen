@@ -19,7 +19,8 @@ Strict release evidence should eventually distinguish a true source-shaped zero 
 - Move Chunk command enums and dispatch from `src/main.rs` into a focused `src/cli_chunk.rs` module as the next chunk-store CLI shell hotspot split.
 - Move Cache command enums and dispatch from `src/main.rs` into a focused `src/cli_cache.rs` module as the next eval-cache CLI shell hotspot split.
 - Move Artifact command enums and dispatch from `src/main.rs` into a focused `src/cli_artifact.rs` module as the next artifact-registry CLI shell hotspot split.
-- Preserve existing `molten test octet ...`, `molten test retention ...`, `molten test delivery ...`, `molten test provenance ...`, `molten test protocol ...`, `molten test job ...`, `molten test secrets ...`, `molten test plugin ...`, `molten test repro ...`, `molten test catalog ...`, `molten test chunk ...`, `molten test cache ...`, `molten test artifact ...`, and `molten node ...` command syntax, receipt output, denial behavior, and canonical Preserves values.
+- Move Storage command enums and dispatch from `src/main.rs` into a focused `src/cli_storage.rs` module as the next typed-storage CLI shell hotspot split.
+- Preserve existing `molten test octet ...`, `molten test retention ...`, `molten test delivery ...`, `molten test provenance ...`, `molten test protocol ...`, `molten test job ...`, `molten test secrets ...`, `molten test plugin ...`, `molten test repro ...`, `molten test catalog ...`, `molten test chunk ...`, `molten test cache ...`, `molten test artifact ...`, `molten test storage ...`, and `molten node ...` command syntax, receipt output, denial behavior, and canonical Preserves values.
 - Track the remaining disabled lint family burn-down as explicit future work rather than claiming the full source-remediated-zero state is complete.
 - Require focused validation and refreshed Octet evidence before claiming source-gate improvements.
 

@@ -501,6 +501,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli_repro.rs",
                 "src/cli_retention.rs",
                 "src/cli_secrets.rs",
+                "src/cli_storage.rs",
             ],
             reason: "the CLI is the imperative shell that materializes canonical artifacts",
         },
