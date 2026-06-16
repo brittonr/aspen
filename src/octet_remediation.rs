@@ -513,6 +513,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli_rewrite.rs",
                 "src/cli_schema.rs",
                 "src/cli_secrets.rs",
+                "src/cli_service.rs",
                 "src/cli_storage.rs",
                 "src/cli_transcript.rs",
                 "src/cli_upgrade.rs",
