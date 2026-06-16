@@ -452,19 +452,17 @@ fn print_or_log_summary(is_written_to_file: bool, summary: &str) {
 }
 
 fn prod_soak_kind(text: &str) -> &'static str {
-    if text.contains("prod-soak-evidence-export-v1") {
-        "evidence-export"
-    } else if text.contains("prod-soak-durability-v1") {
-        "durability"
-    } else if text.contains("prod-soak-fault-case-v1") {
-        "fault-case"
-    } else if text.contains("prod-soak-resource-envelope-v1") {
-        "resource-envelope"
-    } else if text.contains("prod-soak-fault-matrix-v1") {
-        "fault-matrix"
-    } else if text.contains("prod-soak-run-v1") {
-        "run"
-    } else {
-        "artifact"
+    for (needle, kind) in [
+        ("prod-soak-evidence-export-v1", "evidence-export"),
+        ("prod-soak-durability-v1", "durability"),
+        ("prod-soak-fault-case-v1", "fault-case"),
+        ("prod-soak-resource-envelope-v1", "resource-envelope"),
+        ("prod-soak-fault-matrix-v1", "fault-matrix"),
+        ("prod-soak-run-v1", "run"),
+    ] {
+        if text.contains(needle) {
+            return kind;
+        }
     }
+    "artifact"
 }

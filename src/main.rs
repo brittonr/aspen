@@ -66,7 +66,6 @@ use molten::preserves_rail::to_text;
 #[cfg(test)]
 use molten::provenance;
 use molten::raft_control_plane;
-use molten::remote_dataspace;
 use molten::retention;
 #[cfg(test)]
 use molten::schema_identity;
@@ -91,6 +90,7 @@ mod cli_plugin;
 mod cli_prod_soak;
 mod cli_protocol;
 mod cli_provenance;
+mod cli_remote;
 mod cli_repro;
 mod cli_retention;
 mod cli_rewrite;
@@ -228,7 +228,7 @@ enum TestCommand {
     },
     Remote {
         #[command(subcommand)]
-        command: RemoteCommand,
+        command: cli_remote::RemoteCommand,
     },
     Delivery {
         #[command(subcommand)]
@@ -914,80 +914,6 @@ enum ChainCommand {
     },
 }
 
-#[derive(Debug, Subcommand)]
-enum RemoteCommand {
-    Envelope {
-        #[command(subcommand)]
-        command: RemoteEnvelopeCommand,
-    },
-    PublishLocal {
-        #[arg(long)]
-        transport_root: PathBuf,
-        #[arg(long)]
-        envelope: PathBuf,
-        #[arg(long)]
-        node: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    DeliverLocal {
-        #[arg(long)]
-        transport_root: PathBuf,
-        #[arg(long)]
-        topic: String,
-        #[arg(long)]
-        envelope_ref: String,
-        #[arg(long)]
-        receiver_peer: String,
-        #[arg(long)]
-        out: Option<PathBuf>,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    RunTwoPeer {
-        #[arg(long)]
-        transport_root: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-    },
-    Gate {
-        #[arg(long)]
-        delivery_log: PathBuf,
-        #[arg(long = "admission-receipt")]
-        admission_receipts: Vec<PathBuf>,
-        #[arg(long = "turn-context-ref")]
-        turn_context_refs: Vec<String>,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum RemoteEnvelopeCommand {
-    Build {
-        #[arg(long)]
-        from_peer: String,
-        #[arg(long)]
-        from_actor: String,
-        #[arg(long)]
-        to_peer: String,
-        #[arg(long)]
-        topic: String,
-        #[arg(long)]
-        operation: String,
-        #[arg(long)]
-        payload: PathBuf,
-        #[arg(long = "content-ref")]
-        content_refs: Vec<String>,
-        #[arg(long = "capability-ref")]
-        capability_refs: Vec<String>,
-        #[arg(long = "evidence-ref")]
-        evidence_refs: Vec<String>,
-        #[arg(long)]
-        out: PathBuf,
-    },
-}
-
 fn main() {
     if let Err(error) = run() {
         eprintln!("error: {error}");
@@ -1494,7 +1420,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::Rewrite { command } => cli_rewrite::run_rewrite_command(command),
         TestCommand::Catalog { command } => cli_catalog::run_catalog_command(command),
         TestCommand::Job { command } => cli_job::run_job_command(command),
-        TestCommand::Remote { command } => run_remote_command(command),
+        TestCommand::Remote { command } => cli_remote::run_remote_command(command),
         TestCommand::Delivery { command } => cli_delivery::run_delivery_command(command),
         TestCommand::Retention { command } => cli_retention::run_retention_command(command),
         TestCommand::Provenance { command } => cli_provenance::run_provenance_command(command),
@@ -1698,7 +1624,7 @@ fn report_show_summary(report_value: &preserves::IOValue) -> Result<String> {
     if let Ok(summary) = secrets::secrets_summary(report_value) {
         return Ok(summary);
     }
-    if let Ok(summary) = remote_dataspace_gate_summary(report_value) {
+    if let Ok(summary) = cli_remote::remote_dataspace_gate_summary(report_value) {
         return Ok(summary);
     }
     Err(report_error)
@@ -2483,166 +2409,8 @@ fn write_indexed_values(out: &Path, prefix: &str, values: &[preserves::IOValue])
     Ok(())
 }
 
-fn run_remote_command(command: RemoteCommand) -> Result<()> {
-    match command {
-        RemoteCommand::Envelope { command } => run_remote_envelope_command(command),
-        RemoteCommand::PublishLocal {
-            transport_root,
-            envelope,
-            node,
-            receipt_out,
-        } => {
-            let envelope_value = read_preserves_file(&envelope)?;
-            let envelope = remote_dataspace::parse_envelope(&envelope_value)?;
-            let published = remote_dataspace::publish_local_gossip(&transport_root, &envelope, &node)?;
-            emit_named_receipt(receipt_out.as_ref(), "remote dataspace publish receipt", &published.receipt_value)?;
-            println!("remote publish-local ok envelope={} root={}", published.envelope_ref, transport_root.display());
-            Ok(())
-        }
-        RemoteCommand::DeliverLocal {
-            transport_root,
-            topic,
-            envelope_ref,
-            receiver_peer,
-            out,
-            receipt_out,
-        } => {
-            let delivered =
-                remote_dataspace::deliver_local_gossip(&transport_root, &topic, &envelope_ref, &receiver_peer)?;
-            if let Some(out) = out {
-                write_file(&out, &to_text(&delivered.envelope.value)?)?;
-                println!("remote delivered envelope {} written to {}", delivered.envelope.envelope_ref, out.display());
-            }
-            emit_named_receipt(receipt_out.as_ref(), "remote dataspace deliver receipt", &delivered.receipt_value)?;
-            println!(
-                "remote deliver-local ok envelope={} topic={} receiver={}",
-                delivered.envelope.envelope_ref, topic, receiver_peer
-            );
-            Ok(())
-        }
-        RemoteCommand::RunTwoPeer { transport_root, out } => {
-            let harness =
-                remote_dataspace::two_peer_service_ready_harness(&transport_root, remote_evidence_fixture()?)?;
-            fs::create_dir_all(&out).map_err(MoltenError::from)?;
-            write_file(&out.join("delivery-log.preserves"), &to_text(&harness.delivery_log.value)?)?;
-            write_file(&out.join("admission-receipt.preserves"), &to_text(&harness.admission_receipt_value)?)?;
-            write_file(&out.join("gate-receipt.preserves"), &to_text(&harness.gate_receipt_value)?)?;
-            let turn_context_ref = remote_gate_turn_context_ref(&harness.gate_receipt_value)?;
-            write_file(&out.join("turn-context-ref.preserves"), &to_text(&string(&turn_context_ref))?)?;
-            let summary = record("remote-dataspace-summary-v1", vec![
-                record("delivery-log", vec![string(&harness.delivery_log.log_ref)]),
-                record("admission-receipt", vec![string(&canonical_hash(&harness.admission_receipt_value)?)]),
-                record("gate-receipt", vec![string(&canonical_hash(&harness.gate_receipt_value)?)]),
-                record("turn-context-ref", vec![string(&turn_context_ref)]),
-            ]);
-            write_file(&out.join("summary.preserves"), &to_text(&summary)?)?;
-            println!(
-                "remote run-two-peer ok delivery_log={} gate_receipt={} out={}",
-                harness.delivery_log.log_ref,
-                canonical_hash(&harness.gate_receipt_value)?,
-                out.display()
-            );
-            Ok(())
-        }
-        RemoteCommand::Gate {
-            delivery_log,
-            admission_receipts,
-            turn_context_refs,
-            receipt_out,
-        } => {
-            let log_value = read_preserves_file(&delivery_log)?;
-            let log = remote_dataspace::parse_delivery_log(&log_value)?;
-            let receipts =
-                admission_receipts.iter().map(|path| read_preserves_file(path)).collect::<Result<Vec<_>>>()?;
-            let receipt = remote_dataspace::remote_dataspace_gate_receipt_value(&log, &receipts, &turn_context_refs)?;
-            emit_named_receipt(receipt_out.as_ref(), "remote dataspace gate receipt", &receipt)
-        }
-    }
-}
-
-fn run_remote_envelope_command(command: RemoteEnvelopeCommand) -> Result<()> {
-    match command {
-        RemoteEnvelopeCommand::Build {
-            from_peer,
-            from_actor,
-            to_peer,
-            topic,
-            operation,
-            payload,
-            content_refs,
-            capability_refs,
-            evidence_refs,
-            out,
-        } => {
-            let payload = read_preserves_file(&payload)?;
-            let operation = parse_remote_operation(&operation)?;
-            let envelope = remote_dataspace::build_envelope(remote_dataspace::RemoteDataspaceEnvelopeInput {
-                from_peer,
-                from_actor,
-                to_peer,
-                topic,
-                operation,
-                payload,
-                content_refs,
-                capability_refs,
-                evidence_refs,
-            })?;
-            write_file(&out, &to_text(&envelope.value)?)?;
-            println!("remote envelope {} written to {}", envelope.envelope_ref, out.display());
-            Ok(())
-        }
-    }
-}
-
-fn parse_remote_operation(operation: &str) -> Result<remote_dataspace::RemoteDataspaceOperation> {
-    match operation {
-        "message" => Ok(remote_dataspace::RemoteDataspaceOperation::Message),
-        "assert" => Ok(remote_dataspace::RemoteDataspaceOperation::Assert),
-        "retract" => Ok(remote_dataspace::RemoteDataspaceOperation::Retract),
-        "observe" => Ok(remote_dataspace::RemoteDataspaceOperation::Observe),
-        _ => Err(MoltenError::invalid_harness(format!(
-            "unsupported remote dataspace operation {operation}; expected message/assert/retract/observe"
-        ))),
-    }
-}
-
-fn remote_evidence_fixture() -> Result<remote_dataspace::RemoteDeliveryEvidence> {
-    Ok(remote_dataspace::RemoteDeliveryEvidence {
-        peer_bootstrap_refs: vec![cli_synthetic_ref("remote-bootstrap")?],
-        capability_refs: vec![cli_synthetic_ref("remote-capability")?],
-        policy_refs: vec![cli_synthetic_ref("remote-policy")?],
-        resource_refs: vec![cli_synthetic_ref("remote-resource")?],
-        authority_refs: vec![cli_synthetic_ref("remote-authority")?],
-    })
-}
-
 fn cli_synthetic_ref(label: &str) -> Result<String> {
     canonical_hash(&record("remote-cli-ref", vec![string(label)]))
-}
-
-fn remote_gate_turn_context_ref(gate_receipt: &preserves::IOValue) -> Result<String> {
-    let fields = gate_receipt
-        .collect_simple_record("remote-dataspace-gate-receipt-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected remote dataspace gate receipt"))?;
-    let context = molten::preserves_rail::value_to_iovalue(&fields[4]);
-    let refs = context
-        .collect_simple_record("turn-journal-context-refs", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("expected remote turn context refs"))?;
-    let sequence = refs[0]
-        .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("expected turn context ref sequence"))?;
-    let first = sequence.iter().next().ok_or_else(|| MoltenError::invalid_harness("missing turn context ref"))?;
-    first
-        .as_string()
-        .map(|value| value.into_owned())
-        .ok_or_else(|| MoltenError::invalid_harness("expected string turn context ref"))
-}
-
-fn remote_dataspace_gate_summary(value: &preserves::IOValue) -> Result<String> {
-    if molten::ledger::artifact_kind(value) != "remote-dataspace-gate-receipt" {
-        return Err(MoltenError::invalid_harness("not a remote dataspace gate receipt"));
-    }
-    Ok(format!("remote dataspace gate receipt ref={}", canonical_hash(value)?))
 }
 
 fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
@@ -3128,6 +2896,7 @@ mod tests {
     use molten::harness::parse_failure;
     use molten::harness::parse_repro_bundle;
     use molten::protocol_session;
+    use molten::remote_dataspace;
 
     use super::*;
     use crate::cli_artifact::ArtifactCommand;
@@ -3148,6 +2917,9 @@ mod tests {
     use crate::cli_protocol::run_protocol_command;
     use crate::cli_provenance::ProvenanceCommand;
     use crate::cli_provenance::run_provenance_command;
+    use crate::cli_remote::RemoteCommand;
+    use crate::cli_remote::RemoteEnvelopeCommand;
+    use crate::cli_remote::run_remote_command;
     use crate::cli_repro::ReproCommand;
     use crate::cli_repro::run_repro_command;
     use crate::cli_retention::RetentionCommand;
