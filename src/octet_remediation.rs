@@ -498,6 +498,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli_chunk.rs",
                 "src/cli_coordination.rs",
                 "src/cli_delivery.rs",
+                "src/cli_dogfood.rs",
                 "src/cli_node.rs",
                 "src/cli_nixos_vm.rs",
                 "src/cli_job.rs",
