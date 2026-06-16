@@ -28,4 +28,5 @@
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Rewrite command parsing and dispatch from `src/main.rs` into `src/cli_rewrite.rs` as the next structured-rewrite CLI shell hotspot burn-down slice.
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Remote command parsing and dispatch from `src/main.rs` into `src/cli_remote.rs` as the next remote-dataspace CLI shell hotspot split.
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Ledger and Chain command parsing and dispatch from `src/main.rs` into `src/cli_ledger.rs` as the next evidence-ledger CLI shell hotspot split.
+- [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Receipts command parsing and dispatch from `src/main.rs` into `src/cli_receipts.rs` as the next operator-receipt CLI shell hotspot split.
 - [ ] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Continue splitting CLI/module hotspots and remove or narrow disabled lint families when source-remediated-zero evidence can replace the current configuration-clean caveat.
