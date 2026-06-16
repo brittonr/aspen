@@ -34,4 +34,5 @@
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Coordination command parsing and dispatch from `src/main.rs` into `src/cli_coordination.rs` as the next coordination CLI shell hotspot split.
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Dogfood command parsing and dispatch from `src/main.rs` into `src/cli_dogfood.rs` as the next operator-dogfood CLI shell hotspot split.
 - [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract Raft command parsing and dispatch from `src/main.rs` into `src/cli_raft.rs` as the next control-plane CLI shell hotspot split.
+- [x] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Extract replay-fixture command parsing and dispatch from `src/main.rs` into `src/cli_replay_fixture.rs` as the next deterministic-replay CLI shell hotspot split.
 - [ ] [serial] r[molten.octet_source_remediated_zero.disabled_lint_burndown] Continue splitting CLI/module hotspots and remove or narrow disabled lint families when source-remediated-zero evidence can replace the current configuration-clean caveat.
