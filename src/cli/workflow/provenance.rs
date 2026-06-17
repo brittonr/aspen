@@ -10,6 +10,9 @@ use molten::preserves_rail::parse_text;
 use molten::preserves_rail::to_text;
 use molten::provenance;
 
+#[path = "provenance/input.rs"]
+mod input;
+
 const PROVENANCE_CLI_EVIDENCE_LIMIT: usize = 64;
 const _: () = assert!(PROVENANCE_CLI_EVIDENCE_LIMIT <= 100_000);
 
@@ -114,7 +117,7 @@ pub(crate) fn run_provenance_command(command: ProvenanceCommand) -> Result<()> {
             evidence_refs,
             out,
         } => {
-            let build_params = parse_provenance_build_params(&build_params)?;
+            let build_params = input::parse_build_params(&build_params)?;
             let value = provenance::provenance_build_record_value(&provenance::ProvenanceBuildRecordInput {
                 expected_artifact_ref: &expected_artifact_ref,
                 source_refs: &source_refs,
@@ -214,13 +217,13 @@ pub(crate) fn run_provenance_command(command: ProvenanceCommand) -> Result<()> {
             prior_diagnostics,
             receipt_out,
         } => {
-            let mut provenance_values = CliBoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "provenance evidence");
+            let mut provenance_values = input::BoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "provenance evidence");
             for path in provenance_paths {
                 provenance_values.push(read_preserves_file(&path)?)?;
             }
             let provenance_values = provenance_values.into_vec();
             let mut build_verification_values =
-                CliBoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "provenance build verification evidence");
+                input::BoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "provenance build verification evidence");
             for path in build_verification_paths {
                 build_verification_values.push(read_preserves_file(&path)?)?;
             }
@@ -252,48 +255,6 @@ pub(crate) fn run_provenance_command(command: ProvenanceCommand) -> Result<()> {
             println!("{}", provenance::provenance_summary(&value)?);
             Ok(())
         }
-    }
-}
-
-fn parse_provenance_build_params(values: &[String]) -> Result<Vec<provenance::BuildParam>> {
-    let mut params = CliBoundedItems::new(PROVENANCE_CLI_EVIDENCE_LIMIT, "provenance build params");
-    for value in values {
-        let Some((key, param_value)) = value.split_once('=') else {
-            return Err(MoltenError::invalid_harness(format!("provenance build param `{value}` must use key=value")));
-        };
-        params.push(provenance::BuildParam {
-            key: key.to_string(),
-            value: param_value.to_string(),
-        })?;
-    }
-    Ok(params.into_vec())
-}
-
-struct CliBoundedItems<T> {
-    values: Vec<T>,
-    maximum: usize,
-    label: &'static str,
-}
-
-impl<T> CliBoundedItems<T> {
-    fn new(maximum: usize, label: &'static str) -> Self {
-        Self {
-            values: Vec::new(),
-            maximum,
-            label,
-        }
-    }
-
-    fn push(&mut self, value: T) -> Result<()> {
-        if self.values.len() >= self.maximum {
-            return Err(MoltenError::invalid_harness(format!("{} count exceeds {}", self.label, self.maximum)));
-        }
-        self.values.push(value);
-        Ok(())
-    }
-
-    fn into_vec(self) -> Vec<T> {
-        self.values
     }
 }
 

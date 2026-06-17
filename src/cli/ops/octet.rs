@@ -11,6 +11,9 @@ use molten::preserves_rail::canonical_hash;
 use molten::preserves_rail::parse_text;
 use molten::preserves_rail::to_text;
 
+#[path = "octet/baseline.rs"]
+mod baseline;
+
 #[derive(Debug, Subcommand)]
 pub(crate) enum OctetCommand {
     Gate {
@@ -27,7 +30,7 @@ pub(crate) enum OctetCommand {
     },
     Baseline {
         #[command(subcommand)]
-        command: OctetBaselineCommand,
+        command: baseline::Command,
     },
     Review {
         #[command(subcommand)]
@@ -101,36 +104,6 @@ pub(crate) enum OctetReviewCommand {
     },
 }
 
-#[derive(Debug, Subcommand)]
-pub(crate) enum OctetBaselineCommand {
-    Write {
-        #[arg(long, default_value = "target/octet")]
-        artifacts: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long, default_value = "manual")]
-        created_at: String,
-        #[arg(long)]
-        expires_at: String,
-        #[arg(long)]
-        target_next: Option<u64>,
-    },
-    Check {
-        #[arg(long, default_value = "target/octet")]
-        artifacts: PathBuf,
-        #[arg(long)]
-        baseline: PathBuf,
-        #[arg(long, default_value = "quarantine-ci")]
-        profile: String,
-        #[arg(long)]
-        as_of: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-        #[arg(long = "review")]
-        reviews: Vec<PathBuf>,
-    },
-}
-
 pub(crate) fn run_octet_command(command: OctetCommand) -> Result<()> {
     match command {
         OctetCommand::Gate {
@@ -154,7 +127,7 @@ pub(crate) fn run_octet_command(command: OctetCommand) -> Result<()> {
             Ok(())
         }
         OctetCommand::SourceGate { command } => run_octet_source_gate_command(command),
-        OctetCommand::Baseline { command } => run_octet_baseline_command(command),
+        OctetCommand::Baseline { command } => baseline::run(command),
         OctetCommand::Review { command } => run_octet_review_command(command),
         OctetCommand::Artifacts { command } => run_octet_artifacts_command(command),
         OctetCommand::Remediation { command } => run_octet_remediation_command(command),
@@ -252,62 +225,6 @@ fn run_octet_review_command(command: OctetReviewCommand) -> Result<()> {
             })?;
             write_file(&out, &to_text(&review.review_value)?)?;
             println!("octet review manifest {} written to {}", review.review_ref, out.display());
-            Ok(())
-        }
-    }
-}
-
-fn run_octet_baseline_command(command: OctetBaselineCommand) -> Result<()> {
-    match command {
-        OctetBaselineCommand::Write {
-            artifacts,
-            out,
-            created_at,
-            expires_at,
-            target_next,
-        } => {
-            let baseline = octet_gate::build_octet_warning_baseline(&octet_gate::OctetWarningBaselineInput {
-                artifacts_dir: artifacts,
-                created_at,
-                expires_at,
-                target_next,
-            })?;
-            write_file(&out, &to_text(&baseline.baseline_value)?)?;
-            println!(
-                "octet warning baseline {} written to {} findings={} critical={}",
-                baseline.baseline_ref,
-                out.display(),
-                baseline.finding_count,
-                baseline.critical_count
-            );
-            Ok(())
-        }
-        OctetBaselineCommand::Check {
-            artifacts,
-            baseline,
-            profile,
-            as_of,
-            receipt_out,
-            reviews,
-        } => {
-            let baseline_value = read_preserves_file(&baseline)?;
-            let review_values = reviews.iter().map(|path| read_preserves_file(path)).collect::<Result<Vec<_>>>()?;
-            let evaluation = octet_gate::check_octet_warning_baseline(&octet_gate::OctetBaselineCheckInput {
-                artifacts_dir: artifacts.clone(),
-                baseline_value,
-                profile,
-                as_of,
-                review_values,
-            })?;
-            emit_named_receipt(receipt_out.as_ref(), "octet baseline receipt", &evaluation.receipt_value)?;
-            if evaluation.decision != "pass" {
-                return Err(MoltenError::invalid_harness(format!(
-                    "octet baseline denied receipt={} artifacts={}",
-                    evaluation.receipt_ref,
-                    artifacts.display()
-                )));
-            }
-            println!("octet baseline pass receipt={}", evaluation.receipt_ref);
             Ok(())
         }
     }
