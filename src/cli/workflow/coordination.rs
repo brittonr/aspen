@@ -11,6 +11,9 @@ use molten::preserves_rail::parse_text;
 use molten::preserves_rail::to_text;
 use molten::raft_control_plane;
 
+#[path = "coordination/bounded.rs"]
+mod bounded;
+
 const COORDINATION_CLI_BATCH_REF_LIMIT: usize = 4096;
 const COORDINATION_CLI_BATCH_EVIDENCE_LIMIT: usize = 16384;
 const _: () = assert!(COORDINATION_CLI_BATCH_REF_LIMIT <= 100_000);
@@ -77,34 +80,6 @@ pub(crate) enum CoordinationCommand {
     Show {
         artifact: PathBuf,
     },
-}
-
-struct CoordinationCliBoundedItems<T> {
-    values: Vec<T>,
-    maximum: usize,
-    label: &'static str,
-}
-
-impl<T> CoordinationCliBoundedItems<T> {
-    fn new(maximum: usize, label: &'static str) -> Self {
-        Self {
-            values: Vec::new(),
-            maximum,
-            label,
-        }
-    }
-
-    fn push(&mut self, value: T) -> Result<()> {
-        if self.values.len() >= self.maximum {
-            return Err(MoltenError::invalid_harness(format!("{} count exceeds {}", self.label, self.maximum)));
-        }
-        self.values.push(value);
-        Ok(())
-    }
-
-    fn into_vec(self) -> Vec<T> {
-        self.values
-    }
 }
 
 pub(crate) fn run_coordination_command(command: CoordinationCommand) -> Result<()> {
@@ -189,12 +164,12 @@ pub(crate) fn run_coordination_command(command: CoordinationCommand) -> Result<(
             let manifest_ref = runtime.manifest.manifest_ref.clone();
             let mut decision = "pass";
             let mut evidence_values =
-                CoordinationCliBoundedItems::new(COORDINATION_CLI_BATCH_EVIDENCE_LIMIT, "coordination apply evidence");
+                bounded::BoundedItems::new(COORDINATION_CLI_BATCH_EVIDENCE_LIMIT, "coordination apply evidence");
             evidence_values.push(manifest_value)?;
             let mut receipt_refs =
-                CoordinationCliBoundedItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "coordination apply receipts");
+                bounded::BoundedItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "coordination apply receipts");
             let mut assertion_refs =
-                CoordinationCliBoundedItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "coordination apply assertions");
+                bounded::BoundedItems::new(COORDINATION_CLI_BATCH_REF_LIMIT, "coordination apply assertions");
             for request in requests {
                 let request_value = read_preserves_file(&request)?;
                 let result = coordination::apply_coordination_request(&mut runtime, &request_value)?;

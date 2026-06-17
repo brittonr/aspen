@@ -12,6 +12,9 @@ use molten::preserves_rail::sequence;
 use molten::preserves_rail::to_text;
 use molten::rewrites;
 
+#[path = "rewrite/input.rs"]
+mod input;
+
 #[derive(Debug, Subcommand)]
 pub(crate) enum RewriteCommand {
     Find {
@@ -96,7 +99,7 @@ pub(crate) fn run_rewrite_command(command: RewriteCommand) -> Result<()> {
             matches_out,
             receipt_out,
         } => {
-            let query = rewrite_query(RewriteQueryCliInput {
+            let query = rewrite_query(input::QueryCliInput {
                 pattern_kind,
                 pattern,
                 artifact_kinds,
@@ -129,7 +132,7 @@ pub(crate) fn run_rewrite_command(command: RewriteCommand) -> Result<()> {
             plan_out,
             receipt_out,
         } => {
-            let input = rewrite_plan_input(RewritePlanCliInput {
+            let input = rewrite_plan_input(input::PlanCliInput {
                 from,
                 to,
                 artifact_kinds,
@@ -166,7 +169,7 @@ pub(crate) fn run_rewrite_command(command: RewriteCommand) -> Result<()> {
             upgrade_plan_out,
             session_id,
         } => {
-            let input = rewrite_plan_input(RewritePlanCliInput {
+            let input = rewrite_plan_input(input::PlanCliInput {
                 from,
                 to,
                 artifact_kinds,
@@ -206,25 +209,7 @@ pub(crate) fn run_rewrite_command(command: RewriteCommand) -> Result<()> {
     }
 }
 
-struct RewriteQueryCliInput {
-    pattern_kind: String,
-    pattern: String,
-    artifact_kinds: Vec<String>,
-    root_refs: Vec<String>,
-    dependency_inclusion_enabled: bool,
-    hidden_refs: Vec<String>,
-}
-
-struct RewritePlanCliInput {
-    from: String,
-    to: String,
-    artifact_kinds: Vec<String>,
-    root_refs: Vec<String>,
-    dependency_inclusion_enabled: bool,
-    hidden_refs: Vec<String>,
-}
-
-fn rewrite_query(input: RewriteQueryCliInput) -> Result<rewrites::RewriteQueryInput> {
+fn rewrite_query(input: input::QueryCliInput) -> Result<rewrites::RewriteQueryInput> {
     Ok(rewrites::RewriteQueryInput {
         artifact_kinds: input.artifact_kinds,
         root_refs: input.root_refs,
@@ -236,9 +221,9 @@ fn rewrite_query(input: RewriteQueryCliInput) -> Result<rewrites::RewriteQueryIn
     })
 }
 
-fn rewrite_plan_input(input: RewritePlanCliInput) -> Result<rewrites::RewritePlanInput> {
+fn rewrite_plan_input(input: input::PlanCliInput) -> Result<rewrites::RewritePlanInput> {
     Ok(rewrites::RewritePlanInput {
-        query: rewrite_query(RewriteQueryCliInput {
+        query: rewrite_query(input::QueryCliInput {
             pattern_kind: "string-equals".to_string(),
             pattern: input.from.clone(),
             artifact_kinds: input.artifact_kinds,
