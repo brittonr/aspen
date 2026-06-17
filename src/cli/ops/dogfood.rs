@@ -1,8 +1,6 @@
 use std::fs;
 use std::path::Path;
-use std::path::PathBuf;
 
-use clap::Subcommand;
 use molten::error::MoltenError;
 use molten::error::Result;
 use molten::operator_dogfood;
@@ -11,155 +9,14 @@ use molten::preserves_rail::to_text;
 
 use crate::cli_receipts;
 
-const DOGFOOD_SIGNED_MEMBER_LIMIT: usize = 64;
-const _: () = assert!(DOGFOOD_SIGNED_MEMBER_LIMIT <= 100_000);
+#[path = "dogfood/archive.rs"]
+mod archive;
+#[path = "dogfood/command.rs"]
+mod command;
+#[path = "dogfood/signed.rs"]
+mod signed;
 
-#[derive(Debug, Subcommand)]
-pub(crate) enum DogfoodCommand {
-    LocalNode {
-        #[arg(long)]
-        state_root: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long)]
-        release_gate_out: Option<PathBuf>,
-        #[arg(long)]
-        replay_verify_out: Option<PathBuf>,
-        #[arg(long)]
-        replay_index_out: Option<PathBuf>,
-    },
-    NixReleaseExport {
-        #[arg(long)]
-        output_path: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-    },
-    NixReleaseVerify {
-        #[arg(long)]
-        output_path: PathBuf,
-        #[arg(long)]
-        evidence: PathBuf,
-        #[arg(long)]
-        receipt_out: PathBuf,
-    },
-    ReleaseBundleExport {
-        #[arg(long)]
-        output_path: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-    },
-    ReleaseBundleVerify {
-        #[arg(long)]
-        output_path: PathBuf,
-        #[arg(long)]
-        bundle: PathBuf,
-        #[arg(long)]
-        receipt_out: PathBuf,
-        #[arg(long = "signed-member")]
-        signed_members: Vec<PathBuf>,
-        #[arg(long)]
-        require_signed_members: bool,
-        #[arg(long, default_value = "release-evidence")]
-        signed_purpose: String,
-        #[arg(long, default_value = "local-release-trust-root")]
-        signed_trust_root: String,
-        #[arg(long, default_value = "local-release-key")]
-        signed_key: String,
-        #[arg(long)]
-        signed_key_ledger: Option<PathBuf>,
-        #[arg(long)]
-        signed_key_ref: Option<String>,
-        #[arg(long)]
-        signed_key_id: Option<String>,
-        #[arg(long)]
-        signed_signer: Option<String>,
-    },
-    ReleasePromote {
-        #[arg(long)]
-        output_path: PathBuf,
-        #[arg(long)]
-        bundle_verify: PathBuf,
-        #[arg(long)]
-        receipt_out: PathBuf,
-        #[arg(long)]
-        signed_key_ledger: PathBuf,
-        #[arg(long, default_value = "local-release-trust-root")]
-        signed_trust_root: String,
-        #[arg(long)]
-        signed_key_ref: Option<String>,
-        #[arg(long)]
-        signed_key_id: Option<String>,
-        #[arg(long)]
-        signed_signer: Option<String>,
-        #[arg(long)]
-        source_evidence: String,
-        #[arg(long)]
-        octet_evidence: String,
-        #[arg(long)]
-        cairn_evidence: String,
-    },
-    ReleasePromotionSummary {
-        #[arg(long)]
-        output_path: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long)]
-        signed_key_ledger: Option<PathBuf>,
-        #[arg(long, default_value = "local-release-trust-root")]
-        signed_trust_root: String,
-        #[arg(long)]
-        signed_key_ref: Option<String>,
-        #[arg(long)]
-        signed_key_id: Option<String>,
-        #[arg(long)]
-        signed_signer: Option<String>,
-    },
-    ReleaseExport {
-        #[arg(long)]
-        output_path: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long)]
-        manifest_out: PathBuf,
-    },
-    ReleaseExportVerify {
-        #[arg(long)]
-        bundle: PathBuf,
-        #[arg(long)]
-        receipt_out: PathBuf,
-    },
-    Show {
-        artifact: PathBuf,
-    },
-}
-
-struct DogfoodCliBoundedItems<T> {
-    values: Vec<T>,
-    maximum: usize,
-    label: &'static str,
-}
-
-impl<T> DogfoodCliBoundedItems<T> {
-    fn new(maximum: usize, label: &'static str) -> Self {
-        Self {
-            values: Vec::new(),
-            maximum,
-            label,
-        }
-    }
-
-    fn push(&mut self, value: T) -> Result<()> {
-        if self.values.len() >= self.maximum {
-            return Err(MoltenError::invalid_harness(format!("{} count exceeds {}", self.label, self.maximum)));
-        }
-        self.values.push(value);
-        Ok(())
-    }
-
-    fn into_vec(self) -> Vec<T> {
-        self.values
-    }
-}
+pub(crate) type DogfoodCommand = command::Command;
 
 pub(crate) fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
     match command {
@@ -249,7 +106,7 @@ pub(crate) fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
             signed_signer,
         } => {
             let bundle_value = read_preserves_file(&bundle)?;
-            let signed_member_values = read_preserves_files(&signed_members)?;
+            let signed_member_values = signed::read_preserves_files(&signed_members)?;
             cli_receipts::ensure_keyring_selector_has_ledger(
                 signed_key_ledger.as_deref(),
                 signed_key_ref.as_deref(),
@@ -372,7 +229,7 @@ pub(crate) fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
                     output_path: &output_path,
                 })?;
             write_file(&manifest_out, &to_text(&manifest.value)?)?;
-            write_release_export_archive(&output_path, &out, &manifest)?;
+            archive::write(&output_path, &out, &manifest)?;
             println!(
                 "dogfood release-export manifest={} promotion-summary={} members={} archive={}",
                 manifest.manifest_ref,
@@ -383,7 +240,7 @@ pub(crate) fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
             Ok(())
         }
         DogfoodCommand::ReleaseExportVerify { bundle, receipt_out } => {
-            let archive = read_release_export_archive(&bundle)?;
+            let archive = archive::read(&bundle)?;
             let receipt = operator_dogfood::verify_release_export(&operator_dogfood::ReleaseExportVerifyInput {
                 manifest_value: archive.manifest_value.as_ref(),
                 member_refs: &archive.member_refs,
@@ -404,111 +261,9 @@ pub(crate) fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
     }
 }
 
-fn write_release_export_archive(
-    output_path: &Path,
-    archive_path: &Path,
-    manifest: &operator_dogfood::ReleaseExportManifest,
-) -> Result<()> {
-    if let Some(parent) = archive_path.parent() {
-        fs::create_dir_all(parent).map_err(MoltenError::from)?;
-    }
-    let archive_file = fs::File::create(archive_path).map_err(MoltenError::from)?;
-    let encoder = zstd::stream::write::Encoder::new(archive_file, 19).map_err(MoltenError::from)?;
-    let mut builder = tar::Builder::new(encoder);
-    append_release_export_bytes(
-        &mut builder,
-        "release-export-manifest.preserves",
-        to_text(&manifest.value)?.as_bytes(),
-    )?;
-    for (name, expected_ref) in &manifest.member_refs {
-        let bytes = fs::read(output_path.join(name)).map_err(MoltenError::from)?;
-        let actual_ref = operator_dogfood::release_export_file_ref(name, &bytes);
-        if actual_ref != *expected_ref {
-            return Err(MoltenError::invalid_harness(format!(
-                "release export member {name} ref changed before archive write: manifest={expected_ref} observed={actual_ref}"
-            )));
-        }
-        append_release_export_bytes(&mut builder, name, &bytes)?;
-    }
-    let encoder = builder.into_inner().map_err(MoltenError::from)?;
-    encoder.finish().map_err(MoltenError::from)?;
-    Ok(())
-}
-
-fn append_release_export_bytes<W: std::io::Write>(
-    builder: &mut tar::Builder<W>,
-    name: &str,
-    bytes: &[u8],
-) -> Result<()> {
-    let mut header = tar::Header::new_gnu();
-    header.set_size(bytes.len() as u64);
-    header.set_mode(0o444);
-    header.set_uid(0);
-    header.set_gid(0);
-    header.set_mtime(0);
-    header.set_cksum();
-    builder.append_data(&mut header, name, std::io::Cursor::new(bytes)).map_err(MoltenError::from)
-}
-
-#[derive(Debug)]
-struct ReleaseExportArchiveRead {
-    manifest_value: Option<preserves::IOValue>,
-    member_refs: Vec<(String, String)>,
-    diagnostics: Vec<String>,
-}
-
-fn read_release_export_archive(path: &Path) -> Result<ReleaseExportArchiveRead> {
-    let archive_file = fs::File::open(path).map_err(MoltenError::from)?;
-    let decoder = zstd::stream::read::Decoder::new(archive_file).map_err(MoltenError::from)?;
-    let mut archive = tar::Archive::new(decoder);
-    let mut manifest_value = None;
-    let mut seen_names = Vec::with_capacity(operator_dogfood::release_export_member_names().len().saturating_add(16));
-    let mut member_refs = Vec::with_capacity(operator_dogfood::release_export_member_names().len().saturating_add(16));
-    let mut diagnostics = Vec::with_capacity(8);
-    let entries = archive.entries().map_err(MoltenError::from)?;
-    for entry in entries {
-        let mut entry = entry.map_err(MoltenError::from)?;
-        if !entry.header().entry_type().is_file() {
-            continue;
-        }
-        let name = entry.path().map_err(MoltenError::from)?.to_string_lossy().replace('\\', "/");
-        if seen_names.iter().any(|seen| seen == &name) {
-            diagnostics.push(format!("duplicate release export archive member: {name}"));
-        }
-        seen_names.push(name.clone());
-        let mut bytes = Vec::new();
-        std::io::Read::read_to_end(&mut entry, &mut bytes).map_err(MoltenError::from)?;
-        if name == "release-export-manifest.preserves" {
-            if manifest_value.is_some() {
-                diagnostics.push("duplicate release export manifest member".to_string());
-            }
-            let text = String::from_utf8(bytes).map_err(|error| {
-                MoltenError::invalid_harness(format!("release export manifest is not UTF-8: {error}"))
-            })?;
-            manifest_value = Some(parse_text(&text)?);
-        } else {
-            member_refs.push((name.clone(), operator_dogfood::release_export_file_ref(&name, &bytes)));
-        }
-    }
-    member_refs.sort_by(|left, right| left.0.cmp(&right.0));
-    Ok(ReleaseExportArchiveRead {
-        manifest_value,
-        member_refs,
-        diagnostics,
-    })
-}
-
 fn read_preserves_file(path: &Path) -> Result<preserves::IOValue> {
     let text = fs::read_to_string(path).map_err(MoltenError::from)?;
     parse_text(&text)
-}
-
-fn read_preserves_files(paths: &[PathBuf]) -> Result<Vec<preserves::IOValue>> {
-    let mut values = DogfoodCliBoundedItems::new(DOGFOOD_SIGNED_MEMBER_LIMIT, "dogfood signed members");
-    for path in paths {
-        values.push(read_preserves_file(path)?)?;
-    }
-    Ok(values.into_vec())
 }
 
 fn write_file(path: &Path, contents: &str) -> Result<()> {
