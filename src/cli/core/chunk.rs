@@ -1,161 +1,18 @@
 use std::fs;
-use std::path::Path;
 use std::path::PathBuf;
 
-use clap::Subcommand;
 use molten::chunk_store;
-use molten::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 use molten::error::MoltenError;
 use molten::error::Result;
 use molten::preserves_rail::canonical_hash;
 use molten::preserves_rail::to_text;
 
-use crate::RetentionEvidenceArgs;
+#[path = "chunk/command.rs"]
+mod command;
+#[path = "chunk/io.rs"]
+mod io;
 
-#[derive(Debug, Subcommand)]
-pub(crate) enum ChunkCommand {
-    Put {
-        input: PathBuf,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long, default_value = "artifact")]
-        kind: String,
-        #[arg(long, default_value_t = DEFAULT_FIXED_V1_CHUNK_SIZE)]
-        chunk_size: u64,
-        #[arg(long)]
-        manifest_out: Option<PathBuf>,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Verify {
-        manifest_ref: String,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Read {
-        manifest_ref: String,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Range {
-        manifest_ref: String,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        offset: u64,
-        #[arg(long)]
-        length: u64,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Sync {
-        manifest_ref: String,
-        #[arg(long)]
-        from: PathBuf,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    IrohPublish {
-        manifest_ref: String,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        iroh_store: PathBuf,
-        #[arg(long, default_value = "node:local")]
-        node: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    IrohFetch {
-        ticket: String,
-        #[arg(long)]
-        iroh_store: PathBuf,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        expected_manifest_ref: Option<String>,
-        #[arg(long, default_value = "peer:local")]
-        peer: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Pin {
-        manifest_ref: String,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Unpin {
-        manifest_ref: String,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    PinChunk {
-        chunk_ref: String,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    UnpinChunk {
-        chunk_ref: String,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    IndexStatus {
-        #[arg(long)]
-        store: PathBuf,
-    },
-    IndexRebuild {
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    ReceiptList {
-        #[arg(long)]
-        store: PathBuf,
-    },
-    ReceiptShow {
-        receipt_ref: String,
-        #[arg(long)]
-        store: PathBuf,
-    },
-    Lineage {
-        manifest_ref: String,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        lineage_out: Option<PathBuf>,
-    },
-    Gc {
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        dry_run: bool,
-        #[arg(long = "apply-ref")]
-        apply_refs: Vec<String>,
-        #[command(flatten)]
-        retention: RetentionEvidenceArgs,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-}
+pub(crate) type ChunkCommand = command::Command;
 
 pub(crate) fn run_chunk_command(command: ChunkCommand) -> Result<()> {
     match command {
@@ -170,7 +27,7 @@ pub(crate) fn run_chunk_command(command: ChunkCommand) -> Result<()> {
             let bytes = fs::read(&input).map_err(MoltenError::from)?;
             let put = chunk_store::put_bytes(&store, &kind, &bytes, chunk_size)?;
             if let Some(path) = manifest_out.as_ref() {
-                write_file(path, &to_text(&put.manifest_value)?)?;
+                io::write_file(path, &to_text(&put.manifest_value)?)?;
             }
             emit_named_receipt(receipt_out.as_ref(), "chunk store receipt", &put.receipt_value)?;
             println!(
@@ -428,18 +285,11 @@ fn emit_named_receipt(path: Option<&PathBuf>, label: &str, receipt: &preserves::
     let receipt_text = to_text(receipt)?;
     let receipt_ref = canonical_hash(receipt)?;
     if let Some(path) = path {
-        write_file(path, &receipt_text)?;
+        io::write_file(path, &receipt_text)?;
         println!("{label} {receipt_ref} written to {}", path.display());
     } else {
         println!("{receipt_text}");
         eprintln!("{label} {receipt_ref}");
     }
     Ok(())
-}
-
-fn write_file(path: &Path, contents: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(MoltenError::from)?;
-    }
-    fs::write(path, contents).map_err(MoltenError::from)
 }
