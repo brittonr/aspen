@@ -2,19 +2,14 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-use clap::Subcommand;
 use molten::error::MoltenError;
 use molten::error::Result;
-use molten::evidence::PASS_EVIDENCE_PURPOSE;
 use molten::evidence::SignReceiptInput;
-use molten::evidence::SignedReceiptKey;
 use molten::evidence::SignedReceiptKeyInput;
-use molten::evidence::SignedReceiptKeyRevocation;
 use molten::evidence::SignedReceiptKeyRevocationInput;
 use molten::evidence::VerifySignedReceiptKeyringPolicy;
 use molten::evidence::VerifySignedReceiptPolicy;
 use molten::evidence::parse_signed_receipt_key;
-use molten::evidence::parse_signed_receipt_key_revocation;
 use molten::evidence::sign_receipt;
 use molten::evidence::signed_receipt_key_revocation_value;
 use molten::evidence::signed_receipt_key_value;
@@ -27,165 +22,15 @@ use molten::preserves_rail::canonical_hash;
 use molten::preserves_rail::parse_text;
 use molten::preserves_rail::to_text;
 
-const SIGNED_KEYRING_CLI_ENTRY_LIMIT: usize = 4096;
-const _: () = assert!(SIGNED_KEYRING_CLI_ENTRY_LIMIT <= 100_000);
+#[path = "receipts/command.rs"]
+mod command;
+#[path = "receipts/keyring.rs"]
+mod keyring;
 
-#[derive(Debug, Subcommand)]
-pub(crate) enum ReceiptsCommand {
-    List {
-        #[arg(long)]
-        ledger: PathBuf,
-    },
-    Show {
-        receipt_ref: String,
-        #[arg(long)]
-        ledger: PathBuf,
-    },
-    Validate {
-        receipt_ref: String,
-        #[arg(long)]
-        ledger: PathBuf,
-    },
-    Export {
-        receipt_ref: String,
-        #[arg(long)]
-        ledger: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Key {
-        #[command(subcommand)]
-        command: ReceiptKeyCommand,
-    },
-    Sign {
-        receipt: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long, default_value = "local-signer")]
-        signer: String,
-        #[arg(long, default_value = PASS_EVIDENCE_PURPOSE)]
-        purpose: String,
-        #[arg(long, default_value = "local-trust-root")]
-        trust_root: String,
-        #[arg(long, default_value = "local-dev-key")]
-        key: String,
-        #[arg(long = "parent")]
-        parents: Vec<String>,
-    },
-    VerifySigned {
-        signed_receipt: PathBuf,
-        #[arg(long, default_value = PASS_EVIDENCE_PURPOSE)]
-        purpose: String,
-        #[arg(long, default_value = "local-trust-root")]
-        trust_root: String,
-        #[arg(long, default_value = "local-dev-key")]
-        key: String,
-        #[arg(long)]
-        key_ledger: Option<PathBuf>,
-        #[arg(long)]
-        key_ref: Option<String>,
-        #[arg(long)]
-        key_id: Option<String>,
-        #[arg(long)]
-        signer: Option<String>,
-        #[arg(long)]
-        subject_ref: Option<String>,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-pub(crate) enum ReceiptCommand {
-    Sign {
-        receipt: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long, default_value = "local-signer")]
-        signer: String,
-        #[arg(long, default_value = PASS_EVIDENCE_PURPOSE)]
-        purpose: String,
-        #[arg(long, default_value = "local-trust-root")]
-        trust_root: String,
-        #[arg(long, default_value = "local-dev-key")]
-        key: String,
-        #[arg(long = "parent")]
-        parents: Vec<String>,
-    },
-    Verify {
-        signed_receipt: PathBuf,
-        #[arg(long, default_value = PASS_EVIDENCE_PURPOSE)]
-        purpose: String,
-        #[arg(long, default_value = "local-trust-root")]
-        trust_root: String,
-        #[arg(long, default_value = "local-dev-key")]
-        key: String,
-        #[arg(long)]
-        key_ledger: Option<PathBuf>,
-        #[arg(long)]
-        key_ref: Option<String>,
-        #[arg(long)]
-        key_id: Option<String>,
-        #[arg(long)]
-        signer: Option<String>,
-        #[arg(long)]
-        subject_ref: Option<String>,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-pub(crate) enum ReceiptKeyCommand {
-    Import {
-        #[arg(long)]
-        ledger: PathBuf,
-        #[arg(long)]
-        key_id: String,
-        #[arg(long)]
-        signer: String,
-        #[arg(long)]
-        trust_root: String,
-        #[arg(long)]
-        key: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    List {
-        #[arg(long)]
-        ledger: PathBuf,
-    },
-    Show {
-        key_ref: String,
-        #[arg(long)]
-        ledger: PathBuf,
-    },
-    Revoke {
-        key_ref: String,
-        #[arg(long)]
-        ledger: PathBuf,
-        #[arg(long, default_value = "operator-revoked")]
-        reason: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Rotate {
-        old_key_ref: String,
-        #[arg(long)]
-        ledger: PathBuf,
-        #[arg(long)]
-        new_key_id: String,
-        #[arg(long)]
-        new_key: String,
-        #[arg(long, default_value = "rotated")]
-        reason: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-}
-
-pub(crate) struct SignedReceiptKeyring {
-    pub(crate) keys: Vec<SignedReceiptKey>,
-    pub(crate) revocations: Vec<SignedReceiptKeyRevocation>,
-}
+pub(crate) type ReceiptsCommand = command::Top;
+pub(crate) type ReceiptCommand = command::Test;
+type ReceiptKeyCommand = command::Key;
+pub(crate) type SignedReceiptKeyring = keyring::Set;
 
 pub(crate) fn run_receipts_command(command: ReceiptsCommand) -> Result<()> {
     match command {
@@ -423,7 +268,7 @@ fn run_receipt_key_command(command: ReceiptKeyCommand) -> Result<()> {
         ReceiptKeyCommand::List { ledger } => {
             let keyring = load_signed_receipt_keyring(&ledger)?;
             for key in &keyring.keys {
-                let is_revoked = signed_key_revocation(&keyring, &key.key_ref).is_some();
+                let is_revoked = keyring::revocation(&keyring, &key.key_ref).is_some();
                 println!(
                     "{} signed-receipt-key key-id={} signer={} trust-root={} status={} generation={} revoked={} predecessor={}",
                     key.key_ref,
@@ -452,7 +297,7 @@ fn run_receipt_key_command(command: ReceiptKeyCommand) -> Result<()> {
         }
         ReceiptKeyCommand::Show { key_ref, ledger } => {
             let value = ledger::read_artifact(&ledger, &key_ref)?;
-            println!("{}", signed_key_summary(&value)?);
+            println!("{}", keyring::summary(&value)?);
             Ok(())
         }
         ReceiptKeyCommand::Revoke {
@@ -462,7 +307,7 @@ fn run_receipt_key_command(command: ReceiptKeyCommand) -> Result<()> {
             receipt_out,
         } => {
             let keyring = load_signed_receipt_keyring(&ledger)?;
-            if signed_key_revocation(&keyring, &key_ref).is_some() {
+            if keyring::revocation(&keyring, &key_ref).is_some() {
                 return Err(MoltenError::invalid_harness(format!("signed receipt key {key_ref} is already revoked")));
             }
             let key_value = ledger::read_artifact(&ledger, &key_ref)?;
@@ -489,7 +334,7 @@ fn run_receipt_key_command(command: ReceiptKeyCommand) -> Result<()> {
             receipt_out,
         } => {
             let keyring = load_signed_receipt_keyring(&ledger)?;
-            if signed_key_revocation(&keyring, &old_key_ref).is_some() {
+            if keyring::revocation(&keyring, &old_key_ref).is_some() {
                 return Err(MoltenError::invalid_harness(format!(
                     "signed receipt key {old_key_ref} is already revoked and cannot be rotated"
                 )));
@@ -535,86 +380,11 @@ pub(crate) fn ensure_keyring_selector_has_ledger(
     key_ref: Option<&str>,
     key_id: Option<&str>,
 ) -> Result<()> {
-    if ledger.is_none() && (key_ref.is_some() || key_id.is_some()) {
-        Err(MoltenError::invalid_harness(
-            "signed receipt key selectors require --key-ledger or --signed-key-ledger",
-        ))
-    } else {
-        Ok(())
-    }
+    keyring::ensure_selector_has_ledger(ledger, key_ref, key_id)
 }
 
 pub(crate) fn load_signed_receipt_keyring(ledger: &Path) -> Result<SignedReceiptKeyring> {
-    let mut keys = Vec::with_capacity(SIGNED_KEYRING_CLI_ENTRY_LIMIT);
-    let mut revocations = Vec::with_capacity(SIGNED_KEYRING_CLI_ENTRY_LIMIT);
-    for entry in ledger::list_artifacts(ledger)? {
-        match entry.artifact_kind.as_str() {
-            "signed-receipt-key" => {
-                ensure_signed_keyring_entry_count(keys.len().saturating_add(1), "signed receipt key records")?;
-                keys.push(parse_signed_receipt_key(&ledger::read_artifact(ledger, &entry.artifact_ref)?)?);
-            }
-            "signed-receipt-key-revocation" => {
-                ensure_signed_keyring_entry_count(
-                    revocations.len().saturating_add(1),
-                    "signed receipt key revocation records",
-                )?;
-                revocations
-                    .push(parse_signed_receipt_key_revocation(&ledger::read_artifact(ledger, &entry.artifact_ref)?)?);
-            }
-            _ => {}
-        }
-    }
-    Ok(SignedReceiptKeyring { keys, revocations })
-}
-
-fn ensure_signed_keyring_entry_count(count: usize, label: &str) -> Result<()> {
-    if count > SIGNED_KEYRING_CLI_ENTRY_LIMIT {
-        return Err(MoltenError::invalid_harness(format!(
-            "{label} count {count} exceeds {SIGNED_KEYRING_CLI_ENTRY_LIMIT}"
-        )));
-    }
-    Ok(())
-}
-
-fn signed_key_revocation<'a>(
-    keyring: &'a SignedReceiptKeyring,
-    key_ref: &str,
-) -> Option<&'a SignedReceiptKeyRevocation> {
-    keyring.revocations.iter().find(|revocation| revocation.key_ref == key_ref)
-}
-
-fn signed_key_summary(value: &preserves::IOValue) -> Result<String> {
-    match ledger::artifact_kind(value) {
-        "signed-receipt-key" => {
-            let key = parse_signed_receipt_key(value)?;
-            Ok(format!(
-                "signed receipt key {}\nkey-id={}\nsigner={}\ntrust-root={}\nstatus={}\ngeneration={}\npredecessor={}\nevidence-only=pass",
-                key.key_ref,
-                key.key_id,
-                key.signer,
-                key.trust_root,
-                key.status,
-                key.generation,
-                key.predecessor_ref.as_deref().unwrap_or("none")
-            ))
-        }
-        "signed-receipt-key-revocation" => {
-            let revocation = parse_signed_receipt_key_revocation(value)?;
-            Ok(format!(
-                "signed receipt key revocation {}\nkey={}\nkey-id={}\nsigner={}\ntrust-root={}\nreason={}\nsuperseded-by={}\nevidence-only=pass",
-                revocation.revocation_ref,
-                revocation.key_ref,
-                revocation.key_id,
-                revocation.signer,
-                revocation.trust_root,
-                revocation.reason,
-                revocation.superseded_by.as_deref().unwrap_or("none")
-            ))
-        }
-        kind => Err(MoltenError::invalid_harness(format!(
-            "unsupported signed receipt keyring artifact kind {kind}; expected signed-receipt-key or signed-receipt-key-revocation"
-        ))),
-    }
+    keyring::load(ledger)
 }
 
 fn validate_operator_receipt_value(value: &preserves::IOValue) -> Result<String> {

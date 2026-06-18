@@ -512,6 +512,8 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli/ops/dogfood/command.rs",
                 "src/cli/ops/dogfood/signed.rs",
                 "src/cli/evidence/gate.rs",
+                "src/cli/evidence/receipts/command.rs",
+                "src/cli/evidence/receipts/keyring.rs",
                 "src/cli/test/harness.rs",
                 "src/cli/ops/node.rs",
                 "src/cli/ops/nixosvm.rs",
