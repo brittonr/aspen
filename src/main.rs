@@ -1955,17 +1955,17 @@ mod tests {
         .expect("dag value");
         let dag = job_dag::parse_job_dag_value(&dag_value).expect("parse dag");
         write_file(&dag_file, &to_text(&dag_value).expect("dag text")).expect("write dag");
-        run_job_command(JobCommand::Install {
+        run_job_command(JobCommand::Install(cli_job::command::base::Install {
             dag: dag_file.clone(),
             registry: registry.clone(),
             receipt_out: Some(dir.join("job-install-receipt.preserves")),
             artifact_out: Some(dir.join("job-artifact.preserves")),
-        })
+        }))
         .expect("job install");
-        run_job_command(JobCommand::Show {
+        run_job_command(JobCommand::Show(cli_job::command::base::Show {
             job: dag.job_ref.clone(),
             registry: registry.clone(),
-        })
+        }))
         .expect("job show");
         let plan_out = dir.join("job-plan.preserves");
         let profile_out = dir.join("job-profile.preserves");
@@ -1985,35 +1985,35 @@ mod tests {
         }
         let admit_plan_out = dir.join("job-admit-plan.preserves");
         let admit_loopback_receipt = dir.join("job-admit-loopback-receipt.preserves");
-        run_job_command(JobCommand::Plan {
+        run_job_command(JobCommand::Plan(cli_job::command::base::Plan {
             job: dag.job_ref.clone(),
             registry: registry.clone(),
             output_request: None,
             out: Some(plan_out.clone()),
             receipt_out: Some(dir.join("job-plan-receipt.preserves")),
-        })
+        }))
         .expect("job plan");
-        run_job_command(JobCommand::Profile {
+        run_job_command(JobCommand::Profile(cli_job::command::base::Profile {
             job: dag.job_ref.clone(),
             registry: registry.clone(),
             cache: Some(cache.clone()),
             output_request: None,
             out: Some(profile_out.clone()),
             receipt_out: Some(dir.join("job-profile-receipt.preserves")),
-        })
+        }))
         .expect("job profile");
-        run_job_command(JobCommand::FusionPreview {
+        run_job_command(JobCommand::FusionPreview(cli_job::command::base::FusionPreview {
             job: dag.job_ref.clone(),
             registry: registry.clone(),
             output_request: None,
             out: Some(fusion_out.clone()),
             receipt_out: Some(dir.join("job-fusion-receipt.preserves")),
-        })
+        }))
         .expect("job fusion preview");
         assert!(fs::read_to_string(&plan_out).expect("read plan").contains("job-plan-v1"));
         assert!(fs::read_to_string(&profile_out).expect("read profile").contains("job-profile-v1"));
         assert!(fs::read_to_string(&fusion_out).expect("read fusion").contains("job-fusion-plan-v1"));
-        run_job_command(JobCommand::SyncPlan {
+        run_job_command(JobCommand::SyncPlan(cli_job::command::sync::Plan {
             job: dag.job_ref.clone(),
             source_registry: registry.clone(),
             target_registry: target_registry.clone(),
@@ -2021,9 +2021,9 @@ mod tests {
             stages: Vec::new(),
             out: Some(sync_plan_out.clone()),
             receipt_out: Some(dir.join("job-sync-plan-receipt.preserves")),
-        })
+        }))
         .expect("job sync plan");
-        run_job_command(JobCommand::SyncLoopback {
+        run_job_command(JobCommand::SyncLoopback(cli_job::command::sync::Loopback {
             job: dag.job_ref.clone(),
             source_registry: registry.clone(),
             target_registry: target_registry.clone(),
@@ -2033,7 +2033,7 @@ mod tests {
             build_verification_paths: Vec::new(),
             plan_out: Some(dir.join("job-sync-loopback-plan.preserves")),
             receipt_out: Some(sync_loopback_receipt.clone()),
-        })
+        }))
         .expect("job sync loopback");
         assert!(fs::read_to_string(&sync_plan_out).expect("read sync plan").contains("job-sync-plan-v1"));
         assert!(
@@ -2051,7 +2051,7 @@ mod tests {
             cli_synthetic_ref("job-worker-resource-b").expect("resource b"),
             cli_synthetic_ref("job-worker-resource-c").expect("resource c"),
         ];
-        run_job_command(JobCommand::AdmitPlan {
+        run_job_command(JobCommand::AdmitPlan(cli_job::command::sync::AdmitPlan {
             job: dag.job_ref.clone(),
             target_registry: target_registry.clone(),
             sync_ref: Some(sync_ref.clone()),
@@ -2063,9 +2063,9 @@ mod tests {
             resource_refs: worker_resource_refs.clone(),
             out: Some(admit_plan_out.clone()),
             receipt_out: Some(dir.join("job-admit-plan-receipt.preserves")),
-        })
+        }))
         .expect("job admit plan");
-        run_job_command(JobCommand::AdmitLoopback {
+        run_job_command(JobCommand::AdmitLoopback(cli_job::command::sync::AdmitLoopback {
             job: dag.job_ref.clone(),
             target_registry: target_registry.clone(),
             sync_ref: Some(sync_ref.clone()),
@@ -2077,11 +2077,11 @@ mod tests {
             resource_refs: worker_resource_refs.clone(),
             plan_out: Some(dir.join("job-admit-loopback-plan.preserves")),
             receipt_out: Some(admit_loopback_receipt.clone()),
-        })
+        }))
         .expect("job admit loopback");
         assert!(fs::read_to_string(&admit_plan_out).expect("read admit plan").contains("job-admission-plan-v1"));
         let missing_execution_receipt = dir.join("job-execute-missing-admission-receipt.preserves");
-        run_job_command(JobCommand::ExecuteLoopback {
+        run_job_command(JobCommand::ExecuteLoopback(cli_job::command::sync::ExecuteLoopback {
             job: dag.job_ref.clone(),
             target_registry: target_registry.clone(),
             storage: storage.clone(),
@@ -2096,14 +2096,14 @@ mod tests {
             request_out: Some(dir.join("job-execute-missing-request.preserves")),
             out: None,
             receipt_out: Some(missing_execution_receipt.clone()),
-        })
+        }))
         .expect_err("missing admission denies execution");
         assert_eq!(
             ledger::artifact_kind(&read_preserves_file(&missing_execution_receipt).expect("missing execution receipt")),
             "job-execution-receipt"
         );
         let worker_execution_request = dir.join("job-worker-execution-request.preserves");
-        run_job_command(JobCommand::ExecuteLoopback {
+        run_job_command(JobCommand::ExecuteLoopback(cli_job::command::sync::ExecuteLoopback {
             job: dag.job_ref.clone(),
             target_registry: target_registry.clone(),
             storage: storage.clone(),
@@ -2118,12 +2118,12 @@ mod tests {
             request_out: Some(worker_execution_request.clone()),
             out: Some(dir.join("job-execute-loopback-output.preserves")),
             receipt_out: Some(dir.join("job-execute-loopback-receipt.preserves")),
-        })
+        }))
         .expect("job execute loopback pass");
         let worker_request = dir.join("job-worker-request.preserves");
         let peer_bootstrap_ref = cli_synthetic_ref("job-worker-peer-bootstrap").expect("peer bootstrap");
         let node_identity_ref = cli_synthetic_ref("job-worker-node-identity").expect("node identity");
-        run_job_command(JobCommand::WorkerRequest {
+        run_job_command(JobCommand::WorkerRequest(cli_job::command::worker::Request {
             admission_receipt: admit_loopback_receipt.clone(),
             execution_request: worker_execution_request.clone(),
             sync_ref: Some(sync_ref),
@@ -2135,10 +2135,10 @@ mod tests {
             node_identity_refs: vec![node_identity_ref],
             evidence_refs: Vec::new(),
             out: Some(worker_request.clone()),
-        })
+        }))
         .expect("job worker request");
         let worker_out = dir.join("job-worker-local");
-        run_job_command(JobCommand::WorkerRunLocal {
+        run_job_command(JobCommand::WorkerRunLocal(cli_job::command::worker::RunLocal {
             request: worker_request.clone(),
             target_registry: target_registry.clone(),
             storage: dir.join("worker-storage"),
@@ -2152,19 +2152,19 @@ mod tests {
             topic: "molten.job.worker".to_string(),
             ledger: Some(ledger_root.clone()),
             out: worker_out.clone(),
-        })
+        }))
         .expect("job worker local run");
         let worker_receipt = read_preserves_file(&worker_out.join("worker-receipt.preserves")).expect("worker receipt");
         assert_eq!(ledger::artifact_kind(&worker_receipt), "job-worker-receipt");
         assert!(fs::read_to_string(worker_out.join("output.preserves")).expect("worker output").contains("3"));
         let worker_receipt_ref = canonical_hash(&worker_receipt).expect("worker receipt ref");
-        run_job_command(JobCommand::ReceiptShow {
+        run_job_command(JobCommand::ReceiptShow(cli_job::command::refs::ReceiptShow {
             receipt_ref: worker_receipt_ref,
             ledger: ledger_root.clone(),
-        })
+        }))
         .expect("job worker receipt show");
         let schedule_out = dir.join("job-worker-scheduled");
-        run_job_command(JobCommand::WorkerScheduleLocal {
+        run_job_command(JobCommand::WorkerScheduleLocal(cli_job::command::worker::ScheduleLocal {
             request: worker_request.clone(),
             target_registry: target_registry.clone(),
             storage: dir.join("scheduled-worker-storage"),
@@ -2186,7 +2186,7 @@ mod tests {
             coordination_policy_refs: vec![cli_synthetic_ref("job-worker-schedule-policy").expect("schedule policy")],
             ledger: Some(ledger_root.clone()),
             out: schedule_out.clone(),
-        })
+        }))
         .expect("job worker scheduled local run");
         let schedule_receipt =
             read_preserves_file(&schedule_out.join("schedule-receipt.preserves")).expect("schedule receipt");
@@ -2208,13 +2208,13 @@ mod tests {
         .expect("duplicate enqueue ref");
         assert_eq!(enqueue_ref, duplicate_enqueue_ref);
         let schedule_receipt_ref = canonical_hash(&schedule_receipt).expect("schedule receipt ref");
-        run_job_command(JobCommand::ReceiptShow {
+        run_job_command(JobCommand::ReceiptShow(cli_job::command::refs::ReceiptShow {
             receipt_ref: schedule_receipt_ref,
             ledger: ledger_root.clone(),
-        })
+        }))
         .expect("job worker schedule receipt show");
         let stale_schedule_out = dir.join("job-worker-stale-schedule");
-        run_job_command(JobCommand::WorkerScheduleLocal {
+        run_job_command(JobCommand::WorkerScheduleLocal(cli_job::command::worker::ScheduleLocal {
             request: worker_request,
             target_registry: target_registry.clone(),
             storage: dir.join("stale-worker-storage"),
@@ -2236,7 +2236,7 @@ mod tests {
             coordination_policy_refs: vec![cli_synthetic_ref("job-worker-stale-policy").expect("stale policy")],
             ledger: None,
             out: stale_schedule_out.clone(),
-        })
+        }))
         .expect_err("stale schedule token denies before worker");
         let stale_receipt = job_dag::parse_job_worker_schedule_receipt_value(
             &read_preserves_file(&stale_schedule_out.join("schedule-receipt.preserves")).expect("stale receipt"),
@@ -2245,7 +2245,7 @@ mod tests {
         assert_eq!(stale_receipt.decision, "deny");
         assert!(stale_receipt.diagnostics.join(";").contains("stale fencing token"));
         assert!(!stale_schedule_out.join("worker").join("worker-receipt.preserves").exists());
-        run_job_command(JobCommand::Run {
+        run_job_command(JobCommand::Run(cli_job::command::base::Run {
             job: dag.job_ref.clone(),
             registry: registry.clone(),
             storage,
@@ -2255,20 +2255,20 @@ mod tests {
             output_request: None,
             out: Some(output.clone()),
             receipt_out: Some(run_receipt.clone()),
-        })
+        }))
         .expect("job run");
         assert!(fs::read_to_string(&output).expect("read output").contains("3"));
         let receipt_ref =
             canonical_hash(&read_preserves_file(&run_receipt).expect("read run receipt")).expect("receipt ref");
-        run_job_command(JobCommand::Status {
+        run_job_command(JobCommand::Status(cli_job::command::refs::Status {
             ledger: ledger_root.clone(),
             job: Some(dag.job_ref.clone()),
-        })
+        }))
         .expect("job status");
-        run_job_command(JobCommand::ReceiptShow {
+        run_job_command(JobCommand::ReceiptShow(cli_job::command::refs::ReceiptShow {
             receipt_ref,
             ledger: ledger_root,
-        })
+        }))
         .expect("job receipt show");
     }
 
