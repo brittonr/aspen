@@ -3,7 +3,6 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-use clap::Subcommand;
 use molten::error::MoltenError;
 use molten::error::Result;
 use molten::harness::ReproExportProfile;
@@ -27,62 +26,10 @@ use molten::preserves_rail::string;
 use molten::preserves_rail::to_text;
 use molten::secrets;
 
-#[derive(Debug, Subcommand)]
-pub(crate) enum ReproCommand {
-    Export {
-        report: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long, default_value = "deny-sensitive")]
-        profile: String,
-        #[arg(long)]
-        failure_out: Option<PathBuf>,
-    },
-    Verify {
-        bundle: PathBuf,
-        #[arg(long)]
-        failure_out: Option<PathBuf>,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-    },
-    Unpack {
-        bundle: PathBuf,
-        #[arg(long)]
-        out: PathBuf,
-        #[arg(long = "reveal-receipt")]
-        reveal_receipts: Vec<PathBuf>,
-        #[arg(long)]
-        failure_out: Option<PathBuf>,
-    },
-    Publish {
-        bundle: PathBuf,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long, default_value = "node:local")]
-        node: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-        #[arg(long)]
-        failure_out: Option<PathBuf>,
-    },
-    Fetch {
-        ticket: String,
-        #[arg(long)]
-        store: PathBuf,
-        #[arg(long)]
-        out: Option<PathBuf>,
-        #[arg(long)]
-        ledger: Option<PathBuf>,
-        #[arg(long)]
-        expected_bundle_ref: Option<String>,
-        #[arg(long, default_value = "peer:local")]
-        peer: String,
-        #[arg(long)]
-        receipt_out: Option<PathBuf>,
-        #[arg(long)]
-        failure_out: Option<PathBuf>,
-    },
-}
+#[path = "repro/command.rs"]
+mod command;
+
+pub(crate) type ReproCommand = command::Top;
 
 pub(crate) fn run_repro_command(command: ReproCommand) -> Result<()> {
     match command {

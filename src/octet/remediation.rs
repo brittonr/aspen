@@ -533,6 +533,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli/workflow/remote.rs",
                 "src/cli/test/replayfixture.rs",
                 "src/cli/runtime/repro.rs",
+                "src/cli/runtime/repro/command.rs",
                 "src/cli/workflow/retention.rs",
                 "src/cli/runtime/rewrite.rs",
                 "src/cli/runtime/rewrite/input.rs",
