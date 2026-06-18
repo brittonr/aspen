@@ -145,7 +145,7 @@ enum Command {
     },
     Node {
         #[command(subcommand)]
-        command: cli_node::NodeCommand,
+        command: cli_node::Command,
     },
     Runtime {
         #[command(subcommand)]
@@ -296,7 +296,7 @@ enum TestCommand {
     },
     Node {
         #[command(subcommand)]
-        command: cli_node::NodeCommand,
+        command: cli_node::Command,
     },
     Repro {
         #[command(subcommand)]
@@ -365,7 +365,7 @@ fn run() -> Result<()> {
         Some(Command::Test { command }) => run_test_command(command),
         Some(Command::Dogfood { command }) => cli_dogfood::run_dogfood_command(command),
         Some(Command::Receipts { command }) => cli_receipts::run_receipts_command(command),
-        Some(Command::Node { command }) => cli_node::run_node_command(command),
+        Some(Command::Node { command }) => cli_node::run(command),
         Some(Command::Runtime { command }) => run_runtime_command(command),
     }
 }
@@ -419,7 +419,7 @@ fn run_test_command(command: TestCommand) -> Result<()> {
         TestCommand::NixosVm { command } => cli_nixos_vm::run_nixos_vm_command(command),
         TestCommand::ProdSoak { command } => cli_prod_soak::run_prod_soak_command(command),
         TestCommand::Octet { command } => cli_octet::run_octet_command(command),
-        TestCommand::Node { command } => cli_node::run_node_command(command),
+        TestCommand::Node { command } => cli_node::run(command),
         TestCommand::Repro { command } => cli_repro::run_repro_command(command),
     }
 }
