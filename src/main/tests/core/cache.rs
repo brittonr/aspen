@@ -59,7 +59,7 @@
         let policy_ref = test_ref("cache-cli-policy");
         write_file(&input, "<schema-shape <record \"x\">>").expect("write cache input");
         write_file(&output, "<fingerprint \"ok\">").expect("write cache output");
-        run_cache_command(CacheCommand::Put {
+        run_cache_command(CacheCommand::Put(crate::cli_cache::command::Put {
             input,
             cache: cache.clone(),
             output: Some(output),
@@ -81,11 +81,11 @@
             key_out: Some(key_out.clone()),
             value_out: Some(value_out.clone()),
             receipt_out: Some(dir.join("put-receipt.preserves")),
-        })
+        }))
         .expect("cache put");
         let key = eval_cache::parse_eval_cache_key(&read_preserves_file(&key_out).expect("read key"))
             .expect("parse cache key");
-        run_cache_command(CacheCommand::Get {
+        run_cache_command(CacheCommand::Get(crate::cli_cache::command::Get {
             key_ref: key.key_ref.clone(),
             cache: cache.clone(),
             current_policy_refs: Vec::new(),
@@ -94,11 +94,12 @@
             semantic_enabled: true,
             out: Some(hit_out.clone()),
             receipt_out: Some(dir.join("hit-receipt.preserves")),
-        })
+        }))
         .expect("cache get");
         assert_eq!(fs::read_to_string(&hit_out).expect("read hit"), "<fingerprint \"ok\">");
-        run_cache_command(CacheCommand::Status { cache: cache.clone() }).expect("cache status");
-        run_cache_command(CacheCommand::List {
+        run_cache_command(CacheCommand::Status(crate::cli_cache::command::Status { cache: cache.clone() }))
+            .expect("cache status");
+        run_cache_command(CacheCommand::List(crate::cli_cache::command::List {
             cache: cache.clone(),
             operation: Some("schema-fingerprint".to_string()),
             tier: Some(eval_cache::TIER_PURE.to_string()),
@@ -108,19 +109,19 @@
             capability_ref: None,
             revocation_ref: None,
             evidence_ref: None,
-        })
+        }))
         .expect("cache list");
-        run_cache_command(CacheCommand::Show {
+        run_cache_command(CacheCommand::Show(crate::cli_cache::command::Show {
             reference: key.key_ref.clone(),
             cache: cache.clone(),
-        })
+        }))
         .expect("cache show key");
-        run_cache_command(CacheCommand::Show {
+        run_cache_command(CacheCommand::Show(crate::cli_cache::command::Show {
             reference: eval_cache::parse_eval_cache_value(&read_preserves_file(&value_out).expect("read value"))
                 .expect("parse cache value")
                 .value_ref,
             cache: cache.clone(),
-        })
+        }))
         .expect("cache show value");
         let cache_retention_object = RetentionCliObject {
             root: &cache,
@@ -137,7 +138,7 @@
             &cache_retention,
         )];
         let invalidate_receipt = dir.join("invalidate-receipt.preserves");
-        run_cache_command(CacheCommand::Invalidate {
+        run_cache_command(CacheCommand::Invalidate(crate::cli_cache::command::Invalidate {
             cache: cache.clone(),
             key_ref: None,
             dependency_ref: Some(dependency_ref),
@@ -149,11 +150,11 @@
             apply_refs: cache_apply_refs,
             retention: cache_retention,
             receipt_out: Some(invalidate_receipt.clone()),
-        })
+        }))
         .expect("cache invalidate");
         let invalidate_text = fs::read_to_string(&invalidate_receipt).expect("read invalidate receipt");
         assert!(invalidate_text.contains("retention-execution"));
-        let error = run_cache_command(CacheCommand::Get {
+        let error = run_cache_command(CacheCommand::Get(crate::cli_cache::command::Get {
             key_ref: key.key_ref,
             cache,
             current_policy_refs: Vec::new(),
@@ -162,7 +163,7 @@
             semantic_enabled: true,
             out: None,
             receipt_out: None,
-        })
+        }))
         .expect_err("invalidated key should miss");
         assert!(error.to_string().contains("tombstoned"), "{error}");
     }
