@@ -526,6 +526,8 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
                 "src/cli/core/catalog.rs",
                 "src/cli/core/catalog/command.rs",
                 "src/cli/core/catalog/filter.rs",
+                "src/cli/core/catalog/io.rs",
+                "src/cli/core/catalog/ops.rs",
                 "src/cli/core/chunk.rs",
                 "src/cli/core/chunk/command.rs",
                 "src/cli/core/chunk/io.rs",
