@@ -13,7 +13,7 @@ pub(super) fn put(args: super::command::Put) -> molten::error::Result<()> {
         revocation_refs,
         tool_ref,
         tool_version,
-        mut assumption_refs,
+        assumption_refs,
         tier,
         status,
         evidence_refs,
@@ -24,30 +24,14 @@ pub(super) fn put(args: super::command::Put) -> molten::error::Result<()> {
     } = args;
     let input_value = super::io::read_preserves_file(&input)?;
     let output_value = output.as_ref().map(|path| super::io::read_preserves_file(path)).transpose()?;
-    let tool_ref = match tool_ref {
-        Some(tool_ref) => tool_ref,
-        None => super::io::cli_cache_ref("tool", &operation)?,
-    };
-    if matches!(status.as_str(), molten::eval_cache::STATUS_DENY | molten::eval_cache::STATUS_ERROR) {
-        for evidence_ref in &evidence_refs {
-            if !assumption_refs.contains(evidence_ref)
-                && !policy_refs.contains(evidence_ref)
-                && !capability_refs.contains(evidence_ref)
-                && !revocation_refs.contains(evidence_ref)
-            {
-                assumption_refs.push(evidence_ref.clone());
-            }
-        }
-    }
-    let closure_hash = match dependency_closure_hash {
-        Some(hash) => hash,
-        None => {
-            molten::preserves_rail::canonical_hash(&molten::preserves_rail::record("eval-cache-cli-closure", vec![
-                molten::preserves_rail::string(&operation),
-                super::io::preserves_sequence_strings(&dependencies),
-            ]))?
-        }
-    };
+    let tool_ref = resolve_tool_ref(tool_ref, &operation)?;
+    let assumption_refs = extend_denial_assumptions(assumption_refs, &status, GuardRefs {
+        evidence: &evidence_refs,
+        policy: &policy_refs,
+        capability: &capability_refs,
+        revocation: &revocation_refs,
+    });
+    let closure_hash = resolve_closure_hash(dependency_closure_hash, &operation, &dependencies)?;
     let key_input = molten::eval_cache::EvalCacheKeyInput {
         operation: operation.clone(),
         version,
@@ -73,6 +57,52 @@ pub(super) fn put(args: super::command::Put) -> molten::error::Result<()> {
     };
     let put = molten::eval_cache::put(&cache, &key_input, &value_input)?;
     emit_put_result(&cache, key_out.as_ref(), value_out.as_ref(), receipt_out.as_ref(), &put)
+}
+
+struct GuardRefs<'a> {
+    evidence: &'a [String],
+    policy: &'a [String],
+    capability: &'a [String],
+    revocation: &'a [String],
+}
+
+fn resolve_tool_ref(tool_ref: Option<String>, operation: &str) -> molten::error::Result<String> {
+    match tool_ref {
+        Some(tool_ref) => Ok(tool_ref),
+        None => super::io::cli_cache_ref("tool", operation),
+    }
+}
+
+fn extend_denial_assumptions(mut assumption_refs: Vec<String>, status: &str, refs: GuardRefs<'_>) -> Vec<String> {
+    if !matches!(status, molten::eval_cache::STATUS_DENY | molten::eval_cache::STATUS_ERROR) {
+        return assumption_refs;
+    }
+    for evidence_ref in refs.evidence {
+        if !assumption_refs.contains(evidence_ref)
+            && !refs.policy.contains(evidence_ref)
+            && !refs.capability.contains(evidence_ref)
+            && !refs.revocation.contains(evidence_ref)
+        {
+            assumption_refs.push(evidence_ref.clone());
+        }
+    }
+    assumption_refs
+}
+
+fn resolve_closure_hash(
+    dependency_closure_hash: Option<String>,
+    operation: &str,
+    dependencies: &[String],
+) -> molten::error::Result<String> {
+    match dependency_closure_hash {
+        Some(hash) => Ok(hash),
+        None => {
+            molten::preserves_rail::canonical_hash(&molten::preserves_rail::record("eval-cache-cli-closure", vec![
+                molten::preserves_rail::string(operation),
+                super::io::preserves_sequence_strings(dependencies),
+            ]))
+        }
+    }
 }
 
 fn emit_put_result(
