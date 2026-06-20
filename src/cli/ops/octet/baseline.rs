@@ -44,7 +44,7 @@ pub(super) fn run(command: Command) -> molten::error::Result<()> {
                     expires_at,
                     target_next,
                 })?;
-            super::write_file(&out, &molten::preserves_rail::to_text(&baseline.baseline_value)?)?;
+            super::io::write_file(&out, &molten::preserves_rail::to_text(&baseline.baseline_value)?)?;
             println!(
                 "octet warning baseline {} written to {} findings={} critical={}",
                 baseline.baseline_ref,
@@ -62,10 +62,10 @@ pub(super) fn run(command: Command) -> molten::error::Result<()> {
             receipt_out,
             reviews,
         } => {
-            let baseline_value = super::read_preserves_file(&baseline)?;
+            let baseline_value = super::io::read_preserves_file(&baseline)?;
             let review_values = reviews
                 .iter()
-                .map(|path| super::read_preserves_file(path))
+                .map(|path| super::io::read_preserves_file(path))
                 .collect::<molten::error::Result<Vec<_>>>()?;
             let evaluation =
                 molten::octet_gate::check_octet_warning_baseline(&molten::octet_gate::OctetBaselineCheckInput {
@@ -75,7 +75,7 @@ pub(super) fn run(command: Command) -> molten::error::Result<()> {
                     as_of,
                     review_values,
                 })?;
-            super::emit_named_receipt(receipt_out.as_ref(), "octet baseline receipt", &evaluation.receipt_value)?;
+            super::io::emit_named_receipt(receipt_out.as_ref(), "octet baseline receipt", &evaluation.receipt_value)?;
             if evaluation.decision != "pass" {
                 return Err(molten::error::MoltenError::invalid_harness(format!(
                     "octet baseline denied receipt={} artifacts={}",
