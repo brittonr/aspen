@@ -56,7 +56,7 @@ pub(super) fn lease_once(input: LeaseInput<'_>) -> Result<Option<molten::coordin
     Ok(Some(result))
 }
 
-pub(super) struct RunOrReleaseInput<'a> {
+pub(super) struct WorkerInput<'a> {
     pub(super) runtime: &'a mut molten::coordination::CoordinationRuntime,
     pub(super) input: &'a LocalInput<'a>,
     pub(super) refs: &'a CoordinationRefs,
@@ -71,7 +71,7 @@ pub(super) struct RunOrReleaseInput<'a> {
     pub(super) worker: &'a mut Option<molten::job_dag::JobWorkerExecution>,
 }
 
-pub(super) fn run_or_release(input: RunOrReleaseInput<'_>) -> Result<()> {
+pub(super) fn run_or_release(input: WorkerInput<'_>) -> Result<()> {
     let Some(token) = input.lease.and_then(|result| result.token.as_ref()) else {
         input.diagnostics.push("coordination lease did not emit fencing token".to_string());
         return Ok(());
