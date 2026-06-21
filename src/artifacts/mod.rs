@@ -171,8 +171,32 @@ pub struct ArtifactIndexRebuild {
 pub fn install_artifact(root: &Path, input: &ArtifactInstallInput) -> Result<ArtifactInstall> {
     validate_install_input(input)?;
     ensure_dirs(root)?;
-    let payload_bytes = canonical_bytes(&input.payload)?;
-    let payload_value_ref = canonical_hash(&input.payload)?;
+    let payload = prepare_install_payload(root, &input.payload)?;
+    let artifact = build_install_artifact(input, &payload.payload_ref)?;
+    let missing_dependencies = missing_dependencies(root, &input.dependency_refs)?;
+    let decision = install_decision(&missing_dependencies);
+    let refs = install_refs(input, &artifact, payload.chunk_receipt_ref.as_ref())?;
+    let diagnostics = install_diagnostics(&missing_dependencies)?;
+    let receipt_value = install_receipt_value(&artifact, decision, &refs, &diagnostics, &missing_dependencies)?;
+    commit_install(root, &artifact, &payload.payload_bytes, &receipt_value, missing_dependencies.is_empty())?;
+    Ok(ArtifactInstall {
+        artifact_ref: artifact.artifact_ref.clone(),
+        decision: decision.to_string(),
+        artifact,
+        missing_dependencies,
+        receipt_value,
+    })
+}
+
+struct InstallPayload {
+    payload_bytes: Vec<u8>,
+    payload_ref: ArtifactPayloadRef,
+    chunk_receipt_ref: Option<String>,
+}
+
+fn prepare_install_payload(root: &Path, payload: &IOValue) -> Result<InstallPayload> {
+    let payload_bytes = canonical_bytes(payload)?;
+    let payload_value_ref = canonical_hash(payload)?;
     let (payload_ref, chunk_receipt_ref) = if payload_bytes.len() <= INLINE_PAYLOAD_LIMIT {
         (
             ArtifactPayloadRef::Inline {
@@ -192,22 +216,39 @@ pub fn install_artifact(root: &Path, input: &ArtifactInstallInput) -> Result<Art
             Some(canonical_hash(&put.receipt_value)?),
         )
     };
-    let artifact_value = artifact_value(ArtifactValueInput {
+    Ok(InstallPayload {
+        payload_bytes,
+        payload_ref,
+        chunk_receipt_ref,
+    })
+}
+
+fn build_install_artifact(input: &ArtifactInstallInput, payload_ref: &ArtifactPayloadRef) -> Result<ArtifactRecord> {
+    let value = artifact_value(ArtifactValueInput {
         kind: &input.kind,
-        payload: &payload_ref,
+        payload: payload_ref,
         schema_refs: &input.schema_refs,
         dependency_refs: &input.dependency_refs,
         effect_manifest_ref: input.effect_manifest_ref.as_deref(),
         policy_refs: &input.policy_refs,
         evidence_refs: &input.evidence_refs,
     })?;
-    let artifact = parse_artifact_value(&artifact_value)?;
-    let missing_dependencies = missing_dependencies(root, &input.dependency_refs)?;
-    let decision = if missing_dependencies.is_empty() {
+    parse_artifact_value(&value)
+}
+
+fn install_decision(missing_dependencies: &[String]) -> &'static str {
+    if missing_dependencies.is_empty() {
         "pass"
     } else {
         "deny"
-    };
+    }
+}
+
+fn install_refs(
+    input: &ArtifactInstallInput,
+    artifact: &ArtifactRecord,
+    chunk_receipt_ref: Option<&String>,
+) -> Result<Vec<String>> {
     let mut refs = Vec::new();
     push_bounded(&mut refs, artifact.artifact_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
     push_bounded(&mut refs, input.installer_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
@@ -219,11 +260,15 @@ pub fn install_artifact(root: &Path, input: &ArtifactInstallInput) -> Result<Art
     if let Some(effect_manifest_ref) = input.effect_manifest_ref.as_ref() {
         push_bounded(&mut refs, effect_manifest_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
     }
-    if let Some(chunk_receipt_ref) = chunk_receipt_ref.as_ref() {
+    if let Some(chunk_receipt_ref) = chunk_receipt_ref {
         push_bounded(&mut refs, chunk_receipt_ref.clone(), MAX_ARTIFACT_REF_LIST, "artifact install refs")?;
     }
+    Ok(refs)
+}
+
+fn install_diagnostics(missing_dependencies: &[String]) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
-    for dependency in &missing_dependencies {
+    for dependency in missing_dependencies {
         push_bounded(
             &mut diagnostics,
             format!("missing dependency {dependency}"),
@@ -231,43 +276,56 @@ pub fn install_artifact(root: &Path, input: &ArtifactInstallInput) -> Result<Art
             "artifact install diagnostics",
         )?;
     }
-    let receipt_value = artifact_receipt_value(&ArtifactReceiptValueInput {
+    Ok(diagnostics)
+}
+
+fn install_receipt_value(
+    artifact: &ArtifactRecord,
+    decision: &str,
+    refs: &[String],
+    diagnostics: &[String],
+    missing_dependencies: &[String],
+) -> Result<IOValue> {
+    artifact_receipt_value(&ArtifactReceiptValueInput {
         operation: "install",
         decision,
         subject_ref: &artifact.artifact_ref,
         name: None,
-        refs: &refs,
-        diagnostics: &diagnostics,
+        refs,
+        diagnostics,
         checks: &[
             ("domain-separated-identity", "pass"),
             ("canonical-payload-ref", "pass"),
-            (
-                "dependency-closure",
-                if missing_dependencies.is_empty() {
-                    "pass"
-                } else {
-                    "fail"
-                },
-            ),
+            ("dependency-closure", dependency_check(missing_dependencies)),
             ("policy-admission", "pass"),
             ("capability-admission", "pass"),
             ("names-are-metadata", "pass"),
         ],
-    })?;
+    })
+}
+
+fn dependency_check(missing_dependencies: &[String]) -> &'static str {
+    if missing_dependencies.is_empty() {
+        "pass"
+    } else {
+        "fail"
+    }
+}
+
+fn commit_install(
+    root: &Path,
+    artifact: &ArtifactRecord,
+    payload_bytes: &[u8],
+    receipt_value: &IOValue,
+    should_store_artifact: bool,
+) -> Result<()> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
-    if missing_dependencies.is_empty() {
-        store_artifact_in_tx(&write_txn, &artifact, &payload_bytes)?;
+    if should_store_artifact {
+        store_artifact_in_tx(&write_txn, artifact, payload_bytes)?;
     }
-    store_receipt_in_tx(&write_txn, &receipt_value)?;
-    write_txn.commit().map_err(index_error)?;
-    Ok(ArtifactInstall {
-        artifact_ref: artifact.artifact_ref.clone(),
-        decision: decision.to_string(),
-        artifact,
-        missing_dependencies,
-        receipt_value,
-    })
+    store_receipt_in_tx(&write_txn, receipt_value)?;
+    write_txn.commit().map_err(index_error)
 }
 
 pub fn artifact_value(input: ArtifactValueInput<'_>) -> Result<IOValue> {
