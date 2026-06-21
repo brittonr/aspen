@@ -71,6 +71,32 @@ pub fn run_suite_with_effect_log(suite: &HarnessSuite, effect_log: &[EffectLogEn
 }
 
 fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEntry]>) -> Result<HarnessRun> {
+    let material = prepare_suite_run(suite)?;
+    let trace = collect_trace(suite, replay_effect_log, &material)?;
+    let report_value = build_report_value(suite, &material, &trace)?;
+    let report_ref = canonical_hash(&report_value)?;
+    Ok(HarnessRun {
+        report_value,
+        report_ref,
+        suite_ref: material.suite_ref,
+        initial_state_hash: trace.initial_state_hash,
+        final_state_hash: trace.final_state_hash,
+        status: "pass".to_string(),
+    })
+}
+
+struct SuiteRunMaterial {
+    suite_ref: String,
+    policy_gate: IOValue,
+    capability_gate: IOValue,
+    budget_gate: IOValue,
+    policy_ref: String,
+    capability_ref: String,
+    budget_ref: String,
+    budget: super::schema::HarnessBudget,
+}
+
+fn prepare_suite_run(suite: &HarnessSuite) -> Result<SuiteRunMaterial> {
     if !suite.actors_explicit {
         return Err(MoltenError::invalid_harness(
             "missing explicit actor registry fixture; inferred actors cannot execute evidence-bearing suites",
@@ -88,12 +114,6 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
             "missing explicit budget fixture; default resource policy cannot execute evidence-bearing suites",
         ));
     }
-    let policy_gate = policy_gate_value(&suite.policy)?;
-    let capability_gate = capability_gate_value(&suite.capabilities)?;
-    let budget_gate = budget_gate_value(&suite.budget)?;
-    let policy_ref = canonical_hash(&policy_value(&suite.policy))?;
-    let capability_ref = canonical_hash(&capabilities_value(&suite.capabilities))?;
-    let budget_ref = canonical_hash(&budget_limits_value(&suite.budget))?;
     let budget = suite.budget.clone();
     if suite.steps.len() as u64 > budget.max_steps {
         return Err(divergence(
@@ -104,8 +124,31 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
             "suite step count exceeds budget",
         ));
     }
+    Ok(SuiteRunMaterial {
+        suite_ref: suite_ref(suite)?,
+        policy_gate: policy_gate_value(&suite.policy)?,
+        capability_gate: capability_gate_value(&suite.capabilities)?,
+        budget_gate: budget_gate_value(&suite.budget)?,
+        policy_ref: canonical_hash(&policy_value(&suite.policy))?,
+        capability_ref: canonical_hash(&capabilities_value(&suite.capabilities))?,
+        budget_ref: canonical_hash(&budget_limits_value(&suite.budget))?,
+        budget,
+    })
+}
 
-    let suite_ref = suite_ref(suite)?;
+struct RunTrace {
+    initial_state_hash: String,
+    final_state_hash: String,
+    observations: Vec<IOValue>,
+    effect_log: Vec<EffectLogEntry>,
+    total_events: u64,
+}
+
+fn collect_trace(
+    suite: &HarnessSuite,
+    replay_effect_log: Option<&[EffectLogEntry]>,
+    material: &SuiteRunMaterial,
+) -> Result<RunTrace> {
     let mut state = RuntimeState::new(suite.seed);
     let initial_state_hash = canonical_hash(&snapshot_value(&state.snapshot()))?;
     let mut observations = Vec::with_capacity(suite.steps.len());
@@ -114,108 +157,223 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
     let mut replay_effect_index = 0usize;
 
     for (index, step) in suite.steps.iter().enumerate() {
-        let before_state_hash = canonical_hash(&snapshot_value(&state.snapshot()))?;
-        let step_ref = canonical_hash(&step_value(step))?;
-        let admission_request = AdmissionRequest::from_step(step);
-        let admission_authority = admission_authority_evidence(&suite.capabilities, &admission_request)?;
-        let admission_decision = suite.policy.decide_with_capabilities(&suite.capabilities, &admission_request);
-        let admission_event = admission_decision_event_value_with_authority(
-            &admission_request,
-            &admission_authority,
-            &admission_decision,
-        );
-        let hostcall_context = HostcallEvidenceContext {
-            sequence: index as u64,
-            suite_ref: &suite_ref,
-            step_ref: &step_ref,
-            policy_ref: &policy_ref,
-            capability_ref: &capability_ref,
-            budget_ref: &budget_ref,
-        };
-        let actor_input = actor_input_value(suite, step, hostcall_context)?;
-        let hostcall_request = hostcall_request_value(suite, step, hostcall_context, &admission_decision)?;
-        let hostcall_decision =
-            hostcall_decision_value(hostcall_context, &admission_event, &admission_authority, &admission_decision)?;
-        let mut events = vec![
-            admission_event.clone(),
-            actor_input.clone(),
-            hostcall_request.clone(),
-            hostcall_decision.clone(),
-        ];
-        let steel_execution_event = if admission_decision.is_allowed() {
-            execute_steel_actor_step(suite, step, &actor_input, &hostcall_request)?
-        } else {
-            None
-        };
-        let wasm_execution_event = if admission_decision.is_allowed() {
-            execute_wasm_actor_step(&WasmActorStepInput {
-                suite,
-                step,
-                sequence: index as u64,
-                step_ref: &step_ref,
-                actor_input: &actor_input,
-                hostcall_request: &hostcall_request,
-                hostcall_decision: &hostcall_decision,
-            })?
-        } else {
-            None
-        };
-        let runtime_events = runtime_events_for_step(RuntimeStepInput {
+        let outcome = run_step(StepRunInput {
             state: &mut state,
+            suite,
             step,
-            admission_decision: &admission_decision,
+            material,
             step_index: index as u64,
             replay_effect_log,
             replay_effect_index: &mut replay_effect_index,
         })?;
-        let mut boundary_runtime_events = Vec::with_capacity(
-            runtime_events.len()
-                + usize::from(steel_execution_event.is_some())
-                + usize::from(wasm_execution_event.is_some()),
-        );
-        if let Some(steel_execution_event) = steel_execution_event {
-            boundary_runtime_events.push(steel_execution_event);
-        }
-        if let Some(wasm_execution_event) = wasm_execution_event {
-            boundary_runtime_events.push(wasm_execution_event);
-        }
-        boundary_runtime_events.extend(runtime_events.clone());
-        events.extend(boundary_runtime_events.clone());
-        events.push(actor_output_value(step, hostcall_context, &admission_decision, &boundary_runtime_events)?);
-        let after_state_hash = canonical_hash(&snapshot_value(&state.snapshot()))?;
-        events.push(turn_journal_value(TurnJournalInput {
-            index: index as u64,
-            step_ref: &step_ref,
-            before_state_hash: &before_state_hash,
-            after_state_hash: &after_state_hash,
-            policy_ref: &policy_ref,
-            capability_ref: &capability_ref,
-            budget_ref: &budget_ref,
-            events: &events,
-        })?);
-        total_events += events.len() as u64;
-        if total_events > budget.max_events {
-            return Err(divergence(
-                "resource",
-                Some(index as u64),
-                budget.max_events.to_string(),
-                total_events.to_string(),
-                "event count exceeds budget",
-            ));
-        }
-        append_effect_entries_from_events(&events, &mut effect_log)?;
-        if effect_log.len() as u64 > budget.max_effects {
-            return Err(divergence(
-                "resource",
-                Some(index as u64),
-                budget.max_effects.to_string(),
-                effect_log.len().to_string(),
-                "effect count exceeds budget",
-            ));
-        }
-        observations.push(observation_value(index as u64, step_ref, before_state_hash, after_state_hash, events)?);
+        total_events += outcome.events.len() as u64;
+        check_event_budget(index as u64, total_events, &material.budget)?;
+        append_effect_entries_from_events(&outcome.events, &mut effect_log)?;
+        check_effect_budget(index as u64, effect_log.len() as u64, &material.budget)?;
+        observations.push(observation_value(
+            index as u64,
+            outcome.step_ref,
+            outcome.before_state_hash,
+            outcome.after_state_hash,
+            outcome.events,
+        )?);
     }
+    check_replay_consumed(replay_effect_log, replay_effect_index)?;
+    Ok(RunTrace {
+        initial_state_hash,
+        final_state_hash: canonical_hash(&snapshot_value(&state.snapshot()))?,
+        observations,
+        effect_log,
+        total_events,
+    })
+}
 
+struct StepRunInput<'a> {
+    state: &'a mut RuntimeState,
+    suite: &'a HarnessSuite,
+    step: &'a super::core::CoreStep,
+    material: &'a SuiteRunMaterial,
+    step_index: u64,
+    replay_effect_log: Option<&'a [EffectLogEntry]>,
+    replay_effect_index: &'a mut usize,
+}
+
+struct StepOutcome {
+    step_ref: String,
+    before_state_hash: String,
+    after_state_hash: String,
+    events: Vec<IOValue>,
+}
+
+fn run_step(input: StepRunInput<'_>) -> Result<StepOutcome> {
+    let before_state_hash = canonical_hash(&snapshot_value(&input.state.snapshot()))?;
+    let step_ref = canonical_hash(&step_value(input.step))?;
+    let admission = admission_step(input.suite, input.step, input.material, input.step_index, &step_ref)?;
+    let execution = actor_execution_events(ActorExecutionInput {
+        suite: input.suite,
+        step: input.step,
+        step_index: input.step_index,
+        step_ref: &step_ref,
+        actor_input: &admission.actor_input,
+        hostcall_request: &admission.hostcall_request,
+        hostcall_decision: &admission.hostcall_decision,
+        admission_decision: &admission.decision,
+    })?;
+    let runtime_events = runtime_events_for_step(RuntimeStepInput {
+        state: input.state,
+        step: input.step,
+        admission_decision: &admission.decision,
+        step_index: input.step_index,
+        replay_effect_log: input.replay_effect_log,
+        replay_effect_index: input.replay_effect_index,
+    })?;
+    let boundary_runtime_events = boundary_events(execution, runtime_events);
+    let mut events = admission.events;
+    events.extend(boundary_runtime_events.clone());
+    events.push(actor_output_value(input.step, admission.context, &admission.decision, &boundary_runtime_events)?);
+    let after_state_hash = canonical_hash(&snapshot_value(&input.state.snapshot()))?;
+    events.push(turn_journal_value(TurnJournalInput {
+        index: input.step_index,
+        step_ref: &step_ref,
+        before_state_hash: &before_state_hash,
+        after_state_hash: &after_state_hash,
+        policy_ref: &input.material.policy_ref,
+        capability_ref: &input.material.capability_ref,
+        budget_ref: &input.material.budget_ref,
+        events: &events,
+    })?);
+    Ok(StepOutcome {
+        step_ref,
+        before_state_hash,
+        after_state_hash,
+        events,
+    })
+}
+
+struct AdmissionStep<'a> {
+    decision: crate::runtime::AdmissionDecision,
+    context: HostcallEvidenceContext<'a>,
+    actor_input: IOValue,
+    hostcall_request: IOValue,
+    hostcall_decision: IOValue,
+    events: Vec<IOValue>,
+}
+
+fn admission_step<'a>(
+    suite: &'a HarnessSuite,
+    step: &'a super::core::CoreStep,
+    material: &'a SuiteRunMaterial,
+    step_index: u64,
+    step_ref: &'a str,
+) -> Result<AdmissionStep<'a>> {
+    let request = AdmissionRequest::from_step(step);
+    let authority = admission_authority_evidence(&suite.capabilities, &request)?;
+    let decision = suite.policy.decide_with_capabilities(&suite.capabilities, &request);
+    let event = admission_decision_event_value_with_authority(&request, &authority, &decision);
+    let context = HostcallEvidenceContext {
+        sequence: step_index,
+        suite_ref: &material.suite_ref,
+        step_ref,
+        policy_ref: &material.policy_ref,
+        capability_ref: &material.capability_ref,
+        budget_ref: &material.budget_ref,
+    };
+    let actor_input = actor_input_value(suite, step, context)?;
+    let hostcall_request = hostcall_request_value(suite, step, context, &decision)?;
+    let hostcall_decision = hostcall_decision_value(context, &event, &authority, &decision)?;
+    Ok(AdmissionStep {
+        decision,
+        context,
+        events: vec![
+            event,
+            actor_input.clone(),
+            hostcall_request.clone(),
+            hostcall_decision.clone(),
+        ],
+        actor_input,
+        hostcall_request,
+        hostcall_decision,
+    })
+}
+
+struct ActorExecutionInput<'a> {
+    suite: &'a HarnessSuite,
+    step: &'a super::core::CoreStep,
+    step_index: u64,
+    step_ref: &'a str,
+    actor_input: &'a IOValue,
+    hostcall_request: &'a IOValue,
+    hostcall_decision: &'a IOValue,
+    admission_decision: &'a crate::runtime::AdmissionDecision,
+}
+
+struct ActorExecutionEvents {
+    steel: Option<IOValue>,
+    wasm: Option<IOValue>,
+}
+
+fn actor_execution_events(input: ActorExecutionInput<'_>) -> Result<ActorExecutionEvents> {
+    if !input.admission_decision.is_allowed() {
+        return Ok(ActorExecutionEvents {
+            steel: None,
+            wasm: None,
+        });
+    }
+    Ok(ActorExecutionEvents {
+        steel: execute_steel_actor_step(input.suite, input.step, input.actor_input, input.hostcall_request)?,
+        wasm: execute_wasm_actor_step(&WasmActorStepInput {
+            suite: input.suite,
+            step: input.step,
+            sequence: input.step_index,
+            step_ref: input.step_ref,
+            actor_input: input.actor_input,
+            hostcall_request: input.hostcall_request,
+            hostcall_decision: input.hostcall_decision,
+        })?,
+    })
+}
+
+fn boundary_events(execution: ActorExecutionEvents, runtime_events: Vec<IOValue>) -> Vec<IOValue> {
+    let mut events = Vec::with_capacity(
+        runtime_events.len() + usize::from(execution.steel.is_some()) + usize::from(execution.wasm.is_some()),
+    );
+    if let Some(steel) = execution.steel {
+        events.push(steel);
+    }
+    if let Some(wasm) = execution.wasm {
+        events.push(wasm);
+    }
+    events.extend(runtime_events);
+    events
+}
+
+fn check_event_budget(step_index: u64, total_events: u64, budget: &super::schema::HarnessBudget) -> Result<()> {
+    if total_events > budget.max_events {
+        return Err(divergence(
+            "resource",
+            Some(step_index),
+            budget.max_events.to_string(),
+            total_events.to_string(),
+            "event count exceeds budget",
+        ));
+    }
+    Ok(())
+}
+
+fn check_effect_budget(step_index: u64, effects: u64, budget: &super::schema::HarnessBudget) -> Result<()> {
+    if effects > budget.max_effects {
+        return Err(divergence(
+            "resource",
+            Some(step_index),
+            budget.max_effects.to_string(),
+            effects.to_string(),
+            "effect count exceeds budget",
+        ));
+    }
+    Ok(())
+}
+
+fn check_replay_consumed(replay_effect_log: Option<&[EffectLogEntry]>, replay_effect_index: usize) -> Result<()> {
     if let Some(replay_effect_log) = replay_effect_log
         && replay_effect_index != replay_effect_log.len()
     {
@@ -227,78 +385,56 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
             "recorded effect log has unused entries",
         ));
     }
+    Ok(())
+}
 
-    let final_state_hash = canonical_hash(&snapshot_value(&state.snapshot()))?;
+fn build_report_value(suite: &HarnessSuite, material: &SuiteRunMaterial, trace: &RunTrace) -> Result<IOValue> {
     let mut usage = BudgetUsage {
         steps: suite.steps.len() as u64,
-        effects: effect_log.len() as u64,
-        events: total_events,
+        effects: trace.effect_log.len() as u64,
+        events: trace.total_events,
         report_bytes: 0,
     };
-    let mut report_value = super::schema::report_value(ReportValueInput {
-        suite,
-        suite_ref: suite_ref.clone(),
-        initial_state_hash: initial_state_hash.clone(),
-        final_state_hash: final_state_hash.clone(),
-        policy_gate: policy_gate.clone(),
-        capability_gate: capability_gate.clone(),
-        budget_gate: budget_gate.clone(),
-        observations: observations.clone(),
-        effect_log: effect_log.clone(),
-        budget: &budget,
-        usage: &usage,
-    });
+    let mut report_value = report_value_with_usage(suite, material, trace, &usage);
     for _ in 0..4 {
         let report_bytes = canonical_bytes(&report_value)?.len() as u64;
         if report_bytes == usage.report_bytes {
             break;
         }
         usage.report_bytes = report_bytes;
-        report_value = super::schema::report_value(ReportValueInput {
-            suite,
-            suite_ref: suite_ref.clone(),
-            initial_state_hash: initial_state_hash.clone(),
-            final_state_hash: final_state_hash.clone(),
-            policy_gate: policy_gate.clone(),
-            capability_gate: capability_gate.clone(),
-            budget_gate: budget_gate.clone(),
-            observations: observations.clone(),
-            effect_log: effect_log.clone(),
-            budget: &budget,
-            usage: &usage,
-        });
+        report_value = report_value_with_usage(suite, material, trace, &usage);
     }
     usage.report_bytes = canonical_bytes(&report_value)?.len() as u64;
-    if usage.report_bytes > budget.max_report_bytes {
+    if usage.report_bytes > material.budget.max_report_bytes {
         return Err(divergence(
             "resource",
             None,
-            budget.max_report_bytes.to_string(),
+            material.budget.max_report_bytes.to_string(),
             usage.report_bytes.to_string(),
             "report byte size exceeds budget",
         ));
     }
-    report_value = super::schema::report_value(ReportValueInput {
+    Ok(report_value_with_usage(suite, material, trace, &usage))
+}
+
+fn report_value_with_usage(
+    suite: &HarnessSuite,
+    material: &SuiteRunMaterial,
+    trace: &RunTrace,
+    usage: &BudgetUsage,
+) -> IOValue {
+    super::schema::report_value(ReportValueInput {
         suite,
-        suite_ref: suite_ref.clone(),
-        initial_state_hash: initial_state_hash.clone(),
-        final_state_hash: final_state_hash.clone(),
-        policy_gate,
-        capability_gate,
-        budget_gate,
-        observations,
-        effect_log,
-        budget: &budget,
-        usage: &usage,
-    });
-    let report_ref = canonical_hash(&report_value)?;
-    Ok(HarnessRun {
-        report_value,
-        report_ref,
-        suite_ref,
-        initial_state_hash,
-        final_state_hash,
-        status: "pass".to_string(),
+        suite_ref: material.suite_ref.clone(),
+        initial_state_hash: trace.initial_state_hash.clone(),
+        final_state_hash: trace.final_state_hash.clone(),
+        policy_gate: material.policy_gate.clone(),
+        capability_gate: material.capability_gate.clone(),
+        budget_gate: material.budget_gate.clone(),
+        observations: trace.observations.clone(),
+        effect_log: trace.effect_log.clone(),
+        budget: &material.budget,
+        usage,
     })
 }
 
