@@ -2582,42 +2582,55 @@ fn validate_steel_execution_receipt(
             actor.id
         )));
     }
-    let checks_index = if arity == 10 {
-        let resources_value = value_to_iovalue(&receipt[8]);
-        let resources = simple_record(&resources_value, "resources", 5)?;
-        let fuel_value = value_to_iovalue(&resources[0]);
-        let fuel = simple_record(&fuel_value, "fuel", 2)?;
-        let fuel_limit = required_u64(&fuel[0], "Steel execution fuel limit")?;
-        let fuel_remaining = required_u64(&fuel[1], "Steel execution fuel remaining")?;
-        if fuel_remaining > fuel_limit {
-            return Err(MoltenError::invalid_harness("Steel execution remaining fuel exceeds limit"));
-        }
-        required_record_u64(&resources[1], "source-bytes", "Steel execution source byte count")?;
-        required_record_u64(&resources[2], "input-bytes", "Steel execution input byte count")?;
-        required_record_u64(&resources[3], "output-bytes", "Steel execution output byte count")?;
-        let hostcalls_value = value_to_iovalue(&resources[4]);
-        let hostcalls_record = simple_record(&hostcalls_value, "hostcalls", 2)?;
-        let hostcall_limit = required_u64(&hostcalls_record[0], "Steel execution hostcall limit")?;
-        let hostcall_count = required_u64(&hostcalls_record[1], "Steel execution hostcall count")?;
-        if hostcall_count > hostcall_limit {
-            return Err(MoltenError::invalid_harness("Steel execution hostcall count exceeds limit"));
-        }
-        9
-    } else {
-        8
-    };
+    let checks_index = steel_execution_checks_index(receipt, arity)?;
     let checks = parse_executor_preflight_checks(&receipt[checks_index])?;
-    require_executor_preflight_check(&checks, "steel-vm-executed")?;
-    require_executor_preflight_check(&checks, "reviewed-callable-binding")?;
-    require_executor_preflight_check(&checks, "canonical-preserves-input")?;
-    require_executor_preflight_check(&checks, "canonical-preserves-output")?;
-    require_executor_preflight_check(&checks, "no-ambient-steel-io")?;
-    require_executor_preflight_check(&checks, "hostcall-envelope-binding")?;
+    require_steel_execution_checks(&checks, arity)
+}
+
+fn steel_execution_checks_index(receipt: &Record<Value<IOValue>>, arity: usize) -> Result<usize> {
     if arity == 10 {
-        require_executor_preflight_check(&checks, "resource-bounded")?;
-        require_executor_preflight_check(&checks, "fuel-bounded")?;
-        require_executor_preflight_check(&checks, "hostcall-count-bounded")?;
-        require_executor_preflight_check(&checks, "io-bytes-bounded")?;
+        validate_steel_execution_resources(&receipt[8])?;
+        Ok(9)
+    } else {
+        Ok(8)
+    }
+}
+
+fn validate_steel_execution_resources(value: &Value<IOValue>) -> Result<()> {
+    let resources_value = value_to_iovalue(value);
+    let resources = simple_record(&resources_value, "resources", 5)?;
+    let fuel_value = value_to_iovalue(&resources[0]);
+    let fuel = simple_record(&fuel_value, "fuel", 2)?;
+    let fuel_limit = required_u64(&fuel[0], "Steel execution fuel limit")?;
+    let fuel_remaining = required_u64(&fuel[1], "Steel execution fuel remaining")?;
+    if fuel_remaining > fuel_limit {
+        return Err(MoltenError::invalid_harness("Steel execution remaining fuel exceeds limit"));
+    }
+    required_record_u64(&resources[1], "source-bytes", "Steel execution source byte count")?;
+    required_record_u64(&resources[2], "input-bytes", "Steel execution input byte count")?;
+    required_record_u64(&resources[3], "output-bytes", "Steel execution output byte count")?;
+    let hostcalls_value = value_to_iovalue(&resources[4]);
+    let hostcalls_record = simple_record(&hostcalls_value, "hostcalls", 2)?;
+    let hostcall_limit = required_u64(&hostcalls_record[0], "Steel execution hostcall limit")?;
+    let hostcall_count = required_u64(&hostcalls_record[1], "Steel execution hostcall count")?;
+    if hostcall_count > hostcall_limit {
+        return Err(MoltenError::invalid_harness("Steel execution hostcall count exceeds limit"));
+    }
+    Ok(())
+}
+
+fn require_steel_execution_checks(checks: &[String], arity: usize) -> Result<()> {
+    require_executor_preflight_check(checks, "steel-vm-executed")?;
+    require_executor_preflight_check(checks, "reviewed-callable-binding")?;
+    require_executor_preflight_check(checks, "canonical-preserves-input")?;
+    require_executor_preflight_check(checks, "canonical-preserves-output")?;
+    require_executor_preflight_check(checks, "no-ambient-steel-io")?;
+    require_executor_preflight_check(checks, "hostcall-envelope-binding")?;
+    if arity == 10 {
+        require_executor_preflight_check(checks, "resource-bounded")?;
+        require_executor_preflight_check(checks, "fuel-bounded")?;
+        require_executor_preflight_check(checks, "hostcall-count-bounded")?;
+        require_executor_preflight_check(checks, "io-bytes-bounded")?;
     }
     Ok(())
 }
@@ -2713,6 +2726,28 @@ fn validate_wasm_execution_receipt(
             actor.id
         )));
     }
+    let checks_index = wasm_execution_checks_index(actor, position, actor_input, receipt, arity)?;
+    let checks = parse_executor_preflight_checks(&receipt[checks_index])?;
+    require_wasm_execution_checks(&checks, arity)
+}
+
+fn wasm_execution_checks_index(
+    actor: &ActorDecl,
+    position: usize,
+    actor_input: &IOValue,
+    receipt: &Record<Value<IOValue>>,
+    arity: usize,
+) -> Result<usize> {
+    validate_wasm_execution_resources(receipt)?;
+    if arity == 13 {
+        validate_wasm_abi_fields(actor, position, actor_input, receipt)?;
+        Ok(12)
+    } else {
+        Ok(8)
+    }
+}
+
+fn validate_wasm_execution_resources(receipt: &Record<Value<IOValue>>) -> Result<()> {
     let fuel_value = value_to_iovalue(&receipt[6]);
     let fuel = simple_record(&fuel_value, "fuel", 2)?;
     let fuel_limit = required_u64(&fuel[0], "Wasm execution fuel limit")?;
@@ -2723,45 +2758,52 @@ fn validate_wasm_execution_receipt(
     let memory_value = value_to_iovalue(&receipt[7]);
     let memory = simple_record(&memory_value, "memory-limit", 1)?;
     required_u64(&memory[0], "Wasm execution memory limit")?;
-    let checks_index = if arity == 13 {
-        let abi = required_record_string(&receipt[8], "abi", "Wasm execution ABI schema")?;
-        if abi != RUNTIME_WASM_ABI_SCHEMA {
-            return Err(MoltenError::invalid_harness(format!(
-                "unsupported Wasm execution ABI schema {abi}; expected {RUNTIME_WASM_ABI_SCHEMA}"
-            )));
-        }
-        let input_ref = required_record_hash(&receipt[9], "input-ref", "Wasm execution input ref")?;
-        let expected_input_ref = canonical_hash(actor_input)?;
-        if input_ref != expected_input_ref {
-            return Err(MoltenError::invalid_harness(format!(
-                "Wasm execution input ref mismatch for actor {} at observation {position}",
-                actor.id
-            )));
-        }
-        required_record_hash(&receipt[10], "output-ref", "Wasm execution output ref")?;
-        let output_bytes = required_record_u64(&receipt[11], "output-bytes", "Wasm execution output byte count")?;
-        if output_bytes > WASM_ABI_MAX_OUTPUT_BYTES_FOR_VALIDATION {
-            return Err(MoltenError::invalid_harness(format!(
-                "Wasm execution output byte count exceeds molten.wasm.abi.v1 limit for actor {} at observation {position}",
-                actor.id
-            )));
-        }
-        12
-    } else {
-        8
-    };
-    let checks = parse_executor_preflight_checks(&receipt[checks_index])?;
-    if arity == 13 {
-        require_executor_preflight_check(&checks, "preserves-abi-v1")?;
-        require_executor_preflight_check(&checks, "canonical-preserves-input")?;
-        require_executor_preflight_check(&checks, "canonical-preserves-output")?;
-        require_executor_preflight_check(&checks, "guest-memory-bounds")?;
+    Ok(())
+}
+
+fn validate_wasm_abi_fields(
+    actor: &ActorDecl,
+    position: usize,
+    actor_input: &IOValue,
+    receipt: &Record<Value<IOValue>>,
+) -> Result<()> {
+    let abi = required_record_string(&receipt[8], "abi", "Wasm execution ABI schema")?;
+    if abi != RUNTIME_WASM_ABI_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported Wasm execution ABI schema {abi}; expected {RUNTIME_WASM_ABI_SCHEMA}"
+        )));
     }
-    require_executor_preflight_check(&checks, "wasmtime-instantiated")?;
-    require_executor_preflight_check(&checks, "no-wasi")?;
-    require_executor_preflight_check(&checks, "fuel-bounded")?;
-    require_executor_preflight_check(&checks, "memory-bounded")?;
-    require_executor_preflight_check(&checks, "hostcall-envelope-binding")?;
+    let input_ref = required_record_hash(&receipt[9], "input-ref", "Wasm execution input ref")?;
+    let expected_input_ref = canonical_hash(actor_input)?;
+    if input_ref != expected_input_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "Wasm execution input ref mismatch for actor {} at observation {position}",
+            actor.id
+        )));
+    }
+    required_record_hash(&receipt[10], "output-ref", "Wasm execution output ref")?;
+    let output_bytes = required_record_u64(&receipt[11], "output-bytes", "Wasm execution output byte count")?;
+    if output_bytes > WASM_ABI_MAX_OUTPUT_BYTES_FOR_VALIDATION {
+        return Err(MoltenError::invalid_harness(format!(
+            "Wasm execution output byte count exceeds molten.wasm.abi.v1 limit for actor {} at observation {position}",
+            actor.id
+        )));
+    }
+    Ok(())
+}
+
+fn require_wasm_execution_checks(checks: &[String], arity: usize) -> Result<()> {
+    if arity == 13 {
+        require_executor_preflight_check(checks, "preserves-abi-v1")?;
+        require_executor_preflight_check(checks, "canonical-preserves-input")?;
+        require_executor_preflight_check(checks, "canonical-preserves-output")?;
+        require_executor_preflight_check(checks, "guest-memory-bounds")?;
+    }
+    require_executor_preflight_check(checks, "wasmtime-instantiated")?;
+    require_executor_preflight_check(checks, "no-wasi")?;
+    require_executor_preflight_check(checks, "fuel-bounded")?;
+    require_executor_preflight_check(checks, "memory-bounded")?;
+    require_executor_preflight_check(checks, "hostcall-envelope-binding")?;
     Ok(())
 }
 
