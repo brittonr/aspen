@@ -1810,6 +1810,11 @@ mod tests {
 
     #[test]
     fn adapter_and_remote_proxy_negative_security_preflights_fail_closed() {
+        adapter_negative_security_preflights_fail_closed();
+        remote_proxy_negative_security_preflights_fail_closed();
+    }
+
+    fn adapter_negative_security_preflights_fail_closed() {
         let adapter_ambient = parse_text(
             r#"<harness-suite-v1 "molten.harness.suite.v1" "adapter-ambient" 1
               <budget-v1 "molten.harness.budget.v1" <limits 16 4 64 32768>>
@@ -1846,7 +1851,9 @@ mod tests {
             error.to_string().contains("hostcall operation assert is not allowed by adapter executor preflight"),
             "{error}"
         );
+    }
 
+    fn remote_proxy_negative_security_preflights_fail_closed() {
         let remote_unknown = parse_text(
             r#"<harness-suite-v1 "molten.harness.suite.v1" "remote-unknown" 1
               <budget-v1 "molten.harness.budget.v1" <limits 16 4 64 32768>>
