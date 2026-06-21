@@ -6919,11 +6919,45 @@ fn sealed_report_bundle(
     })
 }
 
+struct ProfiledBody {
+    artifact_refs: Vec<(String, String)>,
+    source_report_ref: String,
+    source_suite_ref: String,
+    output_report_ref: String,
+    export_profile_value: IOValue,
+    export_profile: ReproExportProfileEvidence,
+    report_value: IOValue,
+    report: HarnessReport,
+}
+
+struct ProfiledEvidence {
+    policy_ref: String,
+    manifest_ref: String,
+    manifest_value: IOValue,
+    transform_receipt: RedactionTransformReceiptEvidence,
+}
+
+struct ProfiledPrivate {
+    private_bundle_profile_ref: Option<String>,
+    private_bundle_profile_value: Option<IOValue>,
+    checks_index: usize,
+}
+
 fn parse_profiled_report_repro_bundle(
     bundle_value: &IOValue,
     bundle: &Record<Value<IOValue>>,
 ) -> Result<HarnessReproBundle> {
     let arity = bundle.fields_iter().count();
+    let body = parse_profiled_body(bundle)?;
+    require_report_artifact_refs(&body.artifact_refs, &body.report)?;
+    let evidence = parse_profiled_evidence(bundle, &body)?;
+    let private = parse_profiled_private(bundle, &body, &evidence, arity)?;
+    let checks = parse_seal_checks(&bundle[private.checks_index])?;
+    require_profiled_checks(&checks, body.export_profile.profile)?;
+    profiled_report_bundle(bundle_value, body, evidence, private)
+}
+
+fn parse_profiled_body(bundle: &Record<Value<IOValue>>) -> Result<ProfiledBody> {
     let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
     if kind != "report" {
         return Err(MoltenError::invalid_harness(format!("expected report repro bundle kind, got {kind}")));
@@ -6964,112 +6998,179 @@ fn parse_profiled_report_repro_bundle(
         effect_log: &effect_log,
         suite_value: &suite_value,
     })?;
-    require_report_artifact_refs(&artifact_refs, &report)?;
+    Ok(ProfiledBody {
+        artifact_refs,
+        source_report_ref,
+        source_suite_ref,
+        output_report_ref,
+        export_profile_value,
+        export_profile,
+        report_value,
+        report,
+    })
+}
+
+fn parse_profiled_evidence(bundle: &Record<Value<IOValue>>, body: &ProfiledBody) -> Result<ProfiledEvidence> {
     let policy_value = value_to_iovalue(&bundle[19]);
     parse_redaction_policy(&policy_value)?;
     let policy_ref = canonical_hash(&policy_value)?;
-    require_artifact_ref(&artifact_refs, "redaction-policy", &policy_ref)?;
+    require_artifact_ref(&body.artifact_refs, "redaction-policy", &policy_ref)?;
     let manifest_value = value_to_iovalue(&bundle[20]);
     let manifest_ref = canonical_hash(&manifest_value)?;
-    require_artifact_ref(&artifact_refs, "redaction-transform-manifest", &manifest_ref)?;
+    require_artifact_ref(&body.artifact_refs, "redaction-transform-manifest", &manifest_ref)?;
     let transform_receipt_value = value_to_iovalue(&bundle[21]);
     let transform_receipt = parse_redaction_transform_receipt(&transform_receipt_value)?;
-    require_artifact_ref(&artifact_refs, "redaction-transform", &transform_receipt.receipt_ref)?;
-    if transform_receipt.source_report_ref != source_report_ref
-        || transform_receipt.source_suite_ref != source_suite_ref
+    require_artifact_ref(&body.artifact_refs, "redaction-transform", &transform_receipt.receipt_ref)?;
+    require_transform_receipt_binding(body, &policy_ref, &manifest_ref, &transform_receipt)?;
+    validate_redaction_transform_manifest(
+        &manifest_value,
+        &body.source_report_ref,
+        &body.source_suite_ref,
+        &body.report,
+        body.export_profile.profile,
+    )?;
+    require_profiled_output_inventory(body, &transform_receipt)?;
+    Ok(ProfiledEvidence {
+        policy_ref,
+        manifest_ref,
+        manifest_value,
+        transform_receipt,
+    })
+}
+
+fn require_transform_receipt_binding(
+    body: &ProfiledBody,
+    policy_ref: &str,
+    manifest_ref: &str,
+    transform_receipt: &RedactionTransformReceiptEvidence,
+) -> Result<()> {
+    if transform_receipt.source_report_ref != body.source_report_ref
+        || transform_receipt.source_suite_ref != body.source_suite_ref
         || transform_receipt.policy_ref != policy_ref
-        || transform_receipt.profile != export_profile.profile
+        || transform_receipt.profile != body.export_profile.profile
         || transform_receipt.manifest_ref != manifest_ref
-        || transform_receipt.output_bundle_ref != output_report_ref
-        || transform_receipt.loss_classification != export_profile.loss_classification
-        || export_profile.is_gate_preserving
-        || export_profile.requires_reveal != export_profile.profile.requires_reveal()
+        || transform_receipt.output_bundle_ref != body.output_report_ref
+        || transform_receipt.loss_classification != body.export_profile.loss_classification
+        || body.export_profile.is_gate_preserving
+        || body.export_profile.requires_reveal != body.export_profile.profile.requires_reveal()
     {
         return Err(MoltenError::invalid_harness(
             "redaction transform receipt binding does not match profiled repro bundle",
         ));
     }
-    validate_redaction_transform_manifest(
-        &manifest_value,
-        &source_report_ref,
-        &source_suite_ref,
-        &report,
-        export_profile.profile,
-    )?;
-    let output_encrypted_refs = validate_profiled_output(&report_value, export_profile.profile)?;
+    Ok(())
+}
+
+fn require_profiled_output_inventory(
+    body: &ProfiledBody,
+    transform_receipt: &RedactionTransformReceiptEvidence,
+) -> Result<()> {
+    let output_encrypted_refs = validate_profiled_output(&body.report_value, body.export_profile.profile)?;
     if output_encrypted_refs != transform_receipt.encrypted_refs {
         return Err(MoltenError::invalid_harness(
             "redaction transform encrypted-ref inventory does not match output bundle",
         ));
     }
-    let output_marker_refs = collect_redaction_marker_refs(&report_value)?;
+    let output_marker_refs = collect_redaction_marker_refs(&body.report_value)?;
     if output_marker_refs != transform_receipt.marker_refs {
         return Err(MoltenError::invalid_harness(
             "redaction transform marker manifest does not cover output bundle markers",
         ));
     }
-    let (private_bundle_profile_ref, private_bundle_profile_value, checks_index) = if arity == 24 {
-        let private_value = value_to_iovalue(&bundle[22]);
-        let private = parse_private_bundle_profile(&private_value)?;
-        require_artifact_ref(&artifact_refs, "private-bundle-profile", &canonical_hash(&private_value)?)?;
-        if export_profile.profile != ReproExportProfile::EncryptedPrivate {
-            return Err(MoltenError::invalid_harness(
-                "private bundle profile is only valid for encrypted-private repro exports",
-            ));
-        }
-        if private.transform_receipt_ref != transform_receipt.receipt_ref
-            || private.encrypted_refs != transform_receipt.encrypted_refs
-            || private.is_gate_preserving
-        {
-            return Err(MoltenError::invalid_harness(
-                "private bundle profile does not bind encrypted refs and diagnostic-only transform receipt",
-            ));
-        }
-        (Some(canonical_hash(&private_value)?), Some(private_value), 23)
-    } else {
-        if export_profile.profile == ReproExportProfile::EncryptedPrivate {
+    Ok(())
+}
+
+fn parse_profiled_private(
+    bundle: &Record<Value<IOValue>>,
+    body: &ProfiledBody,
+    evidence: &ProfiledEvidence,
+    arity: usize,
+) -> Result<ProfiledPrivate> {
+    if arity != 24 {
+        if body.export_profile.profile == ReproExportProfile::EncryptedPrivate {
             return Err(MoltenError::invalid_harness(
                 "encrypted-private repro bundle missing private bundle profile evidence",
             ));
         }
-        (None, None, 22)
-    };
-    let checks = parse_seal_checks(&bundle[checks_index])?;
-    require_seal_check(&checks, "profile-schema")?;
-    require_seal_check(&checks, "redaction-transform-receipt")?;
-    require_seal_check(&checks, "transform-manifest-bound")?;
-    require_seal_check(&checks, "source-report-ref-binding")?;
-    require_seal_check(&checks, "output-report-ref-binding")?;
-    require_seal_check(&checks, "no-forbidden-cleartext")?;
-    match export_profile.profile {
-        ReproExportProfile::DenySensitive => require_seal_check(&checks, "gate-preserving")?,
-        ReproExportProfile::RedactedDiagnostic => require_seal_check(&checks, "diagnostic-only")?,
+        return Ok(ProfiledPrivate {
+            private_bundle_profile_ref: None,
+            private_bundle_profile_value: None,
+            checks_index: 22,
+        });
+    }
+    let private_value = value_to_iovalue(&bundle[22]);
+    let private = parse_private_bundle_profile(&private_value)?;
+    require_artifact_ref(&body.artifact_refs, "private-bundle-profile", &canonical_hash(&private_value)?)?;
+    if body.export_profile.profile != ReproExportProfile::EncryptedPrivate {
+        return Err(MoltenError::invalid_harness(
+            "private bundle profile is only valid for encrypted-private repro exports",
+        ));
+    }
+    if private.transform_receipt_ref != evidence.transform_receipt.receipt_ref
+        || private.encrypted_refs != evidence.transform_receipt.encrypted_refs
+        || private.is_gate_preserving
+    {
+        return Err(MoltenError::invalid_harness(
+            "private bundle profile does not bind encrypted refs and diagnostic-only transform receipt",
+        ));
+    }
+    Ok(ProfiledPrivate {
+        private_bundle_profile_ref: Some(canonical_hash(&private_value)?),
+        private_bundle_profile_value: Some(private_value),
+        checks_index: 23,
+    })
+}
+
+fn require_profiled_checks(checks: &[String], profile: ReproExportProfile) -> Result<()> {
+    for expected in [
+        "profile-schema",
+        "redaction-transform-receipt",
+        "transform-manifest-bound",
+        "source-report-ref-binding",
+        "output-report-ref-binding",
+        "no-forbidden-cleartext",
+    ] {
+        require_seal_check(checks, expected)?;
+    }
+    match profile {
+        ReproExportProfile::DenySensitive => require_seal_check(checks, "gate-preserving")?,
+        ReproExportProfile::RedactedDiagnostic => require_seal_check(checks, "diagnostic-only")?,
         ReproExportProfile::EncryptedPrivate => {
-            require_seal_check(&checks, "requires-reveal")?;
-            require_seal_check(&checks, "encrypted-ref-validation")?;
+            require_seal_check(checks, "requires-reveal")?;
+            require_seal_check(checks, "encrypted-ref-validation")?;
         }
     }
+    Ok(())
+}
+
+fn profiled_report_bundle(
+    bundle_value: &IOValue,
+    body: ProfiledBody,
+    evidence: ProfiledEvidence,
+    private: ProfiledPrivate,
+) -> Result<HarnessReproBundle> {
+    let transform_receipt = evidence.transform_receipt;
     Ok(HarnessReproBundle {
         bundle_ref: canonical_hash(bundle_value)?,
         kind: HarnessReproBundleKind::Report,
-        artifact_ref: output_report_ref,
-        report_value: Some(report_value),
+        artifact_ref: body.output_report_ref,
+        report_value: Some(body.report_value),
         failure_value: None,
         gate_receipt_ref: None,
         gate_receipt_value: None,
-        redaction_policy_ref: Some(policy_ref),
+        redaction_policy_ref: Some(evidence.policy_ref),
         redaction_gate_ref: None,
-        export_profile: Some(export_profile.profile.as_str().to_string()),
-        export_profile_ref: Some(export_profile.profile_ref),
-        export_profile_value: Some(export_profile_value),
-        source_report_ref: Some(source_report_ref),
-        source_suite_ref: Some(source_suite_ref),
-        redaction_transform_manifest_ref: Some(manifest_ref),
-        redaction_transform_manifest_value: Some(manifest_value),
+        export_profile: Some(body.export_profile.profile.as_str().to_string()),
+        export_profile_ref: Some(body.export_profile.profile_ref),
+        export_profile_value: Some(body.export_profile_value),
+        source_report_ref: Some(body.source_report_ref),
+        source_suite_ref: Some(body.source_suite_ref),
+        redaction_transform_manifest_ref: Some(evidence.manifest_ref),
+        redaction_transform_manifest_value: Some(evidence.manifest_value),
         redaction_transform_receipt_ref: Some(transform_receipt.receipt_ref.clone()),
         redaction_transform_receipt_value: Some(transform_receipt.value.clone()),
-        private_bundle_profile_ref,
-        private_bundle_profile_value,
+        private_bundle_profile_ref: private.private_bundle_profile_ref,
+        private_bundle_profile_value: private.private_bundle_profile_value,
         loss_classification: Some(transform_receipt.loss_classification.clone()),
         encrypted_refs: transform_receipt.encrypted_refs.clone(),
     })
