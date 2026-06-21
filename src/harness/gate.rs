@@ -758,12 +758,64 @@ fn replay_value(check: &GateCheck) -> IOValue {
     ])
 }
 
+struct PassLink {
+    chain: ChainScope,
+    producer: ChainProducer,
+    link_ref: String,
+    link_value: IOValue,
+    payload_refs: Vec<String>,
+    subject_refs: Vec<String>,
+    context_refs: Vec<String>,
+}
+
+struct PassPredicates {
+    values: Vec<IOValue>,
+    refs: Vec<String>,
+    range_ref: String,
+}
+
+struct PassArtifacts {
+    anchor_ref: String,
+    anchor_value: IOValue,
+    verify_ref: String,
+    verify_value: IOValue,
+    checkpoint_ref: String,
+    checkpoint_value: IOValue,
+}
+
+struct Pred<'a> {
+    predicate: &'a str,
+    subject_refs: &'a [String],
+    input_refs: &'a [String],
+    context_refs: &'a [String],
+    checks: &'a [ChainCheck],
+}
+
 fn build_gate_chain_evidence(
     report_ref: &str,
     suite_ref: &str,
     final_state_hash: &str,
     profile: &str,
 ) -> Result<GateChainEvidence> {
+    let link = pass_link(report_ref, suite_ref, final_state_hash, profile)?;
+    let predicates = pass_predicates(&link)?;
+    let artifacts = pass_artifacts(&link, &predicates, suite_ref)?;
+    Ok(GateChainEvidence {
+        link_ref: link.link_ref,
+        anchor_ref: artifacts.anchor_ref,
+        verify_receipt_ref: artifacts.verify_ref,
+        checkpoint_ref: artifacts.checkpoint_ref,
+        range_predicate_ref: predicates.range_ref,
+        predicate_receipt_refs: predicates.refs,
+        link_value: link.link_value,
+        anchor_value: artifacts.anchor_value,
+        verify_receipt_value: artifacts.verify_value,
+        checkpoint_value: artifacts.checkpoint_value,
+        predicate_values: predicates.values,
+    })
+}
+
+fn pass_link(report_ref: &str, suite_ref: &str, final_state_hash: &str, profile: &str) -> Result<PassLink> {
     let chain = ChainScope::new("harness-pass-evidence", report_ref, profile);
     let producer_key_ref = canonical_hash(&record("gate-chain-producer-key", vec![string("molten")]))?;
     let producer = ChainProducer::new("molten-gate", producer_key_ref);
@@ -784,15 +836,35 @@ fn build_gate_chain_evidence(
     ));
     let link = parse_chain_link(&link_value)?;
     let link_ref = link.link_ref.clone();
-    let payload_refs = vec![report_ref.to_string()];
-    let subject_refs = vec![link_ref.clone()];
     let scope_context_ref = canonical_hash(&record("gate-chain-scope", vec![
         string(&chain.scope),
         string(&chain.id),
         string(&chain.epoch),
     ]))?;
-    let predicate_context_refs = vec![scope_context_ref, suite_ref.to_string(), final_state_hash.to_string()];
-    let genesis_predicate_checks = vec![
+    Ok(PassLink {
+        chain,
+        producer,
+        link_ref: link_ref.clone(),
+        link_value,
+        payload_refs: vec![report_ref.to_string()],
+        subject_refs: vec![link_ref],
+        context_refs: vec![scope_context_ref, suite_ref.to_string(), final_state_hash.to_string()],
+    })
+}
+
+fn pass_predicate(input: Pred<'_>) -> IOValue {
+    chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+        predicate: input.predicate,
+        decision: "pass",
+        subject_refs: input.subject_refs,
+        input_refs: input.input_refs,
+        context_refs: input.context_refs,
+        checks: input.checks,
+    })
+}
+
+fn pass_predicates(link: &PassLink) -> Result<PassPredicates> {
+    let genesis_checks = vec![
         ChainCheck::pass("trellis-bounded-predicate"),
         ChainCheck::pass("predicate-decision-binding"),
     ];
@@ -809,89 +881,104 @@ fn build_gate_chain_evidence(
         ChainCheck::pass("checkpoint-range-coverage"),
         ChainCheck::pass("verified-range"),
     ];
-    let predicate_values = vec![
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+    let values = vec![
+        pass_predicate(Pred {
             predicate: GENESIS_VALID_PREDICATE,
-            decision: "pass",
-            subject_refs: &subject_refs,
-            input_refs: &payload_refs,
-            context_refs: &predicate_context_refs,
-            checks: &genesis_predicate_checks,
+            subject_refs: &link.subject_refs,
+            input_refs: &link.payload_refs,
+            context_refs: &link.context_refs,
+            checks: &genesis_checks,
         }),
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+        pass_predicate(Pred {
             predicate: SEGMENT_NO_GAP_PREDICATE,
-            decision: "pass",
-            subject_refs: &subject_refs,
-            input_refs: &payload_refs,
-            context_refs: &predicate_context_refs,
+            subject_refs: &link.subject_refs,
+            input_refs: &link.payload_refs,
+            context_refs: &link.context_refs,
             checks: &segment_checks,
         }),
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+        pass_predicate(Pred {
             predicate: SEGMENT_NO_FORK_PREDICATE,
-            decision: "pass",
-            subject_refs: &subject_refs,
-            input_refs: &subject_refs,
-            context_refs: &predicate_context_refs,
+            subject_refs: &link.subject_refs,
+            input_refs: &link.subject_refs,
+            context_refs: &link.context_refs,
             checks: &fork_checks,
         }),
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+        pass_predicate(Pred {
             predicate: DESCENDS_FROM_ANCHOR_PREDICATE,
-            decision: "pass",
-            subject_refs: &subject_refs,
-            input_refs: &subject_refs,
-            context_refs: &predicate_context_refs,
+            subject_refs: &link.subject_refs,
+            input_refs: &link.subject_refs,
+            context_refs: &link.context_refs,
             checks: &anchor_checks,
         }),
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+        pass_predicate(Pred {
             predicate: CHECKPOINT_COVERS_RANGE_PREDICATE,
-            decision: "pass",
-            subject_refs: &subject_refs,
-            input_refs: &payload_refs,
-            context_refs: &predicate_context_refs,
+            subject_refs: &link.subject_refs,
+            input_refs: &link.payload_refs,
+            context_refs: &link.context_refs,
             checks: &checkpoint_checks,
         }),
     ];
-    let mut predicate_receipt_refs = Vec::with_capacity(predicate_values.len());
-    let mut range_predicate_ref = None;
-    for predicate_value in &predicate_values {
-        let parsed = parse_chain_predicate_receipt(predicate_value)?;
+    let (refs, range_ref) = pass_predicate_refs(&values)?;
+    Ok(PassPredicates {
+        values,
+        refs,
+        range_ref,
+    })
+}
+
+fn pass_predicate_refs(values: &[IOValue]) -> Result<(Vec<String>, String)> {
+    let mut refs = Vec::with_capacity(values.len());
+    let mut range_ref = None;
+    for value in values {
+        let parsed = parse_chain_predicate_receipt(value)?;
         if parsed.predicate == CHECKPOINT_COVERS_RANGE_PREDICATE {
-            range_predicate_ref = Some(parsed.receipt_ref.clone());
+            range_ref = Some(parsed.receipt_ref.clone());
         }
-        predicate_receipt_refs.push(parsed.receipt_ref);
+        refs.push(parsed.receipt_ref);
     }
-    let range_predicate_ref = range_predicate_ref
-        .ok_or_else(|| MoltenError::invalid_harness("gate chain evidence did not build checkpoint range predicate"))?;
-    let anchor_policy_refs = vec![suite_ref.to_string()];
-    let anchor_value = chain_anchor_value(&chain, &link_ref, &anchor_policy_refs, &producer);
-    let anchor_ref = canonical_hash(&anchor_value)?;
-    let verify_diagnostics = Vec::new();
-    let verify_receipt = ChainVerifyReceiptValueInput {
+    Ok((
+        refs,
+        range_ref.ok_or_else(|| {
+            MoltenError::invalid_harness("gate chain evidence did not build checkpoint range predicate")
+        })?,
+    ))
+}
+
+fn pass_verify_value(link: &PassLink, predicates: &PassPredicates) -> IOValue {
+    let diagnostics = Vec::new();
+    let receipt = ChainVerifyReceiptValueInput {
         decision: "pass",
-        chain: &chain,
-        anchor_ref: Some(&link_ref),
-        expected_head: Some(&link_ref),
-        discovered_heads: std::slice::from_ref(&link_ref),
-        verified_links: std::slice::from_ref(&link_ref),
-        payload_refs: &payload_refs,
-        diagnostics: &verify_diagnostics,
+        chain: &link.chain,
+        anchor_ref: Some(&link.link_ref),
+        expected_head: Some(&link.link_ref),
+        discovered_heads: std::slice::from_ref(&link.link_ref),
+        verified_links: std::slice::from_ref(&link.link_ref),
+        payload_refs: &link.payload_refs,
+        diagnostics: &diagnostics,
     };
-    let verify_receipt_value = chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
-        receipt: verify_receipt,
-        predicate_receipt_refs: &predicate_receipt_refs,
+    chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
+        receipt,
+        predicate_receipt_refs: &predicates.refs,
         fork_policy: ChainForkPolicy::RejectUnexpectedForks,
-    });
-    let verify_receipt_ref = canonical_hash(&verify_receipt_value)?;
+    })
+}
+
+fn pass_artifacts(link: &PassLink, predicates: &PassPredicates, suite_ref: &str) -> Result<PassArtifacts> {
+    let policy_refs = vec![suite_ref.to_string()];
+    let anchor_value = chain_anchor_value(&link.chain, &link.link_ref, &policy_refs, &link.producer);
+    let anchor_ref = canonical_hash(&anchor_value)?;
+    let verify_value = pass_verify_value(link, predicates);
+    let verify_ref = canonical_hash(&verify_value)?;
     let checkpoint_value = chain_checkpoint_value(&ChainCheckpointInput {
-        chain,
+        chain: link.chain.clone(),
         prior_checkpoint_ref: None,
-        anchor_link_ref: link_ref.clone(),
-        head_ref: link_ref.clone(),
-        verify_receipt_ref: verify_receipt_ref.clone(),
-        range_predicate_ref: range_predicate_ref.clone(),
-        policy_refs: anchor_policy_refs,
+        anchor_link_ref: link.link_ref.clone(),
+        head_ref: link.link_ref.clone(),
+        verify_receipt_ref: verify_ref.clone(),
+        range_predicate_ref: predicates.range_ref.clone(),
+        policy_refs,
         membership_refs: vec![suite_ref.to_string()],
-        producer,
+        producer: link.producer.clone(),
         checks: vec![
             ChainCheck::pass("raft-control-plane-command"),
             ChainCheck::pass("verified-range"),
@@ -899,18 +986,13 @@ fn build_gate_chain_evidence(
         ],
     });
     let checkpoint_ref = canonical_hash(&checkpoint_value)?;
-    Ok(GateChainEvidence {
-        link_ref,
+    Ok(PassArtifacts {
         anchor_ref,
-        verify_receipt_ref,
-        checkpoint_ref,
-        range_predicate_ref,
-        predicate_receipt_refs,
-        link_value,
         anchor_value,
-        verify_receipt_value,
+        verify_ref,
+        verify_value,
+        checkpoint_ref,
         checkpoint_value,
-        predicate_values,
     })
 }
 
