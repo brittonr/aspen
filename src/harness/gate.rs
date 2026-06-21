@@ -1105,6 +1105,11 @@ struct TurnJournalBuilder {
     payload_refs: Vec<String>,
 }
 
+struct LinkEnds<'a> {
+    anchor_ref: &'a String,
+    head_ref: &'a String,
+}
+
 fn build_turn_journals(report: &HarnessReport) -> Result<TurnJournalEvidence> {
     let suite = parse_suite(&report.suite_value)?;
     if suite.steps.len() != report.observations.len() {
@@ -1167,76 +1172,12 @@ fn build_turn_journals(report: &HarnessReport) -> Result<TurnJournalEvidence> {
 
 fn build_turn_journal_chain(builder: TurnJournalBuilder, report: &HarnessReport) -> Result<TurnJournalChainEvidence> {
     let link_refs = builder.links.iter().map(|link| link.link_ref.clone()).collect::<Vec<_>>();
-    let Some(anchor_ref) = link_refs.first() else {
-        return Err(MoltenError::invalid_harness("turn journal chain must contain at least one link"));
-    };
-    let Some(head_ref) = link_refs.last() else {
-        return Err(MoltenError::invalid_harness("turn journal chain must contain a head link"));
-    };
-    let context_refs = vec![
-        report.report_ref.clone(),
-        report.suite_ref.clone(),
-        canonical_hash(&record("turn-journal-actor", vec![string(&builder.actor_id)]))?,
-    ];
-    let segment_checks = vec![
-        ChainCheck::pass("segment-contiguity"),
-        ChainCheck::pass("canonical-link-order"),
-    ];
-    let fork_checks = vec![
-        ChainCheck::pass("fork-policy-profile"),
-        ChainCheck::pass("fork-evidence-binding"),
-    ];
-    let anchor_subject_refs = vec![anchor_ref.to_string(), head_ref.to_string()];
-    let anchor_checks = vec![ChainCheck::pass("anchor-descent"), ChainCheck::pass("head-binding")];
-    let predicate_values = vec![
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
-            predicate: SEGMENT_NO_GAP_PREDICATE,
-            decision: "pass",
-            subject_refs: &link_refs,
-            input_refs: &builder.payload_refs,
-            context_refs: &context_refs,
-            checks: &segment_checks,
-        }),
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
-            predicate: SEGMENT_NO_FORK_PREDICATE,
-            decision: "pass",
-            subject_refs: std::slice::from_ref(head_ref),
-            input_refs: &link_refs,
-            context_refs: &context_refs,
-            checks: &fork_checks,
-        }),
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
-            predicate: DESCENDS_FROM_ANCHOR_PREDICATE,
-            decision: "pass",
-            subject_refs: &anchor_subject_refs,
-            input_refs: &link_refs,
-            context_refs: &context_refs,
-            checks: &anchor_checks,
-        }),
-    ];
-    let predicate_receipt_refs = predicate_values
-        .iter()
-        .map(parse_chain_predicate_receipt)
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .map(|receipt| receipt.receipt_ref)
-        .collect::<Vec<_>>();
-    let verify_diagnostics = Vec::new();
-    let verify_receipt = ChainVerifyReceiptValueInput {
-        decision: "pass",
-        chain: &builder.chain,
-        anchor_ref: Some(anchor_ref),
-        expected_head: Some(head_ref),
-        discovered_heads: std::slice::from_ref(head_ref),
-        verified_links: &link_refs,
-        payload_refs: &builder.payload_refs,
-        diagnostics: &verify_diagnostics,
-    };
-    let verify_receipt_value = chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
-        receipt: verify_receipt,
-        predicate_receipt_refs: &predicate_receipt_refs,
-        fork_policy: ChainForkPolicy::RejectUnexpectedForks,
-    });
+    let ends = link_ends(&link_refs)?;
+    let context_refs = actor_refs(report, &builder.actor_id)?;
+    let predicate_values = predicate_values(&link_refs, &builder.payload_refs, &context_refs, &ends);
+    let predicate_receipt_refs = predicate_refs(&predicate_values)?;
+    let verify_receipt_value =
+        verify_value(&builder.chain, &link_refs, &builder.payload_refs, &ends, &predicate_receipt_refs);
     let verify_receipt_ref = canonical_hash(&verify_receipt_value)?;
     Ok(TurnJournalChainEvidence {
         actor_id: builder.actor_id,
@@ -1247,6 +1188,103 @@ fn build_turn_journal_chain(builder: TurnJournalBuilder, report: &HarnessReport)
         link_values: builder.link_values,
         verify_receipt_value,
         predicate_values,
+    })
+}
+
+fn link_ends(link_refs: &[String]) -> Result<LinkEnds<'_>> {
+    let Some(anchor_ref) = link_refs.first() else {
+        return Err(MoltenError::invalid_harness("turn journal chain must contain at least one link"));
+    };
+    let Some(head_ref) = link_refs.last() else {
+        return Err(MoltenError::invalid_harness("turn journal chain must contain a head link"));
+    };
+    Ok(LinkEnds { anchor_ref, head_ref })
+}
+
+fn actor_refs(report: &HarnessReport, actor_id: &str) -> Result<Vec<String>> {
+    Ok(vec![
+        report.report_ref.clone(),
+        report.suite_ref.clone(),
+        canonical_hash(&record("turn-journal-actor", vec![string(actor_id)]))?,
+    ])
+}
+
+fn predicate_values(
+    link_refs: &[String],
+    payload_refs: &[String],
+    context_refs: &[String],
+    ends: &LinkEnds<'_>,
+) -> Vec<IOValue> {
+    let segment_checks = vec![
+        ChainCheck::pass("segment-contiguity"),
+        ChainCheck::pass("canonical-link-order"),
+    ];
+    let fork_checks = vec![
+        ChainCheck::pass("fork-policy-profile"),
+        ChainCheck::pass("fork-evidence-binding"),
+    ];
+    let anchor_subject_refs = vec![ends.anchor_ref.clone(), ends.head_ref.clone()];
+    let anchor_checks = vec![ChainCheck::pass("anchor-descent"), ChainCheck::pass("head-binding")];
+    vec![
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: SEGMENT_NO_GAP_PREDICATE,
+            decision: "pass",
+            subject_refs: link_refs,
+            input_refs: payload_refs,
+            context_refs,
+            checks: &segment_checks,
+        }),
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: SEGMENT_NO_FORK_PREDICATE,
+            decision: "pass",
+            subject_refs: std::slice::from_ref(ends.head_ref),
+            input_refs: link_refs,
+            context_refs,
+            checks: &fork_checks,
+        }),
+        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+            predicate: DESCENDS_FROM_ANCHOR_PREDICATE,
+            decision: "pass",
+            subject_refs: &anchor_subject_refs,
+            input_refs: link_refs,
+            context_refs,
+            checks: &anchor_checks,
+        }),
+    ]
+}
+
+fn predicate_refs(values: &[IOValue]) -> Result<Vec<String>> {
+    Ok(values
+        .iter()
+        .map(parse_chain_predicate_receipt)
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .map(|receipt| receipt.receipt_ref)
+        .collect())
+}
+
+fn verify_value(
+    chain: &ChainScope,
+    link_refs: &[String],
+    payload_refs: &[String],
+    ends: &LinkEnds<'_>,
+    predicate_receipt_refs: &[String],
+) -> IOValue {
+    let verify_diagnostics = Vec::new();
+    let verify_receipt = ChainVerifyReceiptValueInput {
+        decision: "pass",
+        chain,
+        anchor_ref: Some(ends.anchor_ref.as_str()),
+        expected_head: Some(ends.head_ref.as_str()),
+        discovered_heads: std::slice::from_ref(ends.head_ref),
+        verified_links: link_refs,
+        payload_refs,
+        diagnostics: &verify_diagnostics,
+    };
+    chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
+        receipt: verify_receipt,
+        predicate_receipt_refs,
+        fork_policy: ChainForkPolicy::RejectUnexpectedForks,
     })
 }
 
