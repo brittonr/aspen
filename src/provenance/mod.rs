@@ -1029,8 +1029,17 @@ mod tests {
         assert!(deny.diagnostics.iter().any(|diagnostic| diagnostic.contains("build artifact mismatch")));
     }
 
-    #[test]
-    fn reproducible_verified_requires_matching_build_verification_evidence() {
+    struct Case {
+        artifact_ref: String,
+        source_refs: Vec<String>,
+        dependency_ref: String,
+        toolchain_refs: Vec<String>,
+        builder_ref: String,
+        build_record: IOValue,
+        provenance: IOValue,
+    }
+
+    fn seed() -> Case {
         let artifact_ref = synthetic_ref("artifact", "reproducible").expect("artifact ref");
         let source_refs = vec![synthetic_ref("source", "reproducible").expect("source ref")];
         let toolchain_refs = vec![synthetic_ref("toolchain", "reproducible").expect("toolchain ref")];
@@ -1048,8 +1057,7 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("build record");
-        let build_record_ref = canonical_hash(&build_record).expect("build record ref");
-        let build_record_refs = vec![build_record_ref.clone()];
+        let build_record_refs = vec![canonical_hash(&build_record).expect("build record ref")];
         let provenance = provenance_record_value(&ProvenanceRecordInput {
             artifact_ref: &artifact_ref,
             trust_state: TRUST_STATE_REPRODUCIBLE_VERIFIED,
@@ -1064,71 +1072,95 @@ mod tests {
             build_record_refs: &build_record_refs,
         })
         .expect("reproducible provenance");
-        let missing_receipt = evaluate_provenance(&ProvenanceEvaluationInput {
-            operation: "install",
-            profile: "node-control",
-            artifact_ref: &artifact_ref,
-            provenance_values: std::slice::from_ref(&provenance),
-            build_verification_values: &[],
-            prior_diagnostics: &[],
-        })
-        .expect("missing build verification denies");
-        assert_eq!(missing_receipt.decision, "deny");
-        assert!(
-            missing_receipt
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.contains("requires a passing build verification"))
-        );
+        Case {
+            artifact_ref,
+            source_refs,
+            dependency_ref,
+            toolchain_refs,
+            builder_ref,
+            build_record,
+            provenance,
+        }
+    }
 
-        let verification = verify_provenance_build(&ProvenanceBuildVerificationInput {
-            build_record_value: &build_record,
-            actual_artifact_ref: &artifact_ref,
-            prior_diagnostics: &[],
-        })
-        .expect("verify reproducible build");
-        let pass = evaluate_provenance(&ProvenanceEvaluationInput {
-            operation: "install",
-            profile: "node-control",
-            artifact_ref: &artifact_ref,
-            provenance_values: std::slice::from_ref(&provenance),
-            build_verification_values: std::slice::from_ref(&verification.receipt_value),
-            prior_diagnostics: &[],
-        })
-        .expect("matching build verification passes");
-        assert_eq!(pass.decision, "pass");
-
+    fn wrong_value(case: &Case) -> IOValue {
         let wrong_record_refs = vec![synthetic_ref("build-record", "wrong").expect("wrong build record ref")];
-        let wrong_binding = provenance_record_value(&ProvenanceRecordInput {
-            artifact_ref: &artifact_ref,
+        provenance_record_value(&ProvenanceRecordInput {
+            artifact_ref: &case.artifact_ref,
             trust_state: TRUST_STATE_REPRODUCIBLE_VERIFIED,
-            source_refs: &source_refs,
-            dependency_closure_ref: &dependency_ref,
-            toolchain_refs: &toolchain_refs,
-            builder_ref: &builder_ref,
+            source_refs: &case.source_refs,
+            dependency_closure_ref: &case.dependency_ref,
+            toolchain_refs: &case.toolchain_refs,
+            builder_ref: &case.builder_ref,
             review_refs: &[],
             test_refs: &[],
             source_gate_refs: &[],
             policy_refs: &[],
             build_record_refs: &wrong_record_refs,
         })
-        .expect("wrong binding provenance");
-        let wrong_binding_eval = evaluate_provenance(&ProvenanceEvaluationInput {
+        .expect("wrong binding provenance")
+    }
+
+    fn assert_missing(case: &Case) {
+        let receipt = evaluate_provenance(&ProvenanceEvaluationInput {
             operation: "install",
             profile: "node-control",
-            artifact_ref: &artifact_ref,
-            provenance_values: &[wrong_binding],
-            build_verification_values: &[verification.receipt_value],
+            artifact_ref: &case.artifact_ref,
+            provenance_values: std::slice::from_ref(&case.provenance),
+            build_verification_values: &[],
+            prior_diagnostics: &[],
+        })
+        .expect("missing build verification denies");
+        assert_eq!(receipt.decision, "deny");
+        assert!(
+            receipt
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.contains("requires a passing build verification"))
+        );
+    }
+
+    fn assert_match(case: &Case) -> ProvenanceBuildVerification {
+        let verification = verify_provenance_build(&ProvenanceBuildVerificationInput {
+            build_record_value: &case.build_record,
+            actual_artifact_ref: &case.artifact_ref,
+            prior_diagnostics: &[],
+        })
+        .expect("verify reproducible build");
+        let pass = evaluate_provenance(&ProvenanceEvaluationInput {
+            operation: "install",
+            profile: "node-control",
+            artifact_ref: &case.artifact_ref,
+            provenance_values: std::slice::from_ref(&case.provenance),
+            build_verification_values: std::slice::from_ref(&verification.receipt_value),
+            prior_diagnostics: &[],
+        })
+        .expect("matching build verification passes");
+        assert_eq!(pass.decision, "pass");
+        verification
+    }
+
+    fn assert_wrong(case: &Case, verification: &ProvenanceBuildVerification) {
+        let wrong_binding = wrong_value(case);
+        let eval = evaluate_provenance(&ProvenanceEvaluationInput {
+            operation: "install",
+            profile: "node-control",
+            artifact_ref: &case.artifact_ref,
+            provenance_values: std::slice::from_ref(&wrong_binding),
+            build_verification_values: std::slice::from_ref(&verification.receipt_value),
             prior_diagnostics: &[],
         })
         .expect("wrong binding denies");
-        assert_eq!(wrong_binding_eval.decision, "deny");
-        assert!(
-            wrong_binding_eval
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.contains("is not bound by provenance record"))
-        );
+        assert_eq!(eval.decision, "deny");
+        assert!(eval.diagnostics.iter().any(|diagnostic| diagnostic.contains("is not bound by provenance record")));
+    }
+
+    #[test]
+    fn reproducible_verified_requires_matching_build_verification_evidence() {
+        let case = seed();
+        assert_missing(&case);
+        let verification = assert_match(&case);
+        assert_wrong(&case, &verification);
     }
 
     #[test]
