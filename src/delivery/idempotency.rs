@@ -1105,92 +1105,92 @@ mod tests {
 
     #[test]
     fn conflict_stale_gap_and_retry_are_canonical_denials() {
-        let root = temp_dir("delivery-negative");
-        let scope = remote_topic_scope_ref("services", "peer:b").expect("scope");
-        let policy_refs = vec![fake_ref("policy")];
-        let evidence_refs = vec![fake_ref("evidence")];
-        let payload = fake_ref("payload");
-        let first = check_delivery(DeliveryCheckInput {
-            root: &root,
-            scope_profile: SCOPE_REMOTE_TOPIC,
-            scope_ref: &scope,
-            producer: "peer:a/producer",
-            consumer: "peer:b",
-            sequence: 1,
-            intent: "remote-dataspace-message",
-            payload_ref: &payload,
-            policy_refs: &policy_refs,
-            evidence_refs: &evidence_refs,
-            semantic_result_ref: Some(&fake_ref("result")),
-            gap_policy: GapPolicy::Deny,
-        })
-        .expect("first");
+        let case = negative_case();
+        assert_first(&case);
+        assert_conflict(&case);
+        assert_denied(&case, attempt(0, "stale", None, GapPolicy::Deny), "stale");
+        assert_denied(&case, attempt(4, "gap", None, GapPolicy::Deny), "gap");
+        assert_denied(&case, attempt(4, "retry", None, GapPolicy::Retry), "retry");
+    }
+
+    struct Case {
+        root: PathBuf,
+        scope: String,
+        policy_refs: Vec<String>,
+        evidence_refs: Vec<String>,
+        payload_ref: String,
+        result_ref: String,
+    }
+
+    struct Attempt {
+        sequence: u64,
+        payload_ref: String,
+        semantic_result_ref: Option<String>,
+        gap_policy: GapPolicy,
+    }
+
+    fn negative_case() -> Case {
+        Case {
+            root: temp_dir("delivery-negative"),
+            scope: remote_topic_scope_ref("services", "peer:b").expect("scope"),
+            policy_refs: vec![fake_ref("policy")],
+            evidence_refs: vec![fake_ref("evidence")],
+            payload_ref: fake_ref("payload"),
+            result_ref: fake_ref("result"),
+        }
+    }
+
+    fn attempt(sequence: u64, payload_label: &str, result_label: Option<&str>, gap_policy: GapPolicy) -> Attempt {
+        Attempt {
+            sequence,
+            payload_ref: fake_ref(payload_label),
+            semantic_result_ref: result_label.map(fake_ref),
+            gap_policy,
+        }
+    }
+
+    fn assert_first(case: &Case) {
+        let first = check_case(
+            case,
+            Attempt {
+                sequence: 1,
+                payload_ref: case.payload_ref.clone(),
+                semantic_result_ref: Some(case.result_ref.clone()),
+                gap_policy: GapPolicy::Deny,
+            },
+            "first",
+        );
         assert_eq!(first.receipt.decision, "first");
-        let conflict = check_delivery(DeliveryCheckInput {
-            root: &root,
-            scope_profile: SCOPE_REMOTE_TOPIC,
-            scope_ref: &scope,
-            producer: "peer:a/producer",
-            consumer: "peer:b",
-            sequence: 1,
-            intent: "remote-dataspace-message",
-            payload_ref: &fake_ref("changed-payload"),
-            policy_refs: &policy_refs,
-            evidence_refs: &evidence_refs,
-            semantic_result_ref: Some(&fake_ref("changed-result")),
-            gap_policy: GapPolicy::Deny,
-        })
-        .expect("conflict");
+    }
+
+    fn assert_conflict(case: &Case) {
+        let conflict =
+            check_case(case, attempt(1, "changed-payload", Some("changed-result"), GapPolicy::Deny), "conflict");
         assert_eq!(conflict.receipt.decision, "conflict");
         assert!(!conflict.should_commit_side_effect);
-        let stale = check_delivery(DeliveryCheckInput {
-            root: &root,
+    }
+
+    fn assert_denied(case: &Case, attempt: Attempt, decision: &str) {
+        let denied = check_case(case, attempt, decision);
+        assert_eq!(denied.receipt.decision, decision);
+    }
+
+    fn check_case(case: &Case, attempt: Attempt, context: &str) -> DeliveryDecision {
+        check_delivery(DeliveryCheckInput {
+            root: &case.root,
             scope_profile: SCOPE_REMOTE_TOPIC,
-            scope_ref: &scope,
+            scope_ref: &case.scope,
             producer: "peer:a/producer",
             consumer: "peer:b",
-            sequence: 0,
+            sequence: attempt.sequence,
             intent: "remote-dataspace-message",
-            payload_ref: &fake_ref("stale"),
-            policy_refs: &policy_refs,
-            evidence_refs: &evidence_refs,
-            semantic_result_ref: None,
-            gap_policy: GapPolicy::Deny,
+            payload_ref: &attempt.payload_ref,
+            policy_refs: &case.policy_refs,
+            evidence_refs: &case.evidence_refs,
+            semantic_result_ref: attempt.semantic_result_ref.as_deref(),
+            gap_policy: attempt.gap_policy,
         })
-        .expect("stale");
-        assert_eq!(stale.receipt.decision, "stale");
-        let gap = check_delivery(DeliveryCheckInput {
-            root: &root,
-            scope_profile: SCOPE_REMOTE_TOPIC,
-            scope_ref: &scope,
-            producer: "peer:a/producer",
-            consumer: "peer:b",
-            sequence: 4,
-            intent: "remote-dataspace-message",
-            payload_ref: &fake_ref("gap"),
-            policy_refs: &policy_refs,
-            evidence_refs: &evidence_refs,
-            semantic_result_ref: None,
-            gap_policy: GapPolicy::Deny,
-        })
-        .expect("gap");
-        assert_eq!(gap.receipt.decision, "gap");
-        let retry = check_delivery(DeliveryCheckInput {
-            root: &root,
-            scope_profile: SCOPE_REMOTE_TOPIC,
-            scope_ref: &scope,
-            producer: "peer:a/producer",
-            consumer: "peer:b",
-            sequence: 4,
-            intent: "remote-dataspace-message",
-            payload_ref: &fake_ref("retry"),
-            policy_refs: &policy_refs,
-            evidence_refs: &evidence_refs,
-            semantic_result_ref: None,
-            gap_policy: GapPolicy::Retry,
-        })
-        .expect("retry");
-        assert_eq!(retry.receipt.decision, "retry");
+        .expect(context)
     }
 
     #[test]
