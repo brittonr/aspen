@@ -2316,6 +2316,33 @@ fn sequence_strings(value: &Value<IOValue>, field: &str) -> Result<Vec<String>> 
     values.iter().map(|value| required_string(&value, field)).collect()
 }
 
+#[derive(Clone, Copy)]
+struct BoundaryEvidence<'a> {
+    suite: &'a HarnessSuite,
+    policy_gate: &'a PolicyGateEvidence,
+    capability_gate: &'a CapabilityGateEvidence,
+    budget_gate: &'a BudgetGateEvidence,
+}
+
+struct ExpectedBoundary<'a> {
+    suite: &'a HarnessSuite,
+    step: &'a CoreStep,
+    position: usize,
+    observation: &'a HarnessObservation,
+    context: HostcallEvidenceContext<'a>,
+    admission: &'a AdmissionDecisionEvent,
+    authority: &'a AdmissionAuthorityEvidence,
+}
+
+struct RuntimeBoundary<'a> {
+    suite: &'a HarnessSuite,
+    step: &'a CoreStep,
+    position: usize,
+    observation: &'a HarnessObservation,
+    decision: &'a AdmissionDecision,
+    runtime_events: &'a [IOValue],
+}
+
 pub fn validate_hostcall_evidence(
     suite: &HarnessSuite,
     observations: &[HarnessObservation],
@@ -2330,70 +2357,126 @@ pub fn validate_hostcall_evidence(
             suite.steps.len()
         )));
     }
-
+    let evidence = BoundaryEvidence {
+        suite,
+        policy_gate,
+        capability_gate,
+        budget_gate,
+    };
     for (position, (step, observation)) in suite.steps.iter().zip(observations.iter()).enumerate() {
-        if observation.events.len() < 5 {
-            return Err(MoltenError::invalid_harness(format!(
-                "missing executor hostcall boundary evidence at observation {position}"
-            )));
-        }
-        let step_ref = canonical_hash(&step_value(step))?;
-        if observation.step_ref != step_ref {
-            return Err(MoltenError::invalid_harness(format!("hostcall step ref mismatch at observation {position}")));
-        }
-        let actor_output_index = if observation.events.last().is_some_and(is_turn_journal) {
-            observation.events.len() - 2
-        } else {
-            observation.events.len() - 1
-        };
-        let Some(actor_output_event) = observation.events.as_slice().get(actor_output_index) else {
-            return Err(MoltenError::invalid_harness(format!("missing final actor output at observation {position}")));
-        };
-        if event_boundary(&observation.events[1]) != EventBoundary::ActorInput
-            || event_boundary(&observation.events[2]) != EventBoundary::HostcallRequest
-            || event_boundary(&observation.events[3]) != EventBoundary::HostcallDecision
-            || event_boundary(actor_output_event) != EventBoundary::ActorOutput
-        {
-            return Err(MoltenError::invalid_harness(format!(
-                "executor hostcall boundary order mismatch at observation {position}"
-            )));
-        }
-        let admission = parse_admission_decision_event(&observation.events[0])?;
-        let authority = admission.authority.as_ref().ok_or_else(|| {
-            MoltenError::invalid_harness(format!(
-                "missing capability authority evidence for hostcall decision at observation {position}"
-            ))
-        })?;
-        let suite_ref = suite_ref(suite)?;
-        let hostcall_context = HostcallEvidenceContext {
-            sequence: position as u64,
-            suite_ref: &suite_ref,
-            step_ref: &step_ref,
-            policy_ref: &policy_gate.policy_ref,
-            capability_ref: &capability_gate.capability_ref,
-            budget_ref: &budget_gate.budget_ref,
-        };
-        let expected_input = actor_input_value(suite, step, hostcall_context)?;
-        require_hostcall_event(position, "actor-input", &observation.events[1], &expected_input)?;
-        let expected_request = hostcall_request_value(suite, step, hostcall_context, &admission.decision)?;
-        require_hostcall_event(position, "hostcall-request", &observation.events[2], &expected_request)?;
-        let expected_decision =
-            hostcall_decision_value(hostcall_context, &observation.events[0], authority, &admission.decision)?;
-        require_hostcall_event(position, "hostcall-decision", &observation.events[3], &expected_decision)?;
-        let runtime_events = &observation.events[4..actor_output_index];
-        validate_steel_execution_evidence(suite, step, position, &admission.decision, runtime_events)?;
-        validate_wasm_execution_evidence(&WasmExecutionEvidenceInput {
-            suite,
-            step,
-            position,
-            decision: &admission.decision,
-            actor_input: &observation.events[1],
-            runtime_events,
-        })?;
-        let expected_output = actor_output_value(step, hostcall_context, &admission.decision, runtime_events)?;
-        require_hostcall_event(position, "actor-output", actor_output_event, &expected_output)?;
+        validate_boundary_observation(evidence, position, step, observation)?;
     }
     Ok(())
+}
+
+fn validate_boundary_observation(
+    evidence: BoundaryEvidence<'_>,
+    position: usize,
+    step: &CoreStep,
+    observation: &HarnessObservation,
+) -> Result<()> {
+    let step_ref = validated_step_ref(position, step, observation)?;
+    let (actor_output_index, actor_output_event) = actor_output_slot(position, observation)?;
+    boundary_order(position, observation, actor_output_event)?;
+    let admission = parse_admission_decision_event(&observation.events[0])?;
+    let authority = admission.authority.as_ref().ok_or_else(|| {
+        MoltenError::invalid_harness(format!(
+            "missing capability authority evidence for hostcall decision at observation {position}"
+        ))
+    })?;
+    let suite_ref = suite_ref(evidence.suite)?;
+    let context = HostcallEvidenceContext {
+        sequence: position as u64,
+        suite_ref: &suite_ref,
+        step_ref: &step_ref,
+        policy_ref: &evidence.policy_gate.policy_ref,
+        capability_ref: &evidence.capability_gate.capability_ref,
+        budget_ref: &evidence.budget_gate.budget_ref,
+    };
+    validate_expected_boundary(&ExpectedBoundary {
+        suite: evidence.suite,
+        step,
+        position,
+        observation,
+        context,
+        admission: &admission,
+        authority,
+    })?;
+    let runtime_events = &observation.events[4..actor_output_index];
+    validate_runtime_boundary(&RuntimeBoundary {
+        suite: evidence.suite,
+        step,
+        position,
+        observation,
+        decision: &admission.decision,
+        runtime_events,
+    })?;
+    let expected_output = actor_output_value(step, context, &admission.decision, runtime_events)?;
+    require_hostcall_event(position, "actor-output", actor_output_event, &expected_output)
+}
+
+fn validated_step_ref(position: usize, step: &CoreStep, observation: &HarnessObservation) -> Result<String> {
+    let step_ref = canonical_hash(&step_value(step))?;
+    if observation.step_ref != step_ref {
+        return Err(MoltenError::invalid_harness(format!("hostcall step ref mismatch at observation {position}")));
+    }
+    Ok(step_ref)
+}
+
+fn actor_output_slot(position: usize, observation: &HarnessObservation) -> Result<(usize, &IOValue)> {
+    if observation.events.len() < 5 {
+        return Err(MoltenError::invalid_harness(format!(
+            "missing executor hostcall boundary evidence at observation {position}"
+        )));
+    }
+    let actor_output_index = if observation.events.last().is_some_and(is_turn_journal) {
+        observation.events.len() - 2
+    } else {
+        observation.events.len() - 1
+    };
+    let Some(actor_output_event) = observation.events.as_slice().get(actor_output_index) else {
+        return Err(MoltenError::invalid_harness(format!("missing final actor output at observation {position}")));
+    };
+    Ok((actor_output_index, actor_output_event))
+}
+
+fn boundary_order(position: usize, observation: &HarnessObservation, actor_output_event: &IOValue) -> Result<()> {
+    if event_boundary(&observation.events[1]) != EventBoundary::ActorInput
+        || event_boundary(&observation.events[2]) != EventBoundary::HostcallRequest
+        || event_boundary(&observation.events[3]) != EventBoundary::HostcallDecision
+        || event_boundary(actor_output_event) != EventBoundary::ActorOutput
+    {
+        return Err(MoltenError::invalid_harness(format!(
+            "executor hostcall boundary order mismatch at observation {position}"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_expected_boundary(input: &ExpectedBoundary<'_>) -> Result<()> {
+    let expected_input = actor_input_value(input.suite, input.step, input.context)?;
+    require_hostcall_event(input.position, "actor-input", &input.observation.events[1], &expected_input)?;
+    let expected_request = hostcall_request_value(input.suite, input.step, input.context, &input.admission.decision)?;
+    require_hostcall_event(input.position, "hostcall-request", &input.observation.events[2], &expected_request)?;
+    let expected_decision = hostcall_decision_value(
+        input.context,
+        &input.observation.events[0],
+        input.authority,
+        &input.admission.decision,
+    )?;
+    require_hostcall_event(input.position, "hostcall-decision", &input.observation.events[3], &expected_decision)
+}
+
+fn validate_runtime_boundary(input: &RuntimeBoundary<'_>) -> Result<()> {
+    validate_steel_execution_evidence(input.suite, input.step, input.position, input.decision, input.runtime_events)?;
+    validate_wasm_execution_evidence(&WasmExecutionEvidenceInput {
+        suite: input.suite,
+        step: input.step,
+        position: input.position,
+        decision: input.decision,
+        actor_input: &input.observation.events[1],
+        runtime_events: input.runtime_events,
+    })
 }
 
 struct WasmExecutionEvidenceInput<'a> {
