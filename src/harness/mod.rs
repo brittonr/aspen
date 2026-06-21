@@ -1468,54 +1468,7 @@ mod tests {
         assert_eq!(receipt.artifact_kind, "report");
         assert_eq!(receipt.report_ref, run.report_ref);
         assert_eq!(receipt.suite_ref, check.suite_ref);
-        assert!(receipt.checks.iter().any(|check| check == "budget"));
-        assert!(receipt.checks.iter().any(|check| check == "explicit-budget-fixture"));
-        assert!(receipt.checks.iter().any(|check| check == "no-default-resource-policy"));
-        assert!(receipt.checks.iter().any(|check| check == "resource-policy-preflight"));
-        assert!(receipt.checks.iter().any(|check| check == "nickel-resource-policy"));
-        assert!(receipt.checks.iter().any(|check| check == "nickel-resource-export"));
-        assert!(receipt.checks.iter().any(|check| check == "basalt-resource-receipt"));
-        assert!(receipt.checks.iter().any(|check| check == "budget-usage-binding"));
-        assert!(receipt.checks.iter().any(|check| check == "actor-registry"));
-        assert!(receipt.checks.iter().any(|check| check == "explicit-actor-registry"));
-        assert!(receipt.checks.iter().any(|check| check == "no-inferred-actors"));
-        assert!(receipt.checks.iter().any(|check| check == "executor-boundary"));
-        assert!(receipt.checks.iter().any(|check| check == "admission-policy"));
-        assert!(receipt.checks.iter().any(|check| check == "policy-preflight"));
-        assert!(receipt.checks.iter().any(|check| check == "nickel-static-policy"));
-        assert!(receipt.checks.iter().any(|check| check == "nickel-policy-source"));
-        assert!(receipt.checks.iter().any(|check| check == "nickel-export-normalization"));
-        assert!(receipt.checks.iter().any(|check| check == "basalt-policy-gate"));
-        assert!(receipt.checks.iter().any(|check| check == "basalt-preflight-receipt"));
-        assert!(receipt.checks.iter().any(|check| check == "basalt-receipt-binding"));
-        assert!(receipt.checks.iter().any(|check| check == "steel-predicate-review"));
-        assert!(receipt.checks.iter().any(|check| check == "explicit-capability-fixture"));
-        assert!(receipt.checks.iter().any(|check| check == "no-implicit-authority"));
-        assert!(receipt.checks.iter().any(|check| check == "capability-context"));
-        assert!(receipt.checks.iter().any(|check| check == "capability-grants"));
-        assert!(receipt.checks.iter().any(|check| check == "basalt-authority-receipt"));
-        assert!(receipt.checks.iter().any(|check| check == "capability-proofset-binding"));
-        assert!(receipt.checks.iter().any(|check| check == "grant-ref-binding"));
-        assert!(receipt.checks.iter().any(|check| check == "deny-without-capability"));
-        assert!(receipt.checks.iter().any(|check| check == "authority-ref-binding"));
-        assert!(receipt.checks.iter().any(|check| check == "admission-decisions"));
-        assert!(receipt.checks.iter().any(|check| check == "deny-rollback"));
-        assert!(receipt.checks.iter().any(|check| check == "denied-effect-suppression"));
-        assert!(receipt.checks.iter().any(|check| check == "runtime-predicate-receipts"));
-        assert!(receipt.checks.iter().any(|check| check == "assertion-visibility-predicate"));
-        assert!(receipt.checks.iter().any(|check| check == "turn-commit-rollback-predicate"));
-        assert!(receipt.checks.iter().any(|check| check == "observe-delivery-predicate"));
-        assert!(receipt.checks.iter().any(|check| check == "executor-conformance-suite-binding"));
-        assert!(receipt.checks.iter().any(|check| check == "cross-kind-hostcall-conformance"));
-        assert!(receipt.checks.iter().any(|check| check == "chain-continuity"));
-        assert!(receipt.checks.iter().any(|check| check == "chain-anchor-descent"));
-        assert!(receipt.checks.iter().any(|check| check == "chain-checkpoint-freshness"));
-        assert!(receipt.checks.iter().any(|check| check == "chain-predicate-receipts"));
-        assert!(receipt.checks.iter().any(|check| check == "turn-journal-chains"));
-        assert!(receipt.checks.iter().any(|check| check == "turn-journal-input-binding"));
-        assert!(receipt.checks.iter().any(|check| check == "turn-journal-admission-binding"));
-        assert!(receipt.checks.iter().any(|check| check == "turn-journal-state-binding"));
-        assert!(receipt.checks.iter().any(|check| check == "turn-journal-no-global-head"));
+        assert_expected_gate_checks(&receipt.checks);
         let parsed_report = parse_report(&run.report_value).expect("parse report");
         let runtime_predicates = parsed_report
             .observations
@@ -1528,6 +1481,63 @@ mod tests {
         let rendered = to_text(&receipt_value).expect("render receipt");
         let reparsed = parse_text(&rendered).expect("reparse receipt");
         assert_eq!(canonical_hash(&receipt_value).unwrap(), canonical_hash(&reparsed).unwrap());
+    }
+
+    const EXPECTED_GATE_CHECKS: &[&str] = &[
+        "budget",
+        "explicit-budget-fixture",
+        "no-default-resource-policy",
+        "resource-policy-preflight",
+        "nickel-resource-policy",
+        "nickel-resource-export",
+        "basalt-resource-receipt",
+        "budget-usage-binding",
+        "actor-registry",
+        "explicit-actor-registry",
+        "no-inferred-actors",
+        "executor-boundary",
+        "admission-policy",
+        "policy-preflight",
+        "nickel-static-policy",
+        "nickel-policy-source",
+        "nickel-export-normalization",
+        "basalt-policy-gate",
+        "basalt-preflight-receipt",
+        "basalt-receipt-binding",
+        "steel-predicate-review",
+        "explicit-capability-fixture",
+        "no-implicit-authority",
+        "capability-context",
+        "capability-grants",
+        "basalt-authority-receipt",
+        "capability-proofset-binding",
+        "grant-ref-binding",
+        "deny-without-capability",
+        "authority-ref-binding",
+        "admission-decisions",
+        "deny-rollback",
+        "denied-effect-suppression",
+        "runtime-predicate-receipts",
+        "assertion-visibility-predicate",
+        "turn-commit-rollback-predicate",
+        "observe-delivery-predicate",
+        "executor-conformance-suite-binding",
+        "cross-kind-hostcall-conformance",
+        "chain-continuity",
+        "chain-anchor-descent",
+        "chain-checkpoint-freshness",
+        "chain-predicate-receipts",
+        "turn-journal-chains",
+        "turn-journal-input-binding",
+        "turn-journal-admission-binding",
+        "turn-journal-state-binding",
+        "turn-journal-no-global-head",
+    ];
+
+    fn assert_expected_gate_checks(checks: &[String]) {
+        for expected in EXPECTED_GATE_CHECKS {
+            assert!(checks.iter().any(|check| check == expected), "missing gate check {expected}");
+        }
     }
 
     #[test]
