@@ -3738,76 +3738,105 @@ fn redaction_child_entries(value: &IOValue, path: &str, context: &str) -> Result
     Ok(entries)
 }
 
-fn transform_sensitive_value(value: &IOValue, path: &str, state: &mut RedactionTransformState) -> Result<IOValue> {
-    let mut stack = RedactionFrameStack::new();
-    let mut outputs = RedactionOutputStack::new();
-    stack.push(RedactionTraversalFrame::Enter {
-        value: value.clone(),
-        path: path.to_string(),
-    })?;
-    let mut visited_nodes = 0usize;
-    while let Some(frame) = stack.pop() {
-        visited_nodes += 1;
-        ensure_redaction_bound(visited_nodes, MAX_REDACTION_TRANSFORM_NODES, "redaction traversal visited nodes")?;
+struct RedactionTraversal<'a> {
+    stack: RedactionFrameStack,
+    outputs: RedactionOutputStack,
+    state: &'a mut RedactionTransformState,
+}
+
+impl<'a> RedactionTraversal<'a> {
+    fn new(state: &'a mut RedactionTransformState) -> Self {
+        Self {
+            stack: RedactionFrameStack::new(),
+            outputs: RedactionOutputStack::new(),
+            state,
+        }
+    }
+
+    fn run(mut self, value: &IOValue, path: &str) -> Result<IOValue> {
+        self.stack.push(RedactionTraversalFrame::Enter {
+            value: value.clone(),
+            path: path.to_string(),
+        })?;
+        let mut visited_nodes = 0usize;
+        while let Some(frame) = self.stack.pop() {
+            visited_nodes += 1;
+            ensure_redaction_bound(visited_nodes, MAX_REDACTION_TRANSFORM_NODES, "redaction traversal visited nodes")?;
+            self.handle(frame)?;
+        }
+        self.outputs.finish()
+    }
+
+    fn handle(&mut self, frame: RedactionTraversalFrame) -> Result<()> {
         match frame {
-            RedactionTraversalFrame::Enter { value, path } => {
-                if let Some(label) = record_label_string(&value)
-                    && is_sensitive_record_label(&label)
-                {
-                    let redacted = transform_sensitive_record(&value, &label, &path, state)?;
-                    outputs.push(redacted)?;
-                    continue;
-                }
-                match value.value_class() {
-                    ValueClass::Atomic(_) | ValueClass::Embedded => outputs.push(value)?,
-                    ValueClass::Compound(CompoundClass::Record) => {
-                        let label = value_to_iovalue(&value.label());
-                        let child_entries = redaction_child_entries(&value, &path, "redaction record fields")?;
-                        stack.push(RedactionTraversalFrame::ExitRecord {
-                            original: value,
-                            label,
-                            field_count: child_entries.len(),
-                        })?;
-                        stack.push_children(child_entries)?;
-                    }
-                    ValueClass::Compound(CompoundClass::Sequence) => {
-                        let child_entries = redaction_child_entries(&value, &path, "redaction sequence items")?;
-                        stack.push(RedactionTraversalFrame::ExitSequence {
-                            original: value,
-                            item_count: child_entries.len(),
-                        })?;
-                        stack.push_children(child_entries)?;
-                    }
-                    ValueClass::Compound(CompoundClass::Set) | ValueClass::Compound(CompoundClass::Dictionary) => {
-                        outputs.push(value)?;
-                    }
-                }
-            }
+            RedactionTraversalFrame::Enter { value, path } => self.enter(value, path),
             RedactionTraversalFrame::ExitRecord {
                 original,
                 label,
                 field_count,
-            } => {
-                let fields = outputs.take(field_count)?;
-                let rebuilt = IOValue::record(label, fields);
-                if rebuilt == original {
-                    outputs.push(original)?;
-                } else {
-                    outputs.push(rebuilt)?;
-                }
-            }
-            RedactionTraversalFrame::ExitSequence { original, item_count } => {
-                let values = outputs.take(item_count)?;
-                let rebuilt = sequence(values);
-                if rebuilt == original {
-                    outputs.push(original)?;
-                } else {
-                    outputs.push(rebuilt)?;
-                }
+            } => self.exit_record(original, label, field_count),
+            RedactionTraversalFrame::ExitSequence { original, item_count } => self.exit_sequence(original, item_count),
+        }
+    }
+
+    fn enter(&mut self, value: IOValue, path: String) -> Result<()> {
+        if let Some(label) = record_label_string(&value)
+            && is_sensitive_record_label(&label)
+        {
+            let redacted = transform_sensitive_record(&value, &label, &path, self.state)?;
+            return self.outputs.push(redacted);
+        }
+        match value.value_class() {
+            ValueClass::Atomic(_) | ValueClass::Embedded => self.outputs.push(value),
+            ValueClass::Compound(CompoundClass::Record) => self.enter_record(value, path),
+            ValueClass::Compound(CompoundClass::Sequence) => self.enter_sequence(value, path),
+            ValueClass::Compound(CompoundClass::Set) | ValueClass::Compound(CompoundClass::Dictionary) => {
+                self.outputs.push(value)
             }
         }
     }
-    outputs.finish()
+
+    fn enter_record(&mut self, value: IOValue, path: String) -> Result<()> {
+        let label = value_to_iovalue(&value.label());
+        let child_entries = redaction_child_entries(&value, &path, "redaction record fields")?;
+        self.stack.push(RedactionTraversalFrame::ExitRecord {
+            original: value,
+            label,
+            field_count: child_entries.len(),
+        })?;
+        self.stack.push_children(child_entries)
+    }
+
+    fn enter_sequence(&mut self, value: IOValue, path: String) -> Result<()> {
+        let child_entries = redaction_child_entries(&value, &path, "redaction sequence items")?;
+        self.stack.push(RedactionTraversalFrame::ExitSequence {
+            original: value,
+            item_count: child_entries.len(),
+        })?;
+        self.stack.push_children(child_entries)
+    }
+
+    fn exit_record(&mut self, original: IOValue, label: IOValue, field_count: usize) -> Result<()> {
+        let fields = self.outputs.take(field_count)?;
+        self.push_rebuilt(original, IOValue::record(label, fields))
+    }
+
+    fn exit_sequence(&mut self, original: IOValue, item_count: usize) -> Result<()> {
+        let values = self.outputs.take(item_count)?;
+        self.push_rebuilt(original, sequence(values))
+    }
+
+    fn push_rebuilt(&mut self, original: IOValue, rebuilt: IOValue) -> Result<()> {
+        if rebuilt == original {
+            self.outputs.push(original)
+        } else {
+            self.outputs.push(rebuilt)
+        }
+    }
+}
+
+fn transform_sensitive_value(value: &IOValue, path: &str, state: &mut RedactionTransformState) -> Result<IOValue> {
+    RedactionTraversal::new(state).run(value, path)
 }
 
 fn transform_sensitive_record(
