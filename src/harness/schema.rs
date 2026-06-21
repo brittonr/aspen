@@ -3111,6 +3111,24 @@ pub fn validate_upgrade_replay_receipt(
     new_report_value: &IOValue,
 ) -> Result<()> {
     let receipt = simple_record(value, "upgrade-replay-receipt-v1", 12)?;
+    let outcome = require_upgrade_replay_header(&receipt)?;
+    let old_report = parse_report(old_report_value)?;
+    let new_report = parse_report(new_report_value)?;
+    let (old_trace_ref, new_trace_ref) = require_upgrade_replay_report_refs(&receipt, &old_report, &new_report)?;
+    let migration_receipt_ref = required_record_string(&receipt[9], "migration-receipt-ref", "migration receipt ref")?;
+    let compatibility_diagnostic_ref =
+        required_record_string(&receipt[10], "compatibility-diagnostic-ref", "compatibility diagnostic ref")?;
+    let is_stable_replay = old_trace_ref == new_trace_ref && old_report.final_state_hash == new_report.final_state_hash;
+    require_upgrade_replay_drift_evidence(
+        &outcome,
+        &migration_receipt_ref,
+        &compatibility_diagnostic_ref,
+        is_stable_replay,
+    )?;
+    require_upgrade_replay_checks(&receipt[11])
+}
+
+fn require_upgrade_replay_header(receipt: &Record<Value<IOValue>>) -> Result<String> {
     let schema = required_string(&receipt[0], "upgrade replay receipt schema")?;
     if schema != HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
@@ -3125,16 +3143,22 @@ pub fn validate_upgrade_replay_receipt(
     if !matches!(outcome.as_str(), "stable" | "migrated" | "diagnosed") {
         return Err(MoltenError::invalid_harness(format!("unsupported upgrade replay outcome {outcome}")));
     }
-    let old_report = parse_report(old_report_value)?;
-    let new_report = parse_report(new_report_value)?;
+    Ok(outcome)
+}
+
+fn require_upgrade_replay_report_refs(
+    receipt: &Record<Value<IOValue>>,
+    old_report: &HarnessReport,
+    new_report: &HarnessReport,
+) -> Result<(String, String)> {
     if required_record_hash(&receipt[3], "old-report-ref", "old upgrade report ref")? != old_report.report_ref {
         return Err(MoltenError::invalid_harness("upgrade replay old report ref mismatch"));
     }
     if required_record_hash(&receipt[4], "new-report-ref", "new upgrade report ref")? != new_report.report_ref {
         return Err(MoltenError::invalid_harness("upgrade replay new report ref mismatch"));
     }
-    let old_trace_ref = report_trace_ref(&old_report)?;
-    let new_trace_ref = report_trace_ref(&new_report)?;
+    let old_trace_ref = report_trace_ref(old_report)?;
+    let new_trace_ref = report_trace_ref(new_report)?;
     if required_record_hash(&receipt[5], "old-trace-ref", "old upgrade trace ref")? != old_trace_ref {
         return Err(MoltenError::invalid_harness("upgrade replay old trace ref mismatch"));
     }
@@ -3147,16 +3171,21 @@ pub fn validate_upgrade_replay_receipt(
     if required_record_hash(&receipt[8], "new-state-ref", "new upgrade state ref")? != new_report.final_state_hash {
         return Err(MoltenError::invalid_harness("upgrade replay new state ref mismatch"));
     }
-    let migration_receipt_ref = required_record_string(&receipt[9], "migration-receipt-ref", "migration receipt ref")?;
-    let compatibility_diagnostic_ref =
-        required_record_string(&receipt[10], "compatibility-diagnostic-ref", "compatibility diagnostic ref")?;
+    Ok((old_trace_ref, new_trace_ref))
+}
+
+fn require_upgrade_replay_drift_evidence(
+    outcome: &str,
+    migration_receipt_ref: &str,
+    compatibility_diagnostic_ref: &str,
+    is_stable_replay: bool,
+) -> Result<()> {
     if migration_receipt_ref != "none" {
-        validate_content_ref(&migration_receipt_ref)?;
+        validate_content_ref(migration_receipt_ref)?;
     }
     if compatibility_diagnostic_ref != "none" {
-        validate_content_ref(&compatibility_diagnostic_ref)?;
+        validate_content_ref(compatibility_diagnostic_ref)?;
     }
-    let is_stable_replay = old_trace_ref == new_trace_ref && old_report.final_state_hash == new_report.final_state_hash;
     if !is_stable_replay && migration_receipt_ref == "none" && compatibility_diagnostic_ref == "none" {
         return Err(MoltenError::invalid_harness(
             "upgrade replay trace drift requires migration receipt or compatibility diagnostic",
@@ -3172,7 +3201,11 @@ pub fn validate_upgrade_replay_receipt(
     if outcome != expected_outcome {
         return Err(MoltenError::invalid_harness("upgrade replay outcome does not match drift evidence"));
     }
-    let checks = parse_executor_preflight_checks(&receipt[11])?;
+    Ok(())
+}
+
+fn require_upgrade_replay_checks(checks_value: &Value<IOValue>) -> Result<()> {
+    let checks = parse_executor_preflight_checks(checks_value)?;
     for expected in [
         "old-report-bound",
         "new-report-bound",
