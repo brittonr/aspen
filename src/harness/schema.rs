@@ -849,12 +849,59 @@ struct HostcallEffectRefs {
     effect_binding_receipt_ref: Option<String>,
 }
 
+struct CallBase {
+    actor_id: String,
+    actor_kind: &'static str,
+    actor_ref: String,
+    operation: &'static str,
+    session_ref: String,
+    scope: EffectScope,
+    allowed_hostcalls: Vec<String>,
+    preflight_ref: String,
+    resource_refs: Vec<String>,
+    evidence_refs: Vec<String>,
+}
+
+struct CallBinding {
+    value: IOValue,
+    value_ref: String,
+    handle: IOValue,
+    handle_ref: String,
+}
+
+#[derive(Default)]
+struct RequestRefs {
+    effect_manifest_ref: Option<String>,
+    handler_profile_ref: Option<String>,
+    effect_request_ref: Option<String>,
+    effect_binding_receipt_ref: Option<String>,
+}
+
 fn hostcall_effect_refs(
     suite: &HarnessSuite,
     step: &CoreStep,
     context: HostcallEvidenceContext<'_>,
     bind_effect_request: bool,
 ) -> Result<HostcallEffectRefs> {
+    let base = call_base(suite, step, context)?;
+    let binding = call_binding(&base, context)?;
+    let refs = if bind_effect_request {
+        request_refs(&base, &binding, context)?
+    } else {
+        RequestRefs::default()
+    };
+    validate_call_handle(&base, &binding, context)?;
+    Ok(HostcallEffectRefs {
+        handler_binding_ref: binding.value_ref,
+        handle_ref: binding.handle_ref,
+        effect_manifest_ref: refs.effect_manifest_ref,
+        handler_profile_ref: refs.handler_profile_ref,
+        effect_request_ref: refs.effect_request_ref,
+        effect_binding_receipt_ref: refs.effect_binding_receipt_ref,
+    })
+}
+
+fn call_base(suite: &HarnessSuite, step: &CoreStep, context: HostcallEvidenceContext<'_>) -> Result<CallBase> {
     let actor = actor_decl_for_primary_actor(suite, step.primary_actor())?;
     let operation = AdmissionRequest::from_step(step).action.as_str();
     let actor_ref = actor_identity_ref(&actor.id)?;
@@ -867,126 +914,175 @@ fn hostcall_effect_refs(
     };
     let allowed_hostcalls = allowed_hostcalls_for_actor(suite, actor);
     let executor_preflight = executor_preflight_value(actor, &allowed_hostcalls)?;
-    let executor_preflight_ref = canonical_hash(&executor_preflight)?;
+    let preflight_ref = canonical_hash(&executor_preflight)?;
+    Ok(CallBase {
+        actor_id: actor.id.clone(),
+        actor_kind: actor.kind.as_str(),
+        actor_ref,
+        operation,
+        session_ref,
+        scope,
+        allowed_hostcalls,
+        preflight_ref: preflight_ref.clone(),
+        resource_refs: vec![context.budget_ref.to_string()],
+        evidence_refs: vec![preflight_ref],
+    })
+}
+
+fn call_binding(base: &CallBase, context: HostcallEvidenceContext<'_>) -> Result<CallBinding> {
     let adapter_ref = canonical_hash(&record("hostcall-adapter-surface", vec![
-        string(&actor.id),
-        string(actor.kind.as_str()),
-        string(&executor_preflight_ref),
+        string(&base.actor_id),
+        string(base.actor_kind),
+        string(&base.preflight_ref),
     ]))?;
-    let resource_refs = vec![context.budget_ref.to_string()];
-    let evidence_refs = vec![executor_preflight_ref.clone()];
-    let handler_binding = handler_binding_value(&HandlerBindingInput {
+    let value = handler_binding_value(&HandlerBindingInput {
         profile: "local-hostcall".to_string(),
-        scope: scope.clone(),
+        scope: base.scope.clone(),
         adapter_kind: "hostcall".to_string(),
         adapter_ref,
-        executor_preflight_ref: Some(executor_preflight_ref.clone()),
+        executor_preflight_ref: Some(base.preflight_ref.clone()),
         policy_ref: context.policy_ref.to_string(),
         capability_context_ref: context.capability_ref.to_string(),
         authority_context_ref: None,
-        resource_refs: resource_refs.clone(),
-        operations: allowed_hostcalls.clone(),
-        evidence_refs: evidence_refs.clone(),
+        resource_refs: base.resource_refs.clone(),
+        operations: base.allowed_hostcalls.clone(),
+        evidence_refs: base.evidence_refs.clone(),
     })?;
-    let handler_binding_ref = canonical_hash(&handler_binding)?;
+    let value_ref = canonical_hash(&value)?;
     let handle = effect_handle_value(&EffectHandleInput {
         kind: "hostcall".to_string(),
-        scope,
-        handler_binding_ref: handler_binding_ref.clone(),
-        operations: vec![operation.to_string()],
+        scope: base.scope.clone(),
+        handler_binding_ref: value_ref.clone(),
+        operations: vec![base.operation.to_string()],
         capability_context_ref: context.capability_ref.to_string(),
         authority_context_ref: None,
-        resource_refs: resource_refs.clone(),
+        resource_refs: base.resource_refs.clone(),
         not_before: Some(0),
         expires_at: None,
         revocation_refs: Vec::new(),
         transfer: TRANSFER_LOCAL_ONLY.to_string(),
         parent_handle_ref: None,
-        evidence_refs,
+        evidence_refs: base.evidence_refs.clone(),
     })?;
     let handle_ref = canonical_hash(&handle)?;
-    let mut effect_manifest_ref = None;
-    let mut handler_profile_ref = None;
-    let mut effect_request_ref = None;
-    let mut effect_binding_receipt_ref = None;
-    if bind_effect_request {
-        let effect_id = format!("hostcall.{operation}");
-        let effect_manifest = effect_manifest_value(&EffectManifestInput {
-            artifact_kind: actor.kind.as_str().to_string(),
-            artifact_ref: actor_ref.clone(),
-            executor_kind: actor.kind.as_str().to_string(),
-            declared_effects: allowed_hostcalls
-                .as_slice()
-                .iter()
-                .map(|hostcall| DeclaredEffect {
-                    effect_id: format!("hostcall.{hostcall}"),
-                    operation: hostcall.clone(),
-                    input_schema_ref: context.step_ref.to_string(),
-                    output_schema_ref: context.step_ref.to_string(),
-                    evidence_refs: vec![executor_preflight_ref.clone()],
-                })
-                .collect(),
-            policy_refs: vec![context.policy_ref.to_string()],
-            evidence_refs: vec![executor_preflight_ref.clone()],
-        })?;
-        effect_manifest_ref = Some(canonical_hash(&effect_manifest)?);
-        let handler_profile = handler_profile_value(&HandlerProfileInput {
-            profile: HANDLER_PROFILE_LOCAL.to_string(),
-            handler_binding_refs: vec![handler_binding_ref.clone()],
-            policy_ref: context.policy_ref.to_string(),
-            capability_context_ref: context.capability_ref.to_string(),
-            resource_refs: resource_refs.clone(),
-            evidence_refs: vec![executor_preflight_ref.clone()],
-        })?;
-        handler_profile_ref = Some(canonical_hash(&handler_profile)?);
-        let effect_request = effect_request_value(&EffectRequestInput {
-            artifact_ref: actor_ref.clone(),
-            effect_id,
-            operation: operation.to_string(),
-            handler_profile: HANDLER_PROFILE_LOCAL.to_string(),
-            input_ref: context.step_ref.to_string(),
-            capability_refs: vec![context.capability_ref.to_string()],
-            evidence_refs: vec![handler_binding_ref.clone(), handle_ref.clone()],
-        })?;
-        effect_request_ref = Some(canonical_hash(&effect_request)?);
-        let effect_binding = admit_effect_request(&effect_manifest, &handler_profile, &effect_request, &[
-            handler_binding_ref.clone(),
-            handle_ref.clone(),
-        ])?;
-        if effect_binding.decision != "pass" {
-            return Err(MoltenError::invalid_harness(format!(
-                "hostcall effect manifest denied operation {operation}: {:?}",
-                effect_binding.diagnostics
-            )));
-        }
-        effect_binding_receipt_ref = Some(effect_binding.receipt_ref.clone());
+    Ok(CallBinding {
+        value,
+        value_ref,
+        handle,
+        handle_ref,
+    })
+}
+
+fn request_refs(base: &CallBase, binding: &CallBinding, context: HostcallEvidenceContext<'_>) -> Result<RequestRefs> {
+    let effect_id = format!("hostcall.{}", base.operation);
+    let effect_manifest = call_effect_manifest(base, context)?;
+    let effect_manifest_ref = canonical_hash(&effect_manifest)?;
+    let handler_profile = call_handler_profile(base, binding, context)?;
+    let handler_profile_ref = canonical_hash(&handler_profile)?;
+    let effect_request = call_effect_request(base, binding, context, effect_id)?;
+    let effect_request_ref = canonical_hash(&effect_request)?;
+    let effect_binding_receipt_ref =
+        call_binding_receipt_ref(base, binding, &effect_manifest, &handler_profile, &effect_request)?;
+    Ok(RequestRefs {
+        effect_manifest_ref: Some(effect_manifest_ref),
+        handler_profile_ref: Some(handler_profile_ref),
+        effect_request_ref: Some(effect_request_ref),
+        effect_binding_receipt_ref: Some(effect_binding_receipt_ref),
+    })
+}
+
+fn call_effect_manifest(base: &CallBase, context: HostcallEvidenceContext<'_>) -> Result<IOValue> {
+    effect_manifest_value(&EffectManifestInput {
+        artifact_kind: base.actor_kind.to_string(),
+        artifact_ref: base.actor_ref.clone(),
+        executor_kind: base.actor_kind.to_string(),
+        declared_effects: base
+            .allowed_hostcalls
+            .as_slice()
+            .iter()
+            .map(|hostcall| DeclaredEffect {
+                effect_id: format!("hostcall.{hostcall}"),
+                operation: hostcall.clone(),
+                input_schema_ref: context.step_ref.to_string(),
+                output_schema_ref: context.step_ref.to_string(),
+                evidence_refs: vec![base.preflight_ref.clone()],
+            })
+            .collect(),
+        policy_refs: vec![context.policy_ref.to_string()],
+        evidence_refs: vec![base.preflight_ref.clone()],
+    })
+}
+
+fn call_handler_profile(
+    base: &CallBase,
+    binding: &CallBinding,
+    context: HostcallEvidenceContext<'_>,
+) -> Result<IOValue> {
+    handler_profile_value(&HandlerProfileInput {
+        profile: HANDLER_PROFILE_LOCAL.to_string(),
+        handler_binding_refs: vec![binding.value_ref.clone()],
+        policy_ref: context.policy_ref.to_string(),
+        capability_context_ref: context.capability_ref.to_string(),
+        resource_refs: base.resource_refs.clone(),
+        evidence_refs: vec![base.preflight_ref.clone()],
+    })
+}
+
+fn call_effect_request(
+    base: &CallBase,
+    binding: &CallBinding,
+    context: HostcallEvidenceContext<'_>,
+    effect_id: String,
+) -> Result<IOValue> {
+    effect_request_value(&EffectRequestInput {
+        artifact_ref: base.actor_ref.clone(),
+        effect_id,
+        operation: base.operation.to_string(),
+        handler_profile: HANDLER_PROFILE_LOCAL.to_string(),
+        input_ref: context.step_ref.to_string(),
+        capability_refs: vec![context.capability_ref.to_string()],
+        evidence_refs: vec![binding.value_ref.clone(), binding.handle_ref.clone()],
+    })
+}
+
+fn call_binding_receipt_ref(
+    base: &CallBase,
+    binding: &CallBinding,
+    manifest: &IOValue,
+    profile: &IOValue,
+    request: &IOValue,
+) -> Result<String> {
+    let effect_binding =
+        admit_effect_request(manifest, profile, request, &[binding.value_ref.clone(), binding.handle_ref.clone()])?;
+    if effect_binding.decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "hostcall effect manifest denied operation {}: {:?}",
+            base.operation, effect_binding.diagnostics
+        )));
     }
-    let validation = validate_handle_for_request(&handler_binding, &handle, &EffectHandleRequest {
+    Ok(effect_binding.receipt_ref.clone())
+}
+
+fn validate_call_handle(base: &CallBase, binding: &CallBinding, context: HostcallEvidenceContext<'_>) -> Result<()> {
+    let validation = validate_handle_for_request(&binding.value, &binding.handle, &EffectHandleRequest {
         kind: "hostcall",
-        operation,
+        operation: base.operation,
         run_ref: context.suite_ref,
-        session_ref: &session_ref,
-        actor_ref: Some(&actor_ref),
+        session_ref: &base.session_ref,
+        actor_ref: Some(&base.actor_ref),
         turn_ref: Some(context.step_ref),
         policy_ref: context.policy_ref,
         capability_context_ref: context.capability_ref,
         authority_context_ref: None,
-        resource_refs: &resource_refs,
+        resource_refs: &base.resource_refs,
         logical_time: context.sequence,
         remote_use: false,
         revoked_refs: &[],
     })?;
-    if validation.handler_binding_ref != handler_binding_ref || validation.handle_ref != handle_ref {
+    if validation.handler_binding_ref != binding.value_ref || validation.handle_ref != binding.handle_ref {
         return Err(MoltenError::invalid_harness("hostcall effect handle validation ref mismatch"));
     }
-    Ok(HostcallEffectRefs {
-        handler_binding_ref,
-        handle_ref,
-        effect_manifest_ref,
-        handler_profile_ref,
-        effect_request_ref,
-        effect_binding_receipt_ref,
-    })
+    Ok(())
 }
 
 fn actor_identity_ref(actor_id: &str) -> Result<String> {
