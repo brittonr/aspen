@@ -20,7 +20,7 @@ use crate::error::HarnessDivergence;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
+mod compare;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplayOutcome {
@@ -100,110 +100,9 @@ pub fn replay_report_value(report_value: &IOValue) -> Result<ReplayOutcome> {
     let expected = parse_report(report_value)?;
     let actual_run = run_suite_with_effect_log(&parse_suite(&expected.suite_value)?, &expected.effect_log)?;
     let actual = parse_report(&actual_run.report_value)?;
-
-    if expected.initial_state_hash != actual.initial_state_hash {
-        return Err(divergence(
-            "initial-state",
-            None,
-            expected.initial_state_hash,
-            actual.initial_state_hash,
-            "initial state hash differs",
-        ));
-    }
-
-    if expected.observations.len() != actual.observations.len() {
-        return Err(divergence(
-            "trace-length",
-            None,
-            expected.observations.len().to_string(),
-            actual.observations.len().to_string(),
-            "observation count differs",
-        ));
-    }
-
-    for (expected_observation, actual_observation) in expected.observations.iter().zip(actual.observations.iter()) {
-        if expected_observation.step_ref != actual_observation.step_ref {
-            return Err(divergence(
-                "input",
-                Some(expected_observation.index),
-                expected_observation.step_ref.clone(),
-                actual_observation.step_ref.clone(),
-                "step input hash differs",
-            ));
-        }
-        if expected_observation.before_state_hash != actual_observation.before_state_hash {
-            return Err(divergence(
-                "state-before",
-                Some(expected_observation.index),
-                expected_observation.before_state_hash.clone(),
-                actual_observation.before_state_hash.clone(),
-                "before state hash differs",
-            ));
-        }
-        if expected_observation.events.len() != actual_observation.events.len() {
-            return Err(divergence(
-                "trace-length",
-                Some(expected_observation.index),
-                expected_observation.events.len().to_string(),
-                actual_observation.events.len().to_string(),
-                "event count differs",
-            ));
-        }
-        for (expected_event, actual_event) in expected_observation.events.iter().zip(actual_observation.events.iter()) {
-            let expected_hash = canonical_hash(expected_event)?;
-            let actual_hash = canonical_hash(actual_event)?;
-            if expected_hash != actual_hash {
-                return Err(divergence(
-                    event_divergence_kind(expected_event, actual_event),
-                    Some(expected_observation.index),
-                    expected_hash,
-                    actual_hash,
-                    "event differs",
-                ));
-            }
-        }
-        if expected_observation.after_state_hash != actual_observation.after_state_hash {
-            return Err(divergence(
-                "state-after",
-                Some(expected_observation.index),
-                expected_observation.after_state_hash.clone(),
-                actual_observation.after_state_hash.clone(),
-                "after state hash differs",
-            ));
-        }
-        let expected_hash = canonical_hash(&expected_observation.value)?;
-        let actual_hash = canonical_hash(&actual_observation.value)?;
-        if expected_hash != actual_hash {
-            return Err(divergence(
-                "trace",
-                Some(expected_observation.index),
-                expected_hash,
-                actual_hash,
-                "turn observation metadata differs",
-            ));
-        }
-    }
-
-    if expected.final_state_hash != actual.final_state_hash {
-        return Err(divergence(
-            "final-state",
-            None,
-            expected.final_state_hash,
-            actual.final_state_hash,
-            "final state hash differs",
-        ));
-    }
-
-    if expected.report_ref != actual.report_ref {
-        return Err(divergence(
-            "report",
-            None,
-            expected.report_ref,
-            actual.report_ref,
-            "report metadata differs after deterministic replay",
-        ));
-    }
-
+    compare::report_start(&expected, &actual)?;
+    compare::observations(&expected.observations, &actual.observations)?;
+    compare::report_end(&expected, &actual)?;
     Ok(ReplayOutcome {
         expected_report_ref: expected.report_ref,
         actual_report_ref: actual.report_ref,
