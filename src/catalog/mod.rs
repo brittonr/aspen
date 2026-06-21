@@ -459,70 +459,150 @@ pub fn resolve_short_id(
     let query_ref = canonical_hash(&query_value)?;
     let prefix = classify_short_id_prefix(&input.prefix);
     let visible_candidates = visible_candidate_refs(registry_root, ledger_root, &input.visibility)?;
-    let candidates = match &prefix {
-        ShortIdPrefix::FullRef => {
-            visible_candidates.into_iter().filter(|candidate| candidate == &input.prefix).collect::<Vec<_>>()
-        }
-        ShortIdPrefix::HexPrefix(hex_prefix) if hex_prefix.len() >= input.min_length => visible_candidates
-            .into_iter()
-            .filter(|candidate| canonical_ref_matches_prefix(candidate, hex_prefix))
-            .collect::<Vec<_>>(),
-        ShortIdPrefix::HexPrefix(_) | ShortIdPrefix::Deny(_) => Vec::new(),
-    };
-    let (decision, full_ref, diagnostics) = match &prefix {
-        ShortIdPrefix::Deny(message) => ("deny".to_string(), None, vec![message.clone()]),
-        ShortIdPrefix::HexPrefix(hex_prefix) if hex_prefix.len() < input.min_length => {
-            ("deny".to_string(), None, vec![format!(
-                "short id prefix requires at least {} hex characters",
-                input.min_length
-            )])
-        }
-        _ if candidates.len() == 1 => ("pass".to_string(), Some(candidates[0].clone()), Vec::new()),
-        _ if candidates.is_empty() => {
-            ("deny".to_string(), None, vec!["short id prefix matched no visible refs".to_string()])
-        }
-        _ => ("deny".to_string(), None, vec![format!(
-            "short id prefix is ambiguous across {} visible refs",
-            candidates.len()
-        )]),
-    };
-    let value = short_id_resolution_value(&input.prefix, full_ref.as_deref(), &candidates, &decision, &diagnostics)?;
-    let result_value = catalog_result_value(&query_ref, &decision, std::slice::from_ref(&value), &diagnostics, &[
-        ("short-id-minimum", match &prefix {
-            ShortIdPrefix::FullRef => "pass",
-            ShortIdPrefix::HexPrefix(hex_prefix) if hex_prefix.len() >= input.min_length => "pass",
-            ShortIdPrefix::HexPrefix(_) | ShortIdPrefix::Deny(_) => "fail",
-        }),
-        ("ambiguity-denial", if candidates.len() <= 1 { "pass" } else { "fail" }),
-        ("visible-candidates-only", "pass"),
-    ])?;
-    let result_ref = canonical_hash(&result_value)?;
-    let mut refs = Vec::new();
-    for candidate in &candidates {
-        push_bounded(&mut refs, candidate.clone(), MAX_CATALOG_REFS, "catalog short-id refs")?;
-    }
-    push_bounded(&mut refs, query_ref.clone(), MAX_CATALOG_REFS, "catalog short-id refs")?;
-    push_bounded(&mut refs, result_ref.clone(), MAX_CATALOG_REFS, "catalog short-id refs")?;
-    let receipt_value = catalog_receipt_value(&CatalogReceiptValueInput {
-        operation: "short-id",
-        decision: &decision,
+    let candidates = short_id_candidates(&prefix, visible_candidates, &input.prefix, input.min_length);
+    let outcome = short_id_outcome(&prefix, &candidates, input.min_length);
+    let value = short_id_resolution_value(
+        &input.prefix,
+        outcome.full_ref.as_deref(),
+        &candidates,
+        &outcome.decision,
+        &outcome.diagnostics,
+    )?;
+    let result_value = short_id_result_value(ShortIdResultInput {
         query_ref: &query_ref,
-        result_ref: Some(&result_ref),
-        refs: &refs,
-        diagnostics: &diagnostics,
-        checks: &[
-            ("canonical-result-ref", "pass"),
-            ("full-ref-expansion", if full_ref.is_some() { "pass" } else { "fail" }),
-            ("no-name-identity", "pass"),
-        ],
+        prefix: &prefix,
+        min_length: input.min_length,
+        value: &value,
+        outcome: &outcome,
+        candidates: &candidates,
     })?;
+    let result_ref = canonical_hash(&result_value)?;
+    let refs = short_id_refs(&candidates, &query_ref, &result_ref)?;
+    let receipt_value = short_id_receipt_value(&query_ref, &result_ref, &refs, &outcome)?;
     Ok(CatalogShortIdResolution {
         prefix: input.prefix.clone(),
-        full_ref,
+        full_ref: outcome.full_ref,
         candidates,
-        decision,
+        decision: outcome.decision,
         value,
         receipt_value,
+    })
+}
+
+struct ShortIdOutcome {
+    decision: String,
+    full_ref: Option<String>,
+    diagnostics: Vec<String>,
+}
+
+fn short_id_candidates(
+    prefix: &ShortIdPrefix<'_>,
+    candidates: Vec<String>,
+    input_prefix: &str,
+    min_length: usize,
+) -> Vec<String> {
+    match prefix {
+        ShortIdPrefix::FullRef => candidates.into_iter().filter(|candidate| candidate == input_prefix).collect(),
+        ShortIdPrefix::HexPrefix(hex_prefix) if hex_prefix.len() >= min_length => candidates
+            .into_iter()
+            .filter(|candidate| canonical_ref_matches_prefix(candidate, hex_prefix))
+            .collect(),
+        ShortIdPrefix::HexPrefix(_) | ShortIdPrefix::Deny(_) => Vec::new(),
+    }
+}
+
+fn short_id_outcome(prefix: &ShortIdPrefix<'_>, candidates: &[String], min_length: usize) -> ShortIdOutcome {
+    match prefix {
+        ShortIdPrefix::Deny(message) => ShortIdOutcome {
+            decision: "deny".to_string(),
+            full_ref: None,
+            diagnostics: vec![message.clone()],
+        },
+        ShortIdPrefix::HexPrefix(hex_prefix) if hex_prefix.len() < min_length => ShortIdOutcome {
+            decision: "deny".to_string(),
+            full_ref: None,
+            diagnostics: vec![format!("short id prefix requires at least {min_length} hex characters")],
+        },
+        _ if candidates.len() == 1 => ShortIdOutcome {
+            decision: "pass".to_string(),
+            full_ref: Some(candidates[0].clone()),
+            diagnostics: Vec::new(),
+        },
+        _ if candidates.is_empty() => ShortIdOutcome {
+            decision: "deny".to_string(),
+            full_ref: None,
+            diagnostics: vec!["short id prefix matched no visible refs".to_string()],
+        },
+        _ => ShortIdOutcome {
+            decision: "deny".to_string(),
+            full_ref: None,
+            diagnostics: vec![format!(
+                "short id prefix is ambiguous across {} visible refs",
+                candidates.len()
+            )],
+        },
+    }
+}
+
+struct ShortIdResultInput<'a, 'p> {
+    query_ref: &'a str,
+    prefix: &'a ShortIdPrefix<'p>,
+    min_length: usize,
+    value: &'a IOValue,
+    outcome: &'a ShortIdOutcome,
+    candidates: &'a [String],
+}
+
+fn short_id_result_value(input: ShortIdResultInput<'_, '_>) -> Result<IOValue> {
+    catalog_result_value(
+        input.query_ref,
+        &input.outcome.decision,
+        std::slice::from_ref(input.value),
+        &input.outcome.diagnostics,
+        &[
+            ("short-id-minimum", short_id_minimum_status(input.prefix, input.min_length)),
+            ("ambiguity-denial", if input.candidates.len() <= 1 { "pass" } else { "fail" }),
+            ("visible-candidates-only", "pass"),
+        ],
+    )
+}
+
+fn short_id_minimum_status(prefix: &ShortIdPrefix<'_>, min_length: usize) -> &'static str {
+    match prefix {
+        ShortIdPrefix::FullRef => "pass",
+        ShortIdPrefix::HexPrefix(hex_prefix) if hex_prefix.len() >= min_length => "pass",
+        ShortIdPrefix::HexPrefix(_) | ShortIdPrefix::Deny(_) => "fail",
+    }
+}
+
+fn short_id_refs(candidates: &[String], query_ref: &str, result_ref: &str) -> Result<Vec<String>> {
+    let mut refs = Vec::new();
+    for candidate in candidates {
+        push_bounded(&mut refs, candidate.clone(), MAX_CATALOG_REFS, "catalog short-id refs")?;
+    }
+    push_bounded(&mut refs, query_ref.to_string(), MAX_CATALOG_REFS, "catalog short-id refs")?;
+    push_bounded(&mut refs, result_ref.to_string(), MAX_CATALOG_REFS, "catalog short-id refs")?;
+    Ok(refs)
+}
+
+fn short_id_receipt_value(
+    query_ref: &str,
+    result_ref: &str,
+    refs: &[String],
+    outcome: &ShortIdOutcome,
+) -> Result<IOValue> {
+    catalog_receipt_value(&CatalogReceiptValueInput {
+        operation: "short-id",
+        decision: &outcome.decision,
+        query_ref,
+        result_ref: Some(result_ref),
+        refs,
+        diagnostics: &outcome.diagnostics,
+        checks: &[
+            ("canonical-result-ref", "pass"),
+            ("full-ref-expansion", if outcome.full_ref.is_some() { "pass" } else { "fail" }),
+            ("no-name-identity", "pass"),
+        ],
     })
 }
 
