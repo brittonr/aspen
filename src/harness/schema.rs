@@ -1465,33 +1465,83 @@ pub fn failure_summary(failure_value: &IOValue) -> Result<String> {
     ))
 }
 
+struct ParsedHeader {
+    status: String,
+    replay_status: String,
+    profile: String,
+    hash_algorithm: String,
+    suite_ref: String,
+    initial_state_hash: String,
+    final_state_hash: String,
+    suite_value: IOValue,
+    suite: HarnessSuite,
+}
+
+struct GateSet {
+    cursor: usize,
+    policy_gate: Option<PolicyGateEvidence>,
+    capability_gate: Option<CapabilityGateEvidence>,
+    budget_gate: Option<BudgetGateEvidence>,
+}
+
 pub fn parse_report(report_value: &IOValue) -> Result<HarnessReport> {
     let report = report_value
         .collect_simple_record("harness-report-v1", None)
         .ok_or_else(|| MoltenError::invalid_harness("expected <harness-report-v1 ...>"))?;
+    let arity = valid_report_arity(&report)?;
+    let header = parsed_header(&report)?;
+    let gates = gate_set(&report, arity)?;
+    let (cursor, actors) = registry_after_gates(&report, gates.cursor, &header.suite)?;
+    let (cursor, executor_preflights) = preflights_after_registry(&report, cursor, arity)?;
+    let (cursor, observations) = observations_after(&report, cursor)?;
+    let (effect_log, budget) = log_and_budget(&report, cursor, &header.suite)?;
+
+    Ok(HarnessReport {
+        report_ref: canonical_hash(report_value)?,
+        status: header.status,
+        replay_status: header.replay_status,
+        profile: header.profile,
+        hash_algorithm: header.hash_algorithm,
+        suite_ref: header.suite_ref,
+        initial_state_hash: header.initial_state_hash,
+        final_state_hash: header.final_state_hash,
+        suite_value: header.suite_value,
+        policy_gate: gates.policy_gate,
+        capability_gate: gates.capability_gate,
+        budget_gate: gates.budget_gate,
+        actors,
+        executor_preflights,
+        observations,
+        effect_log,
+        budget,
+    })
+}
+
+fn valid_report_arity(report: &Record<Value<IOValue>>) -> Result<usize> {
     let arity = report.fields_iter().count();
     if arity != 13 && arity != 14 && arity != 15 && arity != 16 && arity != 17 {
         return Err(MoltenError::invalid_harness(format!(
             "expected <harness-report-v1 ...> with arity 13, 14, 15, 16, or 17, got {arity}"
         )));
     }
+    Ok(arity)
+}
+
+fn parsed_header(report: &Record<Value<IOValue>>) -> Result<ParsedHeader> {
     let schema = required_string(&report[0], "report schema")?;
     if schema != HARNESS_REPORT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
             "unsupported report schema {schema}; expected {HARNESS_REPORT_SCHEMA}"
         )));
     }
-
     let status = required_string(&report[1], "report status")?;
     if status != "pass" {
         return Err(MoltenError::invalid_harness(format!("evidence-bearing report status must be pass, got {status}")));
     }
-
     let replay_status = required_string(&report[2], "report replay status")?;
     if !matches!(replay_status.as_str(), "deterministic" | "replay" | "record") {
         return Err(MoltenError::invalid_harness(format!("unsupported evidence replay status {replay_status}")));
     }
-
     let profile = required_string(&report[3], "report profile")?;
     let hash_algorithm = required_string(&report[4], "report hash algorithm")?;
     if hash_algorithm != HASH_ALGORITHM {
@@ -1499,10 +1549,7 @@ pub fn parse_report(report_value: &IOValue) -> Result<HarnessReport> {
             "unsupported hash algorithm {hash_algorithm}; expected {HASH_ALGORITHM}"
         )));
     }
-
     let suite_ref = required_string(&report[5], "report suite ref")?;
-    let initial_state_hash = required_hash(&report[6], "report initial state hash")?;
-    let final_state_hash = required_hash(&report[7], "report final state hash")?;
     let suite_value = value_to_iovalue(&report[8]);
     let suite = parse_suite(&suite_value)?;
     let actual_suite_ref = canonical_hash(&suite_value)?;
@@ -1511,46 +1558,97 @@ pub fn parse_report(report_value: &IOValue) -> Result<HarnessReport> {
             "suite ref mismatch: report has {suite_ref}, embedded suite hashes to {actual_suite_ref}"
         )));
     }
+    Ok(ParsedHeader {
+        status,
+        replay_status,
+        profile,
+        hash_algorithm,
+        suite_ref,
+        initial_state_hash: required_hash(&report[6], "report initial state hash")?,
+        final_state_hash: required_hash(&report[7], "report final state hash")?,
+        suite_value,
+        suite,
+    })
+}
 
+fn gate_set(report: &Record<Value<IOValue>>, arity: usize) -> Result<GateSet> {
     let mut cursor = 9;
-    let policy_gate = if cursor < arity && value_has_record_label(&report[cursor], "policy-gate-v1") {
-        let parsed = parse_policy_gate(&value_to_iovalue(&report[cursor]))?;
-        cursor += 1;
-        Some(parsed)
-    } else {
-        None
-    };
-    let capability_gate = if cursor < arity && value_has_record_label(&report[cursor], "capability-gate-v1") {
-        let parsed = parse_capability_gate(&value_to_iovalue(&report[cursor]))?;
-        cursor += 1;
-        Some(parsed)
-    } else {
-        None
-    };
-    let budget_gate = if cursor < arity && value_has_record_label(&report[cursor], "budget-gate-v1") {
-        let parsed = parse_budget_gate(&value_to_iovalue(&report[cursor]))?;
-        cursor += 1;
-        Some(parsed)
-    } else {
-        None
-    };
+    let policy_gate = optional_policy_gate(report, &mut cursor, arity)?;
+    let capability_gate = optional_capability_gate(report, &mut cursor, arity)?;
+    let budget_gate = optional_budget_gate(report, &mut cursor, arity)?;
+    Ok(GateSet {
+        cursor,
+        policy_gate,
+        capability_gate,
+        budget_gate,
+    })
+}
 
+fn optional_policy_gate(
+    report: &Record<Value<IOValue>>,
+    cursor: &mut usize,
+    arity: usize,
+) -> Result<Option<PolicyGateEvidence>> {
+    if *cursor < arity && value_has_record_label(&report[*cursor], "policy-gate-v1") {
+        let parsed = parse_policy_gate(&value_to_iovalue(&report[*cursor]))?;
+        *cursor += 1;
+        return Ok(Some(parsed));
+    }
+    Ok(None)
+}
+
+fn optional_capability_gate(
+    report: &Record<Value<IOValue>>,
+    cursor: &mut usize,
+    arity: usize,
+) -> Result<Option<CapabilityGateEvidence>> {
+    if *cursor < arity && value_has_record_label(&report[*cursor], "capability-gate-v1") {
+        let parsed = parse_capability_gate(&value_to_iovalue(&report[*cursor]))?;
+        *cursor += 1;
+        return Ok(Some(parsed));
+    }
+    Ok(None)
+}
+
+fn optional_budget_gate(
+    report: &Record<Value<IOValue>>,
+    cursor: &mut usize,
+    arity: usize,
+) -> Result<Option<BudgetGateEvidence>> {
+    if *cursor < arity && value_has_record_label(&report[*cursor], "budget-gate-v1") {
+        let parsed = parse_budget_gate(&value_to_iovalue(&report[*cursor]))?;
+        *cursor += 1;
+        return Ok(Some(parsed));
+    }
+    Ok(None)
+}
+
+fn registry_after_gates(
+    report: &Record<Value<IOValue>>,
+    cursor: usize,
+    suite: &HarnessSuite,
+) -> Result<(usize, Vec<ActorDecl>)> {
     let actors = parse_actor_registry(&value_to_iovalue(&report[cursor]))?;
-    cursor += 1;
     if actors != suite.actors {
         return Err(MoltenError::invalid_harness("report actor registry does not match embedded suite actor registry"));
     }
+    Ok((cursor + 1, actors))
+}
 
-    let executor_preflights = if cursor < arity && value_has_record_label(&report[cursor], "executor-preflights-v1") {
+fn preflights_after_registry(
+    report: &Record<Value<IOValue>>,
+    cursor: usize,
+    arity: usize,
+) -> Result<(usize, Option<ExecutorPreflightsEvidence>)> {
+    if cursor < arity && value_has_record_label(&report[cursor], "executor-preflights-v1") {
         let parsed = parse_executor_preflights(&value_to_iovalue(&report[cursor]))?;
-        cursor += 1;
-        Some(parsed)
-    } else {
-        None
-    };
+        return Ok((cursor + 1, Some(parsed)));
+    }
+    Ok((cursor, None))
+}
 
+fn observations_after(report: &Record<Value<IOValue>>, cursor: usize) -> Result<(usize, Vec<HarnessObservation>)> {
     let observation_values = required_sequence(&report[cursor], "report observations")?;
-    cursor += 1;
     let mut observations = Vec::with_capacity(observation_values.len());
     for (position, observation) in observation_values.iter().enumerate() {
         let parsed = parse_observation(&observation)?;
@@ -1562,34 +1660,22 @@ pub fn parse_report(report_value: &IOValue) -> Result<HarnessReport> {
         }
         observations.push(parsed);
     }
+    Ok((cursor + 1, observations))
+}
+
+fn log_and_budget(
+    report: &Record<Value<IOValue>>,
+    cursor: usize,
+    suite: &HarnessSuite,
+) -> Result<(Vec<EffectLogEntry>, BudgetEvidence)> {
     let effect_log_value = value_to_iovalue(&report[cursor]);
-    cursor += 1;
     let effect_log = parse_effect_log(&effect_log_value)?;
-    let budget_value = value_to_iovalue(&report[cursor]);
+    let budget_value = value_to_iovalue(&report[cursor + 1]);
     let budget = parse_budget(&budget_value)?;
     if budget.limits != suite.budget {
         return Err(MoltenError::invalid_harness("report budget limits do not match embedded suite budget"));
     }
-
-    Ok(HarnessReport {
-        report_ref: canonical_hash(report_value)?,
-        status,
-        replay_status,
-        profile,
-        hash_algorithm,
-        suite_ref,
-        initial_state_hash,
-        final_state_hash,
-        suite_value,
-        policy_gate,
-        capability_gate,
-        budget_gate,
-        actors,
-        executor_preflights,
-        observations,
-        effect_log,
-        budget,
-    })
+    Ok((effect_log, budget))
 }
 
 pub fn validate_budget_fixture_evidence(suite: &HarnessSuite) -> Result<()> {
