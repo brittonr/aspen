@@ -6704,7 +6704,31 @@ fn parse_legacy_report_repro_bundle(
     })
 }
 
+struct ReportBundleBody {
+    artifact_refs: Vec<(String, String)>,
+    report_ref: String,
+    suite_ref: String,
+    replay_status: String,
+    profile: String,
+    report_value: IOValue,
+    report: HarnessReport,
+}
+
+struct SealedRedaction {
+    redaction_policy_ref: Option<String>,
+    redaction_gate_ref: Option<String>,
+    seal_index: usize,
+    receipt_index: usize,
+    checks_index: usize,
+    has_redaction: bool,
+}
+
 fn parse_report_repro_bundle(bundle_value: &IOValue, bundle: &Record<Value<IOValue>>) -> Result<HarnessReproBundle> {
+    let body = parse_report_body(bundle)?;
+    report_bundle_from_body(bundle_value, body)
+}
+
+fn parse_report_body(bundle: &Record<Value<IOValue>>) -> Result<ReportBundleBody> {
     let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
     if kind != "report" {
         return Err(MoltenError::invalid_harness(format!("expected report repro bundle kind, got {kind}")));
@@ -6738,11 +6762,23 @@ fn parse_report_repro_bundle(bundle_value: &IOValue, bundle: &Record<Value<IOVal
         effect_log: &effect_log,
         suite_value: &suite_value,
     })?;
+    Ok(ReportBundleBody {
+        artifact_refs,
+        report_ref,
+        suite_ref,
+        replay_status,
+        profile,
+        report_value,
+        report,
+    })
+}
+
+fn report_bundle_from_body(bundle_value: &IOValue, body: ReportBundleBody) -> Result<HarnessReproBundle> {
     Ok(HarnessReproBundle {
         bundle_ref: canonical_hash(bundle_value)?,
         kind: HarnessReproBundleKind::Report,
-        artifact_ref: report_ref,
-        report_value: Some(report_value),
+        artifact_ref: body.report_ref,
+        report_value: Some(body.report_value),
         failure_value: None,
         gate_receipt_ref: None,
         gate_receipt_value: None,
@@ -6768,88 +6804,105 @@ fn parse_sealed_report_repro_bundle(
     bundle_value: &IOValue,
     bundle: &Record<Value<IOValue>>,
 ) -> Result<HarnessReproBundle> {
-    let kind = required_record_string(&bundle[1], "bundle-kind", "repro bundle kind")?;
-    if kind != "report" {
-        return Err(MoltenError::invalid_harness(format!("expected report repro bundle kind, got {kind}")));
-    }
-    validate_tool_record(&bundle[2])?;
-    validate_sequence_record(&bundle[3], "command", "repro bundle command")?;
-    validate_sequence_record(&bundle[4], "replay-instructions", "repro bundle replay instructions")?;
-    let artifact_refs = parse_artifact_refs(&bundle[5])?;
-    let report_ref = required_string(&bundle[6], "repro bundle report ref")?;
-    let suite_ref = required_string(&bundle[7], "repro bundle suite ref")?;
-    require_artifact_ref(&artifact_refs, "report", &report_ref)?;
-    require_artifact_ref(&artifact_refs, "suite", &suite_ref)?;
-    let initial_state_hash = required_hash(&bundle[8], "repro bundle initial state hash")?;
-    let final_state_hash = required_hash(&bundle[9], "repro bundle final state hash")?;
-    let replay_status = required_string(&bundle[10], "repro bundle replay status")?;
-    let profile = required_string(&bundle[11], "repro bundle profile")?;
-    let actors = parse_actor_registry(&value_to_iovalue(&bundle[12]))?;
-    let effect_log = parse_effect_log(&value_to_iovalue(&bundle[13]))?;
-    let suite_value = value_to_iovalue(&bundle[14]);
-    let report_value = value_to_iovalue(&bundle[15]);
-    let report = parse_report(&report_value)?;
-    require_repro_report_matches(&ReproReportMatchInput {
-        report: &report,
-        report_ref: &report_ref,
-        suite_ref: &suite_ref,
-        initial_state_hash: &initial_state_hash,
-        final_state_hash: &final_state_hash,
-        replay_status: &replay_status,
-        profile: &profile,
-        actors: &actors,
-        effect_log: &effect_log,
-        suite_value: &suite_value,
-    })?;
-    require_report_artifact_refs(&artifact_refs, &report)?;
+    let body = parse_report_body(bundle)?;
+    require_report_artifact_refs(&body.artifact_refs, &body.report)?;
     let arity = bundle.fields_iter().count();
-    let (redaction_policy_ref, redaction_gate_ref, seal_index, receipt_index, checks_index) = if arity == 21 {
-        let redaction_policy_value = value_to_iovalue(&bundle[16]);
-        let redaction_gate_value = value_to_iovalue(&bundle[17]);
-        let (redaction_policy_ref, redaction_gate_ref) =
-            validate_redaction_evidence(&report_value, &report, &redaction_policy_value, &redaction_gate_value)?;
-        require_artifact_ref(&artifact_refs, "redaction-policy", &redaction_policy_ref)?;
-        require_artifact_ref(&artifact_refs, "redaction-gate", &redaction_gate_ref)?;
-        (Some(redaction_policy_ref), Some(redaction_gate_ref), 18, 19, 20)
-    } else {
-        (None, None, 16, 17, 18)
-    };
-    let seal = parse_repro_seal(&bundle[seal_index], &report_ref, &suite_ref, &profile, &replay_status)?;
-    require_artifact_ref(&artifact_refs, "gate-receipt", &seal.gate_receipt_ref)?;
-    let gate_receipt_value = value_to_iovalue(&bundle[receipt_index]);
+    let redaction = parse_sealed_redaction(bundle, &body, arity)?;
+    let seal = parse_repro_seal(
+        &bundle[redaction.seal_index],
+        &body.report_ref,
+        &body.suite_ref,
+        &body.profile,
+        &body.replay_status,
+    )?;
+    require_artifact_ref(&body.artifact_refs, "gate-receipt", &seal.gate_receipt_ref)?;
+    let gate_receipt_value = embedded_gate_receipt(bundle, redaction.receipt_index, &seal.gate_receipt_ref)?;
+    let seal_checks = parse_seal_checks(&bundle[redaction.checks_index])?;
+    require_report_seal_checks(&seal_checks, redaction.has_redaction)?;
+    sealed_report_bundle(bundle_value, body, seal, gate_receipt_value, redaction)
+}
+
+fn parse_sealed_redaction(
+    bundle: &Record<Value<IOValue>>,
+    body: &ReportBundleBody,
+    arity: usize,
+) -> Result<SealedRedaction> {
+    if arity != 21 {
+        return Ok(SealedRedaction {
+            redaction_policy_ref: None,
+            redaction_gate_ref: None,
+            seal_index: 16,
+            receipt_index: 17,
+            checks_index: 18,
+            has_redaction: false,
+        });
+    }
+    let redaction_policy_value = value_to_iovalue(&bundle[16]);
+    let redaction_gate_value = value_to_iovalue(&bundle[17]);
+    let (redaction_policy_ref, redaction_gate_ref) =
+        validate_redaction_evidence(&body.report_value, &body.report, &redaction_policy_value, &redaction_gate_value)?;
+    require_artifact_ref(&body.artifact_refs, "redaction-policy", &redaction_policy_ref)?;
+    require_artifact_ref(&body.artifact_refs, "redaction-gate", &redaction_gate_ref)?;
+    Ok(SealedRedaction {
+        redaction_policy_ref: Some(redaction_policy_ref),
+        redaction_gate_ref: Some(redaction_gate_ref),
+        seal_index: 18,
+        receipt_index: 19,
+        checks_index: 20,
+        has_redaction: true,
+    })
+}
+
+fn embedded_gate_receipt(bundle: &Record<Value<IOValue>>, index: usize, expected_ref: &str) -> Result<IOValue> {
+    let gate_receipt_value = value_to_iovalue(&bundle[index]);
     let actual_gate_receipt_ref = canonical_hash(&gate_receipt_value)?;
-    if actual_gate_receipt_ref != seal.gate_receipt_ref {
+    if actual_gate_receipt_ref != expected_ref {
         return Err(MoltenError::invalid_harness(format!(
-            "sealed repro bundle gate receipt ref mismatch: seal has {}, embedded receipt hashes to {actual_gate_receipt_ref}",
-            seal.gate_receipt_ref
+            "sealed repro bundle gate receipt ref mismatch: seal has {expected_ref}, embedded receipt hashes to {actual_gate_receipt_ref}"
         )));
     }
-    let seal_checks = parse_seal_checks(&bundle[checks_index])?;
-    require_seal_check(&seal_checks, "sealed-report")?;
-    require_seal_check(&seal_checks, "embedded-gate-receipt")?;
-    require_seal_check(&seal_checks, "report-ref-binding")?;
-    require_seal_check(&seal_checks, "suite-ref-binding")?;
-    require_seal_check(&seal_checks, "actor-registry-binding")?;
-    require_seal_check(&seal_checks, "effect-log-binding")?;
-    require_seal_check(&seal_checks, "policy-gate-ref-binding")?;
-    require_seal_check(&seal_checks, "capability-gate-ref-binding")?;
-    require_seal_check(&seal_checks, "budget-gate-ref-binding")?;
-    if arity == 21 {
-        require_seal_check(&seal_checks, "redaction-preflight")?;
-        require_seal_check(&seal_checks, "redaction-gate-ref-binding")?;
-        require_seal_check(&seal_checks, "no-sensitive-markers")?;
+    Ok(gate_receipt_value)
+}
+
+fn require_report_seal_checks(checks: &[String], has_redaction: bool) -> Result<()> {
+    for expected in [
+        "sealed-report",
+        "embedded-gate-receipt",
+        "report-ref-binding",
+        "suite-ref-binding",
+        "actor-registry-binding",
+        "effect-log-binding",
+        "policy-gate-ref-binding",
+        "capability-gate-ref-binding",
+        "budget-gate-ref-binding",
+    ] {
+        require_seal_check(checks, expected)?;
     }
-    require_seal_check(&seal_checks, "replay-metadata-binding")?;
+    if has_redaction {
+        require_seal_check(checks, "redaction-preflight")?;
+        require_seal_check(checks, "redaction-gate-ref-binding")?;
+        require_seal_check(checks, "no-sensitive-markers")?;
+    }
+    require_seal_check(checks, "replay-metadata-binding")
+}
+
+fn sealed_report_bundle(
+    bundle_value: &IOValue,
+    body: ReportBundleBody,
+    seal: ReproSeal,
+    gate_receipt_value: IOValue,
+    redaction: SealedRedaction,
+) -> Result<HarnessReproBundle> {
     Ok(HarnessReproBundle {
         bundle_ref: canonical_hash(bundle_value)?,
         kind: HarnessReproBundleKind::Report,
-        artifact_ref: report_ref,
-        report_value: Some(report_value),
+        artifact_ref: body.report_ref,
+        report_value: Some(body.report_value),
         failure_value: None,
         gate_receipt_ref: Some(seal.gate_receipt_ref),
         gate_receipt_value: Some(gate_receipt_value),
-        redaction_policy_ref,
-        redaction_gate_ref,
+        redaction_policy_ref: redaction.redaction_policy_ref,
+        redaction_gate_ref: redaction.redaction_gate_ref,
         export_profile: Some(ReproExportProfile::DenySensitive.as_str().to_string()),
         export_profile_ref: None,
         export_profile_value: None,
