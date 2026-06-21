@@ -541,139 +541,14 @@ fn hit_receipt(root: &Path, key_ref: &str, value_ref: &str, refs: &[String]) -> 
 pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalCacheInvalidate> {
     ensure_dirs(root)?;
     validate_invalidate_input(input)?;
-    let mut keys = BTreeSet::new();
-    if let Some(key_ref) = input.key_ref.as_ref() {
-        keys.insert(key_ref.clone());
-    }
-    for summary in list(root, &EvalCacheListFilter::default())? {
-        if input.operation.as_ref().is_some_and(|operation| operation == &summary.operation) {
-            keys.insert(summary.key_ref.clone());
-        }
-        let has_ref_filter = input.dependency_ref.is_some()
-            || input.policy_ref.is_some()
-            || input.capability_ref.is_some()
-            || input.revocation_ref.is_some();
-        if has_ref_filter && let Some((key, value)) = read_key_value_pair(root, &summary.key_ref)? {
-            let has_ref_match =
-                input.dependency_ref.as_ref().is_some_and(|reference| {
-                    key.dependency_refs.contains(reference) || value.dependency_refs.contains(reference)
-                }) || input.policy_ref.as_ref().is_some_and(|reference| {
-                    key.policy_refs.contains(reference) || value.policy_refs.contains(reference)
-                }) || input.capability_ref.as_ref().is_some_and(|reference| key.capability_refs.contains(reference))
-                    || input.revocation_ref.as_ref().is_some_and(|reference| key.revocation_refs.contains(reference));
-            if has_ref_match {
-                keys.insert(summary.key_ref.clone());
-            }
-        }
-    }
-    let reason = if input.reason.is_empty() {
-        "manual-invalidate".to_string()
-    } else {
-        input.reason.clone()
-    };
-    let selected_key_refs = keys.into_iter().collect::<Vec<_>>();
+    let selected_key_refs = selected_keys(root, input)?;
+    let reason = invalidation_reason(input);
     let requester_ref = retention::destructive_retention_requester_ref(
         &input.retention_evidence,
         "eval-cache-invalidate-missing-requester",
     )?;
-    let mut admission_diagnostics = Vec::new();
-    let mut execution_diagnostics = Vec::new();
-    let mut admission_refs = Vec::new();
-    let mut retention_receipt_refs = Vec::new();
-    let mut execution_gate_refs = Vec::new();
-    let mut retention_denials = Vec::new();
-    for key_ref in &selected_key_refs {
-        let admission =
-            retention::admit_destructive_retention_evidence(retention::DestructiveRetentionAdmissionInput {
-                root,
-                evidence: &input.retention_evidence,
-                object_ref: key_ref,
-                object_kind: "eval-cache-key",
-                retention_class: retention::CLASS_EPHEMERAL_CACHE,
-                action: retention::ACTION_TOMBSTONE,
-            })?;
-        for diagnostic in &admission.diagnostics {
-            push_bounded(
-                &mut admission_diagnostics,
-                diagnostic.clone(),
-                MAX_EVAL_CACHE_SCAN_ENTRIES,
-                "eval cache retention admission diagnostics",
-            )?;
-        }
-        for reference in &admission.admitted_refs {
-            push_bounded(
-                &mut admission_refs,
-                reference.clone(),
-                MAX_EVAL_CACHE_SCAN_ENTRIES,
-                "eval cache retention admission refs",
-            )?;
-        }
-        let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
-            root,
-            object_ref: key_ref,
-            object_kind: "eval-cache-key",
-            retention_class: retention::CLASS_EPHEMERAL_CACHE,
-            action: retention::ACTION_TOMBSTONE,
-            requester_ref: &requester_ref,
-            is_reference_index_complete: input.retention_evidence.is_reference_index_complete,
-            retained_refs: &input.retention_evidence.retained_refs,
-            remote_refs: &input.retention_evidence.remote_refs,
-            policy_refs: &input.retention_evidence.policy_refs,
-            evidence_refs: &input.retention_evidence.evidence_refs,
-            has_delete_authority: admission.has_delete_authority,
-            has_remote_gc_clearance: admission.has_remote_gc_clearance,
-        })?;
-        push_bounded(
-            &mut retention_receipt_refs,
-            evaluation.receipt.receipt_ref.clone(),
-            MAX_EVAL_CACHE_SCAN_ENTRIES,
-            "eval cache retention receipt refs",
-        )?;
-        let apply_ref = matching_apply_ref(ApplyRefMatchInput {
-            root,
-            apply_refs: &input.apply_refs,
-            subsystem: "eval-cache-invalidate",
-            action: retention::ACTION_TOMBSTONE,
-            object_ref: key_ref,
-            object_kind: "eval-cache-key",
-            retention_class: retention::CLASS_EPHEMERAL_CACHE,
-        });
-        let execution_gate = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
-            root,
-            subsystem: "eval-cache-invalidate",
-            action: retention::ACTION_TOMBSTONE,
-            object_ref: key_ref,
-            object_kind: "eval-cache-key",
-            retention_class: retention::CLASS_EPHEMERAL_CACHE,
-            apply_ref,
-        })?;
-        push_bounded(
-            &mut execution_gate_refs,
-            execution_gate.execution_ref.clone(),
-            MAX_EVAL_CACHE_SCAN_ENTRIES,
-            "eval cache retention execution gate refs",
-        )?;
-        let is_execution_denied = execution_gate.decision != "pass";
-        if is_execution_denied {
-            for diagnostic in &execution_gate.diagnostics {
-                push_bounded(
-                    &mut execution_diagnostics,
-                    diagnostic.clone(),
-                    MAX_EVAL_CACHE_SCAN_ENTRIES,
-                    "eval cache retention execution diagnostics",
-                )?;
-            }
-        }
-        if admission.decision != "pass" || evaluation.receipt.decision != "pass" || is_execution_denied {
-            push_bounded(
-                &mut retention_denials,
-                key_ref.clone(),
-                MAX_EVAL_CACHE_SCAN_ENTRIES,
-                "eval cache retention denials",
-            )?;
-        }
-    }
-    let decision = if retention_denials.is_empty() { "pass" } else { "deny" };
+    let run = run_retention(root, input, &requester_ref, &selected_key_refs)?;
+    let decision = run.decision();
     let invalidated_key_refs = if decision == "pass" {
         selected_key_refs
     } else {
@@ -687,50 +562,278 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
             tombstones.insert(key_ref.as_str(), reason.as_str()).map_err(index_error)?;
         }
     }
-    let mut refs = invalidated_key_refs.clone();
+    let refs = invalidate_refs(input, &invalidated_key_refs, &run)?;
+    let diagnostics = invalidate_diagnostics(input, decision, &invalidated_key_refs, &run);
+    let receipt = invalidate_receipt(decision, &refs, &diagnostics, &run)?;
+    store_receipt_in_tx(&write_txn, &receipt)?;
+    write_txn.commit().map_err(index_error)?;
+    Ok(EvalCacheInvalidate {
+        decision: decision.to_string(),
+        invalidated_key_refs,
+        retention_receipt_refs: run.receipts,
+        execution_gate_refs: run.gates,
+        receipt_value: receipt,
+    })
+}
+
+fn selected_keys(root: &Path, input: &EvalCacheInvalidateInput) -> Result<Vec<String>> {
+    let mut keys = BTreeSet::new();
+    if let Some(key_ref) = input.key_ref.as_ref() {
+        keys.insert(key_ref.clone());
+    }
+    for summary in list(root, &EvalCacheListFilter::default())? {
+        if input.operation.as_ref().is_some_and(|operation| operation == &summary.operation) {
+            keys.insert(summary.key_ref.clone());
+        }
+        if has_ref_filter(input) && summary_refs_match(root, input, &summary.key_ref)? {
+            keys.insert(summary.key_ref.clone());
+        }
+    }
+    Ok(keys.into_iter().collect())
+}
+
+fn has_ref_filter(input: &EvalCacheInvalidateInput) -> bool {
+    input.dependency_ref.is_some()
+        || input.policy_ref.is_some()
+        || input.capability_ref.is_some()
+        || input.revocation_ref.is_some()
+}
+
+fn summary_refs_match(root: &Path, input: &EvalCacheInvalidateInput, key_ref: &str) -> Result<bool> {
+    let Some((key, value)) = read_key_value_pair(root, key_ref)? else {
+        return Ok(false);
+    };
+    Ok(input
+        .dependency_ref
+        .as_ref()
+        .is_some_and(|reference| key.dependency_refs.contains(reference) || value.dependency_refs.contains(reference))
+        || input
+            .policy_ref
+            .as_ref()
+            .is_some_and(|reference| key.policy_refs.contains(reference) || value.policy_refs.contains(reference))
+        || input.capability_ref.as_ref().is_some_and(|reference| key.capability_refs.contains(reference))
+        || input.revocation_ref.as_ref().is_some_and(|reference| key.revocation_refs.contains(reference)))
+}
+
+fn invalidation_reason(input: &EvalCacheInvalidateInput) -> String {
+    if input.reason.is_empty() {
+        "manual-invalidate".to_string()
+    } else {
+        input.reason.clone()
+    }
+}
+
+#[derive(Default)]
+struct InvalRun {
+    admission_diagnostics: Vec<String>,
+    execution_diagnostics: Vec<String>,
+    admission_refs: Vec<String>,
+    receipts: Vec<String>,
+    gates: Vec<String>,
+    denials: Vec<String>,
+}
+
+struct InvalStep {
+    key_ref: String,
+    admission_diagnostics: Vec<String>,
+    execution_diagnostics: Vec<String>,
+    admission_refs: Vec<String>,
+    receipt_ref: String,
+    gate_ref: String,
+    denied: bool,
+}
+
+impl InvalRun {
+    fn add(&mut self, step: InvalStep) -> Result<()> {
+        for diagnostic in step.admission_diagnostics {
+            push_bounded(
+                &mut self.admission_diagnostics,
+                diagnostic,
+                MAX_EVAL_CACHE_SCAN_ENTRIES,
+                "eval cache retention admission diagnostics",
+            )?;
+        }
+        for diagnostic in step.execution_diagnostics {
+            push_bounded(
+                &mut self.execution_diagnostics,
+                diagnostic,
+                MAX_EVAL_CACHE_SCAN_ENTRIES,
+                "eval cache retention execution diagnostics",
+            )?;
+        }
+        for reference in step.admission_refs {
+            push_bounded(
+                &mut self.admission_refs,
+                reference,
+                MAX_EVAL_CACHE_SCAN_ENTRIES,
+                "eval cache retention admission refs",
+            )?;
+        }
+        push_bounded(
+            &mut self.receipts,
+            step.receipt_ref,
+            MAX_EVAL_CACHE_SCAN_ENTRIES,
+            "eval cache retention receipt refs",
+        )?;
+        push_bounded(
+            &mut self.gates,
+            step.gate_ref,
+            MAX_EVAL_CACHE_SCAN_ENTRIES,
+            "eval cache retention execution gate refs",
+        )?;
+        if step.denied {
+            push_bounded(&mut self.denials, step.key_ref, MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache retention denials")?;
+        }
+        Ok(())
+    }
+
+    fn decision(&self) -> &'static str {
+        if self.denials.is_empty() { "pass" } else { "deny" }
+    }
+
+    fn has_admission_denial(&self) -> bool {
+        !self.admission_diagnostics.is_empty()
+    }
+
+    fn has_execution_denial(&self) -> bool {
+        !self.execution_diagnostics.is_empty()
+    }
+}
+
+fn run_retention(
+    root: &Path,
+    input: &EvalCacheInvalidateInput,
+    requester_ref: &str,
+    selected_key_refs: &[String],
+) -> Result<InvalRun> {
+    let mut run = InvalRun::default();
+    for key_ref in selected_key_refs {
+        run.add(evaluate_invalidate_key(root, input, requester_ref, key_ref)?)?;
+    }
+    Ok(run)
+}
+
+fn evaluate_invalidate_key(
+    root: &Path,
+    input: &EvalCacheInvalidateInput,
+    requester_ref: &str,
+    key_ref: &str,
+) -> Result<InvalStep> {
+    let admission = retention::admit_destructive_retention_evidence(retention::DestructiveRetentionAdmissionInput {
+        root,
+        evidence: &input.retention_evidence,
+        object_ref: key_ref,
+        object_kind: "eval-cache-key",
+        retention_class: retention::CLASS_EPHEMERAL_CACHE,
+        action: retention::ACTION_TOMBSTONE,
+    })?;
+    let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
+        root,
+        object_ref: key_ref,
+        object_kind: "eval-cache-key",
+        retention_class: retention::CLASS_EPHEMERAL_CACHE,
+        action: retention::ACTION_TOMBSTONE,
+        requester_ref,
+        is_reference_index_complete: input.retention_evidence.is_reference_index_complete,
+        retained_refs: &input.retention_evidence.retained_refs,
+        remote_refs: &input.retention_evidence.remote_refs,
+        policy_refs: &input.retention_evidence.policy_refs,
+        evidence_refs: &input.retention_evidence.evidence_refs,
+        has_delete_authority: admission.has_delete_authority,
+        has_remote_gc_clearance: admission.has_remote_gc_clearance,
+    })?;
+    let apply_ref = matching_apply_ref(ApplyRefMatchInput {
+        root,
+        apply_refs: &input.apply_refs,
+        subsystem: "eval-cache-invalidate",
+        action: retention::ACTION_TOMBSTONE,
+        object_ref: key_ref,
+        object_kind: "eval-cache-key",
+        retention_class: retention::CLASS_EPHEMERAL_CACHE,
+    });
+    let gate = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+        root,
+        subsystem: "eval-cache-invalidate",
+        action: retention::ACTION_TOMBSTONE,
+        object_ref: key_ref,
+        object_kind: "eval-cache-key",
+        retention_class: retention::CLASS_EPHEMERAL_CACHE,
+        apply_ref,
+    })?;
+    let is_gate_denied = gate.decision != "pass";
+    let is_denied = admission.decision != "pass" || evaluation.receipt.decision != "pass" || is_gate_denied;
+    Ok(InvalStep {
+        key_ref: key_ref.to_string(),
+        admission_diagnostics: admission.diagnostics,
+        execution_diagnostics: if is_gate_denied { gate.diagnostics } else { Vec::new() },
+        admission_refs: admission.admitted_refs,
+        receipt_ref: evaluation.receipt.receipt_ref,
+        gate_ref: gate.execution_ref,
+        denied: is_denied,
+    })
+}
+
+struct RefSink {
+    refs: Vec<String>,
+}
+
+impl RefSink {
+    fn new(seed_refs: &[String]) -> Self {
+        Self {
+            refs: seed_refs.to_vec(),
+        }
+    }
+
+    fn push(&mut self, reference: &str) -> Result<()> {
+        push_bounded(&mut self.refs, reference.to_string(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")
+    }
+
+    fn push_all(&mut self, references: &[String]) -> Result<()> {
+        for reference in references {
+            self.push(reference)?;
+        }
+        Ok(())
+    }
+
+    fn finish(self) -> Vec<String> {
+        self.refs
+    }
+}
+
+fn invalidate_refs(
+    input: &EvalCacheInvalidateInput,
+    invalidated_key_refs: &[String],
+    run: &InvalRun,
+) -> Result<Vec<String>> {
+    let mut sink = RefSink::new(invalidated_key_refs);
     if let Some(requester_ref) = input.retention_evidence.requester_ref.as_ref() {
-        push_bounded(&mut refs, requester_ref.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
+        sink.push(requester_ref)?;
     }
-    for reference in &input.retention_evidence.policy_refs {
-        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for reference in &input.retention_evidence.authority_refs {
-        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for reference in &input.retention_evidence.evidence_refs {
-        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for reference in &input.retention_evidence.retained_refs {
-        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for reference in &input.retention_evidence.remote_peer_refs {
-        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for reference in &input.retention_evidence.remote_refs {
-        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for reference in &input.retention_evidence.reference_index_refs {
-        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for reference in &input.retention_evidence.remote_gc_refs {
-        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for reference in &input.retention_evidence.remote_clearance_refs {
-        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for reference in &admission_refs {
-        push_bounded(&mut refs, reference.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for receipt_ref in &retention_receipt_refs {
-        push_bounded(&mut refs, receipt_ref.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
-    for execution_ref in &execution_gate_refs {
-        push_bounded(&mut refs, execution_ref.clone(), MAX_EVAL_CACHE_SCAN_ENTRIES, "eval cache receipt refs")?;
-    }
+    sink.push_all(&input.retention_evidence.policy_refs)?;
+    sink.push_all(&input.retention_evidence.authority_refs)?;
+    sink.push_all(&input.retention_evidence.evidence_refs)?;
+    sink.push_all(&input.retention_evidence.retained_refs)?;
+    sink.push_all(&input.retention_evidence.remote_peer_refs)?;
+    sink.push_all(&input.retention_evidence.remote_refs)?;
+    sink.push_all(&input.retention_evidence.reference_index_refs)?;
+    sink.push_all(&input.retention_evidence.remote_gc_refs)?;
+    sink.push_all(&input.retention_evidence.remote_clearance_refs)?;
+    sink.push_all(&run.admission_refs)?;
+    sink.push_all(&run.receipts)?;
+    sink.push_all(&run.gates)?;
+    Ok(sink.finish())
+}
+
+fn invalidate_diagnostics(
+    input: &EvalCacheInvalidateInput,
+    decision: &str,
+    invalidated_key_refs: &[String],
+    run: &InvalRun,
+) -> Vec<String> {
     let mut diagnostics = if decision == "pass" {
         vec![format!("invalidated {} keys", invalidated_key_refs.len())]
     } else {
-        vec![format!("retention denied {} keys", retention_denials.len())]
+        vec![format!("retention denied {} keys", run.denials.len())]
     };
     diagnostics.push(format!(
         "retention evidence requester={} policy={} authority={} evidence={} retained={} remote_peers={} remote={} reference_index={} remote_gc={} remote_clearance={} index_complete={}",
@@ -746,34 +849,27 @@ pub fn invalidate(root: &Path, input: &EvalCacheInvalidateInput) -> Result<EvalC
         input.retention_evidence.remote_clearance_refs.len(),
         input.retention_evidence.is_reference_index_complete
     ));
-    let has_admission_denial = !admission_diagnostics.is_empty();
-    let has_execution_denial = !execution_diagnostics.is_empty();
-    diagnostics.extend(admission_diagnostics);
-    diagnostics.extend(execution_diagnostics);
-    let receipt = receipt_value(&EvalCacheReceiptValueInput {
+    diagnostics.extend(run.admission_diagnostics.iter().cloned());
+    diagnostics.extend(run.execution_diagnostics.iter().cloned());
+    diagnostics
+}
+
+fn invalidate_receipt(decision: &str, refs: &[String], diagnostics: &[String], run: &InvalRun) -> Result<IOValue> {
+    receipt_value(&EvalCacheReceiptValueInput {
         operation: "invalidate",
         decision,
         key_ref: None,
         value_ref: None,
-        refs: &refs,
-        diagnostics: &diagnostics,
+        refs,
+        diagnostics,
         checks: &[
             ("cache-invalidation", if decision == "pass" { "pass" } else { "fail" }),
             ("tombstone", if decision == "pass" { "pass" } else { "fail" }),
             ("retention-receipt-bound", "pass"),
-            ("retention-execution-gate", if has_execution_denial { "fail" } else { "pass" }),
-            ("retention-authority-evidence", if has_admission_denial { "fail" } else { "pass" }),
+            ("retention-execution-gate", if run.has_execution_denial() { "fail" } else { "pass" }),
+            ("retention-authority-evidence", if run.has_admission_denial() { "fail" } else { "pass" }),
             ("deny-before-tombstone", if decision == "pass" { "pass" } else { "fail" }),
         ],
-    })?;
-    store_receipt_in_tx(&write_txn, &receipt)?;
-    write_txn.commit().map_err(index_error)?;
-    Ok(EvalCacheInvalidate {
-        decision: decision.to_string(),
-        invalidated_key_refs,
-        retention_receipt_refs,
-        execution_gate_refs,
-        receipt_value: receipt,
     })
 }
 
