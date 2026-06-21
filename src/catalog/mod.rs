@@ -2759,7 +2759,7 @@ mod tests {
         let registry = dir.join("registry");
         let ledger_root = dir.join("ledger");
         let retention_root = dir.join("retention");
-        let fixture = retention_gc_audit_fixture(&retention_root, "catalog-retention-gc", "ledger-gc");
+        let fixture = gc_case(&retention_root, "catalog-retention-gc", "ledger-gc");
         ledger::import_artifact(&ledger_root, &fixture.plan.value).expect("import plan");
         ledger::import_artifact(&ledger_root, &fixture.apply.value).expect("import apply");
         ledger::import_artifact(&ledger_root, &fixture.execution.value).expect("import execution");
@@ -3018,32 +3018,57 @@ mod tests {
         assert_eq!(hidden.decision, "deny");
     }
 
-    struct RetentionGcAuditFixture {
+    type GcEvidence = crate::retention::DestructiveRetentionEvidence;
+    type GcPlan = crate::retention::RetentionGcPlan;
+    type GcApply = crate::retention::RetentionGcApply;
+    type GcExecution = crate::retention::RetentionGcExecutionGate;
+    type GcAudit = crate::retention::RetentionGcAudit;
+
+    struct GcCase {
         object_ref: String,
-        plan: crate::retention::RetentionGcPlan,
-        apply: crate::retention::RetentionGcApply,
-        execution: crate::retention::RetentionGcExecutionGate,
-        audit: crate::retention::RetentionGcAudit,
+        plan: GcPlan,
+        apply: GcApply,
+        execution: GcExecution,
+        audit: GcAudit,
     }
 
-    fn retention_gc_audit_fixture(root: &Path, label: &str, subsystem: &str) -> RetentionGcAuditFixture {
-        let requester_ref = test_ref(&format!("{label}-requester"));
-        let object_ref = test_ref(&format!("{label}-object"));
-        let object_kind = "chunk";
-        let retention_class = crate::retention::CLASS_DURABLE_VALUE;
-        let action = crate::retention::ACTION_DELETE;
-        let store_admission = |kind: &str, suffix: &str| -> String {
-            crate::retention::store_retention_evidence_admission(
+    struct Seed<'a> {
+        root: &'a Path,
+        label: &'a str,
+        subsystem: &'a str,
+        requester_ref: String,
+        object_ref: String,
+        object_kind: &'static str,
+        retention_class: &'static str,
+        action: &'static str,
+    }
+
+    impl<'a> Seed<'a> {
+        fn new(root: &'a Path, label: &'a str, subsystem: &'a str) -> Self {
+            Self {
                 root,
+                label,
+                subsystem,
+                requester_ref: test_ref(&format!("{label}-requester")),
+                object_ref: test_ref(&format!("{label}-object")),
+                object_kind: "chunk",
+                retention_class: crate::retention::CLASS_DURABLE_VALUE,
+                action: crate::retention::ACTION_DELETE,
+            }
+        }
+
+        fn admission(&self, kind: &str, suffix: &str) -> String {
+            crate::retention::store_retention_evidence_admission(
+                self.root,
                 &crate::retention::RetentionEvidenceAdmissionInput {
                     kind,
                     decision: "pass",
-                    requester_ref: &requester_ref,
-                    object_ref: &object_ref,
-                    object_kind,
-                    retention_class,
-                    action,
-                    bound_refs: &[test_ref(&format!("{label}-{suffix}"))],
+                    requester_ref: &self.requester_ref,
+                    object_ref: &self.object_ref,
+                    object_kind: self.object_kind,
+                    retention_class: self.retention_class,
+                    action: self.action,
+                    bound_refs: &[test_ref(&format!("{}-{suffix}", self.label))],
                     retained_refs: &[],
                     remote_refs: &[],
                     is_reference_index_complete: true,
@@ -3054,64 +3079,84 @@ mod tests {
             )
             .expect("store retention GC catalog admission")
             .admission_ref
-        };
-        let evidence = crate::retention::DestructiveRetentionEvidence {
-            requester_ref: Some(requester_ref.clone()),
-            policy_refs: vec![store_admission(crate::retention::ADMISSION_KIND_POLICY, "policy")],
-            authority_refs: vec![store_admission(crate::retention::ADMISSION_KIND_AUTHORITY, "authority")],
-            evidence_refs: vec![store_admission(
-                crate::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
-                "support",
-            )],
-            retained_refs: Vec::new(),
-            remote_peer_refs: Vec::new(),
-            remote_refs: Vec::new(),
-            reference_index_refs: vec![store_admission(
-                crate::retention::ADMISSION_KIND_REFERENCE_INDEX,
-                "index",
-            )],
-            remote_gc_refs: Vec::new(),
-            remote_clearance_refs: Vec::new(),
-            is_reference_index_complete: true,
-        };
-        let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
-            root,
-            subsystem,
-            object_ref: &object_ref,
-            object_kind,
-            retention_class,
-            action,
-            evidence: &evidence,
-        })
-        .expect("store retention GC catalog plan");
-        let apply = crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
-            root,
-            plan_ref: &plan.plan_ref,
-        })
-        .expect("apply retention GC catalog plan");
-        let execution =
-            crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
-                root,
-                subsystem,
-                action,
-                object_ref: &object_ref,
-                object_kind,
-                retention_class,
-                apply_ref: Some(&apply.apply_ref),
-            })
-            .expect("store retention GC catalog execution");
-        let audit = crate::retention::audit_retention_gc_execution(crate::retention::RetentionGcAuditInput {
-            root,
-            execution_ref: &execution.execution_ref,
-        })
-        .expect("audit retention GC catalog execution");
-        RetentionGcAuditFixture {
-            object_ref,
-            plan,
-            apply,
-            execution,
-            audit,
         }
+
+        fn evidence(&self) -> GcEvidence {
+            GcEvidence {
+                requester_ref: Some(self.requester_ref.clone()),
+                policy_refs: vec![self.admission(crate::retention::ADMISSION_KIND_POLICY, "policy")],
+                authority_refs: vec![self.admission(crate::retention::ADMISSION_KIND_AUTHORITY, "authority")],
+                evidence_refs: vec![self.admission(crate::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE, "support")],
+                retained_refs: Vec::new(),
+                remote_peer_refs: Vec::new(),
+                remote_refs: Vec::new(),
+                reference_index_refs: vec![self.admission(crate::retention::ADMISSION_KIND_REFERENCE_INDEX, "index")],
+                remote_gc_refs: Vec::new(),
+                remote_clearance_refs: Vec::new(),
+                is_reference_index_complete: true,
+            }
+        }
+
+        fn plan(&self, evidence: &GcEvidence) -> GcPlan {
+            crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
+                root: self.root,
+                subsystem: self.subsystem,
+                object_ref: &self.object_ref,
+                object_kind: self.object_kind,
+                retention_class: self.retention_class,
+                action: self.action,
+                evidence,
+            })
+            .expect("store retention GC catalog plan")
+        }
+
+        fn apply(&self, plan_ref: &str) -> GcApply {
+            crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
+                root: self.root,
+                plan_ref,
+            })
+            .expect("apply retention GC catalog plan")
+        }
+
+        fn execution(&self, apply_ref: &str) -> GcExecution {
+            crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
+                root: self.root,
+                subsystem: self.subsystem,
+                action: self.action,
+                object_ref: &self.object_ref,
+                object_kind: self.object_kind,
+                retention_class: self.retention_class,
+                apply_ref: Some(apply_ref),
+            })
+            .expect("store retention GC catalog execution")
+        }
+
+        fn audit(&self, execution_ref: &str) -> GcAudit {
+            crate::retention::audit_retention_gc_execution(crate::retention::RetentionGcAuditInput {
+                root: self.root,
+                execution_ref,
+            })
+            .expect("audit retention GC catalog execution")
+        }
+
+        fn finish(self) -> GcCase {
+            let evidence = self.evidence();
+            let plan = self.plan(&evidence);
+            let apply = self.apply(&plan.plan_ref);
+            let execution = self.execution(&apply.apply_ref);
+            let audit = self.audit(&execution.execution_ref);
+            GcCase {
+                object_ref: self.object_ref,
+                plan,
+                apply,
+                execution,
+                audit,
+            }
+        }
+    }
+
+    fn gc_case(root: &Path, label: &str, subsystem: &str) -> GcCase {
+        Seed::new(root, label, subsystem).finish()
     }
 
     fn install_fixture(

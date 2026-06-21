@@ -502,6 +502,7 @@ pub struct HostcallEvidenceContext<'a> {
     pub budget_ref: &'a str,
 }
 
+#[derive(Default)]
 struct SuiteFixtures {
     budget: HarnessBudget,
     has_budget_fixture: bool,
@@ -516,21 +517,6 @@ struct SuiteFixtures {
 enum SuiteFieldStatus {
     Applied,
     Unknown,
-}
-
-impl Default for SuiteFixtures {
-    fn default() -> Self {
-        Self {
-            budget: HarnessBudget::default(),
-            has_budget_fixture: false,
-            actors: None,
-            has_actor_fixture: false,
-            capabilities: CapabilityContext::default(),
-            has_capability_fixture: false,
-            policy: AdmissionPolicy::default(),
-            has_policy_fixture: false,
-        }
-    }
 }
 
 impl SuiteFixtures {
