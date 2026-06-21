@@ -70,6 +70,88 @@ use crate::preserves_rail::u64_value;
 use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
+const PASS_CHECKS: &[&str] = &[
+    "report-schema",
+    "effect-log",
+    "budget",
+    "explicit-budget-fixture",
+    "no-default-resource-policy",
+    "resource-policy-preflight",
+    "nickel-resource-policy",
+    "nickel-resource-export",
+    "basalt-resource-receipt",
+    "budget-usage-binding",
+    "actor-registry",
+    "explicit-actor-registry",
+    "no-inferred-actors",
+    "executor-boundary",
+    "executor-preflight",
+    "executor-kind-binding",
+    "allowed-hostcall-binding",
+    "no-unsupported-executor-fallback",
+    "executor-conformance-suite-binding",
+    "cross-kind-hostcall-conformance",
+    "executor-execution-receipt-binding",
+    "executor-output-ref-binding",
+    "steel-executor-preflight",
+    "steel-review-receipt-binding",
+    "steel-vm-execution",
+    "steel-resource-bounds",
+    "adapter-executor-preflight",
+    "remote-proxy-preflight",
+    "wasm-executor-preflight",
+    "wasm-inspection-receipt-binding",
+    "wasm-execution-receipt-binding",
+    "wasmtime-no-wasi",
+    "wasm-fuel-memory-bounds",
+    "wasm-abi-byte-bounds",
+    "wasm-guest-memory-bounds",
+    "wasm-preserves-abi-ready",
+    "executor-hostcall-boundary",
+    "hostcall-admission-binding",
+    "hostcall-replay",
+    "effect-handler-binding",
+    "effect-handle-binding",
+    "handle-not-authority",
+    "hostcall-handle-replay",
+    "no-ambient-executor-io",
+    "admission-policy",
+    "policy-preflight",
+    "nickel-static-policy",
+    "nickel-policy-source",
+    "nickel-export-normalization",
+    "basalt-policy-gate",
+    "basalt-preflight-receipt",
+    "basalt-receipt-binding",
+    "steel-predicate-review",
+    "explicit-capability-fixture",
+    "no-implicit-authority",
+    "capability-context",
+    "capability-grants",
+    "basalt-authority-receipt",
+    "capability-proofset-binding",
+    "grant-ref-binding",
+    "deny-without-capability",
+    "authority-ref-binding",
+    "admission-decisions",
+    "deny-rollback",
+    "denied-effect-suppression",
+    "runtime-predicate-receipts",
+    "assertion-visibility-predicate",
+    "turn-commit-rollback-predicate",
+    "observe-delivery-predicate",
+    "chain-continuity",
+    "chain-anchor-descent",
+    "chain-checkpoint-freshness",
+    "chain-predicate-receipts",
+    "turn-journal-chains",
+    "turn-journal-input-binding",
+    "turn-journal-admission-binding",
+    "turn-journal-state-binding",
+    "turn-journal-no-global-head",
+    "deterministic-replay",
+];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GateCheck {
     pub artifact_kind: String,
@@ -352,85 +434,7 @@ pub fn parse_gate_receipt(value: &IOValue) -> Result<GateReceipt> {
     let validation = parse_validation(&receipt[6])?;
     let replay = parse_replay(&receipt[7])?;
     let checks = parse_checks(&receipt[8])?;
-    require_check(&checks, "report-schema")?;
-    require_check(&checks, "effect-log")?;
-    require_check(&checks, "budget")?;
-    require_check(&checks, "explicit-budget-fixture")?;
-    require_check(&checks, "no-default-resource-policy")?;
-    require_check(&checks, "resource-policy-preflight")?;
-    require_check(&checks, "nickel-resource-policy")?;
-    require_check(&checks, "nickel-resource-export")?;
-    require_check(&checks, "basalt-resource-receipt")?;
-    require_check(&checks, "budget-usage-binding")?;
-    require_check(&checks, "actor-registry")?;
-    require_check(&checks, "explicit-actor-registry")?;
-    require_check(&checks, "no-inferred-actors")?;
-    require_check(&checks, "executor-boundary")?;
-    require_check(&checks, "executor-preflight")?;
-    require_check(&checks, "executor-kind-binding")?;
-    require_check(&checks, "allowed-hostcall-binding")?;
-    require_check(&checks, "no-unsupported-executor-fallback")?;
-    require_check(&checks, "executor-conformance-suite-binding")?;
-    require_check(&checks, "cross-kind-hostcall-conformance")?;
-    require_check(&checks, "executor-execution-receipt-binding")?;
-    require_check(&checks, "executor-output-ref-binding")?;
-    require_check(&checks, "steel-executor-preflight")?;
-    require_check(&checks, "steel-review-receipt-binding")?;
-    require_check(&checks, "steel-vm-execution")?;
-    require_check(&checks, "steel-resource-bounds")?;
-    require_check(&checks, "adapter-executor-preflight")?;
-    require_check(&checks, "remote-proxy-preflight")?;
-    require_check(&checks, "wasm-executor-preflight")?;
-    require_check(&checks, "wasm-inspection-receipt-binding")?;
-    require_check(&checks, "wasm-execution-receipt-binding")?;
-    require_check(&checks, "wasmtime-no-wasi")?;
-    require_check(&checks, "wasm-fuel-memory-bounds")?;
-    require_check(&checks, "wasm-abi-byte-bounds")?;
-    require_check(&checks, "wasm-guest-memory-bounds")?;
-    require_check(&checks, "wasm-preserves-abi-ready")?;
-    require_check(&checks, "executor-hostcall-boundary")?;
-    require_check(&checks, "hostcall-admission-binding")?;
-    require_check(&checks, "hostcall-replay")?;
-    require_check(&checks, "effect-handler-binding")?;
-    require_check(&checks, "effect-handle-binding")?;
-    require_check(&checks, "handle-not-authority")?;
-    require_check(&checks, "hostcall-handle-replay")?;
-    require_check(&checks, "no-ambient-executor-io")?;
-    require_check(&checks, "admission-policy")?;
-    require_check(&checks, "policy-preflight")?;
-    require_check(&checks, "nickel-static-policy")?;
-    require_check(&checks, "nickel-policy-source")?;
-    require_check(&checks, "nickel-export-normalization")?;
-    require_check(&checks, "basalt-policy-gate")?;
-    require_check(&checks, "basalt-preflight-receipt")?;
-    require_check(&checks, "basalt-receipt-binding")?;
-    require_check(&checks, "steel-predicate-review")?;
-    require_check(&checks, "explicit-capability-fixture")?;
-    require_check(&checks, "no-implicit-authority")?;
-    require_check(&checks, "capability-context")?;
-    require_check(&checks, "capability-grants")?;
-    require_check(&checks, "basalt-authority-receipt")?;
-    require_check(&checks, "capability-proofset-binding")?;
-    require_check(&checks, "grant-ref-binding")?;
-    require_check(&checks, "deny-without-capability")?;
-    require_check(&checks, "authority-ref-binding")?;
-    require_check(&checks, "admission-decisions")?;
-    require_check(&checks, "deny-rollback")?;
-    require_check(&checks, "denied-effect-suppression")?;
-    require_check(&checks, "runtime-predicate-receipts")?;
-    require_check(&checks, "assertion-visibility-predicate")?;
-    require_check(&checks, "turn-commit-rollback-predicate")?;
-    require_check(&checks, "observe-delivery-predicate")?;
-    require_check(&checks, "chain-continuity")?;
-    require_check(&checks, "chain-anchor-descent")?;
-    require_check(&checks, "chain-checkpoint-freshness")?;
-    require_check(&checks, "chain-predicate-receipts")?;
-    require_check(&checks, "turn-journal-chains")?;
-    require_check(&checks, "turn-journal-input-binding")?;
-    require_check(&checks, "turn-journal-admission-binding")?;
-    require_check(&checks, "turn-journal-state-binding")?;
-    require_check(&checks, "turn-journal-no-global-head")?;
-    require_check(&checks, "deterministic-replay")?;
+    require_all_checks(&checks)?;
 
     let chain_evidence = parse_chain_evidence(&receipt[9])?;
     let report_ref = required_hash(&receipt[11], "gate receipt report ref")?;
@@ -1527,90 +1531,7 @@ fn repro_verify_checks_value() -> IOValue {
 
 fn checks_value() -> IOValue {
     record("checks", vec![sequence(
-        [
-            "report-schema",
-            "effect-log",
-            "budget",
-            "explicit-budget-fixture",
-            "no-default-resource-policy",
-            "resource-policy-preflight",
-            "nickel-resource-policy",
-            "nickel-resource-export",
-            "basalt-resource-receipt",
-            "budget-usage-binding",
-            "actor-registry",
-            "explicit-actor-registry",
-            "no-inferred-actors",
-            "executor-boundary",
-            "executor-preflight",
-            "executor-kind-binding",
-            "allowed-hostcall-binding",
-            "no-unsupported-executor-fallback",
-            "executor-conformance-suite-binding",
-            "cross-kind-hostcall-conformance",
-            "executor-execution-receipt-binding",
-            "executor-output-ref-binding",
-            "steel-executor-preflight",
-            "steel-review-receipt-binding",
-            "steel-vm-execution",
-            "steel-resource-bounds",
-            "adapter-executor-preflight",
-            "remote-proxy-preflight",
-            "wasm-executor-preflight",
-            "wasm-inspection-receipt-binding",
-            "wasm-execution-receipt-binding",
-            "wasmtime-no-wasi",
-            "wasm-fuel-memory-bounds",
-            "wasm-abi-byte-bounds",
-            "wasm-guest-memory-bounds",
-            "wasm-preserves-abi-ready",
-            "executor-hostcall-boundary",
-            "hostcall-admission-binding",
-            "hostcall-replay",
-            "effect-handler-binding",
-            "effect-handle-binding",
-            "handle-not-authority",
-            "hostcall-handle-replay",
-            "no-ambient-executor-io",
-            "admission-policy",
-            "policy-preflight",
-            "nickel-static-policy",
-            "nickel-policy-source",
-            "nickel-export-normalization",
-            "basalt-policy-gate",
-            "basalt-preflight-receipt",
-            "basalt-receipt-binding",
-            "steel-predicate-review",
-            "explicit-capability-fixture",
-            "no-implicit-authority",
-            "capability-context",
-            "capability-grants",
-            "basalt-authority-receipt",
-            "capability-proofset-binding",
-            "grant-ref-binding",
-            "deny-without-capability",
-            "authority-ref-binding",
-            "admission-decisions",
-            "deny-rollback",
-            "denied-effect-suppression",
-            "runtime-predicate-receipts",
-            "assertion-visibility-predicate",
-            "turn-commit-rollback-predicate",
-            "observe-delivery-predicate",
-            "chain-continuity",
-            "chain-anchor-descent",
-            "chain-checkpoint-freshness",
-            "chain-predicate-receipts",
-            "turn-journal-chains",
-            "turn-journal-input-binding",
-            "turn-journal-admission-binding",
-            "turn-journal-state-binding",
-            "turn-journal-no-global-head",
-            "deterministic-replay",
-        ]
-        .iter()
-        .map(|name| record("check", vec![string(*name), string("pass")]))
-        .collect(),
+        PASS_CHECKS.iter().map(|name| record("check", vec![string(*name), string("pass")])).collect(),
     )])
 }
 
@@ -1753,6 +1674,13 @@ fn require_check(checks: &[String], expected: &str) -> Result<()> {
     } else {
         Err(MoltenError::invalid_harness(format!("gate receipt missing {expected} check")))
     }
+}
+
+fn require_all_checks(checks: &[String]) -> Result<()> {
+    for expected in PASS_CHECKS.iter().copied() {
+        require_check(checks, expected)?;
+    }
+    Ok(())
 }
 
 fn validate_tool_record(value: &Value<IOValue>) -> Result<()> {
