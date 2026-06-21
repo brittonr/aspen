@@ -257,276 +257,263 @@ fn dispatch_read_only(
     request: &CatalogMcpRequest,
 ) -> Result<DispatchPayload> {
     let result = match request.tool.as_str() {
-        "catalog.list" | "list_artifacts" => {
-            let kind = optional_arg_string(&request.args, "kind");
-            catalog::list(registry_root, ledger_root, &catalog::CatalogListInput {
-                kind,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }
-        "catalog.view" | "view_artifact" | "view_transcript" => required_arg_string(&request.args, "reference")
-            .and_then(|reference| {
-                let should_include_payload = arg_bool(&request.args, "payload", false)?;
-                let should_redact_payload = arg_bool(&request.args, "redacted", true)?;
-                catalog::view(registry_root, ledger_root, &catalog::CatalogViewInput {
-                    reference,
-                    include_payload: should_include_payload,
-                    redacted: should_redact_payload,
-                    visibility: request.visibility.clone(),
-                })
-                .map(CoreResult::Query)
-            }),
-        "search_by_schema" => required_arg_string(&request.args, "schema-ref").and_then(|schema_ref| {
-            let mut filters = filters_from_args(&request.args)?;
-            push_bounded(
-                &mut filters,
-                CatalogFilter::SchemaRef(schema_ref),
-                MAX_CATALOG_MCP_FILTERS,
-                "catalog MCP filters",
-            )?;
-            let root_refs = arg_strings(&request.args, "root")?;
-            catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
-                root_refs,
-                include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
-                include_dependents: arg_bool(&request.args, "include-dependents", true)?,
-                filters,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }),
-        "search_by_effect" => required_arg_string(&request.args, "effect-ref").and_then(|effect_ref| {
-            let mut filters = filters_from_args(&request.args)?;
-            push_bounded(
-                &mut filters,
-                CatalogFilter::EffectRef(effect_ref),
-                MAX_CATALOG_MCP_FILTERS,
-                "catalog MCP filters",
-            )?;
-            let root_refs = arg_strings(&request.args, "root")?;
-            catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
-                root_refs,
-                include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
-                include_dependents: arg_bool(&request.args, "include-dependents", true)?,
-                filters,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }),
-        "list_upgrade_sessions" => {
-            let mut filters = filters_from_args(&request.args)?;
-            if filters.is_empty() {
-                push_bounded(
-                    &mut filters,
-                    CatalogFilter::UpgradeStatus("planned".to_string()),
-                    MAX_CATALOG_MCP_FILTERS,
-                    "catalog MCP filters",
-                )?;
-            }
-            catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
-                root_refs: arg_strings(&request.args, "root")?,
-                include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
-                include_dependents: arg_bool(&request.args, "include-dependents", true)?,
-                filters,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }
-        "list_provenance" | "search_provenance" => {
-            let mut filters = filters_from_args(&request.args)?;
-            push_bounded(
-                &mut filters,
-                CatalogFilter::Text("provenance:".to_string()),
-                MAX_CATALOG_MCP_FILTERS,
-                "catalog MCP filters",
-            )?;
-            if let Some(trust_state) = optional_arg_string(&request.args, "trust-state") {
-                push_bounded(
-                    &mut filters,
-                    CatalogFilter::Text(format!("provenance-trust-state:{trust_state}")),
-                    MAX_CATALOG_MCP_FILTERS,
-                    "catalog MCP filters",
-                )?;
-            }
-            if let Some(decision) = optional_arg_string(&request.args, "decision") {
-                push_bounded(
-                    &mut filters,
-                    CatalogFilter::Text(format!("provenance-decision:{decision}")),
-                    MAX_CATALOG_MCP_FILTERS,
-                    "catalog MCP filters",
-                )?;
-            }
-            catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
-                root_refs: arg_strings(&request.args, "root")?,
-                include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
-                include_dependents: arg_bool(&request.args, "include-dependents", true)?,
-                filters,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }
-        "search_retention_gc" => {
-            let mut filters = filters_from_args(&request.args)?;
-            push_bounded(
-                &mut filters,
-                CatalogFilter::Text("retention-gc:".to_string()),
-                MAX_CATALOG_MCP_FILTERS,
-                "catalog MCP filters",
-            )?;
-            push_optional_text_filter(&mut filters, &request.args, "stage", "retention-gc")?;
-            push_optional_text_filter(&mut filters, &request.args, "object-ref", "retention-gc-object")?;
-            push_optional_text_filter(&mut filters, &request.args, "subsystem", "retention-gc-subsystem")?;
-            push_optional_text_filter(&mut filters, &request.args, "decision", "retention-gc-decision")?;
-            push_optional_text_filter(&mut filters, &request.args, "plan-ref", "retention-gc-plan")?;
-            push_optional_text_filter(&mut filters, &request.args, "apply-ref", "retention-gc-apply")?;
-            push_optional_text_filter(&mut filters, &request.args, "execution-ref", "retention-gc-execution")?;
-            catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
-                root_refs: arg_strings(&request.args, "root")?,
-                include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
-                include_dependents: arg_bool(&request.args, "include-dependents", true)?,
-                filters,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }
-        "search_replay_evidence" => {
-            let mut filters = filters_from_args(&request.args)?;
-            push_bounded(
-                &mut filters,
-                CatalogFilter::Text("deterministic-replay:".to_string()),
-                MAX_CATALOG_MCP_FILTERS,
-                "catalog MCP filters",
-            )?;
-            push_optional_text_filter(&mut filters, &request.args, "stage", "deterministic-replay")?;
-            push_optional_text_filter(&mut filters, &request.args, "decision", "replay-decision")?;
-            push_optional_text_filter(&mut filters, &request.args, "divergence", "replay-divergence")?;
-            push_optional_text_filter(&mut filters, &request.args, "actor-id", "replay-actor")?;
-            push_optional_text_filter(&mut filters, &request.args, "handler-profile-ref", "replay-handler-profile")?;
-            push_optional_text_filter(&mut filters, &request.args, "expected-report-ref", "replay-expected-report")?;
-            push_optional_text_filter(&mut filters, &request.args, "actual-report-ref", "replay-actual-report")?;
-            push_optional_text_filter(&mut filters, &request.args, "final-state-ref", "replay-final-state")?;
-            push_optional_text_filter(&mut filters, &request.args, "expected-ref", "replay-expected-ref")?;
-            push_optional_text_filter(&mut filters, &request.args, "actual-ref", "replay-actual-ref")?;
-            push_optional_text_filter(&mut filters, &request.args, "expected-output-ref", "replay-expected-output")?;
-            push_optional_text_filter(&mut filters, &request.args, "actual-output-ref", "replay-actual-output")?;
-            push_optional_text_filter(
-                &mut filters,
-                &request.args,
-                "expected-effect-log-ref",
-                "replay-expected-effect-log",
-            )?;
-            push_optional_text_filter(
-                &mut filters,
-                &request.args,
-                "actual-effect-log-ref",
-                "replay-actual-effect-log",
-            )?;
-            push_optional_text_filter(
-                &mut filters,
-                &request.args,
-                "expected-final-state-ref",
-                "replay-expected-final-state",
-            )?;
-            push_optional_text_filter(
-                &mut filters,
-                &request.args,
-                "actual-final-state-ref",
-                "replay-actual-final-state",
-            )?;
-            push_optional_text_filter(
-                &mut filters,
-                &request.args,
-                "release-replay-verify-ref",
-                "release-dogfood-replay-verify",
-            )?;
-            push_optional_text_filter(
-                &mut filters,
-                &request.args,
-                "release-replay-index-ref",
-                "release-dogfood-replay-index",
-            )?;
-            catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
-                root_refs: arg_strings(&request.args, "root")?,
-                include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
-                include_dependents: arg_bool(&request.args, "include-dependents", true)?,
-                filters,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }
-        "catalog.chunk_store" | "search_chunk_store" => {
-            let Some(chunk_root) = chunk_root else {
-                return Err(MoltenError::invalid_harness(
-                    "catalog MCP chunk-store tool requires a chunk store root supplied by the caller",
-                ));
-            };
-            catalog::chunk_store(chunk_root, &catalog::CatalogChunkStoreInput {
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }
-        "catalog.search" | "search_artifacts" => {
-            let filters = filters_from_args(&request.args)?;
-            let root_refs = arg_strings(&request.args, "root")?;
-            let should_include_dependencies = arg_bool(&request.args, "include-dependencies", true)?;
-            let should_include_dependents = arg_bool(&request.args, "include-dependents", true)?;
-            catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
-                root_refs,
-                include_dependencies: should_include_dependencies,
-                include_dependents: should_include_dependents,
-                filters,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }
-        "catalog.deps" | "list_dependencies" => required_arg_string(&request.args, "reference").and_then(|reference| {
-            let should_expand_transitively = arg_bool(&request.args, "transitive", false)?;
-            catalog::dependencies(registry_root, ledger_root, &catalog::CatalogGraphInput {
-                reference,
-                transitive: should_expand_transitively,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }),
-        "catalog.dependents" | "list_dependents" => {
-            required_arg_string(&request.args, "reference").and_then(|reference| {
-                let should_expand_transitively = arg_bool(&request.args, "transitive", false)?;
-                catalog::dependents(registry_root, ledger_root, &catalog::CatalogGraphInput {
-                    reference,
-                    transitive: should_expand_transitively,
-                    visibility: request.visibility.clone(),
-                })
-                .map(CoreResult::Query)
-            })
-        }
-        "view_receipts" => required_arg_string(&request.args, "reference").and_then(|reference| {
-            let should_expand_transitively = arg_bool(&request.args, "transitive", false)?;
-            catalog::receipts(registry_root, ledger_root, &catalog::CatalogGraphInput {
-                reference,
-                transitive: should_expand_transitively,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::Query)
-        }),
-        "catalog.short_id" | "short_id_resolve" => required_arg_string(&request.args, "prefix").and_then(|prefix| {
-            let min_length =
-                usize::try_from(arg_u64(&request.args, "min-length", catalog::DEFAULT_SHORT_ID_MIN_LENGTH as u64)?)
-                    .map_err(|error| {
-                        MoltenError::invalid_harness(format!("catalog MCP min-length is unsupported: {error}"))
-                    })?;
-            catalog::resolve_short_id(registry_root, ledger_root, &catalog::CatalogShortIdInput {
-                prefix,
-                min_length,
-                visibility: request.visibility.clone(),
-            })
-            .map(CoreResult::ShortId)
-        }),
+        "catalog.list" | "list_artifacts" => list_result(registry_root, ledger_root, request),
+        "catalog.view" | "view_artifact" | "view_transcript" => view_result(registry_root, ledger_root, request),
+        "search_by_schema" => schema_search_result(registry_root, ledger_root, request),
+        "search_by_effect" => effect_search_result(registry_root, ledger_root, request),
+        "list_upgrade_sessions" => upgrade_search_result(registry_root, ledger_root, request),
+        "list_provenance" | "search_provenance" => provenance_search_result(registry_root, ledger_root, request),
+        "search_retention_gc" => retention_search_result(registry_root, ledger_root, request),
+        "search_replay_evidence" => replay_search_result(registry_root, ledger_root, request),
+        "catalog.chunk_store" | "search_chunk_store" => chunk_store_result(chunk_root, request),
+        "catalog.search" | "search_artifacts" => artifact_search_result(registry_root, ledger_root, request),
+        "catalog.deps" | "list_dependencies" => deps_result(registry_root, ledger_root, request),
+        "catalog.dependents" | "list_dependents" => dependents_result(registry_root, ledger_root, request),
+        "view_receipts" => receipts_result(registry_root, ledger_root, request),
+        "catalog.short_id" | "short_id_resolve" => short_id_result(registry_root, ledger_root, request),
         _ => Err(MoltenError::invalid_harness(format!(
             "catalog MCP tool {} is not in the read-only dispatch allow-list",
             request.tool
         ))),
     };
     result.map(DispatchPayload::from)
+}
+
+fn list_result(registry_root: &Path, ledger_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
+    let kind = optional_arg_string(&request.args, "kind");
+    catalog::list(registry_root, ledger_root, &catalog::CatalogListInput {
+        kind,
+        visibility: request.visibility.clone(),
+    })
+    .map(CoreResult::Query)
+}
+
+fn view_result(registry_root: &Path, ledger_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
+    let reference = required_arg_string(&request.args, "reference")?;
+    let should_include_payload = arg_bool(&request.args, "payload", false)?;
+    let should_redact_payload = arg_bool(&request.args, "redacted", true)?;
+    catalog::view(registry_root, ledger_root, &catalog::CatalogViewInput {
+        reference,
+        include_payload: should_include_payload,
+        redacted: should_redact_payload,
+        visibility: request.visibility.clone(),
+    })
+    .map(CoreResult::Query)
+}
+
+fn chunk_store_result(chunk_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
+    let Some(chunk_root) = chunk_root else {
+        return Err(MoltenError::invalid_harness(
+            "catalog MCP chunk-store tool requires a chunk store root supplied by the caller",
+        ));
+    };
+    catalog::chunk_store(chunk_root, &catalog::CatalogChunkStoreInput {
+        visibility: request.visibility.clone(),
+    })
+    .map(CoreResult::Query)
+}
+
+fn deps_result(registry_root: &Path, ledger_root: Option<&Path>, request: &CatalogMcpRequest) -> Result<CoreResult> {
+    let graph_input = graph_input(request)?;
+    catalog::dependencies(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
+}
+
+fn dependents_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+) -> Result<CoreResult> {
+    let graph_input = graph_input(request)?;
+    catalog::dependents(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
+}
+
+fn receipts_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+) -> Result<CoreResult> {
+    let graph_input = graph_input(request)?;
+    catalog::receipts(registry_root, ledger_root, &graph_input).map(CoreResult::Query)
+}
+
+fn graph_input(request: &CatalogMcpRequest) -> Result<catalog::CatalogGraphInput> {
+    Ok(catalog::CatalogGraphInput {
+        reference: required_arg_string(&request.args, "reference")?,
+        transitive: arg_bool(&request.args, "transitive", false)?,
+        visibility: request.visibility.clone(),
+    })
+}
+
+fn short_id_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+) -> Result<CoreResult> {
+    let prefix = required_arg_string(&request.args, "prefix")?;
+    let min_length =
+        usize::try_from(arg_u64(&request.args, "min-length", catalog::DEFAULT_SHORT_ID_MIN_LENGTH as u64)?)
+            .map_err(|error| MoltenError::invalid_harness(format!("catalog MCP min-length is unsupported: {error}")))?;
+    catalog::resolve_short_id(registry_root, ledger_root, &catalog::CatalogShortIdInput {
+        prefix,
+        min_length,
+        visibility: request.visibility.clone(),
+    })
+    .map(CoreResult::ShortId)
+}
+
+fn schema_search_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+) -> Result<CoreResult> {
+    let schema_ref = required_arg_string(&request.args, "schema-ref")?;
+    let mut filters = filters_from_args(&request.args)?;
+    push_bounded(&mut filters, CatalogFilter::SchemaRef(schema_ref), MAX_CATALOG_MCP_FILTERS, "catalog MCP filters")?;
+    search_result(registry_root, ledger_root, request, filters)
+}
+
+fn effect_search_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+) -> Result<CoreResult> {
+    let effect_ref = required_arg_string(&request.args, "effect-ref")?;
+    let mut filters = filters_from_args(&request.args)?;
+    push_bounded(&mut filters, CatalogFilter::EffectRef(effect_ref), MAX_CATALOG_MCP_FILTERS, "catalog MCP filters")?;
+    search_result(registry_root, ledger_root, request, filters)
+}
+
+fn upgrade_search_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+) -> Result<CoreResult> {
+    let mut filters = filters_from_args(&request.args)?;
+    if filters.is_empty() {
+        push_bounded(
+            &mut filters,
+            CatalogFilter::UpgradeStatus("planned".to_string()),
+            MAX_CATALOG_MCP_FILTERS,
+            "catalog MCP filters",
+        )?;
+    }
+    search_result(registry_root, ledger_root, request, filters)
+}
+
+fn provenance_search_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+) -> Result<CoreResult> {
+    let mut filters = filters_from_args(&request.args)?;
+    push_bounded(
+        &mut filters,
+        CatalogFilter::Text("provenance:".to_string()),
+        MAX_CATALOG_MCP_FILTERS,
+        "catalog MCP filters",
+    )?;
+    if let Some(trust_state) = optional_arg_string(&request.args, "trust-state") {
+        push_bounded(
+            &mut filters,
+            CatalogFilter::Text(format!("provenance-trust-state:{trust_state}")),
+            MAX_CATALOG_MCP_FILTERS,
+            "catalog MCP filters",
+        )?;
+    }
+    if let Some(decision) = optional_arg_string(&request.args, "decision") {
+        push_bounded(
+            &mut filters,
+            CatalogFilter::Text(format!("provenance-decision:{decision}")),
+            MAX_CATALOG_MCP_FILTERS,
+            "catalog MCP filters",
+        )?;
+    }
+    search_result(registry_root, ledger_root, request, filters)
+}
+
+fn retention_search_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+) -> Result<CoreResult> {
+    let mut filters = filters_from_args(&request.args)?;
+    push_bounded(
+        &mut filters,
+        CatalogFilter::Text("retention-gc:".to_string()),
+        MAX_CATALOG_MCP_FILTERS,
+        "catalog MCP filters",
+    )?;
+    push_optional_text_filter(&mut filters, &request.args, "stage", "retention-gc")?;
+    push_optional_text_filter(&mut filters, &request.args, "object-ref", "retention-gc-object")?;
+    push_optional_text_filter(&mut filters, &request.args, "subsystem", "retention-gc-subsystem")?;
+    push_optional_text_filter(&mut filters, &request.args, "decision", "retention-gc-decision")?;
+    push_optional_text_filter(&mut filters, &request.args, "plan-ref", "retention-gc-plan")?;
+    push_optional_text_filter(&mut filters, &request.args, "apply-ref", "retention-gc-apply")?;
+    push_optional_text_filter(&mut filters, &request.args, "execution-ref", "retention-gc-execution")?;
+    search_result(registry_root, ledger_root, request, filters)
+}
+
+fn replay_search_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+) -> Result<CoreResult> {
+    let mut filters = filters_from_args(&request.args)?;
+    push_bounded(
+        &mut filters,
+        CatalogFilter::Text("deterministic-replay:".to_string()),
+        MAX_CATALOG_MCP_FILTERS,
+        "catalog MCP filters",
+    )?;
+    push_optional_text_filter(&mut filters, &request.args, "stage", "deterministic-replay")?;
+    push_optional_text_filter(&mut filters, &request.args, "decision", "replay-decision")?;
+    push_optional_text_filter(&mut filters, &request.args, "divergence", "replay-divergence")?;
+    push_optional_text_filter(&mut filters, &request.args, "actor-id", "replay-actor")?;
+    push_optional_text_filter(&mut filters, &request.args, "handler-profile-ref", "replay-handler-profile")?;
+    push_optional_text_filter(&mut filters, &request.args, "expected-report-ref", "replay-expected-report")?;
+    push_optional_text_filter(&mut filters, &request.args, "actual-report-ref", "replay-actual-report")?;
+    push_optional_text_filter(&mut filters, &request.args, "final-state-ref", "replay-final-state")?;
+    push_optional_text_filter(&mut filters, &request.args, "expected-ref", "replay-expected-ref")?;
+    push_optional_text_filter(&mut filters, &request.args, "actual-ref", "replay-actual-ref")?;
+    push_optional_text_filter(&mut filters, &request.args, "expected-output-ref", "replay-expected-output")?;
+    push_optional_text_filter(&mut filters, &request.args, "actual-output-ref", "replay-actual-output")?;
+    push_optional_text_filter(&mut filters, &request.args, "expected-effect-log-ref", "replay-expected-effect-log")?;
+    push_optional_text_filter(&mut filters, &request.args, "actual-effect-log-ref", "replay-actual-effect-log")?;
+    push_optional_text_filter(&mut filters, &request.args, "expected-final-state-ref", "replay-expected-final-state")?;
+    push_optional_text_filter(&mut filters, &request.args, "actual-final-state-ref", "replay-actual-final-state")?;
+    push_optional_text_filter(
+        &mut filters,
+        &request.args,
+        "release-replay-verify-ref",
+        "release-dogfood-replay-verify",
+    )?;
+    push_optional_text_filter(&mut filters, &request.args, "release-replay-index-ref", "release-dogfood-replay-index")?;
+    search_result(registry_root, ledger_root, request, filters)
+}
+
+fn artifact_search_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+) -> Result<CoreResult> {
+    let filters = filters_from_args(&request.args)?;
+    search_result(registry_root, ledger_root, request, filters)
+}
+
+fn search_result(
+    registry_root: &Path,
+    ledger_root: Option<&Path>,
+    request: &CatalogMcpRequest,
+    filters: Vec<CatalogFilter>,
+) -> Result<CoreResult> {
+    catalog::search(registry_root, ledger_root, &catalog::CatalogSearchInput {
+        root_refs: arg_strings(&request.args, "root")?,
+        include_dependencies: arg_bool(&request.args, "include-dependencies", true)?,
+        include_dependents: arg_bool(&request.args, "include-dependents", true)?,
+        filters,
+        visibility: request.visibility.clone(),
+    })
+    .map(CoreResult::Query)
 }
 
 fn build_call(input: BuildCallInput<'_>) -> Result<CatalogMcpCall> {
