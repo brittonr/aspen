@@ -614,6 +614,26 @@ fn validate_sealed_report_bundle(report_value: &IOValue, bundle: &HarnessReproBu
     Ok(())
 }
 
+struct EvidenceRefs {
+    executor_preflights_ref: String,
+    executor_execution_receipts_ref: String,
+    runtime_predicate_receipts_ref: String,
+    policy_ref: String,
+    policy_gate_ref: String,
+    policy_nickel_source_ref: String,
+    policy_nickel_export_ref: String,
+    policy_basalt_preflight_ref: String,
+    budget_ref: String,
+    budget_gate_ref: String,
+    budget_nickel_source_ref: String,
+    budget_nickel_export_ref: String,
+    budget_basalt_preflight_ref: String,
+    capability_ref: String,
+    capability_gate_ref: String,
+    capability_authority_preflight_ref: String,
+    capability_proofset_ref: String,
+}
+
 fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Option<String>) -> Result<GateCheck> {
     let validation = validate_report_value(value)?;
     let replay = replay_report_value(value)?;
@@ -624,22 +644,7 @@ fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Optio
     if validation.final_state_hash != replay.final_state_hash {
         return Err(MoltenError::invalid_harness("gate replay final state does not match validation final state"));
     }
-    let policy_gate = report
-        .policy_gate
-        .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing policy gate evidence"))?;
-    let budget_gate = report
-        .budget_gate
-        .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing budget gate evidence"))?;
-    let capability_gate = report
-        .capability_gate
-        .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing capability gate evidence"))?;
-    let executor_preflights = report
-        .executor_preflights
-        .as_ref()
-        .ok_or_else(|| MoltenError::invalid_harness("missing executor preflight evidence"))?;
+    let refs = evidence_refs(&report)?;
     let deterministic_replay_verify_value =
         harness_replay_verify_value(&replay.expected_report_ref, &replay.actual_report_ref, &replay.final_state_hash);
     let deterministic_replay_verify_ref = canonical_hash(&deterministic_replay_verify_value)?;
@@ -660,23 +665,23 @@ fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Optio
         replay_actual_report_ref: replay.actual_report_ref,
         deterministic_replay_verify_ref,
         deterministic_replay_verify_value,
-        executor_preflights_ref: canonical_hash(&executor_preflights.value)?,
-        executor_execution_receipts_ref: executor_execution_receipts_ref(&report.observations)?,
-        runtime_predicate_receipts_ref: runtime_predicate_receipts_ref(&report.observations)?,
-        policy_ref: policy_gate.policy_ref.clone(),
-        policy_gate_ref: canonical_hash(&policy_gate.value)?,
-        policy_nickel_source_ref: policy_gate.nickel_source_ref.clone(),
-        policy_nickel_export_ref: policy_gate.nickel_export_ref.clone(),
-        policy_basalt_preflight_ref: policy_gate.basalt_preflight_ref.clone(),
-        budget_ref: budget_gate.budget_ref.clone(),
-        budget_gate_ref: canonical_hash(&budget_gate.value)?,
-        budget_nickel_source_ref: budget_gate.nickel_source_ref.clone(),
-        budget_nickel_export_ref: budget_gate.nickel_export_ref.clone(),
-        budget_basalt_preflight_ref: budget_gate.basalt_preflight_ref.clone(),
-        capability_ref: capability_gate.capability_ref.clone(),
-        capability_gate_ref: canonical_hash(&capability_gate.value)?,
-        capability_authority_preflight_ref: capability_gate.authority_preflight_ref.clone(),
-        capability_proofset_ref: capability_gate.proofset_ref.clone(),
+        executor_preflights_ref: refs.executor_preflights_ref,
+        executor_execution_receipts_ref: refs.executor_execution_receipts_ref,
+        runtime_predicate_receipts_ref: refs.runtime_predicate_receipts_ref,
+        policy_ref: refs.policy_ref,
+        policy_gate_ref: refs.policy_gate_ref,
+        policy_nickel_source_ref: refs.policy_nickel_source_ref,
+        policy_nickel_export_ref: refs.policy_nickel_export_ref,
+        policy_basalt_preflight_ref: refs.policy_basalt_preflight_ref,
+        budget_ref: refs.budget_ref,
+        budget_gate_ref: refs.budget_gate_ref,
+        budget_nickel_source_ref: refs.budget_nickel_source_ref,
+        budget_nickel_export_ref: refs.budget_nickel_export_ref,
+        budget_basalt_preflight_ref: refs.budget_basalt_preflight_ref,
+        capability_ref: refs.capability_ref,
+        capability_gate_ref: refs.capability_gate_ref,
+        capability_authority_preflight_ref: refs.capability_authority_preflight_ref,
+        capability_proofset_ref: refs.capability_proofset_ref,
         redaction_policy_ref: None,
         redaction_gate_ref: None,
         observations: validation.observations as u64,
@@ -684,6 +689,44 @@ fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Optio
         budget: report.budget,
         chain_evidence,
         turn_journals,
+    })
+}
+
+fn evidence_refs(report: &HarnessReport) -> Result<EvidenceRefs> {
+    let policy = report
+        .policy_gate
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("missing policy gate evidence"))?;
+    let budget = report
+        .budget_gate
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("missing budget gate evidence"))?;
+    let capability = report
+        .capability_gate
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("missing capability gate evidence"))?;
+    let preflights = report
+        .executor_preflights
+        .as_ref()
+        .ok_or_else(|| MoltenError::invalid_harness("missing executor preflight evidence"))?;
+    Ok(EvidenceRefs {
+        executor_preflights_ref: canonical_hash(&preflights.value)?,
+        executor_execution_receipts_ref: executor_execution_receipts_ref(&report.observations)?,
+        runtime_predicate_receipts_ref: runtime_predicate_receipts_ref(&report.observations)?,
+        policy_ref: policy.policy_ref.clone(),
+        policy_gate_ref: canonical_hash(&policy.value)?,
+        policy_nickel_source_ref: policy.nickel_source_ref.clone(),
+        policy_nickel_export_ref: policy.nickel_export_ref.clone(),
+        policy_basalt_preflight_ref: policy.basalt_preflight_ref.clone(),
+        budget_ref: budget.budget_ref.clone(),
+        budget_gate_ref: canonical_hash(&budget.value)?,
+        budget_nickel_source_ref: budget.nickel_source_ref.clone(),
+        budget_nickel_export_ref: budget.nickel_export_ref.clone(),
+        budget_basalt_preflight_ref: budget.basalt_preflight_ref.clone(),
+        capability_ref: capability.capability_ref.clone(),
+        capability_gate_ref: canonical_hash(&capability.value)?,
+        capability_authority_preflight_ref: capability.authority_preflight_ref.clone(),
+        capability_proofset_ref: capability.proofset_ref.clone(),
     })
 }
 
