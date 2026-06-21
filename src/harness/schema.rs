@@ -4764,8 +4764,16 @@ pub fn validate_executor_preflight_evidence(
             canonical_hash(&expected)?
         )));
     }
+    let by_actor = preflights_by_actor(&preflights.preflights)?;
+    validate_actor_preflights(suite, &by_actor)?;
+    validate_hostcall_preflight_bindings(observations, &by_actor)
+}
+
+type PreflightMap<'a> = std::collections::BTreeMap<&'a str, &'a ExecutorPreflightEvidence>;
+
+fn preflights_by_actor(preflights: &[ExecutorPreflightEvidence]) -> Result<PreflightMap<'_>> {
     let mut by_actor = std::collections::BTreeMap::new();
-    for preflight in &preflights.preflights {
+    for preflight in preflights {
         if by_actor.insert(preflight.actor_id.as_str(), preflight).is_some() {
             return Err(MoltenError::invalid_harness(format!(
                 "duplicate executor preflight for actor {}",
@@ -4773,6 +4781,10 @@ pub fn validate_executor_preflight_evidence(
             )));
         }
     }
+    Ok(by_actor)
+}
+
+fn validate_actor_preflights(suite: &HarnessSuite, by_actor: &PreflightMap<'_>) -> Result<()> {
     for actor in &suite.actors {
         let Some(preflight) = by_actor.get(actor.id.as_str()) else {
             return Err(MoltenError::invalid_harness(format!("missing executor preflight for actor {}", actor.id)));
@@ -4782,34 +4794,45 @@ pub fn validate_executor_preflight_evidence(
         }
         validate_actor_executor_preflight(actor, preflight)?;
     }
+    Ok(())
+}
+
+fn validate_hostcall_preflight_bindings(
+    observations: &[HarnessObservation],
+    by_actor: &PreflightMap<'_>,
+) -> Result<()> {
     for (position, observation) in observations.iter().enumerate() {
         for event in &observation.events {
-            if let Some(request) = event.collect_simple_record("hostcall-request-v1", None) {
-                let arity = request.fields_iter().count();
-                if arity != 9 && arity != 11 && arity != 15 {
-                    return Err(MoltenError::invalid_harness(format!(
-                        "hostcall request at observation {position} must have arity 9, 11, or 15, got {arity}"
-                    )));
-                }
-                let admission_request = parse_admission_request(&request[4])?;
-                let preflight: &&ExecutorPreflightEvidence =
-                    by_actor.get(admission_request.actor.as_str()).ok_or_else(|| {
-                        MoltenError::invalid_harness(format!(
-                            "hostcall request at observation {position} has no executor preflight for actor {}",
-                            admission_request.actor
-                        ))
-                    })?;
-                let preflight = *preflight;
-                let allowed_hostcalls: &[String] = preflight.allowed_hostcalls.as_slice();
-                let operation = admission_request.action.as_str();
-                if !allowed_hostcalls.iter().any(|allowed| allowed.as_str() == operation) {
-                    return Err(MoltenError::invalid_harness(format!(
-                        "hostcall operation {operation} at observation {position} is not allowed by executor preflight for actor {}",
-                        admission_request.actor
-                    )));
-                }
-            }
+            validate_hostcall_preflight_event(position, event, by_actor)?;
         }
+    }
+    Ok(())
+}
+
+fn validate_hostcall_preflight_event(position: usize, event: &IOValue, by_actor: &PreflightMap<'_>) -> Result<()> {
+    let Some(request) = event.collect_simple_record("hostcall-request-v1", None) else {
+        return Ok(());
+    };
+    let arity = request.fields_iter().count();
+    if arity != 9 && arity != 11 && arity != 15 {
+        return Err(MoltenError::invalid_harness(format!(
+            "hostcall request at observation {position} must have arity 9, 11, or 15, got {arity}"
+        )));
+    }
+    let admission_request = parse_admission_request(&request[4])?;
+    let Some(preflight) = by_actor.get(admission_request.actor.as_str()) else {
+        return Err(MoltenError::invalid_harness(format!(
+            "hostcall request at observation {position} has no executor preflight for actor {}",
+            admission_request.actor
+        )));
+    };
+    let allowed_hostcalls = preflight.allowed_hostcalls.as_slice();
+    let operation = admission_request.action.as_str();
+    if !allowed_hostcalls.iter().any(|allowed| allowed.as_str() == operation) {
+        return Err(MoltenError::invalid_harness(format!(
+            "hostcall operation {operation} at observation {position} is not allowed by executor preflight for actor {}",
+            admission_request.actor
+        )));
     }
     Ok(())
 }
@@ -4823,132 +4846,16 @@ fn validate_actor_executor_preflight(actor: &ActorDecl, preflight: &ExecutorPref
         )));
     }
     match (&actor.kind, &actor.executor) {
-        (ActorKind::Native, None) => {
-            if preflight.artifact_ref.is_some() || !preflight.executor_receipts.is_empty() {
-                return Err(MoltenError::invalid_harness(format!(
-                    "native executor preflight for actor {} must not carry artifact or review receipts",
-                    actor.id
-                )));
-            }
-            require_executor_preflight_check(&preflight.checks, "native-local-executor")
-        }
+        (ActorKind::Native, None) => validate_native_preflight(actor, preflight),
         (ActorKind::Steel, Some(ActorExecutorConfig::Steel(config))) => {
-            require_executor_preflight_check(&preflight.checks, "steel-source-ref-binding")?;
-            require_executor_preflight_check(&preflight.checks, "steel-callable-review")?;
-            require_executor_preflight_check(&preflight.checks, "steel-hostcall-contract")?;
-            let source_ref = steel_source_ref(config)?;
-            if preflight.artifact_ref.as_deref() != Some(source_ref.as_str()) {
-                return Err(MoltenError::invalid_harness(format!(
-                    "Steel executor preflight source ref mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            let review = preflight.steel_review.as_ref().ok_or_else(|| {
-                MoltenError::invalid_harness(format!(
-                    "Steel executor preflight missing review receipt for actor {}",
-                    actor.id
-                ))
-            })?;
-            if review.source_ref != source_ref {
-                return Err(MoltenError::invalid_harness(format!(
-                    "Steel review receipt source ref mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            if review.callable != config.callable {
-                return Err(MoltenError::invalid_harness(format!(
-                    "Steel review receipt callable mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            if review.allowed_hostcalls != config.allowed_hostcalls
-                || preflight.allowed_hostcalls != config.allowed_hostcalls
-            {
-                return Err(MoltenError::invalid_harness(format!(
-                    "Steel review receipt allowed hostcalls mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            Ok(())
+            validate_steel_preflight(actor, preflight, config)
         }
-        (ActorKind::Wasm, Some(ActorExecutorConfig::Wasm(config))) => {
-            require_executor_preflight_check(&preflight.checks, "wasm-module-ref-binding")?;
-            require_executor_preflight_check(&preflight.checks, "wasmparser-inspection")?;
-            require_executor_preflight_check(&preflight.checks, "wasm-deny-by-default-wasi")?;
-            require_executor_preflight_check(&preflight.checks, "wasm-hostcall-contract")?;
-            require_executor_preflight_check(&preflight.checks, "wit-interface-binding")?;
-            let module_ref = wasm_module_ref(config)?;
-            if preflight.artifact_ref.as_deref() != Some(module_ref.as_str()) {
-                return Err(MoltenError::invalid_harness(format!(
-                    "Wasm executor preflight module ref mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            let inspection = preflight.wasm_inspection.as_ref().ok_or_else(|| {
-                MoltenError::invalid_harness(format!(
-                    "Wasm executor preflight missing inspection receipt for actor {}",
-                    actor.id
-                ))
-            })?;
-            if inspection.module_ref != module_ref {
-                return Err(MoltenError::invalid_harness(format!(
-                    "Wasm inspection receipt module ref mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            if inspection.wit_ref != wasm_wit_ref(config)? {
-                return Err(MoltenError::invalid_harness(format!(
-                    "Wasm inspection receipt WIT ref mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            if inspection.allowed_hostcalls != config.allowed_hostcalls
-                || preflight.allowed_hostcalls != config.allowed_hostcalls
-            {
-                return Err(MoltenError::invalid_harness(format!(
-                    "Wasm inspection receipt allowed hostcalls mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            validate_wasm_imports(&actor.id, &inspection.imports, &config.allowed_hostcalls)
-        }
+        (ActorKind::Wasm, Some(ActorExecutorConfig::Wasm(config))) => validate_wasm_preflight(actor, preflight, config),
         (ActorKind::Adapter, Some(ActorExecutorConfig::Adapter(config))) => {
-            require_executor_preflight_check(&preflight.checks, "adapter-manifest-binding")?;
-            require_executor_preflight_check(&preflight.checks, "adapter-permission-binding")?;
-            require_executor_preflight_check(&preflight.checks, "adapter-transcript-replay")?;
-            let manifest_ref = adapter_manifest_ref(config)?;
-            if preflight.artifact_ref.as_deref() != Some(manifest_ref.as_str()) {
-                return Err(MoltenError::invalid_harness(format!(
-                    "adapter executor preflight manifest ref mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            if preflight.allowed_hostcalls != config.allowed_hostcalls {
-                return Err(MoltenError::invalid_harness(format!(
-                    "adapter executor preflight allowed hostcalls mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            Ok(())
+            validate_adapter_preflight(actor, preflight, config)
         }
         (ActorKind::RemoteProxy, Some(ActorExecutorConfig::RemoteProxy(config))) => {
-            require_executor_preflight_check(&preflight.checks, "remote-peer-binding")?;
-            require_executor_preflight_check(&preflight.checks, "remote-contract-binding")?;
-            require_executor_preflight_check(&preflight.checks, "remote-transcript-replay")?;
-            let endpoint_ref = remote_proxy_endpoint_ref(config)?;
-            if preflight.artifact_ref.as_deref() != Some(endpoint_ref.as_str()) {
-                return Err(MoltenError::invalid_harness(format!(
-                    "remote-proxy executor preflight endpoint ref mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            if preflight.allowed_hostcalls != config.allowed_hostcalls {
-                return Err(MoltenError::invalid_harness(format!(
-                    "remote-proxy executor preflight allowed hostcalls mismatch for actor {}",
-                    actor.id
-                )));
-            }
-            Ok(())
+            validate_remote_preflight(actor, preflight, config)
         }
         (ActorKind::Steel, None) => Err(MoltenError::invalid_harness(format!(
             "steel actor {} missing reviewed Steel executor preflight fixture",
@@ -4972,6 +4879,149 @@ fn validate_actor_executor_preflight(actor: &ActorDecl, preflight: &ExecutorPref
             actor.id
         ))),
     }
+}
+
+fn validate_native_preflight(actor: &ActorDecl, preflight: &ExecutorPreflightEvidence) -> Result<()> {
+    if preflight.artifact_ref.is_some() || !preflight.executor_receipts.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "native executor preflight for actor {} must not carry artifact or review receipts",
+            actor.id
+        )));
+    }
+    require_executor_preflight_check(&preflight.checks, "native-local-executor")
+}
+
+fn validate_steel_preflight(
+    actor: &ActorDecl,
+    preflight: &ExecutorPreflightEvidence,
+    config: &SteelExecutorConfig,
+) -> Result<()> {
+    require_executor_preflight_check(&preflight.checks, "steel-source-ref-binding")?;
+    require_executor_preflight_check(&preflight.checks, "steel-callable-review")?;
+    require_executor_preflight_check(&preflight.checks, "steel-hostcall-contract")?;
+    let source_ref = steel_source_ref(config)?;
+    if preflight.artifact_ref.as_deref() != Some(source_ref.as_str()) {
+        return Err(MoltenError::invalid_harness(format!(
+            "Steel executor preflight source ref mismatch for actor {}",
+            actor.id
+        )));
+    }
+    let review = preflight.steel_review.as_ref().ok_or_else(|| {
+        MoltenError::invalid_harness(format!("Steel executor preflight missing review receipt for actor {}", actor.id))
+    })?;
+    if review.source_ref != source_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "Steel review receipt source ref mismatch for actor {}",
+            actor.id
+        )));
+    }
+    if review.callable != config.callable {
+        return Err(MoltenError::invalid_harness(format!(
+            "Steel review receipt callable mismatch for actor {}",
+            actor.id
+        )));
+    }
+    if review.allowed_hostcalls != config.allowed_hostcalls || preflight.allowed_hostcalls != config.allowed_hostcalls {
+        return Err(MoltenError::invalid_harness(format!(
+            "Steel review receipt allowed hostcalls mismatch for actor {}",
+            actor.id
+        )));
+    }
+    Ok(())
+}
+
+fn validate_wasm_preflight(
+    actor: &ActorDecl,
+    preflight: &ExecutorPreflightEvidence,
+    config: &WasmExecutorConfig,
+) -> Result<()> {
+    require_executor_preflight_check(&preflight.checks, "wasm-module-ref-binding")?;
+    require_executor_preflight_check(&preflight.checks, "wasmparser-inspection")?;
+    require_executor_preflight_check(&preflight.checks, "wasm-deny-by-default-wasi")?;
+    require_executor_preflight_check(&preflight.checks, "wasm-hostcall-contract")?;
+    require_executor_preflight_check(&preflight.checks, "wit-interface-binding")?;
+    let module_ref = wasm_module_ref(config)?;
+    if preflight.artifact_ref.as_deref() != Some(module_ref.as_str()) {
+        return Err(MoltenError::invalid_harness(format!(
+            "Wasm executor preflight module ref mismatch for actor {}",
+            actor.id
+        )));
+    }
+    let inspection = preflight.wasm_inspection.as_ref().ok_or_else(|| {
+        MoltenError::invalid_harness(format!(
+            "Wasm executor preflight missing inspection receipt for actor {}",
+            actor.id
+        ))
+    })?;
+    if inspection.module_ref != module_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "Wasm inspection receipt module ref mismatch for actor {}",
+            actor.id
+        )));
+    }
+    if inspection.wit_ref != wasm_wit_ref(config)? {
+        return Err(MoltenError::invalid_harness(format!(
+            "Wasm inspection receipt WIT ref mismatch for actor {}",
+            actor.id
+        )));
+    }
+    if inspection.allowed_hostcalls != config.allowed_hostcalls
+        || preflight.allowed_hostcalls != config.allowed_hostcalls
+    {
+        return Err(MoltenError::invalid_harness(format!(
+            "Wasm inspection receipt allowed hostcalls mismatch for actor {}",
+            actor.id
+        )));
+    }
+    validate_wasm_imports(&actor.id, &inspection.imports, &config.allowed_hostcalls)
+}
+
+fn validate_adapter_preflight(
+    actor: &ActorDecl,
+    preflight: &ExecutorPreflightEvidence,
+    config: &AdapterExecutorConfig,
+) -> Result<()> {
+    require_executor_preflight_check(&preflight.checks, "adapter-manifest-binding")?;
+    require_executor_preflight_check(&preflight.checks, "adapter-permission-binding")?;
+    require_executor_preflight_check(&preflight.checks, "adapter-transcript-replay")?;
+    let manifest_ref = adapter_manifest_ref(config)?;
+    if preflight.artifact_ref.as_deref() != Some(manifest_ref.as_str()) {
+        return Err(MoltenError::invalid_harness(format!(
+            "adapter executor preflight manifest ref mismatch for actor {}",
+            actor.id
+        )));
+    }
+    if preflight.allowed_hostcalls != config.allowed_hostcalls {
+        return Err(MoltenError::invalid_harness(format!(
+            "adapter executor preflight allowed hostcalls mismatch for actor {}",
+            actor.id
+        )));
+    }
+    Ok(())
+}
+
+fn validate_remote_preflight(
+    actor: &ActorDecl,
+    preflight: &ExecutorPreflightEvidence,
+    config: &RemoteProxyExecutorConfig,
+) -> Result<()> {
+    require_executor_preflight_check(&preflight.checks, "remote-peer-binding")?;
+    require_executor_preflight_check(&preflight.checks, "remote-contract-binding")?;
+    require_executor_preflight_check(&preflight.checks, "remote-transcript-replay")?;
+    let endpoint_ref = remote_proxy_endpoint_ref(config)?;
+    if preflight.artifact_ref.as_deref() != Some(endpoint_ref.as_str()) {
+        return Err(MoltenError::invalid_harness(format!(
+            "remote-proxy executor preflight endpoint ref mismatch for actor {}",
+            actor.id
+        )));
+    }
+    if preflight.allowed_hostcalls != config.allowed_hostcalls {
+        return Err(MoltenError::invalid_harness(format!(
+            "remote-proxy executor preflight allowed hostcalls mismatch for actor {}",
+            actor.id
+        )));
+    }
+    Ok(())
 }
 
 fn parse_optional_steel_review_receipt(receipts: &[IOValue]) -> Result<Option<SteelReviewReceipt>> {
