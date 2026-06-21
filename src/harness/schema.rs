@@ -502,6 +502,95 @@ pub struct HostcallEvidenceContext<'a> {
     pub budget_ref: &'a str,
 }
 
+struct SuiteFixtures {
+    budget: HarnessBudget,
+    has_budget_fixture: bool,
+    actors: Option<Vec<ActorDecl>>,
+    has_actor_fixture: bool,
+    capabilities: CapabilityContext,
+    has_capability_fixture: bool,
+    policy: AdmissionPolicy,
+    has_policy_fixture: bool,
+}
+
+enum SuiteFieldStatus {
+    Applied,
+    Unknown,
+}
+
+impl Default for SuiteFixtures {
+    fn default() -> Self {
+        Self {
+            budget: HarnessBudget::default(),
+            has_budget_fixture: false,
+            actors: None,
+            has_actor_fixture: false,
+            capabilities: CapabilityContext::default(),
+            has_capability_fixture: false,
+            policy: AdmissionPolicy::default(),
+            has_policy_fixture: false,
+        }
+    }
+}
+
+impl SuiteFixtures {
+    fn apply_field(&mut self, field: &Value<IOValue>) -> Result<SuiteFieldStatus> {
+        if value_has_record_label(field, "budget-v1") {
+            self.apply_budget(field)?;
+            return Ok(SuiteFieldStatus::Applied);
+        }
+        if value_has_record_label(field, "actor-registry-v1") {
+            self.apply_actors(field)?;
+            return Ok(SuiteFieldStatus::Applied);
+        }
+        if value_has_record_label(field, "capabilities-v1") {
+            self.apply_capabilities(field)?;
+            return Ok(SuiteFieldStatus::Applied);
+        }
+        if value_has_record_label(field, "policy-v1") {
+            self.apply_policy(field)?;
+            return Ok(SuiteFieldStatus::Applied);
+        }
+        Ok(SuiteFieldStatus::Unknown)
+    }
+
+    fn apply_budget(&mut self, field: &Value<IOValue>) -> Result<()> {
+        if self.has_budget_fixture {
+            return Err(MoltenError::invalid_harness("duplicate suite budget fixture"));
+        }
+        self.budget = parse_budget_limits(&value_to_iovalue(field))?;
+        self.has_budget_fixture = true;
+        Ok(())
+    }
+
+    fn apply_actors(&mut self, field: &Value<IOValue>) -> Result<()> {
+        if self.actors.is_some() {
+            return Err(MoltenError::invalid_harness("duplicate suite actor registry fixture"));
+        }
+        self.actors = Some(parse_actor_registry(&value_to_iovalue(field))?);
+        self.has_actor_fixture = true;
+        Ok(())
+    }
+
+    fn apply_capabilities(&mut self, field: &Value<IOValue>) -> Result<()> {
+        if self.has_capability_fixture {
+            return Err(MoltenError::invalid_harness("duplicate suite capability fixture"));
+        }
+        self.capabilities = parse_capabilities(&value_to_iovalue(field))?;
+        self.has_capability_fixture = true;
+        Ok(())
+    }
+
+    fn apply_policy(&mut self, field: &Value<IOValue>) -> Result<()> {
+        if self.has_policy_fixture {
+            return Err(MoltenError::invalid_harness("duplicate suite policy fixture"));
+        }
+        self.policy = parse_policy(&value_to_iovalue(field))?;
+        self.has_policy_fixture = true;
+        Ok(())
+    }
+}
+
 pub fn parse_suite(value: &IOValue) -> Result<HarnessSuite> {
     let suite = value
         .collect_simple_record("harness-suite-v1", None)
@@ -520,79 +609,42 @@ pub fn parse_suite(value: &IOValue) -> Result<HarnessSuite> {
     }
     let name = required_string(&suite[1], "suite name")?;
     let seed = required_u64(&suite[2], "suite seed")?;
-
-    let mut cursor = 3;
-    let mut budget = HarnessBudget::default();
-    let mut has_budget_fixture = false;
-    let mut actors = None;
-    let mut has_actor_fixture = false;
-    let mut capabilities = CapabilityContext::default();
-    let mut has_capability_fixture = false;
-    let mut policy = AdmissionPolicy::default();
-    let mut has_policy_fixture = false;
-
-    while cursor < arity - 1 {
-        let field = &suite[cursor];
-        if value_has_record_label(field, "budget-v1") {
-            if has_budget_fixture {
-                return Err(MoltenError::invalid_harness("duplicate suite budget fixture"));
-            }
-            budget = parse_budget_limits(&value_to_iovalue(field))?;
-            has_budget_fixture = true;
-            cursor += 1;
-            continue;
-        }
-        if value_has_record_label(field, "actor-registry-v1") {
-            if actors.is_some() {
-                return Err(MoltenError::invalid_harness("duplicate suite actor registry fixture"));
-            }
-            actors = Some(parse_actor_registry(&value_to_iovalue(field))?);
-            has_actor_fixture = true;
-            cursor += 1;
-            continue;
-        }
-        if value_has_record_label(field, "capabilities-v1") {
-            if has_capability_fixture {
-                return Err(MoltenError::invalid_harness("duplicate suite capability fixture"));
-            }
-            capabilities = parse_capabilities(&value_to_iovalue(field))?;
-            has_capability_fixture = true;
-            cursor += 1;
-            continue;
-        }
-        if value_has_record_label(field, "policy-v1") {
-            if has_policy_fixture {
-                return Err(MoltenError::invalid_harness("duplicate suite policy fixture"));
-            }
-            policy = parse_policy(&value_to_iovalue(field))?;
-            has_policy_fixture = true;
-            cursor += 1;
-            continue;
-        }
-        return Err(MoltenError::invalid_harness(
-            "unexpected suite field before steps; expected optional budget, actor registry, capabilities, policy, then steps",
-        ));
-    }
-
+    let (cursor, fixtures) = suite_fixtures(&suite, arity)?;
     let step_values = required_sequence(&suite[cursor], "suite steps")?;
     let mut steps = Vec::with_capacity(step_values.len());
     for step in step_values.iter() {
         steps.push(parse_step(&step)?);
     }
-    let actors = actors.unwrap_or_else(|| infer_actor_registry(&steps));
+    let actors = fixtures.actors.unwrap_or_else(|| infer_actor_registry(&steps));
     Ok(HarnessSuite {
         name,
         seed,
-        budget,
-        budget_explicit: has_budget_fixture,
+        budget: fixtures.budget,
+        budget_explicit: fixtures.has_budget_fixture,
         actors,
-        actors_explicit: has_actor_fixture,
-        capabilities,
-        capabilities_explicit: has_capability_fixture,
-        policy,
+        actors_explicit: fixtures.has_actor_fixture,
+        capabilities: fixtures.capabilities,
+        capabilities_explicit: fixtures.has_capability_fixture,
+        policy: fixtures.policy,
         steps,
         source_value: value.clone(),
     })
+}
+
+fn suite_fixtures(suite: &Record<Value<IOValue>>, arity: usize) -> Result<(usize, SuiteFixtures)> {
+    let mut cursor = 3;
+    let mut fixtures = SuiteFixtures::default();
+    while cursor < arity - 1 {
+        match fixtures.apply_field(&suite[cursor])? {
+            SuiteFieldStatus::Applied => cursor += 1,
+            SuiteFieldStatus::Unknown => {
+                return Err(MoltenError::invalid_harness(
+                    "unexpected suite field before steps; expected optional budget, actor registry, capabilities, policy, then steps",
+                ));
+            }
+        }
+    }
+    Ok((cursor, fixtures))
 }
 
 pub fn suite_ref(suite: &HarnessSuite) -> Result<String> {
