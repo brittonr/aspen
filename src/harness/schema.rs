@@ -6468,64 +6468,102 @@ pub fn actor_ids_for_step(step: &CoreStep) -> Vec<&str> {
 }
 
 fn actor_ids_for_event(event: &IOValue) -> Result<Vec<String>> {
+    if let Some(actors) = message_participants(event)? {
+        return Ok(actors);
+    }
+    if let Some(actors) = assertion_participants(event)? {
+        return Ok(actors);
+    }
+    if let Some(actors) = effect_participants(event)? {
+        return Ok(actors);
+    }
+    if let Some(actors) = decision_participants(event)? {
+        return Ok(actors);
+    }
+    if let Some(actors) = boundary_participants(event)? {
+        return Ok(actors);
+    }
+    if let Some(actors) = receipt_participants(event)? {
+        return Ok(actors);
+    }
+    Ok(Vec::new())
+}
+
+fn message_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     if let Some(message) = event.collect_simple_record("message-delivered", Some(3)) {
-        return Ok(vec![
+        return Ok(Some(vec![
             required_string(&message[0], "message sender")?,
             required_string(&message[1], "message recipient")?,
-        ]);
+        ]));
     }
     if let Some(observe) = event.collect_simple_record("observe-registered", Some(2)) {
-        return Ok(vec![required_string(&observe[0], "observer actor")?]);
+        return Ok(Some(vec![required_string(&observe[0], "observer actor")?]));
     }
+    Ok(None)
+}
+
+fn assertion_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     if let Some(observed) = event.collect_simple_record("assertion-observed", Some(3)) {
-        return Ok(vec![
+        return Ok(Some(vec![
             required_string(&observed[0], "assertion observer")?,
             required_string(&observed[1], "assertion owner")?,
-        ]);
+        ]));
     }
     if let Some(assertion) = event.collect_simple_record("assertion-committed", Some(2)) {
-        return Ok(vec![required_string(&assertion[0], "assertion actor")?]);
+        return Ok(Some(vec![required_string(&assertion[0], "assertion actor")?]));
     }
     if let Some(retraction) = event.collect_simple_record("assertion-retracted", Some(2)) {
-        return Ok(vec![required_string(&retraction[0], "retraction actor")?]);
+        return Ok(Some(vec![required_string(&retraction[0], "retraction actor")?]));
     }
     if let Some(observed) = event.collect_simple_record("assertion-retraction-observed", Some(3)) {
-        return Ok(vec![
+        return Ok(Some(vec![
             required_string(&observed[0], "assertion retraction observer")?,
             required_string(&observed[1], "assertion retraction owner")?,
-        ]);
+        ]));
     }
+    Ok(None)
+}
+
+fn effect_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     if let Some(request) = event.collect_simple_record("effect-request", None) {
         let arity = request.fields_iter().count();
         if arity != 3 && arity != 4 {
             return Err(MoltenError::invalid_harness(format!("effect-request arity must be 3 or 4, got {arity}")));
         }
-        return Ok(vec![required_string(&request[1], "effect request actor")?]);
+        return Ok(Some(vec![required_string(&request[1], "effect request actor")?]));
     }
     if let Some(response) = event.collect_simple_record("effect-response", None) {
         let arity = response.fields_iter().count();
         if arity != 4 && arity != 5 {
             return Err(MoltenError::invalid_harness(format!("effect-response arity must be 4 or 5, got {arity}")));
         }
-        return Ok(vec![required_string(&response[1], "effect response actor")?]);
+        return Ok(Some(vec![required_string(&response[1], "effect response actor")?]));
     }
     if let Some(rollback) = event.collect_simple_record("turn-rolled-back", Some(2)) {
-        return Ok(vec![required_string(&rollback[0], "rollback actor")?]);
+        return Ok(Some(vec![required_string(&rollback[0], "rollback actor")?]));
     }
-    if event.collect_simple_record("admission-decision-v1", None).is_some() {
-        let decision = parse_admission_decision_event(event)?;
-        let mut actors = vec![decision.request.actor];
-        if matches!(&decision.request.action, AdmissionAction::Send)
-            && let Some(target) = decision.request.target
-        {
-            actors.push(target);
-        }
-        return Ok(actors);
+    Ok(None)
+}
+
+fn decision_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
+    if event.collect_simple_record("admission-decision-v1", None).is_none() {
+        return Ok(None);
     }
+    let decision = parse_admission_decision_event(event)?;
+    let mut actors = vec![decision.request.actor];
+    if matches!(&decision.request.action, AdmissionAction::Send)
+        && let Some(target) = decision.request.target
+    {
+        actors.push(target);
+    }
+    Ok(Some(actors))
+}
+
+fn boundary_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     if let Some(input) = event.collect_simple_record("actor-input-v1", Some(9)) {
         let actor_value = value_to_iovalue(&input[1]);
         let actor = simple_record(&actor_value, "actor", 2)?;
-        return Ok(vec![required_string(&actor[0], "actor input actor")?]);
+        return Ok(Some(vec![required_string(&actor[0], "actor input actor")?]));
     }
     if let Some(request) = event.collect_simple_record("hostcall-request-v1", None) {
         let arity = request.fields_iter().count();
@@ -6541,18 +6579,22 @@ fn actor_ids_for_event(event: &IOValue) -> Result<Vec<String>> {
         {
             actors.push(target);
         }
-        return Ok(actors);
+        return Ok(Some(actors));
     }
     if let Some(output) = event.collect_simple_record("actor-output-v1", Some(8)) {
-        return Ok(vec![required_record_string(&output[1], "actor", "actor output actor")?]);
+        return Ok(Some(vec![required_record_string(&output[1], "actor", "actor output actor")?]));
     }
+    Ok(None)
+}
+
+fn receipt_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     if let Some(receipt) = event.collect_simple_record("steel-execution-receipt-v1", None) {
-        return Ok(vec![required_record_string(&receipt[1], "actor", "Steel execution actor")?]);
+        return Ok(Some(vec![required_record_string(&receipt[1], "actor", "Steel execution actor")?]));
     }
     if let Some(receipt) = event.collect_simple_record("wasm-execution-receipt-v1", None) {
-        return Ok(vec![required_record_string(&receipt[1], "actor", "Wasm execution actor")?]);
+        return Ok(Some(vec![required_record_string(&receipt[1], "actor", "Wasm execution actor")?]));
     }
-    Ok(Vec::new())
+    Ok(None)
 }
 
 fn require_declared_actor(
