@@ -1332,89 +1332,120 @@ mod tests {
     }
 
     fn retention_gc_audit_fixture(root: &Path, label: &str, subsystem: &str) -> RetentionGcAuditFixture {
-        let requester_ref = test_ref(&format!("{label}-requester"));
-        let object_ref = test_ref(&format!("{label}-object"));
-        let object_kind = "chunk";
-        let retention_class = crate::retention::CLASS_DURABLE_VALUE;
-        let action = crate::retention::ACTION_DELETE;
-        let store_admission = |kind: &str, suffix: &str| -> String {
-            crate::retention::store_retention_evidence_admission(
-                root,
-                &crate::retention::RetentionEvidenceAdmissionInput {
-                    kind,
-                    decision: "pass",
-                    requester_ref: &requester_ref,
-                    object_ref: &object_ref,
-                    object_kind,
-                    retention_class,
-                    action,
-                    bound_refs: &[test_ref(&format!("{label}-{suffix}"))],
-                    retained_refs: &[],
-                    remote_refs: &[],
-                    is_reference_index_complete: true,
-                    is_current: true,
-                    revoked_refs: &[],
-                    diagnostics: &[],
-                },
-            )
-            .expect("store retention GC catalog MCP admission")
-            .admission_ref
-        };
-        let evidence = crate::retention::DestructiveRetentionEvidence {
-            requester_ref: Some(requester_ref.clone()),
-            policy_refs: vec![store_admission(crate::retention::ADMISSION_KIND_POLICY, "policy")],
-            authority_refs: vec![store_admission(crate::retention::ADMISSION_KIND_AUTHORITY, "authority")],
-            evidence_refs: vec![store_admission(
+        let seed = make_seed(root, label, subsystem);
+        let evidence = seed_evidence(&seed);
+        let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
+            root: seed.root,
+            subsystem: seed.subsystem,
+            object_ref: &seed.object_ref,
+            object_kind: seed.object_kind,
+            retention_class: seed.retention_class,
+            action: seed.action,
+            evidence: &evidence,
+        })
+        .expect("store retention GC catalog MCP plan");
+        let apply = crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
+            root: seed.root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply retention GC catalog MCP plan");
+        let execution =
+            crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
+                root: seed.root,
+                subsystem: seed.subsystem,
+                action: seed.action,
+                object_ref: &seed.object_ref,
+                object_kind: seed.object_kind,
+                retention_class: seed.retention_class,
+                apply_ref: Some(&apply.apply_ref),
+            })
+            .expect("store retention GC catalog MCP execution");
+        let audit = crate::retention::audit_retention_gc_execution(crate::retention::RetentionGcAuditInput {
+            root: seed.root,
+            execution_ref: &execution.execution_ref,
+        })
+        .expect("audit retention GC catalog MCP execution");
+        RetentionGcAuditFixture {
+            object_ref: seed.object_ref,
+            execution_ref: execution.execution_ref,
+            audit,
+        }
+    }
+
+    struct GcSeed<'a> {
+        root: &'a Path,
+        label: &'a str,
+        subsystem: &'a str,
+        requester_ref: String,
+        object_ref: String,
+        object_kind: &'static str,
+        retention_class: &'static str,
+        action: &'static str,
+    }
+
+    fn make_seed<'a>(root: &'a Path, label: &'a str, subsystem: &'a str) -> GcSeed<'a> {
+        GcSeed {
+            root,
+            label,
+            subsystem,
+            requester_ref: test_ref(&format!("{label}-requester")),
+            object_ref: test_ref(&format!("{label}-object")),
+            object_kind: "chunk",
+            retention_class: crate::retention::CLASS_DURABLE_VALUE,
+            action: crate::retention::ACTION_DELETE,
+        }
+    }
+
+    fn seed_evidence(seed: &GcSeed<'_>) -> crate::retention::DestructiveRetentionEvidence {
+        crate::retention::DestructiveRetentionEvidence {
+            requester_ref: Some(seed.requester_ref.clone()),
+            policy_refs: vec![seed_admission(seed, crate::retention::ADMISSION_KIND_POLICY, "policy")],
+            authority_refs: vec![seed_admission(
+                seed,
+                crate::retention::ADMISSION_KIND_AUTHORITY,
+                "authority",
+            )],
+            evidence_refs: vec![seed_admission(
+                seed,
                 crate::retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
                 "support",
             )],
             retained_refs: Vec::new(),
             remote_peer_refs: Vec::new(),
             remote_refs: Vec::new(),
-            reference_index_refs: vec![store_admission(
+            reference_index_refs: vec![seed_admission(
+                seed,
                 crate::retention::ADMISSION_KIND_REFERENCE_INDEX,
                 "index",
             )],
             remote_gc_refs: Vec::new(),
             remote_clearance_refs: Vec::new(),
             is_reference_index_complete: true,
-        };
-        let plan = crate::retention::store_retention_gc_plan(crate::retention::RetentionGcPlanInput {
-            root,
-            subsystem,
-            object_ref: &object_ref,
-            object_kind,
-            retention_class,
-            action,
-            evidence: &evidence,
-        })
-        .expect("store retention GC catalog MCP plan");
-        let apply = crate::retention::apply_retention_gc_plan(crate::retention::RetentionGcApplyFromPlanInput {
-            root,
-            plan_ref: &plan.plan_ref,
-        })
-        .expect("apply retention GC catalog MCP plan");
-        let execution =
-            crate::retention::store_retention_gc_execution_gate(crate::retention::RetentionGcExecutionGateInput {
-                root,
-                subsystem,
-                action,
-                object_ref: &object_ref,
-                object_kind,
-                retention_class,
-                apply_ref: Some(&apply.apply_ref),
-            })
-            .expect("store retention GC catalog MCP execution");
-        let audit = crate::retention::audit_retention_gc_execution(crate::retention::RetentionGcAuditInput {
-            root,
-            execution_ref: &execution.execution_ref,
-        })
-        .expect("audit retention GC catalog MCP execution");
-        RetentionGcAuditFixture {
-            object_ref,
-            execution_ref: execution.execution_ref,
-            audit,
         }
+    }
+
+    fn seed_admission(seed: &GcSeed<'_>, kind: &str, suffix: &str) -> String {
+        crate::retention::store_retention_evidence_admission(
+            seed.root,
+            &crate::retention::RetentionEvidenceAdmissionInput {
+                kind,
+                decision: "pass",
+                requester_ref: &seed.requester_ref,
+                object_ref: &seed.object_ref,
+                object_kind: seed.object_kind,
+                retention_class: seed.retention_class,
+                action: seed.action,
+                bound_refs: &[test_ref(&format!("{}-{suffix}", seed.label))],
+                retained_refs: &[],
+                remote_refs: &[],
+                is_reference_index_complete: true,
+                is_current: true,
+                revoked_refs: &[],
+                diagnostics: &[],
+            },
+        )
+        .expect("store retention GC catalog MCP admission")
+        .admission_ref
     }
 
     fn install_fixture(
