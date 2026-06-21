@@ -456,96 +456,157 @@ pub fn index_replay_evidence(inputs: &[ReplayIndexInput]) -> Result<ReplayIndexR
             "replay index input count exceeds {MAX_REPLAY_INDEX_INPUTS}"
         )));
     }
-    let mut diagnostics = Vec::with_capacity(inputs.len());
-    let mut parsed_receipts = Vec::with_capacity(inputs.len());
-    let mut parsed_rollups = Vec::with_capacity(inputs.len());
-    for input in inputs {
-        let actual_ref = canonical_hash(&input.value)?;
-        if let Some(expected_ref) = input.expected_ref.as_deref() {
-            validate_content_ref(expected_ref)?;
-            if expected_ref != actual_ref {
-                diagnostics.push(format!("replay index ref mismatch expected={expected_ref} actual={actual_ref}"));
-                continue;
-            }
-        }
-        if let Ok(parsed) = parse_replay_verify_receipt(&input.value, &actual_ref) {
-            parsed_receipts.push(parsed);
-        } else if let Ok(parsed) = parse_replay_rollup_receipt(&input.value, &actual_ref) {
-            parsed_rollups.push(parsed);
-        } else {
-            diagnostics.push(format!("replay index input {actual_ref} is neither verify receipt nor rollup"));
-        }
-    }
-
-    let mut receipt_refs = BTreeSet::new();
-    let mut rollup_refs = BTreeSet::new();
-    let mut first_divergence_refs = BTreeSet::new();
-    let mut report_refs = BTreeSet::new();
-    let mut final_state_refs = BTreeSet::new();
-    let mut divergence_counts = BTreeMap::<String, u64>::new();
-    let mut pass_count = 0_u64;
-    let mut deny_count = 0_u64;
-    for parsed in &parsed_receipts {
-        receipt_refs.insert(parsed.receipt_ref.clone());
-        *divergence_counts.entry(parsed.divergence.clone()).or_insert(0) += 1;
-        if parsed.decision == "pass" {
-            pass_count += 1;
-        } else {
-            deny_count += 1;
-        }
-        if let Some(reference) = &parsed.first_divergence_ref {
-            first_divergence_refs.insert(reference.clone());
-        }
-        report_refs.extend(parsed.report_refs.iter().cloned());
-        final_state_refs.extend(parsed.final_state_refs.iter().cloned());
-    }
-    for parsed in &parsed_rollups {
-        rollup_refs.insert(parsed.rollup_ref.clone());
-        receipt_refs.extend(parsed.receipt_refs.iter().cloned());
-        first_divergence_refs.extend(parsed.first_divergence_refs.iter().cloned());
-        merge_divergence_counts(&mut divergence_counts, &parsed.divergence_counts);
-        pass_count += parsed.pass_count;
-        deny_count += parsed.deny_count;
-        if parsed.decision == "deny" && parsed.deny_count == 0 {
-            diagnostics.push(format!("replay rollup {} denied without denied receipt count", parsed.rollup_ref));
-        }
-    }
-    let raw_receipt_count = parsed_receipts.len() as u64;
-    let rollup_count = parsed_rollups.len() as u64;
-    let total_count = raw_receipt_count + parsed_rollups.iter().map(|rollup| rollup.total_count).sum::<u64>();
-    let decision = if diagnostics.is_empty() && deny_count == 0 {
+    let parsed = collect_index_inputs(inputs)?;
+    let mut diagnostics = parsed.diagnostics;
+    diagnostics.extend(rollup_anomalies(&parsed.rollups));
+    let summary = summarize_index_inputs(&parsed.receipts, &parsed.rollups);
+    let decision = if diagnostics.is_empty() && summary.deny_count == 0 {
         "pass"
     } else {
         "deny"
     };
-    let value = record("deterministic-replay-index-v1", vec![
-        string(DETERMINISTIC_REPLAY_INDEX_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("total-count", vec![u64_value(total_count)]),
-        record("pass-count", vec![u64_value(pass_count)]),
-        record("deny-count", vec![u64_value(deny_count)]),
-        record("raw-receipt-count", vec![u64_value(raw_receipt_count)]),
-        record("rollup-count", vec![u64_value(rollup_count)]),
-        record("receipt-refs", vec![refs_value(&receipt_refs)]),
-        record("rollup-refs", vec![refs_value(&rollup_refs)]),
-        record("divergence-counts", vec![divergence_counts_value(&divergence_counts)]),
-        record("first-divergence-refs", vec![refs_value(&first_divergence_refs)]),
-        record("report-refs", vec![refs_value(&report_refs)]),
-        record("final-state-refs", vec![refs_value(&final_state_refs)]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
-        sequence(index_checks(decision, diagnostics.is_empty())),
-    ]);
+    let value = index_value(decision, &diagnostics, &summary);
     let index_ref = canonical_hash(&value)?;
     Ok(ReplayIndexReceipt {
         value,
         index_ref,
         decision: decision.to_string(),
-        total_count,
-        pass_count,
-        deny_count,
-        raw_receipt_count,
-        rollup_count,
+        total_count: summary.total_count,
+        pass_count: summary.pass_count,
+        deny_count: summary.deny_count,
+        raw_receipt_count: summary.raw_receipt_count,
+        rollup_count: summary.rollup_count,
     })
+}
+
+struct ParsedInputs {
+    diagnostics: Vec<String>,
+    receipts: Vec<ParsedReplayVerify>,
+    rollups: Vec<ParsedReplayRollup>,
+}
+
+struct IndexSummary {
+    receipt_refs: BTreeSet<String>,
+    rollup_refs: BTreeSet<String>,
+    first_divergence_refs: BTreeSet<String>,
+    report_refs: BTreeSet<String>,
+    final_state_refs: BTreeSet<String>,
+    divergence_counts: BTreeMap<String, u64>,
+    pass_count: u64,
+    deny_count: u64,
+    raw_receipt_count: u64,
+    rollup_count: u64,
+    total_count: u64,
+}
+
+fn collect_index_inputs(inputs: &[ReplayIndexInput]) -> Result<ParsedInputs> {
+    let mut diagnostics = Vec::with_capacity(inputs.len());
+    let mut receipts = Vec::with_capacity(inputs.len());
+    let mut rollups = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let actual_ref = canonical_hash(&input.value)?;
+        if let Some(diagnostic) = expected_ref_diagnostic(input.expected_ref.as_deref(), &actual_ref)? {
+            diagnostics.push(diagnostic);
+            continue;
+        }
+        if let Ok(parsed) = parse_replay_verify_receipt(&input.value, &actual_ref) {
+            receipts.push(parsed);
+        } else if let Ok(parsed) = parse_replay_rollup_receipt(&input.value, &actual_ref) {
+            rollups.push(parsed);
+        } else {
+            diagnostics.push(format!("replay index input {actual_ref} is neither verify receipt nor rollup"));
+        }
+    }
+    Ok(ParsedInputs {
+        diagnostics,
+        receipts,
+        rollups,
+    })
+}
+
+fn expected_ref_diagnostic(expected_ref: Option<&str>, actual_ref: &str) -> Result<Option<String>> {
+    let Some(expected_ref) = expected_ref else {
+        return Ok(None);
+    };
+    validate_content_ref(expected_ref)?;
+    if expected_ref == actual_ref {
+        Ok(None)
+    } else {
+        Ok(Some(format!("replay index ref mismatch expected={expected_ref} actual={actual_ref}")))
+    }
+}
+
+fn summarize_index_inputs(receipts: &[ParsedReplayVerify], rollups: &[ParsedReplayRollup]) -> IndexSummary {
+    let mut summary = empty_index_summary(receipts.len(), rollups.len());
+    for parsed in receipts {
+        summary.receipt_refs.insert(parsed.receipt_ref.clone());
+        *summary.divergence_counts.entry(parsed.divergence.clone()).or_insert(0) += 1;
+        if parsed.decision == "pass" {
+            summary.pass_count += 1;
+        } else {
+            summary.deny_count += 1;
+        }
+        if let Some(reference) = &parsed.first_divergence_ref {
+            summary.first_divergence_refs.insert(reference.clone());
+        }
+        summary.report_refs.extend(parsed.report_refs.iter().cloned());
+        summary.final_state_refs.extend(parsed.final_state_refs.iter().cloned());
+    }
+    for parsed in rollups {
+        summary.rollup_refs.insert(parsed.rollup_ref.clone());
+        summary.receipt_refs.extend(parsed.receipt_refs.iter().cloned());
+        summary.first_divergence_refs.extend(parsed.first_divergence_refs.iter().cloned());
+        merge_divergence_counts(&mut summary.divergence_counts, &parsed.divergence_counts);
+        summary.pass_count += parsed.pass_count;
+        summary.deny_count += parsed.deny_count;
+        summary.total_count += parsed.total_count;
+    }
+    summary
+}
+
+fn empty_index_summary(raw_count: usize, rollup_count: usize) -> IndexSummary {
+    let raw_receipt_count = raw_count as u64;
+    IndexSummary {
+        receipt_refs: BTreeSet::new(),
+        rollup_refs: BTreeSet::new(),
+        first_divergence_refs: BTreeSet::new(),
+        report_refs: BTreeSet::new(),
+        final_state_refs: BTreeSet::new(),
+        divergence_counts: BTreeMap::new(),
+        pass_count: 0,
+        deny_count: 0,
+        raw_receipt_count,
+        rollup_count: rollup_count as u64,
+        total_count: raw_receipt_count,
+    }
+}
+
+fn rollup_anomalies(rollups: &[ParsedReplayRollup]) -> Vec<String> {
+    rollups
+        .iter()
+        .filter(|parsed| parsed.decision == "deny" && parsed.deny_count == 0)
+        .map(|parsed| format!("replay rollup {} denied without denied receipt count", parsed.rollup_ref))
+        .collect()
+}
+
+fn index_value(decision: &str, diagnostics: &[String], summary: &IndexSummary) -> IOValue {
+    record("deterministic-replay-index-v1", vec![
+        string(DETERMINISTIC_REPLAY_INDEX_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("total-count", vec![u64_value(summary.total_count)]),
+        record("pass-count", vec![u64_value(summary.pass_count)]),
+        record("deny-count", vec![u64_value(summary.deny_count)]),
+        record("raw-receipt-count", vec![u64_value(summary.raw_receipt_count)]),
+        record("rollup-count", vec![u64_value(summary.rollup_count)]),
+        record("receipt-refs", vec![refs_value(&summary.receipt_refs)]),
+        record("rollup-refs", vec![refs_value(&summary.rollup_refs)]),
+        record("divergence-counts", vec![divergence_counts_value(&summary.divergence_counts)]),
+        record("first-divergence-refs", vec![refs_value(&summary.first_divergence_refs)]),
+        record("report-refs", vec![refs_value(&summary.report_refs)]),
+        record("final-state-refs", vec![refs_value(&summary.final_state_refs)]),
+        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        sequence(index_checks(decision, diagnostics.is_empty())),
+    ])
 }
 
 pub fn chaos_schedule_receipt(input: &ChaosScheduleInput) -> Result<ChaosScheduleReceipt> {
