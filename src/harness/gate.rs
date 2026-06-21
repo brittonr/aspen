@@ -1018,66 +1018,43 @@ fn chain_evidence_value(evidence: &GateChainEvidence) -> IOValue {
     ])
 }
 
-fn parse_chain_evidence(value: &Value<IOValue>) -> Result<GateChainEvidence> {
-    let value = value_to_iovalue(value);
-    let evidence = simple_record(&value, "chain-evidence", 7)?;
-    let profile = required_record_string(&evidence[0], "profile", "chain evidence profile")?;
-    if profile != "local-pass-evidence-chain" {
-        return Err(MoltenError::invalid_harness(format!("unsupported gate chain evidence profile {profile}")));
-    }
-    let link_value = required_record_value(&evidence[1], "link")?;
-    let anchor_value = required_record_value(&evidence[2], "anchor")?;
-    let verify_receipt_value = required_record_value(&evidence[3], "verify-receipt")?;
-    let checkpoint_value = required_record_value(&evidence[4], "checkpoint")?;
-    let predicate_values = required_record_values(&evidence[5], "predicates")?;
-    let checks = parse_checks(&evidence[6])?;
-    require_check(&checks, "chain-continuity")?;
-    require_check(&checks, "chain-anchor-descent")?;
-    require_check(&checks, "chain-checkpoint-freshness")?;
-    require_check(&checks, "chain-predicate-receipts")?;
+struct EvidenceParts {
+    link_value: IOValue,
+    anchor_value: IOValue,
+    verify_receipt_value: IOValue,
+    checkpoint_value: IOValue,
+    predicate_values: Vec<IOValue>,
+}
 
-    let link = parse_chain_link(&link_value)?;
+struct ParsedPredicates {
+    receipts: Vec<ChainPredicateReceipt>,
+    refs: Vec<String>,
+}
+
+fn parse_chain_evidence(value: &Value<IOValue>) -> Result<GateChainEvidence> {
+    let parts = evidence_parts(value)?;
+    let link = parse_chain_link(&parts.link_value)?;
     let link_ref = link.link_ref.clone();
-    let anchor = parse_chain_anchor(&anchor_value)?;
+    let anchor = parse_chain_anchor(&parts.anchor_value)?;
     if anchor.link_ref != link_ref || anchor.chain != link.chain {
         return Err(MoltenError::invalid_harness("gate chain anchor does not bind the gate chain link"));
     }
-    let checkpoint = parse_chain_checkpoint(&checkpoint_value)?;
+    let checkpoint = parse_chain_checkpoint(&parts.checkpoint_value)?;
     if checkpoint.chain != link.chain || checkpoint.anchor_link_ref != link_ref || checkpoint.head_ref != link_ref {
         return Err(MoltenError::invalid_harness("gate chain checkpoint does not bind the anchored chain head"));
     }
-    let verify_receipt_ref = canonical_hash(&verify_receipt_value)?;
+    let verify_receipt_ref = canonical_hash(&parts.verify_receipt_value)?;
     if checkpoint.verify_receipt_ref != verify_receipt_ref {
         return Err(MoltenError::invalid_harness("gate chain checkpoint does not bind the embedded verify receipt"));
     }
 
-    let mut predicate_receipts = Vec::with_capacity(predicate_values.len());
-    let mut predicate_receipt_refs = Vec::with_capacity(predicate_values.len());
-    for predicate_value in &predicate_values {
-        let parsed = parse_chain_predicate_receipt(predicate_value)?;
-        predicate_receipt_refs.push(parsed.receipt_ref.clone());
-        predicate_receipts.push(parsed);
-    }
-    let range_predicate = require_chain_predicate(
-        &predicate_receipts,
-        &checkpoint.range_predicate_ref,
-        CHECKPOINT_COVERS_RANGE_PREDICATE,
-    )?;
-    require_chain_predicate_kind(&predicate_receipts, GENESIS_VALID_PREDICATE)?;
-    require_chain_predicate_kind(&predicate_receipts, SEGMENT_NO_GAP_PREDICATE)?;
-    require_chain_predicate_kind(&predicate_receipts, SEGMENT_NO_FORK_PREDICATE)?;
-    require_chain_predicate_kind(&predicate_receipts, DESCENDS_FROM_ANCHOR_PREDICATE)?;
-    if range_predicate.subject_refs != vec![link_ref.clone()] {
-        return Err(MoltenError::invalid_harness("gate chain range predicate subjects do not match anchored link"));
-    }
-    if range_predicate.input_refs != vec![link.payload.artifact_ref.clone()] {
-        return Err(MoltenError::invalid_harness("gate chain range predicate inputs do not match report payload ref"));
-    }
+    let predicates = parsed_predicates(&parts.predicate_values)?;
+    require_predicates(&predicates, &checkpoint.range_predicate_ref, &link_ref, &link.payload.artifact_ref)?;
     validate_gate_chain_verify_receipt(
-        &verify_receipt_value,
+        &parts.verify_receipt_value,
         &link,
         &checkpoint.range_predicate_ref,
-        &predicate_receipt_refs,
+        &predicates.refs,
     )?;
 
     Ok(GateChainEvidence {
@@ -1086,13 +1063,60 @@ fn parse_chain_evidence(value: &Value<IOValue>) -> Result<GateChainEvidence> {
         verify_receipt_ref,
         checkpoint_ref: checkpoint.checkpoint_ref,
         range_predicate_ref: checkpoint.range_predicate_ref,
-        predicate_receipt_refs,
-        link_value,
-        anchor_value,
-        verify_receipt_value,
-        checkpoint_value,
-        predicate_values,
+        predicate_receipt_refs: predicates.refs,
+        link_value: parts.link_value,
+        anchor_value: parts.anchor_value,
+        verify_receipt_value: parts.verify_receipt_value,
+        checkpoint_value: parts.checkpoint_value,
+        predicate_values: parts.predicate_values,
     })
+}
+
+fn evidence_parts(value: &Value<IOValue>) -> Result<EvidenceParts> {
+    let value = value_to_iovalue(value);
+    let evidence = simple_record(&value, "chain-evidence", 7)?;
+    let profile = required_record_string(&evidence[0], "profile", "chain evidence profile")?;
+    if profile != "local-pass-evidence-chain" {
+        return Err(MoltenError::invalid_harness(format!("unsupported gate chain evidence profile {profile}")));
+    }
+    let checks = parse_checks(&evidence[6])?;
+    require_check(&checks, "chain-continuity")?;
+    require_check(&checks, "chain-anchor-descent")?;
+    require_check(&checks, "chain-checkpoint-freshness")?;
+    require_check(&checks, "chain-predicate-receipts")?;
+    Ok(EvidenceParts {
+        link_value: required_record_value(&evidence[1], "link")?,
+        anchor_value: required_record_value(&evidence[2], "anchor")?,
+        verify_receipt_value: required_record_value(&evidence[3], "verify-receipt")?,
+        checkpoint_value: required_record_value(&evidence[4], "checkpoint")?,
+        predicate_values: required_record_values(&evidence[5], "predicates")?,
+    })
+}
+
+fn parsed_predicates(values: &[IOValue]) -> Result<ParsedPredicates> {
+    let mut receipts = Vec::with_capacity(values.len());
+    let mut refs = Vec::with_capacity(values.len());
+    for value in values {
+        let parsed = parse_chain_predicate_receipt(value)?;
+        refs.push(parsed.receipt_ref.clone());
+        receipts.push(parsed);
+    }
+    Ok(ParsedPredicates { receipts, refs })
+}
+
+fn require_predicates(predicates: &ParsedPredicates, range_ref: &str, link_ref: &str, payload_ref: &str) -> Result<()> {
+    let range_predicate = require_chain_predicate(&predicates.receipts, range_ref, CHECKPOINT_COVERS_RANGE_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, GENESIS_VALID_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, SEGMENT_NO_GAP_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, SEGMENT_NO_FORK_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, DESCENDS_FROM_ANCHOR_PREDICATE)?;
+    if range_predicate.subject_refs != vec![link_ref.to_string()] {
+        return Err(MoltenError::invalid_harness("gate chain range predicate subjects do not match anchored link"));
+    }
+    if range_predicate.input_refs != vec![payload_ref.to_string()] {
+        return Err(MoltenError::invalid_harness("gate chain range predicate inputs do not match report payload ref"));
+    }
+    Ok(())
 }
 
 fn validate_gate_chain_verify_receipt(
