@@ -111,6 +111,19 @@ enum TrustAdmission {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct BuildChecks {
+    receipts: Vec<ProvenanceBuildVerificationReceipt>,
+    refs: Vec<String>,
+    diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RecordMatch {
+    record: Option<ProvenanceRecord>,
+    diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProvenanceRecord {
     pub record_ref: String,
     pub artifact_ref: String,
@@ -281,65 +294,19 @@ pub fn verify_provenance_build(input: &ProvenanceBuildVerificationInput<'_>) -> 
 }
 
 pub fn evaluate_provenance(input: &ProvenanceEvaluationInput<'_>) -> Result<ProvenanceEvaluation> {
-    validate_ref(input.artifact_ref, "provenance evaluation artifact ref")?;
-    validate_profile(input.profile)?;
-    ensure_ref_bound(input.provenance_values.len(), MAX_PROVENANCE_REFS, "provenance values")?;
-    ensure_ref_bound(
-        input.build_verification_values.len(),
-        MAX_PROVENANCE_REFS,
-        "provenance build verification values",
-    )?;
-    let mut diagnostics = Vec::with_capacity(
-        input
-            .prior_diagnostics
-            .len()
-            .saturating_add(input.provenance_values.len())
-            .saturating_add(input.build_verification_values.len())
-            .saturating_add(4),
-    );
+    validate_evaluation_input(input)?;
+    let mut diagnostics = Vec::with_capacity(evaluation_diagnostic_capacity(input));
     diagnostics.extend(input.prior_diagnostics.iter().cloned());
-    let mut build_verifications = Vec::with_capacity(input.build_verification_values.len());
-    let mut build_verification_refs = Vec::with_capacity(input.build_verification_values.len());
-    for value in input.build_verification_values {
-        match parse_provenance_build_verification_receipt(value) {
-            Ok(receipt) => {
-                build_verification_refs.push(receipt.receipt_ref.clone());
-                build_verifications.push(receipt);
-            }
-            Err(error) => diagnostics.push(format!("malformed provenance build verification receipt: {error}")),
-        }
-    }
-    let mut matched: Option<ProvenanceRecord> = None;
-    let mut has_mismatched_record = false;
-    for value in input.provenance_values {
-        let record = match parse_provenance_record(value) {
-            Ok(record) => record,
-            Err(error) => {
-                diagnostics.push(format!("malformed provenance record: {error}"));
-                continue;
-            }
-        };
-        if record.artifact_ref == input.artifact_ref {
-            matched = Some(record);
-            break;
-        }
-        has_mismatched_record = true;
-    }
-    if input.provenance_values.is_empty() {
-        diagnostics.push(format!("missing provenance evidence for {}", input.artifact_ref));
-    } else if matched.is_none() && has_mismatched_record {
-        diagnostics.push(format!("no provenance record matches artifact {}", input.artifact_ref));
-    }
+
+    let build_checks = parse_build_checks(input.build_verification_values);
+    diagnostics.extend(build_checks.diagnostics);
+
+    let record_match = find_matching_record(input.provenance_values, input.artifact_ref);
+    diagnostics.extend(record_match.diagnostics);
+    let matched = record_match.record;
     let matched_record_ref = matched.as_ref().map(|record| record.record_ref.clone());
-    let trust_state = matched.as_ref().map(|record| record.trust_state.as_str()).unwrap_or(TRUST_STATE_UNKNOWN);
-    let has_admitted_trust_state = is_trust_state_admitted(trust_state, input.profile);
-    let trust_admission = if matched.is_some() && has_admitted_trust_state {
-        TrustAdmission::Admitted
-    } else if matched.is_some() {
-        TrustAdmission::Denied
-    } else {
-        TrustAdmission::Missing
-    };
+    let (trust_state, trust_admission) = trust_status(matched.as_ref(), input.profile);
+
     if trust_admission == TrustAdmission::Denied {
         diagnostics.push(format!("provenance trust state {trust_state} is not admitted for profile {}", input.profile));
     }
@@ -347,8 +314,9 @@ pub fn evaluate_provenance(input: &ProvenanceEvaluationInput<'_>) -> Result<Prov
         diagnostics.extend(stronger_provenance_diagnostics(record, input.operation, input.profile));
     }
     if let Some(record) = matched.as_ref().filter(|record| record.trust_state == TRUST_STATE_REPRODUCIBLE_VERIFIED) {
-        diagnostics.extend(reproducible_build_binding_diagnostics(record, input.artifact_ref, &build_verifications));
+        diagnostics.extend(reproducible_build_binding_diagnostics(record, input.artifact_ref, &build_checks.receipts));
     }
+
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = provenance_receipt_value(&ProvenanceReceiptValueInput {
         decision,
@@ -357,7 +325,7 @@ pub fn evaluate_provenance(input: &ProvenanceEvaluationInput<'_>) -> Result<Prov
         artifact_ref: input.artifact_ref,
         trust_state,
         record_ref: matched_record_ref.as_deref(),
-        build_verification_refs: &build_verification_refs,
+        build_verification_refs: &build_checks.refs,
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = canonical_hash(&receipt_value)?;
@@ -368,6 +336,89 @@ pub fn evaluate_provenance(input: &ProvenanceEvaluationInput<'_>) -> Result<Prov
         matched_record_ref,
         diagnostics,
     })
+}
+
+fn validate_evaluation_input(input: &ProvenanceEvaluationInput<'_>) -> Result<()> {
+    validate_ref(input.artifact_ref, "provenance evaluation artifact ref")?;
+    validate_profile(input.profile)?;
+    ensure_ref_bound(input.provenance_values.len(), MAX_PROVENANCE_REFS, "provenance values")?;
+    ensure_ref_bound(
+        input.build_verification_values.len(),
+        MAX_PROVENANCE_REFS,
+        "provenance build verification values",
+    )?;
+    Ok(())
+}
+
+fn evaluation_diagnostic_capacity(input: &ProvenanceEvaluationInput<'_>) -> usize {
+    input
+        .prior_diagnostics
+        .len()
+        .saturating_add(input.provenance_values.len())
+        .saturating_add(input.build_verification_values.len())
+        .saturating_add(4)
+}
+
+fn parse_build_checks(values: &[IOValue]) -> BuildChecks {
+    let mut receipts = Vec::with_capacity(values.len());
+    let mut refs = Vec::with_capacity(values.len());
+    let mut diagnostics = Vec::with_capacity(values.len());
+    for value in values {
+        match parse_provenance_build_verification_receipt(value) {
+            Ok(receipt) => {
+                refs.push(receipt.receipt_ref.clone());
+                receipts.push(receipt);
+            }
+            Err(error) => diagnostics.push(format!("malformed provenance build verification receipt: {error}")),
+        }
+    }
+    BuildChecks {
+        receipts,
+        refs,
+        diagnostics,
+    }
+}
+
+fn find_matching_record(values: &[IOValue], artifact_ref: &str) -> RecordMatch {
+    let mut diagnostics = Vec::with_capacity(values.len().saturating_add(1));
+    let mut matched: Option<ProvenanceRecord> = None;
+    let mut has_mismatched_record = false;
+    for value in values {
+        let record = match parse_provenance_record(value) {
+            Ok(record) => record,
+            Err(error) => {
+                diagnostics.push(format!("malformed provenance record: {error}"));
+                continue;
+            }
+        };
+        if record.artifact_ref == artifact_ref {
+            matched = Some(record);
+            break;
+        }
+        has_mismatched_record = true;
+    }
+    if values.is_empty() {
+        diagnostics.push(format!("missing provenance evidence for {artifact_ref}"));
+    } else if matched.is_none() && has_mismatched_record {
+        diagnostics.push(format!("no provenance record matches artifact {artifact_ref}"));
+    }
+    RecordMatch {
+        record: matched,
+        diagnostics,
+    }
+}
+
+fn trust_status<'a>(record: Option<&'a ProvenanceRecord>, profile: &str) -> (&'a str, TrustAdmission) {
+    let trust_state = record.map(|record| record.trust_state.as_str()).unwrap_or(TRUST_STATE_UNKNOWN);
+    let has_admitted_trust_state = is_trust_state_admitted(trust_state, profile);
+    let admission = if record.is_some() && has_admitted_trust_state {
+        TrustAdmission::Admitted
+    } else if record.is_some() {
+        TrustAdmission::Denied
+    } else {
+        TrustAdmission::Missing
+    };
+    (trust_state, admission)
 }
 
 pub fn parse_provenance_record(value: &IOValue) -> Result<ProvenanceRecord> {
