@@ -152,6 +152,28 @@ const PASS_CHECKS: &[&str] = &[
     "deterministic-replay",
 ];
 
+const REQUIRED_KINDS: &[&str] = &[
+    "executor-preflights",
+    "executor-execution-receipts",
+    "runtime-predicate-receipts",
+    "policy",
+    "policy-gate",
+    "policy-nickel-source",
+    "policy-nickel-export",
+    "policy-basalt-preflight",
+    "budget",
+    "budget-gate",
+    "budget-nickel-source",
+    "budget-nickel-export",
+    "budget-basalt-preflight",
+    "capabilities",
+    "capability-gate",
+    "capability-authority-preflight",
+    "ucan-proofset",
+];
+
+const REDACTION_KINDS: &[&str] = &["redaction-policy", "redaction-gate"];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GateCheck {
     pub artifact_kind: String,
@@ -441,55 +463,18 @@ pub fn parse_gate_receipt(value: &IOValue) -> Result<GateReceipt> {
     let suite_ref = required_hash(&receipt[12], "gate receipt suite ref")?;
     let final_state_hash = required_hash(&receipt[13], "gate receipt final state hash")?;
     let turn_journals = parse_turn_journals(&receipt[10], &report_ref, &suite_ref)?;
-    if report_ref != validation.report_ref
-        || report_ref != replay.expected_report_ref
-        || report_ref != replay.actual_report_ref
-    {
-        return Err(MoltenError::invalid_harness("gate receipt report refs are inconsistent"));
-    }
-    if suite_ref != validation.suite_ref {
-        return Err(MoltenError::invalid_harness("gate receipt suite refs are inconsistent"));
-    }
-    if final_state_hash != validation.final_state_hash || final_state_hash != replay.final_state_hash {
-        return Err(MoltenError::invalid_harness("gate receipt final state refs are inconsistent"));
-    }
+    require_core_refs(&CoreRefs {
+        validation: &validation,
+        replay: &replay,
+        report: &report_ref,
+        suite: &suite_ref,
+        final_state: &final_state_hash,
+    })?;
     let chain_link = parse_chain_link(&chain_evidence.link_value)?;
-    if chain_link.payload.artifact_ref != report_ref {
-        return Err(MoltenError::invalid_harness("gate chain evidence payload does not bind the gate report ref"));
-    }
-    if !chain_link
-        .context_refs
-        .iter()
-        .any(|context| context.label == "suite" && context.artifact_ref == suite_ref)
-    {
-        return Err(MoltenError::invalid_harness("gate chain evidence context does not bind the gate suite ref"));
-    }
-    if !chain_link
-        .context_refs
-        .iter()
-        .any(|context| context.label == "final-state" && context.artifact_ref == final_state_hash)
-    {
-        return Err(MoltenError::invalid_harness("gate chain evidence context does not bind the gate final state ref"));
-    }
+    require_link_context(&chain_link, &report_ref, &suite_ref, &final_state_hash)?;
     require_artifact_ref(&artifact_refs, "report", &report_ref)?;
     require_artifact_ref(&artifact_refs, "suite", &suite_ref)?;
-    require_artifact_kind(&artifact_refs, "executor-preflights")?;
-    require_artifact_kind(&artifact_refs, "executor-execution-receipts")?;
-    require_artifact_kind(&artifact_refs, "runtime-predicate-receipts")?;
-    require_artifact_kind(&artifact_refs, "policy")?;
-    require_artifact_kind(&artifact_refs, "policy-gate")?;
-    require_artifact_kind(&artifact_refs, "policy-nickel-source")?;
-    require_artifact_kind(&artifact_refs, "policy-nickel-export")?;
-    require_artifact_kind(&artifact_refs, "policy-basalt-preflight")?;
-    require_artifact_kind(&artifact_refs, "budget")?;
-    require_artifact_kind(&artifact_refs, "budget-gate")?;
-    require_artifact_kind(&artifact_refs, "budget-nickel-source")?;
-    require_artifact_kind(&artifact_refs, "budget-nickel-export")?;
-    require_artifact_kind(&artifact_refs, "budget-basalt-preflight")?;
-    require_artifact_kind(&artifact_refs, "capabilities")?;
-    require_artifact_kind(&artifact_refs, "capability-gate")?;
-    require_artifact_kind(&artifact_refs, "capability-authority-preflight")?;
-    require_artifact_kind(&artifact_refs, "ucan-proofset")?;
+    require_kinds(&artifact_refs, REQUIRED_KINDS)?;
     require_artifact_ref(&artifact_refs, "chain-link", &chain_evidence.link_ref)?;
     require_artifact_ref(&artifact_refs, "chain-anchor", &chain_evidence.anchor_ref)?;
     require_artifact_ref(&artifact_refs, "chain-verify-receipt", &chain_evidence.verify_receipt_ref)?;
@@ -498,8 +483,7 @@ pub fn parse_gate_receipt(value: &IOValue) -> Result<GateReceipt> {
     require_artifact_ref(&artifact_refs, "turn-journals", &turn_journals.aggregate_ref)?;
     require_artifact_ref(&artifact_refs, "deterministic-replay-verify", &replay.verify_ref)?;
     if artifact_kind == "repro-bundle" {
-        require_artifact_kind(&artifact_refs, "redaction-policy")?;
-        require_artifact_kind(&artifact_refs, "redaction-gate")?;
+        require_kinds(&artifact_refs, REDACTION_KINDS)?;
     }
 
     Ok(GateReceipt {
@@ -1535,6 +1519,14 @@ fn checks_value() -> IOValue {
     )])
 }
 
+struct CoreRefs<'a> {
+    validation: &'a ValidationReceipt,
+    replay: &'a ReplayReceipt,
+    report: &'a str,
+    suite: &'a str,
+    final_state: &'a str,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ValidationReceipt {
     report_ref: String,
@@ -1683,6 +1675,43 @@ fn require_all_checks(checks: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn require_core_refs(input: &CoreRefs<'_>) -> Result<()> {
+    if input.report != input.validation.report_ref
+        || input.report != input.replay.expected_report_ref
+        || input.report != input.replay.actual_report_ref
+    {
+        return Err(MoltenError::invalid_harness("gate receipt report refs are inconsistent"));
+    }
+    if input.suite != input.validation.suite_ref {
+        return Err(MoltenError::invalid_harness("gate receipt suite refs are inconsistent"));
+    }
+    if input.final_state != input.validation.final_state_hash || input.final_state != input.replay.final_state_hash {
+        return Err(MoltenError::invalid_harness("gate receipt final state refs are inconsistent"));
+    }
+    Ok(())
+}
+
+fn require_link_context(link: &ChainLink, report_ref: &str, suite_ref: &str, final_state_hash: &str) -> Result<()> {
+    if link.payload.artifact_ref != report_ref {
+        return Err(MoltenError::invalid_harness("gate chain evidence payload does not bind the gate report ref"));
+    }
+    if !link
+        .context_refs
+        .iter()
+        .any(|context| context.label == "suite" && context.artifact_ref == suite_ref)
+    {
+        return Err(MoltenError::invalid_harness("gate chain evidence context does not bind the gate suite ref"));
+    }
+    if !link
+        .context_refs
+        .iter()
+        .any(|context| context.label == "final-state" && context.artifact_ref == final_state_hash)
+    {
+        return Err(MoltenError::invalid_harness("gate chain evidence context does not bind the gate final state ref"));
+    }
+    Ok(())
+}
+
 fn validate_tool_record(value: &Value<IOValue>) -> Result<()> {
     let value = value_to_iovalue(value);
     let tool = simple_record(&value, "tool", 2)?;
@@ -1719,6 +1748,13 @@ fn require_artifact_ref(refs: &[(String, String)], kind: &str, expected: &str) -
     } else {
         Err(MoltenError::invalid_harness(format!("gate receipt artifact refs missing {kind} ref {expected}")))
     }
+}
+
+fn require_kinds(refs: &[(String, String)], expected: &[&str]) -> Result<()> {
+    for kind in expected.iter().copied() {
+        require_artifact_kind(refs, kind)?;
+    }
+    Ok(())
 }
 
 fn require_artifact_kind(refs: &[(String, String)], kind: &str) -> Result<()> {
