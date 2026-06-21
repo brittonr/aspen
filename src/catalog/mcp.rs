@@ -1083,109 +1083,12 @@ mod tests {
         let root = temp_dir("catalog-mcp-replay-evidence");
         let registry = root.join("registry");
         let ledger_root = root.join("ledger");
-        let expected_report_ref = test_ref("replay-expected-report");
-        let actual_report_ref = test_ref("replay-actual-report");
-        let final_state_ref = test_ref("replay-final-state");
-        let expected_ref = test_ref("replay-expected-effect");
-        let actual_ref = test_ref("replay-actual-effect");
-        let handler_profile_ref = test_ref("replay-handler-profile");
-        let verify = record("deterministic-replay-verify-v1", vec![
-            string(crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
-            string("deny"),
-            record("expected-report-ref", vec![string(&expected_report_ref)]),
-            record("actual-report-ref", vec![string(&actual_report_ref)]),
-            record("final-state-ref", vec![string(&final_state_ref)]),
-            record("divergence", vec![string("effect-response")]),
-            checks_value(&["evidence-only", "no-authority-grant"]),
-        ]);
-        let divergence = record("deterministic-first-divergence-v1", vec![
-            string(crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA),
-            record("kind", vec![string("effect-response")]),
-            record("turn-id", vec![string("turn:0001")]),
-            record("actor-id", vec![string("actor:helper")]),
-            record("log-position", vec![string("0")]),
-            record("handler-profile-ref", vec![string(&handler_profile_ref)]),
-            record("expected-ref", vec![string(&expected_ref)]),
-            record("actual-ref", vec![string(&actual_ref)]),
-            checks_value(&["evidence-only", "first-divergence"]),
-        ]);
-        let rollup =
-            crate::deterministic_replay::rollup_replay_receipts(&[crate::deterministic_replay::ReplayRollupInput {
-                expected_ref: Some(canonical_hash(&verify).expect("verify ref")),
-                value: verify.clone(),
-            }])
-            .expect("replay rollup");
-        let index = crate::deterministic_replay::index_replay_evidence(&[
-            crate::deterministic_replay::ReplayIndexInput {
-                expected_ref: Some(canonical_hash(&verify).expect("verify ref")),
-                value: verify.clone(),
-            },
-            crate::deterministic_replay::ReplayIndexInput {
-                expected_ref: Some(rollup.rollup_ref.clone()),
-                value: rollup.value.clone(),
-            },
-        ])
-        .expect("replay index");
-        ledger::import_artifact(&ledger_root, &verify).expect("import replay verify");
-        ledger::import_artifact(&ledger_root, &divergence).expect("import first divergence");
-        ledger::import_artifact(&ledger_root, &rollup.value).expect("import replay rollup");
-        ledger::import_artifact(&ledger_root, &index.value).expect("import replay index");
+        let fixture = replay_case(&ledger_root);
 
-        let verify_request = mcp_request_value("search_replay_evidence", vec![
-            record("stage", vec![string("verify")]),
-            record("decision", vec![string("deny")]),
-            record("final-state-ref", vec![string(&final_state_ref)]),
-        ])
-        .expect("replay verify request");
-        let verify_call = call(&registry, Some(&ledger_root), &verify_request).expect("replay verify call");
-        assert_eq!(verify_call.decision, "pass");
-        let verify_text = to_text(&verify_call.response_value).expect("replay verify response");
-        assert!(verify_text.contains("deterministic-replay:verify"));
-        assert!(verify_text.contains(&expected_report_ref));
-
-        let divergence_request = mcp_request_value("search_replay_evidence", vec![
-            record("stage", vec![string("first-divergence")]),
-            record("divergence", vec![string("effect-response")]),
-            record("handler-profile-ref", vec![string(&handler_profile_ref)]),
-            record("actual-ref", vec![string(&actual_ref)]),
-        ])
-        .expect("replay divergence request");
-        let divergence_call = call(&registry, Some(&ledger_root), &divergence_request).expect("replay divergence call");
-        assert_eq!(divergence_call.decision, "pass");
-        let divergence_text = to_text(&divergence_call.response_value).expect("replay divergence response");
-        assert!(divergence_text.contains("deterministic-replay:first-divergence"));
-        assert!(divergence_text.contains("actor:helper"));
-        assert!(
-            to_text(&divergence_call.receipt_value)
-                .expect("replay MCP receipt")
-                .contains("mutating-tools-denied")
-        );
-
-        let rollup_request = mcp_request_value("search_replay_evidence", vec![
-            record("stage", vec![string("rollup")]),
-            record("text", vec![string("replay-rollup-decision:deny")]),
-        ])
-        .expect("replay rollup request");
-        let rollup_call = call(&registry, Some(&ledger_root), &rollup_request).expect("replay rollup call");
-        assert_eq!(rollup_call.decision, "pass");
-        assert!(
-            to_text(&rollup_call.response_value)
-                .expect("replay rollup response")
-                .contains("deterministic-replay:rollup")
-        );
-
-        let index_request = mcp_request_value("search_replay_evidence", vec![
-            record("stage", vec![string("index")]),
-            record("text", vec![string("replay-index-decision:deny")]),
-        ])
-        .expect("replay index request");
-        let index_call = call(&registry, Some(&ledger_root), &index_request).expect("replay index call");
-        assert_eq!(index_call.decision, "pass");
-        assert!(
-            to_text(&index_call.response_value)
-                .expect("replay index response")
-                .contains("deterministic-replay:index")
-        );
+        assert_replay_verify_search(&registry, &ledger_root, &fixture);
+        assert_replay_divergence_search(&registry, &ledger_root, &fixture);
+        assert_replay_rollup_search(&registry, &ledger_root);
+        assert_replay_index_search(&registry, &ledger_root);
     }
 
     #[test]
@@ -1286,6 +1189,140 @@ mod tests {
         let denied = call(&registry, None, &mcp_request_value("catalog.delete", Vec::new()).expect("mutating request"))
             .expect("denied mutating");
         assert_eq!(denied.decision, "deny");
+    }
+
+    struct ReplayCase {
+        expected_report_ref: String,
+        final_state_ref: String,
+        expected_ref: String,
+        actual_ref: String,
+        handler_profile_ref: String,
+    }
+
+    fn replay_case(ledger_root: &Path) -> ReplayCase {
+        let fixture = ReplayCase {
+            expected_report_ref: test_ref("replay-expected-report"),
+            final_state_ref: test_ref("replay-final-state"),
+            expected_ref: test_ref("replay-expected-effect"),
+            actual_ref: test_ref("replay-actual-effect"),
+            handler_profile_ref: test_ref("replay-handler-profile"),
+        };
+        let verify = replay_verify_record(&fixture, &test_ref("replay-actual-report"));
+        let divergence = replay_divergence_record(&fixture);
+        let rollup = replay_rollup(&verify);
+        let index = replay_index(&verify, &rollup);
+        ledger::import_artifact(ledger_root, &verify).expect("import replay verify");
+        ledger::import_artifact(ledger_root, &divergence).expect("import first divergence");
+        ledger::import_artifact(ledger_root, &rollup.value).expect("import replay rollup");
+        ledger::import_artifact(ledger_root, &index.value).expect("import replay index");
+        fixture
+    }
+
+    fn replay_verify_record(fixture: &ReplayCase, actual_report_ref: &str) -> IOValue {
+        record("deterministic-replay-verify-v1", vec![
+            string(crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
+            string("deny"),
+            record("expected-report-ref", vec![string(&fixture.expected_report_ref)]),
+            record("actual-report-ref", vec![string(actual_report_ref)]),
+            record("final-state-ref", vec![string(&fixture.final_state_ref)]),
+            record("divergence", vec![string("effect-response")]),
+            checks_value(&["evidence-only", "no-authority-grant"]),
+        ])
+    }
+
+    fn replay_divergence_record(fixture: &ReplayCase) -> IOValue {
+        record("deterministic-first-divergence-v1", vec![
+            string(crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA),
+            record("kind", vec![string("effect-response")]),
+            record("turn-id", vec![string("turn:0001")]),
+            record("actor-id", vec![string("actor:helper")]),
+            record("log-position", vec![string("0")]),
+            record("handler-profile-ref", vec![string(&fixture.handler_profile_ref)]),
+            record("expected-ref", vec![string(&fixture.expected_ref)]),
+            record("actual-ref", vec![string(&fixture.actual_ref)]),
+            checks_value(&["evidence-only", "first-divergence"]),
+        ])
+    }
+
+    fn replay_rollup(verify: &IOValue) -> crate::deterministic_replay::ReplayRollupReceipt {
+        crate::deterministic_replay::rollup_replay_receipts(&[crate::deterministic_replay::ReplayRollupInput {
+            expected_ref: Some(canonical_hash(verify).expect("verify ref")),
+            value: verify.clone(),
+        }])
+        .expect("replay rollup")
+    }
+
+    fn replay_index(
+        verify: &IOValue,
+        rollup: &crate::deterministic_replay::ReplayRollupReceipt,
+    ) -> crate::deterministic_replay::ReplayIndexReceipt {
+        crate::deterministic_replay::index_replay_evidence(&[
+            crate::deterministic_replay::ReplayIndexInput {
+                expected_ref: Some(canonical_hash(verify).expect("verify ref")),
+                value: verify.clone(),
+            },
+            crate::deterministic_replay::ReplayIndexInput {
+                expected_ref: Some(rollup.rollup_ref.clone()),
+                value: rollup.value.clone(),
+            },
+        ])
+        .expect("replay index")
+    }
+
+    fn assert_replay_verify_search(registry: &Path, ledger_root: &Path, fixture: &ReplayCase) {
+        let request = mcp_request_value("search_replay_evidence", vec![
+            record("stage", vec![string("verify")]),
+            record("decision", vec![string("deny")]),
+            record("final-state-ref", vec![string(&fixture.final_state_ref)]),
+        ])
+        .expect("replay verify request");
+        let call = call(registry, Some(ledger_root), &request).expect("replay verify call");
+        assert_eq!(call.decision, "pass");
+        let text = to_text(&call.response_value).expect("replay verify response");
+        assert!(text.contains("deterministic-replay:verify"));
+        assert!(text.contains(&fixture.expected_report_ref));
+    }
+
+    fn assert_replay_divergence_search(registry: &Path, ledger_root: &Path, fixture: &ReplayCase) {
+        let request = mcp_request_value("search_replay_evidence", vec![
+            record("stage", vec![string("first-divergence")]),
+            record("divergence", vec![string("effect-response")]),
+            record("handler-profile-ref", vec![string(&fixture.handler_profile_ref)]),
+            record("actual-ref", vec![string(&fixture.actual_ref)]),
+        ])
+        .expect("replay divergence request");
+        let call = call(registry, Some(ledger_root), &request).expect("replay divergence call");
+        assert_eq!(call.decision, "pass");
+        let text = to_text(&call.response_value).expect("replay divergence response");
+        assert!(text.contains("deterministic-replay:first-divergence"));
+        assert!(text.contains("actor:helper"));
+        assert!(to_text(&call.receipt_value).expect("replay MCP receipt").contains("mutating-tools-denied"));
+    }
+
+    fn assert_replay_rollup_search(registry: &Path, ledger_root: &Path) {
+        let request = mcp_request_value("search_replay_evidence", vec![
+            record("stage", vec![string("rollup")]),
+            record("text", vec![string("replay-rollup-decision:deny")]),
+        ])
+        .expect("replay rollup request");
+        let call = call(registry, Some(ledger_root), &request).expect("replay rollup call");
+        assert_eq!(call.decision, "pass");
+        assert!(
+            to_text(&call.response_value)
+                .expect("replay rollup response")
+                .contains("deterministic-replay:rollup")
+        );
+    }
+
+    fn assert_replay_index_search(registry: &Path, ledger_root: &Path) {
+        let request = mcp_request_value("search_replay_evidence", vec![
+            record("stage", vec![string("index")]),
+            record("text", vec![string("replay-index-decision:deny")]),
+        ])
+        .expect("replay index request");
+        let call = call(registry, Some(ledger_root), &request).expect("replay index call");
+        assert_eq!(call.decision, "pass");
+        assert!(to_text(&call.response_value).expect("replay index response").contains("deterministic-replay:index"));
     }
 
     struct RetentionGcAuditFixture {
