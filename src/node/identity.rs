@@ -334,26 +334,7 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<NodeIdentityResolutio
     } else {
         input.operation
     };
-    let common_checks = [
-        "resolution-order",
-        "stable-endpoint-id",
-        "restricted-secret-file",
-        "no-secret-material",
-        "identity-grants-no-authority",
-        "config-contract",
-    ];
-    let pre_receipt_value = node_identity_receipt_value(&ReceiptValueInput {
-        operation: receipt_operation,
-        decision: "pass",
-        node_id: &input.config.node_id,
-        identity_ref: None,
-        endpoint_id: Some(&input.material.endpoint_id),
-        key_source_class: input.operation,
-        backend_ref: input.backend_ref,
-        policy_refs: &input.config.policy_refs,
-        diagnostic: "node identity resolved without exposing secret material",
-        checks: &common_checks,
-    });
+    let pre_receipt_value = pass_receipt(&input, receipt_operation, None);
     let pre_receipt_ref = canonical_hash(&pre_receipt_value)?;
     let identity_value = node_identity_value(
         input.config,
@@ -363,22 +344,34 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<NodeIdentityResolutio
         std::slice::from_ref(&pre_receipt_ref),
     );
     let identity = parse_node_identity(&identity_value)?;
-    let receipt_value = node_identity_receipt_value(&ReceiptValueInput {
-        operation: receipt_operation,
+    let receipt_value = pass_receipt(&input, receipt_operation, Some(&identity.identity_ref));
+    Ok(NodeIdentityResolution {
+        identity: Some(identity),
+        receipt_ref: canonical_hash(&receipt_value)?,
+        receipt_value,
+    })
+}
+
+fn pass_receipt(input: &ResolutionInput<'_>, operation: &str, identity_ref: Option<&str>) -> IOValue {
+    const CHECKS: [&str; 6] = [
+        "resolution-order",
+        "stable-endpoint-id",
+        "restricted-secret-file",
+        "no-secret-material",
+        "identity-grants-no-authority",
+        "config-contract",
+    ];
+    node_identity_receipt_value(&ReceiptValueInput {
+        operation,
         decision: "pass",
         node_id: &input.config.node_id,
-        identity_ref: Some(&identity.identity_ref),
+        identity_ref,
         endpoint_id: Some(&input.material.endpoint_id),
         key_source_class: input.operation,
         backend_ref: input.backend_ref,
         policy_refs: &input.config.policy_refs,
         diagnostic: "node identity resolved without exposing secret material",
-        checks: &common_checks,
-    });
-    Ok(NodeIdentityResolution {
-        identity: Some(identity),
-        receipt_ref: canonical_hash(&receipt_value)?,
-        receipt_value,
+        checks: &CHECKS,
     })
 }
 
