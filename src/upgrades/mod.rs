@@ -691,114 +691,134 @@ pub fn cleanup_admission_with_registry(
     Ok(receipt)
 }
 
+#[derive(Clone, Copy)]
+struct GateFacts {
+    is_decision_pass: bool,
+    is_terminal: bool,
+    is_protocol_match: bool,
+}
+
+#[derive(Default)]
+struct DrainState {
+    diagnostics: Vec<String>,
+    has_gate: bool,
+    has_gate_decision_pass: bool,
+    has_terminal_state: bool,
+    has_protocol_match: bool,
+    has_drained_gate: bool,
+}
+
+impl DrainState {
+    fn push(&mut self, message: String) -> Result<()> {
+        push_bounded(&mut self.diagnostics, message, MAX_UPGRADE_DIAGNOSTICS, "upgrade protocol drain diagnostics")
+    }
+
+    fn require_refs(&mut self, refs: &[String]) -> Result<()> {
+        if refs.is_empty() {
+            self.push(
+                "drain-sessions task requires a protocol-session-gate-receipt-v1 precondition or postcondition ref"
+                    .to_string(),
+            )?;
+        }
+        Ok(())
+    }
+
+    fn inspect_ref(&mut self, ledger_root: &Path, evidence_ref: &str, expected_refs: &[String]) -> Result<()> {
+        let value = match ledger::read_artifact(ledger_root, evidence_ref) {
+            Ok(value) => value,
+            Err(error) => {
+                self.push(format!("protocol drain evidence {evidence_ref} is not readable from ledger: {error}"))?;
+                return Ok(());
+            }
+        };
+        let gate = match protocol_session::parse_protocol_session_gate_receipt(&value) {
+            Ok(gate) => gate,
+            Err(error) => {
+                self.push(format!(
+                    "protocol drain evidence {evidence_ref} is not a protocol session gate receipt: {error}"
+                ))?;
+                return Ok(());
+            }
+        };
+        self.observe(&gate, expected_refs)
+    }
+
+    fn observe(&mut self, gate: &protocol_session::ProtocolSessionGateReceipt, expected_refs: &[String]) -> Result<()> {
+        self.has_gate = true;
+        let facts = GateFacts {
+            is_decision_pass: gate.decision == "pass",
+            is_terminal: !gate.session_ids.is_empty() && !gate.final_state_refs.is_empty(),
+            is_protocol_match: expected_refs.iter().any(|expected| expected == &gate.protocol_ref),
+        };
+        self.has_gate_decision_pass |= facts.is_decision_pass;
+        self.has_terminal_state |= facts.is_terminal;
+        self.has_protocol_match |= facts.is_protocol_match;
+        self.note_gate(gate, expected_refs, facts)?;
+        self.has_drained_gate |= facts.is_decision_pass && facts.is_terminal && facts.is_protocol_match;
+        Ok(())
+    }
+
+    fn note_gate(
+        &mut self,
+        gate: &protocol_session::ProtocolSessionGateReceipt,
+        expected_refs: &[String],
+        facts: GateFacts,
+    ) -> Result<()> {
+        if !facts.is_decision_pass {
+            self.push(format!("protocol drain gate {} denied with decision {}", gate.receipt_ref, gate.decision))?;
+        }
+        if !facts.is_terminal {
+            self.push(format!("protocol drain gate {} does not bind terminal session state", gate.receipt_ref))?;
+        }
+        if !facts.is_protocol_match {
+            self.push(format!(
+                "protocol drain gate {} is for {}, expected one of {}",
+                gate.receipt_ref,
+                gate.protocol_ref,
+                expected_refs.join(",")
+            ))?;
+        }
+        Ok(())
+    }
+
+    fn require_gate(&mut self, refs: &[String]) -> Result<()> {
+        if !refs.is_empty() && !self.has_gate {
+            self.push("drain-sessions task did not bind any readable protocol session gate receipts".to_string())?;
+        }
+        Ok(())
+    }
+
+    fn outcome(self) -> UpgradeTaskOutcome {
+        let decision = if self.diagnostics.is_empty() && self.has_drained_gate {
+            "pass"
+        } else {
+            "deny"
+        };
+        (decision, self.diagnostics, vec![
+            ("protocol-session-gate-bound", pass_fail(self.has_gate)),
+            ("protocol-session-gate-pass", pass_fail(self.has_gate_decision_pass)),
+            ("protocol-terminal-state", pass_fail(self.has_terminal_state)),
+            ("protocol-ref-bound", pass_fail(self.has_protocol_match)),
+            ("protocol-session-drain", pass_fail(self.has_drained_gate)),
+            ("protocol-drain-is-not-authority", "pass"),
+        ])
+    }
+}
+
 fn protocol_drain_task_outcome(
     ledger_root: &Path,
     plan: &UpgradePlan,
     task: &UpgradeTask,
 ) -> Result<UpgradeTaskOutcome> {
     let evidence_refs = protocol_drain_evidence_refs(task)?;
-    let expected_protocol_refs = protocol_drain_expected_protocol_refs(plan, task)?;
-    let mut diagnostics = Vec::new();
-    let mut has_gate = false;
-    let mut has_gate_decision_pass = false;
-    let mut has_terminal_state = false;
-    let mut has_protocol_match = false;
-    let mut has_drained_gate = false;
-    if evidence_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "drain-sessions task requires a protocol-session-gate-receipt-v1 precondition or postcondition ref"
-                .to_string(),
-            MAX_UPGRADE_DIAGNOSTICS,
-            "upgrade protocol drain diagnostics",
-        )?;
-    }
+    let expected_refs = protocol_drain_expected_protocol_refs(plan, task)?;
+    let mut state = DrainState::default();
+    state.require_refs(&evidence_refs)?;
     for evidence_ref in &evidence_refs {
-        let value = match ledger::read_artifact(ledger_root, evidence_ref) {
-            Ok(value) => value,
-            Err(error) => {
-                push_bounded(
-                    &mut diagnostics,
-                    format!("protocol drain evidence {evidence_ref} is not readable from ledger: {error}"),
-                    MAX_UPGRADE_DIAGNOSTICS,
-                    "upgrade protocol drain diagnostics",
-                )?;
-                continue;
-            }
-        };
-        let gate = match protocol_session::parse_protocol_session_gate_receipt(&value) {
-            Ok(gate) => gate,
-            Err(error) => {
-                push_bounded(
-                    &mut diagnostics,
-                    format!("protocol drain evidence {evidence_ref} is not a protocol session gate receipt: {error}"),
-                    MAX_UPGRADE_DIAGNOSTICS,
-                    "upgrade protocol drain diagnostics",
-                )?;
-                continue;
-            }
-        };
-        has_gate = true;
-        let is_decision_pass = gate.decision == "pass";
-        let is_terminal = !gate.session_ids.is_empty() && !gate.final_state_refs.is_empty();
-        let is_protocol_match = expected_protocol_refs.iter().any(|expected| expected == &gate.protocol_ref);
-        has_gate_decision_pass |= is_decision_pass;
-        has_terminal_state |= is_terminal;
-        has_protocol_match |= is_protocol_match;
-        if !is_decision_pass {
-            push_bounded(
-                &mut diagnostics,
-                format!("protocol drain gate {} denied with decision {}", gate.receipt_ref, gate.decision),
-                MAX_UPGRADE_DIAGNOSTICS,
-                "upgrade protocol drain diagnostics",
-            )?;
-        }
-        if !is_terminal {
-            push_bounded(
-                &mut diagnostics,
-                format!("protocol drain gate {} does not bind terminal session state", gate.receipt_ref),
-                MAX_UPGRADE_DIAGNOSTICS,
-                "upgrade protocol drain diagnostics",
-            )?;
-        }
-        if !is_protocol_match {
-            push_bounded(
-                &mut diagnostics,
-                format!(
-                    "protocol drain gate {} is for {}, expected one of {}",
-                    gate.receipt_ref,
-                    gate.protocol_ref,
-                    expected_protocol_refs.join(",")
-                ),
-                MAX_UPGRADE_DIAGNOSTICS,
-                "upgrade protocol drain diagnostics",
-            )?;
-        }
-        if is_decision_pass && is_terminal && is_protocol_match {
-            has_drained_gate = true;
-        }
+        state.inspect_ref(ledger_root, evidence_ref, &expected_refs)?;
     }
-    if !evidence_refs.is_empty() && !has_gate {
-        push_bounded(
-            &mut diagnostics,
-            "drain-sessions task did not bind any readable protocol session gate receipts".to_string(),
-            MAX_UPGRADE_DIAGNOSTICS,
-            "upgrade protocol drain diagnostics",
-        )?;
-    }
-    let decision = if diagnostics.is_empty() && has_drained_gate {
-        "pass"
-    } else {
-        "deny"
-    };
-    Ok((decision, diagnostics, vec![
-        ("protocol-session-gate-bound", pass_fail(has_gate)),
-        ("protocol-session-gate-pass", pass_fail(has_gate_decision_pass)),
-        ("protocol-terminal-state", pass_fail(has_terminal_state)),
-        ("protocol-ref-bound", pass_fail(has_protocol_match)),
-        ("protocol-session-drain", pass_fail(has_drained_gate)),
-        ("protocol-drain-is-not-authority", "pass"),
-    ]))
+    state.require_gate(&evidence_refs)?;
+    Ok(state.outcome())
 }
 
 fn protocol_drain_evidence_refs(task: &UpgradeTask) -> Result<Vec<String>> {

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-22 | self | I misread the `src/upgrades/mod.rs:698` function-length entry as `rollback_task`; extracting rollback decision logic passed focused tests but left the no-disabled probe flat at 7246 because the actual finding was `protocol_drain_task_outcome`. | Map Octet line numbers to the post-fmt source before editing; do not assume a nearby preceding public function is the flagged function. |
 | 2026-06-22 | self | Splitting only source-gate diagnostics out of `src/node/runtime.rs::start_node_runtime` left the no-disabled probe flat at 7248 because the top-level function was still over Octet's length threshold. | For borderline runtime startup functions, extract validation, diagnostic scanning, and receipt assembly together in one same-file refactor before probing; keep the split only once `function_length` actually drops. |
 | 2026-06-22 | self | Extracting only the conflict tail of `remote_dataspace::idempotent_remote_delivery_suppresses_duplicate_and_denies_conflict_before_commit` into `assert_conflict_case` passed focused tests/clippy but left the no-disabled probe flat at 7249. | Revert flat test-helper splits; for function-length burn-down, extract enough of the long function to cross Octet's threshold and keep the split only after the probe count decreases. |
 | 2026-06-22 | self | While extracting a remote dataspace parse helper, I treated `collect_simple_record` fields as a slice via `fields.as_ref()`; the actual type was `preserves::Record<Value<IOValue>>`, so the focused test compile failed. | When splitting Preserves record parsers, either keep field indexing in the caller or type helpers against the actual record type; do not assume a Cow/Vec slice. |
@@ -206,6 +207,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-22 Octet upgrade protocol-drain split: moving `src/upgrades/mod.rs::protocol_drain_task_outcome` loop state into a same-file `DrainState`/`GateFacts` shape lowered the no-disabled probe from 7246 to 7244. Validation passed `cargo fmt`, focused `cargo test upgrades`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-upgrade-drain-0`.
 
 - 2026-06-22 Octet remote idempotency test split: extracting the changed-payload conflict tail of `src/remote/dataspace.rs` into neutral `assert_conflict_case` plus shortening the repetitive test name to `idempotent_apply_handles_repeat_and_conflict` lowered the no-disabled probe from 7249 to 7248. If a helper split exposes path-segment repetition on a long test name, shorten the private test name as part of the same behavior-preserving refactor.
 
