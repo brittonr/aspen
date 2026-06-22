@@ -1832,8 +1832,12 @@ mod tests {
         assert_eq!(loaded.value, value);
         assert_eq!(loaded.typed_ref.schema_ref, target_schema_ref);
 
+        assert_lazy_load(&root, &admission);
+    }
+
+    fn assert_lazy_load(root: &Path, admission: &TypedStorageAdmission) {
         let lazy_value = parse_text("<profile \"bob\" 9>").expect("parse lazy value");
-        let lazy_put = put_value(&root, &TypedStoragePutInput {
+        let lazy_put = put_value(root, &TypedStoragePutInput {
             namespace: "profiles".to_string(),
             key: "bob".to_string(),
             schema_ref: None,
@@ -1856,12 +1860,12 @@ mod tests {
         })
         .expect("lazy recipe");
         let lazy_loaded = get_value_with_migration(MigrationGetInput {
-            root: &root,
+            root,
             namespace: "profiles",
             key: "bob",
             expected_schema_ref: &lazy_target_schema_ref,
             migration_recipe_value: &lazy_recipe,
-            admission: &admission,
+            admission,
         })
         .expect("lazy migration load");
         assert_eq!(lazy_loaded.value, lazy_value);

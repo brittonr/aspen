@@ -211,6 +211,8 @@
 
 ## Patterns That Work
 
+- 2026-06-22 Octet typed-storage migration test split: extracting the lazy-load half of `src/typed/storage.rs::explicit_and_lazy_migrations_preserve_value_hash_and_trace_refs` into neutral same-file `assert_lazy_load` lowered the no-disabled probe from 7231 to 7230 without adding path/import/file debt. Validation passed `cargo fmt`, focused `cargo test typed_storage`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-typed-storage-migration-test-0`.
+
 - 2026-06-22 Octet retention summary split: extracting `src/retention/mod.rs::retention_summary` into small neutral same-file summary helpers lowered the no-disabled probe from 7234 to 7232 by clearing two `function_length` findings while keeping path/import/file counts flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-retention-summary-0`.
 
 - 2026-06-22 Octet runtime vat fixture split: extracting `src/runtime/vat/mod.rs::run_vat_fixture` setup and receipt construction into neutral same-file `FixtureObjects`/`near_far_calls`/`actormap_calls` helpers lowered the no-disabled probe from 7236 to 7234 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test vat_fixture`, and probe `target/octet-burndown/probe-vat-fixture-0`.
