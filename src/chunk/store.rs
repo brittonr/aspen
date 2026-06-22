@@ -541,26 +541,9 @@ pub fn parse_manifest_value(value: &IOValue, expected_manifest_ref: Option<&str>
         return Err(MoltenError::invalid_harness("chunk manifest chunk-size must be non-zero"));
     }
     validate_transform_shape(&transforms)?;
-    let mut chunks = Vec::new();
-    for chunk_value in &chunk_values {
-        let chunk = parse_chunk_ref_value(chunk_value, chunk_size)?;
-        if chunk.transforms != transforms {
-            return Err(MoltenError::invalid_harness(format!(
-                "chunk transform mismatch for {}: manifest transforms differ from chunk ref transforms",
-                chunk.chunk_ref
-            )));
-        }
-        push_bounded(&mut chunks, chunk, MAX_CHUNK_STORE_CHUNKS, "chunk manifest chunks")?;
-    }
+    let chunks = refs_from_values(&chunk_values, chunk_size, &transforms)?;
     validate_fixed_chunk_lengths(total_len, chunk_size, &chunks)?;
-    for chunk in &chunks {
-        if chunk.transforms.protected_commitment_ref.as_deref() == Some(chunk.chunk_ref.as_str()) {
-            return Err(MoltenError::invalid_harness(format!(
-                "protected commitment ref for chunk {} must differ from the plaintext chunk ref",
-                chunk.chunk_ref
-            )));
-        }
-    }
+    ensure_distinct_commitments(&chunks)?;
     let recomputed_root = chunk_root_ref(&chunks)?;
     if recomputed_root != root_ref {
         return Err(MoltenError::invalid_harness(format!(
@@ -581,6 +564,33 @@ pub fn parse_manifest_value(value: &IOValue, expected_manifest_ref: Option<&str>
         evidence_refs,
         value: value.clone(),
     })
+}
+
+fn refs_from_values(values: &[IOValue], chunk_size: u64, transforms: &ChunkTransforms) -> Result<Vec<ChunkRef>> {
+    let mut chunks = Vec::new();
+    for value in values {
+        let chunk = parse_chunk_ref_value(value, chunk_size)?;
+        if chunk.transforms != *transforms {
+            return Err(MoltenError::invalid_harness(format!(
+                "chunk transform mismatch for {}: manifest transforms differ from chunk ref transforms",
+                chunk.chunk_ref
+            )));
+        }
+        push_bounded(&mut chunks, chunk, MAX_CHUNK_STORE_CHUNKS, "chunk manifest chunks")?;
+    }
+    Ok(chunks)
+}
+
+fn ensure_distinct_commitments(chunks: &[ChunkRef]) -> Result<()> {
+    for chunk in chunks {
+        if chunk.transforms.protected_commitment_ref.as_deref() == Some(chunk.chunk_ref.as_str()) {
+            return Err(MoltenError::invalid_harness(format!(
+                "protected commitment ref for chunk {} must differ from the plaintext chunk ref",
+                chunk.chunk_ref
+            )));
+        }
+    }
+    Ok(())
 }
 
 pub fn parse_chunk_ref_value(value: &IOValue, expected_chunk_size: u64) -> Result<ChunkRef> {
