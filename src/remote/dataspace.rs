@@ -1319,7 +1319,7 @@ mod tests {
     }
 
     #[test]
-    fn idempotent_remote_delivery_suppresses_duplicate_and_denies_conflict_before_commit() {
+    fn idempotent_apply_handles_repeat_and_conflict() {
         let root = temp_dir("remote-dataspace-idempotency");
         let payload = record("service-ready", vec![string("db")]);
         let envelope = assert_envelope(AssertEnvelopeInput {
@@ -1364,6 +1364,10 @@ mod tests {
         )
         .expect("idempotent delivery log");
         assert!(crate::preserves_rail::to_text(&log.value).expect("log text").contains("idempotency-receipt"));
+        assert_conflict_case(&root, &mut state, &evidence);
+    }
+
+    fn assert_conflict_case(root: &Path, state: &mut RuntimeState, evidence: &RemoteDeliveryEvidence) {
         let changed = assert_envelope(AssertEnvelopeInput {
             from_peer: "peer:a",
             from_actor: "producer",
@@ -1374,14 +1378,14 @@ mod tests {
             evidence_refs: Vec::new(),
         })
         .expect("changed envelope");
-        publish_local_gossip(&root, &changed, "peer:a").expect("publish changed");
+        publish_local_gossip(root, &changed, "peer:a").expect("publish changed");
         let changed_delivery =
-            deliver_local_gossip(&root, "services", &changed.envelope_ref, "peer:b").expect("deliver changed");
+            deliver_local_gossip(root, "services", &changed.envelope_ref, "peer:b").expect("deliver changed");
         let conflict = admit_and_apply_delivered_envelope_idempotent(
-            &root,
-            &mut state,
+            root,
+            state,
             &changed_delivery,
-            &evidence,
+            evidence,
             delivery_idempotency::GapPolicy::Deny,
         )
         .expect("conflict receipt");

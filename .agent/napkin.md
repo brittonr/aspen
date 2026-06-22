@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-22 | self | Extracting only the conflict tail of `remote_dataspace::idempotent_remote_delivery_suppresses_duplicate_and_denies_conflict_before_commit` into `assert_conflict_case` passed focused tests/clippy but left the no-disabled probe flat at 7249. | Revert flat test-helper splits; for function-length burn-down, extract enough of the long function to cross Octet's threshold and keep the split only after the probe count decreases. |
 | 2026-06-22 | self | While extracting a remote dataspace parse helper, I treated `collect_simple_record` fields as a slice via `fields.as_ref()`; the actual type was `preserves::Record<Value<IOValue>>`, so the focused test compile failed. | When splitting Preserves record parsers, either keep field indexing in the caller or type helpers against the actual record type; do not assume a Cow/Vec slice. |
 | 2026-06-22 | self | While extracting rewrite preview helper refs, I called `.as_slice()` on a field that was already `&[String]`; current Rust treats slice `.as_slice()` as unstable and the focused rewrite test compile failed. | For helper structs carrying slice fields, iterate directly with `.iter()`; reserve `.as_slice().iter()` for owned `Vec<String>` fields in `ValueImpl`-heavy modules. |
 | 2026-06-22 | self | Ran the repo's standalone `scripts/octet-burndown.scm` through the pi `steel` tool with the default prelude, so its local `(define (println ...))` collided with the prelude binding before the probe started. | When invoking standalone repo Steel scripts through the pi `steel` tool, set `prelude=false` (or run the standalone CLI shape documented by the script); do not mix the pi prelude with scripts that define their own helpers. |
@@ -204,6 +205,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-22 Octet remote idempotency test split: extracting the changed-payload conflict tail of `src/remote/dataspace.rs` into neutral `assert_conflict_case` plus shortening the repetitive test name to `idempotent_apply_handles_repeat_and_conflict` lowered the no-disabled probe from 7249 to 7248. If a helper split exposes path-segment repetition on a long test name, shorten the private test name as part of the same behavior-preserving refactor.
 
 - 2026-06-22 Octet rewrites find/preview split: extracting `src/rewrites/mod.rs` query/preview collection into neutral same-file helpers (`found_items`, `found_refs`, `diff_items`, `PlanRefs`) lowered the no-disabled probe from 7264 to 7260 by clearing four `function_length` findings while keeping non-trait/path/file counts flat. Validation passed `cargo fmt`, `cargo fmt --check`, focused `cargo test rewrite`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-rewrites-helpers-0`.
 
