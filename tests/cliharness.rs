@@ -2187,61 +2187,110 @@ fn cli_retention_gc_plan_lists_gates_before_mutation() -> CliResult<()> {
     let root = dir.join("retention-state");
     let plan_path = dir.join("plan.preserves");
     let apply_path = dir.join("apply.preserves");
-    let requester_ref = test_ref("retention-plan-requester")?;
-    let object_ref = test_ref("retention-plan-object")?;
-    let peer_ref = test_ref("retention-plan-peer")?;
-    let remote_ref = test_ref("retention-plan-remote")?;
-    let store_admission = |kind: &str, label: &str, remote_refs: &[String]| -> CliResult<String> {
-        Ok(retention::store_retention_evidence_admission(&root, &retention::RetentionEvidenceAdmissionInput {
-            kind,
-            decision: "pass",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: retention::CLASS_DURABLE_VALUE,
-            action: retention::ACTION_DELETE,
-            bound_refs: &[test_ref(label)?],
-            retained_refs: &[],
-            remote_refs,
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-            diagnostics: &[],
-        })?
-        .admission_ref)
+    let refs = build_refs(&root)?;
+    let plan = run_plan(&root, &refs, &plan_path)?;
+
+    let show = molten_cmd().args(["test", "retention", "show"]).arg(&plan_path).output()?;
+    assert_success(&show, "retention show gc-plan");
+    assert!(stdout(&show).contains("retention gc plan"));
+
+    let apply = run_apply(&root, &plan, &apply_path)?;
+    assert_eq!(apply.plan_ref, plan.plan_ref);
+    assert!(apply.retention_receipt_ref.is_some());
+    assert!(apply.tombstone_ref.is_some());
+    Ok(())
+}
+
+struct Refs {
+    requester: String,
+    object: String,
+    peer: String,
+    remote: String,
+    policy: String,
+    authority: String,
+    support: String,
+    index: String,
+    remote_gc: String,
+    clearance: String,
+}
+
+fn build_refs(root: &Path) -> CliResult<Refs> {
+    let mut refs = Refs {
+        requester: test_ref("retention-plan-requester")?,
+        object: test_ref("retention-plan-object")?,
+        peer: test_ref("retention-plan-peer")?,
+        remote: test_ref("retention-plan-remote")?,
+        policy: String::new(),
+        authority: String::new(),
+        support: String::new(),
+        index: String::new(),
+        remote_gc: String::new(),
+        clearance: String::new(),
     };
-    let policy_ref = store_admission(retention::ADMISSION_KIND_POLICY, "retention-plan-policy", &[])?;
-    let authority_ref = store_admission(retention::ADMISSION_KIND_AUTHORITY, "retention-plan-authority", &[])?;
-    let support_ref = store_admission(retention::ADMISSION_KIND_SUPPORTING_EVIDENCE, "retention-plan-support", &[])?;
-    let index_ref = store_admission(retention::ADMISSION_KIND_REFERENCE_INDEX, "retention-plan-index", &[])?;
-    let remote_gc_ref = store_admission(
+    refs.policy = admission(root, &refs, retention::ADMISSION_KIND_POLICY, "retention-plan-policy", &[])?;
+    refs.authority = admission(root, &refs, retention::ADMISSION_KIND_AUTHORITY, "retention-plan-authority", &[])?;
+    refs.support =
+        admission(root, &refs, retention::ADMISSION_KIND_SUPPORTING_EVIDENCE, "retention-plan-support", &[])?;
+    refs.index = admission(root, &refs, retention::ADMISSION_KIND_REFERENCE_INDEX, "retention-plan-index", &[])?;
+    refs.remote_gc = admission(
+        root,
+        &refs,
         retention::ADMISSION_KIND_REMOTE_GC,
         "retention-plan-remote-gc",
-        std::slice::from_ref(&remote_ref),
+        std::slice::from_ref(&refs.remote),
     )?;
-    let clearance =
-        retention::store_retention_remote_gc_clearance(&root, &retention::RetentionRemoteGcClearanceInput {
-            decision: "pass",
-            requester_ref: &requester_ref,
-            peer_ref: &peer_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: retention::CLASS_DURABLE_VALUE,
-            action: retention::ACTION_DELETE,
-            remote_ref: &remote_ref,
-            policy_ref: &policy_ref,
-            authority_ref: &authority_ref,
-            evidence_refs: std::slice::from_ref(&support_ref),
-            retained_refs: &[],
-            is_current: true,
-            revoked_refs: &[],
-            diagnostics: &[],
-        })?;
-    let output = molten_cmd()
+    refs.clearance = clearance(root, &refs)?;
+    Ok(refs)
+}
+
+fn admission(root: &Path, refs: &Refs, kind: &str, label: &str, remote_refs: &[String]) -> CliResult<String> {
+    Ok(retention::store_retention_evidence_admission(root, &retention::RetentionEvidenceAdmissionInput {
+        kind,
+        decision: "pass",
+        requester_ref: &refs.requester,
+        object_ref: &refs.object,
+        object_kind: "chunk",
+        retention_class: retention::CLASS_DURABLE_VALUE,
+        action: retention::ACTION_DELETE,
+        bound_refs: &[test_ref(label)?],
+        retained_refs: &[],
+        remote_refs,
+        is_reference_index_complete: true,
+        is_current: true,
+        revoked_refs: &[],
+        diagnostics: &[],
+    })?
+    .admission_ref)
+}
+
+fn clearance(root: &Path, refs: &Refs) -> CliResult<String> {
+    Ok(retention::store_retention_remote_gc_clearance(root, &retention::RetentionRemoteGcClearanceInput {
+        decision: "pass",
+        requester_ref: &refs.requester,
+        peer_ref: &refs.peer,
+        object_ref: &refs.object,
+        object_kind: "chunk",
+        retention_class: retention::CLASS_DURABLE_VALUE,
+        action: retention::ACTION_DELETE,
+        remote_ref: &refs.remote,
+        policy_ref: &refs.policy,
+        authority_ref: &refs.authority,
+        evidence_refs: std::slice::from_ref(&refs.support),
+        retained_refs: &[],
+        is_current: true,
+        revoked_refs: &[],
+        diagnostics: &[],
+    })?
+    .clearance_ref)
+}
+
+fn run_plan(root: &Path, refs: &Refs, out: &Path) -> CliResult<retention::RetentionGcPlan> {
+    let mut command = molten_cmd();
+    command
         .args(["test", "retention", "gc-plan", "--root"])
-        .arg(&root)
+        .arg(root)
         .args(["--subsystem", "ledger-gc", "--object-ref"])
-        .arg(&object_ref)
+        .arg(&refs.object)
         .args([
             "--object-kind",
             "chunk",
@@ -2249,56 +2298,59 @@ fn cli_retention_gc_plan_lists_gates_before_mutation() -> CliResult<()> {
             retention::CLASS_DURABLE_VALUE,
             "--action",
             "delete",
-        ])
-        .args(["--retention-requester"])
-        .arg(&requester_ref)
-        .args(["--retention-policy-ref"])
-        .arg(&policy_ref)
-        .args(["--retention-authority-ref"])
-        .arg(&authority_ref)
-        .args(["--retention-evidence-ref"])
-        .arg(&support_ref)
-        .args(["--retention-remote-peer-ref"])
-        .arg(&peer_ref)
-        .args(["--retention-remote-ref"])
-        .arg(&remote_ref)
-        .args(["--retention-reference-index-ref"])
-        .arg(&index_ref)
-        .args(["--retention-remote-gc-ref"])
-        .arg(&remote_gc_ref)
-        .args(["--retention-remote-clearance-ref"])
-        .arg(&clearance.clearance_ref)
-        .args(["--retention-reference-index-complete", "--out"])
-        .arg(&plan_path)
-        .output()?;
+        ]);
+    add_refs(&mut command, refs);
+    command.args(["--out"]).arg(out);
+    let output = command.output()?;
     assert_success(&output, "retention gc-plan");
     assert!(stdout(&output).contains("retention gc plan ref="));
-    let plan_value = read_preserves(&plan_path)?;
-    assert_eq!(molten::ledger::artifact_kind(&plan_value), "retention-gc-plan");
-    let plan = retention::parse_retention_gc_plan(&plan_value)?;
+    let value = read_preserves(out)?;
+    assert_eq!(molten::ledger::artifact_kind(&value), "retention-gc-plan");
+    let plan = retention::parse_retention_gc_plan(&value)?;
     assert_eq!(plan.decision, "pass");
     assert!(plan.gates.iter().any(|gate| gate.name == "remote-clearance" && gate.decision == "pass"));
-    let show = molten_cmd().args(["test", "retention", "show"]).arg(&plan_path).output()?;
-    assert_success(&show, "retention show gc-plan");
-    assert!(stdout(&show).contains("retention gc plan"));
-    let apply_output = molten_cmd()
+    Ok(plan)
+}
+
+fn add_refs(command: &mut Command, refs: &Refs) {
+    command
+        .args(["--retention-requester"])
+        .arg(&refs.requester)
+        .args(["--retention-policy-ref"])
+        .arg(&refs.policy)
+        .args(["--retention-authority-ref"])
+        .arg(&refs.authority)
+        .args(["--retention-evidence-ref"])
+        .arg(&refs.support)
+        .args(["--retention-remote-peer-ref"])
+        .arg(&refs.peer)
+        .args(["--retention-remote-ref"])
+        .arg(&refs.remote)
+        .args(["--retention-reference-index-ref"])
+        .arg(&refs.index)
+        .args(["--retention-remote-gc-ref"])
+        .arg(&refs.remote_gc)
+        .args(["--retention-remote-clearance-ref"])
+        .arg(&refs.clearance)
+        .args(["--retention-reference-index-complete"]);
+}
+
+fn run_apply(root: &Path, plan: &retention::RetentionGcPlan, out: &Path) -> CliResult<retention::RetentionGcApply> {
+    let output = molten_cmd()
         .args(["test", "retention", "gc-apply-plan", "--root"])
-        .arg(&root)
+        .arg(root)
         .args(["--plan-ref"])
         .arg(&plan.plan_ref)
         .args(["--receipt-out"])
-        .arg(&apply_path)
+        .arg(out)
         .output()?;
-    assert_success(&apply_output, "retention gc-apply-plan");
-    assert!(stdout(&apply_output).contains("retention gc apply ref="));
-    let apply_value = read_preserves(&apply_path)?;
-    assert_eq!(molten::ledger::artifact_kind(&apply_value), "retention-gc-apply");
-    let apply = retention::parse_retention_gc_apply(&apply_value)?;
+    assert_success(&output, "retention gc-apply-plan");
+    assert!(stdout(&output).contains("retention gc apply ref="));
+    let value = read_preserves(out)?;
+    assert_eq!(molten::ledger::artifact_kind(&value), "retention-gc-apply");
+    let apply = retention::parse_retention_gc_apply(&value)?;
     assert_eq!(apply.decision, "pass");
-    assert_eq!(apply.plan_ref, plan.plan_ref);
-    assert!(apply.retention_receipt_ref.is_some());
-    assert!(apply.tombstone_ref.is_some());
-    Ok(())
+    Ok(apply)
 }
 
 #[test]
