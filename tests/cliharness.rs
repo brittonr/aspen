@@ -387,9 +387,72 @@ fn cli_failure_paths_write_canonical_failure_artifacts_to_files() -> CliResult<(
 #[test]
 fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let dir = temp_dir("dogfood-receipts")?;
+    let base = base_outputs(&dir)?;
+    receipt_ops(&base)?;
+    nix_bundle(&dir, &base)?;
+    let keys = key_set(&dir)?;
+    let members = member_files(&dir, &base, &keys)?;
+    let bundles = bundle_checks(&dir, &base, &keys, &members)?;
+    let promotion = promotion_summary(&dir, &keys, &bundles)?;
+    missing_member_summary(&dir, &keys)?;
+    let archive = archive_case(&dir, &promotion)?;
+    archive_denials(&dir, &archive)?;
+    wrong_signer_denial(&dir, &base, &members)?;
+    revoked_key_denial(&dir, &keys, &bundles)?;
+    stale_marker_denial(&dir, &base, &bundles)?;
+    Ok(())
+}
+
+struct BaseOutputs {
+    ledger: PathBuf,
+    report: PathBuf,
+    gate: PathBuf,
+    replay_verify: PathBuf,
+    replay_index: PathBuf,
+    nix_evidence: PathBuf,
+    nix_verify: PathBuf,
+    bundle: PathBuf,
+    report_ref: String,
+    gate_ref: String,
+}
+
+struct Keys {
+    ledger: PathBuf,
+    key_ref: String,
+}
+
+struct MemberFiles {
+    report: PathBuf,
+    gate: PathBuf,
+    replay_verify: PathBuf,
+    replay_index: PathBuf,
+    nix_evidence: PathBuf,
+    nix_verify: PathBuf,
+}
+
+struct BundleChecks {
+    path: PathBuf,
+    keyring_verify: PathBuf,
+}
+
+struct PromotionSummary {
+    summary_ref: String,
+}
+
+struct PromotionRefs {
+    promotion_ref: String,
+    summary_ref: String,
+}
+
+struct ArchiveCase {
+    manifest: PathBuf,
+    member_refs: Vec<(String, String)>,
+}
+
+fn base_outputs(dir: &Path) -> CliResult<BaseOutputs> {
     let state_root = dir.join("state");
     let report = dir.join("dogfood-report.preserves");
-    let release_gate = dir.join("release-gate.preserves");
+    let gate = dir.join("release-gate.preserves");
     let replay_verify = dir.join("replay-verify.preserves");
     let replay_index = dir.join("replay-evidence-index.preserves");
     let run = molten_cmd()
@@ -398,7 +461,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .args(["--out"])
         .arg(&report)
         .args(["--release-gate-out"])
-        .arg(&release_gate)
+        .arg(&gate)
         .args(["--replay-verify-out"])
         .arg(&replay_verify)
         .args(["--replay-index-out"])
@@ -410,111 +473,118 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let report_value = read_preserves(&report)?;
     let parsed_report = molten::operator_dogfood::parse_dogfood_report(&report_value)?;
     assert_eq!(parsed_report.decision, "pass");
-    let release_gate_ref = canonical_hash(&read_preserves(&release_gate)?)?;
+    let gate_ref = canonical_hash(&read_preserves(&gate)?)?;
     assert!(fs::read_to_string(&replay_verify)?.contains("deterministic-replay-verify-v1"));
     assert!(fs::read_to_string(&replay_index)?.contains("deterministic-replay-index-v1"));
-    let ledger = state_root.join("ledger");
+    Ok(BaseOutputs {
+        ledger: state_root.join("ledger"),
+        report,
+        gate,
+        replay_verify,
+        replay_index,
+        nix_evidence: dir.join("nix-dogfood-evidence.preserves"),
+        nix_verify: dir.join("nix-dogfood-verify.preserves"),
+        bundle: dir.join("release-evidence-bundle.preserves"),
+        report_ref: parsed_report.report_ref,
+        gate_ref,
+    })
+}
 
-    let list = molten_cmd().args(["receipts", "list", "--ledger"]).arg(&ledger).output()?;
+fn receipt_ops(base: &BaseOutputs) -> CliResult<()> {
+    let list = molten_cmd().args(["receipts", "list", "--ledger"]).arg(&base.ledger).output()?;
     assert_success(&list, "receipts list");
-    assert!(stdout(&list).contains(&parsed_report.report_ref));
+    assert!(stdout(&list).contains(&base.report_ref));
     assert!(stdout(&list).contains("dogfood-report"));
 
     let show = molten_cmd()
         .args(["receipts", "show"])
-        .arg(&parsed_report.report_ref)
+        .arg(&base.report_ref)
         .args(["--ledger"])
-        .arg(&ledger)
+        .arg(&base.ledger)
         .output()?;
     assert_success(&show, "receipts show");
     assert!(stdout(&show).contains("operator dogfood report"));
 
     let validate = molten_cmd()
         .args(["receipts", "validate"])
-        .arg(&parsed_report.report_ref)
+        .arg(&base.report_ref)
         .args(["--ledger"])
-        .arg(&ledger)
+        .arg(&base.ledger)
         .output()?;
     assert_success(&validate, "receipts validate");
     assert!(stdout(&validate).contains("receipts validate ok"));
 
-    let exported = dir.join("exported-dogfood-report.preserves");
+    let exported = base.report.with_file_name("exported-dogfood-report.preserves");
     let export = molten_cmd()
         .args(["receipts", "export"])
-        .arg(&parsed_report.report_ref)
+        .arg(&base.report_ref)
         .args(["--ledger"])
-        .arg(&ledger)
+        .arg(&base.ledger)
         .args(["--out"])
         .arg(&exported)
         .output()?;
     assert_success(&export, "receipts export");
     assert!(stdout(&export).contains("redaction=pass"));
-    assert_eq!(canonical_hash(&read_preserves(&exported)?)?, parsed_report.report_ref);
+    assert_eq!(canonical_hash(&read_preserves(&exported)?)?, base.report_ref);
+    Ok(())
+}
 
+fn nix_bundle(dir: &Path, base: &BaseOutputs) -> CliResult<()> {
     fs::write(
         dir.join("dogfood-summary.txt"),
-        format!(
-            "dogfood local-node decision=pass report={} release-gate={}\n",
-            parsed_report.report_ref, release_gate_ref
-        ),
+        format!("dogfood local-node decision=pass report={} release-gate={}\n", base.report_ref, base.gate_ref),
     )?;
     fs::write(dir.join("after-nextest.txt"), "/nix/store/test-molten-nextest\n")?;
-    let nix_evidence = dir.join("nix-dogfood-evidence.preserves");
-    let nix_verify = dir.join("nix-dogfood-verify.preserves");
     let export_nix = molten_cmd()
         .args(["dogfood", "nix-release-export", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--out"])
-        .arg(&nix_evidence)
+        .arg(&base.nix_evidence)
         .output()?;
     assert_success(&export_nix, "dogfood nix-release-export");
     let verify_nix = molten_cmd()
         .args(["dogfood", "nix-release-verify", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--evidence"])
-        .arg(&nix_evidence)
+        .arg(&base.nix_evidence)
         .args(["--receipt-out"])
-        .arg(&nix_verify)
+        .arg(&base.nix_verify)
         .output()?;
     assert_success(&verify_nix, "dogfood nix-release-verify");
     fs::write(dir.join("nix-dogfood-verify.txt"), stdout(&verify_nix))?;
-    let verify_receipt = molten::operator_dogfood::parse_nix_dogfood_verify_receipt(&read_preserves(&nix_verify)?)?;
+    let verify_receipt =
+        molten::operator_dogfood::parse_nix_dogfood_verify_receipt(&read_preserves(&base.nix_verify)?)?;
     assert_eq!(verify_receipt.decision, "pass");
 
-    let release_bundle = dir.join("release-evidence-bundle.preserves");
-    let release_bundle_verify = dir.join("release-evidence-bundle-verify.preserves");
+    let bundle_verify = dir.join("release-evidence-bundle-verify.preserves");
     let export_bundle = molten_cmd()
         .args(["dogfood", "release-bundle-export", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--out"])
-        .arg(&release_bundle)
+        .arg(&base.bundle)
         .output()?;
     assert_success(&export_bundle, "dogfood release-bundle-export");
     let verify_bundle = molten_cmd()
         .args(["dogfood", "release-bundle-verify", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--bundle"])
-        .arg(&release_bundle)
+        .arg(&base.bundle)
         .args(["--receipt-out"])
-        .arg(&release_bundle_verify)
+        .arg(&bundle_verify)
         .output()?;
     assert_success(&verify_bundle, "dogfood release-bundle-verify");
     fs::write(dir.join("release-evidence-bundle-verify.txt"), stdout(&verify_bundle))?;
-    let bundle_verify = molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(&read_preserves(
-        &release_bundle_verify,
-    )?)?;
-    assert_eq!(bundle_verify.decision, "pass");
+    let parsed =
+        molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(&read_preserves(&bundle_verify)?)?;
+    assert_eq!(parsed.decision, "pass");
+    Ok(())
+}
 
-    let signed_report = dir.join("dogfood-report.signed.preserves");
-    let signed_gate = dir.join("release-gate.signed.preserves");
-    let signed_replay_verify = dir.join("replay-verify.signed.preserves");
-    let signed_replay_index = dir.join("replay-evidence-index.signed.preserves");
-    let signed_nix_evidence = dir.join("nix-dogfood-evidence.signed.preserves");
-    let signed_nix_verify = dir.join("nix-dogfood-verify.signed.preserves");
-    let key_ledger = dir.join("signed-keyring");
+fn key_set(dir: &Path) -> CliResult<Keys> {
+    let ledger = dir.join("signed-keyring");
     let key_import = molten_cmd()
         .args(["receipts", "key", "import", "--ledger"])
-        .arg(&key_ledger)
+        .arg(&ledger)
         .args([
             "--key-id",
             "release-key-1",
@@ -534,20 +604,25 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .find_map(|field| field.strip_prefix("key="))
         .ok_or_else(|| test_error("key import output did not include key ref"))?
         .to_string();
-    let key_list = molten_cmd().args(["receipts", "key", "list", "--ledger"]).arg(&key_ledger).output()?;
+    let key_list = molten_cmd().args(["receipts", "key", "list", "--ledger"]).arg(&ledger).output()?;
     assert_success(&key_list, "receipts key list");
     assert!(stdout(&key_list).contains("release-key-1"));
     let key_show = molten_cmd()
         .args(["receipts", "key", "show"])
         .arg(&key_ref)
         .args(["--ledger"])
-        .arg(&key_ledger)
+        .arg(&ledger)
         .output()?;
     assert_success(&key_show, "receipts key show");
     assert!(stdout(&key_show).contains("evidence-only=pass"));
+    rotate_seed_key(&ledger)?;
+    Ok(Keys { ledger, key_ref })
+}
+
+fn rotate_seed_key(ledger: &Path) -> CliResult<()> {
     let rotate_seed = molten_cmd()
         .args(["receipts", "key", "import", "--ledger"])
-        .arg(&key_ledger)
+        .arg(ledger)
         .args([
             "--key-id",
             "rotate-key-1",
@@ -569,18 +644,30 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         .args(["receipts", "key", "rotate"])
         .arg(&rotate_key_ref)
         .args(["--ledger"])
-        .arg(&key_ledger)
+        .arg(ledger)
         .args(["--new-key-id", "rotate-key-2", "--new-key", "rotate-key-2"])
         .output()?;
     assert_success(&rotate_success, "receipts key rotate");
     assert!(stdout(&rotate_success).contains("new-key-id=rotate-key-2"));
+    Ok(())
+}
+
+fn member_files(dir: &Path, base: &BaseOutputs, keys: &Keys) -> CliResult<MemberFiles> {
+    let members = MemberFiles {
+        report: dir.join("dogfood-report.signed.preserves"),
+        gate: dir.join("release-gate.signed.preserves"),
+        replay_verify: dir.join("replay-verify.signed.preserves"),
+        replay_index: dir.join("replay-evidence-index.signed.preserves"),
+        nix_evidence: dir.join("nix-dogfood-evidence.signed.preserves"),
+        nix_verify: dir.join("nix-dogfood-verify.signed.preserves"),
+    };
     for (receipt_path, signed_path) in [
-        (&report, &signed_report),
-        (&release_gate, &signed_gate),
-        (&replay_verify, &signed_replay_verify),
-        (&replay_index, &signed_replay_index),
-        (&nix_evidence, &signed_nix_evidence),
-        (&nix_verify, &signed_nix_verify),
+        (&base.report, &members.report),
+        (&base.gate, &members.gate),
+        (&base.replay_verify, &members.replay_verify),
+        (&base.replay_index, &members.replay_index),
+        (&base.nix_evidence, &members.nix_evidence),
+        (&base.nix_verify, &members.nix_verify),
     ] {
         let signed = molten_cmd()
             .args(["receipts", "sign"])
@@ -600,9 +687,14 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
             .output()?;
         assert_success(&signed, "receipts sign release member");
     }
+    verify_member_file(base, keys, &members.report)?;
+    Ok(members)
+}
+
+fn verify_member_file(base: &BaseOutputs, keys: &Keys, signed_report: &Path) -> CliResult<()> {
     let verify_signed = molten_cmd()
         .args(["receipts", "verify-signed"])
-        .arg(&signed_report)
+        .arg(signed_report)
         .args([
             "--purpose",
             "release-evidence",
@@ -614,13 +706,13 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
             "release-signer",
             "--subject-ref",
         ])
-        .arg(&parsed_report.report_ref)
+        .arg(&base.report_ref)
         .output()?;
     assert_success(&verify_signed, "receipts verify-signed release member");
     assert!(stdout(&verify_signed).contains("evidence-only=pass"));
     let verify_signed_keyring = molten_cmd()
         .args(["receipts", "verify-signed"])
-        .arg(&signed_report)
+        .arg(signed_report)
         .args([
             "--purpose",
             "release-evidence",
@@ -628,22 +720,31 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
             "release-root",
             "--key-ledger",
         ])
-        .arg(&key_ledger)
-        .args(["--key-ref", &key_ref, "--signer", "release-signer", "--subject-ref"])
-        .arg(&parsed_report.report_ref)
+        .arg(&keys.ledger)
+        .args([
+            "--key-ref",
+            &keys.key_ref,
+            "--signer",
+            "release-signer",
+            "--subject-ref",
+        ])
+        .arg(&base.report_ref)
         .output()?;
     assert_success(&verify_signed_keyring, "receipts verify-signed release member with keyring");
     assert!(stdout(&verify_signed_keyring).contains("keyring=current"));
+    Ok(())
+}
 
-    let signed_bundle_verify_path = dir.join("release-evidence-bundle-verify-signed.preserves");
-    let mut verify_signed_bundle = molten_cmd();
-    verify_signed_bundle
+fn bundle_checks(dir: &Path, base: &BaseOutputs, keys: &Keys, members: &MemberFiles) -> CliResult<BundleChecks> {
+    let direct = dir.join("release-evidence-bundle-verify-signed.preserves");
+    let mut verify_direct = molten_cmd();
+    verify_direct
         .args(["dogfood", "release-bundle-verify", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--bundle"])
-        .arg(&release_bundle)
+        .arg(&base.bundle)
         .args(["--receipt-out"])
-        .arg(&signed_bundle_verify_path)
+        .arg(&direct)
         .args([
             "--require-signed-members",
             "--signed-purpose",
@@ -655,32 +756,22 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
             "--signed-signer",
             "release-signer",
         ]);
-    for signed_path in [
-        &signed_report,
-        &signed_gate,
-        &signed_replay_verify,
-        &signed_replay_index,
-        &signed_nix_evidence,
-        &signed_nix_verify,
-    ] {
-        verify_signed_bundle.args(["--signed-member"]).arg(signed_path);
-    }
-    let signed_bundle_output = verify_signed_bundle.output()?;
-    assert_success(&signed_bundle_output, "dogfood release-bundle-verify signed members");
-    let signed_bundle_receipt = molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(
-        &read_preserves(&signed_bundle_verify_path)?,
-    )?;
-    assert_eq!(signed_bundle_receipt.decision, "pass");
+    add_member_args(&mut verify_direct, members);
+    let direct_output = verify_direct.output()?;
+    assert_success(&direct_output, "dogfood release-bundle-verify signed members");
+    let direct_receipt =
+        molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(&read_preserves(&direct)?)?;
+    assert_eq!(direct_receipt.decision, "pass");
 
-    let keyring_bundle_verify_path = dir.join("release-evidence-bundle-verify-keyring.preserves");
-    let mut verify_keyring_bundle = molten_cmd();
-    verify_keyring_bundle
+    let keyring_verify = dir.join("release-evidence-bundle-verify-keyring.preserves");
+    let mut verify_keyring = molten_cmd();
+    verify_keyring
         .args(["dogfood", "release-bundle-verify", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--bundle"])
-        .arg(&release_bundle)
+        .arg(&base.bundle)
         .args(["--receipt-out"])
-        .arg(&keyring_bundle_verify_path)
+        .arg(&keyring_verify)
         .args([
             "--require-signed-members",
             "--signed-purpose",
@@ -689,38 +780,48 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
             "release-root",
             "--signed-key-ledger",
         ])
-        .arg(&key_ledger)
+        .arg(&keys.ledger)
         .args(["--signed-key-ref"])
-        .arg(&key_ref)
+        .arg(&keys.key_ref)
         .args(["--signed-signer", "release-signer"]);
+    add_member_args(&mut verify_keyring, members);
+    let keyring_output = verify_keyring.output()?;
+    assert_success(&keyring_output, "dogfood release-bundle-verify signed keyring members");
+    let keyring_receipt =
+        molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(&read_preserves(&keyring_verify)?)?;
+    assert_eq!(keyring_receipt.decision, "pass");
+    Ok(BundleChecks {
+        path: base.bundle.clone(),
+        keyring_verify,
+    })
+}
+
+fn add_member_args(command: &mut Command, members: &MemberFiles) {
     for signed_path in [
-        &signed_report,
-        &signed_gate,
-        &signed_replay_verify,
-        &signed_replay_index,
-        &signed_nix_evidence,
-        &signed_nix_verify,
+        &members.report,
+        &members.gate,
+        &members.replay_verify,
+        &members.replay_index,
+        &members.nix_evidence,
+        &members.nix_verify,
     ] {
-        verify_keyring_bundle.args(["--signed-member"]).arg(signed_path);
+        command.args(["--signed-member"]).arg(signed_path);
     }
-    let keyring_bundle_output = verify_keyring_bundle.output()?;
-    assert_success(&keyring_bundle_output, "dogfood release-bundle-verify signed keyring members");
-    let keyring_bundle_receipt = molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(
-        &read_preserves(&keyring_bundle_verify_path)?,
-    )?;
-    assert_eq!(keyring_bundle_receipt.decision, "pass");
+}
+
+fn promotion_summary(dir: &Path, keys: &Keys, bundles: &BundleChecks) -> CliResult<PromotionSummary> {
     let promotion_receipt_path = dir.join("release-promotion-gate.preserves");
     let promotion = molten_cmd()
         .args(["dogfood", "release-promote", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--bundle-verify"])
-        .arg(&keyring_bundle_verify_path)
+        .arg(&bundles.keyring_verify)
         .args(["--receipt-out"])
         .arg(&promotion_receipt_path)
         .args(["--signed-key-ledger"])
-        .arg(&key_ledger)
+        .arg(&keys.ledger)
         .args(["--signed-key-ref"])
-        .arg(&key_ref)
+        .arg(&keys.key_ref)
         .args([
             "--signed-signer",
             "release-signer",
@@ -740,12 +841,27 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let promotion_receipt =
         molten::operator_dogfood::parse_release_promotion_gate_receipt(&read_preserves(&promotion_receipt_path)?)?;
     assert_eq!(promotion_receipt.decision, "pass");
-    let signed_promotion_path = dir.join("release-promotion-gate.signed.preserves");
+    sign_and_verify_promotion(dir, keys, &promotion_receipt_path, &promotion_receipt.receipt_ref)?;
+    let refs = write_promotion_summary(
+        dir,
+        keys,
+        "release-promotion-summary.preserves",
+        Some("release-promotion-summary.txt"),
+        "pass",
+    )?;
+    assert_eq!(refs.promotion_ref, promotion_receipt.receipt_ref);
+    Ok(PromotionSummary {
+        summary_ref: refs.summary_ref,
+    })
+}
+
+fn sign_and_verify_promotion(dir: &Path, keys: &Keys, receipt_path: &Path, receipt_ref: &str) -> CliResult<()> {
+    let signed_path = dir.join("release-promotion-gate.signed.preserves");
     let sign_promotion = molten_cmd()
         .args(["receipts", "sign"])
-        .arg(&promotion_receipt_path)
+        .arg(receipt_path)
         .args(["--out"])
-        .arg(&signed_promotion_path)
+        .arg(&signed_path)
         .args([
             "--signer",
             "release-signer",
@@ -760,7 +876,7 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     assert_success(&sign_promotion, "sign release promotion receipt");
     let verify_signed_promotion = molten_cmd()
         .args(["receipts", "verify-signed"])
-        .arg(&signed_promotion_path)
+        .arg(&signed_path)
         .args([
             "--purpose",
             "release-promotion",
@@ -768,187 +884,147 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
             "release-root",
             "--key-ledger",
         ])
-        .arg(&key_ledger)
+        .arg(&keys.ledger)
         .args(["--key-ref"])
-        .arg(&key_ref)
+        .arg(&keys.key_ref)
         .args(["--signer", "release-signer", "--subject-ref"])
-        .arg(&promotion_receipt.receipt_ref)
+        .arg(receipt_ref)
         .output()?;
     assert_success(&verify_signed_promotion, "verify signed release promotion receipt");
     fs::write(dir.join("release-promotion-gate-signed-verify.txt"), stdout(&verify_signed_promotion))?;
-    let promotion_summary_path = dir.join("release-promotion-summary.preserves");
-    let promotion_summary = molten_cmd()
-        .args(["dogfood", "release-promotion-summary", "--output-path"])
-        .arg(&dir)
-        .args(["--out"])
-        .arg(&promotion_summary_path)
-        .args(["--signed-key-ledger"])
-        .arg(&key_ledger)
-        .args(["--signed-key-ref"])
-        .arg(&key_ref)
-        .args([
-            "--signed-signer",
-            "release-signer",
-            "--signed-trust-root",
-            "release-root",
-        ])
-        .output()?;
-    assert_success(&promotion_summary, "dogfood release-promotion-summary");
-    assert!(stdout(&promotion_summary).contains("decision=pass"));
-    fs::write(dir.join("release-promotion-summary.txt"), stdout(&promotion_summary))?;
-    let parsed_promotion_summary =
-        molten::operator_dogfood::parse_release_promotion_summary(&read_preserves(&promotion_summary_path)?)?;
-    assert_eq!(parsed_promotion_summary.decision, "pass");
-    assert_eq!(parsed_promotion_summary.promotion_ref, promotion_receipt.receipt_ref);
-    let missing_signed_path = dir.join("release-promotion-gate.signed.missing");
-    fs::rename(&signed_promotion_path, &missing_signed_path)?;
-    let missing_signed_summary_path = dir.join("release-promotion-summary-missing-signed.preserves");
-    let missing_signed_summary = molten_cmd()
-        .args(["dogfood", "release-promotion-summary", "--output-path"])
-        .arg(&dir)
-        .args(["--out"])
-        .arg(&missing_signed_summary_path)
-        .args(["--signed-key-ledger"])
-        .arg(&key_ledger)
-        .args(["--signed-key-ref"])
-        .arg(&key_ref)
-        .args([
-            "--signed-signer",
-            "release-signer",
-            "--signed-trust-root",
-            "release-root",
-        ])
-        .output()?;
-    assert_success(&missing_signed_summary, "dogfood release-promotion-summary missing signed receipt");
-    let parsed_missing_signed_summary =
-        molten::operator_dogfood::parse_release_promotion_summary(&read_preserves(&missing_signed_summary_path)?)?;
-    assert_eq!(parsed_missing_signed_summary.decision, "deny");
-    fs::rename(&missing_signed_path, &signed_promotion_path)?;
+    Ok(())
+}
 
-    let release_export_archive = dir.join("release-evidence.tar.zst");
-    let release_export_manifest = dir.join("release-export-manifest.preserves");
+fn write_promotion_summary(
+    dir: &Path,
+    keys: &Keys,
+    name: &str,
+    stdout_name: Option<&str>,
+    expected_decision: &str,
+) -> CliResult<PromotionRefs> {
+    let summary_path = dir.join(name);
+    let summary = molten_cmd()
+        .args(["dogfood", "release-promotion-summary", "--output-path"])
+        .arg(dir)
+        .args(["--out"])
+        .arg(&summary_path)
+        .args(["--signed-key-ledger"])
+        .arg(&keys.ledger)
+        .args(["--signed-key-ref"])
+        .arg(&keys.key_ref)
+        .args([
+            "--signed-signer",
+            "release-signer",
+            "--signed-trust-root",
+            "release-root",
+        ])
+        .output()?;
+    assert_success(&summary, "dogfood release-promotion-summary");
+    if let Some(stdout_name) = stdout_name {
+        fs::write(dir.join(stdout_name), stdout(&summary))?;
+    }
+    let parsed = molten::operator_dogfood::parse_release_promotion_summary(&read_preserves(&summary_path)?)?;
+    assert_eq!(parsed.decision, expected_decision);
+    Ok(PromotionRefs {
+        promotion_ref: parsed.promotion_ref,
+        summary_ref: parsed.summary_ref,
+    })
+}
+
+fn missing_member_summary(dir: &Path, keys: &Keys) -> CliResult<()> {
+    let signed_path = dir.join("release-promotion-gate.signed.preserves");
+    let missing_path = dir.join("release-promotion-gate.signed.missing");
+    fs::rename(&signed_path, &missing_path)?;
+    let _refs = write_promotion_summary(dir, keys, "release-promotion-summary-missing-signed.preserves", None, "deny")?;
+    fs::rename(&missing_path, &signed_path)?;
+    Ok(())
+}
+
+fn archive_case(dir: &Path, promotion: &PromotionSummary) -> CliResult<ArchiveCase> {
+    let archive_path = dir.join("release-evidence.tar.zst");
+    let manifest = dir.join("release-export-manifest.preserves");
     let release_export = molten_cmd()
         .args(["dogfood", "release-export", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--out"])
-        .arg(&release_export_archive)
+        .arg(&archive_path)
         .args(["--manifest-out"])
-        .arg(&release_export_manifest)
+        .arg(&manifest)
         .output()?;
     assert_success(&release_export, "dogfood release-export");
     assert!(stdout(&release_export).contains("release-export manifest="));
-    let parsed_release_export =
-        molten::operator_dogfood::parse_release_export_manifest(&read_preserves(&release_export_manifest)?)?;
-    assert_eq!(parsed_release_export.promotion_summary_ref, parsed_promotion_summary.summary_ref);
-    let release_export_verify_path = dir.join("release-export-verify.preserves");
-    let release_export_verify = molten_cmd()
-        .args(["dogfood", "release-export-verify", "--bundle"])
-        .arg(&release_export_archive)
-        .args(["--receipt-out"])
-        .arg(&release_export_verify_path)
-        .output()?;
-    assert_success(&release_export_verify, "dogfood release-export-verify");
-    assert!(stdout(&release_export_verify).contains("decision=pass"));
-    let parsed_release_export_verify =
-        molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(&release_export_verify_path)?)?;
-    assert_eq!(parsed_release_export_verify.decision, "pass");
+    let parsed_export = molten::operator_dogfood::parse_release_export_manifest(&read_preserves(&manifest)?)?;
+    assert_eq!(parsed_export.promotion_summary_ref, promotion.summary_ref);
 
-    let release_export_missing_manifest = dir.join("release-evidence-missing-manifest.tar.zst");
-    write_release_export_test_archive(
-        &dir,
-        &release_export_missing_manifest,
-        None,
-        &parsed_release_export.member_refs,
-    )?;
-    let release_export_missing_manifest_verify_path = dir.join("release-export-verify-missing-manifest.preserves");
-    let release_export_missing_manifest_verify = molten_cmd()
+    let verify_path = dir.join("release-export-verify.preserves");
+    let verify = molten_cmd()
         .args(["dogfood", "release-export-verify", "--bundle"])
-        .arg(&release_export_missing_manifest)
+        .arg(&archive_path)
         .args(["--receipt-out"])
-        .arg(&release_export_missing_manifest_verify_path)
+        .arg(&verify_path)
         .output()?;
-    assert_success(
-        &release_export_missing_manifest_verify,
-        "dogfood release-export-verify missing manifest emits deny receipt",
-    );
-    let parsed_missing_manifest = molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(
-        &release_export_missing_manifest_verify_path,
-    )?)?;
-    assert_eq!(parsed_missing_manifest.decision, "deny");
+    assert_success(&verify, "dogfood release-export-verify");
+    assert!(stdout(&verify).contains("decision=pass"));
+    let parsed_verify = molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(&verify_path)?)?;
+    assert_eq!(parsed_verify.decision, "pass");
+    Ok(ArchiveCase {
+        manifest,
+        member_refs: parsed_export.member_refs,
+    })
+}
 
-    let release_export_extra = dir.join("release-evidence-extra.tar.zst");
+fn archive_denials(dir: &Path, archive: &ArchiveCase) -> CliResult<()> {
+    let missing_manifest = dir.join("release-evidence-missing-manifest.tar.zst");
+    write_release_export_test_archive(dir, &missing_manifest, None, &archive.member_refs)?;
+    verify_archive_deny(dir, &missing_manifest, "release-export-verify-missing-manifest.preserves")?;
+
+    let extra = dir.join("release-evidence-extra.tar.zst");
     write_release_export_test_archive_with_extra(
-        &dir,
-        &release_export_extra,
-        &release_export_manifest,
-        &parsed_release_export.member_refs,
+        dir,
+        &extra,
+        &archive.manifest,
+        &archive.member_refs,
         ExtraArchiveMember {
             name: "unexpected.txt",
             bytes: b"extra evidence",
         },
     )?;
-    let release_export_extra_verify_path = dir.join("release-export-verify-extra.preserves");
-    let release_export_extra_verify = molten_cmd()
-        .args(["dogfood", "release-export-verify", "--bundle"])
-        .arg(&release_export_extra)
-        .args(["--receipt-out"])
-        .arg(&release_export_extra_verify_path)
-        .output()?;
-    assert_success(&release_export_extra_verify, "dogfood release-export-verify extra member emits deny receipt");
-    let parsed_extra = molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(
-        &release_export_extra_verify_path,
-    )?)?;
-    assert_eq!(parsed_extra.decision, "deny");
+    verify_archive_deny(dir, &extra, "release-export-verify-extra.preserves")?;
 
-    let release_export_tampered = dir.join("release-evidence-tampered.tar.zst");
-    write_release_export_test_archive_with_tamper(
-        &dir,
-        &release_export_tampered,
-        &release_export_manifest,
-        &parsed_release_export.member_refs,
-    )?;
-    let release_export_tampered_verify_path = dir.join("release-export-verify-tampered.preserves");
-    let release_export_tampered_verify = molten_cmd()
-        .args(["dogfood", "release-export-verify", "--bundle"])
-        .arg(&release_export_tampered)
-        .args(["--receipt-out"])
-        .arg(&release_export_tampered_verify_path)
-        .output()?;
-    assert_success(&release_export_tampered_verify, "dogfood release-export-verify tampered emits deny receipt");
-    let parsed_tampered = molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(
-        &release_export_tampered_verify_path,
-    )?)?;
-    assert_eq!(parsed_tampered.decision, "deny");
+    let tampered = dir.join("release-evidence-tampered.tar.zst");
+    write_release_export_test_archive_with_tamper(dir, &tampered, &archive.manifest, &archive.member_refs)?;
+    verify_archive_deny(dir, &tampered, "release-export-verify-tampered.preserves")?;
 
-    let release_export_duplicate = dir.join("release-evidence-duplicate.tar.zst");
-    write_release_export_test_archive_with_duplicate(
-        &dir,
-        &release_export_duplicate,
-        &release_export_manifest,
-        &parsed_release_export.member_refs,
-    )?;
-    let release_export_duplicate_verify_path = dir.join("release-export-verify-duplicate.preserves");
-    let release_export_duplicate_verify = molten_cmd()
-        .args(["dogfood", "release-export-verify", "--bundle"])
-        .arg(&release_export_duplicate)
-        .args(["--receipt-out"])
-        .arg(&release_export_duplicate_verify_path)
-        .output()?;
-    assert_success(&release_export_duplicate_verify, "dogfood release-export-verify duplicate emits deny receipt");
-    let parsed_duplicate = molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(
-        &release_export_duplicate_verify_path,
-    )?)?;
-    assert_eq!(parsed_duplicate.decision, "deny");
+    let duplicate = dir.join("release-evidence-duplicate.tar.zst");
+    write_release_export_test_archive_with_duplicate(dir, &duplicate, &archive.manifest, &archive.member_refs)?;
+    verify_archive_deny(dir, &duplicate, "release-export-verify-duplicate.preserves")?;
+    Ok(())
+}
 
-    let wrong_signer_bundle_verify_path = dir.join("release-evidence-bundle-verify-wrong-signer.preserves");
-    let mut verify_wrong_signer_bundle = molten_cmd();
-    verify_wrong_signer_bundle
+fn verify_archive_deny(dir: &Path, archive_path: &Path, receipt_name: &str) -> CliResult<()> {
+    let receipt_path = dir.join(receipt_name);
+    let verify = molten_cmd()
+        .args(["dogfood", "release-export-verify", "--bundle"])
+        .arg(archive_path)
+        .args(["--receipt-out"])
+        .arg(&receipt_path)
+        .output()?;
+    assert_success(&verify, "dogfood release-export-verify emits deny receipt");
+    let parsed = molten::operator_dogfood::parse_release_export_verify_receipt(&read_preserves(&receipt_path)?)?;
+    assert_eq!(parsed.decision, "deny");
+    Ok(())
+}
+
+fn wrong_signer_denial(dir: &Path, base: &BaseOutputs, members: &MemberFiles) -> CliResult<()> {
+    let receipt_path = dir.join("release-evidence-bundle-verify-wrong-signer.preserves");
+    let mut verify = molten_cmd();
+    verify
         .args(["dogfood", "release-bundle-verify", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--bundle"])
-        .arg(&release_bundle)
+        .arg(&base.bundle)
         .args(["--receipt-out"])
-        .arg(&wrong_signer_bundle_verify_path)
+        .arg(&receipt_path)
         .args([
             "--require-signed-members",
             "--signed-purpose",
@@ -960,35 +1036,28 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
             "--signed-signer",
             "wrong-signer",
         ]);
-    for signed_path in [
-        &signed_report,
-        &signed_gate,
-        &signed_replay_verify,
-        &signed_replay_index,
-        &signed_nix_evidence,
-        &signed_nix_verify,
-    ] {
-        verify_wrong_signer_bundle.args(["--signed-member"]).arg(signed_path);
-    }
-    let wrong_signer_bundle = verify_wrong_signer_bundle.output()?;
-    assert_success(&wrong_signer_bundle, "dogfood release-bundle-verify wrong signer");
-    let wrong_signer_bundle_receipt = molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(
-        &read_preserves(&wrong_signer_bundle_verify_path)?,
-    )?;
-    assert_eq!(wrong_signer_bundle_receipt.decision, "deny");
-    assert!(wrong_signer_bundle_receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("signer")));
+    add_member_args(&mut verify, members);
+    let output = verify.output()?;
+    assert_success(&output, "dogfood release-bundle-verify wrong signer");
+    let receipt =
+        molten::operator_dogfood::parse_release_evidence_bundle_verify_receipt(&read_preserves(&receipt_path)?)?;
+    assert_eq!(receipt.decision, "deny");
+    assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("signer")));
+    Ok(())
+}
 
+fn revoked_key_denial(dir: &Path, keys: &Keys, bundles: &BundleChecks) -> CliResult<()> {
     let revoke_key = molten_cmd()
         .args(["receipts", "key", "revoke"])
-        .arg(&key_ref)
+        .arg(&keys.key_ref)
         .args(["--ledger"])
-        .arg(&key_ledger)
+        .arg(&keys.ledger)
         .args(["--reason", "test-revoked"])
         .output()?;
     assert_success(&revoke_key, "receipts key revoke");
     let revoked_verify = molten_cmd()
         .args(["receipts", "verify-signed"])
-        .arg(&signed_report)
+        .arg(dir.join("dogfood-report.signed.preserves"))
         .args([
             "--purpose",
             "release-evidence",
@@ -996,24 +1065,38 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
             "release-root",
             "--key-ledger",
         ])
-        .arg(&key_ledger)
+        .arg(&keys.ledger)
         .args(["--key-ref"])
-        .arg(&key_ref)
+        .arg(&keys.key_ref)
         .output()?;
     assert_failure(&revoked_verify, "revoked key denies signed receipt");
     assert!(stderr(&revoked_verify).contains("revoked"));
-    let revoked_promotion_path = dir.join("release-promotion-gate-revoked.preserves");
+    revoked_promotion_denial(dir, keys, bundles)?;
+    let rotate_key = molten_cmd()
+        .args(["receipts", "key", "rotate"])
+        .arg(&keys.key_ref)
+        .args(["--ledger"])
+        .arg(&keys.ledger)
+        .args(["--new-key-id", "release-key-2", "--new-key", "release-key-2"])
+        .output()?;
+    assert_failure(&rotate_key, "cannot rotate already revoked key");
+    assert!(stderr(&rotate_key).contains("already revoked"));
+    Ok(())
+}
+
+fn revoked_promotion_denial(dir: &Path, keys: &Keys, bundles: &BundleChecks) -> CliResult<()> {
+    let receipt_path = dir.join("release-promotion-gate-revoked.preserves");
     let revoked_promotion = molten_cmd()
         .args(["dogfood", "release-promote", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--bundle-verify"])
-        .arg(&keyring_bundle_verify_path)
+        .arg(&bundles.keyring_verify)
         .args(["--receipt-out"])
-        .arg(&revoked_promotion_path)
+        .arg(&receipt_path)
         .args(["--signed-key-ledger"])
-        .arg(&key_ledger)
+        .arg(&keys.ledger)
         .args(["--signed-key-ref"])
-        .arg(&key_ref)
+        .arg(&keys.key_ref)
         .args([
             "--signed-signer",
             "release-signer",
@@ -1028,27 +1111,19 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
         ])
         .output()?;
     assert_success(&revoked_promotion, "dogfood release-promote revoked key emits deny receipt");
-    let revoked_promotion_receipt =
-        molten::operator_dogfood::parse_release_promotion_gate_receipt(&read_preserves(&revoked_promotion_path)?)?;
-    assert_eq!(revoked_promotion_receipt.decision, "deny");
+    let receipt = molten::operator_dogfood::parse_release_promotion_gate_receipt(&read_preserves(&receipt_path)?)?;
+    assert_eq!(receipt.decision, "deny");
+    Ok(())
+}
 
-    let rotate_key = molten_cmd()
-        .args(["receipts", "key", "rotate"])
-        .arg(&key_ref)
-        .args(["--ledger"])
-        .arg(&key_ledger)
-        .args(["--new-key-id", "release-key-2", "--new-key", "release-key-2"])
-        .output()?;
-    assert_failure(&rotate_key, "cannot rotate already revoked key");
-    assert!(stderr(&rotate_key).contains("already revoked"));
-
+fn stale_marker_denial(dir: &Path, base: &BaseOutputs, bundles: &BundleChecks) -> CliResult<()> {
     fs::write(dir.join("after-nextest.txt"), "/nix/store/stale-molten-nextest\n")?;
     let stale_verify = dir.join("nix-dogfood-verify-stale.preserves");
     let verify_stale = molten_cmd()
         .args(["dogfood", "nix-release-verify", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--evidence"])
-        .arg(&nix_evidence)
+        .arg(&base.nix_evidence)
         .args(["--receipt-out"])
         .arg(&stale_verify)
         .output()?;
@@ -1064,9 +1139,9 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     let stale_bundle_verify_path = dir.join("release-evidence-bundle-verify-stale.preserves");
     let verify_stale_bundle = molten_cmd()
         .args(["dogfood", "release-bundle-verify", "--output-path"])
-        .arg(&dir)
+        .arg(dir)
         .args(["--bundle"])
-        .arg(&release_bundle)
+        .arg(&bundles.path)
         .args(["--receipt-out"])
         .arg(&stale_bundle_verify_path)
         .output()?;
