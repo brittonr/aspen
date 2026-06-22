@@ -1084,6 +1084,11 @@ fn cli_dogfood_receipts_and_nix_negative_verify_work() -> CliResult<()> {
     Ok(())
 }
 
+fn manifest_arg(root: &Path, name: &str, bytes: &[u8], kind: &str) -> CliResult<String> {
+    let stored = molten::chunk_store::put_bytes(root, name, bytes, molten::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE)?;
+    Ok(format!("{}@{}@{}", stored.manifest_ref, stored.total_len, kind))
+}
+
 #[test]
 fn cli_blob_ref_job_submit_execute_status_and_receipt_show() -> CliResult<()> {
     let dir = temp_dir("cli-job-ref")?;
@@ -1091,25 +1096,13 @@ fn cli_blob_ref_job_submit_execute_status_and_receipt_show() -> CliResult<()> {
     let ledger = dir.join("ledger");
     let submission = dir.join("submission.preserves");
     let receipt_path = dir.join("receipt.preserves");
-    let executable = molten::chunk_store::put_bytes(
-        &chunks,
-        "job-executable",
-        b"echo",
-        molten::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
-    )?;
-    let input = molten::chunk_store::put_bytes(
-        &chunks,
-        "job-input",
-        b"cli-output",
-        molten::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
-    )?;
     let operation_id = test_ref("cli-job-ref-operation")?;
     let authority_ref = test_ref("cli-job-ref-authority")?;
     let policy_ref = test_ref("cli-job-ref-policy")?;
     let provenance_ref = test_ref("cli-job-ref-provenance")?;
     let effect_ref = test_ref("cli-job-ref-effect")?;
-    let executable_arg = format!("{}@{}@elf-executable", executable.manifest_ref, executable.total_len);
-    let input_arg = format!("{}@{}@bytes", input.manifest_ref, input.total_len);
+    let executable_arg = manifest_arg(&chunks, "job-executable", b"echo", "elf-executable")?;
+    let input_arg = manifest_arg(&chunks, "job-input", b"cli-output", "bytes")?;
 
     let submit = molten_cmd()
         .args(["test", "job", "ref-submit", "--job-id", "cli-job-ref", "--operation-id"])
