@@ -208,6 +208,8 @@
 
 ## Patterns That Work
 
+- 2026-06-22 Octet plugin summary split: extracting `src/plugin/host.rs::plugin_summary` parse/format branches into neutral same-file `core_summary` and `receipt_summary` helpers lowered the no-disabled probe from 7244 to 7242 while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test plugin`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-plugin-summary-0`.
+
 - 2026-06-22 Octet upgrade protocol-drain split: moving `src/upgrades/mod.rs::protocol_drain_task_outcome` loop state into a same-file `DrainState`/`GateFacts` shape lowered the no-disabled probe from 7246 to 7244. Validation passed `cargo fmt`, focused `cargo test upgrades`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-upgrade-drain-0`.
 
 - 2026-06-22 Octet remote idempotency test split: extracting the changed-payload conflict tail of `src/remote/dataspace.rs` into neutral `assert_conflict_case` plus shortening the repetitive test name to `idempotent_apply_handles_repeat_and_conflict` lowered the no-disabled probe from 7249 to 7248. If a helper split exposes path-segment repetition on a long test name, shorten the private test name as part of the same behavior-preserving refactor.

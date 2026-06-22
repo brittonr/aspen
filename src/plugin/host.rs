@@ -1014,8 +1014,21 @@ pub fn minimal_plugin_fixture(root: &Path) -> Result<PluginFixtureRun> {
 }
 
 pub fn plugin_summary(value: &IOValue) -> Result<String> {
+    if let Some(summary) = core_summary(value) {
+        return Ok(summary);
+    }
+    if let Some(summary) = receipt_summary(value) {
+        return Ok(summary);
+    }
+    if value.collect_simple_record("plugin-fixture-report-v1", Some(11)).is_some() {
+        return Ok(format!("plugin fixture report ref={} (summary is non-normative)", canonical_hash(value)?));
+    }
+    Err(MoltenError::invalid_harness("unsupported plugin host artifact for summary"))
+}
+
+fn core_summary(value: &IOValue) -> Option<String> {
     if let Ok(manifest) = parse_plugin_manifest(value) {
-        return Ok(format!(
+        return Some(format!(
             "plugin manifest ref={} id={} artifact={} hostcalls={} lifecycle={} (summary is non-normative)",
             manifest.manifest_ref,
             manifest.plugin_id,
@@ -1025,7 +1038,7 @@ pub fn plugin_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(install) = parse_plugin_install_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "plugin install receipt ref={} decision={} manifest={} artifact={} diagnostics={} (summary is non-normative)",
             install.receipt_ref,
             install.decision,
@@ -1035,7 +1048,7 @@ pub fn plugin_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(permission) = parse_plugin_permission_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "plugin permission receipt ref={} decision={} manifest={} diagnostics={} (summary is non-normative)",
             permission.receipt_ref,
             permission.decision,
@@ -1044,7 +1057,7 @@ pub fn plugin_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(lifecycle) = parse_plugin_lifecycle_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "plugin lifecycle receipt ref={} operation={} decision={} diagnostics={} (summary is non-normative)",
             lifecycle.receipt_ref,
             lifecycle.operation,
@@ -1052,8 +1065,12 @@ pub fn plugin_summary(value: &IOValue) -> Result<String> {
             lifecycle.diagnostics.len()
         ));
     }
+    None
+}
+
+fn receipt_summary(value: &IOValue) -> Option<String> {
     if let Ok(hostcall) = parse_plugin_hostcall_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "plugin hostcall receipt ref={} operation={} decision={} diagnostics={} (summary is non-normative)",
             hostcall.receipt_ref,
             hostcall.operation,
@@ -1062,7 +1079,7 @@ pub fn plugin_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(health) = parse_plugin_health_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "plugin health receipt ref={} decision={} diagnostics={} (summary is non-normative)",
             health.receipt_ref,
             health.decision,
@@ -1070,7 +1087,7 @@ pub fn plugin_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(removal) = parse_plugin_removal_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "plugin removal receipt ref={} decision={} diagnostics={} (summary is non-normative)",
             removal.receipt_ref,
             removal.decision,
@@ -1078,7 +1095,7 @@ pub fn plugin_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(upgrade) = parse_plugin_upgrade_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "plugin upgrade receipt ref={} decision={} old={} new={} diagnostics={} (summary is non-normative)",
             upgrade.receipt_ref,
             upgrade.decision,
@@ -1087,10 +1104,7 @@ pub fn plugin_summary(value: &IOValue) -> Result<String> {
             upgrade.diagnostics.len()
         ));
     }
-    if value.collect_simple_record("plugin-fixture-report-v1", Some(11)).is_some() {
-        return Ok(format!("plugin fixture report ref={} (summary is non-normative)", canonical_hash(value)?));
-    }
-    Err(MoltenError::invalid_harness("unsupported plugin host artifact for summary"))
+    None
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
