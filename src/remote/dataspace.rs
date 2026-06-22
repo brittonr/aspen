@@ -246,22 +246,14 @@ pub fn parse_envelope(value: &IOValue) -> Result<RemoteDataspaceEnvelope> {
     } else {
         payload_delivery_sequence(&payload)?
     };
-    let operation_ref = if has_operation_ref {
-        record_string(&fields[11], "operation-ref")?
+    let stored_ref = if has_operation_ref {
+        Some(record_string(&fields[11], "operation-ref")?)
     } else {
-        envelope_operation_ref(EnvelopeOperationRefInput {
-            from_peer: &from_peer,
-            from_actor: &from_actor,
-            to_peer: &to_peer,
-            topic: &topic,
-            operation,
-            payload: &payload,
-            capability_refs: &capability_refs,
-            evidence_refs: &evidence_refs,
-            sequence,
-        })?
+        None
     };
-    let expected_operation_ref = envelope_operation_ref(EnvelopeOperationRefInput {
+    let operation_ref = parsed_ref(RefParts {
+        stored_ref,
+        sequence,
         from_peer: &from_peer,
         from_actor: &from_actor,
         to_peer: &to_peer,
@@ -270,13 +262,7 @@ pub fn parse_envelope(value: &IOValue) -> Result<RemoteDataspaceEnvelope> {
         payload: &payload,
         capability_refs: &capability_refs,
         evidence_refs: &evidence_refs,
-        sequence,
     })?;
-    if operation_ref != expected_operation_ref {
-        return Err(MoltenError::invalid_harness(format!(
-            "remote dataspace operation ref {operation_ref} does not match canonical ref {expected_operation_ref}"
-        )));
-    }
     Ok(RemoteDataspaceEnvelope {
         envelope_ref: canonical_hash(value)?,
         from_peer,
@@ -292,6 +278,54 @@ pub fn parse_envelope(value: &IOValue) -> Result<RemoteDataspaceEnvelope> {
         operation_ref,
         value: value.clone(),
     })
+}
+
+struct RefParts<'a> {
+    stored_ref: Option<String>,
+    sequence: u64,
+    from_peer: &'a str,
+    from_actor: &'a str,
+    to_peer: &'a str,
+    topic: &'a str,
+    operation: RemoteDataspaceOperation,
+    payload: &'a IOValue,
+    capability_refs: &'a [String],
+    evidence_refs: &'a [String],
+}
+
+fn parsed_ref(input: RefParts<'_>) -> Result<String> {
+    let operation_ref = if let Some(stored_ref) = input.stored_ref {
+        stored_ref
+    } else {
+        envelope_operation_ref(EnvelopeOperationRefInput {
+            from_peer: input.from_peer,
+            from_actor: input.from_actor,
+            to_peer: input.to_peer,
+            topic: input.topic,
+            operation: input.operation,
+            payload: input.payload,
+            capability_refs: input.capability_refs,
+            evidence_refs: input.evidence_refs,
+            sequence: input.sequence,
+        })?
+    };
+    let expected_operation_ref = envelope_operation_ref(EnvelopeOperationRefInput {
+        from_peer: input.from_peer,
+        from_actor: input.from_actor,
+        to_peer: input.to_peer,
+        topic: input.topic,
+        operation: input.operation,
+        payload: input.payload,
+        capability_refs: input.capability_refs,
+        evidence_refs: input.evidence_refs,
+        sequence: input.sequence,
+    })?;
+    if operation_ref != expected_operation_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "remote dataspace operation ref {operation_ref} does not match canonical ref {expected_operation_ref}"
+        )));
+    }
+    Ok(operation_ref)
 }
 
 pub fn store_content_blob(root: &Path, bytes: &[u8]) -> Result<String> {
