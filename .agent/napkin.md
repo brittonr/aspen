@@ -208,6 +208,8 @@
 
 ## Patterns That Work
 
+- 2026-06-22 Octet typed-storage put split: extracting `src/typed/storage.rs::put_value` schema, payload, entry, receipt, and persistence pieces into neutral same-file helpers (`accepted_schema`, `payload_parts`, `entry_value`, `pass_receipt`, `persist_entry`) lowered the no-disabled probe from 7238 to 7236 after the first narrower payload-only split stayed flat. Validation passed `cargo fmt`, focused `cargo test typed_storage`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-typed-storage-put-v2-0`.
+
 - 2026-06-22 Octet upgrade execute-task split: extracting `src/upgrades/mod.rs::execute_task` branch logic into same-file neutral result helpers (`task_result`, `alias_result`, `transcript_result`, `move_result`, `cleanup_result`) lowered the no-disabled probe from 7240 to 7238 by clearing two `function_length` findings while keeping path/import/file counts flat. Validation passed `cargo fmt`, focused `cargo test upgrades`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-upgrade-exec-0`.
 
 - 2026-06-22 Octet plugin fixture split: extracting `src/plugin/host.rs::minimal_plugin_fixture` setup/receipt assembly into same-file neutral `SeedRefs`/`LifeSteps` plus small step helpers lowered the no-disabled probe from 7242 to 7240 by clearing two `function_length` findings while keeping import/path/file counts flat. Validation passed `cargo fmt`, focused `cargo test plugin`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-plugin-fixture-0`.

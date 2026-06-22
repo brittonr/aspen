@@ -256,6 +256,39 @@ struct DenialReceiptValueInput<'a> {
     details: Vec<IOValue>,
 }
 
+struct PayloadParts {
+    value: IOValue,
+    details: Vec<IOValue>,
+}
+
+struct PersistInput<'a> {
+    root: &'a Path,
+    storage_key: &'a str,
+    storage_ref: &'a str,
+    typed_ref_value: &'a IOValue,
+    value_ref: &'a str,
+    value_bytes: &'a [u8],
+    receipt_value: &'a IOValue,
+}
+
+struct EntryInput<'a> {
+    input: &'a TypedStoragePutInput,
+    schema_ref: &'a str,
+    value_ref: &'a str,
+    payload: &'a IOValue,
+    revision: u64,
+    effect_handle_ref: &'a str,
+}
+
+struct PassInput<'a> {
+    input: &'a TypedStoragePutInput,
+    storage_ref: &'a str,
+    schema_ref: &'a str,
+    value_ref: &'a str,
+    effect: &'a StorageEffectEvidence,
+    details: Vec<IOValue>,
+}
+
 pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStoragePut> {
     ensure_dirs(root)?;
     validate_namespace_key(&input.namespace, &input.key)?;
@@ -265,28 +298,7 @@ pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStora
     validate_admission(&input.admission)?;
 
     let inferred_schema_ref = inferred_schema_ref(&input.value)?;
-    let schema_ref = input.schema_ref.clone().unwrap_or_else(|| inferred_schema_ref.clone());
-    if schema_ref != inferred_schema_ref {
-        let receipt_value = denial_receipt_value(DenialReceiptValueInput {
-            operation: "put",
-            storage_ref: None,
-            namespace: Some(&input.namespace),
-            key: Some(&input.key),
-            schema_ref: Some(&schema_ref),
-            value_ref: None,
-            reason: "declared schema ref does not match inferred Preserves value schema".to_string(),
-            checks: vec![
-                ("schema-binding", "fail"),
-                ("no-raw-memory", "pass"),
-                ("denial-receipt", "pass"),
-            ],
-            details: Vec::new(),
-        });
-        store_receipt(root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(
-            "typed storage write rejected: declared schema ref does not match inferred value schema",
-        ));
-    }
+    let schema_ref = accepted_schema(root, input, &inferred_schema_ref)?;
     let effect = storage_effect_evidence(StorageEffectEvidenceInput {
         operation: "put",
         namespace: &input.namespace,
@@ -298,49 +310,71 @@ pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStora
     })?;
     let value_bytes = canonical_bytes(&input.value)?;
     let value_ref = canonical_hash(&input.value)?;
-    let (payload, payload_details) = if value_bytes.len() <= INLINE_VALUE_LIMIT {
-        (record("inline", vec![u64_value(value_bytes.len() as u64)]), vec![record("payload", vec![
-            string("inline"),
-            u64_value(value_bytes.len() as u64),
-        ])])
-    } else {
-        let put = chunk_store::put_bytes(
-            &chunk_root(root),
-            "typed-storage-value",
-            &value_bytes,
-            DEFAULT_FIXED_V1_CHUNK_SIZE,
-        )?;
-        (record("content-ref", vec![string(&put.manifest_ref), u64_value(value_bytes.len() as u64)]), vec![
-            record("payload", vec![string("content-ref"), string(&put.manifest_ref)]),
-            record("chunk-store-receipt", vec![string(canonical_hash(&put.receipt_value)?)]),
-        ])
-    };
+    let payload = payload_parts(root, &value_bytes)?;
     let storage_key = storage_key_ref(&input.namespace, &input.key)?;
     let revision = next_revision(root, &storage_key)?;
-    let typed_ref_value = typed_ref_value(TypedRefValueInput {
-        namespace: &input.namespace,
-        key: &input.key,
+    let typed_ref_value = entry_value(EntryInput {
+        input,
         schema_ref: &schema_ref,
         value_ref: &value_ref,
-        payload: &payload,
-        producer_ref: &input.producer_ref,
-        policy_refs: &input.policy_refs,
-        evidence_refs: &input.evidence_refs,
+        payload: &payload.value,
         revision,
-        actor_ref: &input.admission.actor_ref,
-        capability_ref: &input.admission.capability_ref,
         effect_handle_ref: &effect.handle_ref,
     });
     let storage_ref = canonical_hash(&typed_ref_value)?;
-    let receipt_value = receipt_value(ReceiptValueInput {
+    let receipt_value = pass_receipt(PassInput {
+        input,
+        storage_ref: &storage_ref,
+        schema_ref: &schema_ref,
+        value_ref: &value_ref,
+        effect: &effect,
+        details: payload.details,
+    });
+    persist_entry(PersistInput {
+        root,
+        storage_key: &storage_key,
+        storage_ref: &storage_ref,
+        typed_ref_value: &typed_ref_value,
+        value_ref: &value_ref,
+        value_bytes: &value_bytes,
+        receipt_value: &receipt_value,
+    })?;
+    Ok(TypedStoragePut {
+        storage_ref,
+        typed_ref_value,
+        schema_ref,
+        value_ref,
+        receipt_value,
+    })
+}
+
+fn entry_value(input: EntryInput<'_>) -> IOValue {
+    typed_ref_value(TypedRefValueInput {
+        namespace: &input.input.namespace,
+        key: &input.input.key,
+        schema_ref: input.schema_ref,
+        value_ref: input.value_ref,
+        payload: input.payload,
+        producer_ref: &input.input.producer_ref,
+        policy_refs: &input.input.policy_refs,
+        evidence_refs: &input.input.evidence_refs,
+        revision: input.revision,
+        actor_ref: &input.input.admission.actor_ref,
+        capability_ref: &input.input.admission.capability_ref,
+        effect_handle_ref: input.effect_handle_ref,
+    })
+}
+
+fn pass_receipt(input: PassInput<'_>) -> IOValue {
+    receipt_value(ReceiptValueInput {
         operation: "put",
         decision: "pass",
-        storage_ref: Some(&storage_ref),
-        namespace: Some(&input.namespace),
-        key: Some(&input.key),
-        schema_ref: Some(&schema_ref),
-        value_ref: Some(&value_ref),
-        effect: &effect,
+        storage_ref: Some(input.storage_ref),
+        namespace: Some(&input.input.namespace),
+        key: Some(&input.input.key),
+        schema_ref: Some(input.schema_ref),
+        value_ref: Some(input.value_ref),
+        effect: input.effect,
         checks: vec![
             ("effect-manifest", "pass"),
             ("storage-effect-handle", "pass"),
@@ -351,30 +385,73 @@ pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStora
             ("cairn-receipt", "pass"),
             ("no-raw-memory", "pass"),
         ],
-        details: payload_details,
+        details: input.details,
+    })
+}
+
+fn accepted_schema(root: &Path, input: &TypedStoragePutInput, inferred_schema_ref: &str) -> Result<String> {
+    let schema_ref = input.schema_ref.clone().unwrap_or_else(|| inferred_schema_ref.to_string());
+    if schema_ref == inferred_schema_ref {
+        return Ok(schema_ref);
+    }
+    let receipt_value = denial_receipt_value(DenialReceiptValueInput {
+        operation: "put",
+        storage_ref: None,
+        namespace: Some(&input.namespace),
+        key: Some(&input.key),
+        schema_ref: Some(&schema_ref),
+        value_ref: None,
+        reason: "declared schema ref does not match inferred Preserves value schema".to_string(),
+        checks: vec![
+            ("schema-binding", "fail"),
+            ("no-raw-memory", "pass"),
+            ("denial-receipt", "pass"),
+        ],
+        details: Vec::new(),
     });
-    let db = ensure_index_tables(root)?;
+    store_receipt(root, &receipt_value)?;
+    Err(MoltenError::invalid_harness(
+        "typed storage write rejected: declared schema ref does not match inferred value schema",
+    ))
+}
+
+fn payload_parts(root: &Path, value_bytes: &[u8]) -> Result<PayloadParts> {
+    let value_len = u64::try_from(value_bytes.len())
+        .map_err(|_| MoltenError::invalid_harness("typed storage value length exceeds u64"))?;
+    if value_bytes.len() <= INLINE_VALUE_LIMIT {
+        return Ok(PayloadParts {
+            value: record("inline", vec![u64_value(value_len)]),
+            details: vec![record("payload", vec![string("inline"), u64_value(value_len)])],
+        });
+    }
+    let put =
+        chunk_store::put_bytes(&chunk_root(root), "typed-storage-value", value_bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
+    Ok(PayloadParts {
+        value: record("content-ref", vec![string(&put.manifest_ref), u64_value(value_len)]),
+        details: vec![
+            record("payload", vec![string("content-ref"), string(&put.manifest_ref)]),
+            record("chunk-store-receipt", vec![string(canonical_hash(&put.receipt_value)?)]),
+        ],
+    })
+}
+
+fn persist_entry(input: PersistInput<'_>) -> Result<()> {
+    let db = ensure_index_tables(input.root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     {
-        let typed_ref_bytes = canonical_bytes(&typed_ref_value)?;
+        let typed_ref_bytes = canonical_bytes(input.typed_ref_value)?;
         let mut records = write_txn.open_table(INDEX_RECORDS).map_err(index_error)?;
-        records.insert(storage_key.as_str(), typed_ref_bytes.as_slice()).map_err(index_error)?;
+        records.insert(input.storage_key, typed_ref_bytes.as_slice()).map_err(index_error)?;
         let mut refs = write_txn.open_table(INDEX_REFS).map_err(index_error)?;
-        refs.insert(storage_ref.as_str(), typed_ref_bytes.as_slice()).map_err(index_error)?;
-        if value_bytes.len() <= INLINE_VALUE_LIMIT {
+        refs.insert(input.storage_ref, typed_ref_bytes.as_slice()).map_err(index_error)?;
+        if input.value_bytes.len() <= INLINE_VALUE_LIMIT {
             let mut inline_values = write_txn.open_table(INDEX_INLINE_VALUES).map_err(index_error)?;
-            inline_values.insert(value_ref.as_str(), value_bytes.as_slice()).map_err(index_error)?;
+            inline_values.insert(input.value_ref, input.value_bytes).map_err(index_error)?;
         }
-        store_receipt_in_tx(&write_txn, &receipt_value)?;
+        store_receipt_in_tx(&write_txn, input.receipt_value)?;
     }
     write_txn.commit().map_err(index_error)?;
-    Ok(TypedStoragePut {
-        storage_ref,
-        typed_ref_value,
-        schema_ref,
-        value_ref,
-        receipt_value,
-    })
+    Ok(())
 }
 
 pub fn get_value(
