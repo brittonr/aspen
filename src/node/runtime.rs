@@ -289,8 +289,17 @@ const _: () = assert!(MAX_NODE_ADAPTERS >= REQUIRED_RUNTIME_ADAPTERS.len());
 const _: () = assert!(MAX_NODE_SOURCE_GATE_RECEIPTS > 0);
 const _: () = assert!(MAX_NODE_DIAGNOSTICS > 0);
 
-pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeStart> {
-    let config = parse_node_config(&input.config_value)?;
+struct GateScan {
+    validation_refs: Vec<String>,
+    diagnostics: Vec<String>,
+}
+
+struct AdapterStart {
+    values: Vec<IOValue>,
+    receipts: Vec<NodeAdapterReceiptRef>,
+}
+
+fn validate_start_input(config: &NodeConfig, input: &NodeRuntimeStartInput) -> Result<()> {
     validate_refs(&input.index_receipt_refs, "node runtime index receipt ref")?;
     validate_refs(&input.source_gate_receipt_refs, "node runtime source gate receipt ref")?;
     validate_refs(&input.capability_receipt_refs, "node runtime capability receipt ref")?;
@@ -307,8 +316,10 @@ pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeSt
         MAX_NODE_SOURCE_GATE_RECEIPTS,
         "node runtime source gate receipt values",
     )?;
-    validate_ref(&input.identity_receipt_ref, "node runtime identity receipt ref")?;
-    let ordered = deterministic_adapter_bindings(&config.adapters);
+    validate_ref(&input.identity_receipt_ref, "node runtime identity receipt ref")
+}
+
+fn startup_diagnostics(config: &NodeConfig, input: &NodeRuntimeStartInput) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     let missing = missing_required_adapters(&config.adapters);
     if !missing.is_empty() {
@@ -351,11 +362,16 @@ pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeSt
             "node runtime startup diagnostics",
         )?;
     }
-    let mut source_gate_validation_refs = Vec::with_capacity(input.source_gate_receipt_values.len());
+    Ok(diagnostics)
+}
+
+fn scan_gates(config_ref: &str, input: &NodeRuntimeStartInput) -> Result<GateScan> {
+    let mut validation_refs = Vec::with_capacity(input.source_gate_receipt_values.len());
+    let mut diagnostics = Vec::new();
     for (index, value) in input.source_gate_receipt_values.iter().enumerate() {
         let validation = octet_gate::validate_octet_source_gate(&octet_gate::OctetSourceGateValidationInput {
             consumer: "node-startup".to_string(),
-            subject_ref: config.config_ref.clone(),
+            subject_ref: config_ref.to_string(),
             gate_receipt_value: Some(value.clone()),
             source_scope: Vec::new(),
         })?;
@@ -373,7 +389,7 @@ pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeSt
             )?;
         }
         push_bounded(
-            &mut source_gate_validation_refs,
+            &mut validation_refs,
             validation.validation_ref.clone(),
             MAX_NODE_SOURCE_GATE_RECEIPTS,
             "node runtime source gate validation refs",
@@ -387,6 +403,49 @@ pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeSt
             )?;
         }
     }
+    Ok(GateScan {
+        validation_refs,
+        diagnostics,
+    })
+}
+
+fn adapter_start(
+    ordered: &[NodeAdapterBinding],
+    input: &NodeRuntimeStartInput,
+    decision: &str,
+    diagnostics: &[String],
+) -> Result<AdapterStart> {
+    let mut values = Vec::with_capacity(ordered.len());
+    for adapter in ordered {
+        values.push(node_adapter_lifecycle_receipt_value(&AdapterLifecycleReceiptInput {
+            operation: "start",
+            decision,
+            adapter,
+            index_receipt_refs: &input.index_receipt_refs,
+            resource_receipt_refs: &input.resource_receipt_refs,
+            diagnostics,
+        })?);
+    }
+    let mut receipts = Vec::with_capacity(ordered.len());
+    for (adapter, receipt) in ordered.iter().zip(values.iter()) {
+        receipts.push(NodeAdapterReceiptRef {
+            name: adapter.name.clone(),
+            receipt_ref: canonical_hash(receipt)?,
+        });
+    }
+    Ok(AdapterStart { values, receipts })
+}
+
+pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeStart> {
+    let config = parse_node_config(&input.config_value)?;
+    validate_start_input(&config, input)?;
+    let ordered = deterministic_adapter_bindings(&config.adapters);
+    let mut diagnostics = startup_diagnostics(&config, input)?;
+    let gate_scan = scan_gates(&config.config_ref, input)?;
+    for diagnostic in gate_scan.diagnostics {
+        push_bounded(&mut diagnostics, diagnostic, MAX_NODE_DIAGNOSTICS, "node runtime startup diagnostics")?;
+    }
+    let source_gate_validation_refs = gate_scan.validation_refs;
     let has_valid_source_gate_values = !source_gate_validation_refs.is_empty()
         && diagnostics
             .iter()
@@ -403,29 +462,12 @@ pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeSt
         )?;
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let mut adapter_receipt_values = Vec::with_capacity(ordered.len());
-    for adapter in &ordered {
-        adapter_receipt_values.push(node_adapter_lifecycle_receipt_value(&AdapterLifecycleReceiptInput {
-            operation: "start",
-            decision,
-            adapter,
-            index_receipt_refs: &input.index_receipt_refs,
-            resource_receipt_refs: &input.resource_receipt_refs,
-            diagnostics: &diagnostics,
-        })?);
-    }
-    let mut adapter_receipts = Vec::with_capacity(ordered.len());
-    for (adapter, receipt) in ordered.iter().zip(adapter_receipt_values.iter()) {
-        adapter_receipts.push(NodeAdapterReceiptRef {
-            name: adapter.name.clone(),
-            receipt_ref: canonical_hash(receipt)?,
-        });
-    }
+    let adapter_start = adapter_start(&ordered, input, decision, &diagnostics)?;
     let startup_value = node_startup_receipt_value(&StartupReceiptValueInput {
         decision,
         config: &config,
         identity_receipt_ref: &input.identity_receipt_ref,
-        adapter_receipts: &adapter_receipts,
+        adapter_receipts: &adapter_start.receipts,
         source_gate_receipt_refs: &input.source_gate_receipt_refs,
         source_gate_validation_refs: &source_gate_validation_refs,
         capability_receipt_refs: &input.capability_receipt_refs,
@@ -437,8 +479,8 @@ pub fn start_node_runtime(input: &NodeRuntimeStartInput) -> Result<NodeRuntimeSt
     Ok(NodeRuntimeStart {
         decision: decision.to_string(),
         config,
-        adapter_receipt_values,
-        adapter_receipts,
+        adapter_receipt_values: adapter_start.values,
+        adapter_receipts: adapter_start.receipts,
         startup_receipt,
     })
 }
