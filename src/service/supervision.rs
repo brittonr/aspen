@@ -571,53 +571,106 @@ pub struct ReportValueInput<'a> {
 }
 
 pub fn supervision_fixture_suite_value() -> Result<IOValue> {
-    let authority_ref = synthetic_ref("authority")?;
-    let resource_ref = synthetic_ref("resource")?;
-    let retention_ref = synthetic_ref("retention")?;
-    let effect_ref = synthetic_ref("effect-log")?;
-    let policy_ref = synthetic_ref("policy")?;
-    let restart_policy = service_records::service_restart_policy_value(&service_records::ServiceRestartPolicyInput {
+    let refs = fixture_refs()?;
+    let restart_policy = fixture_restart_policy(&refs)?;
+    let restart_policy_ref = canonical_hash(&restart_policy)?;
+    let manifest = fixture_manifest(&refs, restart_policy_ref)?;
+    let manifest_ref = canonical_hash(&manifest)?;
+    let monitors = fixture_monitors(&refs.policy_ref)?;
+    let link = fixture_link(&refs.policy_ref)?;
+    let owned_state = fixture_owned_state(manifest_ref)?;
+    service_supervision_suite_value(&ServiceSupervisionSuiteInput {
+        manifest,
+        links: vec![link],
+        monitors,
+        restart_policy,
+        owned_state,
+        restart_attempt: 0,
+        logical_step: 0,
+        evidence: ServiceSupervisionEvidenceInput {
+            authority_refs: vec![refs.authority_ref],
+            resource_refs: vec![refs.resource_ref],
+            revocation_refs: Vec::new(),
+            retention_policy_refs: vec![refs.retention_ref],
+            prior_lifecycle_refs: vec![synthetic_ref("prior-lifecycle")?],
+            effect_log_refs: vec![refs.effect_ref],
+        },
+    })
+}
+
+#[derive(Debug, Clone)]
+struct FixtureRefs {
+    authority_ref: String,
+    resource_ref: String,
+    retention_ref: String,
+    effect_ref: String,
+    policy_ref: String,
+}
+
+fn fixture_refs() -> Result<FixtureRefs> {
+    Ok(FixtureRefs {
+        authority_ref: synthetic_ref("authority")?,
+        resource_ref: synthetic_ref("resource")?,
+        retention_ref: synthetic_ref("retention")?,
+        effect_ref: synthetic_ref("effect-log")?,
+        policy_ref: synthetic_ref("policy")?,
+    })
+}
+
+fn fixture_restart_policy(refs: &FixtureRefs) -> Result<IOValue> {
+    service_records::service_restart_policy_value(&service_records::ServiceRestartPolicyInput {
         policy_id: "restart:web".to_string(),
         max_attempts: 2,
         window_steps: 8,
         backoff_steps: 0,
-        resource_refs: vec![resource_ref.clone()],
-    })?;
-    let restart_policy_ref = canonical_hash(&restart_policy)?;
-    let manifest = service_records::service_manifest_value(&service_records::ServiceManifestInput {
+        resource_refs: vec![refs.resource_ref.clone()],
+    })
+}
+
+fn fixture_manifest(refs: &FixtureRefs, restart_policy_ref: String) -> Result<IOValue> {
+    service_records::service_manifest_value(&service_records::ServiceManifestInput {
         service_id: "svc:web".to_string(),
-        owner_authority_ref: authority_ref.clone(),
+        owner_authority_ref: refs.authority_ref.clone(),
         target_ref: synthetic_ref("target")?,
         dependencies: Vec::new(),
         provided_assertion_refs: vec![synthetic_ref("ready-pattern")?],
         restart_policy_ref,
-        policy_refs: vec![policy_ref.clone()],
-        resource_refs: vec![resource_ref.clone()],
-        effect_profile_refs: vec![effect_ref.clone()],
-    })?;
-    let manifest_ref = canonical_hash(&manifest)?;
+        policy_refs: vec![refs.policy_ref.clone()],
+        resource_refs: vec![refs.resource_ref.clone()],
+        effect_profile_refs: vec![refs.effect_ref.clone()],
+    })
+}
+
+fn fixture_monitors(policy_ref: &str) -> Result<Vec<IOValue>> {
     let first_monitor = service_records::service_monitor_value(&service_records::ServiceMonitorInput {
         monitor_id: "monitor:web:b".to_string(),
         service_id: "svc:web".to_string(),
         observer_ref: synthetic_ref("observer-b")?,
         notification_policy: "failure".to_string(),
-        policy_refs: vec![policy_ref.clone()],
+        policy_refs: vec![policy_ref.to_string()],
     })?;
     let second_monitor = service_records::service_monitor_value(&service_records::ServiceMonitorInput {
         monitor_id: "monitor:web:a".to_string(),
         service_id: "svc:web".to_string(),
         observer_ref: synthetic_ref("observer-a")?,
         notification_policy: "failure".to_string(),
-        policy_refs: vec![policy_ref.clone()],
+        policy_refs: vec![policy_ref.to_string()],
     })?;
-    let link = service_records::service_link_value(&service_records::ServiceLinkInput {
+    Ok(vec![first_monitor, second_monitor])
+}
+
+fn fixture_link(policy_ref: &str) -> Result<IOValue> {
+    service_records::service_link_value(&service_records::ServiceLinkInput {
         supervisor_id: "supervisor:web".to_string(),
         parent_service_id: "svc:web".to_string(),
         child_service_id: "svc:web".to_string(),
         propagation: "restart".to_string(),
-        policy_refs: vec![policy_ref],
-    })?;
-    let owned_state = service_owned_state_value(&ServiceOwnedStateInput {
+        policy_refs: vec![policy_ref.to_string()],
+    })
+}
+
+fn fixture_owned_state(manifest_ref: String) -> Result<IOValue> {
+    service_owned_state_value(&ServiceOwnedStateInput {
         service_id: "svc:web".to_string(),
         manifest_ref: Some(manifest_ref),
         owned_assertion_refs: vec![synthetic_ref("readiness")?],
@@ -626,23 +679,6 @@ pub fn supervision_fixture_suite_value() -> Result<IOValue> {
         exposed_ref_refs: vec![synthetic_ref("exposed-ref")?],
         pending_effect_refs: vec![synthetic_ref("pending-effect")?],
         foreign_ref_claims: Vec::new(),
-    })?;
-    service_supervision_suite_value(&ServiceSupervisionSuiteInput {
-        manifest,
-        links: vec![link],
-        monitors: vec![first_monitor, second_monitor],
-        restart_policy,
-        owned_state,
-        restart_attempt: 0,
-        logical_step: 0,
-        evidence: ServiceSupervisionEvidenceInput {
-            authority_refs: vec![authority_ref],
-            resource_refs: vec![resource_ref],
-            revocation_refs: Vec::new(),
-            retention_policy_refs: vec![retention_ref],
-            prior_lifecycle_refs: vec![synthetic_ref("prior-lifecycle")?],
-            effect_log_refs: vec![effect_ref],
-        },
     })
 }
 
