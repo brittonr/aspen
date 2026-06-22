@@ -306,34 +306,12 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<NodeIdentityResolutio
     let existing_endpoint = fs::read_to_string(input.endpoint_path).ok().map(|value| value.trim().to_string());
     let is_drift = existing_endpoint.as_deref().is_some_and(|existing| existing != input.material.endpoint_id.as_str());
     if is_drift && !input.config.allow_rotation {
-        let receipt_value = node_identity_receipt_value(&ReceiptValueInput {
-            operation: "drift-detected",
-            decision: "fail",
-            node_id: &input.config.node_id,
-            identity_ref: None,
-            endpoint_id: Some(&input.material.endpoint_id),
-            key_source_class: input.operation,
-            backend_ref: input.backend_ref,
-            policy_refs: &input.config.policy_refs,
-            diagnostic: "endpoint id drift detected; rotation policy is required",
-            checks: &["drift-detection", "rotation-denied", "no-secret-material"],
-        });
-        return Ok(NodeIdentityResolution {
-            identity: None,
-            receipt_ref: canonical_hash(&receipt_value)?,
-            receipt_value,
-        });
+        return drift_denial(&input);
     }
 
     fs::create_dir_all(&input.config.data_dir).map_err(MoltenError::from)?;
     fs::write(input.endpoint_path, &input.material.endpoint_id).map_err(MoltenError::from)?;
-    let receipt_operation = if is_drift {
-        "rotation"
-    } else if input.is_first_boot {
-        "first-boot-generate"
-    } else {
-        input.operation
-    };
+    let receipt_operation = resolution_operation(&input, is_drift);
     let pre_receipt_value = pass_receipt(&input, receipt_operation, None);
     let pre_receipt_ref = canonical_hash(&pre_receipt_value)?;
     let identity_value = node_identity_value(
@@ -350,6 +328,36 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<NodeIdentityResolutio
         receipt_ref: canonical_hash(&receipt_value)?,
         receipt_value,
     })
+}
+
+fn drift_denial(input: &ResolutionInput<'_>) -> Result<NodeIdentityResolution> {
+    let receipt_value = node_identity_receipt_value(&ReceiptValueInput {
+        operation: "drift-detected",
+        decision: "fail",
+        node_id: &input.config.node_id,
+        identity_ref: None,
+        endpoint_id: Some(&input.material.endpoint_id),
+        key_source_class: input.operation,
+        backend_ref: input.backend_ref,
+        policy_refs: &input.config.policy_refs,
+        diagnostic: "endpoint id drift detected; rotation policy is required",
+        checks: &["drift-detection", "rotation-denied", "no-secret-material"],
+    });
+    Ok(NodeIdentityResolution {
+        identity: None,
+        receipt_ref: canonical_hash(&receipt_value)?,
+        receipt_value,
+    })
+}
+
+fn resolution_operation<'a>(input: &ResolutionInput<'a>, is_drift: bool) -> &'a str {
+    if is_drift {
+        "rotation"
+    } else if input.is_first_boot {
+        "first-boot-generate"
+    } else {
+        input.operation
+    }
 }
 
 fn pass_receipt(input: &ResolutionInput<'_>, operation: &str, identity_ref: Option<&str>) -> IOValue {

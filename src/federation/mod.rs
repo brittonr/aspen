@@ -424,129 +424,167 @@ pub fn pull_ledger_inventory(input: &PullLedgerInventoryInput<'_>) -> Result<Fed
 }
 
 pub fn pull_ledger_inventory_with_policy(input: &PullLedgerInventoryPolicyInput<'_>) -> Result<FederationPull> {
-    let policy = input.policy;
     let inventory = parse_inventory(input.inventory_value, input.trust_root, input.key)?;
-    if inventory.resources.len() > policy.max_resources {
-        let denied_refs = inventory.resources.iter().map(|resource| resource.resource_ref.clone()).collect::<Vec<_>>();
-        return Ok(FederationPull {
-            peer: inventory.peer.clone(),
-            imported_refs: Vec::new(),
-            skipped_refs: Vec::new(),
-            denied_refs: denied_refs.clone(),
-            receipt_value: federation_receipt_value(&FederationReceiptValueInput {
-                operation: "pull-ledger-inventory",
-                decision: "fail",
-                peer: &inventory.peer,
-                resources: &inventory.resources,
-                imported_refs: &[],
-                skipped_refs: &[],
-                denied_refs: &denied_refs,
-            }),
-        });
+    if inventory.resources.len() > input.policy.max_resources {
+        return Ok(oversized_pull(&inventory));
     }
-    let existing = ledger::list_artifacts(input.dest_root)?
-        .into_iter()
-        .map(|entry| entry.artifact_ref)
-        .collect::<BTreeSet<_>>();
-    ensure_count_at_most(inventory.resources.len(), MAX_FEDERATION_RESOURCES, "federation inventory resources")?;
-    let allowed = policy.allowed_resource_types.iter().cloned().collect::<BTreeSet<_>>();
-    let mut imported_refs = Vec::new();
-    let mut skipped_refs = Vec::new();
-    let mut denied_refs = Vec::new();
-    for resource in &inventory.resources {
-        if !allowed.is_empty() && !allowed.contains(&resource.resource_type) {
-            push_bounded(
-                &mut denied_refs,
-                resource.resource_ref.clone(),
-                MAX_FEDERATION_RESOURCES,
-                "federation denied refs",
-            )?;
-            continue;
-        }
-        if let Some(capability) = policy.required_delegate_capability.as_deref()
-            && !has_valid_delegate(
-                &inventory.delegates,
-                resource,
-                capability,
-                &policy.delegate_trust_root,
-                &policy.delegate_key,
-            )?
-        {
-            push_bounded(
-                &mut denied_refs,
-                resource.resource_ref.clone(),
-                MAX_FEDERATION_RESOURCES,
-                "federation denied refs",
-            )?;
-            continue;
-        }
-        if existing.contains(&resource.resource_ref)
-            || imported_refs.iter().any(|imported| imported == &resource.resource_ref)
-        {
-            push_bounded(
-                &mut skipped_refs,
-                resource.resource_ref.clone(),
-                MAX_FEDERATION_RESOURCES,
-                "federation skipped refs",
-            )?;
-            continue;
-        }
-        if imported_refs.len() >= policy.max_imports {
-            push_bounded(
-                &mut denied_refs,
-                resource.resource_ref.clone(),
-                MAX_FEDERATION_RESOURCES,
-                "federation denied refs",
-            )?;
-            continue;
-        }
-        let artifact = match ledger::read_artifact(input.source_root, &resource.resource_ref) {
-            Ok(artifact) => artifact,
-            Err(_) => {
-                push_bounded(
-                    &mut denied_refs,
-                    resource.resource_ref.clone(),
-                    MAX_FEDERATION_RESOURCES,
-                    "federation denied refs",
-                )?;
-                continue;
-            }
-        };
-        let actual_ref = canonical_hash(&artifact)?;
-        if actual_ref != resource.resource_ref || ledger::artifact_kind(&artifact) != resource.resource_type {
-            push_bounded(
-                &mut denied_refs,
-                resource.resource_ref.clone(),
-                MAX_FEDERATION_RESOURCES,
-                "federation denied refs",
-            )?;
-            continue;
-        }
-        ledger::import_artifact(input.dest_root, &artifact)?;
+    let refs = PullEnv::new(input, &inventory)?.collect_refs()?;
+    Ok(finish_pull(inventory, refs))
+}
+
+#[derive(Default)]
+struct PullRefs {
+    imported_refs: Vec<String>,
+    skipped_refs: Vec<String>,
+    denied_refs: Vec<String>,
+}
+
+impl PullRefs {
+    fn deny(&mut self, resource: &FederatedResource) -> Result<()> {
         push_bounded(
-            &mut imported_refs,
+            &mut self.denied_refs,
+            resource.resource_ref.clone(),
+            MAX_FEDERATION_RESOURCES,
+            "federation denied refs",
+        )
+    }
+
+    fn skip(&mut self, resource: &FederatedResource) -> Result<()> {
+        push_bounded(
+            &mut self.skipped_refs,
+            resource.resource_ref.clone(),
+            MAX_FEDERATION_RESOURCES,
+            "federation skipped refs",
+        )
+    }
+
+    fn import(&mut self, resource: &FederatedResource) -> Result<()> {
+        push_bounded(
+            &mut self.imported_refs,
             resource.resource_ref.clone(),
             MAX_FEDERATION_RESOURCES,
             "federation imported refs",
-        )?;
+        )
     }
-    let decision = if denied_refs.is_empty() { "pass" } else { "fail" };
+}
+
+struct PullEnv<'a, 'b> {
+    input: &'a PullLedgerInventoryPolicyInput<'b>,
+    inventory: &'a FederationInventory,
+    existing: BTreeSet<String>,
+    allowed: BTreeSet<String>,
+}
+
+impl<'a, 'b> PullEnv<'a, 'b> {
+    fn new(input: &'a PullLedgerInventoryPolicyInput<'b>, inventory: &'a FederationInventory) -> Result<Self> {
+        let existing = ledger::list_artifacts(input.dest_root)?
+            .into_iter()
+            .map(|entry| entry.artifact_ref)
+            .collect::<BTreeSet<_>>();
+        ensure_count_at_most(inventory.resources.len(), MAX_FEDERATION_RESOURCES, "federation inventory resources")?;
+        let allowed = input.policy.allowed_resource_types.iter().cloned().collect::<BTreeSet<_>>();
+        Ok(Self {
+            input,
+            inventory,
+            existing,
+            allowed,
+        })
+    }
+
+    fn collect_refs(&self) -> Result<PullRefs> {
+        let mut refs = PullRefs::default();
+        for resource in &self.inventory.resources {
+            self.apply_resource(&mut refs, resource)?;
+        }
+        Ok(refs)
+    }
+
+    fn apply_resource(&self, refs: &mut PullRefs, resource: &FederatedResource) -> Result<()> {
+        if self.is_type_denied(resource) || self.is_delegate_missing(resource)? {
+            return refs.deny(resource);
+        }
+        if self.is_duplicate(refs, resource) {
+            return refs.skip(resource);
+        }
+        if refs.imported_refs.len() >= self.input.policy.max_imports {
+            return refs.deny(resource);
+        }
+        self.import_verified(refs, resource)
+    }
+
+    fn is_type_denied(&self, resource: &FederatedResource) -> bool {
+        !self.allowed.is_empty() && !self.allowed.contains(&resource.resource_type)
+    }
+
+    fn is_delegate_missing(&self, resource: &FederatedResource) -> Result<bool> {
+        if let Some(capability) = self.input.policy.required_delegate_capability.as_deref() {
+            return Ok(!has_valid_delegate(
+                &self.inventory.delegates,
+                resource,
+                capability,
+                &self.input.policy.delegate_trust_root,
+                &self.input.policy.delegate_key,
+            )?);
+        }
+        Ok(false)
+    }
+
+    fn is_duplicate(&self, refs: &PullRefs, resource: &FederatedResource) -> bool {
+        self.existing.contains(&resource.resource_ref)
+            || refs.imported_refs.iter().any(|imported| imported == &resource.resource_ref)
+    }
+
+    fn import_verified(&self, refs: &mut PullRefs, resource: &FederatedResource) -> Result<()> {
+        let artifact = match ledger::read_artifact(self.input.source_root, &resource.resource_ref) {
+            Ok(artifact) => artifact,
+            Err(_) => return refs.deny(resource),
+        };
+        let actual_ref = canonical_hash(&artifact)?;
+        if actual_ref != resource.resource_ref || ledger::artifact_kind(&artifact) != resource.resource_type {
+            return refs.deny(resource);
+        }
+        ledger::import_artifact(self.input.dest_root, &artifact)?;
+        refs.import(resource)
+    }
+}
+
+fn oversized_pull(inventory: &FederationInventory) -> FederationPull {
+    let denied_refs = inventory.resources.iter().map(|resource| resource.resource_ref.clone()).collect::<Vec<_>>();
+    FederationPull {
+        peer: inventory.peer.clone(),
+        imported_refs: Vec::new(),
+        skipped_refs: Vec::new(),
+        denied_refs: denied_refs.clone(),
+        receipt_value: federation_receipt_value(&FederationReceiptValueInput {
+            operation: "pull-ledger-inventory",
+            decision: "fail",
+            peer: &inventory.peer,
+            resources: &inventory.resources,
+            imported_refs: &[],
+            skipped_refs: &[],
+            denied_refs: &denied_refs,
+        }),
+    }
+}
+
+fn finish_pull(inventory: FederationInventory, refs: PullRefs) -> FederationPull {
+    let decision = if refs.denied_refs.is_empty() { "pass" } else { "fail" };
     let receipt_value = federation_receipt_value(&FederationReceiptValueInput {
         operation: "pull-ledger-inventory",
         decision,
         peer: &inventory.peer,
         resources: &inventory.resources,
-        imported_refs: &imported_refs,
-        skipped_refs: &skipped_refs,
-        denied_refs: &denied_refs,
+        imported_refs: &refs.imported_refs,
+        skipped_refs: &refs.skipped_refs,
+        denied_refs: &refs.denied_refs,
     });
-    Ok(FederationPull {
+    FederationPull {
         peer: inventory.peer,
-        imported_refs,
-        skipped_refs,
-        denied_refs,
+        imported_refs: refs.imported_refs,
+        skipped_refs: refs.skipped_refs,
+        denied_refs: refs.denied_refs,
         receipt_value,
-    })
+    }
 }
 
 pub fn pull_chunk_manifest_from_announcement(input: &PullChunkManifestInput<'_>) -> Result<FederationPull> {
