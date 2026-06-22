@@ -289,6 +289,47 @@ struct PassInput<'a> {
     details: Vec<IOValue>,
 }
 
+struct SourceInput<'a> {
+    root: &'a Path,
+    storage_key: &'a str,
+    namespace: &'a str,
+    key: &'a str,
+    recipe: &'a StorageMigrationRecipe,
+}
+
+struct SourceData {
+    typed_ref: TypedStorageRef,
+    value: IOValue,
+}
+
+struct EntryRefs {
+    policy: Vec<String>,
+    evidence: Vec<String>,
+}
+
+struct NextInput<'a> {
+    namespace: &'a str,
+    key: &'a str,
+    recipe: &'a StorageMigrationRecipe,
+    value_ref: &'a str,
+    payload: &'a IOValue,
+    refs: &'a EntryRefs,
+    revision: u64,
+    admission: &'a TypedStorageAdmission,
+    effect_handle_ref: &'a str,
+}
+
+struct StepInput<'a> {
+    namespace: &'a str,
+    key: &'a str,
+    recipe: &'a StorageMigrationRecipe,
+    source: &'a TypedStorageRef,
+    storage_ref: &'a str,
+    value_ref: &'a str,
+    effect: &'a StorageEffectEvidence,
+    details: Vec<IOValue>,
+}
+
 pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStoragePut> {
     ensure_dirs(root)?;
     validate_namespace_key(&input.namespace, &input.key)?;
@@ -776,66 +817,14 @@ pub fn migrate_value(
     let recipe = parse_migration_recipe_value(migration_recipe_value)?;
     let recipe_ref = recipe.recipe_ref.clone();
     let storage_key = storage_key_ref(namespace, key)?;
-    let old_typed_ref_value = {
-        let db = ensure_index_tables(root)?;
-        let read_txn = db.begin_read().map_err(index_error)?;
-        let records = read_txn.open_table(INDEX_RECORDS).map_err(index_error)?;
-        let Some(bytes) = records.get(storage_key.as_str()).map_err(index_error)? else {
-            drop(records);
-            drop(read_txn);
-            drop(db);
-            let receipt_value = denial_receipt_value(DenialReceiptValueInput {
-                operation: "migrate",
-                storage_ref: None,
-                namespace: Some(namespace),
-                key: Some(key),
-                schema_ref: Some(&recipe.target_schema_ref),
-                value_ref: None,
-                reason: "typed storage migration source record not found".to_string(),
-                checks: vec![("record-found", "fail"), ("denial-receipt", "pass")],
-                details: vec![record("recipe", vec![string(&recipe_ref)])],
-            });
-            store_receipt(root, &receipt_value)?;
-            return Err(MoltenError::invalid_harness("typed storage migration rejected: source record not found"));
-        };
-        parse_canonical_bytes(bytes.value())?
-    };
-    let old_typed_ref = parse_typed_ref_value(&old_typed_ref_value)?;
-    if old_typed_ref.schema_ref != recipe.source_schema_ref {
-        let receipt_value = denial_receipt_value(DenialReceiptValueInput {
-            operation: "migrate",
-            storage_ref: Some(&old_typed_ref.storage_ref),
-            namespace: Some(namespace),
-            key: Some(key),
-            schema_ref: Some(&recipe.target_schema_ref),
-            value_ref: Some(&old_typed_ref.value_ref),
-            reason: "typed storage migration source schema does not match recipe".to_string(),
-            checks: vec![("source-schema-binding", "fail"), ("denial-receipt", "pass")],
-            details: vec![record("recipe", vec![string(&recipe_ref)])],
-        });
-        store_receipt(root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(
-            "typed storage migration rejected: source schema does not match recipe",
-        ));
-    }
-    let old_value_bytes = read_payload_bytes(root, &old_typed_ref)?;
-    let old_value = parse_canonical_bytes(&old_value_bytes)?;
-    if canonical_hash(&old_value)? != old_typed_ref.value_ref {
-        let receipt_value = denial_receipt_value(DenialReceiptValueInput {
-            operation: "migrate",
-            storage_ref: Some(&old_typed_ref.storage_ref),
-            namespace: Some(namespace),
-            key: Some(key),
-            schema_ref: Some(&recipe.target_schema_ref),
-            value_ref: Some(&old_typed_ref.value_ref),
-            reason: "typed storage migration source value hash mismatch".to_string(),
-            checks: vec![("source-content-integrity", "fail"), ("denial-receipt", "pass")],
-            details: vec![record("recipe", vec![string(&recipe_ref)])],
-        });
-        store_receipt(root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness("typed storage migration source content integrity failed"));
-    }
-    let new_value = apply_migration_transform(&recipe, &old_value)?;
+    let source = source_data(SourceInput {
+        root,
+        storage_key: &storage_key,
+        namespace,
+        key,
+        recipe: &recipe,
+    })?;
+    let new_value = apply_migration_transform(&recipe, &source.value)?;
     let new_value_bytes = canonical_bytes(&new_value)?;
     let new_value_ref = canonical_hash(&new_value)?;
     let (payload, payload_details) = store_payload(root, &new_value_bytes)?;
@@ -849,51 +838,179 @@ pub fn migrate_value(
         remote_use: false,
     })?;
     let revision = next_revision(root, &storage_key)?;
-    let mut policy_refs = old_typed_ref.policy_refs.clone();
-    policy_refs.extend(recipe.policy_refs.clone());
-    policy_refs.sort();
-    policy_refs.dedup();
-    let mut evidence_refs = old_typed_ref.evidence_refs.clone();
-    evidence_refs.push(recipe_ref.clone());
-    evidence_refs.extend(recipe.evidence_refs.clone());
-    evidence_refs.sort();
-    evidence_refs.dedup();
-    let typed_ref_value = typed_ref_value(TypedRefValueInput {
+    let refs = entry_refs(&source.typed_ref, &recipe);
+    let typed_ref_value = next_value(NextInput {
         namespace,
         key,
-        schema_ref: &recipe.target_schema_ref,
+        recipe: &recipe,
         value_ref: &new_value_ref,
         payload: &payload,
-        producer_ref: &recipe.transformer_ref,
-        policy_refs: &policy_refs,
-        evidence_refs: &evidence_refs,
+        refs: &refs,
         revision,
-        actor_ref: &admission.actor_ref,
-        capability_ref: &admission.capability_ref,
+        admission,
         effect_handle_ref: &effect.handle_ref,
     });
     let new_storage_ref = canonical_hash(&typed_ref_value)?;
+    let receipt_value = step_receipt(StepInput {
+        namespace,
+        key,
+        recipe: &recipe,
+        source: &source.typed_ref,
+        storage_ref: &new_storage_ref,
+        value_ref: &new_value_ref,
+        effect: &effect,
+        details: payload_details,
+    });
+    persist_entry(PersistInput {
+        root,
+        storage_key: &storage_key,
+        storage_ref: &new_storage_ref,
+        typed_ref_value: &typed_ref_value,
+        value_ref: &new_value_ref,
+        value_bytes: &new_value_bytes,
+        receipt_value: &receipt_value,
+    })?;
+    Ok(TypedStorageMigrate {
+        old_storage_ref: source.typed_ref.storage_ref,
+        new_storage_ref,
+        old_value_ref: source.typed_ref.value_ref,
+        new_value_ref,
+        recipe_ref,
+        typed_ref_value,
+        receipt_value,
+    })
+}
+
+fn source_data(input: SourceInput<'_>) -> Result<SourceData> {
+    let typed_ref_value = stored_entry(&input)?;
+    let typed_ref = parse_typed_ref_value(&typed_ref_value)?;
+    require_match(&input, &typed_ref)?;
+    let value = source_value(&input, &typed_ref)?;
+    Ok(SourceData { typed_ref, value })
+}
+
+fn stored_entry(input: &SourceInput<'_>) -> Result<IOValue> {
+    let db = ensure_index_tables(input.root)?;
+    let read_txn = db.begin_read().map_err(index_error)?;
+    let records = read_txn.open_table(INDEX_RECORDS).map_err(index_error)?;
+    let Some(bytes) = records.get(input.storage_key).map_err(index_error)? else {
+        drop(records);
+        drop(read_txn);
+        drop(db);
+        let receipt_value = denial_receipt_value(DenialReceiptValueInput {
+            operation: "migrate",
+            storage_ref: None,
+            namespace: Some(input.namespace),
+            key: Some(input.key),
+            schema_ref: Some(&input.recipe.target_schema_ref),
+            value_ref: None,
+            reason: "typed storage migration source record not found".to_string(),
+            checks: vec![("record-found", "fail"), ("denial-receipt", "pass")],
+            details: vec![record("recipe", vec![string(&input.recipe.recipe_ref)])],
+        });
+        store_receipt(input.root, &receipt_value)?;
+        return Err(MoltenError::invalid_harness("typed storage migration rejected: source record not found"));
+    };
+    parse_canonical_bytes(bytes.value())
+}
+
+fn require_match(input: &SourceInput<'_>, typed_ref: &TypedStorageRef) -> Result<()> {
+    if typed_ref.schema_ref == input.recipe.source_schema_ref {
+        return Ok(());
+    }
+    let receipt_value = denial_receipt_value(DenialReceiptValueInput {
+        operation: "migrate",
+        storage_ref: Some(&typed_ref.storage_ref),
+        namespace: Some(input.namespace),
+        key: Some(input.key),
+        schema_ref: Some(&input.recipe.target_schema_ref),
+        value_ref: Some(&typed_ref.value_ref),
+        reason: "typed storage migration source schema does not match recipe".to_string(),
+        checks: vec![("source-schema-binding", "fail"), ("denial-receipt", "pass")],
+        details: vec![record("recipe", vec![string(&input.recipe.recipe_ref)])],
+    });
+    store_receipt(input.root, &receipt_value)?;
+    Err(MoltenError::invalid_harness(
+        "typed storage migration rejected: source schema does not match recipe",
+    ))
+}
+
+fn source_value(input: &SourceInput<'_>, typed_ref: &TypedStorageRef) -> Result<IOValue> {
+    let value_bytes = read_payload_bytes(input.root, typed_ref)?;
+    let value = parse_canonical_bytes(&value_bytes)?;
+    if canonical_hash(&value)? == typed_ref.value_ref {
+        return Ok(value);
+    }
+    let receipt_value = denial_receipt_value(DenialReceiptValueInput {
+        operation: "migrate",
+        storage_ref: Some(&typed_ref.storage_ref),
+        namespace: Some(input.namespace),
+        key: Some(input.key),
+        schema_ref: Some(&input.recipe.target_schema_ref),
+        value_ref: Some(&typed_ref.value_ref),
+        reason: "typed storage migration source value hash mismatch".to_string(),
+        checks: vec![("source-content-integrity", "fail"), ("denial-receipt", "pass")],
+        details: vec![record("recipe", vec![string(&input.recipe.recipe_ref)])],
+    });
+    store_receipt(input.root, &receipt_value)?;
+    Err(MoltenError::invalid_harness("typed storage migration source content integrity failed"))
+}
+
+fn entry_refs(typed_ref: &TypedStorageRef, recipe: &StorageMigrationRecipe) -> EntryRefs {
+    let mut policy = typed_ref.policy_refs.clone();
+    policy.extend(recipe.policy_refs.clone());
+    policy.sort();
+    policy.dedup();
+    let mut evidence = typed_ref.evidence_refs.clone();
+    evidence.push(recipe.recipe_ref.clone());
+    evidence.extend(recipe.evidence_refs.clone());
+    evidence.sort();
+    evidence.dedup();
+    EntryRefs { policy, evidence }
+}
+
+fn next_value(input: NextInput<'_>) -> IOValue {
+    typed_ref_value(TypedRefValueInput {
+        namespace: input.namespace,
+        key: input.key,
+        schema_ref: &input.recipe.target_schema_ref,
+        value_ref: input.value_ref,
+        payload: input.payload,
+        producer_ref: &input.recipe.transformer_ref,
+        policy_refs: &input.refs.policy,
+        evidence_refs: &input.refs.evidence,
+        revision: input.revision,
+        actor_ref: &input.admission.actor_ref,
+        capability_ref: &input.admission.capability_ref,
+        effect_handle_ref: input.effect_handle_ref,
+    })
+}
+
+fn step_receipt(input: StepInput<'_>) -> IOValue {
     let mut details = vec![
-        record("recipe", vec![string(&recipe_ref)]),
-        record("mode", vec![string(&recipe.mode)]),
-        record("transformer", vec![string(&recipe.transformer_ref), string(&recipe.transformer_kind)]),
-        record("old-storage-ref", vec![string(&old_typed_ref.storage_ref)]),
-        record("new-storage-ref", vec![string(&new_storage_ref)]),
-        record("old-value-ref", vec![string(&old_typed_ref.value_ref)]),
-        record("new-value-ref", vec![string(&new_value_ref)]),
-        record("source-schema-ref", vec![string(&recipe.source_schema_ref)]),
-        record("target-schema-ref", vec![string(&recipe.target_schema_ref)]),
+        record("recipe", vec![string(&input.recipe.recipe_ref)]),
+        record("mode", vec![string(&input.recipe.mode)]),
+        record("transformer", vec![
+            string(&input.recipe.transformer_ref),
+            string(&input.recipe.transformer_kind),
+        ]),
+        record("old-storage-ref", vec![string(&input.source.storage_ref)]),
+        record("new-storage-ref", vec![string(input.storage_ref)]),
+        record("old-value-ref", vec![string(&input.source.value_ref)]),
+        record("new-value-ref", vec![string(input.value_ref)]),
+        record("source-schema-ref", vec![string(&input.recipe.source_schema_ref)]),
+        record("target-schema-ref", vec![string(&input.recipe.target_schema_ref)]),
     ];
-    details.extend(payload_details);
-    let receipt_value = receipt_value(ReceiptValueInput {
+    details.extend(input.details);
+    receipt_value(ReceiptValueInput {
         operation: "migrate",
         decision: "pass",
-        storage_ref: Some(&new_storage_ref),
-        namespace: Some(namespace),
-        key: Some(key),
-        schema_ref: Some(&recipe.target_schema_ref),
-        value_ref: Some(&new_value_ref),
-        effect: &effect,
+        storage_ref: Some(input.storage_ref),
+        namespace: Some(input.namespace),
+        key: Some(input.key),
+        schema_ref: Some(&input.recipe.target_schema_ref),
+        value_ref: Some(input.value_ref),
+        effect: input.effect,
         checks: vec![
             ("effect-manifest", "pass"),
             ("storage-effect-handle", "pass"),
@@ -908,30 +1025,6 @@ pub fn migrate_value(
             ("cairn-receipt", "pass"),
         ],
         details,
-    });
-    let db = ensure_index_tables(root)?;
-    let write_txn = db.begin_write().map_err(index_error)?;
-    {
-        let typed_ref_bytes = canonical_bytes(&typed_ref_value)?;
-        let mut records = write_txn.open_table(INDEX_RECORDS).map_err(index_error)?;
-        records.insert(storage_key.as_str(), typed_ref_bytes.as_slice()).map_err(index_error)?;
-        let mut refs = write_txn.open_table(INDEX_REFS).map_err(index_error)?;
-        refs.insert(new_storage_ref.as_str(), typed_ref_bytes.as_slice()).map_err(index_error)?;
-        if new_value_bytes.len() <= INLINE_VALUE_LIMIT {
-            let mut inline_values = write_txn.open_table(INDEX_INLINE_VALUES).map_err(index_error)?;
-            inline_values.insert(new_value_ref.as_str(), new_value_bytes.as_slice()).map_err(index_error)?;
-        }
-        store_receipt_in_tx(&write_txn, &receipt_value)?;
-    }
-    write_txn.commit().map_err(index_error)?;
-    Ok(TypedStorageMigrate {
-        old_storage_ref: old_typed_ref.storage_ref,
-        new_storage_ref,
-        old_value_ref: old_typed_ref.value_ref,
-        new_value_ref,
-        recipe_ref,
-        typed_ref_value,
-        receipt_value,
     })
 }
 

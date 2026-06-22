@@ -211,6 +211,8 @@
 
 ## Patterns That Work
 
+- 2026-06-22 Octet typed-storage migrate split: extracting `src/typed/storage.rs::migrate_value` source loading/validation, merged refs, next entry, pass receipt, and persistence into neutral same-file helpers lowered the no-disabled probe from 7224 to 7222 by clearing the function-length finding while keeping path/import/file counts flat. Validation passed `cargo fmt`, focused `cargo test typed_storage`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-typed-storage-migrate-0`.
+
 - 2026-06-22 Octet typed-storage get split: extracting `src/typed/storage.rs::get_value_inner` into neutral same-file `stored_binding`/`require_binding`/`checked_value`/`get_details` helpers lowered the no-disabled probe from 7226 to 7224 by clearing the function-length finding while keeping path/import/file counts flat. Validation passed `cargo fmt`, focused `cargo test typed_storage`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-typed-storage-get-0`.
 
 - 2026-06-22 Octet typed-storage effect-evidence split: extracting `src/typed/storage.rs::storage_effect_evidence` into neutral same-file `ScopeParts`/`scope_parts`/`binding`/`handle` helpers lowered the no-disabled probe from 7228 to 7226 by clearing the function-length finding while keeping path/file counts net-positive. Validation passed `cargo fmt`, focused `cargo test typed_storage`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-typed-storage-effect-0`.
