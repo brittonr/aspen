@@ -1943,43 +1943,22 @@ mod tests {
                 record("shape", vec![string("field"), string("age"), record("shape", vec![string("u64")])]),
             ]),
         ]);
-        let actual_identity = schema_identity::parse_schema_identity(
-            &schema_identity::schema_identity_value(&schema_identity::SchemaIdentityInput {
-                mode: schema_identity::MODE_STRUCTURAL.to_string(),
-                schema_ref: put.schema_ref.clone(),
-                shape: shape.clone(),
-                brand_ref: None,
-                metadata_refs: vec![test_ref("actual-metadata")],
-                policy_refs: vec![test_ref("schema-policy")],
-                evidence_refs: vec![test_ref("schema-evidence")],
-            })
-            .expect("actual identity"),
-        )
-        .expect("parse actual identity");
+        let actual = parsed_id(
+            schema_identity::MODE_STRUCTURAL,
+            put.schema_ref.clone(),
+            shape.clone(),
+            "actual-metadata",
+            "actual identity",
+        );
         let expected_schema_ref = test_ref("expected-structural-schema");
-        let expected_identity = schema_identity::parse_schema_identity(
-            &schema_identity::schema_identity_value(&schema_identity::SchemaIdentityInput {
-                mode: schema_identity::MODE_STRUCTURAL.to_string(),
-                schema_ref: expected_schema_ref.clone(),
-                shape: shape.clone(),
-                brand_ref: None,
-                metadata_refs: vec![test_ref("expected-metadata")],
-                policy_refs: vec![test_ref("schema-policy")],
-                evidence_refs: vec![test_ref("schema-evidence")],
-            })
-            .expect("expected identity"),
-        )
-        .expect("parse expected identity");
-        let compatibility = schema_identity::compatibility_decision_value(&schema_identity::SchemaCompatibilityInput {
-            expected: expected_identity,
-            actual: actual_identity,
-            alias: None,
-            migration_ref: None,
-            policy_refs: vec![test_ref("compat-policy")],
-            evidence_refs: vec![test_ref("compat-evidence")],
-            deny_by_policy: false,
-        })
-        .expect("structural compatibility");
+        let expected = parsed_id(
+            schema_identity::MODE_STRUCTURAL,
+            expected_schema_ref.clone(),
+            shape.clone(),
+            "expected-metadata",
+            "expected identity",
+        );
+        let compatibility = compatible(expected, actual, None, "structural compatibility");
         let loaded = get_value_with_schema_compatibility(SchemaCompatibilityGetInput {
             root: &root,
             namespace: "profiles",
@@ -1992,84 +1971,98 @@ mod tests {
         assert_eq!(loaded.value, value);
         assert!(to_text(&loaded.receipt_value).expect("receipt text").contains("schema-compatibility-value"));
 
+        assert_alternate_case(&root, &put, shape, &admission);
+    }
+
+    fn assert_alternate_case(root: &Path, put: &TypedStoragePut, shape: IOValue, admission: &TypedStorageAdmission) {
         let unique_expected_schema_ref = test_ref("unique-expected-schema");
-        let actual_unique = schema_identity::parse_schema_identity(
-            &schema_identity::schema_identity_value(&schema_identity::SchemaIdentityInput {
-                mode: schema_identity::MODE_UNIQUE.to_string(),
-                schema_ref: put.schema_ref.clone(),
-                shape: shape.clone(),
-                brand_ref: None,
-                metadata_refs: vec![test_ref("actual-unique")],
-                policy_refs: vec![test_ref("schema-policy")],
-                evidence_refs: vec![test_ref("schema-evidence")],
-            })
-            .expect("actual unique identity"),
-        )
-        .expect("parse actual unique");
-        let expected_unique = schema_identity::parse_schema_identity(
-            &schema_identity::schema_identity_value(&schema_identity::SchemaIdentityInput {
-                mode: schema_identity::MODE_UNIQUE.to_string(),
-                schema_ref: unique_expected_schema_ref.clone(),
-                shape,
-                brand_ref: None,
-                metadata_refs: vec![test_ref("expected-unique")],
-                policy_refs: vec![test_ref("schema-policy")],
-                evidence_refs: vec![test_ref("schema-evidence")],
-            })
-            .expect("expected unique identity"),
-        )
-        .expect("parse expected unique");
-        let mismatch = schema_identity::compatibility_decision_value(&schema_identity::SchemaCompatibilityInput {
-            expected: expected_unique.clone(),
-            actual: actual_unique.clone(),
-            alias: None,
+        let actual = parsed_id(
+            schema_identity::MODE_UNIQUE,
+            put.schema_ref.clone(),
+            shape.clone(),
+            "actual-unique",
+            "actual unique identity",
+        );
+        let expected = parsed_id(
+            schema_identity::MODE_UNIQUE,
+            unique_expected_schema_ref.clone(),
+            shape,
+            "expected-unique",
+            "expected unique identity",
+        );
+        let mismatch = compatible(expected.clone(), actual.clone(), None, "unique mismatch");
+        let error = get_value_with_schema_compatibility(SchemaCompatibilityGetInput {
+            root,
+            namespace: "profiles",
+            key: "alice",
+            expected_schema_ref: &unique_expected_schema_ref,
+            schema_compatibility_value: &mismatch,
+            admission,
+        })
+        .expect_err("unique mismatch denied");
+        assert!(error.to_string().contains("schema ref"), "{error}");
+
+        let binding = parsed_binding(&put.schema_ref, &unique_expected_schema_ref);
+        let admitted = compatible(expected, actual, Some(binding), "alias compatibility");
+        get_value_with_schema_compatibility(SchemaCompatibilityGetInput {
+            root,
+            namespace: "profiles",
+            key: "alice",
+            expected_schema_ref: &unique_expected_schema_ref,
+            schema_compatibility_value: &admitted,
+            admission,
+        })
+        .expect("alias load admitted");
+    }
+
+    fn parsed_id(
+        mode: &str,
+        schema_ref: String,
+        shape: IOValue,
+        metadata_label: &str,
+        context: &str,
+    ) -> schema_identity::SchemaIdentity {
+        let value = schema_identity::schema_identity_value(&schema_identity::SchemaIdentityInput {
+            mode: mode.to_string(),
+            schema_ref,
+            shape,
+            brand_ref: None,
+            metadata_refs: vec![test_ref(metadata_label)],
+            policy_refs: vec![test_ref("schema-policy")],
+            evidence_refs: vec![test_ref("schema-evidence")],
+        })
+        .expect(context);
+        schema_identity::parse_schema_identity(&value).expect(context)
+    }
+
+    fn compatible(
+        expected: schema_identity::SchemaIdentity,
+        actual: schema_identity::SchemaIdentity,
+        alias: Option<schema_identity::SchemaAlias>,
+        context: &str,
+    ) -> IOValue {
+        schema_identity::compatibility_decision_value(&schema_identity::SchemaCompatibilityInput {
+            expected,
+            actual,
+            alias,
             migration_ref: None,
             policy_refs: vec![test_ref("compat-policy")],
             evidence_refs: vec![test_ref("compat-evidence")],
             deny_by_policy: false,
         })
-        .expect("unique mismatch");
-        let error = get_value_with_schema_compatibility(SchemaCompatibilityGetInput {
-            root: &root,
-            namespace: "profiles",
-            key: "alice",
-            expected_schema_ref: &unique_expected_schema_ref,
-            schema_compatibility_value: &mismatch,
-            admission: &admission,
+        .expect(context)
+    }
+
+    fn parsed_binding(from_schema_ref: &str, to_schema_ref: &str) -> schema_identity::SchemaAlias {
+        let value = schema_identity::schema_alias_value(&schema_identity::SchemaAliasInput {
+            from_schema_ref: from_schema_ref.to_string(),
+            to_schema_ref: to_schema_ref.to_string(),
+            scope: "storage".to_string(),
+            policy_refs: vec![test_ref("alias-policy")],
+            evidence_refs: vec![test_ref("alias-evidence")],
         })
-        .expect_err("unique mismatch denied");
-        assert!(error.to_string().contains("schema ref"), "{error}");
-        let alias = schema_identity::parse_schema_alias(
-            &schema_identity::schema_alias_value(&schema_identity::SchemaAliasInput {
-                from_schema_ref: put.schema_ref.clone(),
-                to_schema_ref: unique_expected_schema_ref.clone(),
-                scope: "storage".to_string(),
-                policy_refs: vec![test_ref("alias-policy")],
-                evidence_refs: vec![test_ref("alias-evidence")],
-            })
-            .expect("alias"),
-        )
-        .expect("parse alias");
-        let admitted_alias =
-            schema_identity::compatibility_decision_value(&schema_identity::SchemaCompatibilityInput {
-                expected: expected_unique,
-                actual: actual_unique,
-                alias: Some(alias),
-                migration_ref: None,
-                policy_refs: vec![test_ref("compat-policy")],
-                evidence_refs: vec![test_ref("compat-evidence")],
-                deny_by_policy: false,
-            })
-            .expect("alias compatibility");
-        get_value_with_schema_compatibility(SchemaCompatibilityGetInput {
-            root: &root,
-            namespace: "profiles",
-            key: "alice",
-            expected_schema_ref: &unique_expected_schema_ref,
-            schema_compatibility_value: &admitted_alias,
-            admission: &admission,
-        })
-        .expect("alias load admitted");
+        .expect("alias");
+        schema_identity::parse_schema_alias(&value).expect("parse alias")
     }
 
     #[test]
