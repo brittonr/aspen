@@ -1427,95 +1427,20 @@ fn cli_node_control_ingress_build_publish_deliver_work() -> CliResult<()> {
     let resource_ref = test_ref("ingress-resource")?;
     let bootstrap_ref = test_ref("ingress-bootstrap")?;
 
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "init", "--state-root"])
-            .arg(&state_root)
-            .args(["--node-id", "node:cli-ingress"])
-            .output()?,
-        "node ingress init",
-    );
-    assert_success(
-        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
-        "node ingress run",
-    );
-    assert_success(
-        &molten_cmd()
-            .args([
-                "test",
-                "node",
-                "control-request",
-                "--operation",
-                "status",
-                "--authority",
-            ])
-            .arg(&authority_ref)
-            .args(["--policy"])
-            .arg(&policy_ref)
-            .args(["--resource"])
-            .arg(&resource_ref)
-            .args(["--out"])
-            .arg(&request)
-            .output()?,
-        "node ingress request",
-    );
-    assert_success(
-        &molten_cmd()
-            .args([
-                "test",
-                "node",
-                "control-ingress-build",
-                "--from-peer",
-                "peer:cli",
-                "--to-node",
-                "node:cli-ingress",
-                "--peer-bootstrap",
-            ])
-            .arg(&bootstrap_ref)
-            .args(["--authority"])
-            .arg(&authority_ref)
-            .args(["--policy"])
-            .arg(&policy_ref)
-            .args(["--resource"])
-            .arg(&resource_ref)
-            .args(["--out"])
-            .arg(&envelope)
-            .arg(&request)
-            .output()?,
-        "node ingress build",
-    );
-    let envelope_value = read_preserves(&envelope)?;
-    assert_eq!(molten::ledger::artifact_kind(&envelope_value), "node-control-ingress-envelope");
-    let envelope_ref = molten::preserves_rail::canonical_hash(&envelope_value)?;
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "control-ingress-publish", "--state-root"])
-            .arg(&state_root)
-            .arg(&envelope)
-            .args(["--receipt-out"])
-            .arg(&publish_receipt)
-            .output()?,
-        "node ingress publish",
-    );
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&publish_receipt)?), "node-control-ingress-receipt");
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "control-ingress-deliver", "--state-root"])
-            .arg(&state_root)
-            .arg(&envelope_ref)
-            .args(["--receipt-out"])
-            .arg(&deliver_receipt)
-            .output()?,
-        "node ingress deliver",
-    );
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&deliver_receipt)?), "node-control-ingress-receipt");
-    let loop_out = molten_cmd()
-        .args(["test", "node", "run-loop", "--state-root"])
-        .arg(&state_root)
-        .args(["--max-requests", "1", "--receipt-out"])
-        .arg(&loop_receipt)
-        .output()?;
-    assert_success(&loop_out, "node ingress loop");
+    start_state(&state_root, "node:cli-ingress", "node ingress init", "node ingress run")?;
+    write_status_request(&request, &authority_ref, &policy_ref, &resource_ref, "node ingress request")?;
+    let envelope_ref = write_envelope(EnvelopeArgs {
+        path: &envelope,
+        request: &request,
+        bootstrap_ref: &bootstrap_ref,
+        authority_ref: &authority_ref,
+        policy_ref: &policy_ref,
+        resource_ref: &resource_ref,
+        label: "node ingress build",
+    })?;
+    publish_envelope(&state_root, &envelope, &publish_receipt, "node ingress publish")?;
+    deliver_envelope(&state_root, &envelope_ref, &deliver_receipt, "node ingress deliver")?;
+    let loop_out = run_once(&state_root, &loop_receipt, "node ingress loop")?;
     assert!(stdout(&loop_out).contains("processed=1"));
     Ok(())
 }
@@ -3302,6 +3227,131 @@ fn molten_cmd() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_molten"));
     command.current_dir(manifest_dir());
     command
+}
+
+fn start_state(root: &Path, node_id: &str, init_label: &str, run_label: &str) -> CliResult<()> {
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "init", "--state-root"])
+            .arg(root)
+            .args(["--node-id", node_id])
+            .output()?,
+        init_label,
+    );
+    assert_success(&molten_cmd().args(["test", "node", "run", "--state-root"]).arg(root).output()?, run_label);
+    Ok(())
+}
+
+fn write_status_request(
+    path: &Path,
+    authority_ref: &str,
+    policy_ref: &str,
+    resource_ref: &str,
+    label: &str,
+) -> CliResult<()> {
+    assert_success(
+        &molten_cmd()
+            .args([
+                "test",
+                "node",
+                "control-request",
+                "--operation",
+                "status",
+                "--authority",
+            ])
+            .arg(authority_ref)
+            .args(["--policy"])
+            .arg(policy_ref)
+            .args(["--resource"])
+            .arg(resource_ref)
+            .args(["--out"])
+            .arg(path)
+            .output()?,
+        label,
+    );
+    Ok(())
+}
+
+struct EnvelopeArgs<'a> {
+    path: &'a Path,
+    request: &'a Path,
+    bootstrap_ref: &'a str,
+    authority_ref: &'a str,
+    policy_ref: &'a str,
+    resource_ref: &'a str,
+    label: &'a str,
+}
+
+fn write_envelope(args: EnvelopeArgs<'_>) -> CliResult<String> {
+    assert_success(
+        &molten_cmd()
+            .args([
+                "test",
+                "node",
+                "control-ingress-build",
+                "--from-peer",
+                "peer:cli",
+                "--to-node",
+                "node:cli-ingress",
+                "--peer-bootstrap",
+            ])
+            .arg(args.bootstrap_ref)
+            .args(["--authority"])
+            .arg(args.authority_ref)
+            .args(["--policy"])
+            .arg(args.policy_ref)
+            .args(["--resource"])
+            .arg(args.resource_ref)
+            .args(["--out"])
+            .arg(args.path)
+            .arg(args.request)
+            .output()?,
+        args.label,
+    );
+    let value = read_preserves(args.path)?;
+    assert_eq!(molten::ledger::artifact_kind(&value), "node-control-ingress-envelope");
+    Ok(molten::preserves_rail::canonical_hash(&value)?)
+}
+
+fn publish_envelope(root: &Path, envelope: &Path, receipt: &Path, label: &str) -> CliResult<()> {
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "control-ingress-publish", "--state-root"])
+            .arg(root)
+            .arg(envelope)
+            .args(["--receipt-out"])
+            .arg(receipt)
+            .output()?,
+        label,
+    );
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(receipt)?), "node-control-ingress-receipt");
+    Ok(())
+}
+
+fn deliver_envelope(root: &Path, envelope_ref: &str, receipt: &Path, label: &str) -> CliResult<()> {
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "control-ingress-deliver", "--state-root"])
+            .arg(root)
+            .arg(envelope_ref)
+            .args(["--receipt-out"])
+            .arg(receipt)
+            .output()?,
+        label,
+    );
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(receipt)?), "node-control-ingress-receipt");
+    Ok(())
+}
+
+fn run_once(root: &Path, receipt: &Path, label: &str) -> CliResult<Output> {
+    let output = molten_cmd()
+        .args(["test", "node", "run-loop", "--state-root"])
+        .arg(root)
+        .args(["--max-requests", "1", "--receipt-out"])
+        .arg(receipt)
+        .output()?;
+    assert_success(&output, label);
+    Ok(output)
 }
 
 fn manifest_dir() -> PathBuf {
