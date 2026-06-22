@@ -4075,6 +4075,12 @@ mod tests {
 
     #[test]
     fn confidentiality_and_transform_modes_fail_closed_until_supported() {
+        assert_confidential_write_denials();
+        let (root, transformed_manifest_ref) = write_unsupported_manifest();
+        assert_unsupported_transform_denials(&root, &transformed_manifest_ref);
+    }
+
+    fn assert_confidential_write_denials() {
         let confidential_root = temp_dir("chunk-confidential-deny");
         let metadata = record("chunk-metadata-v1", vec![record("object-kind", vec![string("artifact")])]);
         let mut confidential_without_commitment = ChunkTransforms::public_plaintext();
@@ -4109,7 +4115,9 @@ mod tests {
         })
         .expect_err("protected confidential writes are denied until encryption exists");
         assert!(protected_error.to_string().contains("protected encryption implementation"));
+    }
 
+    fn write_unsupported_manifest() -> (std::path::PathBuf, String) {
         let root = temp_dir("chunk-transform-unsupported");
         let put = put_bytes(&root, "artifact", b"aaaabbbb", 4).expect("put public");
         let public_manifest = read_manifest(&root, &put.manifest_ref).expect("read manifest");
@@ -4162,28 +4170,32 @@ mod tests {
         .expect("write transformed manifest");
         let parsed = read_manifest(&root, &transformed_manifest_ref).expect("parse transformed manifest");
         assert_eq!(parsed.transforms, unsupported);
+        (root, transformed_manifest_ref)
+    }
+
+    fn assert_unsupported_transform_denials(root: &std::path::Path, transformed_manifest_ref: &str) {
         assert!(
-            verify_manifest(&root, &transformed_manifest_ref)
+            verify_manifest(root, transformed_manifest_ref)
                 .expect_err("verify rejects unsupported transform")
                 .to_string()
                 .contains("unsupported chunk-store transform")
         );
         assert!(
-            read_object(&root, &transformed_manifest_ref)
+            read_object(root, transformed_manifest_ref)
                 .expect_err("read rejects unsupported transform")
                 .to_string()
                 .contains("unsupported chunk-store transform")
         );
         assert!(
-            range_read(&root, &transformed_manifest_ref, 0, 1)
+            range_read(root, transformed_manifest_ref, 0, 1)
                 .expect_err("range rejects unsupported transform")
                 .to_string()
                 .contains("unsupported chunk-store transform")
         );
-        let transform_denials = list_receipt_refs(&root)
+        let transform_denials = list_receipt_refs(root)
             .expect("list transform receipts")
             .iter()
-            .map(|receipt_ref| read_receipt(&root, receipt_ref).expect("read transform receipt"))
+            .map(|receipt_ref| read_receipt(root, receipt_ref).expect("read transform receipt"))
             .filter(|receipt| receipt.decision == "deny")
             .collect::<Vec<_>>();
         assert!(transform_denials.iter().any(|receipt| receipt.operation == "chunk-verify"));
