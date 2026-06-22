@@ -1278,97 +1278,38 @@ fn cli_node_init_run_status_and_stop_write_receipts() -> CliResult<()> {
     let shutdown = state_root.join("shutdown-receipt.preserves");
     let loop_receipt = dir.join("node-control-loop.preserves");
 
-    let init = molten_cmd()
-        .args(["node", "init", "--state-root"])
-        .arg(&state_root)
-        .args(["--node-id", "node:cli", "--config-out"])
-        .arg(&config)
-        .output()?;
-    assert_success(&init, "node init");
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&config)?), "node-config");
-
-    let run = molten_cmd()
-        .args(["node", "run", "--state-root"])
-        .arg(&state_root)
-        .args(["--startup-out"])
-        .arg(&startup)
-        .output()?;
-    assert_success(&run, "node run");
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&startup)?), "node-startup-receipt");
-
+    start_case(StartArgs {
+        root: &state_root,
+        config: &config,
+        startup: &startup,
+    })?;
     let authority_ref = test_ref("node-control-authority")?;
     let policy_ref = test_ref("node-control-policy")?;
     let resource_ref = test_ref("node-control-resource")?;
-    let request = molten_cmd()
-        .args(["node", "control-request", "--operation", "status", "--authority"])
-        .arg(&authority_ref)
-        .args(["--policy"])
-        .arg(&policy_ref)
-        .args(["--resource"])
-        .arg(&resource_ref)
-        .args(["--out"])
-        .arg(&socket_request)
-        .output()?;
-    assert_success(&request, "node socket status request");
-    let submit = molten_cmd()
-        .args(["node", "control-submit", "--state-root"])
-        .arg(&state_root)
-        .arg(&socket_request)
-        .args(["--receipt-out"])
-        .arg(&socket_queue)
-        .output()?;
-    assert_success(&submit, "node socket status submit");
+
+    write_op(OpArgs {
+        name: "status",
+        out: &socket_request,
+        authority_ref: &authority_ref,
+        policy_ref: &policy_ref,
+        resource_ref: &resource_ref,
+        label: "node socket status request",
+    })?;
+    submit_op(&state_root, &socket_request, &socket_queue, "node socket status submit")?;
     assert_eq!(molten::ledger::artifact_kind(&read_preserves(&socket_queue)?), "node-control-queue-receipt");
-    let dispatch = molten_cmd()
-        .args(["node", "control-dispatch", "--state-root"])
-        .arg(&state_root)
-        .args(["--receipt-out"])
-        .arg(&socket_receipt)
-        .output()?;
-    assert_success(&dispatch, "node socket status dispatch");
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&socket_receipt)?), "node-control-receipt");
+    dispatch_op(&state_root, &socket_receipt, "node socket status dispatch")?;
+    expect_running(&state_root, &health, &status_receipt)?;
 
-    let status = molten_cmd()
-        .args(["node", "status", "--state-root"])
-        .arg(&state_root)
-        .args(["--health-out"])
-        .arg(&health)
-        .args(["--receipt-out"])
-        .arg(&status_receipt)
-        .output()?;
-    assert_success(&status, "node status");
-    assert!(stdout(&status).contains("node status running"));
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&health)?), "node-health-receipt");
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&status_receipt)?), "node-control-receipt");
-
-    let shutdown_req = molten_cmd()
-        .args(["node", "control-request", "--operation", "shutdown", "--authority"])
-        .arg(&authority_ref)
-        .args(["--policy"])
-        .arg(&policy_ref)
-        .args(["--resource"])
-        .arg(&resource_ref)
-        .args(["--out"])
-        .arg(&shutdown_request)
-        .output()?;
-    assert_success(&shutdown_req, "node socket shutdown request");
-    let shutdown_submit = molten_cmd()
-        .args(["node", "control-submit", "--state-root"])
-        .arg(&state_root)
-        .arg(&shutdown_request)
-        .args(["--receipt-out"])
-        .arg(&shutdown_queue)
-        .output()?;
-    assert_success(&shutdown_submit, "node socket shutdown submit");
-    let stop = molten_cmd()
-        .args(["node", "run-loop", "--state-root"])
-        .arg(&state_root)
-        .args(["--max-requests", "4", "--receipt-out"])
-        .arg(&loop_receipt)
-        .output()?;
-    assert_success(&stop, "node socket shutdown loop");
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&shutdown)?), "node-shutdown-receipt");
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&loop_receipt)?), "node-control-loop-receipt");
+    write_op(OpArgs {
+        name: "shutdown",
+        out: &shutdown_request,
+        authority_ref: &authority_ref,
+        policy_ref: &policy_ref,
+        resource_ref: &resource_ref,
+        label: "node socket shutdown request",
+    })?;
+    submit_op(&state_root, &shutdown_request, &shutdown_queue, "node socket shutdown submit")?;
+    expect_stop_loop(&state_root, &shutdown, &loop_receipt)?;
 
     let stopped = molten_cmd().args(["node", "status", "--state-root"]).arg(&state_root).output()?;
     assert_success(&stopped, "node stopped status");
@@ -3233,6 +3174,112 @@ fn molten_cmd() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_molten"));
     command.current_dir(manifest_dir());
     command
+}
+
+struct StartArgs<'a> {
+    root: &'a Path,
+    config: &'a Path,
+    startup: &'a Path,
+}
+
+fn start_case(args: StartArgs<'_>) -> CliResult<()> {
+    let init = molten_cmd()
+        .args(["node", "init", "--state-root"])
+        .arg(args.root)
+        .args(["--node-id", "node:cli", "--config-out"])
+        .arg(args.config)
+        .output()?;
+    assert_success(&init, "node init");
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(args.config)?), "node-config");
+
+    let run = molten_cmd()
+        .args(["node", "run", "--state-root"])
+        .arg(args.root)
+        .args(["--startup-out"])
+        .arg(args.startup)
+        .output()?;
+    assert_success(&run, "node run");
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(args.startup)?), "node-startup-receipt");
+    Ok(())
+}
+
+struct OpArgs<'a> {
+    name: &'a str,
+    out: &'a Path,
+    authority_ref: &'a str,
+    policy_ref: &'a str,
+    resource_ref: &'a str,
+    label: &'a str,
+}
+
+fn write_op(args: OpArgs<'_>) -> CliResult<()> {
+    let output = molten_cmd()
+        .args(["node", "control-request", "--operation"])
+        .arg(args.name)
+        .args(["--authority"])
+        .arg(args.authority_ref)
+        .args(["--policy"])
+        .arg(args.policy_ref)
+        .args(["--resource"])
+        .arg(args.resource_ref)
+        .args(["--out"])
+        .arg(args.out)
+        .output()?;
+    assert_success(&output, args.label);
+    Ok(())
+}
+
+fn submit_op(root: &Path, request: &Path, receipt: &Path, label: &str) -> CliResult<()> {
+    let output = molten_cmd()
+        .args(["node", "control-submit", "--state-root"])
+        .arg(root)
+        .arg(request)
+        .args(["--receipt-out"])
+        .arg(receipt)
+        .output()?;
+    assert_success(&output, label);
+    Ok(())
+}
+
+fn dispatch_op(root: &Path, receipt: &Path, label: &str) -> CliResult<()> {
+    let output = molten_cmd()
+        .args(["node", "control-dispatch", "--state-root"])
+        .arg(root)
+        .args(["--receipt-out"])
+        .arg(receipt)
+        .output()?;
+    assert_success(&output, label);
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(receipt)?), "node-control-receipt");
+    Ok(())
+}
+
+fn expect_running(root: &Path, health: &Path, receipt: &Path) -> CliResult<()> {
+    let output = molten_cmd()
+        .args(["node", "status", "--state-root"])
+        .arg(root)
+        .args(["--health-out"])
+        .arg(health)
+        .args(["--receipt-out"])
+        .arg(receipt)
+        .output()?;
+    assert_success(&output, "node status");
+    assert!(stdout(&output).contains("node status running"));
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(health)?), "node-health-receipt");
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(receipt)?), "node-control-receipt");
+    Ok(())
+}
+
+fn expect_stop_loop(root: &Path, shutdown: &Path, receipt: &Path) -> CliResult<()> {
+    let output = molten_cmd()
+        .args(["node", "run-loop", "--state-root"])
+        .arg(root)
+        .args(["--max-requests", "4", "--receipt-out"])
+        .arg(receipt)
+        .output()?;
+    assert_success(&output, "node socket shutdown loop");
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(shutdown)?), "node-shutdown-receipt");
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(receipt)?), "node-control-loop-receipt");
+    Ok(())
 }
 
 fn start_state(root: &Path, node_id: &str, init_label: &str, run_label: &str) -> CliResult<()> {
