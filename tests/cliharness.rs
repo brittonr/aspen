@@ -2541,10 +2541,21 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     })?;
     let fixture = setup_retention_gc_catalog_fixture(&candidate, "ledger-gc", &dir)?;
 
+    let (explain_path, explain_ref) = run_explain(&retention_root, &dir, &fixture)?;
+    let (bundle_dir, bundle_ref) = run_bundle(&retention_root, &dir, &explain_path, &explain_ref)?;
+    check_profile(&registry, &ledger_root, &bundle_dir)?;
+    run_verify(&registry, &ledger_root, &dir, &bundle_dir, &bundle_ref)?;
+    run_tamper(&dir, &bundle_dir, &fixture)?;
+    run_search(&dir, &registry, &ledger_root, &fixture)?;
+    run_mcp(&dir, &registry, &ledger_root, &fixture)?;
+    Ok(())
+}
+
+fn run_explain(retention_root: &Path, dir: &Path, fixture: &RetentionGcCatalogFixture) -> CliResult<(PathBuf, String)> {
     let explain_path = dir.join("retention-explain.preserves");
     let explain_output = molten_cmd()
         .args(["test", "retention", "explain", "--root"])
-        .arg(&retention_root)
+        .arg(retention_root)
         .args(["--object-ref"])
         .arg(&fixture.object_ref)
         .args([
@@ -2570,13 +2581,21 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     assert_eq!(explain.gc_execution_refs, vec![fixture.execution_ref.clone()]);
     assert_eq!(explain.gc_audit_refs, vec![fixture.audit_ref.clone()]);
     assert_eq!(molten::ledger::artifact_kind(&read_preserves(&explain_path)?), "retention-candidate-explain");
+    Ok((explain_path, explain.explain_ref))
+}
 
+fn run_bundle(
+    retention_root: &Path,
+    dir: &Path,
+    explain_path: &Path,
+    explain_ref: &str,
+) -> CliResult<(PathBuf, String)> {
     let bundle_dir = dir.join("retention-bundle");
     let bundle_output = molten_cmd()
         .args(["test", "retention", "bundle-export", "--root"])
-        .arg(&retention_root)
+        .arg(retention_root)
         .args(["--explain"])
-        .arg(&explain_path)
+        .arg(explain_path)
         .args(["--out"])
         .arg(&bundle_dir)
         .args(["--profile", "public"])
@@ -2586,9 +2605,16 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     let bundle_value = read_preserves(&bundle_dir.join("bundle.preserves"))?;
     let bundle = retention::parse_retention_candidate_bundle(&bundle_value)?;
     assert_eq!(molten::ledger::artifact_kind(&bundle_value), "retention-candidate-bundle");
-    assert_eq!(bundle.explain_ref, explain.explain_ref);
+    assert_eq!(bundle.explain_ref, explain_ref);
     assert_eq!(bundle.artifact_refs.len(), 6);
     assert!(bundle.diagnostics.is_empty());
+    assert!(bundle_dir.join("explain.preserves").exists());
+    assert!(bundle_dir.join("artifacts/gc-plans").exists());
+    assert!(bundle_dir.join("artifacts/gc-audits").exists());
+    Ok((bundle_dir, bundle.bundle_ref))
+}
+
+fn check_profile(registry: &Path, ledger_root: &Path, bundle_dir: &Path) -> CliResult<()> {
     let bundle_profile = retention::parse_retention_candidate_bundle_profile(&read_preserves(
         &bundle_dir.join("bundle-profile.preserves"),
     )?)?;
@@ -2600,14 +2626,14 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
         .args(["test", "ledger", "import"])
         .arg(&bundle_profile_path)
         .args(["--ledger"])
-        .arg(&ledger_root)
+        .arg(ledger_root)
         .output()?;
     assert_success(&profile_import, "ledger import retention bundle profile");
     let profile_search = molten_cmd()
         .args(["test", "catalog", "search", "--registry"])
-        .arg(&registry)
+        .arg(registry)
         .args(["--ledger"])
-        .arg(&ledger_root)
+        .arg(ledger_root)
         .args([
             "--ledger-kind",
             "retention-candidate-bundle-profile",
@@ -2617,14 +2643,14 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
         .output()?;
     assert_success(&profile_search, "catalog search retention bundle profile");
     assert!(stdout(&profile_search).contains("retention-candidate:bundle-profile"));
-    assert!(bundle_dir.join("explain.preserves").exists());
-    assert!(bundle_dir.join("artifacts/gc-plans").exists());
-    assert!(bundle_dir.join("artifacts/gc-audits").exists());
+    Ok(())
+}
 
+fn run_verify(registry: &Path, ledger_root: &Path, dir: &Path, bundle_dir: &Path, bundle_ref: &str) -> CliResult<()> {
     let verify_path = dir.join("retention-bundle-verify.preserves");
     let verify_output = molten_cmd()
         .args(["test", "retention", "bundle-verify", "--bundle"])
-        .arg(&bundle_dir)
+        .arg(bundle_dir)
         .args(["--receipt-out"])
         .arg(&verify_path)
         .output()?;
@@ -2634,21 +2660,21 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     let verify = retention::parse_retention_candidate_bundle_verify(&verify_value)?;
     assert_eq!(molten::ledger::artifact_kind(&verify_value), "retention-candidate-bundle-verify");
     assert_eq!(verify.decision, "pass");
-    assert_eq!(verify.bundle_ref, bundle.bundle_ref);
+    assert_eq!(verify.bundle_ref, bundle_ref);
     assert_eq!(verify.file_refs.len(), 6);
     assert!(verify.diagnostics.is_empty());
     let verify_import = molten_cmd()
         .args(["test", "ledger", "import"])
         .arg(&verify_path)
         .args(["--ledger"])
-        .arg(&ledger_root)
+        .arg(ledger_root)
         .output()?;
     assert_success(&verify_import, "ledger import retention bundle verify");
     let verify_search = molten_cmd()
         .args(["test", "catalog", "search", "--registry"])
-        .arg(&registry)
+        .arg(registry)
         .args(["--ledger"])
-        .arg(&ledger_root)
+        .arg(ledger_root)
         .args([
             "--ledger-kind",
             "retention-candidate-bundle-verify",
@@ -2660,7 +2686,10 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     let verify_search_stdout = stdout(&verify_search);
     assert!(verify_search_stdout.contains("retention-candidate:bundle-verify"));
     assert!(verify_search_stdout.contains(&verify.verify_ref));
+    Ok(())
+}
 
+fn run_tamper(dir: &Path, bundle_dir: &Path, fixture: &RetentionGcCatalogFixture) -> CliResult<()> {
     let tampered_plan_path = bundle_dir
         .join("artifacts/gc-plans")
         .join(format!("{}.preserves", fixture.plan_ref.replace(':', "_")));
@@ -2668,7 +2697,7 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
     let tampered_path = dir.join("retention-bundle-verify-tampered.preserves");
     let tampered_output = molten_cmd()
         .args(["test", "retention", "bundle-verify", "--bundle"])
-        .arg(&bundle_dir)
+        .arg(bundle_dir)
         .args(["--receipt-out"])
         .arg(&tampered_path)
         .output()?;
@@ -2681,13 +2710,16 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
             .iter()
             .any(|diagnostic| diagnostic.contains("retention-bundle-tampered-file:gc-plans"))
     );
+    Ok(())
+}
 
+fn run_search(dir: &Path, registry: &Path, ledger_root: &Path, fixture: &RetentionGcCatalogFixture) -> CliResult<()> {
     let search_receipt = dir.join("catalog-search-receipt.preserves");
     let search_output = molten_cmd()
         .args(["test", "catalog", "search", "--registry"])
-        .arg(&registry)
+        .arg(registry)
         .args(["--ledger"])
-        .arg(&ledger_root)
+        .arg(ledger_root)
         .args(["--text"])
         .arg(format!("retention-gc-object:{}", fixture.object_ref))
         .args(["--receipt-out"])
@@ -2706,16 +2738,19 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
 
     let audit_search = molten_cmd()
         .args(["test", "catalog", "search", "--registry"])
-        .arg(&registry)
+        .arg(registry)
         .args(["--ledger"])
-        .arg(&ledger_root)
+        .arg(ledger_root)
         .args(["--ledger-kind", "retention-gc-audit", "--text", "retention-gc:audit"])
         .output()?;
     assert_success(&audit_search, "catalog search retention GC audit ledger kind");
     let audit_search_stdout = stdout(&audit_search);
     assert!(audit_search_stdout.contains("retention-gc:audit"));
     assert!(audit_search_stdout.contains(&fixture.audit_ref));
+    Ok(())
+}
 
+fn run_mcp(dir: &Path, registry: &Path, ledger_root: &Path, fixture: &RetentionGcCatalogFixture) -> CliResult<()> {
     let mcp_request_path = dir.join("retention-gc-search-request.preserves");
     let mcp_response_path = dir.join("retention-gc-search-response.preserves");
     let mcp_receipt_path = dir.join("retention-gc-search-mcp-receipt.preserves");
@@ -2730,9 +2765,9 @@ fn cli_catalog_discovers_retention_gc_audit_chains() -> CliResult<()> {
         .args(["test", "catalog", "mcp-call"])
         .arg(&mcp_request_path)
         .args(["--registry"])
-        .arg(&registry)
+        .arg(registry)
         .args(["--ledger"])
-        .arg(&ledger_root)
+        .arg(ledger_root)
         .args(["--out"])
         .arg(&mcp_response_path)
         .args(["--receipt-out"])
