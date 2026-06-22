@@ -31,7 +31,6 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 fn cli_happy_path_produces_gateable_report_and_repro_bundle() -> CliResult<()> {
     let dir = temp_dir("cli-happy")?;
     let report = dir.join("report.preserves");
-    let repro = dir.join("repro");
     let suite = manifest_dir().join("examples/two-actor.preserves");
 
     let run = molten_cmd().args(["test", "run"]).arg(&suite).args(["--report-out"]).arg(&report).output()?;
@@ -59,7 +58,18 @@ fn cli_happy_path_produces_gateable_report_and_repro_bundle() -> CliResult<()> {
     assert_eq!(receipt.artifact_kind, "report");
     assert!(gate_receipt_summary(&receipt_value)?.contains("decision=pass"));
 
-    let export = molten_cmd().args(["test", "repro", "export"]).arg(&report).args(["--out"]).arg(&repro).output()?;
+    assert_report_repro_flow(&dir, &report, &report_value, &receipt.report_ref)?;
+    Ok(())
+}
+
+fn assert_report_repro_flow(
+    dir: &Path,
+    report: &Path,
+    report_value: &preserves::IOValue,
+    report_ref: &str,
+) -> CliResult<()> {
+    let repro = dir.join("repro");
+    let export = molten_cmd().args(["test", "repro", "export"]).arg(report).args(["--out"]).arg(&repro).output()?;
     assert_success(&export, "test repro export");
     assert!(stdout(&export).contains("repro bundle written"));
 
@@ -87,7 +97,7 @@ fn cli_happy_path_produces_gateable_report_and_repro_bundle() -> CliResult<()> {
     assert!(stdout(&verify_bundle).contains("repro verify receipt blake3:"));
     let verify = parse_repro_verify_receipt(&read_preserves(&verify_receipt)?)?;
     assert_eq!(verify.decision, "pass");
-    assert_eq!(verify.report_ref, receipt.report_ref);
+    assert_eq!(verify.report_ref, report_ref);
 
     let unpacked = dir.join("unpacked");
     let unpack = molten_cmd()
@@ -100,7 +110,7 @@ fn cli_happy_path_produces_gateable_report_and_repro_bundle() -> CliResult<()> {
     assert!(stdout(&unpack).contains("repro bundle unpacked"));
     assert_eq!(
         molten::preserves_rail::canonical_hash(&read_preserves(&unpacked.join("report.preserves"))?)?,
-        molten::preserves_rail::canonical_hash(&report_value)?
+        molten::preserves_rail::canonical_hash(report_value)?
     );
     parse_repro_verify_receipt(&read_preserves(&unpacked.join("verify-receipt.preserves"))?)?;
 
