@@ -149,6 +149,75 @@ pub fn find(root: &Path, input: &RewriteQueryInput) -> Result<RewriteQuery> {
     validate_query_input(input)?;
     let query_value = rewrite_query_value(input)?;
     let query_ref = canonical_hash(&query_value)?;
+    let matches = found_items(root, input)?;
+    let refs = found_refs(&query_ref, input, &matches);
+    let receipt_value = rewrite_receipt_value(&RewriteReceiptValueInput {
+        operation: "query",
+        decision: "pass",
+        subject_ref: &query_ref,
+        refs: &refs,
+        diagnostics: &[],
+        checks: &[
+            ("canonical-query-ref", "pass"),
+            ("visibility-filter", "pass"),
+            ("bounded-preserves-pattern", "pass"),
+            ("no-text-only-bypass", "pass"),
+        ],
+    })?;
+    Ok(RewriteQuery {
+        query_ref,
+        query_value,
+        matches,
+        receipt_value,
+    })
+}
+
+pub fn preview(root: &Path, input: &RewritePlanInput) -> Result<RewritePreview> {
+    validate_plan_input(input)?;
+    let query = find(root, &input.query)?;
+    let diffs = diff_items(root, input, &query)?;
+    let impacted_refs = impacted_refs(root, &diffs)?;
+    let plan_value = rewrite_plan_value(input, &query, &diffs, &impacted_refs)?;
+    let plan_ref = canonical_hash(&plan_value)?;
+    let refs = plan_refs(&PlanRefs {
+        plan_ref: &plan_ref,
+        query: &query,
+        diffs: &diffs,
+        impacted_refs: &impacted_refs,
+        input,
+    })?;
+    let decision = if diffs.is_empty() { "deny" } else { "pass" };
+    let diagnostics = if diffs.is_empty() {
+        vec!["rewrite preview produced no structural diffs".to_string()]
+    } else {
+        Vec::new()
+    };
+    let receipt_value = rewrite_receipt_value(&RewriteReceiptValueInput {
+        operation: "preview",
+        decision,
+        subject_ref: &plan_ref,
+        refs: &refs,
+        diagnostics: &diagnostics,
+        checks: &[
+            ("dry-run-only", "pass"),
+            ("immutable-old-artifacts", "pass"),
+            ("structural-diff", if diffs.is_empty() { "fail" } else { "pass" }),
+            ("impact-set", "pass"),
+            ("policy-admission", "pass"),
+            ("capability-admission", "pass"),
+        ],
+    })?;
+    Ok(RewritePreview {
+        query,
+        plan_ref,
+        plan_value,
+        diffs,
+        impacted_refs,
+        receipt_value,
+    })
+}
+
+fn found_items(root: &Path, input: &RewriteQueryInput) -> Result<Vec<RewriteMatch>> {
     let scope = scoped_refs(root, &input.root_refs, input.include_dependencies)?;
     let hidden = input.hidden_refs.as_slice().iter().cloned().collect::<BTreeSet<_>>();
     let kind_filter = input.artifact_kinds.as_slice().iter().cloned().collect::<BTreeSet<_>>();
@@ -201,36 +270,20 @@ pub fn find(root: &Path, input: &RewriteQueryInput) -> Result<RewriteQuery> {
         }
     }
     matches.sort_by(|left, right| left.artifact_ref.cmp(&right.artifact_ref));
-    let mut refs = vec![query_ref.clone()];
+    Ok(matches)
+}
+
+fn found_refs(query_ref: &str, input: &RewriteQueryInput, matches: &[RewriteMatch]) -> Vec<String> {
+    let mut refs = vec![query_ref.to_string()];
     refs.extend(matches.iter().map(|rewrite_match| rewrite_match.artifact_ref.clone()));
     refs.extend(input.root_refs.as_slice().iter().cloned());
     refs.extend(input.policy_refs.as_slice().iter().cloned());
     refs.extend(input.capability_refs.as_slice().iter().cloned());
     refs.extend(input.hidden_refs.as_slice().iter().cloned());
-    let receipt_value = rewrite_receipt_value(&RewriteReceiptValueInput {
-        operation: "query",
-        decision: "pass",
-        subject_ref: &query_ref,
-        refs: &refs,
-        diagnostics: &[],
-        checks: &[
-            ("canonical-query-ref", "pass"),
-            ("visibility-filter", "pass"),
-            ("bounded-preserves-pattern", "pass"),
-            ("no-text-only-bypass", "pass"),
-        ],
-    })?;
-    Ok(RewriteQuery {
-        query_ref,
-        query_value,
-        matches,
-        receipt_value,
-    })
+    refs
 }
 
-pub fn preview(root: &Path, input: &RewritePlanInput) -> Result<RewritePreview> {
-    validate_plan_input(input)?;
-    let query = find(root, &input.query)?;
+fn diff_items(root: &Path, input: &RewritePlanInput, query: &RewriteQuery) -> Result<Vec<RewriteDiff>> {
     let mut diffs = Vec::new();
     for rewrite_match in &query.matches {
         let artifact = artifacts::read_artifact(root, &rewrite_match.artifact_ref)?;
@@ -249,14 +302,16 @@ pub fn preview(root: &Path, input: &RewritePlanInput) -> Result<RewritePreview> 
             continue;
         }
         let new_payload_ref = canonical_hash(&rewritten)?;
+        let old_preview = preview_text(&payload)?;
+        let new_preview = preview_text(&rewritten)?;
         let value = rewrite_diff_value(&RewriteDiffValueInput {
             artifact_ref: &artifact.artifact_ref,
             kind: &artifact.kind,
             old_payload_ref: &old_payload_ref,
             new_payload_ref: &new_payload_ref,
             paths: &paths,
-            old_preview: &preview_text(&payload)?,
-            new_preview: &preview_text(&rewritten)?,
+            old_preview: &old_preview,
+            new_preview: &new_preview,
         })?;
         push_bounded(
             &mut diffs,
@@ -266,8 +321,8 @@ pub fn preview(root: &Path, input: &RewritePlanInput) -> Result<RewritePreview> 
                 old_payload_ref,
                 new_payload_ref,
                 paths,
-                old_preview: preview_text(&payload)?,
-                new_preview: preview_text(&rewritten)?,
+                old_preview,
+                new_preview,
                 new_payload: rewritten,
                 value,
             },
@@ -276,50 +331,31 @@ pub fn preview(root: &Path, input: &RewritePlanInput) -> Result<RewritePreview> 
         )?;
     }
     diffs.sort_by(|left, right| left.artifact_ref.cmp(&right.artifact_ref));
-    let impacted_refs = impacted_refs(root, &diffs)?;
-    let plan_value = rewrite_plan_value(input, &query, &diffs, &impacted_refs)?;
-    let plan_ref = canonical_hash(&plan_value)?;
+    Ok(diffs)
+}
+
+struct PlanRefs<'a> {
+    plan_ref: &'a str,
+    query: &'a RewriteQuery,
+    diffs: &'a [RewriteDiff],
+    impacted_refs: &'a [String],
+    input: &'a RewritePlanInput,
+}
+
+fn plan_refs(input: &PlanRefs<'_>) -> Result<Vec<String>> {
     let mut refs = vec![
-        plan_ref.clone(),
-        query.query_ref.clone(),
-        canonical_hash(&query.receipt_value)?,
+        input.plan_ref.to_string(),
+        input.query.query_ref.clone(),
+        canonical_hash(&input.query.receipt_value)?,
     ];
-    refs.extend(diffs.iter().map(|diff| diff.artifact_ref.clone()));
-    refs.extend(diffs.iter().map(|diff| diff.new_payload_ref.clone()));
-    refs.extend(impacted_refs.as_slice().iter().cloned());
-    refs.extend(input.policy_refs.as_slice().iter().cloned());
-    refs.extend(input.capability_refs.as_slice().iter().cloned());
-    refs.extend(input.transcript_refs.as_slice().iter().cloned());
-    refs.extend(input.schema_migration_recipe_refs.as_slice().iter().cloned());
-    let decision = if diffs.is_empty() { "deny" } else { "pass" };
-    let diagnostics = if diffs.is_empty() {
-        vec!["rewrite preview produced no structural diffs".to_string()]
-    } else {
-        Vec::new()
-    };
-    let receipt_value = rewrite_receipt_value(&RewriteReceiptValueInput {
-        operation: "preview",
-        decision,
-        subject_ref: &plan_ref,
-        refs: &refs,
-        diagnostics: &diagnostics,
-        checks: &[
-            ("dry-run-only", "pass"),
-            ("immutable-old-artifacts", "pass"),
-            ("structural-diff", if diffs.is_empty() { "fail" } else { "pass" }),
-            ("impact-set", "pass"),
-            ("policy-admission", "pass"),
-            ("capability-admission", "pass"),
-        ],
-    })?;
-    Ok(RewritePreview {
-        query,
-        plan_ref,
-        plan_value,
-        diffs,
-        impacted_refs,
-        receipt_value,
-    })
+    refs.extend(input.diffs.iter().map(|diff| diff.artifact_ref.clone()));
+    refs.extend(input.diffs.iter().map(|diff| diff.new_payload_ref.clone()));
+    refs.extend(input.impacted_refs.iter().cloned());
+    refs.extend(input.input.policy_refs.as_slice().iter().cloned());
+    refs.extend(input.input.capability_refs.as_slice().iter().cloned());
+    refs.extend(input.input.transcript_refs.as_slice().iter().cloned());
+    refs.extend(input.input.schema_migration_recipe_refs.as_slice().iter().cloned());
+    Ok(refs)
 }
 
 pub fn apply(root: &Path, input: &RewritePlanInput) -> Result<RewriteApply> {

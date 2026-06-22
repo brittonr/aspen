@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-22 | self | While extracting rewrite preview helper refs, I called `.as_slice()` on a field that was already `&[String]`; current Rust treats slice `.as_slice()` as unstable and the focused rewrite test compile failed. | For helper structs carrying slice fields, iterate directly with `.iter()`; reserve `.as_slice().iter()` for owned `Vec<String>` fields in `ValueImpl`-heavy modules. |
 | 2026-06-22 | self | Ran the repo's standalone `scripts/octet-burndown.scm` through the pi `steel` tool with the default prelude, so its local `(define (println ...))` collided with the prelude binding before the probe started. | When invoking standalone repo Steel scripts through the pi `steel` tool, set `prelude=false` (or run the standalone CLI shape documented by the script); do not mix the pi prelude with scripts that define their own helpers. |
 | 2026-06-22 | self | Even with `prelude=false`, running `scripts/octet-burndown.scm` via the pi `steel` file mode did not pass its `--artifact-prefix` through `(command-line)`, so the probe reused `target/octet-burndown/probe-0`. | Invoke this standalone script as an external CLI (`steel scripts/octet-burndown.scm -- ...`) when custom arguments matter; avoid pi `file` mode for scripts that parse `(command-line)`. |
 | 2026-06-21 | user | Octet burn-down `git push` failed with GitHub SSH access errors because the repo was not using the intended deploy/key identity. | In `/home/brittonr/git/molten`, keep local `git config core.sshCommand "ssh -i ../../.ssh/framework -o IdentitiesOnly=yes"`; verify `../../.ssh/framework` is readable before push retries. |
@@ -202,6 +203,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-22 Octet rewrites find/preview split: extracting `src/rewrites/mod.rs` query/preview collection into neutral same-file helpers (`found_items`, `found_refs`, `diff_items`, `PlanRefs`) lowered the no-disabled probe from 7264 to 7260 by clearing four `function_length` findings while keeping non-trait/path/file counts flat. Validation passed `cargo fmt`, `cargo fmt --check`, focused `cargo test rewrite`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-rewrites-helpers-0`.
 
 - 2026-06-22 Octet transcript run split: extracting `src/transcripts/mod.rs::run_transcript` denial/cache branches into neutral same-file helpers (`denied_run`, `cached_run`, `store_run`) lowered the no-disabled probe from 7273 to 7271 by clearing two `function_length` findings while keeping the broad lint mix flat. Validation passed `cargo fmt`, `cargo fmt --check`, focused `cargo test transcript`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-transcripts-run-0`.
 
