@@ -1162,71 +1162,29 @@ fn typed_ref_value(input: TypedRefValueInput<'_>) -> IOValue {
     ])
 }
 
+struct ScopeParts {
+    manifest: String,
+    run: String,
+    session: String,
+    turn: String,
+    scope: EffectScope,
+    evidence: Vec<String>,
+}
+
 fn storage_effect_evidence(input: StorageEffectEvidenceInput<'_>) -> Result<StorageEffectEvidence> {
     validate_operation(input.operation)?;
-    let manifest =
-        effect_manifest_value(input.producer_ref, input.namespace, input.schema_ref, &[input.operation.to_string()])?;
-    let manifest_ref = canonical_hash(&manifest)?;
-    let run_ref =
-        canonical_hash(&record("typed-storage-run", vec![string(input.namespace), string(input.schema_ref)]))?;
-    let session_ref = canonical_hash(&record("typed-storage-session", vec![
-        string(input.namespace),
-        string(&input.admission.policy_ref),
-        string(&input.admission.capability_ref),
-    ]))?;
-    let turn_ref = canonical_hash(&record("typed-storage-operation", vec![
-        string(input.operation),
-        string(input.namespace),
-        string(input.key),
-        string(input.schema_ref),
-    ]))?;
-    let scope = EffectScope {
-        run_ref: run_ref.clone(),
-        session_ref: session_ref.clone(),
-        actor_ref: Some(input.admission.actor_ref.clone()),
-        turn_ref: Some(turn_ref.clone()),
-    };
-    let adapter_ref =
-        canonical_hash(&record("typed-storage-redb-adapter", vec![string(input.namespace), string(input.schema_ref)]))?;
-    let mut evidence_refs = vec![manifest_ref.clone()];
-    evidence_refs.extend(input.admission.evidence_refs.clone());
-    let handler = handler_binding_value(&HandlerBindingInput {
-        profile: "typed-storage-redb".to_string(),
-        scope: scope.clone(),
-        adapter_kind: ADAPTER_KIND_STORAGE.to_string(),
-        adapter_ref,
-        executor_preflight_ref: None,
-        policy_ref: input.admission.policy_ref.clone(),
-        capability_context_ref: input.admission.capability_ref.clone(),
-        authority_context_ref: None,
-        resource_refs: input.admission.resource_refs.clone(),
-        operations: vec![input.operation.to_string()],
-        evidence_refs: evidence_refs.clone(),
-    })?;
+    let parts = scope_parts(&input)?;
+    let handler = binding(&input, &parts)?;
     let handler_binding_ref = canonical_hash(&handler)?;
-    let handle = effect_handle_value(&EffectHandleInput {
-        kind: ADAPTER_KIND_STORAGE.to_string(),
-        scope,
-        handler_binding_ref: handler_binding_ref.clone(),
-        operations: vec![input.operation.to_string()],
-        capability_context_ref: input.admission.capability_ref.clone(),
-        authority_context_ref: None,
-        resource_refs: input.admission.resource_refs.clone(),
-        not_before: Some(0),
-        expires_at: None,
-        revocation_refs: Vec::new(),
-        transfer: TRANSFER_LOCAL_ONLY.to_string(),
-        parent_handle_ref: None,
-        evidence_refs,
-    })?;
+    let handle = handle(&input, &parts, &handler_binding_ref)?;
     let handle_ref = canonical_hash(&handle)?;
     let validation = validate_handle_for_request(&handler, &handle, &EffectHandleRequest {
         kind: ADAPTER_KIND_STORAGE,
         operation: input.operation,
-        run_ref: &run_ref,
-        session_ref: &session_ref,
+        run_ref: &parts.run,
+        session_ref: &parts.session,
         actor_ref: Some(&input.admission.actor_ref),
-        turn_ref: Some(&turn_ref),
+        turn_ref: Some(&parts.turn),
         policy_ref: &input.admission.policy_ref,
         capability_context_ref: &input.admission.capability_ref,
         authority_context_ref: None,
@@ -1239,9 +1197,79 @@ fn storage_effect_evidence(input: StorageEffectEvidenceInput<'_>) -> Result<Stor
         return Err(MoltenError::invalid_harness("typed storage handle validation ref mismatch"));
     }
     Ok(StorageEffectEvidence {
-        manifest_ref,
+        manifest_ref: parts.manifest,
         handler_binding_ref,
         handle_ref,
+    })
+}
+
+fn scope_parts(input: &StorageEffectEvidenceInput<'_>) -> Result<ScopeParts> {
+    let manifest =
+        effect_manifest_value(input.producer_ref, input.namespace, input.schema_ref, &[input.operation.to_string()])?;
+    let manifest = canonical_hash(&manifest)?;
+    let run = canonical_hash(&record("typed-storage-run", vec![string(input.namespace), string(input.schema_ref)]))?;
+    let session = canonical_hash(&record("typed-storage-session", vec![
+        string(input.namespace),
+        string(&input.admission.policy_ref),
+        string(&input.admission.capability_ref),
+    ]))?;
+    let turn = canonical_hash(&record("typed-storage-operation", vec![
+        string(input.operation),
+        string(input.namespace),
+        string(input.key),
+        string(input.schema_ref),
+    ]))?;
+    let scope = EffectScope {
+        run_ref: run.clone(),
+        session_ref: session.clone(),
+        actor_ref: Some(input.admission.actor_ref.clone()),
+        turn_ref: Some(turn.clone()),
+    };
+    let mut evidence = vec![manifest.clone()];
+    evidence.extend(input.admission.evidence_refs.clone());
+    Ok(ScopeParts {
+        manifest,
+        run,
+        session,
+        turn,
+        scope,
+        evidence,
+    })
+}
+
+fn binding(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts) -> Result<IOValue> {
+    let adapter_ref =
+        canonical_hash(&record("typed-storage-redb-adapter", vec![string(input.namespace), string(input.schema_ref)]))?;
+    handler_binding_value(&HandlerBindingInput {
+        profile: "typed-storage-redb".to_string(),
+        scope: parts.scope.clone(),
+        adapter_kind: ADAPTER_KIND_STORAGE.to_string(),
+        adapter_ref,
+        executor_preflight_ref: None,
+        policy_ref: input.admission.policy_ref.clone(),
+        capability_context_ref: input.admission.capability_ref.clone(),
+        authority_context_ref: None,
+        resource_refs: input.admission.resource_refs.clone(),
+        operations: vec![input.operation.to_string()],
+        evidence_refs: parts.evidence.clone(),
+    })
+}
+
+fn handle(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts, handler_binding_ref: &str) -> Result<IOValue> {
+    effect_handle_value(&EffectHandleInput {
+        kind: ADAPTER_KIND_STORAGE.to_string(),
+        scope: parts.scope.clone(),
+        handler_binding_ref: handler_binding_ref.to_string(),
+        operations: vec![input.operation.to_string()],
+        capability_context_ref: input.admission.capability_ref.clone(),
+        authority_context_ref: None,
+        resource_refs: input.admission.resource_refs.clone(),
+        not_before: Some(0),
+        expires_at: None,
+        revocation_refs: Vec::new(),
+        transfer: TRANSFER_LOCAL_ONLY.to_string(),
+        parent_handle_ref: None,
+        evidence_refs: parts.evidence.clone(),
     })
 }
 
