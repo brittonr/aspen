@@ -208,6 +208,8 @@
 
 ## Patterns That Work
 
+- 2026-06-22 Octet plugin fixture split: extracting `src/plugin/host.rs::minimal_plugin_fixture` setup/receipt assembly into same-file neutral `SeedRefs`/`LifeSteps` plus small step helpers lowered the no-disabled probe from 7242 to 7240 by clearing two `function_length` findings while keeping import/path/file counts flat. Validation passed `cargo fmt`, focused `cargo test plugin`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-plugin-fixture-0`.
+
 - 2026-06-22 Octet plugin summary split: extracting `src/plugin/host.rs::plugin_summary` parse/format branches into neutral same-file `core_summary` and `receipt_summary` helpers lowered the no-disabled probe from 7244 to 7242 while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test plugin`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-plugin-summary-0`.
 
 - 2026-06-22 Octet upgrade protocol-drain split: moving `src/upgrades/mod.rs::protocol_drain_task_outcome` loop state into a same-file `DrainState`/`GateFacts` shape lowered the no-disabled probe from 7246 to 7244. Validation passed `cargo fmt`, focused `cargo test upgrades`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-upgrade-drain-0`.
