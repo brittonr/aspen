@@ -1082,81 +1082,107 @@ pub fn redacted_text(value: &IOValue, redaction_profile_ref: Option<&str>) -> Re
 }
 
 pub fn secrets_summary(value: &IOValue) -> Result<String> {
-    match crate::ledger::artifact_kind(value) {
+    let kind = crate::ledger::artifact_kind(value);
+    if let Some(line) = summary_core(kind, value)? {
+        return Ok(line);
+    }
+    if let Some(line) = summary_receipts(kind, value)? {
+        return Ok(line);
+    }
+    if let Some(line) = summary_profiles(kind, value)? {
+        return Ok(line);
+    }
+    Err(MoltenError::invalid_harness("not a secrets artifact"))
+}
+
+fn summary_core(kind: &str, value: &IOValue) -> Result<Option<String>> {
+    match kind {
         "secret-ref" => {
             let secret = parse_secret_ref(value)?;
-            Ok(format!(
+            Ok(Some(format!(
                 "secret id={} scope={} commitment={} ref={} plaintext=redacted",
                 secret.secret_id, secret.scope_ref, secret.commitment_ref, secret.secret_ref
-            ))
+            )))
         }
         "confidential-label" => {
             let label = parse_confidential_label(value)?;
-            Ok(format!(
+            Ok(Some(format!(
                 "confidential-label surface={} field={} classification={} ref={}",
                 label.surface, label.field_path, label.classification, label.label_ref
-            ))
+            )))
         }
         "encrypted-ref" => {
             let encrypted = parse_encrypted_ref(value)?;
-            Ok(format!(
+            Ok(Some(format!(
                 "encrypted-ref ciphertext={} commitment={} ref={} authority=required",
                 encrypted.ciphertext_ref, encrypted.commitment_ref, encrypted.encrypted_ref
-            ))
+            )))
         }
         "redaction-marker" => {
             let marker = parse_redaction_marker(value)?;
-            Ok(format!(
+            Ok(Some(format!(
                 "redaction-marker reason={} commitment={} ref={}",
                 marker.reason, marker.commitment_ref, marker.marker_ref
-            ))
+            )))
         }
+        _ => Ok(None),
+    }
+}
+
+fn summary_receipts(kind: &str, value: &IOValue) -> Result<Option<String>> {
+    match kind {
         "reveal-receipt" => {
             let receipt = parse_reveal_receipt(value)?;
             let encrypted_ref = receipt.encrypted_ref.as_deref().unwrap_or("none");
-            Ok(format!(
+            Ok(Some(format!(
                 "reveal-receipt decision={} purpose={} secret={} encrypted={} ref={}",
                 receipt.decision, receipt.purpose, receipt.secret_ref, encrypted_ref, receipt.receipt_ref
-            ))
+            )))
         }
         "decrypt-receipt" => {
             let receipt = parse_decrypt_receipt(value)?;
-            Ok(format!(
+            Ok(Some(format!(
                 "decrypt-receipt decision={} purpose={} encrypted={} ref={}",
                 receipt.decision, receipt.purpose, receipt.encrypted_ref, receipt.receipt_ref
-            ))
+            )))
         }
         "redaction-transform-receipt" => {
             let receipt = parse_redaction_transform_receipt(value)?;
-            Ok(format!(
+            Ok(Some(format!(
                 "redaction-transform decision={} source={} output={} ref={}",
                 receipt.decision, receipt.source_ref, receipt.output_ref, receipt.receipt_ref
-            ))
+            )))
         }
         "secret-cleanup-receipt" => {
             let receipt = parse_secret_cleanup_receipt(value)?;
-            Ok(format!(
+            Ok(Some(format!(
                 "secret-cleanup decision={} secret={} tombstone={} ref={}",
                 receipt.decision, receipt.secret_ref, receipt.tombstone_ref, receipt.receipt_ref
-            ))
+            )))
         }
+        _ => Ok(None),
+    }
+}
+
+fn summary_profiles(kind: &str, value: &IOValue) -> Result<Option<String>> {
+    match kind {
         "private-bundle-profile" => {
             let profile = parse_private_bundle_profile(value)?;
-            Ok(format!(
+            Ok(Some(format!(
                 "private-bundle-profile profile={} encrypted={} gate-preserving={}",
                 profile.profile_ref,
                 profile.encrypted_refs.len(),
                 profile.is_gate_preserving
-            ))
+            )))
         }
         "commitment-replay-receipt" => {
             let receipt = parse_commitment_replay_receipt(value)?;
-            Ok(format!(
+            Ok(Some(format!(
                 "commitment-replay decision={} expected={} actual={} ref={}",
                 receipt.decision, receipt.expected_commitment_ref, receipt.actual_commitment_ref, receipt.receipt_ref
-            ))
+            )))
         }
-        _ => Err(MoltenError::invalid_harness("not a secrets artifact")),
+        _ => Ok(None),
     }
 }
 
