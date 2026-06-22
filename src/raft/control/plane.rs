@@ -302,6 +302,24 @@ struct ProposalDecisionInput<'a> {
     diagnostics: Vec<String>,
 }
 
+struct PassDraft {
+    next_index: u64,
+    append_predicate: RaftPredicateReceipt,
+    commit_predicate: RaftPredicateReceipt,
+    advancement_predicate: RaftPredicateReceipt,
+    log_entry: RaftLogEntry,
+    commit_receipt: RaftCommitReceipt,
+}
+
+struct PassCommitInput<'a> {
+    runtime: &'a ControlRegistryRuntime,
+    envelope: &'a RaftCommandEnvelope,
+    index: u64,
+    log_entry: &'a RaftLogEntry,
+    append_predicate: &'a RaftPredicateReceipt,
+    commit_predicate: &'a RaftPredicateReceipt,
+}
+
 struct PredicateReceiptInput<'a> {
     predicate: &'a str,
     decision: &'a str,
@@ -623,82 +641,27 @@ pub fn propose_control_registry_command(
     }
     let command =
         command.ok_or_else(|| MoltenError::invalid_harness("missing admitted command after admission pass"))?;
-    let next_index = runtime
-        .committed_index
-        .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("raft committed index overflow"))?;
-    let append_predicate = predicate_receipt_value(&PredicateReceiptInput {
-        predicate: "trellis-append-consistency",
-        decision: "pass",
-        group_ref: &runtime.manifest.manifest_ref,
-        term: runtime.term,
-        index: next_index,
-        subjects: std::slice::from_ref(&envelope.envelope_ref),
-        diagnostics: &[],
-        checks: &[("trellis-predicate", "pass"), ("prior-log-binding", "pass")],
-    })?;
-    let append_predicate = parse_predicate_receipt(&append_predicate)?;
-    let log_entry_value = raft_log_entry_value(&LogEntryValueInput {
-        group_ref: &runtime.manifest.manifest_ref,
-        term: runtime.term,
-        index: next_index,
-        prior_log_ref: runtime.last_log_ref.as_deref(),
-        command_ref: &envelope.envelope_ref,
-        command: &envelope.value,
-        append_predicate_ref: &append_predicate.predicate_ref,
-    })?;
-    let log_entry = parse_raft_log_entry(&log_entry_value)?;
-    let commit_predicate = predicate_receipt_value(&PredicateReceiptInput {
-        predicate: "trellis-quorum-commit",
-        decision: "pass",
-        group_ref: &runtime.manifest.manifest_ref,
-        term: runtime.term,
-        index: next_index,
-        subjects: std::slice::from_ref(&log_entry.entry_ref),
-        diagnostics: &[],
-        checks: &[("trellis-predicate", "pass"), ("quorum-members", "pass")],
-    })?;
-    let commit_predicate = parse_predicate_receipt(&commit_predicate)?;
-    let advancement_predicate = predicate_receipt_value(&PredicateReceiptInput {
-        predicate: "trellis-commit-advancement",
-        decision: "pass",
-        group_ref: &runtime.manifest.manifest_ref,
-        term: runtime.term,
-        index: next_index,
-        subjects: &[runtime.state.state_ref.clone(), log_entry.entry_ref.clone()],
-        diagnostics: &[],
-        checks: &[("trellis-predicate", "pass"), ("monotonic-index", "pass")],
-    })?;
-    let advancement_predicate = parse_predicate_receipt(&advancement_predicate)?;
-    let commit_receipt = commit_receipt_value(&CommitReceiptValueInput {
-        decision: "pass",
-        group_ref: &runtime.manifest.manifest_ref,
-        term: runtime.term,
-        index: next_index,
-        command_ref: &envelope.envelope_ref,
-        log_entry_ref: Some(&log_entry.entry_ref),
-        quorum_refs: &runtime.manifest.members,
-        append_predicate_ref: Some(&append_predicate.predicate_ref),
-        commit_predicate_ref: Some(&commit_predicate.predicate_ref),
-        diagnostics: &[],
-    })?;
-    let commit_receipt = parse_commit_receipt(&commit_receipt)?;
-    let registry_receipt = apply_admitted_command(runtime, &envelope, &command, &log_entry)?;
-    runtime.committed_index = next_index;
-    runtime.last_log_ref = Some(log_entry.entry_ref.clone());
-    runtime.log_entries.push(log_entry.clone());
-    runtime.commit_receipts.push(commit_receipt.clone());
-    runtime.predicate_receipts.push(append_predicate.clone());
-    runtime.predicate_receipts.push(commit_predicate.clone());
-    runtime.predicate_receipts.push(advancement_predicate.clone());
+    let draft = pass_draft(runtime, &envelope)?;
+    let registry_receipt = apply_admitted_command(runtime, &envelope, &command, &draft.log_entry)?;
+    runtime.committed_index = draft.next_index;
+    runtime.last_log_ref = Some(draft.log_entry.entry_ref.clone());
+    runtime.log_entries.push(draft.log_entry.clone());
+    runtime.commit_receipts.push(draft.commit_receipt.clone());
+    runtime.predicate_receipts.push(draft.append_predicate.clone());
+    runtime.predicate_receipts.push(draft.commit_predicate.clone());
+    runtime.predicate_receipts.push(draft.advancement_predicate.clone());
     runtime.registry_receipts.push(registry_receipt.clone());
     Ok(ControlRegistryProposal {
         decision: "pass".to_string(),
         duplicate: false,
         envelope,
-        predicates: vec![append_predicate, commit_predicate, advancement_predicate],
-        log_entry: Some(log_entry),
-        commit_receipt,
+        predicates: vec![
+            draft.append_predicate,
+            draft.commit_predicate,
+            draft.advancement_predicate,
+        ],
+        log_entry: Some(draft.log_entry),
+        commit_receipt: draft.commit_receipt,
         registry_receipt,
     })
 }
@@ -998,6 +961,93 @@ pub fn control_registry_summary(runtime: &ControlRegistryRuntime) -> String {
         runtime.state.entries.len(),
         runtime.state.state_ref
     )
+}
+
+fn pass_draft(runtime: &ControlRegistryRuntime, envelope: &RaftCommandEnvelope) -> Result<PassDraft> {
+    let next_index = runtime
+        .committed_index
+        .checked_add(1)
+        .ok_or_else(|| MoltenError::invalid_harness("raft committed index overflow"))?;
+    let append_predicate = pass_predicate(
+        "trellis-append-consistency",
+        runtime,
+        next_index,
+        std::slice::from_ref(&envelope.envelope_ref),
+        &[("trellis-predicate", "pass"), ("prior-log-binding", "pass")],
+    )?;
+    let log_entry_value = raft_log_entry_value(&LogEntryValueInput {
+        group_ref: &runtime.manifest.manifest_ref,
+        term: runtime.term,
+        index: next_index,
+        prior_log_ref: runtime.last_log_ref.as_deref(),
+        command_ref: &envelope.envelope_ref,
+        command: &envelope.value,
+        append_predicate_ref: &append_predicate.predicate_ref,
+    })?;
+    let log_entry = parse_raft_log_entry(&log_entry_value)?;
+    let commit_predicate =
+        pass_predicate("trellis-quorum-commit", runtime, next_index, std::slice::from_ref(&log_entry.entry_ref), &[
+            ("trellis-predicate", "pass"),
+            ("quorum-members", "pass"),
+        ])?;
+    let advancement_subjects = [runtime.state.state_ref.clone(), log_entry.entry_ref.clone()];
+    let advancement_predicate =
+        pass_predicate("trellis-commit-advancement", runtime, next_index, &advancement_subjects, &[
+            ("trellis-predicate", "pass"),
+            ("monotonic-index", "pass"),
+        ])?;
+    let commit_receipt = pass_commit(PassCommitInput {
+        runtime,
+        envelope,
+        index: next_index,
+        log_entry: &log_entry,
+        append_predicate: &append_predicate,
+        commit_predicate: &commit_predicate,
+    })?;
+    Ok(PassDraft {
+        next_index,
+        append_predicate,
+        commit_predicate,
+        advancement_predicate,
+        log_entry,
+        commit_receipt,
+    })
+}
+
+fn pass_predicate(
+    predicate: &str,
+    runtime: &ControlRegistryRuntime,
+    index: u64,
+    subjects: &[String],
+    checks: &[(&str, &str)],
+) -> Result<RaftPredicateReceipt> {
+    let value = predicate_receipt_value(&PredicateReceiptInput {
+        predicate,
+        decision: "pass",
+        group_ref: &runtime.manifest.manifest_ref,
+        term: runtime.term,
+        index,
+        subjects,
+        diagnostics: &[],
+        checks,
+    })?;
+    parse_predicate_receipt(&value)
+}
+
+fn pass_commit(input: PassCommitInput<'_>) -> Result<RaftCommitReceipt> {
+    let value = commit_receipt_value(&CommitReceiptValueInput {
+        decision: "pass",
+        group_ref: &input.runtime.manifest.manifest_ref,
+        term: input.runtime.term,
+        index: input.index,
+        command_ref: &input.envelope.envelope_ref,
+        log_entry_ref: Some(&input.log_entry.entry_ref),
+        quorum_refs: &input.runtime.manifest.members,
+        append_predicate_ref: Some(&input.append_predicate.predicate_ref),
+        commit_predicate_ref: Some(&input.commit_predicate.predicate_ref),
+        diagnostics: &[],
+    })?;
+    parse_commit_receipt(&value)
 }
 
 fn admitted_command(command: &IOValue) -> (Option<ControlRegistryCommand>, Vec<String>) {
