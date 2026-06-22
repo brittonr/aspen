@@ -1405,115 +1405,35 @@ fn cli_node_live_ingress_loopback_enqueues_request() -> CliResult<()> {
     let policy_ref = test_ref("live-policy")?;
     let resource_ref = test_ref("live-resource")?;
 
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "init", "--state-root"])
-            .arg(&state_root)
-            .args(["--node-id", "node:cli-live"])
-            .output()?,
-        "node live init",
-    );
-    assert_success(
-        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
-        "node live run",
-    );
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "authority-grant-fixture", "--state-root"])
-            .arg(&state_root)
-            .args([
-                "--peer",
-                "peer:cli-live",
-                "--node",
-                "node:cli-live",
-                "--operation",
-                "status",
-                "--policy",
-            ])
-            .arg(&policy_ref)
-            .args(["--out"])
-            .arg(&authority_grant)
-            .output()?,
-        "node live authority grant",
-    );
-    let authority_ref = molten::preserves_rail::canonical_hash(&read_preserves(&authority_grant)?)?;
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "live-ticket-export", "--state-root"])
-            .arg(&state_root)
-            .args(["--policy"])
-            .arg(&policy_ref)
-            .args(["--out"])
-            .arg(&live_ticket)
-            .output()?,
-        "node live ticket export",
-    );
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "live-peer-admit", "--state-root"])
-            .arg(&state_root)
-            .args(["--peer", "peer:cli-live", "--policy"])
-            .arg(&policy_ref)
-            .args(["--receipt-out"])
-            .arg(&peer_admission)
-            .arg(&live_ticket)
-            .output()?,
-        "node live peer admit",
-    );
-    let bootstrap_ref = molten::preserves_rail::canonical_hash(&read_preserves(&peer_admission)?)?;
-    assert_success(
-        &molten_cmd()
-            .args([
-                "test",
-                "node",
-                "control-request",
-                "--operation",
-                "status",
-                "--authority",
-            ])
-            .arg(&authority_ref)
-            .args(["--policy"])
-            .arg(&policy_ref)
-            .args(["--resource"])
-            .arg(&resource_ref)
-            .args(["--out"])
-            .arg(&request)
-            .output()?,
-        "node live status request",
-    );
-    let loopback = molten_cmd()
-        .args(["test", "node", "control-ingress-live-loopback", "--state-root"])
-        .arg(&state_root)
-        .args([
-            "--from-peer",
-            "peer:cli-live",
-            "--to-node",
-            "node:cli-live",
-            "--peer-bootstrap",
-        ])
-        .arg(&bootstrap_ref)
-        .args(["--authority"])
-        .arg(&authority_ref)
-        .args(["--policy"])
-        .arg(&policy_ref)
-        .args(["--resource"])
-        .arg(&resource_ref)
-        .args(["--publish-receipt-out"])
-        .arg(&publish_receipt)
-        .args(["--receive-receipt-out"])
-        .arg(&receive_receipt)
-        .arg(&request)
-        .output()?;
-    assert_success(&loopback, "node live ingress loopback");
-    assert!(stdout(&loopback).contains("enqueued=yes"));
-    assert_eq!(
-        molten::ledger::artifact_kind(&read_preserves(&publish_receipt)?),
-        "node-control-live-transport-receipt"
-    );
-    assert_eq!(
-        molten::ledger::artifact_kind(&read_preserves(&receive_receipt)?),
-        "node-control-live-transport-receipt"
-    );
+    start_state(&state_root, "node:cli-live", "node live init", "node live run")?;
+    let authority_ref = grant_fixture(GrantArgs {
+        root: &state_root,
+        grant: &authority_grant,
+        peer: "peer:cli-live",
+        node: "node:cli-live",
+        policy_ref: &policy_ref,
+        label: "node live authority grant",
+    })?;
+    ticket_export(&state_root, &live_ticket, &policy_ref, "node live ticket export")?;
+    let bootstrap_ref = peer_admit(AdmitArgs {
+        root: &state_root,
+        receipt: &peer_admission,
+        peer: "peer:cli-live",
+        policy_ref: &policy_ref,
+        ticket: &live_ticket,
+        label: "node live peer admit",
+    })?;
+    write_status_request(&request, &authority_ref, &policy_ref, &resource_ref, "node live status request")?;
+    run_loopback(LoopbackArgs {
+        root: &state_root,
+        request: &request,
+        publish: &publish_receipt,
+        receive: &receive_receipt,
+        bootstrap_ref: &bootstrap_ref,
+        authority_ref: &authority_ref,
+        policy_ref: &policy_ref,
+        resource_ref: &resource_ref,
+    })?;
     Ok(())
 }
 
@@ -3322,6 +3242,120 @@ fn write_status_request(
             .output()?,
         label,
     );
+    Ok(())
+}
+
+struct GrantArgs<'a> {
+    root: &'a Path,
+    grant: &'a Path,
+    peer: &'a str,
+    node: &'a str,
+    policy_ref: &'a str,
+    label: &'a str,
+}
+
+fn grant_fixture(args: GrantArgs<'_>) -> CliResult<String> {
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "authority-grant-fixture", "--state-root"])
+            .arg(args.root)
+            .args([
+                "--peer",
+                args.peer,
+                "--node",
+                args.node,
+                "--operation",
+                "status",
+                "--policy",
+            ])
+            .arg(args.policy_ref)
+            .args(["--out"])
+            .arg(args.grant)
+            .output()?,
+        args.label,
+    );
+    Ok(molten::preserves_rail::canonical_hash(&read_preserves(args.grant)?)?)
+}
+
+fn ticket_export(root: &Path, ticket: &Path, policy_ref: &str, label: &str) -> CliResult<()> {
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "live-ticket-export", "--state-root"])
+            .arg(root)
+            .args(["--policy"])
+            .arg(policy_ref)
+            .args(["--out"])
+            .arg(ticket)
+            .output()?,
+        label,
+    );
+    Ok(())
+}
+
+struct AdmitArgs<'a> {
+    root: &'a Path,
+    receipt: &'a Path,
+    peer: &'a str,
+    policy_ref: &'a str,
+    ticket: &'a Path,
+    label: &'a str,
+}
+
+fn peer_admit(args: AdmitArgs<'_>) -> CliResult<String> {
+    assert_success(
+        &molten_cmd()
+            .args(["test", "node", "live-peer-admit", "--state-root"])
+            .arg(args.root)
+            .args(["--peer", args.peer, "--policy"])
+            .arg(args.policy_ref)
+            .args(["--receipt-out"])
+            .arg(args.receipt)
+            .arg(args.ticket)
+            .output()?,
+        args.label,
+    );
+    Ok(molten::preserves_rail::canonical_hash(&read_preserves(args.receipt)?)?)
+}
+
+struct LoopbackArgs<'a> {
+    root: &'a Path,
+    request: &'a Path,
+    publish: &'a Path,
+    receive: &'a Path,
+    bootstrap_ref: &'a str,
+    authority_ref: &'a str,
+    policy_ref: &'a str,
+    resource_ref: &'a str,
+}
+
+fn run_loopback(args: LoopbackArgs<'_>) -> CliResult<()> {
+    let output = molten_cmd()
+        .args(["test", "node", "control-ingress-live-loopback", "--state-root"])
+        .arg(args.root)
+        .args([
+            "--from-peer",
+            "peer:cli-live",
+            "--to-node",
+            "node:cli-live",
+            "--peer-bootstrap",
+        ])
+        .arg(args.bootstrap_ref)
+        .args(["--authority"])
+        .arg(args.authority_ref)
+        .args(["--policy"])
+        .arg(args.policy_ref)
+        .args(["--resource"])
+        .arg(args.resource_ref)
+        .args(["--publish-receipt-out"])
+        .arg(args.publish)
+        .args(["--receive-receipt-out"])
+        .arg(args.receive)
+        .arg(args.request)
+        .output()?;
+    assert_success(&output, "node live ingress loopback");
+    assert!(stdout(&output).contains("enqueued=yes"));
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(args.publish)?), "node-control-live-transport-receipt");
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(args.receive)?), "node-control-live-transport-receipt");
     Ok(())
 }
 
