@@ -737,73 +737,112 @@ pub fn parse_service_record(value: &IOValue) -> Result<ServiceRecord> {
 pub fn service_summary(value: &IOValue) -> Result<String> {
     let has_sensitive_marker = is_sensitive_marker_present(value)?;
     let redaction = if has_sensitive_marker { " redacted=true" } else { "" };
-    match parse_service_record(value)? {
-        ServiceRecord::Manifest(manifest) => Ok(format!(
-            "service manifest id={} target={} deps={} ref={}{}",
-            manifest.service_id,
-            manifest.target_ref,
-            manifest.dependencies.len(),
-            manifest.manifest_ref,
-            redaction
-        )),
-        ServiceRecord::Demand(demand) => Ok(format!(
-            "service demand id={} service={} requester={} ref={}{}",
-            demand.demand_id, demand.service_id, demand.requester_ref, demand.demand_ref, redaction
-        )),
-        ServiceRecord::Status(status) => Ok(format!(
-            "service status service={} state={} readiness={} ref={}{}",
-            status.service_id,
-            status.state,
-            status.readiness_assertion_refs.len(),
-            status.status_ref,
-            redaction
-        )),
-        ServiceRecord::Supervisor(supervisor) => Ok(format!(
-            "service supervisor id={} services={} ref={}{}",
-            supervisor.supervisor_id,
-            supervisor.service_ids.len(),
-            supervisor.supervisor_ref,
-            redaction
-        )),
-        ServiceRecord::Link(link) => Ok(format!(
-            "service link supervisor={} parent={} child={} propagation={} ref={}{}",
-            link.supervisor_id,
-            link.parent_service_id,
-            link.child_service_id,
-            link.propagation,
-            link.link_ref,
-            redaction
-        )),
-        ServiceRecord::Monitor(monitor) => Ok(format!(
-            "service monitor id={} service={} observer={} ref={}{}",
-            monitor.monitor_id, monitor.service_id, monitor.observer_ref, monitor.monitor_ref, redaction
-        )),
-        ServiceRecord::RestartPolicy(policy) => Ok(format!(
-            "service restart-policy id={} max-attempts={} ref={}{}",
-            policy.policy_id, policy.max_attempts, policy.policy_ref, redaction
-        )),
-        ServiceRecord::RestartDecision(decision) => Ok(format!(
-            "service restart decision={} service={} attempt={}/{} ref={}{}",
-            decision.decision,
-            decision.service_id,
-            decision.attempt,
-            decision.max_attempts,
-            decision.decision_ref,
-            redaction
-        )),
-        ServiceRecord::LifecycleReceipt(receipt) => Ok(format!(
-            "service lifecycle operation={} decision={} service={} ref={}{}",
-            receipt.operation, receipt.decision, receipt.service_id, receipt.receipt_ref, redaction
-        )),
-        ServiceRecord::CleanupReceipt(receipt) => Ok(format!(
-            "service cleanup decision={} service={} retractions={} ref={}{}",
-            receipt.decision,
-            receipt.service_id,
-            receipt.retraction_refs.len(),
-            receipt.receipt_ref,
-            redaction
-        )),
+    Ok(summary_text(parse_service_record(value)?, redaction))
+}
+
+fn summary_text(record: ServiceRecord, redaction: &str) -> String {
+    match record {
+        ServiceRecord::Manifest(manifest) => manifest_text(&manifest, redaction),
+        ServiceRecord::Demand(demand) => demand_text(&demand, redaction),
+        ServiceRecord::Status(status) => status_text(&status, redaction),
+        ServiceRecord::Supervisor(supervisor) => supervisor_text(&supervisor, redaction),
+        ServiceRecord::Link(link) => link_text(&link, redaction),
+        ServiceRecord::Monitor(monitor) => monitor_text(&monitor, redaction),
+        ServiceRecord::RestartPolicy(policy) => restart_policy_text(&policy, redaction),
+        ServiceRecord::RestartDecision(decision) => restart_decision_text(&decision, redaction),
+        ServiceRecord::LifecycleReceipt(receipt) => lifecycle_text(&receipt, redaction),
+        ServiceRecord::CleanupReceipt(receipt) => cleanup_text(&receipt, redaction),
     }
+}
+
+fn manifest_text(manifest: &ServiceManifest, redaction: &str) -> String {
+    format!(
+        "service manifest id={} target={} deps={} ref={}{}",
+        manifest.service_id,
+        manifest.target_ref,
+        manifest.dependencies.len(),
+        manifest.manifest_ref,
+        redaction
+    )
+}
+
+fn demand_text(demand: &ServiceDemand, redaction: &str) -> String {
+    format!(
+        "service demand id={} service={} requester={} ref={}{}",
+        demand.demand_id, demand.service_id, demand.requester_ref, demand.demand_ref, redaction
+    )
+}
+
+fn status_text(status: &ServiceStatus, redaction: &str) -> String {
+    format!(
+        "service status service={} state={} readiness={} ref={}{}",
+        status.service_id,
+        status.state,
+        status.readiness_assertion_refs.len(),
+        status.status_ref,
+        redaction
+    )
+}
+
+fn supervisor_text(supervisor: &ServiceSupervisor, redaction: &str) -> String {
+    format!(
+        "service supervisor id={} services={} ref={}{}",
+        supervisor.supervisor_id,
+        supervisor.service_ids.len(),
+        supervisor.supervisor_ref,
+        redaction
+    )
+}
+
+fn link_text(link: &ServiceLink, redaction: &str) -> String {
+    format!(
+        "service link supervisor={} parent={} child={} propagation={} ref={}{}",
+        link.supervisor_id, link.parent_service_id, link.child_service_id, link.propagation, link.link_ref, redaction
+    )
+}
+
+fn monitor_text(monitor: &ServiceMonitor, redaction: &str) -> String {
+    format!(
+        "service monitor id={} service={} observer={} ref={}{}",
+        monitor.monitor_id, monitor.service_id, monitor.observer_ref, monitor.monitor_ref, redaction
+    )
+}
+
+fn restart_policy_text(policy: &ServiceRestartPolicy, redaction: &str) -> String {
+    format!(
+        "service restart-policy id={} max-attempts={} ref={}{}",
+        policy.policy_id, policy.max_attempts, policy.policy_ref, redaction
+    )
+}
+
+fn restart_decision_text(decision: &ServiceRestartDecision, redaction: &str) -> String {
+    format!(
+        "service restart decision={} service={} attempt={}/{} ref={}{}",
+        decision.decision,
+        decision.service_id,
+        decision.attempt,
+        decision.max_attempts,
+        decision.decision_ref,
+        redaction
+    )
+}
+
+fn lifecycle_text(receipt: &ServiceLifecycleReceipt, redaction: &str) -> String {
+    format!(
+        "service lifecycle operation={} decision={} service={} ref={}{}",
+        receipt.operation, receipt.decision, receipt.service_id, receipt.receipt_ref, redaction
+    )
+}
+
+fn cleanup_text(receipt: &ServiceCleanupReceipt, redaction: &str) -> String {
+    format!(
+        "service cleanup decision={} service={} retractions={} ref={}{}",
+        receipt.decision,
+        receipt.service_id,
+        receipt.retraction_refs.len(),
+        receipt.receipt_ref,
+        redaction
+    )
 }
 
 fn validate_manifest_input(input: &ServiceManifestInput) -> Result<()> {
