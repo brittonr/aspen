@@ -144,20 +144,31 @@ fn cli_repro_export_profiles_fail_closed_and_unpack_diagnostics() -> CliResult<(
     let run = molten_cmd().args(["test", "run"]).arg(&suite).args(["--report-out"]).arg(&report).output()?;
     assert_success(&run, "secret test run");
 
+    assert_default_denial(&dir, &report)?;
+    assert_diagnostic_case(&dir, &report)?;
+    let (encrypted_out, encrypted_refs) = prepare_private_case(&dir, &report)?;
+    assert_reveal_cases(&dir, &encrypted_out, encrypted_refs.as_slice())?;
+    Ok(())
+}
+
+fn assert_default_denial(dir: &Path, report: &Path) -> CliResult<()> {
     let denied_out = dir.join("default-repro");
     let denied = molten_cmd()
         .args(["test", "repro", "export"])
-        .arg(&report)
+        .arg(report)
         .args(["--out"])
         .arg(&denied_out)
         .output()?;
     assert_failure(&denied, "default deny-sensitive export");
     assert!(stderr(&denied).contains("sensitive marker secret"));
+    Ok(())
+}
 
+fn assert_diagnostic_case(dir: &Path, report: &Path) -> CliResult<()> {
     let diagnostic_out = dir.join("diagnostic-repro");
     let diagnostic = molten_cmd()
         .args(["test", "repro", "export"])
-        .arg(&report)
+        .arg(report)
         .args(["--out"])
         .arg(&diagnostic_out)
         .args(["--profile", "redacted-diagnostic"])
@@ -180,11 +191,14 @@ fn cli_repro_export_profiles_fail_closed_and_unpack_diagnostics() -> CliResult<(
         .output()?;
     assert_success(&unpack, "diagnostic unpack");
     assert!(unpacked_diagnostic.join("redaction-transform-receipt.preserves").exists());
+    Ok(())
+}
 
+fn prepare_private_case(dir: &Path, report: &Path) -> CliResult<(PathBuf, Vec<String>)> {
     let encrypted_out = dir.join("encrypted-repro");
     let encrypted = molten_cmd()
         .args(["test", "repro", "export"])
-        .arg(&report)
+        .arg(report)
         .args(["--out"])
         .arg(&encrypted_out)
         .args(["--profile", "encrypted-private"])
@@ -201,25 +215,18 @@ fn cli_repro_export_profiles_fail_closed_and_unpack_diagnostics() -> CliResult<(
         .output()?;
     assert_failure(&denied_unpack, "encrypted unpack without reveal");
     assert!(stderr(&denied_unpack).contains("requires at least one passing reveal receipt"));
-
     if parsed_encrypted.encrypted_refs.is_empty() {
         return Err(test_error("encrypted profile did not expose encrypted refs"));
     }
-    let legacy_reveal = reveal_receipt_value(&RevealReceiptInput {
-        secret_ref: parsed_encrypted.encrypted_refs[0].clone(),
-        encrypted_ref: None,
-        requester_ref: canonical_hash(&string("cli-requester"))?,
-        purpose: "export".to_string(),
-        plaintext_ref: Some(canonical_hash(&string("authorized-private-material-legacy"))?),
-        commitment_ref: parsed_encrypted.encrypted_refs[0].clone(),
-        authority_refs: vec![canonical_hash(&string("reveal-authority"))?],
-        policy_refs: vec![canonical_hash(&string("reveal-policy"))?],
-        resource_refs: vec![canonical_hash(&string("reveal-resource"))?],
-        effect_handle_refs: vec![canonical_hash(&string("reveal-effect-handle"))?],
-        revocation_refs: Vec::new(),
-    })?;
-    let legacy_reveal_path = dir.join("legacy-reveal.preserves");
-    fs::write(&legacy_reveal_path, to_text(&legacy_reveal)?)?;
+    Ok((encrypted_out, parsed_encrypted.encrypted_refs))
+}
+
+fn assert_reveal_cases(dir: &Path, encrypted_out: &Path, encrypted_refs: &[String]) -> CliResult<()> {
+    let first_ref = encrypted_refs
+        .first()
+        .ok_or_else(|| test_error("encrypted profile did not expose encrypted refs"))?;
+    let legacy_reveal_path =
+        write_reveal_case(dir, "legacy-reveal.preserves", first_ref, None, "authorized-private-material-legacy")?;
     let legacy_unpack = molten_cmd()
         .args(["test", "repro", "unpack"])
         .arg(encrypted_out.join("refs.preserves"))
@@ -232,21 +239,13 @@ fn cli_repro_export_profiles_fail_closed_and_unpack_diagnostics() -> CliResult<(
     assert!(stderr(&legacy_unpack).contains("does not bind an encrypted repro reference"));
 
     let wrong_reveal_ref = canonical_hash(&string("wrong-encrypted-ref"))?;
-    let stale_reveal = reveal_receipt_value(&RevealReceiptInput {
-        secret_ref: parsed_encrypted.encrypted_refs[0].clone(),
-        encrypted_ref: Some(wrong_reveal_ref),
-        requester_ref: canonical_hash(&string("cli-requester"))?,
-        purpose: "export".to_string(),
-        plaintext_ref: Some(canonical_hash(&string("authorized-private-material-stale"))?),
-        commitment_ref: parsed_encrypted.encrypted_refs[0].clone(),
-        authority_refs: vec![canonical_hash(&string("reveal-authority"))?],
-        policy_refs: vec![canonical_hash(&string("reveal-policy"))?],
-        resource_refs: vec![canonical_hash(&string("reveal-resource"))?],
-        effect_handle_refs: vec![canonical_hash(&string("reveal-effect-handle"))?],
-        revocation_refs: Vec::new(),
-    })?;
-    let stale_reveal_path = dir.join("stale-reveal.preserves");
-    fs::write(&stale_reveal_path, to_text(&stale_reveal)?)?;
+    let stale_reveal_path = write_reveal_case(
+        dir,
+        "stale-reveal.preserves",
+        first_ref,
+        Some(wrong_reveal_ref.as_str()),
+        "authorized-private-material-stale",
+    )?;
     let stale_unpack = molten_cmd()
         .args(["test", "repro", "unpack"])
         .arg(encrypted_out.join("refs.preserves"))
@@ -258,23 +257,12 @@ fn cli_repro_export_profiles_fail_closed_and_unpack_diagnostics() -> CliResult<(
     assert_failure(&stale_unpack, "encrypted unpack with stale reveal ref");
     assert!(stderr(&stale_unpack).contains("not part of this repro bundle"));
 
-    let mut reveal_paths = Vec::with_capacity(parsed_encrypted.encrypted_refs.len());
-    for (index, encrypted_ref) in parsed_encrypted.encrypted_refs.iter().enumerate() {
-        let reveal = reveal_receipt_value(&RevealReceiptInput {
-            secret_ref: encrypted_ref.clone(),
-            encrypted_ref: Some(encrypted_ref.clone()),
-            requester_ref: canonical_hash(&string("cli-requester"))?,
-            purpose: "export".to_string(),
-            plaintext_ref: Some(canonical_hash(&string(format!("authorized-private-material-{index}")))?),
-            commitment_ref: encrypted_ref.clone(),
-            authority_refs: vec![canonical_hash(&string("reveal-authority"))?],
-            policy_refs: vec![canonical_hash(&string("reveal-policy"))?],
-            resource_refs: vec![canonical_hash(&string("reveal-resource"))?],
-            effect_handle_refs: vec![canonical_hash(&string("reveal-effect-handle"))?],
-            revocation_refs: Vec::new(),
-        })?;
-        let reveal_path = dir.join(format!("reveal-{index}.preserves"));
-        fs::write(&reveal_path, to_text(&reveal)?)?;
+    let mut reveal_paths = Vec::with_capacity(encrypted_refs.len());
+    for (index, encrypted_ref) in encrypted_refs.iter().enumerate() {
+        let reveal_name = format!("reveal-{index}.preserves");
+        let plaintext = format!("authorized-private-material-{index}");
+        let reveal_path =
+            write_reveal_case(dir, &reveal_name, encrypted_ref, Some(encrypted_ref.as_str()), &plaintext)?;
         reveal_paths.push(reveal_path);
     }
     let unpacked_private = dir.join("encrypted-unpacked");
@@ -291,6 +279,31 @@ fn cli_repro_export_profiles_fail_closed_and_unpack_diagnostics() -> CliResult<(
     assert_success(&revealed_unpack, "encrypted unpack with reveal");
     assert!(unpacked_private.join("reveal-receipt-0.preserves").exists());
     Ok(())
+}
+
+fn write_reveal_case(
+    dir: &Path,
+    name: &str,
+    secret_ref: &str,
+    encrypted_ref: Option<&str>,
+    plaintext: &str,
+) -> CliResult<PathBuf> {
+    let reveal = reveal_receipt_value(&RevealReceiptInput {
+        secret_ref: secret_ref.to_string(),
+        encrypted_ref: encrypted_ref.map(|ref_value| ref_value.to_string()),
+        requester_ref: canonical_hash(&string("cli-requester"))?,
+        purpose: "export".to_string(),
+        plaintext_ref: Some(canonical_hash(&string(plaintext))?),
+        commitment_ref: secret_ref.to_string(),
+        authority_refs: vec![canonical_hash(&string("reveal-authority"))?],
+        policy_refs: vec![canonical_hash(&string("reveal-policy"))?],
+        resource_refs: vec![canonical_hash(&string("reveal-resource"))?],
+        effect_handle_refs: vec![canonical_hash(&string("reveal-effect-handle"))?],
+        revocation_refs: Vec::new(),
+    })?;
+    let reveal_path = dir.join(name);
+    fs::write(&reveal_path, to_text(&reveal)?)?;
+    Ok(reveal_path)
 }
 
 #[test]
