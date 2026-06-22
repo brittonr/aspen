@@ -133,7 +133,7 @@ impl BoundedValues {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ServiceRuntimeArtifacts {
+struct Artifacts {
     lifecycle_receipts: BoundedValues,
     statuses: BoundedValues,
     readiness_assertions: BoundedValues,
@@ -141,7 +141,7 @@ struct ServiceRuntimeArtifacts {
     turn_contexts: BoundedValues,
 }
 
-impl ServiceRuntimeArtifacts {
+impl Artifacts {
     fn new(statuses: Vec<IOValue>) -> Self {
         Self {
             lifecycle_receipts: BoundedValues::empty("service lifecycle receipts"),
@@ -167,6 +167,130 @@ impl ServiceRuntimeArtifacts {
             self.turn_contexts.push(turn_context)?;
         }
         Ok(())
+    }
+}
+
+struct RunCtx<'a> {
+    evidence: &'a ServiceRuntimeEvidenceInput,
+    manifests: &'a BTreeMap<String, ServiceManifest>,
+    ready_statuses: BTreeMap<String, String>,
+    artifacts: Artifacts,
+    runtime: RuntimeState,
+}
+
+struct PassResult {
+    pending: Vec<ServiceDemand>,
+    is_progress_made: bool,
+}
+
+enum StepOutcome {
+    Started,
+    Finished,
+    Pending(ServiceDemand),
+}
+
+impl<'a> RunCtx<'a> {
+    fn new(suite: &'a ServiceRuntimeSuite, manifests: &'a BTreeMap<String, ServiceManifest>) -> Result<Self> {
+        let ready_statuses = ready_status_map(&suite.statuses)?;
+        let statuses = suite.statuses.iter().map(|status| status.value.clone()).collect::<Vec<_>>();
+        Ok(Self {
+            evidence: &suite.evidence,
+            manifests,
+            ready_statuses,
+            artifacts: Artifacts::new(statuses),
+            runtime: RuntimeState::new(1),
+        })
+    }
+
+    fn run_demands(&mut self, mut pending: Vec<ServiceDemand>, is_cycle_present: bool) -> Result<()> {
+        let mut passes = 0usize;
+        while !pending.is_empty() && !is_cycle_present {
+            passes = next_pass_count(passes)?;
+            let pass = self.run_pass(pending)?;
+            pending = pass.pending;
+            if !pass.is_progress_made {
+                break;
+            }
+        }
+        self.finish_pending(pending, is_cycle_present)
+    }
+
+    fn run_pass(&mut self, pending: Vec<ServiceDemand>) -> Result<PassResult> {
+        let mut next_pending = Vec::with_capacity(pending.len());
+        let mut is_progress_made = false;
+        for demand in pending {
+            match self.step(demand)? {
+                StepOutcome::Started => {
+                    is_progress_made = true;
+                }
+                StepOutcome::Finished => {}
+                StepOutcome::Pending(demand) => next_pending.push(demand),
+            }
+        }
+        Ok(PassResult {
+            pending: next_pending,
+            is_progress_made,
+        })
+    }
+
+    fn step(&mut self, demand: ServiceDemand) -> Result<StepOutcome> {
+        let Some(manifest) = self.manifests.get(&demand.service_id) else {
+            self.artifacts.push_outcome(missing_manifest_outcome(&demand)?)?;
+            return Ok(StepOutcome::Finished);
+        };
+        if manifest_ref_mismatch(&demand, manifest) {
+            self.artifacts.push_outcome(deny_outcome(
+                &demand,
+                Some(manifest),
+                "demand manifest ref does not match resolved manifest",
+            )?)?;
+            return Ok(StepOutcome::Finished);
+        }
+        let dependency_refs = dependency_status_refs(manifest, &self.ready_statuses);
+        if dependency_refs.len() != manifest.dependencies.len() {
+            return Ok(StepOutcome::Pending(demand));
+        }
+        let admission_diagnostics = startup_admission_diagnostics(self.evidence);
+        if admission_diagnostics.is_empty() {
+            let outcome = start_outcome(&mut self.runtime, self.evidence, &demand, manifest, dependency_refs)?;
+            self.track_ready_status(&outcome)?;
+            self.artifacts.push_outcome(outcome)?;
+            Ok(StepOutcome::Started)
+        } else {
+            self.artifacts
+                .push_outcome(deny_outcome(&demand, Some(manifest), &admission_diagnostics.join("; "))?)?;
+            Ok(StepOutcome::Finished)
+        }
+    }
+
+    fn track_ready_status(&mut self, outcome: &DemandOutcome) -> Result<()> {
+        if let Some(status) = outcome.status.as_ref() {
+            let parsed = service_records::parse_service_status(status)?;
+            self.ready_statuses.insert(parsed.service_id.clone(), parsed.status_ref);
+        }
+        Ok(())
+    }
+
+    fn finish_pending(&mut self, pending: Vec<ServiceDemand>, is_cycle_present: bool) -> Result<()> {
+        for demand in pending {
+            let manifest = self.manifests.get(&demand.service_id);
+            let diagnostic = if is_cycle_present {
+                "dependency cycle detected"
+            } else {
+                "required service dependency is not ready"
+            };
+            let outcome = if is_cycle_present {
+                dependency_deny_outcome(&demand, manifest, diagnostic)?
+            } else {
+                dependency_wait_outcome(&demand, manifest, diagnostic)?
+            };
+            self.artifacts.push_outcome(outcome)?;
+        }
+        Ok(())
+    }
+
+    fn into_artifacts(self) -> Artifacts {
+        self.artifacts
     }
 }
 
@@ -218,90 +342,45 @@ pub fn run_service_runtime_suite_value(value: &IOValue) -> Result<ServiceRuntime
 }
 
 pub fn run_service_runtime_suite(suite: &ServiceRuntimeSuite) -> Result<ServiceRuntimeRun> {
-    let mut manifests = BTreeMap::new();
-    for manifest in &suite.manifests {
-        if manifests.insert(manifest.service_id.clone(), manifest.clone()).is_some() {
+    let manifests = manifest_map(&suite.manifests)?;
+    let is_cycle_present = dependency_cycle_exists(&manifests)?;
+    let mut context = RunCtx::new(suite, &manifests)?;
+    context.run_demands(sorted_demands(&suite.demands), is_cycle_present)?;
+    finish_runtime_run(suite, context.into_artifacts())
+}
+
+fn manifest_map(manifests: &[ServiceManifest]) -> Result<BTreeMap<String, ServiceManifest>> {
+    let mut mapped = BTreeMap::new();
+    for manifest in manifests {
+        if mapped.insert(manifest.service_id.clone(), manifest.clone()).is_some() {
             return Err(MoltenError::invalid_harness(format!(
                 "duplicate service manifest for {}",
                 manifest.service_id
             )));
         }
     }
-    let mut ready_statuses = ready_status_map(&suite.statuses)?;
-    let initial_status_values = suite.statuses.iter().map(|status| status.value.clone()).collect::<Vec<_>>();
-    let mut demands = suite.demands.clone();
-    demands.sort_by(|left, right| {
+    Ok(mapped)
+}
+
+fn sorted_demands(demands: &[ServiceDemand]) -> Vec<ServiceDemand> {
+    let mut sorted = demands.to_vec();
+    sorted.sort_by(|left, right| {
         left.service_id.cmp(&right.service_id).then_with(|| left.demand_ref.cmp(&right.demand_ref))
     });
-    let mut artifacts = ServiceRuntimeArtifacts::new(initial_status_values);
-    let mut runtime = RuntimeState::new(1);
-    let has_cycle = dependency_cycle_exists(&manifests)?;
-    let mut pending = demands;
-    let mut passes = 0usize;
-    while !pending.is_empty() && !has_cycle {
-        passes = passes
-            .checked_add(1)
-            .ok_or_else(|| MoltenError::invalid_harness("service dependency pass count overflow"))?;
-        if passes > MAX_DEPENDENCY_PASSES {
-            return Err(MoltenError::invalid_harness("service dependency evaluation exceeded pass bound"));
-        }
-        let mut next_pending = Vec::with_capacity(pending.len());
-        let mut is_progress_made = false;
-        for demand in pending {
-            let Some(manifest) = manifests.get(&demand.service_id) else {
-                artifacts.push_outcome(missing_manifest_outcome(&demand)?)?;
-                continue;
-            };
-            if manifest_ref_mismatch(&demand, manifest) {
-                artifacts.push_outcome(deny_outcome(
-                    &demand,
-                    Some(manifest),
-                    "demand manifest ref does not match resolved manifest",
-                )?)?;
-                continue;
-            }
-            let dependency_refs = dependency_status_refs(manifest, &ready_statuses);
-            if dependency_refs.len() == manifest.dependencies.len() {
-                let admission_diagnostics = startup_admission_diagnostics(&suite.evidence);
-                if admission_diagnostics.is_empty() {
-                    let outcome = start_outcome(&mut runtime, &suite.evidence, &demand, manifest, dependency_refs)?;
-                    if let Some(status) = outcome.status.as_ref() {
-                        let parsed = service_records::parse_service_status(status)?;
-                        ready_statuses.insert(parsed.service_id.clone(), parsed.status_ref);
-                    }
-                    artifacts.push_outcome(outcome)?;
-                    is_progress_made = true;
-                } else {
-                    artifacts.push_outcome(deny_outcome(
-                        &demand,
-                        Some(manifest),
-                        &admission_diagnostics.join("; "),
-                    )?)?;
-                }
-            } else {
-                next_pending.push(demand);
-            }
-        }
-        if !is_progress_made {
-            pending = next_pending;
-            break;
-        }
-        pending = next_pending;
+    sorted
+}
+
+fn next_pass_count(passes: usize) -> Result<usize> {
+    let next = passes
+        .checked_add(1)
+        .ok_or_else(|| MoltenError::invalid_harness("service dependency pass count overflow"))?;
+    if next > MAX_DEPENDENCY_PASSES {
+        return Err(MoltenError::invalid_harness("service dependency evaluation exceeded pass bound"));
     }
-    for demand in pending {
-        let manifest = manifests.get(&demand.service_id);
-        let diagnostic = if has_cycle {
-            "dependency cycle detected"
-        } else {
-            "required service dependency is not ready"
-        };
-        let outcome = if has_cycle {
-            dependency_deny_outcome(&demand, manifest, diagnostic)?
-        } else {
-            dependency_wait_outcome(&demand, manifest, diagnostic)?
-        };
-        artifacts.push_outcome(outcome)?;
-    }
+    Ok(next)
+}
+
+fn finish_runtime_run(suite: &ServiceRuntimeSuite, artifacts: Artifacts) -> Result<ServiceRuntimeRun> {
     let report_value = service_runtime_report_value(ReportValueInput {
         suite_value: &suite.value,
         lifecycle_receipts: artifacts.lifecycle_receipts.as_slice(),
@@ -310,7 +389,7 @@ pub fn run_service_runtime_suite(suite: &ServiceRuntimeSuite) -> Result<ServiceR
         replay_identities: artifacts.replay_identities.as_slice(),
         turn_contexts: artifacts.turn_contexts.as_slice(),
     })?;
-    let ServiceRuntimeArtifacts {
+    let Artifacts {
         lifecycle_receipts,
         statuses,
         readiness_assertions,
