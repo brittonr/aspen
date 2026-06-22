@@ -1355,8 +1355,43 @@ mod tests {
         assert!(error.to_string().contains("canonical content ref"));
     }
 
-    #[test]
-    fn service_record_variants_roundtrip() {
+    struct Core {
+        manifest: IOValue,
+        manifest_ref: String,
+        demand: IOValue,
+        status: IOValue,
+        status_ref: String,
+    }
+
+    struct Aux {
+        supervisor: IOValue,
+        link: IOValue,
+        monitor: IOValue,
+        monitor_ref: String,
+        restart: IOValue,
+        restart_ref: String,
+    }
+
+    struct Receipts {
+        decision: IOValue,
+        lifecycle: IOValue,
+        cleanup: IOValue,
+    }
+
+    struct Case {
+        manifest: IOValue,
+        demand: IOValue,
+        status: IOValue,
+        supervisor: IOValue,
+        link: IOValue,
+        monitor: IOValue,
+        restart: IOValue,
+        decision: IOValue,
+        lifecycle: IOValue,
+        cleanup: IOValue,
+    }
+
+    fn base() -> Core {
         let manifest = service_manifest_value(&manifest_input()).expect("manifest");
         let manifest_ref = canonical_hash(&manifest).expect("manifest ref");
         let demand = service_demand_value(&ServiceDemandInput {
@@ -1381,6 +1416,17 @@ mod tests {
             replay_refs: vec![test_ref("replay")],
         })
         .expect("status");
+        let status_ref = canonical_hash(&status).expect("status ref");
+        Core {
+            manifest,
+            manifest_ref,
+            demand,
+            status,
+            status_ref,
+        }
+    }
+
+    fn aux() -> Aux {
         let supervisor = service_supervisor_value(&ServiceSupervisorInput {
             supervisor_id: "supervisor:web".to_string(),
             service_ids: vec!["svc:web".to_string()],
@@ -1405,6 +1451,7 @@ mod tests {
             policy_refs: vec![test_ref("policy")],
         })
         .expect("monitor");
+        let monitor_ref = canonical_hash(&monitor).expect("monitor ref");
         let restart = service_restart_policy_value(&ServiceRestartPolicyInput {
             policy_id: "restart:web".to_string(),
             max_attempts: 2,
@@ -1413,11 +1460,23 @@ mod tests {
             resource_refs: vec![test_ref("resource")],
         })
         .expect("restart policy");
-        let restart_decision = service_restart_decision_value(&ServiceRestartDecisionInput {
+        let restart_ref = canonical_hash(&restart).expect("restart policy ref");
+        Aux {
+            supervisor,
+            link,
+            monitor,
+            monitor_ref,
+            restart,
+            restart_ref,
+        }
+    }
+
+    fn decision(core: &Core, aux: &Aux) -> IOValue {
+        service_restart_decision_value(&ServiceRestartDecisionInput {
             decision: "pass".to_string(),
             service_id: "svc:web".to_string(),
-            manifest_ref: Some(manifest_ref.clone()),
-            policy_ref: canonical_hash(&restart).expect("restart policy ref"),
+            manifest_ref: Some(core.manifest_ref.clone()),
+            policy_ref: aux.restart_ref.clone(),
             attempt: 1,
             max_attempts: 2,
             window_step: 0,
@@ -1427,24 +1486,30 @@ mod tests {
             resource_refs: vec![test_ref("resource")],
             diagnostics: Vec::new(),
         })
-        .expect("restart decision");
-        let lifecycle = service_lifecycle_receipt_value(&ServiceLifecycleReceiptInput {
+        .expect("restart decision")
+    }
+
+    fn lifecycle(core: &Core, aux: &Aux) -> IOValue {
+        service_lifecycle_receipt_value(&ServiceLifecycleReceiptInput {
             operation: "ready".to_string(),
             decision: "pass".to_string(),
             service_id: "svc:web".to_string(),
-            manifest_ref: Some(manifest_ref.clone()),
-            status_ref: Some(canonical_hash(&status).expect("status ref")),
+            manifest_ref: Some(core.manifest_ref.clone()),
+            status_ref: Some(core.status_ref.clone()),
             authority_refs: vec![test_ref("authority-receipt")],
             resource_refs: vec![test_ref("resource-receipt")],
             effect_profile_refs: vec![test_ref("effect")],
-            supervision_refs: vec![canonical_hash(&monitor).expect("monitor ref")],
+            supervision_refs: vec![aux.monitor_ref.clone()],
             diagnostics: Vec::new(),
         })
-        .expect("lifecycle");
-        let cleanup = service_cleanup_receipt_value(&ServiceCleanupReceiptInput {
+        .expect("lifecycle")
+    }
+
+    fn cleanup(core: &Core) -> IOValue {
+        service_cleanup_receipt_value(&ServiceCleanupReceiptInput {
             decision: "pass".to_string(),
             service_id: "svc:web".to_string(),
-            manifest_ref: Some(manifest_ref),
+            manifest_ref: Some(core.manifest_ref.clone()),
             authority_refs: vec![test_ref("authority")],
             owned_assertion_refs: vec![test_ref("owned")],
             observer_refs: vec![test_ref("observer")],
@@ -1456,27 +1521,66 @@ mod tests {
             retention_refs: vec![test_ref("retention")],
             diagnostics: Vec::new(),
         })
-        .expect("cleanup");
+        .expect("cleanup")
+    }
 
-        assert!(matches!(parse_service_record(&manifest).expect("manifest record"), ServiceRecord::Manifest(_)));
-        assert!(matches!(parse_service_record(&demand).expect("demand record"), ServiceRecord::Demand(_)));
-        assert!(matches!(parse_service_record(&status).expect("status record"), ServiceRecord::Status(_)));
+    fn receipts(core: &Core, aux: &Aux) -> Receipts {
+        Receipts {
+            decision: decision(core, aux),
+            lifecycle: lifecycle(core, aux),
+            cleanup: cleanup(core),
+        }
+    }
+
+    fn case() -> Case {
+        let core = base();
+        let aux = aux();
+        let receipts = receipts(&core, &aux);
+        Case {
+            manifest: core.manifest,
+            demand: core.demand,
+            status: core.status,
+            supervisor: aux.supervisor,
+            link: aux.link,
+            monitor: aux.monitor,
+            restart: aux.restart,
+            decision: receipts.decision,
+            lifecycle: receipts.lifecycle,
+            cleanup: receipts.cleanup,
+        }
+    }
+
+    fn assert_variants(case: &Case) {
+        assert!(matches!(parse_service_record(&case.manifest).expect("manifest record"), ServiceRecord::Manifest(_)));
+        assert!(matches!(parse_service_record(&case.demand).expect("demand record"), ServiceRecord::Demand(_)));
+        assert!(matches!(parse_service_record(&case.status).expect("status record"), ServiceRecord::Status(_)));
         assert!(matches!(
-            parse_service_record(&supervisor).expect("supervisor record"),
+            parse_service_record(&case.supervisor).expect("supervisor record"),
             ServiceRecord::Supervisor(_)
         ));
-        assert!(matches!(parse_service_record(&link).expect("link record"), ServiceRecord::Link(_)));
-        assert!(matches!(parse_service_record(&monitor).expect("monitor record"), ServiceRecord::Monitor(_)));
-        assert!(matches!(parse_service_record(&restart).expect("restart record"), ServiceRecord::RestartPolicy(_)));
+        assert!(matches!(parse_service_record(&case.link).expect("link record"), ServiceRecord::Link(_)));
+        assert!(matches!(parse_service_record(&case.monitor).expect("monitor record"), ServiceRecord::Monitor(_)));
         assert!(matches!(
-            parse_service_record(&restart_decision).expect("restart decision record"),
+            parse_service_record(&case.restart).expect("restart record"),
+            ServiceRecord::RestartPolicy(_)
+        ));
+        assert!(matches!(
+            parse_service_record(&case.decision).expect("restart decision record"),
             ServiceRecord::RestartDecision(_)
         ));
         assert!(matches!(
-            parse_service_record(&lifecycle).expect("lifecycle record"),
+            parse_service_record(&case.lifecycle).expect("lifecycle record"),
             ServiceRecord::LifecycleReceipt(_)
         ));
-        assert!(matches!(parse_service_record(&cleanup).expect("cleanup record"), ServiceRecord::CleanupReceipt(_)));
+        assert!(matches!(
+            parse_service_record(&case.cleanup).expect("cleanup record"),
+            ServiceRecord::CleanupReceipt(_)
+        ));
+    }
+
+    #[test]
+    fn service_record_variants_roundtrip() {
+        assert_variants(&case());
     }
 
     #[test]
