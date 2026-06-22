@@ -365,6 +365,23 @@ pub fn verify_signed_receipt_with_keyring_policy(
     policy: &VerifySignedReceiptKeyringPolicy<'_>,
 ) -> Result<SignedReceiptWithKey> {
     let envelope = signed_receipt_envelope(value)?;
+    require_envelope(&envelope, policy)?;
+    let key = select_key(&envelope, policy)?;
+    let receipt = verify_signed_receipt_with_policy(value, &VerifySignedReceiptPolicy {
+        required_purpose: policy.required_purpose,
+        trust_root: policy.trust_root,
+        key: &key.key,
+        expected_signer: Some(&key.signer),
+        expected_subject_ref: policy.expected_subject_ref,
+    })?;
+    Ok(SignedReceiptWithKey {
+        receipt,
+        key_ref: key.key_ref.clone(),
+        key_id: key.key_id.clone(),
+    })
+}
+
+fn require_envelope(envelope: &SignedReceiptEnvelope, policy: &VerifySignedReceiptKeyringPolicy<'_>) -> Result<()> {
     if envelope.purpose != policy.required_purpose {
         return Err(MoltenError::invalid_harness(format!(
             "signed receipt purpose {} does not satisfy required purpose {}",
@@ -393,7 +410,31 @@ pub fn verify_signed_receipt_with_keyring_policy(
             envelope.subject_ref
         )));
     }
-    let mut matching_keys = Vec::new();
+    Ok(())
+}
+
+fn select_key<'a>(
+    envelope: &SignedReceiptEnvelope,
+    policy: &'a VerifySignedReceiptKeyringPolicy<'a>,
+) -> Result<&'a SignedReceiptKey> {
+    let matches = matching_keys(envelope, policy)?;
+    if matches.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "signed receipt keyring has no key for signer {} trust-root {}{}{}",
+            envelope.signer,
+            envelope.trust_root,
+            key_ref_suffix(policy.required_key_ref),
+            key_id_suffix(policy.required_key_id)
+        )));
+    }
+    eligible_key(envelope, policy, matches)
+}
+
+fn matching_keys<'a>(
+    envelope: &SignedReceiptEnvelope,
+    policy: &'a VerifySignedReceiptKeyringPolicy<'a>,
+) -> Result<Vec<&'a SignedReceiptKey>> {
+    let mut matches = Vec::new();
     for key in policy.keys {
         if key.signer != envelope.signer || key.trust_root != envelope.trust_root {
             continue;
@@ -408,20 +449,19 @@ pub fn verify_signed_receipt_with_keyring_policy(
         {
             continue;
         }
-        push_bounded(&mut matching_keys, key, MAX_SIGNED_KEY_RECORDS, "signed receipt keyring matches")?;
+        push_bounded(&mut matches, key, MAX_SIGNED_KEY_RECORDS, "signed receipt keyring matches")?;
     }
-    if matching_keys.is_empty() {
-        return Err(MoltenError::invalid_harness(format!(
-            "signed receipt keyring has no key for signer {} trust-root {}{}{}",
-            envelope.signer,
-            envelope.trust_root,
-            key_ref_suffix(policy.required_key_ref),
-            key_id_suffix(policy.required_key_id)
-        )));
-    }
-    let mut eligible_keys = Vec::new();
+    Ok(matches)
+}
+
+fn eligible_key<'a>(
+    envelope: &SignedReceiptEnvelope,
+    policy: &VerifySignedReceiptKeyringPolicy<'_>,
+    matches: Vec<&'a SignedReceiptKey>,
+) -> Result<&'a SignedReceiptKey> {
+    let mut eligible = Vec::new();
     let mut blocked_reasons = Vec::new();
-    for key in matching_keys {
+    for key in matches {
         if key.status != SIGNED_RECEIPT_KEY_STATUS_CURRENT {
             push_bounded(
                 &mut blocked_reasons,
@@ -440,9 +480,9 @@ pub fn verify_signed_receipt_with_keyring_policy(
             )?;
             continue;
         }
-        push_bounded(&mut eligible_keys, key, MAX_SIGNED_KEY_RECORDS, "signed receipt keyring eligible keys")?;
+        push_bounded(&mut eligible, key, MAX_SIGNED_KEY_RECORDS, "signed receipt keyring eligible keys")?;
     }
-    if eligible_keys.is_empty() {
+    if eligible.is_empty() {
         return Err(MoltenError::invalid_harness(format!(
             "signed receipt keyring has no current unrevoked key for signer {} trust-root {}: {}",
             envelope.signer,
@@ -450,25 +490,13 @@ pub fn verify_signed_receipt_with_keyring_policy(
             blocked_reasons.join("; ")
         )));
     }
-    if eligible_keys.len() > 1 {
+    if eligible.len() > 1 {
         return Err(MoltenError::invalid_harness(format!(
             "signed receipt keyring matched {} current keys; specify --key-ref or --key-id",
-            eligible_keys.len()
+            eligible.len()
         )));
     }
-    let key = eligible_keys[0];
-    let receipt = verify_signed_receipt_with_policy(value, &VerifySignedReceiptPolicy {
-        required_purpose: policy.required_purpose,
-        trust_root: policy.trust_root,
-        key: &key.key,
-        expected_signer: Some(&key.signer),
-        expected_subject_ref: policy.expected_subject_ref,
-    })?;
-    Ok(SignedReceiptWithKey {
-        receipt,
-        key_ref: key.key_ref.clone(),
-        key_id: key.key_id.clone(),
-    })
+    Ok(eligible[0])
 }
 
 pub fn signed_receipt_summary(value: &IOValue) -> Result<String> {
