@@ -285,53 +285,10 @@ pub fn parse_transcript_stanza(value: &IOValue) -> Result<TranscriptStanza> {
 
 pub fn run_transcript(transcript: &TranscriptArtifact, input: &TranscriptRunInput) -> Result<TranscriptRun> {
     if matches!(input.mode, TranscriptRunMode::ForkDenied | TranscriptRunMode::InPlaceDenied) {
-        let outcome = denial_outcome(0, "mode", format!("{} mode denied by default", input.mode.as_str()))?;
-        let receipt = run_receipt_value(&RunReceiptValueInput {
-            operation: "deny",
-            decision: DECISION_DENY,
-            transcript_ref: &transcript.transcript_ref,
-            mode: input.mode.as_str(),
-            outcomes: std::slice::from_ref(&outcome),
-            output: None,
-            refs: refs_for_transcript(transcript, &[]),
-            diagnostics: &[format!("{} mode denied by default", input.mode.as_str())],
-            checks: &[("in-place-denied", "pass"), ("no-ambient-identity", "pass")],
-        })?;
-        return Ok(TranscriptRun {
-            transcript_ref: transcript.transcript_ref.clone(),
-            decision: DECISION_DENY.to_string(),
-            stanza_outcomes: vec![outcome],
-            receipt_ref: canonical_hash(&receipt)?,
-            receipt_value: receipt,
-            cache_receipt_value: None,
-            state_root: None,
-        });
+        return denied_run(transcript, input);
     }
-
-    if let Some(cache_root) = input.cache_root.as_ref() {
-        let cache_key = transcript_cache_key(transcript)?;
-        if let Ok(cache_get) = eval_cache::get(
-            cache_root,
-            &canonical_hash(&eval_cache::eval_cache_key_value(&cache_key)?)?,
-            &eval_cache::EvalCacheGetInput {
-                current_policy_refs: transcript.policy_refs.clone(),
-                current_capability_refs: transcript.capability_refs.clone(),
-                current_revocation_refs: transcript.revocation_refs.clone(),
-                semantic: true,
-            },
-        ) && let Some(output) = cache_get.output.as_ref()
-            && let Ok(receipt) = parse_transcript_run_receipt(output)
-        {
-            return Ok(TranscriptRun {
-                transcript_ref: transcript.transcript_ref.clone(),
-                decision: receipt.decision.clone(),
-                stanza_outcomes: Vec::new(),
-                receipt_ref: receipt.receipt_ref,
-                receipt_value: output.clone(),
-                cache_receipt_value: Some(cache_get.receipt_value),
-                state_root: None,
-            });
-        }
+    if let Some(run) = cached_run(transcript, input)? {
+        return Ok(run);
     }
 
     let state_root = match input.mode {
@@ -371,8 +328,83 @@ pub fn run_transcript(transcript: &TranscriptArtifact, input: &TranscriptRunInpu
             ("effect-admission", "pass"),
         ],
     })?;
+    let cache_receipt_value = store_run(input, transcript, &decision, &receipt)?;
+    let receipt_ref = canonical_hash(&receipt)?;
+    Ok(TranscriptRun {
+        transcript_ref: transcript.transcript_ref.clone(),
+        decision,
+        stanza_outcomes: outcomes,
+        receipt_value: receipt,
+        receipt_ref,
+        cache_receipt_value,
+        state_root: if matches!(input.mode, TranscriptRunMode::Save) {
+            Some(state.root)
+        } else {
+            None
+        },
+    })
+}
 
-    let mut cache_receipt = None;
+fn denied_run(transcript: &TranscriptArtifact, input: &TranscriptRunInput) -> Result<TranscriptRun> {
+    let outcome = denial_outcome(0, "mode", format!("{} mode denied by default", input.mode.as_str()))?;
+    let receipt = run_receipt_value(&RunReceiptValueInput {
+        operation: "deny",
+        decision: DECISION_DENY,
+        transcript_ref: &transcript.transcript_ref,
+        mode: input.mode.as_str(),
+        outcomes: std::slice::from_ref(&outcome),
+        output: None,
+        refs: refs_for_transcript(transcript, &[]),
+        diagnostics: &[format!("{} mode denied by default", input.mode.as_str())],
+        checks: &[("in-place-denied", "pass"), ("no-ambient-identity", "pass")],
+    })?;
+    Ok(TranscriptRun {
+        transcript_ref: transcript.transcript_ref.clone(),
+        decision: DECISION_DENY.to_string(),
+        stanza_outcomes: vec![outcome],
+        receipt_ref: canonical_hash(&receipt)?,
+        receipt_value: receipt,
+        cache_receipt_value: None,
+        state_root: None,
+    })
+}
+
+fn cached_run(transcript: &TranscriptArtifact, input: &TranscriptRunInput) -> Result<Option<TranscriptRun>> {
+    let Some(cache_root) = input.cache_root.as_ref() else {
+        return Ok(None);
+    };
+    let cache_key = transcript_cache_key(transcript)?;
+    if let Ok(cache_get) = eval_cache::get(
+        cache_root,
+        &canonical_hash(&eval_cache::eval_cache_key_value(&cache_key)?)?,
+        &eval_cache::EvalCacheGetInput {
+            current_policy_refs: transcript.policy_refs.clone(),
+            current_capability_refs: transcript.capability_refs.clone(),
+            current_revocation_refs: transcript.revocation_refs.clone(),
+            semantic: true,
+        },
+    ) && let Some(output) = cache_get.output.as_ref()
+        && let Ok(receipt) = parse_transcript_run_receipt(output)
+    {
+        return Ok(Some(TranscriptRun {
+            transcript_ref: transcript.transcript_ref.clone(),
+            decision: receipt.decision.clone(),
+            stanza_outcomes: Vec::new(),
+            receipt_ref: receipt.receipt_ref,
+            receipt_value: output.clone(),
+            cache_receipt_value: Some(cache_get.receipt_value),
+            state_root: None,
+        }));
+    }
+    Ok(None)
+}
+
+fn store_run(
+    input: &TranscriptRunInput,
+    transcript: &TranscriptArtifact,
+    decision: &str,
+    receipt: &IOValue,
+) -> Result<Option<IOValue>> {
     if decision == DECISION_PASS
         && let Some(cache_root) = input.cache_root.as_ref()
     {
@@ -386,23 +418,10 @@ pub fn run_transcript(transcript: &TranscriptArtifact, input: &TranscriptRunInpu
             evidence_refs: Vec::new(),
             diagnostics: Vec::new(),
         })?;
-        cache_receipt = Some(put.receipt_value);
+        Ok(Some(put.receipt_value))
+    } else {
+        Ok(None)
     }
-
-    let receipt_ref = canonical_hash(&receipt)?;
-    Ok(TranscriptRun {
-        transcript_ref: transcript.transcript_ref.clone(),
-        decision,
-        stanza_outcomes: outcomes,
-        receipt_value: receipt,
-        receipt_ref,
-        cache_receipt_value: cache_receipt,
-        state_root: if matches!(input.mode, TranscriptRunMode::Save) {
-            Some(state.root)
-        } else {
-            None
-        },
-    })
 }
 
 pub fn parse_transcript_run_receipt(value: &IOValue) -> Result<TranscriptRunReceipt> {

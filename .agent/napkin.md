@@ -203,6 +203,8 @@
 
 ## Patterns That Work
 
+- 2026-06-22 Octet transcript run split: extracting `src/transcripts/mod.rs::run_transcript` denial/cache branches into neutral same-file helpers (`denied_run`, `cached_run`, `store_run`) lowered the no-disabled probe from 7273 to 7271 by clearing two `function_length` findings while keeping the broad lint mix flat. Validation passed `cargo fmt`, `cargo fmt --check`, focused `cargo test transcript`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-transcripts-run-0`.
+
 - 2026-06-22 Octet service runtime split: extracting `src/service/runtime.rs::run_service_runtime_suite` demand-pass state into neutral same-file `RunCtx`/`Artifacts` helpers lowered the no-disabled probe from 7275 to 7273 by clearing two `function_length` findings while keeping path/import/file counts flat. Validation passed `cargo fmt`, focused `cargo test service_runtime`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-service-runtime-artifacts-0`.
 
 - 2026-06-22 Octet federation pull split: moving `src/federation/mod.rs::pull_ledger_inventory_with_policy` resource loop state into neutral same-file `PullEnv`/`PullRefs` helpers lowered the no-disabled probe from 7277 to 7275 by clearing two `function_length` findings while keeping path/import/file counts flat. Validation passed `cargo fmt --check`, focused `cargo test federation`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-federation-pull-0`.
