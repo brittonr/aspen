@@ -194,6 +194,109 @@ struct GateCheck {
     status: &'static str,
 }
 
+const PASS_CHECKS: &[GateCheck] = &[
+    GateCheck {
+        name: "artifacts-dir-present",
+        status: "pass",
+    },
+    GateCheck {
+        name: "profile-supported",
+        status: "pass",
+    },
+    GateCheck {
+        name: "command-artifact-present",
+        status: "pass",
+    },
+    GateCheck {
+        name: "status-artifact-present",
+        status: "pass",
+    },
+    GateCheck {
+        name: "summary-artifact-present",
+        status: "pass",
+    },
+    GateCheck {
+        name: "object-corpus-artifact-present",
+        status: "pass",
+    },
+    GateCheck {
+        name: "status-json-parse",
+        status: "pass",
+    },
+    GateCheck {
+        name: "status-metadata-complete",
+        status: "pass",
+    },
+    GateCheck {
+        name: "status-tool-version-supported",
+        status: "pass",
+    },
+    GateCheck {
+        name: "status-exit-consistent",
+        status: "pass",
+    },
+    GateCheck {
+        name: "summary-lints-parse",
+        status: "pass",
+    },
+    GateCheck {
+        name: "object-corpus-json-parse",
+        status: "pass",
+    },
+    GateCheck {
+        name: "object-corpus-schema",
+        status: "pass",
+    },
+    GateCheck {
+        name: "object-corpus-nonempty",
+        status: "pass",
+    },
+    GateCheck {
+        name: "object-corpus-fingerprint",
+        status: "pass",
+    },
+    GateCheck {
+        name: "object-corpus-critical-paths",
+        status: "pass",
+    },
+    GateCheck {
+        name: "command-shape",
+        status: "pass",
+    },
+    GateCheck {
+        name: "status-config-current",
+        status: "pass",
+    },
+    GateCheck {
+        name: "status-profile-current",
+        status: "pass",
+    },
+    GateCheck {
+        name: "strict-status-clean",
+        status: "pass",
+    },
+    GateCheck {
+        name: "no-critical-findings",
+        status: "pass",
+    },
+    GateCheck {
+        name: "artifact-ref-binding",
+        status: "pass",
+    },
+    GateCheck {
+        name: "structured-findings-bound",
+        status: "pass",
+    },
+    GateCheck {
+        name: "structured-findings-keyed",
+        status: "pass",
+    },
+    GateCheck {
+        name: "fingerprint-evidence-bound",
+        status: "pass",
+    },
+];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct GateFile {
     artifact_ref: String,
@@ -444,108 +547,6 @@ pub fn synthetic_clean_octet_gate_receipt_for_tests() -> Result<IOValue> {
         profile: STRICT_PROFILE.to_string(),
     });
     let counts = FindingCounts::default();
-    let checks = vec![
-        GateCheck {
-            name: "artifacts-dir-present",
-            status: "pass",
-        },
-        GateCheck {
-            name: "profile-supported",
-            status: "pass",
-        },
-        GateCheck {
-            name: "command-artifact-present",
-            status: "pass",
-        },
-        GateCheck {
-            name: "status-artifact-present",
-            status: "pass",
-        },
-        GateCheck {
-            name: "summary-artifact-present",
-            status: "pass",
-        },
-        GateCheck {
-            name: "object-corpus-artifact-present",
-            status: "pass",
-        },
-        GateCheck {
-            name: "status-json-parse",
-            status: "pass",
-        },
-        GateCheck {
-            name: "status-metadata-complete",
-            status: "pass",
-        },
-        GateCheck {
-            name: "status-tool-version-supported",
-            status: "pass",
-        },
-        GateCheck {
-            name: "status-exit-consistent",
-            status: "pass",
-        },
-        GateCheck {
-            name: "summary-lints-parse",
-            status: "pass",
-        },
-        GateCheck {
-            name: "object-corpus-json-parse",
-            status: "pass",
-        },
-        GateCheck {
-            name: "object-corpus-schema",
-            status: "pass",
-        },
-        GateCheck {
-            name: "object-corpus-nonempty",
-            status: "pass",
-        },
-        GateCheck {
-            name: "object-corpus-fingerprint",
-            status: "pass",
-        },
-        GateCheck {
-            name: "object-corpus-critical-paths",
-            status: "pass",
-        },
-        GateCheck {
-            name: "command-shape",
-            status: "pass",
-        },
-        GateCheck {
-            name: "status-config-current",
-            status: "pass",
-        },
-        GateCheck {
-            name: "status-profile-current",
-            status: "pass",
-        },
-        GateCheck {
-            name: "strict-status-clean",
-            status: "pass",
-        },
-        GateCheck {
-            name: "no-critical-findings",
-            status: "pass",
-        },
-        GateCheck {
-            name: "artifact-ref-binding",
-            status: "pass",
-        },
-        GateCheck {
-            name: "structured-findings-bound",
-            status: "pass",
-        },
-        GateCheck {
-            name: "structured-findings-keyed",
-            status: "pass",
-        },
-        GateCheck {
-            name: "fingerprint-evidence-bound",
-            status: "pass",
-        },
-    ];
     Ok(octet_gate_receipt_value(OctetGateReceiptInput {
         decision: "pass",
         policy_ref: &canonical_hash(&policy)?,
@@ -560,7 +561,7 @@ pub fn synthetic_clean_octet_gate_receipt_for_tests() -> Result<IOValue> {
         toolchain: Some("nightly-test-toolchain"),
         counts: &counts,
         diagnostics: &[],
-        checks: &checks,
+        checks: PASS_CHECKS,
     }))
 }
 
