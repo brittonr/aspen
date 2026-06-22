@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-22 | self | I called Steel `spawn-process` as `(spawn-process "git" (list ...))`, then as `(spawn-process (list ...))`; this harness expects a `CommandBuilder`, not raw argv. | Use `(spawn-process (command "prog" (list ...)))`, unwrap child with `Ok->value`, and unwrap/inspect `(wait child)` as an `Ok` result. |
 | 2026-06-22 | self | I misread the `src/upgrades/mod.rs:698` function-length entry as `rollback_task`; extracting rollback decision logic passed focused tests but left the no-disabled probe flat at 7246 because the actual finding was `protocol_drain_task_outcome`. | Map Octet line numbers to the post-fmt source before editing; do not assume a nearby preceding public function is the flagged function. |
 | 2026-06-22 | self | Splitting only source-gate diagnostics out of `src/node/runtime.rs::start_node_runtime` left the no-disabled probe flat at 7248 because the top-level function was still over Octet's length threshold. | For borderline runtime startup functions, extract validation, diagnostic scanning, and receipt assembly together in one same-file refactor before probing; keep the split only once `function_length` actually drops. |
 | 2026-06-22 | self | Extracting only the conflict tail of `remote_dataspace::idempotent_remote_delivery_suppresses_duplicate_and_denies_conflict_before_commit` into `assert_conflict_case` passed focused tests/clippy but left the no-disabled probe flat at 7249. | Revert flat test-helper splits; for function-length burn-down, extract enough of the long function to cross Octet's threshold and keep the split only after the probe count decreases. |
@@ -207,6 +208,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-22 Octet runtime vat fixture split: extracting `src/runtime/vat/mod.rs::run_vat_fixture` setup and receipt construction into neutral same-file `FixtureObjects`/`near_far_calls`/`actormap_calls` helpers lowered the no-disabled probe from 7236 to 7234 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test vat_fixture`, and probe `target/octet-burndown/probe-vat-fixture-0`.
 
 - 2026-06-22 Octet typed-storage put split: extracting `src/typed/storage.rs::put_value` schema, payload, entry, receipt, and persistence pieces into neutral same-file helpers (`accepted_schema`, `payload_parts`, `entry_value`, `pass_receipt`, `persist_entry`) lowered the no-disabled probe from 7238 to 7236 after the first narrower payload-only split stayed flat. Validation passed `cargo fmt`, focused `cargo test typed_storage`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-typed-storage-put-v2-0`.
 

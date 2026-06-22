@@ -236,7 +236,29 @@ impl VatReplayDivergenceKind {
     }
 }
 
-pub fn run_vat_fixture() -> Result<VatFixtureRun> {
+struct FixtureObjects {
+    root: VatObjectRef,
+    helper: VatObjectRef,
+    spawned: VatObjectRef,
+    far: VatObjectRef,
+    proxy: VatObjectRef,
+    root_ref: String,
+    helper_ref: String,
+    spawned_ref: String,
+    far_ref: String,
+    proxy_ref: String,
+}
+
+impl FixtureObjects {
+    fn object_values(&self) -> Vec<IOValue> {
+        [&self.root, &self.helper, &self.spawned, &self.far, &self.proxy]
+            .iter()
+            .map(|object| object.value())
+            .collect()
+    }
+}
+
+fn fixture_objects() -> Result<FixtureObjects> {
     let root = VatObjectRef::new(LOCAL_VAT_ID, ROOT_OBJECT_ID, VatReferenceKind::Near, Vec::new());
     let helper = VatObjectRef::new(LOCAL_VAT_ID, HELPER_OBJECT_ID, VatReferenceKind::Near, vec![root.object_ref()?]);
     let spawned =
@@ -244,14 +266,23 @@ pub fn run_vat_fixture() -> Result<VatFixtureRun> {
     let far = VatObjectRef::new(REMOTE_VAT_ID, FAR_OBJECT_ID, VatReferenceKind::Far, Vec::new());
     let proxy = VatObjectRef::new(LOCAL_VAT_ID, PROXY_OBJECT_ID, VatReferenceKind::Proxy, vec![helper.object_ref()?]);
 
-    let root_ref = root.object_ref()?;
-    let helper_ref = helper.object_ref()?;
-    let spawned_ref = spawned.object_ref()?;
-    let far_ref = far.object_ref()?;
-    let proxy_ref = proxy.object_ref()?;
+    Ok(FixtureObjects {
+        root_ref: root.object_ref()?,
+        helper_ref: helper.object_ref()?,
+        spawned_ref: spawned.object_ref()?,
+        far_ref: far.object_ref()?,
+        proxy_ref: proxy.object_ref()?,
+        root,
+        helper,
+        spawned,
+        far,
+        proxy,
+    })
+}
 
+fn near_far_calls(objects: &FixtureObjects) -> Result<Vec<VatCallEvidence>> {
     let near_call = evaluate_near_far_refs(&RuntimeNearFarRefState {
-        reference_ref: helper_ref.clone(),
+        reference_ref: objects.helper_ref.clone(),
         reference_kind: RuntimeReferenceKind::Near,
         is_live: true,
         caller_vat_id: LOCAL_VAT_ID.to_string(),
@@ -259,7 +290,7 @@ pub fn run_vat_fixture() -> Result<VatFixtureRun> {
         call_mode: RuntimeReferenceCallMode::Synchronous,
     })?;
     let far_sync_denial = evaluate_near_far_refs(&RuntimeNearFarRefState {
-        reference_ref: far_ref.clone(),
+        reference_ref: objects.far_ref.clone(),
         reference_kind: RuntimeReferenceKind::Far,
         is_live: true,
         caller_vat_id: LOCAL_VAT_ID.to_string(),
@@ -267,7 +298,7 @@ pub fn run_vat_fixture() -> Result<VatFixtureRun> {
         call_mode: RuntimeReferenceCallMode::Synchronous,
     })?;
     let far_async = evaluate_near_far_refs(&RuntimeNearFarRefState {
-        reference_ref: far_ref.clone(),
+        reference_ref: objects.far_ref.clone(),
         reference_kind: RuntimeReferenceKind::Far,
         is_live: true,
         caller_vat_id: LOCAL_VAT_ID.to_string(),
@@ -275,91 +306,110 @@ pub fn run_vat_fixture() -> Result<VatFixtureRun> {
         call_mode: RuntimeReferenceCallMode::Asynchronous,
     })?;
 
+    Ok(vec![
+        VatCallEvidence {
+            name: "near-sync-call".to_string(),
+            receipt: near_call.receipt,
+        },
+        VatCallEvidence {
+            name: "far-sync-denied".to_string(),
+            receipt: far_sync_denial.receipt,
+        },
+        VatCallEvidence {
+            name: "far-async-call".to_string(),
+            receipt: far_async.receipt,
+        },
+    ])
+}
+
+fn actormap_calls(objects: &FixtureObjects) -> Result<Vec<VatCallEvidence>> {
     let committed = evaluate_actormap_transaction(&RuntimeActormapTransactionState {
         outcome: RuntimeActormapTransactionOutcome::Committed,
-        before_object_refs: sorted_refs(vec![root_ref.clone(), helper_ref.clone()]),
-        after_object_refs: sorted_refs(vec![root_ref.clone(), helper_ref.clone(), spawned_ref.clone()]),
-        spawned_object_refs: vec![spawned_ref.clone()],
+        before_object_refs: sorted_refs(vec![objects.root_ref.clone(), objects.helper_ref.clone()]),
+        after_object_refs: sorted_refs(vec![
+            objects.root_ref.clone(),
+            objects.helper_ref.clone(),
+            objects.spawned_ref.clone(),
+        ]),
+        spawned_object_refs: vec![objects.spawned_ref.clone()],
         removed_object_refs: Vec::new(),
-        visible_object_refs: sorted_refs(vec![root_ref.clone(), helper_ref.clone(), spawned_ref.clone()]),
-        used_object_refs: vec![helper_ref.clone()],
+        visible_object_refs: sorted_refs(vec![
+            objects.root_ref.clone(),
+            objects.helper_ref.clone(),
+            objects.spawned_ref.clone(),
+        ]),
+        used_object_refs: vec![objects.helper_ref.clone()],
     })?;
     let rollback = evaluate_actormap_transaction(&RuntimeActormapTransactionState {
         outcome: RuntimeActormapTransactionOutcome::RolledBack,
-        before_object_refs: sorted_refs(vec![root_ref.clone(), helper_ref.clone()]),
-        after_object_refs: sorted_refs(vec![root_ref.clone(), helper_ref.clone()]),
-        spawned_object_refs: vec![spawned_ref.clone()],
+        before_object_refs: sorted_refs(vec![objects.root_ref.clone(), objects.helper_ref.clone()]),
+        after_object_refs: sorted_refs(vec![objects.root_ref.clone(), objects.helper_ref.clone()]),
+        spawned_object_refs: vec![objects.spawned_ref.clone()],
         removed_object_refs: Vec::new(),
-        visible_object_refs: sorted_refs(vec![root_ref.clone(), helper_ref.clone()]),
-        used_object_refs: vec![helper_ref.clone()],
+        visible_object_refs: sorted_refs(vec![objects.root_ref.clone(), objects.helper_ref.clone()]),
+        used_object_refs: vec![objects.helper_ref.clone()],
     })?;
 
+    Ok(vec![
+        VatCallEvidence {
+            name: "actormap-commit".to_string(),
+            receipt: committed.receipt,
+        },
+        VatCallEvidence {
+            name: "actormap-rollback".to_string(),
+            receipt: rollback.receipt,
+        },
+    ])
+}
+
+fn pipeline_call(far_ref: &str) -> Result<VatCallEvidence> {
     let pipeline = evaluate_promise_pipeline(&RuntimePromisePipelineState::new(
         RuntimePromiseState::pending("promise:far-call"),
         PIPELINE_MAX_QUEUE,
         vec![
-            RuntimePromisePipelineEntry::new(1, far_ref.clone(), "get"),
-            RuntimePromisePipelineEntry::new(2, far_ref.clone(), "subscribe"),
+            RuntimePromisePipelineEntry::new(1, far_ref.to_string(), "get"),
+            RuntimePromisePipelineEntry::new(2, far_ref.to_string(), "subscribe"),
         ],
     ))?;
+    Ok(VatCallEvidence {
+        name: "promise-pipeline".to_string(),
+        receipt: pipeline.receipt,
+    })
+}
+
+fn revocation_call(proxy_ref: &str) -> Result<VatCallEvidence> {
     let revoked = evaluate_revocation_cleanup(&RuntimeRevocationCleanupState {
-        revoked_refs: vec![proxy_ref.clone()],
-        attempted_use_refs: vec![proxy_ref.clone()],
+        revoked_refs: vec![proxy_ref.to_string()],
+        attempted_use_refs: vec![proxy_ref.to_string()],
         remaining_assertion_refs: Vec::new(),
         remaining_subscription_refs: Vec::new(),
         remaining_pending_call_refs: Vec::new(),
         remaining_child_refs: Vec::new(),
     })?;
+    Ok(VatCallEvidence {
+        name: "revocation-cleanup".to_string(),
+        receipt: revoked.receipt,
+    })
+}
 
-    let receipts = vec![
-        near_call.receipt.clone(),
-        far_sync_denial.receipt.clone(),
-        far_async.receipt.clone(),
-        committed.receipt.clone(),
-        rollback.receipt.clone(),
-        pipeline.receipt.clone(),
-        revoked.receipt.clone(),
-    ];
+fn fixture_calls(objects: &FixtureObjects) -> Result<Vec<VatCallEvidence>> {
+    let mut calls = near_far_calls(objects)?;
+    calls.extend(actormap_calls(objects)?);
+    calls.push(pipeline_call(&objects.far_ref)?);
+    calls.push(revocation_call(&objects.proxy_ref)?);
+    Ok(calls)
+}
+
+pub fn run_vat_fixture() -> Result<VatFixtureRun> {
+    let objects = fixture_objects()?;
+    let calls = fixture_calls(&objects)?;
+    let receipts = calls.iter().map(|call| call.receipt.clone()).collect::<Vec<_>>();
     let diagnostics = fixture_diagnostics(&receipts);
     let value = record("vat-fixture-run-v1", vec![
         string(RUNTIME_VAT_FIXTURE_RUN_SCHEMA),
         string(LOCAL_VAT_ID),
-        sequence([root, helper, spawned, far, proxy].iter().map(VatObjectRef::value).collect()),
-        sequence(
-            [
-                VatCallEvidence {
-                    name: "near-sync-call".to_string(),
-                    receipt: near_call.receipt,
-                },
-                VatCallEvidence {
-                    name: "far-sync-denied".to_string(),
-                    receipt: far_sync_denial.receipt,
-                },
-                VatCallEvidence {
-                    name: "far-async-call".to_string(),
-                    receipt: far_async.receipt,
-                },
-                VatCallEvidence {
-                    name: "actormap-commit".to_string(),
-                    receipt: committed.receipt,
-                },
-                VatCallEvidence {
-                    name: "actormap-rollback".to_string(),
-                    receipt: rollback.receipt,
-                },
-                VatCallEvidence {
-                    name: "promise-pipeline".to_string(),
-                    receipt: pipeline.receipt,
-                },
-                VatCallEvidence {
-                    name: "revocation-cleanup".to_string(),
-                    receipt: revoked.receipt,
-                },
-            ]
-            .iter()
-            .map(VatCallEvidence::value)
-            .collect(),
-        ),
+        sequence(objects.object_values()),
+        sequence(calls.iter().map(VatCallEvidence::value).collect()),
         sequence(receipts.iter().map(|receipt| receipt.value.clone()).collect()),
         sequence(diagnostics.iter().map(string).collect()),
     ]);
