@@ -461,89 +461,7 @@ pub fn execute_task(root: &Path, ledger_root: &Path, plan_ref: &str, task_id: &s
         .ok_or_else(|| MoltenError::invalid_harness(format!("upgrade plan missing task {task_id}")))?;
     ensure_prior_tasks_complete(root, &plan, task_index)?;
     let task = plan.tasks[task_index].clone();
-    let (decision, diagnostics, checks) = match task.kind.as_str() {
-        "compatibility-alias" => {
-            let to_ref = task
-                .to_ref
-                .as_deref()
-                .ok_or_else(|| MoltenError::invalid_harness("compatibility alias missing target ref"))?;
-            let previous = task.from_ref.as_deref();
-            let pending_receipt_ref = local_ref("upgrade-pending-receipt", &plan.plan_ref, &task.task_id)?;
-            let pointer = name_pointer_value(&task.subject, "alias", to_ref, previous, &pending_receipt_ref)?;
-            write_preserves(&name_pointer_path(root, &task.subject)?, &pointer)?;
-            ("pass", Vec::new(), vec![("compatibility-alias", "pass"), ("old-and-new-coexist", "pass")])
-        }
-        "transcript-rerun" => {
-            if task.precondition_refs.is_empty() && plan.evidence_refs.is_empty() {
-                ("deny", vec!["transcript rerun task has no transcript or receipt evidence refs".to_string()], vec![
-                    ("transcript-evidence", "fail"),
-                ])
-            } else {
-                ("pass", Vec::new(), vec![("transcript-evidence", "pass"), ("handler-profile-bound", "pass")])
-            }
-        }
-        "move-name" => {
-            let from_ref =
-                task.from_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing from ref"))?;
-            let to_ref =
-                task.to_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing to ref"))?;
-            let current = read_name_pointer(root, &task.subject)?;
-            if let Some(current) = current.as_ref()
-                && current.artifact_ref != from_ref
-            {
-                (
-                    "deny",
-                    vec![format!(
-                        "name {} currently points to {}, expected {}",
-                        task.subject, current.artifact_ref, from_ref
-                    )],
-                    vec![("current-pointer", "fail")],
-                )
-            } else {
-                let pending_receipt_ref = local_ref("upgrade-pending-receipt", &plan.plan_ref, &task.task_id)?;
-                let pointer = name_pointer_value(&task.subject, "name", to_ref, Some(from_ref), &pending_receipt_ref)?;
-                write_preserves(&name_pointer_path(root, &task.subject)?, &pointer)?;
-                ("pass", Vec::new(), vec![
-                    ("metadata-pointer-move", "pass"),
-                    ("artifact-content-immutable", "pass"),
-                ])
-            }
-        }
-        "cutover" => {
-            ("pass", Vec::new(), vec![("metadata-cutover", "pass"), ("transcript-gate-before-cutover", "pass")])
-        }
-        "migrate-storage" => ("pass", Vec::new(), vec![
-            ("typed-storage-migration-recipe-bound", "pass"),
-            ("migration-receipt-required", "pass"),
-        ]),
-        "cleanup" => {
-            let cleanup_ref = task.to_ref.as_deref().or(task.from_ref.as_deref()).unwrap_or(&task.subject);
-            let cleanup = cleanup_admission(root, ledger_root, cleanup_ref)?;
-            if cleanup.decision == "pass" {
-                ("pass", Vec::new(), vec![("cleanup-safety", "pass")])
-            } else {
-                ("deny", vec![format!("cleanup denied by receipt {}", cleanup.receipt_ref)], vec![(
-                    "cleanup-safety",
-                    "fail",
-                )])
-            }
-        }
-        "drain-sessions" => protocol_drain_task_outcome(ledger_root, &plan, &task)?,
-        "install-artifact"
-        | "deprecate"
-        | "install-protocol-bridge"
-        | "update-handler-policy"
-        | "update-docs"
-        | "rollback-pointer" => {
-            ("pass", Vec::new(), vec![("task-admission", "pass"), ("side-effect-boundary", "pass")])
-        }
-        other => {
-            return Err(MoltenError::invalid_harness(format!(
-                "unsupported upgrade task kind {other}; expected one of {:?}",
-                SUPPORTED_TASK_KINDS
-            )));
-        }
-    };
+    let (decision, diagnostics, checks) = task_result(root, ledger_root, &plan, &task)?;
     let refs = task_refs(&task);
     let receipt_value = upgrade_receipt_value(&UpgradeReceiptValueInput {
         operation: if task.kind == "cutover" {
@@ -570,6 +488,97 @@ pub fn execute_task(root: &Path, ledger_root: &Path, plan_ref: &str, task_id: &s
         task_kind: task.kind,
         receipt,
     })
+}
+
+fn task_result(root: &Path, ledger_root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+    match task.kind.as_str() {
+        "compatibility-alias" => alias_result(root, plan, task),
+        "transcript-rerun" => Ok(transcript_result(plan, task)),
+        "move-name" => move_result(root, plan, task),
+        "cutover" => {
+            Ok(("pass", Vec::new(), vec![("metadata-cutover", "pass"), ("transcript-gate-before-cutover", "pass")]))
+        }
+        "migrate-storage" => Ok(("pass", Vec::new(), vec![
+            ("typed-storage-migration-recipe-bound", "pass"),
+            ("migration-receipt-required", "pass"),
+        ])),
+        "cleanup" => cleanup_result(root, ledger_root, task),
+        "drain-sessions" => protocol_drain_task_outcome(ledger_root, plan, task),
+        "install-artifact"
+        | "deprecate"
+        | "install-protocol-bridge"
+        | "update-handler-policy"
+        | "update-docs"
+        | "rollback-pointer" => {
+            Ok(("pass", Vec::new(), vec![("task-admission", "pass"), ("side-effect-boundary", "pass")]))
+        }
+        other => Err(MoltenError::invalid_harness(format!(
+            "unsupported upgrade task kind {other}; expected one of {:?}",
+            SUPPORTED_TASK_KINDS
+        ))),
+    }
+}
+
+fn alias_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+    let to_ref = task
+        .to_ref
+        .as_deref()
+        .ok_or_else(|| MoltenError::invalid_harness("compatibility alias missing target ref"))?;
+    let previous = task.from_ref.as_deref();
+    let pending_receipt_ref = local_ref("upgrade-pending-receipt", &plan.plan_ref, &task.task_id)?;
+    let pointer = name_pointer_value(&task.subject, "alias", to_ref, previous, &pending_receipt_ref)?;
+    write_preserves(&name_pointer_path(root, &task.subject)?, &pointer)?;
+    Ok(("pass", Vec::new(), vec![("compatibility-alias", "pass"), ("old-and-new-coexist", "pass")]))
+}
+
+fn transcript_result(plan: &UpgradePlan, task: &UpgradeTask) -> UpgradeTaskOutcome {
+    if task.precondition_refs.is_empty() && plan.evidence_refs.is_empty() {
+        ("deny", vec!["transcript rerun task has no transcript or receipt evidence refs".to_string()], vec![
+            ("transcript-evidence", "fail"),
+        ])
+    } else {
+        ("pass", Vec::new(), vec![("transcript-evidence", "pass"), ("handler-profile-bound", "pass")])
+    }
+}
+
+fn move_result(root: &Path, plan: &UpgradePlan, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+    let from_ref =
+        task.from_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing from ref"))?;
+    let to_ref = task.to_ref.as_deref().ok_or_else(|| MoltenError::invalid_harness("move-name missing to ref"))?;
+    let current = read_name_pointer(root, &task.subject)?;
+    if let Some(current) = current.as_ref()
+        && current.artifact_ref != from_ref
+    {
+        return Ok((
+            "deny",
+            vec![format!(
+                "name {} currently points to {}, expected {}",
+                task.subject, current.artifact_ref, from_ref
+            )],
+            vec![("current-pointer", "fail")],
+        ));
+    }
+
+    let pending_receipt_ref = local_ref("upgrade-pending-receipt", &plan.plan_ref, &task.task_id)?;
+    let pointer = name_pointer_value(&task.subject, "name", to_ref, Some(from_ref), &pending_receipt_ref)?;
+    write_preserves(&name_pointer_path(root, &task.subject)?, &pointer)?;
+    Ok(("pass", Vec::new(), vec![
+        ("metadata-pointer-move", "pass"),
+        ("artifact-content-immutable", "pass"),
+    ]))
+}
+
+fn cleanup_result(root: &Path, ledger_root: &Path, task: &UpgradeTask) -> Result<UpgradeTaskOutcome> {
+    let cleanup_ref = task.to_ref.as_deref().or(task.from_ref.as_deref()).unwrap_or(&task.subject);
+    let cleanup = cleanup_admission(root, ledger_root, cleanup_ref)?;
+    if cleanup.decision == "pass" {
+        Ok(("pass", Vec::new(), vec![("cleanup-safety", "pass")]))
+    } else {
+        Ok(("deny", vec![format!("cleanup denied by receipt {}", cleanup.receipt_ref)], vec![(
+            "cleanup-safety",
+            "fail",
+        )]))
+    }
 }
 
 pub fn rollback_task(root: &Path, plan_ref: &str, task_id: &str) -> Result<UpgradeReceipt> {
