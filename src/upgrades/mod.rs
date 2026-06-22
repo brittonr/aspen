@@ -268,48 +268,7 @@ pub fn name_move_plan_value_with_registry(
     } else {
         compute_impact_set(ledger_root, std::slice::from_ref(&input.from_ref))?
     };
-    let tasks = vec![
-        UpgradeTaskInput {
-            task_id: "compatibility-alias".to_string(),
-            kind: "compatibility-alias".to_string(),
-            subject: format!("{}@candidate", input.name),
-            from_ref: Some(input.from_ref.clone()),
-            to_ref: Some(input.to_ref.clone()),
-            precondition_refs: input.evidence_refs.clone(),
-            postcondition_refs: Vec::new(),
-            reversible: true,
-        },
-        UpgradeTaskInput {
-            task_id: "transcript-gate".to_string(),
-            kind: "transcript-rerun".to_string(),
-            subject: input.name.clone(),
-            from_ref: Some(input.from_ref.clone()),
-            to_ref: Some(input.to_ref.clone()),
-            precondition_refs: input.evidence_refs.clone(),
-            postcondition_refs: input.evidence_refs.clone(),
-            reversible: true,
-        },
-        UpgradeTaskInput {
-            task_id: "move-name".to_string(),
-            kind: "move-name".to_string(),
-            subject: input.name.clone(),
-            from_ref: Some(input.from_ref.clone()),
-            to_ref: Some(input.to_ref.clone()),
-            precondition_refs: input.evidence_refs.clone(),
-            postcondition_refs: Vec::new(),
-            reversible: true,
-        },
-        UpgradeTaskInput {
-            task_id: "cutover".to_string(),
-            kind: "cutover".to_string(),
-            subject: input.name.clone(),
-            from_ref: Some(input.from_ref.clone()),
-            to_ref: Some(input.to_ref.clone()),
-            precondition_refs: input.evidence_refs.clone(),
-            postcondition_refs: Vec::new(),
-            reversible: true,
-        },
-    ];
+    let tasks = planned_tasks(input);
     upgrade_plan_value(&UpgradePlanInput {
         session_id: input.session_id.clone(),
         reason: "name-move".to_string(),
@@ -330,6 +289,40 @@ pub fn name_move_plan_value_with_registry(
         evidence_refs: input.evidence_refs.clone(),
         source_gate_receipt_values: input.source_gate_receipt_values.clone(),
     })
+}
+
+fn planned_tasks(input: &NameMovePlanInput) -> Vec<UpgradeTaskInput> {
+    vec![
+        planned_task(
+            input,
+            "compatibility-alias",
+            "compatibility-alias",
+            format!("{}@candidate", input.name),
+            Vec::new(),
+        ),
+        planned_task(input, "transcript-gate", "transcript-rerun", input.name.clone(), input.evidence_refs.clone()),
+        planned_task(input, "move-name", "move-name", input.name.clone(), Vec::new()),
+        planned_task(input, "cutover", "cutover", input.name.clone(), Vec::new()),
+    ]
+}
+
+fn planned_task(
+    input: &NameMovePlanInput,
+    task_id: &str,
+    kind: &str,
+    subject: String,
+    postcondition_refs: Vec<String>,
+) -> UpgradeTaskInput {
+    UpgradeTaskInput {
+        task_id: task_id.to_string(),
+        kind: kind.to_string(),
+        subject,
+        from_ref: Some(input.from_ref.clone()),
+        to_ref: Some(input.to_ref.clone()),
+        precondition_refs: input.evidence_refs.clone(),
+        postcondition_refs,
+        reversible: true,
+    }
 }
 
 pub fn parse_upgrade_plan(value: &IOValue) -> Result<UpgradePlan> {
