@@ -72,6 +72,17 @@ struct SignedReceiptEnvelope {
     trust_root: String,
 }
 
+struct SubjectParts {
+    subject_ref: String,
+    receipt_value: IOValue,
+}
+
+struct SignerParts {
+    signer: String,
+    purpose: String,
+    trust_root: String,
+}
+
 pub struct SignReceiptInput<'a> {
     pub receipt: &'a IOValue,
     pub signer: &'a str,
@@ -288,50 +299,35 @@ pub fn verify_signed_receipt_with_policy(
             "unsupported signed receipt schema {schema}; expected {EVIDENCE_SIGNED_RECEIPT_SCHEMA}"
         )));
     }
-    let subject = value_to_iovalue(&signed[1]);
-    let subject_record = subject
-        .collect_simple_record("subject", Some(2))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing subject record"))?;
-    let subject_ref = required_string(&subject_record[0], "signed receipt subject ref")?;
-    let receipt_value = value_to_iovalue(&subject_record[1]);
-    let actual_ref = canonical_hash(&receipt_value)?;
-    if actual_ref != subject_ref {
-        return Err(MoltenError::invalid_harness(format!(
-            "signed receipt subject ref mismatch: got {subject_ref}, expected {actual_ref}"
-        )));
-    }
+    let subject = subject_parts(&signed[1])?;
     if let Some(expected_subject_ref) = policy.expected_subject_ref
-        && subject_ref != expected_subject_ref
+        && subject.subject_ref != expected_subject_ref
     {
         return Err(MoltenError::invalid_harness(format!(
-            "signed receipt subject ref {subject_ref} does not match required subject ref {expected_subject_ref}"
+            "signed receipt subject ref {} does not match required subject ref {expected_subject_ref}",
+            subject.subject_ref
         )));
     }
 
-    let signer_record_value = value_to_iovalue(&signed[2]);
-    let signer_record = signer_record_value
-        .collect_simple_record("signer", Some(3))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing signer record"))?;
-    let signer = required_string(&signer_record[0], "signed receipt signer")?;
-    let purpose = required_string(&signer_record[1], "signed receipt purpose")?;
-    let actual_trust_root = required_string(&signer_record[2], "signed receipt trust root")?;
+    let signer = signer_parts(&signed[2])?;
     if let Some(expected_signer) = policy.expected_signer
-        && signer != expected_signer
+        && signer.signer != expected_signer
     {
         return Err(MoltenError::invalid_harness(format!(
-            "signed receipt signer {signer} does not match required signer {expected_signer}"
+            "signed receipt signer {} does not match required signer {expected_signer}",
+            signer.signer
         )));
     }
-    if purpose != policy.required_purpose {
+    if signer.purpose != policy.required_purpose {
         return Err(MoltenError::invalid_harness(format!(
-            "signed receipt purpose {purpose} does not satisfy required purpose {}",
-            policy.required_purpose
+            "signed receipt purpose {} does not satisfy required purpose {}",
+            signer.purpose, policy.required_purpose
         )));
     }
-    if actual_trust_root != policy.trust_root {
+    if signer.trust_root != policy.trust_root {
         return Err(MoltenError::invalid_harness(format!(
-            "signed receipt trust root {actual_trust_root} does not match required trust root {}",
-            policy.trust_root
+            "signed receipt trust root {} does not match required trust root {}",
+            signer.trust_root, policy.trust_root
         )));
     }
 
@@ -342,29 +338,12 @@ pub fn verify_signed_receipt_with_policy(
         )));
     }
     let signature = required_record_string(&signed[4], "signature", "signed receipt signature")?;
-    let expected_signature = signature_for(&receipt_value, &signer, &purpose, &actual_trust_root, policy.key)?;
+    let expected_signature =
+        signature_for(&subject.receipt_value, &signer.signer, &signer.purpose, &signer.trust_root, policy.key)?;
     if signature != expected_signature {
         return Err(MoltenError::invalid_harness("signed receipt signature verification failed"));
     }
-    let parents_value = value_to_iovalue(&signed[5]);
-    let parents_record = parents_value
-        .collect_simple_record("parents", Some(1))
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing parents record"))?;
-    let parent_values = parents_record[0]
-        .collect_sequence()
-        .ok_or_else(|| MoltenError::invalid_harness("signed receipt parents must be a sequence"))?;
-    if parent_values.len() > MAX_SIGNED_RECEIPT_PARENTS {
-        return Err(MoltenError::invalid_harness("signed receipt parent ref count exceeds bound"));
-    }
-    let mut parents = Vec::with_capacity(parent_values.len());
-    for parent in parent_values.iter() {
-        push_bounded(
-            &mut parents,
-            required_string(parent, "signed receipt parent ref")?,
-            MAX_SIGNED_RECEIPT_PARENTS,
-            "signed receipt parent refs",
-        )?;
-    }
+    let parents = parent_refs(&signed[5])?;
     let checks = parse_signed_checks(&signed[6])?;
     require_signed_check(&checks, "subject-ref-binding")?;
     require_signed_check(&checks, "signature-covers-canonical-receipt")?;
@@ -372,10 +351,10 @@ pub fn verify_signed_receipt_with_policy(
     require_signed_check(&checks, "signed-receipt-is-evidence-only")?;
     Ok(SignedReceipt {
         envelope_ref: canonical_hash(value)?,
-        subject_ref,
-        signer,
-        purpose,
-        trust_root: actual_trust_root,
+        subject_ref: subject.subject_ref,
+        signer: signer.signer,
+        purpose: signer.purpose,
+        trust_root: signer.trust_root,
         algorithm,
         parents,
     })
@@ -516,17 +495,8 @@ pub fn signed_receipt_summary(value: &IOValue) -> Result<String> {
     ))
 }
 
-fn signed_receipt_envelope(value: &IOValue) -> Result<SignedReceiptEnvelope> {
-    let signed = value
-        .collect_simple_record("signed-receipt-v1", Some(7))
-        .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-v1 ...>"))?;
-    let schema = required_string(&signed[0], "signed receipt schema")?;
-    if schema != EVIDENCE_SIGNED_RECEIPT_SCHEMA {
-        return Err(MoltenError::invalid_harness(format!(
-            "unsupported signed receipt schema {schema}; expected {EVIDENCE_SIGNED_RECEIPT_SCHEMA}"
-        )));
-    }
-    let subject = value_to_iovalue(&signed[1]);
+fn subject_parts(value: &preserves::Value<IOValue>) -> Result<SubjectParts> {
+    let subject = value_to_iovalue(value);
     let subject_record = subject
         .collect_simple_record("subject", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing subject record"))?;
@@ -538,15 +508,64 @@ fn signed_receipt_envelope(value: &IOValue) -> Result<SignedReceiptEnvelope> {
             "signed receipt subject ref mismatch: got {subject_ref}, expected {actual_ref}"
         )));
     }
-    let signer_record_value = value_to_iovalue(&signed[2]);
+    Ok(SubjectParts {
+        subject_ref,
+        receipt_value,
+    })
+}
+
+fn signer_parts(value: &preserves::Value<IOValue>) -> Result<SignerParts> {
+    let signer_record_value = value_to_iovalue(value);
     let signer_record = signer_record_value
         .collect_simple_record("signer", Some(3))
         .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing signer record"))?;
-    Ok(SignedReceiptEnvelope {
-        subject_ref,
+    Ok(SignerParts {
         signer: required_string(&signer_record[0], "signed receipt signer")?,
         purpose: required_string(&signer_record[1], "signed receipt purpose")?,
         trust_root: required_string(&signer_record[2], "signed receipt trust root")?,
+    })
+}
+
+fn parent_refs(value: &preserves::Value<IOValue>) -> Result<Vec<String>> {
+    let parents_value = value_to_iovalue(value);
+    let parents_record = parents_value
+        .collect_simple_record("parents", Some(1))
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt missing parents record"))?;
+    let parent_values = parents_record[0]
+        .collect_sequence()
+        .ok_or_else(|| MoltenError::invalid_harness("signed receipt parents must be a sequence"))?;
+    if parent_values.len() > MAX_SIGNED_RECEIPT_PARENTS {
+        return Err(MoltenError::invalid_harness("signed receipt parent ref count exceeds bound"));
+    }
+    let mut parents = Vec::with_capacity(parent_values.len());
+    for parent in parent_values.iter() {
+        push_bounded(
+            &mut parents,
+            required_string(parent, "signed receipt parent ref")?,
+            MAX_SIGNED_RECEIPT_PARENTS,
+            "signed receipt parent refs",
+        )?;
+    }
+    Ok(parents)
+}
+
+fn signed_receipt_envelope(value: &IOValue) -> Result<SignedReceiptEnvelope> {
+    let signed = value
+        .collect_simple_record("signed-receipt-v1", Some(7))
+        .ok_or_else(|| MoltenError::invalid_harness("expected <signed-receipt-v1 ...>"))?;
+    let schema = required_string(&signed[0], "signed receipt schema")?;
+    if schema != EVIDENCE_SIGNED_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(format!(
+            "unsupported signed receipt schema {schema}; expected {EVIDENCE_SIGNED_RECEIPT_SCHEMA}"
+        )));
+    }
+    let subject = subject_parts(&signed[1])?;
+    let signer = signer_parts(&signed[2])?;
+    Ok(SignedReceiptEnvelope {
+        subject_ref: subject.subject_ref,
+        signer: signer.signer,
+        purpose: signer.purpose,
+        trust_root: signer.trust_root,
     })
 }
 
