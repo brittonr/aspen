@@ -667,39 +667,13 @@ pub fn verify_ref(root: &Path, storage_ref: &str, expected_schema_ref: Option<&s
     if let Some(expected_schema_ref) = expected_schema_ref
         && typed_ref.schema_ref != expected_schema_ref
     {
-        let receipt_value = denial_receipt_value(DenialReceiptValueInput {
-            operation: "verify",
-            storage_ref: Some(storage_ref),
-            namespace: Some(&typed_ref.namespace),
-            key: Some(&typed_ref.key),
-            schema_ref: Some(expected_schema_ref),
-            value_ref: Some(&typed_ref.value_ref),
-            reason: "verify expected schema ref does not match stored schema ref".to_string(),
-            checks: vec![("schema-compatibility", "fail"), ("denial-receipt", "pass")],
-            details: Vec::new(),
-        });
-        store_receipt(root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(
-            "typed storage verify rejected: expected schema ref does not match stored schema ref",
-        ));
+        return schema_mismatch(root, storage_ref, &typed_ref, expected_schema_ref);
     }
     let value_bytes = read_payload_bytes(root, &typed_ref)?;
     let value = parse_canonical_bytes(&value_bytes)?;
     let actual_value_ref = canonical_hash(&value)?;
     if actual_value_ref != typed_ref.value_ref {
-        let receipt_value = denial_receipt_value(DenialReceiptValueInput {
-            operation: "verify",
-            storage_ref: Some(storage_ref),
-            namespace: Some(&typed_ref.namespace),
-            key: Some(&typed_ref.key),
-            schema_ref: Some(&typed_ref.schema_ref),
-            value_ref: Some(&typed_ref.value_ref),
-            reason: "verify content hash mismatch".to_string(),
-            checks: vec![("content-integrity", "fail"), ("denial-receipt", "pass")],
-            details: Vec::new(),
-        });
-        store_receipt(root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness("typed storage verify content integrity check failed"));
+        return content_mismatch(root, storage_ref, &typed_ref);
     }
     let effect = StorageEffectEvidence {
         manifest_ref: typed_ref.effect_handle_ref.clone(),
@@ -729,6 +703,45 @@ pub fn verify_ref(root: &Path, storage_ref: &str, expected_schema_ref: Option<&s
         typed_ref,
         receipt_value,
     })
+}
+
+fn schema_mismatch(
+    root: &Path,
+    storage_ref: &str,
+    typed_ref: &TypedStorageRef,
+    expected_schema_ref: &str,
+) -> Result<TypedStorageVerify> {
+    let receipt_value = denial_receipt_value(DenialReceiptValueInput {
+        operation: "verify",
+        storage_ref: Some(storage_ref),
+        namespace: Some(&typed_ref.namespace),
+        key: Some(&typed_ref.key),
+        schema_ref: Some(expected_schema_ref),
+        value_ref: Some(&typed_ref.value_ref),
+        reason: "verify expected schema ref does not match stored schema ref".to_string(),
+        checks: vec![("schema-compatibility", "fail"), ("denial-receipt", "pass")],
+        details: Vec::new(),
+    });
+    store_receipt(root, &receipt_value)?;
+    Err(MoltenError::invalid_harness(
+        "typed storage verify rejected: expected schema ref does not match stored schema ref",
+    ))
+}
+
+fn content_mismatch(root: &Path, storage_ref: &str, typed_ref: &TypedStorageRef) -> Result<TypedStorageVerify> {
+    let receipt_value = denial_receipt_value(DenialReceiptValueInput {
+        operation: "verify",
+        storage_ref: Some(storage_ref),
+        namespace: Some(&typed_ref.namespace),
+        key: Some(&typed_ref.key),
+        schema_ref: Some(&typed_ref.schema_ref),
+        value_ref: Some(&typed_ref.value_ref),
+        reason: "verify content hash mismatch".to_string(),
+        checks: vec![("content-integrity", "fail"), ("denial-receipt", "pass")],
+        details: Vec::new(),
+    });
+    store_receipt(root, &receipt_value)?;
+    Err(MoltenError::invalid_harness("typed storage verify content integrity check failed"))
 }
 
 pub fn migrate_value(
