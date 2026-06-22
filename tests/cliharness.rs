@@ -1901,127 +1901,37 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
     let resource_ref = test_ref("live-send-resource")?;
     let wrong_operation_ref = test_ref("wrong-live-send-operation")?;
 
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "init", "--state-root"])
-            .arg(&state_root)
-            .args(["--node-id", "node:cli-live-send"])
-            .output()?,
-        "node live send init",
-    );
-    assert_success(
-        &molten_cmd().args(["test", "node", "run", "--state-root"]).arg(&state_root).output()?,
-        "node live send run",
-    );
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "authority-grant-fixture", "--state-root"])
-            .arg(&state_root)
-            .args([
-                "--peer",
-                "peer:cli-live-send",
-                "--node",
-                "node:cli-live-send",
-                "--operation",
-                "status",
-                "--policy",
-            ])
-            .arg(&policy_ref)
-            .args(["--out"])
-            .arg(&authority_grant)
-            .output()?,
-        "node live send authority grant",
-    );
-    let authority_ref = molten::preserves_rail::canonical_hash(&read_preserves(&authority_grant)?)?;
-    assert_success(
-        &molten_cmd()
-            .args([
-                "test",
-                "node",
-                "control-request",
-                "--operation",
-                "status",
-                "--authority",
-            ])
-            .arg(&authority_ref)
-            .args(["--policy"])
-            .arg(&policy_ref)
-            .args(["--resource"])
-            .arg(&resource_ref)
-            .args(["--out"])
-            .arg(&request)
-            .output()?,
-        "node live send request",
-    );
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "live-ticket-export", "--state-root"])
-            .arg(&state_root)
-            .args(["--policy"])
-            .arg(&policy_ref)
-            .args(["--out"])
-            .arg(&ticket)
-            .output()?,
-        "node live send ticket",
-    );
-    assert_success(
-        &molten_cmd()
-            .args(["test", "node", "live-peer-admit", "--state-root"])
-            .arg(&state_root)
-            .args(["--peer", "peer:cli-live-send", "--policy"])
-            .arg(&policy_ref)
-            .args(["--receipt-out"])
-            .arg(&peer_admission)
-            .arg(&ticket)
-            .output()?,
-        "node live send peer admit",
-    );
-    let bootstrap_ref = molten::preserves_rail::canonical_hash(&read_preserves(&peer_admission)?)?;
-    let sent = molten_cmd()
-        .args(["test", "node", "control-ingress-live-send", "--state-root"])
-        .arg(&state_root)
-        .arg(&request)
-        .arg(&ticket)
-        .args(["--from-peer", "peer:cli-live-send", "--peer-bootstrap"])
-        .arg(&bootstrap_ref)
-        .args(["--authority"])
-        .arg(&authority_ref)
-        .args(["--policy"])
-        .arg(&policy_ref)
-        .args(["--resource"])
-        .arg(&resource_ref)
-        .args(["--transport-receipt-out"])
-        .arg(&transport_receipt)
-        .args(["--receipt-out"])
-        .arg(&send_receipt)
-        .output()?;
-    assert_success(&sent, "node live send deny no address");
-    assert!(stdout(&sent).contains("transport_receipt=none"));
-    assert_eq!(molten::ledger::artifact_kind(&read_preserves(&send_receipt)?), "node-control-live-send-receipt");
-    assert!(!transport_receipt.exists());
-    let text = to_text(&read_preserves(&send_receipt)?)?;
-    assert!(text.contains("ticket has no endpoint addresses"));
-    let operation_mismatch = molten_cmd()
-        .args(["test", "node", "control-ingress-live-send", "--state-root"])
-        .arg(&state_root)
-        .arg(&request)
-        .arg(&ticket)
-        .args(["--from-peer", "peer:cli-live-send", "--operation-id"])
-        .arg(&wrong_operation_ref)
-        .args(["--peer-bootstrap"])
-        .arg(&bootstrap_ref)
-        .args(["--authority"])
-        .arg(&authority_ref)
-        .args(["--policy"])
-        .arg(&policy_ref)
-        .args(["--resource"])
-        .arg(&resource_ref)
-        .args(["--receipt-out"])
-        .arg(&operation_mismatch_receipt)
-        .output()?;
-    assert_success(&operation_mismatch, "node live send deny operation mismatch");
-    let mismatch_text = to_text(&read_preserves(&operation_mismatch_receipt)?)?;
-    assert!(mismatch_text.contains("operation-id"));
+    start_state(&state_root, "node:cli-live-send", "node live send init", "node live send run")?;
+    let authority_ref = grant_fixture(GrantArgs {
+        root: &state_root,
+        grant: &authority_grant,
+        peer: "peer:cli-live-send",
+        node: "node:cli-live-send",
+        policy_ref: &policy_ref,
+        label: "node live send authority grant",
+    })?;
+    write_status_request(&request, &authority_ref, &policy_ref, &resource_ref, "node live send request")?;
+    ticket_export(&state_root, &ticket, &policy_ref, "node live send ticket")?;
+    let bootstrap_ref = peer_admit(AdmitArgs {
+        root: &state_root,
+        receipt: &peer_admission,
+        peer: "peer:cli-live-send",
+        policy_ref: &policy_ref,
+        ticket: &ticket,
+        label: "node live send peer admit",
+    })?;
+    let send_args = SendArgs {
+        root: &state_root,
+        request: &request,
+        ticket: &ticket,
+        peer: "peer:cli-live-send",
+        bootstrap_ref: &bootstrap_ref,
+        authority_ref: &authority_ref,
+        policy_ref: &policy_ref,
+        resource_ref: &resource_ref,
+    };
+    expect_no_address(&send_args, &transport_receipt, &send_receipt)?;
+    expect_mismatch(&send_args, &wrong_operation_ref, &operation_mismatch_receipt)?;
     assert_success(
         &molten_cmd()
             .args(["test", "node", "serve", "--state-root"])
@@ -2031,30 +1941,15 @@ fn cli_node_live_send_denies_offline_ticket_without_addresses() -> CliResult<()>
             .output()?,
         "node live send service receipt",
     );
-    let bundled = molten_cmd()
-        .args(["test", "node", "live-workflow-bundle", "--state-root"])
-        .arg(&state_root)
-        .args(["--ticket"])
-        .arg(&ticket)
-        .args(["--peer-admission"])
-        .arg(&peer_admission)
-        .args(["--authority-grant"])
-        .arg(&authority_grant)
-        .args(["--send-receipt"])
-        .arg(&send_receipt)
-        .args(["--service-receipt"])
-        .arg(&service_receipt)
-        .args(["--receipt-out"])
-        .arg(&workflow_receipt)
-        .output()?;
-    assert_success(&bundled, "node live workflow bundle deny");
-    assert!(stdout(&bundled).contains("decision=deny"));
-    assert_eq!(
-        molten::ledger::artifact_kind(&read_preserves(&workflow_receipt)?),
-        "node-control-live-workflow-receipt"
-    );
-    let workflow_text = to_text(&read_preserves(&workflow_receipt)?)?;
-    assert!(workflow_text.contains("missing receive receipt"));
+    expect_missing_receive(BundleArgs {
+        root: &state_root,
+        ticket: &ticket,
+        peer_admission: &peer_admission,
+        authority_grant: &authority_grant,
+        send_receipt: &send_receipt,
+        service_receipt: &service_receipt,
+        receipt: &workflow_receipt,
+    })?;
     Ok(())
 }
 
@@ -3315,6 +3210,99 @@ fn peer_admit(args: AdmitArgs<'_>) -> CliResult<String> {
         args.label,
     );
     Ok(molten::preserves_rail::canonical_hash(&read_preserves(args.receipt)?)?)
+}
+
+struct SendArgs<'a> {
+    root: &'a Path,
+    request: &'a Path,
+    ticket: &'a Path,
+    peer: &'a str,
+    bootstrap_ref: &'a str,
+    authority_ref: &'a str,
+    policy_ref: &'a str,
+    resource_ref: &'a str,
+}
+
+fn send_cmd(args: &SendArgs<'_>) -> Command {
+    let mut command = molten_cmd();
+    command
+        .args(["test", "node", "control-ingress-live-send", "--state-root"])
+        .arg(args.root)
+        .arg(args.request)
+        .arg(args.ticket)
+        .args(["--from-peer", args.peer, "--peer-bootstrap"])
+        .arg(args.bootstrap_ref)
+        .args(["--authority"])
+        .arg(args.authority_ref)
+        .args(["--policy"])
+        .arg(args.policy_ref)
+        .args(["--resource"])
+        .arg(args.resource_ref);
+    command
+}
+
+fn expect_no_address(args: &SendArgs<'_>, transport_receipt: &Path, receipt: &Path) -> CliResult<()> {
+    let sent = send_cmd(args)
+        .args(["--transport-receipt-out"])
+        .arg(transport_receipt)
+        .args(["--receipt-out"])
+        .arg(receipt)
+        .output()?;
+    assert_success(&sent, "node live send deny no address");
+    assert!(stdout(&sent).contains("transport_receipt=none"));
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(receipt)?), "node-control-live-send-receipt");
+    assert!(!transport_receipt.exists());
+    let text = to_text(&read_preserves(receipt)?)?;
+    assert!(text.contains("ticket has no endpoint addresses"));
+    Ok(())
+}
+
+fn expect_mismatch(args: &SendArgs<'_>, operation_ref: &str, receipt: &Path) -> CliResult<()> {
+    let output = send_cmd(args)
+        .args(["--operation-id"])
+        .arg(operation_ref)
+        .args(["--receipt-out"])
+        .arg(receipt)
+        .output()?;
+    assert_success(&output, "node live send deny operation mismatch");
+    let text = to_text(&read_preserves(receipt)?)?;
+    assert!(text.contains("operation-id"));
+    Ok(())
+}
+
+struct BundleArgs<'a> {
+    root: &'a Path,
+    ticket: &'a Path,
+    peer_admission: &'a Path,
+    authority_grant: &'a Path,
+    send_receipt: &'a Path,
+    service_receipt: &'a Path,
+    receipt: &'a Path,
+}
+
+fn expect_missing_receive(args: BundleArgs<'_>) -> CliResult<()> {
+    let output = molten_cmd()
+        .args(["test", "node", "live-workflow-bundle", "--state-root"])
+        .arg(args.root)
+        .args(["--ticket"])
+        .arg(args.ticket)
+        .args(["--peer-admission"])
+        .arg(args.peer_admission)
+        .args(["--authority-grant"])
+        .arg(args.authority_grant)
+        .args(["--send-receipt"])
+        .arg(args.send_receipt)
+        .args(["--service-receipt"])
+        .arg(args.service_receipt)
+        .args(["--receipt-out"])
+        .arg(args.receipt)
+        .output()?;
+    assert_success(&output, "node live workflow bundle deny");
+    assert!(stdout(&output).contains("decision=deny"));
+    assert_eq!(molten::ledger::artifact_kind(&read_preserves(args.receipt)?), "node-control-live-workflow-receipt");
+    let text = to_text(&read_preserves(args.receipt)?)?;
+    assert!(text.contains("missing receive receipt"));
+    Ok(())
 }
 
 struct LoopbackArgs<'a> {
