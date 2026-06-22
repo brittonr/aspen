@@ -948,34 +948,20 @@ mod tests {
 
     #[test]
     fn ledger_gc_requires_per_remote_clearance_before_removal() {
+        let label = "remote-clearance";
         let root = temp_dir("ledger-retention-remote-clearance");
         let artifact = parse_text("<example \"remote-clearance\">").expect("parse artifact");
         let imported = import_artifact(&root, &artifact).expect("import artifact");
         let retention_class = ledger_retention_class(&imported.artifact_kind);
         let mut retention_evidence = retention_evidence(
             &root,
-            "remote-clearance",
+            label,
             &imported.artifact_ref,
             &imported.artifact_kind,
             retention_class,
             retention::ACTION_DELETE,
         );
-        let peer_ref = ledger_test_ref("remote-peer", "remote-clearance");
-        let remote_ref = ledger_test_ref("remote-cache", "remote-clearance");
-        retention_evidence.remote_peer_refs = vec![peer_ref.clone()];
-        retention_evidence.remote_refs = vec![remote_ref.clone()];
-        retention_evidence.remote_gc_refs = vec![store_admission(
-            &root,
-            retention::ADMISSION_KIND_REMOTE_GC,
-            "remote-clearance",
-            retention_evidence.requester_ref.as_deref().expect("requester"),
-            &imported.artifact_ref,
-            &imported.artifact_kind,
-            retention_class,
-            retention::ACTION_DELETE,
-            &retention_evidence.remote_refs,
-            true,
-        )];
+        let peer = add_peer_gate(&root, label, &imported, retention_class, &mut retention_evidence);
         let denied = gc(&root, LedgerGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -985,27 +971,13 @@ mod tests {
         assert_eq!(denied.decision, "deny");
         assert!(denied.removed_refs.is_empty());
         assert_eq!(read_artifact(&root, &imported.artifact_ref).expect("read artifact"), artifact);
-        let clearance =
-            retention::store_retention_remote_gc_clearance(&root, &retention::RetentionRemoteGcClearanceInput {
-                decision: "pass",
-                requester_ref: retention_evidence.requester_ref.as_deref().expect("requester"),
-                peer_ref: &peer_ref,
-                object_ref: &imported.artifact_ref,
-                object_kind: &imported.artifact_kind,
-                retention_class,
-                action: retention::ACTION_DELETE,
-                remote_ref: &remote_ref,
-                policy_ref: &retention_evidence.policy_refs[0],
-                authority_ref: &retention_evidence.authority_refs[0],
-                evidence_refs: &retention_evidence.evidence_refs,
-                retained_refs: &[],
-                is_current: true,
-                revoked_refs: &[],
-                diagnostics: &[],
-            })
-            .expect("store remote clearance")
-            .clearance_ref;
-        retention_evidence.remote_clearance_refs = vec![clearance];
+        retention_evidence.remote_clearance_refs = vec![store_peer_pass(
+            &root,
+            &imported,
+            retention_class,
+            &retention_evidence,
+            &peer,
+        )];
         let apply_refs = vec![apply_ref_for(
             &root,
             "ledger-gc",
@@ -1149,6 +1121,67 @@ mod tests {
             .expect("corrupt artifact");
         let error = read_artifact(&root, &imported.artifact_ref).expect_err("corruption fails");
         assert!(["Preserves", "hash mismatch"].iter().any(|needle| error.to_string().contains(needle)));
+    }
+
+    struct PeerCase {
+        peer: String,
+        remote: String,
+    }
+
+    fn add_peer_gate(
+        root: &std::path::Path,
+        label: &str,
+        imported: &LedgerImport,
+        retention_class: &str,
+        evidence: &mut retention::DestructiveRetentionEvidence,
+    ) -> PeerCase {
+        let peer = PeerCase {
+            peer: ledger_test_ref("remote-peer", label),
+            remote: ledger_test_ref("remote-cache", label),
+        };
+        evidence.remote_peer_refs = vec![peer.peer.clone()];
+        evidence.remote_refs = vec![peer.remote.clone()];
+        evidence.remote_gc_refs = vec![store_admission(
+            root,
+            retention::ADMISSION_KIND_REMOTE_GC,
+            label,
+            evidence.requester_ref.as_deref().expect("requester"),
+            &imported.artifact_ref,
+            &imported.artifact_kind,
+            retention_class,
+            retention::ACTION_DELETE,
+            &evidence.remote_refs,
+            true,
+        )];
+        peer
+    }
+
+    fn store_peer_pass(
+        root: &std::path::Path,
+        imported: &LedgerImport,
+        retention_class: &str,
+        evidence: &retention::DestructiveRetentionEvidence,
+        peer: &PeerCase,
+    ) -> String {
+        retention::store_retention_remote_gc_clearance(root, &retention::RetentionRemoteGcClearanceInput {
+            decision: "pass",
+            requester_ref: evidence.requester_ref.as_deref().expect("requester"),
+            peer_ref: &peer.peer,
+            object_ref: &imported.artifact_ref,
+            object_kind: &imported.artifact_kind,
+            retention_class,
+            action: retention::ACTION_DELETE,
+            remote_ref: &peer.remote,
+            policy_ref: &evidence.policy_refs[0],
+            authority_ref: &evidence.authority_refs[0],
+            evidence_refs: &evidence.evidence_refs,
+            retained_refs: &[],
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("store remote clearance")
+        .clearance_ref
     }
 
     fn apply_ref_for(
