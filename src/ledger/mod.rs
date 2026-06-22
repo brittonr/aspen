@@ -161,6 +161,40 @@ pub fn pin_artifact(root: &Path, artifact_ref: &str) -> Result<()> {
 pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
     ensure_dirs(root)?;
     let pins = pinned_refs(root)?;
+    let candidates = scan_unpinned(root, &pins)?;
+    let action = action_for(input.dry_run);
+    let requester_ref =
+        retention::destructive_retention_requester_ref(input.retention_evidence, "ledger-gc-missing-requester")?;
+    let evidence_summary = retention::destructive_retention_evidence_value(input.retention_evidence)?;
+    let review = review_entries(
+        ReviewInput {
+            root,
+            source: input,
+            action,
+            requester_ref: &requester_ref,
+        },
+        &candidates,
+    )?;
+    let decision = decision_for(&review.denied_refs);
+    let removed_refs = remove_entries(root, &candidates, input.dry_run, decision)?;
+    let receipt_value = outcome_value(OutcomeInput {
+        is_dry_run: input.dry_run,
+        decision,
+        removed_refs: &removed_refs,
+        evidence_summary,
+        review: &review,
+    });
+    Ok(LedgerGc {
+        dry_run: input.dry_run,
+        decision: decision.to_string(),
+        removed_refs,
+        retention_receipt_refs: review.retention_receipt_refs,
+        execution_gate_refs: review.execution_gate_refs,
+        receipt_value,
+    })
+}
+
+fn scan_unpinned(root: &Path, pins: &[String]) -> Result<Vec<LedgerEntry>> {
     let mut candidates = Vec::new();
     for entry in list_artifacts(root)? {
         if pins.iter().any(|pin| pin == &entry.artifact_ref) {
@@ -168,171 +202,214 @@ pub fn gc(root: &Path, input: LedgerGcInput<'_>) -> Result<LedgerGc> {
         }
         push_bounded(&mut candidates, entry, MAX_LEDGER_SCAN_ENTRIES, "ledger gc candidates")?;
     }
-    let action = if input.dry_run {
+    Ok(candidates)
+}
+
+fn action_for(is_dry_run: bool) -> &'static str {
+    if is_dry_run {
         retention::ACTION_ELIGIBILITY
     } else {
         retention::ACTION_DELETE
-    };
-    let requester_ref =
-        retention::destructive_retention_requester_ref(input.retention_evidence, "ledger-gc-missing-requester")?;
-    let evidence_summary = retention::destructive_retention_evidence_value(input.retention_evidence)?;
-    let mut admission_diagnostics = Vec::new();
-    let mut execution_diagnostics = Vec::new();
-    let mut admission_refs = Vec::new();
-    let mut retention_receipt_refs = Vec::new();
-    let mut execution_gate_refs = Vec::new();
-    let mut retention_denials = Vec::new();
-    for entry in &candidates {
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ReviewInput<'a> {
+    root: &'a Path,
+    source: LedgerGcInput<'a>,
+    action: &'a str,
+    requester_ref: &'a str,
+}
+
+#[derive(Default)]
+struct Review {
+    admission_diagnostics: Vec<String>,
+    execution_diagnostics: Vec<String>,
+    admission_refs: Vec<String>,
+    retention_receipt_refs: Vec<String>,
+    execution_gate_refs: Vec<String>,
+    denied_refs: Vec<String>,
+}
+
+fn review_entries(input: ReviewInput<'_>, candidates: &[LedgerEntry]) -> Result<Review> {
+    let mut review = Review::default();
+    for entry in candidates {
         let retention_class = ledger_retention_class(&entry.artifact_kind);
         let admission =
             retention::admit_destructive_retention_evidence(retention::DestructiveRetentionAdmissionInput {
-                root,
-                evidence: input.retention_evidence,
+                root: input.root,
+                evidence: input.source.retention_evidence,
                 object_ref: &entry.artifact_ref,
                 object_kind: &entry.artifact_kind,
                 retention_class,
-                action,
+                action: input.action,
             })?;
-        for diagnostic in &admission.diagnostics {
-            push_bounded(
-                &mut admission_diagnostics,
-                diagnostic.clone(),
-                MAX_LEDGER_SCAN_ENTRIES,
-                "ledger retention admission diagnostics",
-            )?;
-        }
-        for reference in &admission.admitted_refs {
-            push_bounded(
-                &mut admission_refs,
-                reference.clone(),
-                MAX_LEDGER_SCAN_ENTRIES,
-                "ledger retention admission refs",
-            )?;
-        }
+        extend_refs(
+            &mut review.admission_diagnostics,
+            &admission.diagnostics,
+            "ledger retention admission diagnostics",
+        )?;
+        extend_refs(&mut review.admission_refs, &admission.admitted_refs, "ledger retention admission refs")?;
         let evaluation = retention::evaluate_retention(retention::RetentionEvaluationInput {
-            root,
+            root: input.root,
             object_ref: &entry.artifact_ref,
             object_kind: &entry.artifact_kind,
             retention_class,
-            action,
-            requester_ref: &requester_ref,
-            is_reference_index_complete: input.retention_evidence.is_reference_index_complete,
-            retained_refs: &input.retention_evidence.retained_refs,
-            remote_refs: &input.retention_evidence.remote_refs,
-            policy_refs: &input.retention_evidence.policy_refs,
-            evidence_refs: &input.retention_evidence.evidence_refs,
+            action: input.action,
+            requester_ref: input.requester_ref,
+            is_reference_index_complete: input.source.retention_evidence.is_reference_index_complete,
+            retained_refs: &input.source.retention_evidence.retained_refs,
+            remote_refs: &input.source.retention_evidence.remote_refs,
+            policy_refs: &input.source.retention_evidence.policy_refs,
+            evidence_refs: &input.source.retention_evidence.evidence_refs,
             has_delete_authority: admission.has_delete_authority,
             has_remote_gc_clearance: admission.has_remote_gc_clearance,
         })?;
         push_bounded(
-            &mut retention_receipt_refs,
+            &mut review.retention_receipt_refs,
             evaluation.receipt.receipt_ref.clone(),
             MAX_LEDGER_SCAN_ENTRIES,
             "ledger retention receipt refs",
         )?;
-        let mut is_execution_denied = false;
-        if !input.dry_run {
-            let apply_ref = matching_apply_ref(ApplyRefMatchInput {
-                root,
-                apply_refs: input.apply_refs,
-                subsystem: "ledger-gc",
-                action,
-                object_ref: &entry.artifact_ref,
-                object_kind: &entry.artifact_kind,
-                retention_class,
-            });
-            let execution_gate =
-                retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
-                    root,
-                    subsystem: "ledger-gc",
-                    action,
-                    object_ref: &entry.artifact_ref,
-                    object_kind: &entry.artifact_kind,
-                    retention_class,
-                    apply_ref,
-                })?;
-            push_bounded(
-                &mut execution_gate_refs,
-                execution_gate.execution_ref.clone(),
-                MAX_LEDGER_SCAN_ENTRIES,
-                "ledger retention execution gate refs",
-            )?;
-            if execution_gate.decision != "pass" {
-                is_execution_denied = true;
-                for diagnostic in &execution_gate.diagnostics {
-                    push_bounded(
-                        &mut execution_diagnostics,
-                        diagnostic.clone(),
-                        MAX_LEDGER_SCAN_ENTRIES,
-                        "ledger retention execution diagnostics",
-                    )?;
-                }
-            }
-        }
+        let is_execution_denied = record_execution(input, entry, retention_class, &mut review)?;
         if admission.decision != "pass" || evaluation.receipt.decision != "pass" || is_execution_denied {
             push_bounded(
-                &mut retention_denials,
+                &mut review.denied_refs,
                 entry.artifact_ref.clone(),
                 MAX_LEDGER_SCAN_ENTRIES,
                 "ledger retention denials",
             )?;
         }
     }
-    let decision = if retention_denials.is_empty() { "pass" } else { "deny" };
+    Ok(review)
+}
+
+fn extend_refs(target: &mut impl crate::bounded::VecSink<String>, values: &[String], label: &str) -> Result<()> {
+    for value in values {
+        push_bounded(target, value.clone(), MAX_LEDGER_SCAN_ENTRIES, label)?;
+    }
+    Ok(())
+}
+
+fn record_execution(
+    input: ReviewInput<'_>,
+    entry: &LedgerEntry,
+    retention_class: &str,
+    review: &mut Review,
+) -> Result<bool> {
+    if input.source.dry_run {
+        return Ok(false);
+    }
+    let apply_ref = matching_apply_ref(ApplyRefMatchInput {
+        root: input.root,
+        apply_refs: input.source.apply_refs,
+        subsystem: "ledger-gc",
+        action: input.action,
+        object_ref: &entry.artifact_ref,
+        object_kind: &entry.artifact_kind,
+        retention_class,
+    });
+    let execution_gate = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
+        root: input.root,
+        subsystem: "ledger-gc",
+        action: input.action,
+        object_ref: &entry.artifact_ref,
+        object_kind: &entry.artifact_kind,
+        retention_class,
+        apply_ref,
+    })?;
+    push_bounded(
+        &mut review.execution_gate_refs,
+        execution_gate.execution_ref.clone(),
+        MAX_LEDGER_SCAN_ENTRIES,
+        "ledger retention execution gate refs",
+    )?;
+    if execution_gate.decision == "pass" {
+        return Ok(false);
+    }
+    extend_refs(
+        &mut review.execution_diagnostics,
+        &execution_gate.diagnostics,
+        "ledger retention execution diagnostics",
+    )?;
+    Ok(true)
+}
+
+fn decision_for(denied_refs: &[String]) -> &'static str {
+    if denied_refs.is_empty() { "pass" } else { "deny" }
+}
+
+fn remove_entries(root: &Path, candidates: &[LedgerEntry], is_dry_run: bool, decision: &str) -> Result<Vec<String>> {
     let mut removed_refs = Vec::new();
     if decision == "pass" {
-        for entry in &candidates {
+        for entry in candidates {
             push_bounded(
                 &mut removed_refs,
                 entry.artifact_ref.clone(),
                 MAX_LEDGER_SCAN_ENTRIES,
                 "ledger removed refs",
             )?;
-            if !input.dry_run {
+            if !is_dry_run {
                 fs::remove_file(content_path(root, &entry.artifact_ref)?).map_err(MoltenError::from)?;
             }
         }
     }
-    let receipt_value = record("ledger-gc-receipt-v1", vec![
+    Ok(removed_refs)
+}
+
+struct OutcomeInput<'a> {
+    is_dry_run: bool,
+    decision: &'a str,
+    removed_refs: &'a [String],
+    evidence_summary: IOValue,
+    review: &'a Review,
+}
+
+fn outcome_value(input: OutcomeInput<'_>) -> IOValue {
+    record("ledger-gc-receipt-v1", vec![
         string(EVIDENCE_LEDGER_GC_RECEIPT_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("mode", vec![string(if input.dry_run { "dry-run" } else { "apply" })]),
-        record("removed", vec![sequence(removed_refs.iter().map(string).collect())]),
-        record("retention", vec![sequence(retention_receipt_refs.iter().map(string).collect())]),
-        record("retention-execution", vec![sequence(execution_gate_refs.iter().map(string).collect())]),
-        record("denied", vec![sequence(retention_denials.iter().map(string).collect())]),
-        record("retention-evidence", vec![evidence_summary]),
-        record("retention-admission", vec![sequence(admission_refs.iter().map(string).collect())]),
-        record("retention-diagnostics", vec![sequence(admission_diagnostics.iter().map(string).collect())]),
-        record("retention-execution-diagnostics", vec![sequence(
-            execution_diagnostics.iter().map(string).collect(),
+        record("decision", vec![string(input.decision)]),
+        record("mode", vec![string(mode_for(input.is_dry_run))]),
+        record("removed", vec![sequence(input.removed_refs.iter().map(string).collect())]),
+        record("retention", vec![sequence(
+            input.review.retention_receipt_refs.iter().map(string).collect(),
         )]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("pin-preservation"), string("pass")]),
-            record("check", vec![string("derived-index-scan"), string("pass")]),
-            record("check", vec![string("retention-receipt-bound"), string("pass")]),
-            record("check", vec![
-                string("retention-execution-gate"),
-                string(pass_or_fail(input.dry_run || execution_diagnostics.is_empty())),
-            ]),
-            record("check", vec![
-                string("retention-authority-evidence"),
-                string(pass_or_fail(admission_diagnostics.is_empty())),
-            ]),
-            record("check", vec![
-                string("deny-before-removal"),
-                string(if decision == "pass" { "pass" } else { "fail" }),
-            ]),
-        ])]),
-    ]);
-    Ok(LedgerGc {
-        dry_run: input.dry_run,
-        decision: decision.to_string(),
-        removed_refs,
-        retention_receipt_refs,
-        execution_gate_refs,
-        receipt_value,
-    })
+        record("retention-execution", vec![sequence(input.review.execution_gate_refs.iter().map(string).collect())]),
+        record("denied", vec![sequence(input.review.denied_refs.iter().map(string).collect())]),
+        record("retention-evidence", vec![input.evidence_summary]),
+        record("retention-admission", vec![sequence(input.review.admission_refs.iter().map(string).collect())]),
+        record("retention-diagnostics", vec![sequence(
+            input.review.admission_diagnostics.iter().map(string).collect(),
+        )]),
+        record("retention-execution-diagnostics", vec![sequence(
+            input.review.execution_diagnostics.iter().map(string).collect(),
+        )]),
+        record("checks", vec![outcome_checks(input.is_dry_run, input.decision, input.review)]),
+    ])
+}
+
+fn mode_for(is_dry_run: bool) -> &'static str {
+    if is_dry_run { "dry-run" } else { "apply" }
+}
+
+fn outcome_checks(is_dry_run: bool, decision: &str, review: &Review) -> IOValue {
+    sequence(vec![
+        record("check", vec![string("pin-preservation"), string("pass")]),
+        record("check", vec![string("derived-index-scan"), string("pass")]),
+        record("check", vec![string("retention-receipt-bound"), string("pass")]),
+        record("check", vec![
+            string("retention-execution-gate"),
+            string(pass_or_fail(is_dry_run || review.execution_diagnostics.is_empty())),
+        ]),
+        record("check", vec![
+            string("retention-authority-evidence"),
+            string(pass_or_fail(review.admission_diagnostics.is_empty())),
+        ]),
+        record("check", vec![
+            string("deny-before-removal"),
+            string(if decision == "pass" { "pass" } else { "fail" }),
+        ]),
+    ])
 }
 
 fn pass_or_fail(value: bool) -> &'static str {
