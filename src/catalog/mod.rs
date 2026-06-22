@@ -2594,24 +2594,27 @@ mod tests {
         assert!(!receipt_view.items.is_empty());
     }
 
-    #[test]
-    fn catalog_classifies_generic_replay_receipts_and_divergence() {
-        let dir = temp_dir("catalog-replay");
-        let registry = dir.join("registry");
-        let ledger_root = dir.join("ledger");
-        let expected_report_ref = test_ref("expected-report");
-        let actual_report_ref = test_ref("actual-report");
-        let final_state_ref = test_ref("final-state");
-        let verify = record("deterministic-replay-verify-v1", vec![
+    struct Values {
+        verify: IOValue,
+        divergence: IOValue,
+        rollup: IOValue,
+        index: IOValue,
+    }
+
+    fn verify_value(expected_report_ref: &str, actual_report_ref: &str, final_state_ref: &str) -> IOValue {
+        record("deterministic-replay-verify-v1", vec![
             string(crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
             string("pass"),
-            record("expected-report-ref", vec![string(&expected_report_ref)]),
-            record("actual-report-ref", vec![string(&actual_report_ref)]),
-            record("final-state-ref", vec![string(&final_state_ref)]),
+            record("expected-report-ref", vec![string(expected_report_ref)]),
+            record("actual-report-ref", vec![string(actual_report_ref)]),
+            record("final-state-ref", vec![string(final_state_ref)]),
             record("divergence", vec![string("none")]),
             checks_value(&["report-replayed", "final-state-bound", "no-divergence"]),
-        ]);
-        let divergence = record("deterministic-first-divergence-v1", vec![
+        ])
+    }
+
+    fn divergence_value() -> IOValue {
+        record("deterministic-first-divergence-v1", vec![
             string(crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA),
             record("kind", vec![string("effect-response")]),
             record("turn-id", vec![string("turn:1")]),
@@ -2621,16 +2624,21 @@ mod tests {
             record("expected-ref", vec![string(test_ref("expected-effect"))]),
             record("actual-ref", vec![string(test_ref("actual-effect"))]),
             sequence(vec![string("safe-canonical-refs-only")]),
-        ]);
+        ])
+    }
+
+    fn seed_values(expected_report_ref: &str, actual_report_ref: &str, final_state_ref: &str) -> Values {
+        let verify = verify_value(expected_report_ref, actual_report_ref, final_state_ref);
+        let verify_ref = canonical_hash(&verify).expect("verify ref");
         let rollup =
             crate::deterministic_replay::rollup_replay_receipts(&[crate::deterministic_replay::ReplayRollupInput {
-                expected_ref: Some(canonical_hash(&verify).expect("verify ref")),
+                expected_ref: Some(verify_ref.clone()),
                 value: verify.clone(),
             }])
             .expect("replay rollup");
         let index = crate::deterministic_replay::index_replay_evidence(&[
             crate::deterministic_replay::ReplayIndexInput {
-                expected_ref: Some(canonical_hash(&verify).expect("verify ref")),
+                expected_ref: Some(verify_ref),
                 value: verify.clone(),
             },
             crate::deterministic_replay::ReplayIndexInput {
@@ -2639,85 +2647,97 @@ mod tests {
             },
         ])
         .expect("replay index");
-        let verify_import = ledger::import_artifact(&ledger_root, &verify).expect("import replay verify");
-        ledger::import_artifact(&ledger_root, &divergence).expect("import first divergence");
-        let rollup_import = ledger::import_artifact(&ledger_root, &rollup.value).expect("import replay rollup");
-        let index_import = ledger::import_artifact(&ledger_root, &index.value).expect("import replay index");
+        Values {
+            verify,
+            divergence: divergence_value(),
+            rollup: rollup.value,
+            index: index.value,
+        }
+    }
+
+    fn import_values(ledger_root: &std::path::Path, values: &Values) {
+        let verify_import = ledger::import_artifact(ledger_root, &values.verify).expect("import replay verify");
+        ledger::import_artifact(ledger_root, &values.divergence).expect("import first divergence");
+        let rollup_import = ledger::import_artifact(ledger_root, &values.rollup).expect("import replay rollup");
+        let index_import = ledger::import_artifact(ledger_root, &values.index).expect("import replay index");
         assert_eq!(verify_import.artifact_kind, "deterministic-replay-verify-receipt");
         assert_eq!(rollup_import.artifact_kind, "deterministic-replay-rollup");
         assert_eq!(index_import.artifact_kind, "deterministic-replay-index");
+    }
 
-        let found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
+    fn assert_found_text(
+        registry: &std::path::Path,
+        ledger_root: &std::path::Path,
+        filters: Vec<CatalogFilter>,
+        needles: &[&str],
+    ) {
+        let found = search(registry, Some(ledger_root), &CatalogSearchInput {
             root_refs: Vec::new(),
             include_dependencies: true,
             include_dependents: true,
-            filters: vec![
+            filters,
+            visibility: CatalogVisibilityInput::default(),
+        })
+        .expect("catalog search");
+        assert_eq!(found.items.len(), 1);
+        let text = to_text(&found.value).expect("catalog result text");
+        for needle in needles {
+            assert!(text.contains(needle), "missing catalog text {needle}");
+        }
+    }
+
+    #[test]
+    fn catalog_classifies_generic_replay_receipts_and_divergence() {
+        let dir = temp_dir("catalog-replay");
+        let registry = dir.join("registry");
+        let ledger_root = dir.join("ledger");
+        let expected_report_ref = test_ref("expected-report");
+        let actual_report_ref = test_ref("actual-report");
+        let final_state_ref = test_ref("final-state");
+        let values = seed_values(&expected_report_ref, &actual_report_ref, &final_state_ref);
+        import_values(&ledger_root, &values);
+
+        assert_found_text(
+            &registry,
+            &ledger_root,
+            vec![
                 CatalogFilter::LedgerKind("deterministic-replay-verify-receipt".to_string()),
                 CatalogFilter::ReceiptDecision("pass".to_string()),
                 CatalogFilter::Text(format!("replay-final-state:{final_state_ref}")),
             ],
-            visibility: CatalogVisibilityInput::default(),
-        })
-        .expect("replay receipt search");
-        assert_eq!(found.items.len(), 1);
-        let text = to_text(&found.value).expect("replay search result text");
-        assert!(text.contains("deterministic-replay:verify"));
-        assert!(text.contains(&expected_report_ref));
-        assert!(text.contains(&actual_report_ref));
-        assert!(text.contains(&final_state_ref));
-
-        let divergence_found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
-            root_refs: Vec::new(),
-            include_dependencies: true,
-            include_dependents: true,
-            filters: vec![CatalogFilter::Text("replay-divergence:effect-response".to_string())],
-            visibility: CatalogVisibilityInput::default(),
-        })
-        .expect("first divergence search");
-        assert_eq!(divergence_found.items.len(), 1);
-        assert!(
-            to_text(&divergence_found.value)
-                .expect("first divergence result text")
-                .contains("deterministic-replay:first-divergence")
+            &[
+                "deterministic-replay:verify",
+                expected_report_ref.as_str(),
+                actual_report_ref.as_str(),
+                final_state_ref.as_str(),
+            ],
         );
-
-        let rollup_found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
-            root_refs: Vec::new(),
-            include_dependencies: true,
-            include_dependents: true,
-            filters: vec![
+        assert_found_text(
+            &registry,
+            &ledger_root,
+            vec![CatalogFilter::Text("replay-divergence:effect-response".to_string())],
+            &["deterministic-replay:first-divergence"],
+        );
+        assert_found_text(
+            &registry,
+            &ledger_root,
+            vec![
                 CatalogFilter::LedgerKind("deterministic-replay-rollup".to_string()),
                 CatalogFilter::Text("replay-rollup-decision:pass".to_string()),
                 CatalogFilter::Text("replay-rollup-total:1".to_string()),
             ],
-            visibility: CatalogVisibilityInput::default(),
-        })
-        .expect("replay rollup search");
-        assert_eq!(rollup_found.items.len(), 1);
-        assert!(
-            to_text(&rollup_found.value)
-                .expect("replay rollup result text")
-                .contains("deterministic-replay:rollup")
+            &["deterministic-replay:rollup"],
         );
-
-        let index_found = search(&registry, Some(&ledger_root), &CatalogSearchInput {
-            root_refs: Vec::new(),
-            include_dependencies: true,
-            include_dependents: true,
-            filters: vec![
+        assert_found_text(
+            &registry,
+            &ledger_root,
+            vec![
                 CatalogFilter::LedgerKind("deterministic-replay-index".to_string()),
                 CatalogFilter::Text("replay-index-decision:pass".to_string()),
                 CatalogFilter::Text("replay-index-rollups:1".to_string()),
                 CatalogFilter::Text(format!("replay-index-final-state:{final_state_ref}")),
             ],
-            visibility: CatalogVisibilityInput::default(),
-        })
-        .expect("replay index search");
-        assert_eq!(index_found.items.len(), 1);
-        assert!(
-            to_text(&index_found.value)
-                .expect("replay index result text")
-                .contains("deterministic-replay:index")
+            &["deterministic-replay:index"],
         );
     }
 
