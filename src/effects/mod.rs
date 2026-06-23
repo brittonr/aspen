@@ -1018,6 +1018,27 @@ fn validate_parsed_handle_for_request(
     handle: &EffectHandle,
     request: &EffectHandleRequest<'_>,
 ) -> Result<EffectHandleValidation> {
+    require_binding_match(handler, handle, request)?;
+    require_context_match(handler, handle, request)?;
+    require_lifetime_match(handle, request)?;
+    Ok(EffectHandleValidation {
+        handler_binding_ref: handler.binding_ref.clone(),
+        handle_ref: handle.handle_ref.clone(),
+        checks: vec![
+            "handler-binding-available".to_string(),
+            "effect-handle-binding".to_string(),
+            "handle-not-authority".to_string(),
+            "operation-authorization-binding".to_string(),
+            "scope-lifetime-binding".to_string(),
+        ],
+    })
+}
+
+fn require_binding_match(
+    handler: &HandlerBinding,
+    handle: &EffectHandle,
+    request: &EffectHandleRequest<'_>,
+) -> Result<()> {
     if handle.handler_binding_ref != handler.binding_ref {
         return Err(MoltenError::invalid_harness("effect handle does not bind the supplied handler binding"));
     }
@@ -1030,7 +1051,14 @@ fn validate_parsed_handle_for_request(
     require_operation(&handler.operations, request.operation, "handler binding")?;
     require_operation(&handle.operations, request.operation, "effect handle")?;
     require_scope_match(&handler.scope, request, "handler binding")?;
-    require_scope_match(&handle.scope, request, "effect handle")?;
+    require_scope_match(&handle.scope, request, "effect handle")
+}
+
+fn require_context_match(
+    handler: &HandlerBinding,
+    handle: &EffectHandle,
+    request: &EffectHandleRequest<'_>,
+) -> Result<()> {
     if handler.policy_ref != request.policy_ref {
         return Err(MoltenError::invalid_harness("handler binding policy ref does not match request"));
     }
@@ -1047,6 +1075,10 @@ fn validate_parsed_handle_for_request(
     if handler.resource_refs != request.resource_refs || handle.resource_refs != request.resource_refs {
         return Err(MoltenError::invalid_harness("effect handle resource refs do not match request"));
     }
+    Ok(())
+}
+
+fn require_lifetime_match(handle: &EffectHandle, request: &EffectHandleRequest<'_>) -> Result<()> {
     if handle.not_before.is_some_and(|not_before| request.logical_time < not_before) {
         return Err(MoltenError::invalid_harness("effect handle used before not-before bound"));
     }
@@ -1076,17 +1108,7 @@ fn validate_parsed_handle_for_request(
             return Err(MoltenError::invalid_harness("remote-proxy effect handle missing bounded expiry"));
         }
     }
-    Ok(EffectHandleValidation {
-        handler_binding_ref: handler.binding_ref.clone(),
-        handle_ref: handle.handle_ref.clone(),
-        checks: vec![
-            "handler-binding-available".to_string(),
-            "effect-handle-binding".to_string(),
-            "handle-not-authority".to_string(),
-            "operation-authorization-binding".to_string(),
-            "scope-lifetime-binding".to_string(),
-        ],
-    })
+    Ok(())
 }
 
 fn scope_value(scope: &EffectScope) -> IOValue {
