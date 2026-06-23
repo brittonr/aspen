@@ -593,106 +593,108 @@ pub fn parse_operator_workflow(value: &IOValue) -> Result<OperatorWorkflow> {
     })
 }
 
+struct ReportParts {
+    checkpoint_refs: Vec<String>,
+    step_receipts: Vec<(String, String)>,
+    diagnostics: Vec<String>,
+}
+
+impl ReportParts {
+    fn collect(input: &DogfoodReportInput<'_>, workflow: &OperatorWorkflow) -> Result<Self> {
+        let checkpoint_refs = input.checkpoint_values.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
+        ensure_count_at_most(checkpoint_refs.len(), MAX_OPERATOR_STEPS, "dogfood checkpoints")?;
+        let diagnostics = input.diagnostics.to_vec();
+        ensure_count_at_most(diagnostics.len(), MAX_OPERATOR_DIAGNOSTICS, "dogfood report diagnostics")?;
+        let mut parts = Self {
+            checkpoint_refs,
+            step_receipts: Vec::new(),
+            diagnostics,
+        };
+        parts.add_step_notes(workflow)?;
+        parts.add_summary_notes(input, workflow)?;
+        Ok(parts)
+    }
+
+    fn add_step_notes(&mut self, workflow: &OperatorWorkflow) -> Result<()> {
+        for step in &workflow.steps {
+            if let Some(receipt_ref) = step.receipt_ref.as_ref() {
+                self.step_receipts.push_limited_value(
+                    (step.name.clone(), receipt_ref.clone()),
+                    MAX_OPERATOR_STEPS,
+                    "dogfood step receipts",
+                )?;
+            }
+            for diagnostic in &step.diagnostics {
+                self.push_note(format!("dogfood step {} diagnostic: {diagnostic}", step.name))?;
+            }
+            if step.mandatory && step.receipt_ref.is_none() {
+                self.push_note(format!("mandatory dogfood step {} lacks canonical receipt", step.name))?;
+            }
+            if step.mandatory && step.decision != "pass" {
+                self.push_note(format!("mandatory dogfood step {} decision is {}", step.name, step.decision))?;
+            }
+            if step.mandatory && !matches!(step.replay_status.as_str(), "deterministic" | "recorded") {
+                self.push_note(format!(
+                    "mandatory dogfood step {} has non-release replay status {}",
+                    step.name, step.replay_status
+                ))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn add_summary_notes(&mut self, input: &DogfoodReportInput<'_>, workflow: &OperatorWorkflow) -> Result<()> {
+        if self.checkpoint_refs.len() < workflow.steps.len() {
+            self.push_note(format!(
+                "dogfood workflow has {} steps but only {} checkpoints",
+                workflow.steps.len(),
+                self.checkpoint_refs.len()
+            ))?;
+        }
+        if !workflow_check_pass(&workflow.checks, "no-hidden-bypass") {
+            self.push_note("dogfood workflow contains hidden or unreceipted operator bypass")?;
+        }
+        if !workflow_check_pass(&workflow.checks, "explicit-operator-authority") {
+            self.push_note("dogfood workflow lacks current explicit operator policy/capability refs")?;
+        }
+        if input.gate_receipt_refs.is_empty() {
+            self.push_note("dogfood report requires at least one gate receipt")?;
+        }
+        if input.repro_bundle_refs.is_empty() {
+            self.push_note("dogfood report requires a sealed/redacted repro bundle ref")?;
+        }
+        Ok(())
+    }
+
+    fn push_note(&mut self, note: impl Into<String>) -> Result<()> {
+        self.diagnostics
+            .push_limited_value(note.into(), MAX_OPERATOR_DIAGNOSTICS, "dogfood report diagnostics")
+    }
+}
+
 pub fn dogfood_report_value(input: &DogfoodReportInput<'_>) -> Result<IOValue> {
     let workflow = parse_operator_workflow(input.workflow_value)?;
-    let checkpoint_refs = input.checkpoint_values.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
     validate_refs(input.gate_receipt_refs, "dogfood gate receipt ref")?;
     validate_refs(input.repro_bundle_refs, "dogfood repro bundle ref")?;
     validate_ref(input.final_state_ref, "dogfood final state ref")?;
-    ensure_count_at_most(checkpoint_refs.len(), MAX_OPERATOR_STEPS, "dogfood checkpoints")?;
-    let mut diagnostics = input.diagnostics.to_vec();
-    ensure_count_at_most(diagnostics.len(), MAX_OPERATOR_DIAGNOSTICS, "dogfood report diagnostics")?;
-    let mut step_receipts = Vec::new();
-    for step in &workflow.steps {
-        if let Some(receipt_ref) = step.receipt_ref.as_ref() {
-            step_receipts.push_limited_value(
-                (step.name.clone(), receipt_ref.clone()),
-                MAX_OPERATOR_STEPS,
-                "dogfood step receipts",
-            )?;
-        }
-        for diagnostic in &step.diagnostics {
-            diagnostics.push_limited_value(
-                format!("dogfood step {} diagnostic: {diagnostic}", step.name),
-                MAX_OPERATOR_DIAGNOSTICS,
-                "dogfood report diagnostics",
-            )?;
-        }
-        if step.mandatory && step.receipt_ref.is_none() {
-            diagnostics.push_limited_value(
-                format!("mandatory dogfood step {} lacks canonical receipt", step.name),
-                MAX_OPERATOR_DIAGNOSTICS,
-                "dogfood report diagnostics",
-            )?;
-        }
-        if step.mandatory && step.decision != "pass" {
-            diagnostics.push_limited_value(
-                format!("mandatory dogfood step {} decision is {}", step.name, step.decision),
-                MAX_OPERATOR_DIAGNOSTICS,
-                "dogfood report diagnostics",
-            )?;
-        }
-        if step.mandatory && !matches!(step.replay_status.as_str(), "deterministic" | "recorded") {
-            diagnostics.push_limited_value(
-                format!("mandatory dogfood step {} has non-release replay status {}", step.name, step.replay_status),
-                MAX_OPERATOR_DIAGNOSTICS,
-                "dogfood report diagnostics",
-            )?;
-        }
-    }
-    if checkpoint_refs.len() < workflow.steps.len() {
-        diagnostics.push_limited_value(
-            format!(
-                "dogfood workflow has {} steps but only {} checkpoints",
-                workflow.steps.len(),
-                checkpoint_refs.len()
-            ),
-            MAX_OPERATOR_DIAGNOSTICS,
-            "dogfood report diagnostics",
-        )?;
-    }
-    if !workflow_check_pass(&workflow.checks, "no-hidden-bypass") {
-        diagnostics.push_limited_value(
-            "dogfood workflow contains hidden or unreceipted operator bypass".to_string(),
-            MAX_OPERATOR_DIAGNOSTICS,
-            "dogfood report diagnostics",
-        )?;
-    }
-    if !workflow_check_pass(&workflow.checks, "explicit-operator-authority") {
-        diagnostics.push_limited_value(
-            "dogfood workflow lacks current explicit operator policy/capability refs".to_string(),
-            MAX_OPERATOR_DIAGNOSTICS,
-            "dogfood report diagnostics",
-        )?;
-    }
-    if input.gate_receipt_refs.is_empty() {
-        diagnostics.push_limited_value(
-            "dogfood report requires at least one gate receipt".to_string(),
-            MAX_OPERATOR_DIAGNOSTICS,
-            "dogfood report diagnostics",
-        )?;
-    }
-    if input.repro_bundle_refs.is_empty() {
-        diagnostics.push_limited_value(
-            "dogfood report requires a sealed/redacted repro bundle ref".to_string(),
-            MAX_OPERATOR_DIAGNOSTICS,
-            "dogfood report diagnostics",
-        )?;
-    }
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let parts = ReportParts::collect(input, &workflow)?;
+    let decision = if parts.diagnostics.is_empty() { "pass" } else { "deny" };
     Ok(record("dogfood-report-v1", vec![
         string(OPERATOR_DOGFOOD_REPORT_SCHEMA),
         record("decision", vec![string(decision)]),
         record("workflow", vec![string(&workflow.workflow_ref)]),
-        record("checkpoints", vec![refs_sequence(&checkpoint_refs)]),
-        record("step-receipts", vec![step_receipts_sequence(&step_receipts)]),
+        record("checkpoints", vec![refs_sequence(&parts.checkpoint_refs)]),
+        record("step-receipts", vec![step_receipts_sequence(&parts.step_receipts)]),
         record("gate-receipts", vec![refs_sequence(input.gate_receipt_refs)]),
         record("repro-bundles", vec![refs_sequence(input.repro_bundle_refs)]),
         record("final-state", vec![string(input.final_state_ref)]),
-        record("diagnostics", vec![strings_sequence(&diagnostics)]),
+        record("diagnostics", vec![strings_sequence(&parts.diagnostics)]),
         checks_value_from_pairs(&[
             ("canonical-report", "pass"),
-            ("deterministic-or-recorded", status(diagnostics.iter().all(|item| !item.contains("replay status")))),
+            (
+                "deterministic-or-recorded",
+                status(parts.diagnostics.iter().all(|item| !item.contains("replay status"))),
+            ),
             ("final-state-bound", "pass"),
             ("redaction-gate", status(!input.repro_bundle_refs.is_empty())),
             ("no-text-oracle", "pass"),
