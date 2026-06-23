@@ -6102,7 +6102,17 @@ mod tests {
     #[test]
     fn worker_denies_missing_authority_stale_sync_target_mismatch_and_missing_artifact() {
         let fixture = worker_fixture("job-worker-deny");
-        let missing_authority_request = job_worker_request_value(JobWorkerRequestValueInput {
+
+        assert_missing_authority(&fixture);
+        assert_missing_admission(&fixture);
+        assert_denied_admission(&fixture);
+        assert_stale_sync(&fixture);
+        assert_target_mismatch(&fixture);
+        assert_missing_artifact(&fixture);
+    }
+
+    fn assert_missing_authority(fixture: &WorkerFixture) {
+        let request = job_worker_request_value(JobWorkerRequestValueInput {
             job_ref: &fixture.installed_job.job_ref,
             target_peer: "peer:b",
             stage_ids: &fixture.admission.plan.stage_order,
@@ -6116,30 +6126,28 @@ mod tests {
             evidence_refs: &fixture.evidence_refs,
         })
         .expect("missing authority worker request");
-        let (missing_authority_delivery, missing_authority_log) = deliver_worker_request(
-            &fixture.root.join("missing-authority-transport"),
-            &missing_authority_request,
-            "peer:b",
-            true,
-        );
-        let missing_authority = execute_worker_delivery(JobWorkerExecuteInput {
+        let (delivery, log) =
+            deliver_worker_request(&fixture.root.join("missing-authority-transport"), &request, "peer:b", true);
+        let denied = execute_worker_delivery(JobWorkerExecuteInput {
             target_registry: &fixture.target,
             storage_root: &fixture.root.join("missing-authority-storage"),
             cache_root: &fixture.root.join("missing-authority-cache"),
             chunk_root: &fixture.root.join("missing-authority-chunks"),
-            delivery: &missing_authority_delivery,
-            delivery_log: Some(&missing_authority_log),
+            delivery: &delivery,
+            delivery_log: Some(&log),
             admission_receipt_value: &fixture.admission.receipt_value,
             execution_request_value: &fixture.execution_request,
             ledger_root: None,
         })
         .expect("missing authority denial");
-        assert_eq!(missing_authority.result.decision, "deny");
-        assert!(missing_authority.execution.is_none());
-        assert!(missing_authority.result.diagnostics.iter().any(|diagnostic| diagnostic.contains("authority")));
+        assert_eq!(denied.result.decision, "deny");
+        assert!(denied.execution.is_none());
+        assert!(denied.result.diagnostics.iter().any(|diagnostic| diagnostic.contains("authority")));
+    }
 
+    fn assert_missing_admission(fixture: &WorkerFixture) {
         let missing_admission_ref = test_ref("missing-worker-admission");
-        let missing_admission_request = job_worker_request_value(JobWorkerRequestValueInput {
+        let request = job_worker_request_value(JobWorkerRequestValueInput {
             job_ref: &fixture.installed_job.job_ref,
             target_peer: "peer:b",
             stage_ids: &fixture.admission.plan.stage_order,
@@ -6157,35 +6165,27 @@ mod tests {
             ],
         })
         .expect("missing admission worker request");
-        let (missing_admission_delivery, missing_admission_log) = deliver_worker_request(
-            &fixture.root.join("missing-admission-transport"),
-            &missing_admission_request,
-            "peer:b",
-            true,
-        );
-        let missing_admission = execute_worker_delivery(JobWorkerExecuteInput {
+        let (delivery, log) =
+            deliver_worker_request(&fixture.root.join("missing-admission-transport"), &request, "peer:b", true);
+        let denied = execute_worker_delivery(JobWorkerExecuteInput {
             target_registry: &fixture.target,
             storage_root: &fixture.root.join("missing-admission-storage"),
             cache_root: &fixture.root.join("missing-admission-cache"),
             chunk_root: &fixture.root.join("missing-admission-chunks"),
-            delivery: &missing_admission_delivery,
-            delivery_log: Some(&missing_admission_log),
+            delivery: &delivery,
+            delivery_log: Some(&log),
             admission_receipt_value: &fixture.admission.receipt_value,
             execution_request_value: &fixture.execution_request,
             ledger_root: None,
         })
         .expect("missing admission denial");
-        assert_eq!(missing_admission.result.decision, "deny");
-        assert!(missing_admission.execution.is_none());
-        assert!(
-            missing_admission
-                .result
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.contains("admission receipt hashes"))
-        );
+        assert_eq!(denied.result.decision, "deny");
+        assert!(denied.execution.is_none());
+        assert!(denied.result.diagnostics.iter().any(|diagnostic| diagnostic.contains("admission receipt hashes")));
+    }
 
-        let denied_admission_request_value = job_admission_request_value(AdmissionRequestValueInput {
+    fn assert_denied_admission(fixture: &WorkerFixture) {
+        let request_value = job_admission_request_value(AdmissionRequestValueInput {
             job_ref: &fixture.installed_job.job_ref,
             sync_ref: &fixture.sync_ref,
             stage_ids: &[],
@@ -6196,14 +6196,13 @@ mod tests {
             resource_refs: &[],
         })
         .expect("denied admission request");
-        let denied_admission =
-            admission_loopback(&fixture.target, &denied_admission_request_value).expect("denied admission");
-        assert_eq!(denied_admission.plan.decision, "deny");
-        let denied_admission_ref = canonical_hash(&denied_admission.receipt_value).expect("denied admission ref");
-        let denied_execution_request = job_execution_request_value(ExecutionRequestValueInput {
+        let admission = admission_loopback(&fixture.target, &request_value).expect("denied admission");
+        assert_eq!(admission.plan.decision, "deny");
+        let admission_ref = canonical_hash(&admission.receipt_value).expect("denied admission ref");
+        let execution_request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &fixture.installed_job.job_ref,
-            admission_ref: &denied_admission_ref,
-            stage_ids: &denied_admission.plan.stage_order,
+            admission_ref: &admission_ref,
+            stage_ids: &admission.plan.stage_order,
             target_peer: "peer:b",
             storage_profile_ref: &test_ref("denied-worker-storage-profile"),
             cache_profile_ref: &test_ref("denied-worker-cache-profile"),
@@ -6213,48 +6212,46 @@ mod tests {
             resource_refs: &[],
         })
         .expect("denied execution request");
-        let denied_execution_request_ref = canonical_hash(&denied_execution_request).expect("denied execution ref");
-        let denied_worker_request = job_worker_request_value(JobWorkerRequestValueInput {
+        let execution_request_ref = canonical_hash(&execution_request).expect("denied execution ref");
+        let worker_request = job_worker_request_value(JobWorkerRequestValueInput {
             job_ref: &fixture.installed_job.job_ref,
             target_peer: "peer:b",
-            stage_ids: &denied_admission.plan.stage_order,
+            stage_ids: &admission.plan.stage_order,
             sync_ref: &fixture.sync_ref,
-            admission_ref: &denied_admission_ref,
-            execution_request_ref: &denied_execution_request_ref,
+            admission_ref: &admission_ref,
+            execution_request_ref: &execution_request_ref,
             authority_refs: &[],
             resource_refs: &[],
             peer_bootstrap_refs: std::slice::from_ref(&fixture.peer_bootstrap_ref),
             node_identity_refs: std::slice::from_ref(&fixture.node_identity_ref),
             evidence_refs: &[
                 fixture.sync_ref.clone(),
-                denied_admission_ref.clone(),
-                denied_execution_request_ref.clone(),
+                admission_ref.clone(),
+                execution_request_ref.clone(),
             ],
         })
         .expect("denied worker request");
-        let (denied_delivery, denied_log) = deliver_worker_request(
-            &fixture.root.join("denied-admission-transport"),
-            &denied_worker_request,
-            "peer:b",
-            true,
-        );
-        let denied_worker = execute_worker_delivery(JobWorkerExecuteInput {
+        let (delivery, log) =
+            deliver_worker_request(&fixture.root.join("denied-admission-transport"), &worker_request, "peer:b", true);
+        let denied = execute_worker_delivery(JobWorkerExecuteInput {
             target_registry: &fixture.target,
             storage_root: &fixture.root.join("denied-admission-storage"),
             cache_root: &fixture.root.join("denied-admission-cache"),
             chunk_root: &fixture.root.join("denied-admission-chunks"),
-            delivery: &denied_delivery,
-            delivery_log: Some(&denied_log),
-            admission_receipt_value: &denied_admission.receipt_value,
-            execution_request_value: &denied_execution_request,
+            delivery: &delivery,
+            delivery_log: Some(&log),
+            admission_receipt_value: &admission.receipt_value,
+            execution_request_value: &execution_request,
             ledger_root: None,
         })
         .expect("denied worker");
-        assert_eq!(denied_worker.result.decision, "deny");
-        assert!(denied_worker.execution.is_none());
+        assert_eq!(denied.result.decision, "deny");
+        assert!(denied.execution.is_none());
+    }
 
+    fn assert_stale_sync(fixture: &WorkerFixture) {
         let stale_sync = test_ref("stale-sync");
-        let stale_request = job_worker_request_value(JobWorkerRequestValueInput {
+        let request = job_worker_request_value(JobWorkerRequestValueInput {
             job_ref: &fixture.installed_job.job_ref,
             target_peer: "peer:b",
             stage_ids: &fixture.admission.plan.stage_order,
@@ -6272,69 +6269,71 @@ mod tests {
             ],
         })
         .expect("stale sync request");
-        let (stale_delivery, stale_log) =
-            deliver_worker_request(&fixture.root.join("stale-sync-transport"), &stale_request, "peer:b", true);
-        let stale = execute_worker_delivery(JobWorkerExecuteInput {
+        let (delivery, log) =
+            deliver_worker_request(&fixture.root.join("stale-sync-transport"), &request, "peer:b", true);
+        let denied = execute_worker_delivery(JobWorkerExecuteInput {
             target_registry: &fixture.target,
             storage_root: &fixture.root.join("stale-storage"),
             cache_root: &fixture.root.join("stale-cache"),
             chunk_root: &fixture.root.join("stale-chunks"),
-            delivery: &stale_delivery,
-            delivery_log: Some(&stale_log),
+            delivery: &delivery,
+            delivery_log: Some(&log),
             admission_receipt_value: &fixture.admission.receipt_value,
             execution_request_value: &fixture.execution_request,
             ledger_root: None,
         })
         .expect("stale denial");
-        assert_eq!(stale.result.decision, "deny");
-        assert!(stale.execution.is_none());
-        assert!(stale.result.diagnostics.iter().any(|diagnostic| diagnostic.contains("sync ref")));
+        assert_eq!(denied.result.decision, "deny");
+        assert!(denied.execution.is_none());
+        assert!(denied.result.diagnostics.iter().any(|diagnostic| diagnostic.contains("sync ref")));
+    }
 
-        let target_mismatch_envelope =
-            crate::remote_dataspace::build_envelope(crate::remote_dataspace::RemoteDataspaceEnvelopeInput {
-                from_peer: "peer:a".to_string(),
-                from_actor: "source-worker".to_string(),
-                to_peer: "peer:c".to_string(),
-                topic: "molten.job.worker".to_string(),
-                operation: crate::remote_dataspace::RemoteDataspaceOperation::Message,
-                payload: fixture.worker_request.clone(),
-                content_refs: Vec::new(),
-                capability_refs: vec![fixture.authority_context_ref.clone()],
-                evidence_refs: fixture.evidence_refs.clone(),
-            })
-            .expect("target mismatch envelope");
+    fn assert_target_mismatch(fixture: &WorkerFixture) {
+        let envelope = crate::remote_dataspace::build_envelope(crate::remote_dataspace::RemoteDataspaceEnvelopeInput {
+            from_peer: "peer:a".to_string(),
+            from_actor: "source-worker".to_string(),
+            to_peer: "peer:c".to_string(),
+            topic: "molten.job.worker".to_string(),
+            operation: crate::remote_dataspace::RemoteDataspaceOperation::Message,
+            payload: fixture.worker_request.clone(),
+            content_refs: Vec::new(),
+            capability_refs: vec![fixture.authority_context_ref.clone()],
+            evidence_refs: fixture.evidence_refs.clone(),
+        })
+        .expect("target mismatch envelope");
         crate::remote_dataspace::publish_local_gossip(
             &fixture.root.join("target-mismatch-transport"),
-            &target_mismatch_envelope,
+            &envelope,
             "peer:a",
         )
         .expect("publish mismatch");
-        let target_mismatch_delivery = crate::remote_dataspace::deliver_local_gossip(
+        let delivery = crate::remote_dataspace::deliver_local_gossip(
             &fixture.root.join("target-mismatch-transport"),
             "molten.job.worker",
-            &target_mismatch_envelope.envelope_ref,
+            &envelope.envelope_ref,
             "peer:c",
         )
         .expect("deliver mismatch");
-        let target_mismatch_log =
-            crate::remote_dataspace::delivery_log(std::slice::from_ref(&target_mismatch_delivery), true)
-                .expect("mismatch delivery log");
-        let target_mismatch = execute_worker_delivery(JobWorkerExecuteInput {
+        let log = crate::remote_dataspace::delivery_log(std::slice::from_ref(&delivery), true)
+            .expect("mismatch delivery log");
+        let denied = execute_worker_delivery(JobWorkerExecuteInput {
             target_registry: &fixture.target,
             storage_root: &fixture.root.join("target-mismatch-storage"),
             cache_root: &fixture.root.join("target-mismatch-cache"),
             chunk_root: &fixture.root.join("target-mismatch-chunks"),
-            delivery: &target_mismatch_delivery,
-            delivery_log: Some(&target_mismatch_log),
+            delivery: &delivery,
+            delivery_log: Some(&log),
             admission_receipt_value: &fixture.admission.receipt_value,
             execution_request_value: &fixture.execution_request,
             ledger_root: None,
         })
         .expect("target mismatch denial");
-        assert_eq!(target_mismatch.result.decision, "deny");
-        assert!(target_mismatch.execution.is_none());
+        assert_eq!(denied.result.decision, "deny");
+        assert!(denied.execution.is_none());
+    }
 
-        let missing_artifact = execute_worker_delivery(JobWorkerExecuteInput {
+    fn assert_missing_artifact(fixture: &WorkerFixture) {
+        let denied = execute_worker_delivery(JobWorkerExecuteInput {
             target_registry: &fixture.root.join("empty-target"),
             storage_root: &fixture.root.join("missing-artifact-storage"),
             cache_root: &fixture.root.join("missing-artifact-cache"),
@@ -6346,11 +6345,11 @@ mod tests {
             ledger_root: None,
         })
         .expect("missing target artifact denial");
-        assert_eq!(missing_artifact.result.decision, "deny", "{:?}", missing_artifact.result.diagnostics);
+        assert_eq!(denied.result.decision, "deny", "{:?}", denied.result.diagnostics);
         assert!(
-            missing_artifact.execution.as_ref().is_some_and(|execution| execution.run.is_none()),
+            denied.execution.as_ref().is_some_and(|execution| execution.run.is_none()),
             "{:?}",
-            missing_artifact.result.diagnostics
+            denied.result.diagnostics
         );
     }
 
