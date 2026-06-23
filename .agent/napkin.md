@@ -212,6 +212,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet retention diagnostics table split: replacing the repetitive `src/retention/mod.rs::retention_diagnostics` push chain with a neutral same-file `push_notes` helper lowered the no-disabled probe from 7196 to 7194 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-retention-notes-0`.
+
 - 2026-06-23 Octet retention no-endpoint send split: extracting `src/retention/mod.rs::remote_clearance_live_multihost_request_and_response_send_write_artifacts_on_denied_transport` through neutral same-file `NoEndpointCase`/`TicketPair` plus `case_request`/`case_response` helpers lowered the no-disabled probe from 7197 to 7196 by clearing one `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test remote_clearance_live_multihost_request_and_response_send_write_artifacts_on_denied_transport`, `cargo fmt --check`, and probe `target/octet-burndown/probe-retention-denied-transport-0`.
 
 - 2026-06-23 Octet retention workflow reuse split: replacing repeated remote-clearance request/response/admission setup in `src/retention/mod.rs::remote_clearance_workflow_imports_peer_clearance_and_denies_wrong_request` with existing `LiveCase` helpers plus neutral `pair_with_label` lowered the no-disabled probe from 7198 to 7197 while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test remote_clearance_workflow_imports_peer_clearance_and_denies_wrong_request`, and probe `target/octet-burndown/probe-retention-workflow-v2-0`.

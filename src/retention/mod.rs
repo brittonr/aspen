@@ -6955,80 +6955,39 @@ fn retention_tombstone(input: RetentionTombstoneBuildInput<'_>) -> Result<Retent
 }
 
 fn retention_diagnostics(input: &RetentionEvaluationInput<'_>, index: &RetentionReferenceIndex) -> Result<Vec<String>> {
+    let is_destructive = is_destructive_action(input.action);
     let mut diagnostics = Vec::new();
-    if !input.is_reference_index_complete {
-        push_bounded(
-            &mut diagnostics,
-            "incomplete-reference-proof".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention diagnostics",
-        )?;
-    }
-    if !index.pin_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "active-pins-present".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention diagnostics",
-        )?;
-    }
-    if !input.retained_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "retained-dependencies-present".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention diagnostics",
-        )?;
-    }
-    if input.policy_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "retention-policy-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention diagnostics",
-        )?;
-    }
-    if is_destructive_action(input.action) && input.evidence_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "retention-evidence-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention diagnostics",
-        )?;
-    }
-    if is_destructive_action(input.action) && !input.has_delete_authority {
-        push_bounded(
-            &mut diagnostics,
-            "delete-authority-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention diagnostics",
-        )?;
-    }
-    if is_destructive_action(input.action) && !input.remote_refs.is_empty() && !input.has_remote_gc_clearance {
-        push_bounded(
-            &mut diagnostics,
-            "remote-cache-refs-present".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention diagnostics",
-        )?;
-    }
-    if input.retention_class == CLASS_LEGAL_HOLD && is_destructive_action(input.action) {
-        push_bounded(
-            &mut diagnostics,
-            "legal-hold-class-not-deletable".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention diagnostics",
-        )?;
-    }
-    if input.retention_class == CLASS_PRIVATE_SECRET_REF && input.action == ACTION_COMPACT {
-        push_bounded(
-            &mut diagnostics,
-            "private-secret-ref-compaction-denied".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention diagnostics",
-        )?;
-    }
+    push_notes(&mut diagnostics, [
+        (!input.is_reference_index_complete, "incomplete-reference-proof"),
+        (!index.pin_refs.is_empty(), "active-pins-present"),
+        (!input.retained_refs.is_empty(), "retained-dependencies-present"),
+        (input.policy_refs.is_empty(), "retention-policy-missing"),
+        (is_destructive && input.evidence_refs.is_empty(), "retention-evidence-missing"),
+        (is_destructive && !input.has_delete_authority, "delete-authority-missing"),
+        (
+            is_destructive && !input.remote_refs.is_empty() && !input.has_remote_gc_clearance,
+            "remote-cache-refs-present",
+        ),
+        (input.retention_class == CLASS_LEGAL_HOLD && is_destructive, "legal-hold-class-not-deletable"),
+        (
+            input.retention_class == CLASS_PRIVATE_SECRET_REF && input.action == ACTION_COMPACT,
+            "private-secret-ref-compaction-denied",
+        ),
+    ])?;
     Ok(diagnostics)
+}
+
+fn push_notes<S, I>(values: &mut S, entries: I) -> Result<()>
+where
+    S: VecSink<String>,
+    I: IntoIterator<Item = (bool, &'static str)>,
+{
+    for (is_active, note) in entries {
+        if is_active {
+            push_bounded(values, note.to_string(), MAX_RETENTION_DIAGNOSTICS, "retention diagnostics")?;
+        }
+    }
+    Ok(())
 }
 
 fn class_profile_diagnostics(input: &RetentionClassProfileInput) -> Result<Vec<String>> {
