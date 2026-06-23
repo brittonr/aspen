@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-23 | self | While splitting retention bundle verification, I used a literal array type `[( &str, &[String], fn(&IOValue) -> Result<()> ); 6]`; focused tests passed but clippy failed `type_complexity`. | For repeated parser groups, introduce a tiny descriptor struct/type alias immediately instead of spelling complex tuple/function-pointer array types inline. |
 | 2026-06-23 | self | While splitting `src/chunk/store.rs::gc`, I passed an owned `GcReceiptInput` to both receipt and tombstone helpers and the focused chunk-store test compile failed with E0382 use-after-move. | Make small helper input structs `Copy`/borrow them when they only carry references and scalars before reusing them across sibling builders. |
 | 2026-06-23 | self | Extracting `src/chunk/store.rs::put_bytes_with_transforms` into a helper named `store_dedup` removed the target function-length finding but kept the no-disabled probe flat by adding `path_segment_repetition` on the helper name. | In `chunk/store.rs`, avoid helper names that repeat the file/module segment (`store`) or domain terms; use neutral verbs like `note_reuse` for receipt side helpers. |
 | 2026-06-23 | self | Splitting `retention_remote_gc_clearance_live_workflow_value` through a six-argument `flow_diagnostics` helper removed the target function-length finding but kept the no-disabled probe flat by adding two `too_many_parameters` findings. | When extracting retention flow diagnostic helpers, group helper inputs in a neutral private input struct immediately; Octet's parameter threshold is lower than clippy's. |
@@ -214,6 +215,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-23 Octet retention bundle verify split: extracting `src/retention/mod.rs::verify_retention_candidate_bundle` into neutral same-file expected-ref/group/file-note helpers lowered the no-disabled probe from 7174 to 7172 by clearing the function-length finding while validation passed `cargo fmt`, focused `cargo test retention`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-retention-bundle-verify-0`.
 
 - 2026-06-23 Octet chunk GC split: extracting `src/chunk/store.rs::gc` into neutral same-file `GcTargets`/`GcNotes`/receipt finish helpers lowered the no-disabled probe from 7176 to 7174 by clearing the GC `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test chunk_store`, `cargo fmt --check`, and probe `target/octet-burndown/probe-chunk-gc-notes-v2-0`.
 
