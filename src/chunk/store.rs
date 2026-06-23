@@ -1076,6 +1076,128 @@ fn copy_refs(input: CopyInput<'_>) -> Result<Vec<String>> {
     Ok(fetched_chunks)
 }
 
+struct HeadInput<'a> {
+    store_root: &'a Path,
+    iroh_root: &'a Path,
+    manifest: &'a ChunkManifest,
+    chunk_refs: &'a [String],
+}
+
+fn write_head(input: HeadInput<'_>) -> Result<String> {
+    let manifest_bytes =
+        fs::read(manifest_path(input.store_root, &input.manifest.manifest_ref)?).map_err(MoltenError::from)?;
+    let manifest_blob_ref = hash_blob_bytes(&manifest_bytes);
+    if manifest_blob_ref != input.manifest.manifest_ref {
+        let message = format!(
+            "Iroh manifest blob ref {manifest_blob_ref} does not preserve manifest identity {}",
+            input.manifest.manifest_ref
+        );
+        let receipt_value =
+            denial_receipt_value("iroh-publish", Some(&input.manifest.manifest_ref), input.chunk_refs, &message, vec![
+                ("manifest-identity-preserved", "fail"),
+                ("transport-does-not-grant-trust", "pass"),
+            ]);
+        store_receipt(input.store_root, &receipt_value)?;
+        return Err(MoltenError::invalid_harness(message));
+    }
+    write_immutable_blob(&iroh_blob_path(input.iroh_root, &manifest_blob_ref)?, &manifest_bytes, &manifest_blob_ref)?;
+    Ok(manifest_blob_ref)
+}
+
+struct PartsInput<'a> {
+    store_root: &'a Path,
+    iroh_root: &'a Path,
+    manifest: &'a ChunkManifest,
+    chunk_refs: &'a [String],
+    chunk_size: usize,
+}
+
+fn write_parts(input: PartsInput<'_>) -> Result<Vec<IrohChunkBlob>> {
+    let mut chunk_blobs = Vec::new();
+    for chunk in &input.manifest.chunks {
+        let bytes = match read_verified_chunk(input.store_root, chunk, input.chunk_size) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                let receipt_value = denial_receipt_value(
+                    "iroh-publish",
+                    Some(&input.manifest.manifest_ref),
+                    input.chunk_refs,
+                    error.to_string(),
+                    vec![
+                        ("streaming-chunk-verification", "fail"),
+                        ("deny-corrupt-or-missing-chunk", "pass"),
+                    ],
+                );
+                store_receipt(input.store_root, &receipt_value)?;
+                return Err(error);
+            }
+        };
+        let blob_ref = hash_blob_bytes(&bytes);
+        write_immutable_blob(&iroh_blob_path(input.iroh_root, &blob_ref)?, &bytes, &blob_ref)?;
+        push_bounded(
+            &mut chunk_blobs,
+            IrohChunkBlob {
+                chunk_ref: chunk.chunk_ref.clone(),
+                blob_ref,
+                length: chunk.length,
+            },
+            MAX_CHUNK_STORE_CHUNKS,
+            "chunk store Iroh chunk blobs",
+        )?;
+    }
+    Ok(chunk_blobs)
+}
+
+struct FinishInput<'a> {
+    store_root: &'a Path,
+    iroh_root: &'a Path,
+    node: &'a str,
+    manifest: ChunkManifest,
+    manifest_blob_ref: String,
+    chunk_blobs: Vec<IrohChunkBlob>,
+    chunk_refs: &'a [String],
+}
+
+fn finish_pass(input: FinishInput<'_>) -> Result<ChunkStoreIrohPublish> {
+    let ticket_value = iroh_ticket_value(&input.manifest.manifest_ref, &input.manifest_blob_ref, &input.chunk_blobs);
+    let ticket_ref = canonical_hash(&ticket_value)?;
+    write_immutable_bytes(
+        &iroh_ticket_path(input.iroh_root, &input.manifest.manifest_ref)?,
+        &canonical_bytes(&ticket_value)?,
+        &ticket_ref,
+        parse_canonical_bytes,
+    )?;
+    let ticket = format!("iroh-local-chunk:{}", input.manifest.manifest_ref);
+    let chunk_blob_refs = input.chunk_blobs.iter().map(|chunk| chunk.blob_ref.clone()).collect::<Vec<_>>();
+    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+        operation: "iroh-publish",
+        decision: "pass",
+        manifest_ref: Some(&input.manifest.manifest_ref),
+        chunk_refs: input.chunk_refs,
+        checks: vec![
+            ("manifest-identity-preserved", "pass"),
+            ("chunk-blob-verification", "pass"),
+            ("iroh-location-hints-only", "pass"),
+            ("transport-does-not-grant-trust", "pass"),
+        ],
+        details: vec![
+            record("node", vec![string(input.node)]),
+            record("ticket", vec![string(&ticket)]),
+            record("ticket-ref", vec![string(&ticket_ref)]),
+            record("manifest-blob-ref", vec![string(&input.manifest_blob_ref)]),
+            record("chunk-blob-refs", vec![sequence(chunk_blob_refs.iter().map(string).collect())]),
+        ],
+    });
+    store_receipt(input.store_root, &receipt_value)?;
+    Ok(ChunkStoreIrohPublish {
+        ticket,
+        manifest_ref: input.manifest.manifest_ref,
+        manifest_blob_ref: input.manifest_blob_ref,
+        chunk_blob_refs,
+        receipt_value,
+    })
+}
+
 pub fn publish_iroh_blobs(
     store_root: &Path,
     iroh_root: &Path,
@@ -1106,93 +1228,30 @@ pub fn publish_iroh_blobs(
         return Err(MoltenError::invalid_harness(message));
     }
 
-    let manifest_bytes = fs::read(manifest_path(store_root, &manifest.manifest_ref)?).map_err(MoltenError::from)?;
-    let manifest_blob_ref = hash_blob_bytes(&manifest_bytes);
-    if manifest_blob_ref != manifest.manifest_ref {
-        let message = format!(
-            "Iroh manifest blob ref {manifest_blob_ref} does not preserve manifest identity {}",
-            manifest.manifest_ref
-        );
-        let receipt_value =
-            denial_receipt_value("iroh-publish", Some(&manifest.manifest_ref), &chunk_refs, &message, vec![
-                ("manifest-identity-preserved", "fail"),
-                ("transport-does-not-grant-trust", "pass"),
-            ]);
-        store_receipt(store_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
-    }
-    write_immutable_blob(&iroh_blob_path(iroh_root, &manifest_blob_ref)?, &manifest_bytes, &manifest_blob_ref)?;
+    let manifest_blob_ref = write_head(HeadInput {
+        store_root,
+        iroh_root,
+        manifest: &manifest,
+        chunk_refs: &chunk_refs,
+    })?;
 
     let chunk_size = chunk_size_to_usize(manifest.chunk_size, "manifest chunk size")?;
-    let mut chunk_blobs = Vec::new();
-    for chunk in &manifest.chunks {
-        let bytes = match read_verified_chunk(store_root, chunk, chunk_size) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                let receipt_value = denial_receipt_value(
-                    "iroh-publish",
-                    Some(&manifest.manifest_ref),
-                    &chunk_refs,
-                    error.to_string(),
-                    vec![
-                        ("streaming-chunk-verification", "fail"),
-                        ("deny-corrupt-or-missing-chunk", "pass"),
-                    ],
-                );
-                store_receipt(store_root, &receipt_value)?;
-                return Err(error);
-            }
-        };
-        let blob_ref = hash_blob_bytes(&bytes);
-        write_immutable_blob(&iroh_blob_path(iroh_root, &blob_ref)?, &bytes, &blob_ref)?;
-        push_bounded(
-            &mut chunk_blobs,
-            IrohChunkBlob {
-                chunk_ref: chunk.chunk_ref.clone(),
-                blob_ref,
-                length: chunk.length,
-            },
-            MAX_CHUNK_STORE_CHUNKS,
-            "chunk store Iroh chunk blobs",
-        )?;
-    }
-
-    let ticket_value = iroh_ticket_value(&manifest.manifest_ref, &manifest_blob_ref, &chunk_blobs);
-    let ticket_ref = canonical_hash(&ticket_value)?;
-    write_immutable_bytes(
-        &iroh_ticket_path(iroh_root, &manifest.manifest_ref)?,
-        &canonical_bytes(&ticket_value)?,
-        &ticket_ref,
-        parse_canonical_bytes,
-    )?;
-    let ticket = format!("iroh-local-chunk:{}", manifest.manifest_ref);
-    let chunk_blob_refs = chunk_blobs.iter().map(|chunk| chunk.blob_ref.clone()).collect::<Vec<_>>();
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
-        operation: "iroh-publish",
-        decision: "pass",
-        manifest_ref: Some(&manifest.manifest_ref),
+    let chunk_blobs = write_parts(PartsInput {
+        store_root,
+        iroh_root,
+        manifest: &manifest,
         chunk_refs: &chunk_refs,
-        checks: vec![
-            ("manifest-identity-preserved", "pass"),
-            ("chunk-blob-verification", "pass"),
-            ("iroh-location-hints-only", "pass"),
-            ("transport-does-not-grant-trust", "pass"),
-        ],
-        details: vec![
-            record("node", vec![string(node)]),
-            record("ticket", vec![string(&ticket)]),
-            record("ticket-ref", vec![string(&ticket_ref)]),
-            record("manifest-blob-ref", vec![string(&manifest_blob_ref)]),
-            record("chunk-blob-refs", vec![sequence(chunk_blob_refs.iter().map(string).collect())]),
-        ],
-    });
-    store_receipt(store_root, &receipt_value)?;
-    Ok(ChunkStoreIrohPublish {
-        ticket,
-        manifest_ref: manifest.manifest_ref,
+        chunk_size,
+    })?;
+
+    finish_pass(FinishInput {
+        store_root,
+        iroh_root,
+        node,
+        manifest,
         manifest_blob_ref,
-        chunk_blob_refs,
-        receipt_value,
+        chunk_blobs,
+        chunk_refs: &chunk_refs,
     })
 }
 
