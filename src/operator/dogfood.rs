@@ -1907,6 +1907,69 @@ struct ObservedNixDogfoodOutput {
     file_refs: Vec<(String, String)>,
 }
 
+struct OutputBindingRefs<'a> {
+    report: &'a DogfoodReport,
+    release_gate: &'a ReleaseGateReceipt,
+    replay_verify_ref: &'a str,
+    replay_index_ref: &'a str,
+    replay_index_receipt_refs: &'a [String],
+}
+
+fn require_observed_bindings(input: &OutputBindingRefs<'_>) -> Result<()> {
+    if !input
+        .replay_index_receipt_refs
+        .iter()
+        .any(|reference| reference.as_str() == input.replay_verify_ref)
+    {
+        return Err(MoltenError::invalid_harness(format!(
+            "Nix dogfood replay index {} does not bind replay verify {}",
+            input.replay_index_ref, input.replay_verify_ref
+        )));
+    }
+    if input.report.decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "Nix dogfood evidence requires pass report {}; decision is {}",
+            input.report.report_ref, input.report.decision
+        )));
+    }
+    if input.release_gate.decision != "pass" {
+        return Err(MoltenError::invalid_harness(format!(
+            "Nix dogfood evidence requires pass release gate {}; decision is {}",
+            input.release_gate.receipt_ref, input.release_gate.decision
+        )));
+    }
+    if input.release_gate.report_ref != input.report.report_ref {
+        return Err(MoltenError::invalid_harness(format!(
+            "Nix dogfood release gate report ref {} does not match report {}",
+            input.release_gate.report_ref, input.report.report_ref
+        )));
+    }
+    if !input
+        .release_gate
+        .replay_index_refs
+        .iter()
+        .any(|reference| reference.as_str() == input.replay_index_ref)
+    {
+        return Err(MoltenError::invalid_harness(format!(
+            "Nix dogfood release gate does not bind replay index {}",
+            input.replay_index_ref
+        )));
+    }
+    Ok(())
+}
+
+fn observed_file_refs(entries: [(&str, &str); 6]) -> Result<Vec<(String, String)>> {
+    let mut file_refs = Vec::new();
+    for (path, reference) in entries {
+        file_refs.push_limited_value(
+            (path.to_string(), reference.to_string()),
+            MAX_OPERATOR_REFS,
+            "Nix dogfood file refs",
+        )?;
+    }
+    Ok(file_refs)
+}
+
 fn observe_nix_dogfood_output(output_path: &Path) -> Result<ObservedNixDogfoodOutput> {
     let output_path_string = output_path.display().to_string();
     let output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
@@ -1925,71 +1988,27 @@ fn observe_nix_dogfood_output(output_path: &Path) -> Result<ObservedNixDogfoodOu
     let replay_verify_ref = parse_release_replay_verify(&replay_verify_value)?;
     let replay_index_ref = parse_release_replay_index(&replay_index_value)?;
     let replay_index_receipt_refs = parse_release_replay_index_receipt_refs(&replay_index_value)?;
-    if !replay_index_receipt_refs.iter().any(|reference| reference == &replay_verify_ref) {
-        return Err(MoltenError::invalid_harness(format!(
-            "Nix dogfood replay index {replay_index_ref} does not bind replay verify {replay_verify_ref}"
-        )));
-    }
-    if report.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
-            "Nix dogfood evidence requires pass report {}; decision is {}",
-            report.report_ref, report.decision
-        )));
-    }
-    if release_gate.decision != "pass" {
-        return Err(MoltenError::invalid_harness(format!(
-            "Nix dogfood evidence requires pass release gate {}; decision is {}",
-            release_gate.receipt_ref, release_gate.decision
-        )));
-    }
-    if release_gate.report_ref != report.report_ref {
-        return Err(MoltenError::invalid_harness(format!(
-            "Nix dogfood release gate report ref {} does not match report {}",
-            release_gate.report_ref, report.report_ref
-        )));
-    }
-    if !release_gate.replay_index_refs.iter().any(|reference| reference == &replay_index_ref) {
-        return Err(MoltenError::invalid_harness(format!(
-            "Nix dogfood release gate does not bind replay index {replay_index_ref}"
-        )));
-    }
+    require_observed_bindings(&OutputBindingRefs {
+        report: &report,
+        release_gate: &release_gate,
+        replay_verify_ref: &replay_verify_ref,
+        replay_index_ref: &replay_index_ref,
+        replay_index_receipt_refs: &replay_index_receipt_refs,
+    })?;
     let nextest_check_path = nextest_text.trim().to_string();
     if nextest_check_path.is_empty() {
         return Err(MoltenError::invalid_harness("Nix dogfood after-nextest marker is empty"));
     }
     let summary_ref = raw_text_ref("molten.operator.nix-dogfood-summary.v1", &summary_text);
     let nextest_marker_ref = raw_text_ref("molten.operator.nix-dogfood-nextest-marker.v1", &nextest_text);
-    let mut file_refs = Vec::new();
-    file_refs.push_limited_value(
-        ("dogfood-report.preserves".to_string(), report.report_ref.clone()),
-        MAX_OPERATOR_REFS,
-        "Nix dogfood file refs",
-    )?;
-    file_refs.push_limited_value(
-        ("release-gate.preserves".to_string(), release_gate.receipt_ref.clone()),
-        MAX_OPERATOR_REFS,
-        "Nix dogfood file refs",
-    )?;
-    file_refs.push_limited_value(
-        ("replay-verify.preserves".to_string(), replay_verify_ref.clone()),
-        MAX_OPERATOR_REFS,
-        "Nix dogfood file refs",
-    )?;
-    file_refs.push_limited_value(
-        ("replay-evidence-index.preserves".to_string(), replay_index_ref.clone()),
-        MAX_OPERATOR_REFS,
-        "Nix dogfood file refs",
-    )?;
-    file_refs.push_limited_value(
-        ("dogfood-summary.txt".to_string(), summary_ref.clone()),
-        MAX_OPERATOR_REFS,
-        "Nix dogfood file refs",
-    )?;
-    file_refs.push_limited_value(
-        ("after-nextest.txt".to_string(), nextest_marker_ref.clone()),
-        MAX_OPERATOR_REFS,
-        "Nix dogfood file refs",
-    )?;
+    let file_refs = observed_file_refs([
+        ("dogfood-report.preserves", report.report_ref.as_str()),
+        ("release-gate.preserves", release_gate.receipt_ref.as_str()),
+        ("replay-verify.preserves", replay_verify_ref.as_str()),
+        ("replay-evidence-index.preserves", replay_index_ref.as_str()),
+        ("dogfood-summary.txt", summary_ref.as_str()),
+        ("after-nextest.txt", nextest_marker_ref.as_str()),
+    ])?;
     Ok(ObservedNixDogfoodOutput {
         output_path: output_path_string,
         output_path_ref,
