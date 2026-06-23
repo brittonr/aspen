@@ -225,6 +225,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet catalog classification split: extracting `src/catalog/mod.rs::known_classifications_result` branches into neutral same-file `*_labels` helpers lowered the no-disabled probe from 7069 to 7067 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test catalog`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `git diff --check`, and probe `target/octet-burndown/probe-known-labels-split-0`.
+
 - 2026-06-23 Octet job DAG profile split: extracting `src/job/dag.rs::profile_job_dag` stage profile assembly into neutral same-file `StageProfiles`/`stage_profile_values` lowered the no-disabled probe from 7079 to 7077 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test job_dag`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check`, and probe `target/octet-burndown/probe-profile-stages-0`.
 
 - 2026-06-23 Octet job DAG plan-stage split: extracting `src/job/dag.rs::plan_job_dag` stage record assembly into neutral same-file `stage_plan_values` lowered the no-disabled probe from 7083 to 7081 by clearing two `function_length` findings while existing path repetition stayed flat. Validation passed `cargo fmt`, focused `cargo test job_dag`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check`, and probe `target/octet-burndown/probe-plan-stage-values-0`.

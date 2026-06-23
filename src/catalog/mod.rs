@@ -974,25 +974,65 @@ fn known_classifications(value: &IOValue) -> Vec<String> {
 }
 
 fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
+    if let Some(classifications) = direct_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = release_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = retention_core_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = retention_plan_apply_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = retention_execute_audit_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = retention_candidate_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = retention_tail_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = lifecycle_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = provenance_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = octet_evidence_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = octet_baseline_labels(value)? {
+        return Ok(classifications);
+    }
+    if let Some(classifications) = octet_gate_labels(value)? {
+        return Ok(classifications);
+    }
+    Ok(Vec::new())
+}
+
+fn direct_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Ok(receipt) = artifacts::parse_artifact_receipt(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "artifact-receipt:registry".to_string(),
             format!("receipt-operation:{}", receipt.operation),
             format!("receipt-decision:{}", receipt.decision),
-        ]);
+        ]));
     }
     if let Ok(receipt) = crate::transcripts::parse_transcript_run_receipt(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "transcript:run-receipt".to_string(),
             format!("transcript-status:{}", receipt.decision),
             format!("transcript-mode:{}", receipt.mode),
-        ]);
+        ]));
     }
     if let Some(fields) = value.collect_simple_record("deterministic-replay-verify-v1", Some(7)) {
-        return deterministic_replay_verify_gate_classifications(&fields);
+        return deterministic_replay_verify_gate_classifications(&fields).map(Some);
     }
     if let Some(fields) = value.collect_simple_record("deterministic-replay-verify-v1", Some(13)) {
-        return deterministic_replay_verify_fixture_classifications(&fields);
+        return deterministic_replay_verify_fixture_classifications(&fields).map(Some);
     }
     if let Some(fields) = value.collect_simple_record("deterministic-first-divergence-v1", Some(9)) {
         require_schema(&fields[0], DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA, "deterministic first divergence")?;
@@ -1001,21 +1041,25 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
         let handler_profile_ref = record_string(&fields[5], "handler-profile-ref")?;
         let expected_ref = record_string(&fields[6], "expected-ref")?;
         let actual_ref = record_string(&fields[7], "actual-ref")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "deterministic-replay:first-divergence".to_string(),
             format!("replay-divergence:{kind}"),
             format!("replay-actor:{actor_id}"),
             format!("replay-handler-profile:{handler_profile_ref}"),
             format!("replay-expected-ref:{expected_ref}"),
             format!("replay-actual-ref:{actual_ref}"),
-        ]);
+        ]));
     }
     if let Some(fields) = value.collect_simple_record("deterministic-replay-rollup-v1", Some(10)) {
-        return deterministic_replay_rollup_classifications(&fields);
+        return deterministic_replay_rollup_classifications(&fields).map(Some);
     }
     if let Some(fields) = value.collect_simple_record("deterministic-replay-index-v1", Some(15)) {
-        return deterministic_replay_index_classifications(&fields);
+        return deterministic_replay_index_classifications(&fields).map(Some);
     }
+    Ok(None)
+}
+
+fn release_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Ok(receipt) = crate::operator_dogfood::parse_release_gate_receipt(value) {
         let mut classifications = vec![
             "deterministic-replay:release-binding".to_string(),
@@ -1024,65 +1068,73 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
         for reference in receipt.replay_index_refs {
             classifications.push(format!("release-replay-index:{reference}"));
         }
-        return Ok(classifications);
+        return Ok(Some(classifications));
     }
     if let Ok(evidence) = crate::operator_dogfood::parse_nix_dogfood_evidence(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "deterministic-replay:release-binding".to_string(),
             format!("release-dogfood-replay-verify:{}", evidence.replay_verify_ref),
             format!("release-dogfood-replay-index:{}", evidence.replay_index_ref),
             format!("release-dogfood-release-gate:{}", evidence.release_gate_ref),
-        ]);
+        ]));
     }
     if let Ok(receipt) = crate::operator_dogfood::parse_nix_dogfood_verify_receipt(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "deterministic-replay:release-binding".to_string(),
             format!("release-dogfood-decision:{}", receipt.decision),
             format!("release-dogfood-replay-verify:{}", receipt.replay_verify_ref),
             format!("release-dogfood-replay-index:{}", receipt.replay_index_ref),
-        ]);
+        ]));
     }
     if let Ok(bundle) = crate::operator_dogfood::parse_release_evidence_bundle(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "deterministic-replay:release-binding".to_string(),
             format!("release-dogfood-replay-verify:{}", bundle.replay_verify_ref),
             format!("release-dogfood-replay-index:{}", bundle.replay_index_ref),
             format!("release-dogfood-release-gate:{}", bundle.release_gate_ref),
-        ]);
+        ]));
     }
     if let Ok(receipt) = crate::operator_dogfood::parse_release_evidence_bundle_verify_receipt(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "deterministic-replay:release-binding".to_string(),
             format!("release-dogfood-decision:{}", receipt.decision),
             format!("release-dogfood-replay-verify:{}", receipt.replay_verify_ref),
             format!("release-dogfood-replay-index:{}", receipt.replay_index_ref),
-        ]);
+        ]));
     }
+    Ok(None)
+}
+
+fn retention_core_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Ok(profile) = crate::retention::parse_retention_class_profile(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "retention:class".to_string(),
             format!("retention-class:{}", profile.class_name),
             format!("retention-policies:{}", profile.policy_refs.len()),
-        ]);
+        ]));
     }
     if let Ok(pin) = crate::retention::parse_retention_pin(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "retention:pin".to_string(),
             format!("retention-object:{}", pin.object_ref),
             format!("retention-class:{}", pin.retention_class),
             format!("retention-source:{}", pin.source),
-        ]);
+        ]));
     }
     if let Ok(index) = crate::retention::parse_reference_index(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "retention:index".to_string(),
             format!("retention-object:{}", index.object_ref),
             format!("retention-pins:{}", index.pin_refs.len()),
             format!("retention-complete:{}", index.is_complete),
-        ]);
+        ]));
     }
+    Ok(None)
+}
+
+fn retention_plan_apply_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Ok(plan) = crate::retention::parse_retention_gc_plan(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "retention-gc:plan".to_string(),
             "retention-gc-stage:plan".to_string(),
             format!("retention-gc-decision:{}", plan.decision),
@@ -1091,7 +1143,7 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
             format!("retention-gc-object:{}", plan.object_ref),
             format!("retention-gc-class:{}", plan.retention_class),
             format!("retention-gc-plan:{}", plan.plan_ref),
-        ]);
+        ]));
     }
     if let Ok(apply) = crate::retention::parse_retention_gc_apply(value) {
         let mut classifications = vec![
@@ -1111,8 +1163,12 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
             apply.retention_receipt_ref.as_deref(),
         )?;
         push_optional_classification(&mut classifications, "retention-gc-tombstone", apply.tombstone_ref.as_deref())?;
-        return Ok(classifications);
+        return Ok(Some(classifications));
     }
+    Ok(None)
+}
+
+fn retention_execute_audit_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Ok(execute) = crate::retention::parse_retention_gc_execution_gate(value) {
         let mut classifications = vec![
             "retention-gc:execute".to_string(),
@@ -1132,7 +1188,7 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
             execute.retention_receipt_ref.as_deref(),
         )?;
         push_optional_classification(&mut classifications, "retention-gc-tombstone", execute.tombstone_ref.as_deref())?;
-        return Ok(classifications);
+        return Ok(Some(classifications));
     }
     if let Ok(audit) = crate::retention::parse_retention_gc_audit(value) {
         let mut classifications = vec![
@@ -1153,8 +1209,12 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
             audit.retention_receipt_ref.as_deref(),
         )?;
         push_optional_classification(&mut classifications, "retention-gc-tombstone", audit.tombstone_ref.as_deref())?;
-        return Ok(classifications);
+        return Ok(Some(classifications));
     }
+    Ok(None)
+}
+
+fn retention_candidate_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Ok(explain) = crate::retention::parse_retention_candidate_explain(value) {
         let mut classifications = vec![
             "retention:explain".to_string(),
@@ -1172,7 +1232,7 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
         push_optional_classification(&mut classifications, "retention-class", explain.retention_class.as_deref())?;
         push_optional_classification(&mut classifications, "retention-action", explain.action.as_deref())?;
         push_optional_classification(&mut classifications, "retention-subsystem", explain.subsystem.as_deref())?;
-        return Ok(classifications);
+        return Ok(Some(classifications));
     }
     if let Ok(bundle) = crate::retention::parse_retention_candidate_bundle(value) {
         let mut classifications = vec![
@@ -1189,17 +1249,21 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
         push_optional_classification(&mut classifications, "retention-class", bundle.retention_class.as_deref())?;
         push_optional_classification(&mut classifications, "retention-action", bundle.action.as_deref())?;
         push_optional_classification(&mut classifications, "retention-subsystem", bundle.subsystem.as_deref())?;
-        return Ok(classifications);
+        return Ok(Some(classifications));
     }
+    Ok(None)
+}
+
+fn retention_tail_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Ok(profile) = crate::retention::parse_retention_candidate_bundle_profile(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "retention:bundle-profile".to_string(),
             "retention-candidate:bundle-profile".to_string(),
             format!("retention-bundle-profile:{}", profile.profile),
             format!("retention-bundle-decision:{}", profile.decision),
             format!("retention-bundle:{}", profile.bundle_ref),
             format!("retention-bundle-markers:{}", profile.marker_refs.len()),
-        ]);
+        ]));
     }
     if let Ok(verify) = crate::retention::parse_retention_candidate_bundle_verify(value) {
         let mut classifications = vec![
@@ -1216,70 +1280,78 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
         push_optional_classification(&mut classifications, "retention-class", verify.retention_class.as_deref())?;
         push_optional_classification(&mut classifications, "retention-action", verify.action.as_deref())?;
         push_optional_classification(&mut classifications, "retention-subsystem", verify.subsystem.as_deref())?;
-        return Ok(classifications);
+        return Ok(Some(classifications));
     }
     if let Ok(receipt) = crate::retention::parse_retention_receipt(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "retention:receipt".to_string(),
             format!("retention-decision:{}", receipt.decision),
             format!("retention-action:{}", receipt.action),
             format!("retention-object:{}", receipt.object_ref),
             format!("retention-pins:{}", receipt.pin_refs.len()),
-        ]);
+        ]));
     }
     if let Ok(tombstone) = crate::retention::parse_tombstone(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "retention:tombstone".to_string(),
             format!("retention-action:{}", tombstone.action),
             format!("retention-object:{}", tombstone.object_ref),
             format!("retention-class:{}", tombstone.retention_class),
-        ]);
+        ]));
     }
+    Ok(None)
+}
+
+fn lifecycle_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if crate::transcripts::parse_transcript_artifact(value).is_ok() {
-        return Ok(vec![
+        return Ok(Some(vec![
             "transcript:artifact".to_string(),
             "transcript-status:document".to_string(),
-        ]);
+        ]));
     }
     if let Ok(plan) = crate::upgrades::parse_upgrade_plan(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "upgrade:plan".to_string(),
             "upgrade-status:planned".to_string(),
             format!("upgrade-session:{}", plan.session_id),
-        ]);
+        ]));
     }
     if let Some(fields) = value.collect_simple_record("upgrade-receipt-v1", Some(8)) {
         let decision = record_string(&fields[2], "decision")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "upgrade:receipt".to_string(),
             format!("upgrade-status:{decision}"),
             format!("receipt-decision:{decision}"),
-        ]);
+        ]));
     }
+    Ok(None)
+}
+
+fn provenance_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Ok(record) = crate::provenance::parse_provenance_record(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "provenance:record".to_string(),
             format!("provenance-trust-state:{}", record.trust_state),
             format!("provenance-artifact:{}", record.artifact_ref),
             format!("provenance-build-records:{}", record.build_record_refs.len()),
-        ]);
+        ]));
     }
     if let Ok(record) = crate::provenance::parse_provenance_build_record(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "provenance:build-record".to_string(),
             format!("provenance-expected-artifact:{}", record.expected_artifact_ref),
             format!("provenance-build-sources:{}", record.source_refs.len()),
             format!("provenance-build-toolchains:{}", record.toolchain_refs.len()),
-        ]);
+        ]));
     }
     if let Ok(receipt) = crate::provenance::parse_provenance_build_verification_receipt(value) {
-        return Ok(vec![
+        return Ok(Some(vec![
             "provenance:build-verify-receipt".to_string(),
             format!("provenance-build-decision:{}", receipt.decision),
             format!("provenance-expected-artifact:{}", receipt.expected_artifact_ref),
             format!("provenance-actual-artifact:{}", receipt.actual_artifact_ref),
             format!("receipt-decision:{}", receipt.decision),
-        ]);
+        ]));
     }
     if let Some(fields) = value.collect_simple_record("provenance-receipt-v1", Some(10)) {
         require_schema(&fields[0], PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
@@ -1288,7 +1360,7 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
         let profile = record_string(&fields[3], "profile")?;
         let trust_state = record_string(&fields[5], "trust-state")?;
         let build_verification_count = record_sequence_len(&fields[9], "build-verifications")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "provenance:receipt".to_string(),
             format!("provenance-decision:{decision}"),
             format!("provenance-operation:{operation}"),
@@ -1297,7 +1369,7 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
             format!("provenance-build-verifications:{build_verification_count}"),
             format!("receipt-operation:{operation}"),
             format!("receipt-decision:{decision}"),
-        ]);
+        ]));
     }
     if let Some(fields) = value.collect_simple_record("provenance-receipt-v1", Some(9)) {
         require_schema(&fields[0], PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
@@ -1305,7 +1377,7 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
         let operation = record_string(&fields[2], "operation")?;
         let profile = record_string(&fields[3], "profile")?;
         let trust_state = record_string(&fields[5], "trust-state")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "provenance:receipt".to_string(),
             format!("provenance-decision:{decision}"),
             format!("provenance-operation:{operation}"),
@@ -1313,8 +1385,12 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
             format!("provenance-trust-state:{trust_state}"),
             format!("receipt-operation:{operation}"),
             format!("receipt-decision:{decision}"),
-        ]);
+        ]));
     }
+    Ok(None)
+}
+
+fn octet_evidence_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Some(fields) = value.collect_simple_record("octet-structured-findings-v1", Some(7)) {
         let counts = value_to_iovalue(&fields[4]);
         let count_fields = simple_record(&counts, "counts", 4)?;
@@ -1322,25 +1398,29 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
         let parsed = record_u64(&count_fields[1], "parsed")?;
         let unkeyed = record_u64(&count_fields[2], "unkeyed")?;
         let critical = record_u64(&count_fields[3], "critical")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "octet-structured-findings:summary-index".to_string(),
             format!("octet-findings-total:{total}"),
             format!("octet-findings-parsed:{parsed}"),
             format!("octet-findings-unkeyed:{unkeyed}"),
             format!("octet-findings-critical:{critical}"),
-        ]);
+        ]));
     }
     if let Some(fields) = value.collect_simple_record("octet-fingerprint-evidence-v1", Some(7)) {
         let source_paths = record_sequence_len(&fields[3], "source-paths")?;
         let object_count = record_u64(&fields[4], "object-count")?;
         let pure_cache_blocked = record_u64(&fields[5], "pure-cache-blocked")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "octet-fingerprint-evidence:object-corpus".to_string(),
             format!("octet-fingerprint-source-paths:{source_paths}"),
             format!("octet-fingerprint-object-count:{object_count}"),
             format!("octet-fingerprint-pure-cache-blocked:{pure_cache_blocked}"),
-        ]);
+        ]));
     }
+    Ok(None)
+}
+
+fn octet_baseline_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Some(fields) = value.collect_simple_record("octet-warning-baseline-v1", Some(14)) {
         let expires_at = record_string(&fields[3], "expires-at")?;
         let finding_count = record_sequence_len(&fields[8], "finding-keys")?;
@@ -1369,7 +1449,7 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
                 "catalog octet classifications",
             )?;
         }
-        return Ok(classifications);
+        return Ok(Some(classifications));
     }
     if let Some(fields) = value.collect_simple_record("octet-baseline-receipt-v1", Some(12)) {
         let decision = record_string(&fields[1], "decision")?;
@@ -1395,29 +1475,33 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
                 "catalog octet classifications",
             )?;
         }
-        return Ok(classifications);
+        return Ok(Some(classifications));
     }
     if let Some(fields) = value.collect_simple_record("octet-review-manifest-v1", Some(6)) {
         let profile = record_string(&fields[1], "profile")?;
         let expires_at = record_string(&fields[2], "expires-at")?;
         let finding_count = record_sequence_len(&fields[3], "finding-keys")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "octet-review-manifest:critical-finding-review".to_string(),
             format!("octet-review-profile:{profile}"),
             format!("octet-review-expires-at:{expires_at}"),
             format!("octet-review-finding-count:{finding_count}"),
-        ]);
+        ]));
     }
+    Ok(None)
+}
+
+fn octet_gate_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
     if let Some(fields) = value.collect_simple_record("octet-gate-policy-v1", Some(8)) {
         let profile = record_string(&fields[1], "profile")?;
         let required_artifacts = record_sequence_len(&fields[3], "required-artifacts")?;
         let critical_lints = record_sequence_len(&fields[5], "critical-lints")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "octet-gate-policy:strict-source-gate".to_string(),
             format!("octet-gate-profile:{profile}"),
             format!("octet-gate-required-artifacts:{required_artifacts}"),
             format!("octet-gate-critical-lints:{critical_lints}"),
-        ]);
+        ]));
     }
     if let Some(fields) = value.collect_simple_record("octet-gate-receipt-v1", Some(15)) {
         let decision = record_string(&fields[1], "decision")?;
@@ -1427,23 +1511,23 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
         let warnings = record_u64(&count_fields[1], "warnings")?;
         let errors = record_u64(&count_fields[2], "errors")?;
         let critical = record_u64(&count_fields[4], "critical")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "octet-gate-receipt:strict-source-gate".to_string(),
             format!("octet-gate-decision:{decision}"),
             format!("octet-gate-findings:{findings}"),
             format!("octet-gate-warnings:{warnings}"),
             format!("octet-gate-errors:{errors}"),
             format!("octet-gate-critical:{critical}"),
-        ]);
+        ]));
     }
     if let Some(fields) = value.collect_simple_record("octet-source-gate-requirement-v1", Some(10)) {
         let consumer = record_string(&fields[1], "consumer")?;
         let source_scope = record_sequence_len(&fields[4], "source-scope")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "octet-source-gate-requirement:downstream-consumer".to_string(),
             format!("octet-source-gate-consumer:{consumer}"),
             format!("octet-source-gate-scope-paths:{source_scope}"),
-        ]);
+        ]));
     }
     if let Some(fields) = value.collect_simple_record("octet-source-gate-validation-v1", Some(13)) {
         let decision = record_string(&fields[1], "decision")?;
@@ -1451,14 +1535,14 @@ fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
         let count_fields = simple_record(&counts, "counts", 6)?;
         let findings = record_u64(&count_fields[0], "findings")?;
         let critical = record_u64(&count_fields[4], "critical")?;
-        return Ok(vec![
+        return Ok(Some(vec![
             "octet-source-gate-validation:strict-receipt-content".to_string(),
             format!("octet-source-gate-decision:{decision}"),
             format!("octet-source-gate-findings:{findings}"),
             format!("octet-source-gate-critical:{critical}"),
-        ]);
+        ]));
     }
-    Ok(Vec::new())
+    Ok(None)
 }
 
 fn deterministic_replay_rollup_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
