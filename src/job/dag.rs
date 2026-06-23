@@ -1814,24 +1814,14 @@ pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<Jo
     })
 }
 
-pub fn profile_job_dag(
-    dag: &JobDag,
-    output_request: Option<&IOValue>,
-    cache_root: Option<&Path>,
-) -> Result<JobProfile> {
-    let request = request_for_analysis(dag, output_request)?;
-    let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
-    let cache_entries = if let Some(cache_root) = cache_root {
-        eval_cache::list(cache_root, &eval_cache::EvalCacheListFilter {
-            operation: Some(JOB_CACHE_OPERATION.to_string()),
-            ..eval_cache::EvalCacheListFilter::default()
-        })?
-        .len()
-    } else {
-        0
-    };
+struct StageProfiles {
+    config_bytes: u64,
+    values: Vec<IOValue>,
+}
+
+fn stage_profile_values(dag: &JobDag, plan: &TrellisExecutionPlan, cache_entries: usize) -> Result<StageProfiles> {
     let mut config_bytes = 0_u64;
-    let mut stage_profiles = Vec::new();
+    let mut values = Vec::with_capacity(plan.order_ids.len());
     for node_id in &plan.order_ids {
         let node = dag
             .nodes
@@ -1843,7 +1833,7 @@ pub fn profile_job_dag(
             .checked_add(bytes)
             .ok_or_else(|| MoltenError::invalid_harness("job profile estimated config bytes overflowed"))?;
         push_bounded(
-            &mut stage_profiles,
+            &mut values,
             record("job-stage-profile-v1", vec![
                 record("id", vec![string(node_id)]),
                 record("kind", vec![string(&node.kind)]),
@@ -1861,6 +1851,26 @@ pub fn profile_job_dag(
             "job profile stage values",
         )?;
     }
+    Ok(StageProfiles { config_bytes, values })
+}
+
+pub fn profile_job_dag(
+    dag: &JobDag,
+    output_request: Option<&IOValue>,
+    cache_root: Option<&Path>,
+) -> Result<JobProfile> {
+    let request = request_for_analysis(dag, output_request)?;
+    let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
+    let cache_entries = if let Some(cache_root) = cache_root {
+        eval_cache::list(cache_root, &eval_cache::EvalCacheListFilter {
+            operation: Some(JOB_CACHE_OPERATION.to_string()),
+            ..eval_cache::EvalCacheListFilter::default()
+        })?
+        .len()
+    } else {
+        0
+    };
+    let profile_stages = stage_profile_values(dag, &plan, cache_entries)?;
     let materialization_boundaries = usize_to_u64(
         dag.edges.iter().filter(|edge| edge.materialization != "stream").count()
             + dag.nodes.iter().filter(|node| node.kind == "materialize").count(),
@@ -1876,10 +1886,10 @@ pub fn profile_job_dag(
         record("edge-count", vec![u64_value(edge_count)]),
         record("materialization-boundaries", vec![u64_value(materialization_boundaries)]),
         record("estimated-bytes", vec![
-            record("config", vec![u64_value(config_bytes)]),
+            record("config", vec![u64_value(profile_stages.config_bytes)]),
             record("known-cache-entries", vec![u64_value(usize_to_u64(cache_entries, "job cache entry count")?)]),
         ]),
-        record("stages", vec![sequence(stage_profiles)]),
+        record("stages", vec![sequence(profile_stages.values)]),
         checks_value(&[
             "deterministic-profile",
             "no-wall-clock-time",
