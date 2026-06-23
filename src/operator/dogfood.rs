@@ -4413,6 +4413,38 @@ mod tests {
 
     #[test]
     fn nix_dogfood_release_evidence_verifies_and_denies_stale_refs() {
+        let case = build_nix_case();
+        assert_release_binding_search(&case);
+        let signed_members = signed_members(&case);
+        let signed_bundle_verify = signed_bundle_pass(&case, &signed_members);
+        let key = signed_key();
+        assert_promotion_receipts(&case, &signed_bundle_verify, &key);
+        assert_signed_denials(&case, &signed_members, &key);
+        assert_stale_bundle_denies(&case);
+        assert_stale_evidence_denies(&case);
+    }
+
+    struct NixCase {
+        root: PathBuf,
+        output_root: PathBuf,
+        run: LocalNodeDogfoodRun,
+        parsed: NixDogfoodEvidence,
+        evidence: IOValue,
+        receipt: NixDogfoodVerifyReceipt,
+        bundle: IOValue,
+        parsed_bundle: ReleaseEvidenceBundle,
+        bundle_verify: ReleaseEvidenceBundleVerifyReceipt,
+    }
+
+    struct PromotionInput<'a> {
+        output_path: &'a std::path::Path,
+        bundle_verify_value: &'a IOValue,
+        source_evidence: &'a str,
+        key: &'a SignedReceiptKey,
+        revocations: &'a [SignedReceiptKeyRevocation],
+    }
+
+    fn build_nix_case() -> NixCase {
         let root = temp_dir("operator-dogfood-nix-evidence");
         let state_root = root.join("state");
         let output_root = root.join("nix-output");
@@ -4421,6 +4453,51 @@ mod tests {
             state_root: &state_root,
         })
         .expect("dogfood run");
+        write_run_outputs(&output_root, &run);
+        let evidence = nix_dogfood_release_evidence_value(&NixDogfoodEvidenceInput {
+            output_path: &output_root,
+        })
+        .expect("nix evidence");
+        let parsed = parse_nix_dogfood_evidence(&evidence).expect("parse nix evidence");
+        assert_eq!(crate::ledger::artifact_kind(&evidence), "nix-dogfood-release-evidence");
+        assert_eq!(parsed.release_gate_ref, run.release_gate_ref.clone().expect("release ref"));
+        assert_eq!(parsed.replay_verify_ref, run.replay_verify_ref.clone().expect("replay verify ref"));
+        assert_eq!(parsed.replay_index_ref, run.replay_index_ref.clone().expect("replay index ref"));
+        let receipt = verify_nix_dogfood_evidence(&NixDogfoodVerifyInput {
+            output_path: &output_root,
+            evidence_value: &evidence,
+        })
+        .expect("verify nix evidence");
+        assert_eq!(receipt.decision, "pass");
+        assert_eq!(crate::ledger::artifact_kind(&receipt.value), "nix-dogfood-release-verify-receipt");
+        assert_tampered_replay_denies(&output_root, &run, &evidence);
+        write_bundle_inputs(&output_root, &evidence, &receipt);
+        let bundle = release_evidence_bundle_value(&ReleaseEvidenceBundleInput {
+            output_path: &output_root,
+        })
+        .expect("release bundle");
+        let parsed_bundle = parse_release_evidence_bundle(&bundle).expect("parse release bundle");
+        assert_eq!(crate::ledger::artifact_kind(&bundle), "release-evidence-bundle");
+        assert_eq!(parsed_bundle.report_ref, parsed.report_ref);
+        assert_eq!(parsed_bundle.replay_verify_ref, parsed.replay_verify_ref);
+        assert_eq!(parsed_bundle.replay_index_ref, parsed.replay_index_ref);
+        let bundle_verify = unsigned_bundle_verify(&output_root, &bundle);
+        assert_eq!(bundle_verify.decision, "pass");
+        assert_eq!(crate::ledger::artifact_kind(&bundle_verify.value), "release-evidence-bundle-verify-receipt");
+        NixCase {
+            root,
+            output_root,
+            run,
+            parsed,
+            evidence,
+            receipt,
+            bundle,
+            parsed_bundle,
+            bundle_verify,
+        }
+    }
+
+    fn write_run_outputs(output_root: &std::path::Path, run: &LocalNodeDogfoodRun) {
         fs::write(output_root.join("dogfood-report.preserves"), to_text(&run.report_value).expect("report text"))
             .expect("write report");
         fs::write(
@@ -4449,27 +4526,14 @@ mod tests {
         .expect("write summary");
         fs::write(output_root.join("after-nextest.txt"), "/nix/store/test-molten-nextest\n")
             .expect("write nextest marker");
-        let evidence = nix_dogfood_release_evidence_value(&NixDogfoodEvidenceInput {
-            output_path: &output_root,
-        })
-        .expect("nix evidence");
-        let parsed = parse_nix_dogfood_evidence(&evidence).expect("parse nix evidence");
-        assert_eq!(crate::ledger::artifact_kind(&evidence), "nix-dogfood-release-evidence");
-        assert_eq!(parsed.release_gate_ref, run.release_gate_ref.clone().expect("release ref"));
-        assert_eq!(parsed.replay_verify_ref, run.replay_verify_ref.clone().expect("replay verify ref"));
-        assert_eq!(parsed.replay_index_ref, run.replay_index_ref.clone().expect("replay index ref"));
-        let receipt = verify_nix_dogfood_evidence(&NixDogfoodVerifyInput {
-            output_path: &output_root,
-            evidence_value: &evidence,
-        })
-        .expect("verify nix evidence");
-        assert_eq!(receipt.decision, "pass");
-        assert_eq!(crate::ledger::artifact_kind(&receipt.value), "nix-dogfood-release-verify-receipt");
+    }
+
+    fn assert_tampered_replay_denies(output_root: &std::path::Path, run: &LocalNodeDogfoodRun, evidence: &IOValue) {
         fs::write(output_root.join("replay-evidence-index.preserves"), "<tampered-replay-index>\n")
             .expect("tamper replay index");
         let tampered_replay_verify = verify_nix_dogfood_evidence(&NixDogfoodVerifyInput {
-            output_path: &output_root,
-            evidence_value: &evidence,
+            output_path: output_root,
+            evidence_value: evidence,
         })
         .expect("verify tampered replay index evidence");
         assert_eq!(tampered_replay_verify.decision, "deny");
@@ -4484,22 +4548,19 @@ mod tests {
             to_text(run.replay_index_value.as_ref().expect("replay index")).expect("replay index text"),
         )
         .expect("restore replay index");
-        fs::write(output_root.join("nix-dogfood-evidence.preserves"), to_text(&evidence).expect("evidence text"))
+    }
+
+    fn write_bundle_inputs(output_root: &std::path::Path, evidence: &IOValue, receipt: &NixDogfoodVerifyReceipt) {
+        fs::write(output_root.join("nix-dogfood-evidence.preserves"), to_text(evidence).expect("evidence text"))
             .expect("write evidence");
         fs::write(output_root.join("nix-dogfood-verify.preserves"), to_text(&receipt.value).expect("verify text"))
             .expect("write verify");
-        let bundle = release_evidence_bundle_value(&ReleaseEvidenceBundleInput {
-            output_path: &output_root,
-        })
-        .expect("release bundle");
-        let parsed_bundle = parse_release_evidence_bundle(&bundle).expect("parse release bundle");
-        assert_eq!(crate::ledger::artifact_kind(&bundle), "release-evidence-bundle");
-        assert_eq!(parsed_bundle.report_ref, parsed.report_ref);
-        assert_eq!(parsed_bundle.replay_verify_ref, parsed.replay_verify_ref);
-        assert_eq!(parsed_bundle.replay_index_ref, parsed.replay_index_ref);
-        let bundle_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
-            output_path: &output_root,
-            bundle_value: &bundle,
+    }
+
+    fn unsigned_bundle_verify(output_root: &std::path::Path, bundle: &IOValue) -> ReleaseEvidenceBundleVerifyReceipt {
+        verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
+            output_path: output_root,
+            bundle_value: bundle,
             signed_member_values: &[],
             signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
             signed_trust_root: "local-release-trust-root",
@@ -4511,22 +4572,23 @@ mod tests {
             signed_signer: None,
             is_signed_members_required: false,
         })
-        .expect("verify release bundle");
-        assert_eq!(bundle_verify.decision, "pass");
-        assert_eq!(crate::ledger::artifact_kind(&bundle_verify.value), "release-evidence-bundle-verify-receipt");
-        let catalog_registry = root.join("catalog-registry");
-        let release_ledger = root.join("release-ledger");
-        ledger::import_artifact(&release_ledger, run.release_gate_value.as_ref().expect("release gate"))
+        .expect("verify release bundle")
+    }
+
+    fn assert_release_binding_search(case: &NixCase) {
+        let catalog_registry = case.root.join("catalog-registry");
+        let release_ledger = case.root.join("release-ledger");
+        ledger::import_artifact(&release_ledger, case.run.release_gate_value.as_ref().expect("release gate"))
             .expect("import release gate");
-        ledger::import_artifact(&release_ledger, run.replay_verify_value.as_ref().expect("replay verify"))
+        ledger::import_artifact(&release_ledger, case.run.replay_verify_value.as_ref().expect("replay verify"))
             .expect("import replay verify");
-        ledger::import_artifact(&release_ledger, run.replay_index_value.as_ref().expect("replay index"))
+        ledger::import_artifact(&release_ledger, case.run.replay_index_value.as_ref().expect("replay index"))
             .expect("import replay index");
-        ledger::import_artifact(&release_ledger, &evidence).expect("import Nix evidence");
-        ledger::import_artifact(&release_ledger, &bundle_verify.value).expect("import bundle verify");
+        ledger::import_artifact(&release_ledger, &case.evidence).expect("import Nix evidence");
+        ledger::import_artifact(&release_ledger, &case.bundle_verify.value).expect("import bundle verify");
         let replay_binding_request = catalog_mcp::mcp_request_value("search_replay_evidence", vec![
             record("stage", vec![string("release-binding")]),
-            record("release-replay-index-ref", vec![string(&parsed.replay_index_ref)]),
+            record("release-replay-index-ref", vec![string(&case.parsed.replay_index_ref)]),
         ])
         .expect("replay binding request");
         let replay_binding = catalog_mcp::call(&catalog_registry, Some(&release_ledger), &replay_binding_request)
@@ -4537,78 +4599,38 @@ mod tests {
                 .expect("replay binding response")
                 .contains("deterministic-replay:release-binding")
         );
-        let signed_members = vec![
-            sign_receipt(&SignReceiptInput {
-                receipt: &run.report_value,
-                signer: "release-signer",
-                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-                trust_root: "release-root",
-                key: "release-key",
-                parents: &[],
-            })
-            .expect("sign report"),
-            sign_receipt(&SignReceiptInput {
-                receipt: run.release_gate_value.as_ref().expect("release gate"),
-                signer: "release-signer",
-                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-                trust_root: "release-root",
-                key: "release-key",
-                parents: &[],
-            })
-            .expect("sign release gate"),
-            sign_receipt(&SignReceiptInput {
-                receipt: run.replay_verify_value.as_ref().expect("replay verify"),
-                signer: "release-signer",
-                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-                trust_root: "release-root",
-                key: "release-key",
-                parents: &[],
-            })
-            .expect("sign replay verify"),
-            sign_receipt(&SignReceiptInput {
-                receipt: run.replay_index_value.as_ref().expect("replay index"),
-                signer: "release-signer",
-                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-                trust_root: "release-root",
-                key: "release-key",
-                parents: &[],
-            })
-            .expect("sign replay index"),
-            sign_receipt(&SignReceiptInput {
-                receipt: &evidence,
-                signer: "release-signer",
-                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-                trust_root: "release-root",
-                key: "release-key",
-                parents: &[],
-            })
-            .expect("sign Nix evidence"),
-            sign_receipt(&SignReceiptInput {
-                receipt: &receipt.value,
-                signer: "release-signer",
-                purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-                trust_root: "release-root",
-                key: "release-key",
-                parents: &[],
-            })
-            .expect("sign Nix verify"),
-        ];
-        let signed_bundle_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
-            output_path: &output_root,
-            bundle_value: &bundle,
-            signed_member_values: &signed_members,
-            signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-            signed_trust_root: "release-root",
-            signed_key: "release-key",
-            signed_keys: &[],
-            signed_key_revocations: &[],
-            signed_key_ref: None,
-            signed_key_id: None,
-            signed_signer: Some("release-signer"),
-            is_signed_members_required: true,
+    }
+
+    fn signed_members(case: &NixCase) -> Vec<IOValue> {
+        vec![
+            sign_member(&case.run.report_value),
+            sign_member(case.run.release_gate_value.as_ref().expect("release gate")),
+            sign_member(case.run.replay_verify_value.as_ref().expect("replay verify")),
+            sign_member(case.run.replay_index_value.as_ref().expect("replay index")),
+            sign_member(&case.evidence),
+            sign_member(&case.receipt.value),
+        ]
+    }
+
+    fn sign_member(receipt: &IOValue) -> IOValue {
+        sign_receipt(&SignReceiptInput {
+            receipt,
+            signer: "release-signer",
+            purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
+            trust_root: "release-root",
+            key: "release-key",
+            parents: &[],
         })
-        .expect("verify signed release bundle");
+        .expect("sign member")
+    }
+
+    fn signed_bundle_pass(case: &NixCase, signed_members: &[IOValue]) -> ReleaseEvidenceBundleVerifyReceipt {
+        let signed_bundle_verify = required_bundle_verify(case, signed_members, Some("release-signer"), None);
         assert_eq!(signed_bundle_verify.decision, "pass");
+        signed_bundle_verify
+    }
+
+    fn signed_key() -> SignedReceiptKey {
         let key_value = signed_receipt_key_value(&SignedReceiptKeyInput {
             key_id: "release-key-1",
             signer: "release-signer",
@@ -4618,44 +4640,52 @@ mod tests {
             predecessor_ref: None,
         })
         .expect("signed key value");
-        let key = parse_signed_receipt_key(&key_value).expect("parse signed key");
-        let promotion = release_promotion_gate_receipt_value(&ReleasePromotionGateInput {
-            output_path: &output_root,
+        parse_signed_receipt_key(&key_value).expect("parse signed key")
+    }
+
+    fn assert_promotion_receipts(
+        case: &NixCase,
+        signed_bundle_verify: &ReleaseEvidenceBundleVerifyReceipt,
+        key: &SignedReceiptKey,
+    ) {
+        let promotion = promotion_receipt(PromotionInput {
+            output_path: &case.output_root,
             bundle_verify_value: &signed_bundle_verify.value,
             source_evidence: "source:working-tree-reviewed",
-            octet_evidence: "octet:clean",
-            cairn_evidence: "cairn:strict-validate",
-            signed_keys: std::slice::from_ref(&key),
-            signed_key_revocations: &[],
-            signed_trust_root: "release-root",
-            signed_signer: Some("release-signer"),
-            signed_key_ref: Some(&key.key_ref),
-            signed_key_id: Some("release-key-1"),
-        })
-        .expect("promotion receipt");
+            key,
+            revocations: &[],
+        });
         assert_eq!(promotion.decision, "pass");
         assert_eq!(crate::ledger::artifact_kind(&promotion.value), "release-promotion-gate-receipt");
+        let revocation = signed_revocation(key);
+        assert_revoked_promotion(case, signed_bundle_verify, key, &revocation);
+        assert_missing_source_promotion(case, signed_bundle_verify, key);
+        assert_stale_output_promotion(case, signed_bundle_verify, key);
+    }
+
+    fn signed_revocation(key: &SignedReceiptKey) -> SignedReceiptKeyRevocation {
         let revocation_value = signed_receipt_key_revocation_value(&SignedReceiptKeyRevocationInput {
-            key: &key,
+            key,
             reason: "test-revoked",
             superseded_by: None,
         })
         .expect("revocation value");
-        let revocation = parse_signed_receipt_key_revocation(&revocation_value).expect("parse revocation");
-        let revoked_promotion = release_promotion_gate_receipt_value(&ReleasePromotionGateInput {
-            output_path: &output_root,
+        parse_signed_receipt_key_revocation(&revocation_value).expect("parse revocation")
+    }
+
+    fn assert_revoked_promotion(
+        case: &NixCase,
+        signed_bundle_verify: &ReleaseEvidenceBundleVerifyReceipt,
+        key: &SignedReceiptKey,
+        revocation: &SignedReceiptKeyRevocation,
+    ) {
+        let revoked_promotion = promotion_receipt(PromotionInput {
+            output_path: &case.output_root,
             bundle_verify_value: &signed_bundle_verify.value,
             source_evidence: "source:working-tree-reviewed",
-            octet_evidence: "octet:clean",
-            cairn_evidence: "cairn:strict-validate",
-            signed_keys: std::slice::from_ref(&key),
-            signed_key_revocations: std::slice::from_ref(&revocation),
-            signed_trust_root: "release-root",
-            signed_signer: Some("release-signer"),
-            signed_key_ref: Some(&key.key_ref),
-            signed_key_id: Some("release-key-1"),
-        })
-        .expect("revoked promotion receipt");
+            key,
+            revocations: std::slice::from_ref(revocation),
+        });
         assert_eq!(revoked_promotion.decision, "deny");
         assert!(
             revoked_promotion
@@ -4663,36 +4693,37 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.contains("revoked") || diagnostic.contains("stale"))
         );
-        let missing_source_promotion = release_promotion_gate_receipt_value(&ReleasePromotionGateInput {
-            output_path: &output_root,
+    }
+
+    fn assert_missing_source_promotion(
+        case: &NixCase,
+        signed_bundle_verify: &ReleaseEvidenceBundleVerifyReceipt,
+        key: &SignedReceiptKey,
+    ) {
+        let missing_source_promotion = promotion_receipt(PromotionInput {
+            output_path: &case.output_root,
             bundle_verify_value: &signed_bundle_verify.value,
             source_evidence: "",
-            octet_evidence: "octet:clean",
-            cairn_evidence: "cairn:strict-validate",
-            signed_keys: std::slice::from_ref(&key),
-            signed_key_revocations: &[],
-            signed_trust_root: "release-root",
-            signed_signer: Some("release-signer"),
-            signed_key_ref: Some(&key.key_ref),
-            signed_key_id: Some("release-key-1"),
-        })
-        .expect("missing source promotion receipt");
+            key,
+            revocations: &[],
+        });
         assert_eq!(missing_source_promotion.decision, "deny");
         assert!(missing_source_promotion.diagnostics.iter().any(|diagnostic| diagnostic.contains("source evidence")));
-        let stale_output_promotion = release_promotion_gate_receipt_value(&ReleasePromotionGateInput {
-            output_path: &output_root.join("stale-output"),
+    }
+
+    fn assert_stale_output_promotion(
+        case: &NixCase,
+        signed_bundle_verify: &ReleaseEvidenceBundleVerifyReceipt,
+        key: &SignedReceiptKey,
+    ) {
+        let stale_output = case.output_root.join("stale-output");
+        let stale_output_promotion = promotion_receipt(PromotionInput {
+            output_path: &stale_output,
             bundle_verify_value: &signed_bundle_verify.value,
             source_evidence: "source:working-tree-reviewed",
-            octet_evidence: "octet:clean",
-            cairn_evidence: "cairn:strict-validate",
-            signed_keys: std::slice::from_ref(&key),
-            signed_key_revocations: &[],
-            signed_trust_root: "release-root",
-            signed_signer: Some("release-signer"),
-            signed_key_ref: Some(&key.key_ref),
-            signed_key_id: Some("release-key-1"),
-        })
-        .expect("stale output promotion receipt");
+            key,
+            revocations: &[],
+        });
         assert_eq!(stale_output_promotion.decision, "deny");
         assert!(
             stale_output_promotion
@@ -4700,70 +4731,41 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.contains("output-path-ref mismatch"))
         );
-        let missing_signed_member_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
-            output_path: &output_root,
-            bundle_value: &bundle,
-            signed_member_values: &[],
-            signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-            signed_trust_root: "release-root",
-            signed_key: "release-key",
-            signed_keys: std::slice::from_ref(&key),
-            signed_key_revocations: &[],
-            signed_key_ref: Some(&key.key_ref),
-            signed_key_id: Some("release-key-1"),
-            signed_signer: Some("release-signer"),
-            is_signed_members_required: true,
-        })
-        .expect("missing signed member verify receipt");
-        assert_eq!(missing_signed_member_verify.decision, "deny");
-        let denied_bundle_promotion = release_promotion_gate_receipt_value(&ReleasePromotionGateInput {
-            output_path: &output_root,
-            bundle_verify_value: &missing_signed_member_verify.value,
-            source_evidence: "source:working-tree-reviewed",
+    }
+
+    fn promotion_receipt(input: PromotionInput<'_>) -> ReleasePromotionGateReceipt {
+        release_promotion_gate_receipt_value(&ReleasePromotionGateInput {
+            output_path: input.output_path,
+            bundle_verify_value: input.bundle_verify_value,
+            source_evidence: input.source_evidence,
             octet_evidence: "octet:clean",
             cairn_evidence: "cairn:strict-validate",
-            signed_keys: std::slice::from_ref(&key),
-            signed_key_revocations: &[],
+            signed_keys: std::slice::from_ref(input.key),
+            signed_key_revocations: input.revocations,
             signed_trust_root: "release-root",
             signed_signer: Some("release-signer"),
-            signed_key_ref: Some(&key.key_ref),
+            signed_key_ref: Some(&input.key.key_ref),
             signed_key_id: Some("release-key-1"),
         })
-        .expect("denied bundle promotion receipt");
+        .expect("promotion receipt")
+    }
+
+    fn assert_signed_denials(case: &NixCase, signed_members: &[IOValue], key: &SignedReceiptKey) {
+        let missing_signed_member_verify = required_bundle_verify(case, &[], Some("release-signer"), Some(key));
+        assert_eq!(missing_signed_member_verify.decision, "deny");
+        let denied_bundle_promotion = promotion_receipt(PromotionInput {
+            output_path: &case.output_root,
+            bundle_verify_value: &missing_signed_member_verify.value,
+            source_evidence: "source:working-tree-reviewed",
+            key,
+            revocations: &[],
+        });
         assert_eq!(denied_bundle_promotion.decision, "deny");
         assert!(denied_bundle_promotion.diagnostics.iter().any(|diagnostic| diagnostic.contains("decision is deny")));
-        let wrong_signer_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
-            output_path: &output_root,
-            bundle_value: &bundle,
-            signed_member_values: &signed_members,
-            signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-            signed_trust_root: "release-root",
-            signed_key: "release-key",
-            signed_keys: &[],
-            signed_key_revocations: &[],
-            signed_key_ref: None,
-            signed_key_id: None,
-            signed_signer: Some("wrong-signer"),
-            is_signed_members_required: true,
-        })
-        .expect("verify wrong signer release bundle");
+        let wrong_signer_verify = required_bundle_verify(case, signed_members, Some("wrong-signer"), None);
         assert_eq!(wrong_signer_verify.decision, "deny");
         assert!(wrong_signer_verify.diagnostics.iter().any(|diagnostic| diagnostic.contains("signer")));
-        let missing_signed_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
-            output_path: &output_root,
-            bundle_value: &bundle,
-            signed_member_values: &signed_members[..1],
-            signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-            signed_trust_root: "release-root",
-            signed_key: "release-key",
-            signed_keys: &[],
-            signed_key_revocations: &[],
-            signed_key_ref: None,
-            signed_key_id: None,
-            signed_signer: Some("release-signer"),
-            is_signed_members_required: true,
-        })
-        .expect("verify missing signed member release bundle");
+        let missing_signed_verify = required_bundle_verify(case, &signed_members[..1], Some("release-signer"), None);
         assert_eq!(missing_signed_verify.decision, "deny");
         assert!(
             missing_signed_verify
@@ -4771,32 +4773,50 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic.contains("missing signed member receipt"))
         );
-        let stale_bundle_ref = dogfood_ref("stale-bundle-summary").expect("stale bundle ref");
-        let stale_bundle_text =
-            to_text(&bundle).expect("bundle text").replace(&parsed_bundle.summary_ref, &stale_bundle_ref);
-        let stale_bundle = parse_text(&stale_bundle_text).expect("stale bundle parse");
-        let stale_bundle_verify = verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
-            output_path: &output_root,
-            bundle_value: &stale_bundle,
-            signed_member_values: &[],
+    }
+
+    fn required_bundle_verify(
+        case: &NixCase,
+        signed_member_values: &[IOValue],
+        signed_signer: Option<&str>,
+        key: Option<&SignedReceiptKey>,
+    ) -> ReleaseEvidenceBundleVerifyReceipt {
+        let empty_keys: &[SignedReceiptKey] = &[];
+        let signed_keys = key.map(std::slice::from_ref).unwrap_or(empty_keys);
+        verify_release_evidence_bundle(&ReleaseEvidenceBundleVerifyInput {
+            output_path: &case.output_root,
+            bundle_value: &case.bundle,
+            signed_member_values,
             signed_purpose: RELEASE_EVIDENCE_SIGNING_PURPOSE,
-            signed_trust_root: "local-release-trust-root",
-            signed_key: "local-release-key",
-            signed_keys: &[],
+            signed_trust_root: "release-root",
+            signed_key: "release-key",
+            signed_keys,
             signed_key_revocations: &[],
-            signed_key_ref: None,
-            signed_key_id: None,
-            signed_signer: None,
-            is_signed_members_required: false,
+            signed_key_ref: key.map(|key| key.key_ref.as_str()),
+            signed_key_id: key.map(|_| "release-key-1"),
+            signed_signer,
+            is_signed_members_required: true,
         })
-        .expect("verify stale bundle");
+        .expect("verify required release bundle")
+    }
+
+    fn assert_stale_bundle_denies(case: &NixCase) {
+        let stale_bundle_ref = dogfood_ref("stale-bundle-summary").expect("stale bundle ref");
+        let stale_bundle_text = to_text(&case.bundle)
+            .expect("bundle text")
+            .replace(&case.parsed_bundle.summary_ref, &stale_bundle_ref);
+        let stale_bundle = parse_text(&stale_bundle_text).expect("stale bundle parse");
+        let stale_bundle_verify = unsigned_bundle_verify(&case.output_root, &stale_bundle);
         assert_eq!(stale_bundle_verify.decision, "deny");
         assert!(stale_bundle_verify.diagnostics.iter().any(|diagnostic| diagnostic.contains("summary-ref mismatch")));
+    }
+
+    fn assert_stale_evidence_denies(case: &NixCase) {
         let stale_ref = dogfood_ref("stale-summary").expect("stale ref");
-        let stale_text = to_text(&evidence).expect("evidence text").replace(&parsed.summary_ref, &stale_ref);
+        let stale_text = to_text(&case.evidence).expect("evidence text").replace(&case.parsed.summary_ref, &stale_ref);
         let stale_evidence = parse_text(&stale_text).expect("stale evidence parse");
         let stale_receipt = verify_nix_dogfood_evidence(&NixDogfoodVerifyInput {
-            output_path: &output_root,
+            output_path: &case.output_root,
             evidence_value: &stale_evidence,
         })
         .expect("verify stale evidence");

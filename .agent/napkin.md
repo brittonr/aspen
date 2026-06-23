@@ -220,6 +220,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet operator Nix evidence test split: extracting `src/operator/dogfood.rs::nix_dogfood_release_evidence_verifies_and_denies_stale_refs` into neutral same-file `NixCase` plus output/signing/promotion/stale assertion helpers lowered the no-disabled probe from 7109 to 7108 by clearing one test `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test nix_dogfood_release_evidence_verifies_and_denies_stale_refs`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-nix-evidence-test-0`.
+
 - 2026-06-23 Octet node live-workflow protocol split: extracting `src/node/daemon.rs::gate_node_control_live_workflow_protocol` repeated send/receive legs into neutral same-file `RolePair`/`LegInput`/`RunValues` helpers lowered the no-disabled probe from 7111 to 7109 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_live_workflow_bundle_reconcile_binds_receiver_evidence`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-node-flow-values-0`.
 
 - 2026-06-23 Octet operator retention-GC split: extracting `src/operator/dogfood.rs::run_retention_gc_workflow` into neutral same-file `GcSeed`/`GcAdmissions`/`GcFlow` helpers lowered the no-disabled probe from 7114 to 7112 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test local_node_dogfood_runs_and_gates_release`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-operator-gc-split-0`.
