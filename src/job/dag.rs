@@ -2234,168 +2234,217 @@ pub fn sync_loopback(input: SyncLoopbackInput<'_>) -> Result<JobSyncLoopback> {
 pub fn admission_plan_value(target_registry: &Path, request_value: &IOValue) -> Result<JobAdmissionPlan> {
     let request = parse_job_admission_request_value(request_value)?;
     let mut diagnostics = Vec::new();
-    let mut closure_refs = Vec::new();
-    let mut stage_order = Vec::new();
-    let mut stage_verdicts = Vec::new();
-    let has_target_closure;
-    let mut has_valid_topology = true;
-    let mut has_executable_artifacts = true;
-
     let has_explicit_authority = explicit_admission_authority(&request, &mut diagnostics);
     let (has_capability_authority, authority_receipt_refs) =
         capability_contexts_admit(target_registry, &request, &mut diagnostics)?;
-    let has_admission_authority = has_explicit_authority && has_capability_authority;
     let has_sync_evidence = sync_evidence_bound(&request, &mut diagnostics);
     let (has_source_gate_evidence, source_gate_validation_refs) =
         source_gate_evidence_bound(target_registry, &request, &mut diagnostics)?;
+    let readiness = scan_target(target_registry, &request, &mut diagnostics)?;
+    let has_resource_profile = resource_profile_admits(&request, &readiness.stage_order, &mut diagnostics)?;
+    finish_plan(PlanOutcomeInput {
+        request,
+        readiness,
+        authority_receipt_refs,
+        source_gate_validation_refs,
+        has_explicit_authority,
+        has_capability_authority,
+        has_sync_evidence,
+        has_source_gate_evidence,
+        has_resource_profile,
+        diagnostics,
+    })
+}
 
+struct Readiness {
+    has_target_closure: bool,
+    has_valid_topology: bool,
+    has_executable_artifacts: bool,
+    closure_refs: Vec<String>,
+    stage_order: Vec<String>,
+    stage_verdicts: Vec<JobAdmissionStageVerdict>,
+}
+
+struct PlanOutcomeInput {
+    request: JobAdmissionRequest,
+    readiness: Readiness,
+    authority_receipt_refs: Vec<String>,
+    source_gate_validation_refs: Vec<String>,
+    has_explicit_authority: bool,
+    has_capability_authority: bool,
+    has_sync_evidence: bool,
+    has_source_gate_evidence: bool,
+    has_resource_profile: bool,
+    diagnostics: Vec<String>,
+}
+
+struct RecordInput<'a> {
+    request: &'a JobAdmissionRequest,
+    readiness: &'a Readiness,
+    authority_receipt_refs: &'a [String],
+    resource_verdict: &'a str,
+    decision: &'a str,
+    diagnostics: &'a [String],
+    checks: &'a [(&'a str, &'a str)],
+}
+
+struct StageScanInput<'a> {
+    node_id: &'a str,
+    plan: &'a TrellisExecutionPlan,
+    node_map: &'a BTreeMap<String, &'a JobNode>,
+    completed_indices: &'a [u64],
+}
+
+fn scan_target(
+    target_registry: &Path,
+    request: &JobAdmissionRequest,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<Readiness> {
+    let mut readiness = Readiness {
+        has_target_closure: true,
+        has_valid_topology: true,
+        has_executable_artifacts: true,
+        closure_refs: Vec::new(),
+        stage_order: Vec::new(),
+        stage_verdicts: Vec::new(),
+    };
     match read_job_dag(target_registry, &request.job_ref) {
         Ok(dag) => {
-            let selected = selected_stage_set(&dag, &request.stage_ids, &mut diagnostics, &mut stage_verdicts)?;
-            if !diagnostics.is_empty()
-                && request.stage_ids.iter().any(|stage_id| !dag.nodes.iter().any(|node| node.id == *stage_id))
-            {
-                has_valid_topology = false;
+            let selected = selected_stage_set(&dag, &request.stage_ids, diagnostics, &mut readiness.stage_verdicts)?;
+            if request.stage_ids.iter().any(|stage_id| !dag.nodes.iter().any(|node| node.id == *stage_id)) {
+                readiness.has_valid_topology = false;
             }
-            match trellis_execution_plan(&dag.nodes, &dag.edges) {
-                Ok(plan) => {
-                    let node_map = dag.nodes.iter().map(|node| (node.id.clone(), node)).collect::<BTreeMap<_, _>>();
-                    let mut completed_indices = Vec::new();
-                    for node_id in &plan.order_ids {
-                        if !selected.contains(node_id) {
-                            continue;
-                        }
-                        let mut stage_diagnostics = Vec::new();
-                        let deps = plan.dependency_indices.get(node_id).cloned().unwrap_or_default();
-                        if !trellis::job_dag::all_deps_satisfied(&deps, &completed_indices)
-                            || trellis::job_dag::unsatisfied_count(&deps, &completed_indices) != 0
-                        {
-                            has_valid_topology = false;
-                            stage_diagnostics.push(format!("unsatisfied selected-stage dependencies for {node_id}"));
-                        }
-                        let node = node_map.get(node_id).ok_or_else(|| {
-                            MoltenError::invalid_harness(format!("job admission missing node {node_id}"))
-                        })?;
-                        if node.stage_artifact_ref.is_none() {
-                            has_executable_artifacts = false;
-                            stage_diagnostics
-                                .push(format!("stage {node_id} lacks artifact-backed executable operation"));
-                        }
-                        if !stage_diagnostics.is_empty() {
-                            diagnostics.extend(stage_diagnostics.iter().cloned());
-                        }
-                        push_bounded(
-                            &mut stage_verdicts,
-                            JobAdmissionStageVerdict {
-                                stage_id: node_id.clone(),
-                                decision: if stage_diagnostics.is_empty() { "pass" } else { "deny" }.to_string(),
-                                diagnostics: stage_diagnostics,
-                            },
-                            MAX_JOB_NODES,
-                            "job admission stage verdicts",
-                        )?;
-                        let node_index = *plan.node_index.get(node_id).ok_or_else(|| {
-                            MoltenError::invalid_harness(format!("job admission missing trellis index for {node_id}"))
-                        })?;
-                        push_bounded(
-                            &mut completed_indices,
-                            usize_to_u64(node_index, "job admission completed node index")?,
-                            MAX_JOB_NODES,
-                            "job admission completed node indices",
-                        )?;
-                        push_bounded(&mut stage_order, node_id.clone(), MAX_JOB_NODES, "job admission stage order")?;
-                    }
-                }
-                Err(error) => {
-                    has_valid_topology = false;
-                    diagnostics.push(format!("trellis topology denied: {error}"));
-                }
-            }
-            let (closure_is_complete, target_closure_refs, target_closure_diagnostics) =
-                target_closure_state(target_registry, &dag, &selected)?;
-            has_target_closure = closure_is_complete;
-            closure_refs = target_closure_refs;
-            diagnostics.extend(target_closure_diagnostics);
+            scan_topology(&dag, &selected, diagnostics, &mut readiness)?;
+            let (is_complete, refs, notes) = target_closure_state(target_registry, &dag, &selected)?;
+            readiness.has_target_closure = is_complete;
+            readiness.closure_refs = refs;
+            diagnostics.extend_cloned_items(&notes);
         }
         Err(error) => {
-            has_target_closure = false;
-            has_valid_topology = false;
-            has_executable_artifacts = false;
-            diagnostics.push(format!("target job not available: {error}"));
+            readiness.has_target_closure = false;
+            readiness.has_valid_topology = false;
+            readiness.has_executable_artifacts = false;
+            diagnostics.push_item(format!("target job not available: {error}"));
         }
     }
+    Ok(readiness)
+}
 
-    let has_resource_profile = resource_profile_admits(&request, &stage_order, &mut diagnostics)?;
-    let decision = if has_target_closure
-        && has_valid_topology
-        && has_executable_artifacts
-        && has_admission_authority
-        && has_sync_evidence
-        && has_source_gate_evidence
-        && has_resource_profile
-    {
-        "pass"
-    } else {
-        "deny"
+fn scan_topology(
+    dag: &JobDag,
+    selected: &BTreeSet<String>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    readiness: &mut Readiness,
+) -> Result<()> {
+    let plan = match trellis_execution_plan(&dag.nodes, &dag.edges) {
+        Ok(plan) => plan,
+        Err(error) => {
+            readiness.has_valid_topology = false;
+            diagnostics.push_item(format!("trellis topology denied: {error}"));
+            return Ok(());
+        }
     };
-    let resource_verdict = if has_resource_profile { "pass" } else { "deny" }.to_string();
-    let stage_values = stage_verdicts
-        .iter()
-        .map(|verdict| {
-            record("stage", vec![
-                string(&verdict.stage_id),
-                string(&verdict.decision),
-                record("diagnostics", vec![sequence(verdict.diagnostics.iter().map(string).collect())]),
-            ])
-        })
-        .collect::<Vec<_>>();
-    let checks = [
-        ("target-closure-present", status(has_target_closure)),
-        ("trellis-topology", status(has_valid_topology)),
-        ("executable-artifact-gate", status(has_executable_artifacts)),
-        ("explicit-authority", status(has_explicit_authority)),
-        ("capability-authority-context", status(has_capability_authority)),
-        ("resource-profile", status(has_resource_profile)),
-        ("sync-evidence-bound", status(has_sync_evidence)),
-        ("strict-octet-source-gate-bound", status(has_source_gate_evidence)),
-        ("no-execution", "pass"),
-    ];
-    let value = record("job-admission-plan-v1", vec![
-        string(JOB_ADMISSION_PLAN_SCHEMA),
-        record("request", vec![string(&request.request_ref)]),
-        record("job", vec![string(&request.job_ref)]),
-        record("sync", vec![string(&request.sync_ref)]),
-        record("target-peer", vec![string(&request.target_peer)]),
-        record("stages", vec![sequence(request.stage_ids.iter().map(string).collect())]),
-        record("closure", vec![refs_sequence(&closure_refs)]),
-        record("topology", vec![sequence(stage_order.iter().map(string).collect())]),
-        record("stage-verdicts", vec![sequence(stage_values)]),
-        record("authority", vec![refs_sequence(&authority_receipt_refs)]),
-        record("resource-verdict", vec![string(&resource_verdict)]),
-        record("decision", vec![string(decision)]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
-        checks_value_from_pairs(&checks),
-    ]);
+    let node_map = dag.nodes.iter().map(|node| (node.id.clone(), node)).collect::<BTreeMap<_, _>>();
+    let mut completed_indices = Vec::new();
+    for node_id in &plan.order_ids {
+        if !selected.contains(node_id) {
+            continue;
+        }
+        let node_index = scan_stage(
+            StageScanInput {
+                node_id,
+                plan: &plan,
+                node_map: &node_map,
+                completed_indices: &completed_indices,
+            },
+            diagnostics,
+            readiness,
+        )?;
+        push_bounded(&mut completed_indices, node_index, MAX_JOB_NODES, "job admission completed node indices")?;
+    }
+    Ok(())
+}
+
+fn scan_stage(
+    input: StageScanInput<'_>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    readiness: &mut Readiness,
+) -> Result<u64> {
+    let mut stage_diagnostics = Vec::new();
+    let deps = input.plan.dependency_indices.get(input.node_id).cloned().unwrap_or_default();
+    if !trellis::job_dag::all_deps_satisfied(&deps, input.completed_indices)
+        || trellis::job_dag::unsatisfied_count(&deps, input.completed_indices) != 0
+    {
+        readiness.has_valid_topology = false;
+        stage_diagnostics.push(format!("unsatisfied selected-stage dependencies for {}", input.node_id));
+    }
+    let node = input
+        .node_map
+        .get(input.node_id)
+        .ok_or_else(|| MoltenError::invalid_harness(format!("job admission missing node {}", input.node_id)))?;
+    if node.stage_artifact_ref.is_none() {
+        readiness.has_executable_artifacts = false;
+        stage_diagnostics.push(format!("stage {} lacks artifact-backed executable operation", input.node_id));
+    }
+    diagnostics.extend_cloned_items(&stage_diagnostics);
+    push_bounded(
+        &mut readiness.stage_verdicts,
+        JobAdmissionStageVerdict {
+            stage_id: input.node_id.to_string(),
+            decision: if stage_diagnostics.is_empty() { "pass" } else { "deny" }.to_string(),
+            diagnostics: stage_diagnostics,
+        },
+        MAX_JOB_NODES,
+        "job admission stage verdicts",
+    )?;
+    let node_index = *input.plan.node_index.get(input.node_id).ok_or_else(|| {
+        MoltenError::invalid_harness(format!("job admission missing trellis index for {}", input.node_id))
+    })?;
+    push_bounded(&mut readiness.stage_order, input.node_id.to_string(), MAX_JOB_NODES, "job admission stage order")?;
+    usize_to_u64(node_index, "job admission completed node index")
+}
+
+fn finish_plan(input: PlanOutcomeInput) -> Result<JobAdmissionPlan> {
+    let decision = plan_decision(&input);
+    let resource_verdict = if input.has_resource_profile { "pass" } else { "deny" }.to_string();
+    let checks = plan_checks(&input);
+    let value = plan_record(RecordInput {
+        request: &input.request,
+        readiness: &input.readiness,
+        authority_receipt_refs: &input.authority_receipt_refs,
+        resource_verdict: &resource_verdict,
+        decision,
+        diagnostics: &input.diagnostics,
+        checks: &checks,
+    });
     let plan_ref = canonical_hash(&value)?;
     let receipt_value = job_admission_receipt_value(JobAdmissionReceiptValueInput {
         operation: "admit-plan",
         decision,
-        request: &request,
+        request: &input.request,
         plan_ref: &plan_ref,
-        closure_refs: &closure_refs,
-        stage_order: &stage_order,
-        authority_receipt_refs: &authority_receipt_refs,
-        source_gate_validation_refs: &source_gate_validation_refs,
+        closure_refs: &input.readiness.closure_refs,
+        stage_order: &input.readiness.stage_order,
+        authority_receipt_refs: &input.authority_receipt_refs,
+        source_gate_validation_refs: &input.source_gate_validation_refs,
         resource_verdict: &resource_verdict,
-        diagnostics: &diagnostics,
+        diagnostics: &input.diagnostics,
         checks: &checks,
     })?;
+    let PlanOutcomeInput {
+        request,
+        readiness,
+        authority_receipt_refs,
+        source_gate_validation_refs,
+        diagnostics,
+        ..
+    } = input;
     Ok(JobAdmissionPlan {
         plan_ref,
         request,
-        closure_refs,
-        stage_order,
-        stage_verdicts,
+        closure_refs: readiness.closure_refs,
+        stage_order: readiness.stage_order,
+        stage_verdicts: readiness.stage_verdicts,
         authority_receipt_refs,
         source_gate_validation_refs,
         resource_verdict,
@@ -2404,6 +2453,68 @@ pub fn admission_plan_value(target_registry: &Path, request_value: &IOValue) -> 
         value,
         receipt_value,
     })
+}
+
+fn plan_decision(input: &PlanOutcomeInput) -> &'static str {
+    if input.readiness.has_target_closure
+        && input.readiness.has_valid_topology
+        && input.readiness.has_executable_artifacts
+        && input.has_explicit_authority
+        && input.has_capability_authority
+        && input.has_sync_evidence
+        && input.has_source_gate_evidence
+        && input.has_resource_profile
+    {
+        "pass"
+    } else {
+        "deny"
+    }
+}
+
+fn plan_checks(input: &PlanOutcomeInput) -> [(&'static str, &'static str); 9] {
+    [
+        ("target-closure-present", status(input.readiness.has_target_closure)),
+        ("trellis-topology", status(input.readiness.has_valid_topology)),
+        ("executable-artifact-gate", status(input.readiness.has_executable_artifacts)),
+        ("explicit-authority", status(input.has_explicit_authority)),
+        ("capability-authority-context", status(input.has_capability_authority)),
+        ("resource-profile", status(input.has_resource_profile)),
+        ("sync-evidence-bound", status(input.has_sync_evidence)),
+        ("strict-octet-source-gate-bound", status(input.has_source_gate_evidence)),
+        ("no-execution", "pass"),
+    ]
+}
+
+fn plan_record(input: RecordInput<'_>) -> IOValue {
+    record("job-admission-plan-v1", vec![
+        string(JOB_ADMISSION_PLAN_SCHEMA),
+        record("request", vec![string(&input.request.request_ref)]),
+        record("job", vec![string(&input.request.job_ref)]),
+        record("sync", vec![string(&input.request.sync_ref)]),
+        record("target-peer", vec![string(&input.request.target_peer)]),
+        record("stages", vec![sequence(input.request.stage_ids.iter().map(string).collect())]),
+        record("closure", vec![refs_sequence(&input.readiness.closure_refs)]),
+        record("topology", vec![sequence(input.readiness.stage_order.iter().map(string).collect())]),
+        record("stage-verdicts", vec![sequence(verdict_values(&input.readiness.stage_verdicts))]),
+        record("authority", vec![refs_sequence(input.authority_receipt_refs)]),
+        record("resource-verdict", vec![string(input.resource_verdict)]),
+        record("decision", vec![string(input.decision)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+        checks_value_from_pairs(input.checks),
+    ])
+}
+
+fn verdict_values(verdicts: &[JobAdmissionStageVerdict]) -> Vec<IOValue> {
+    verdicts
+        .iter()
+        .map(|verdict| {
+            record("stage", vec![
+                string(&verdict.stage_id),
+                string(&verdict.decision),
+                record("diagnostics", vec![sequence(verdict.diagnostics.iter().map(string).collect())]),
+            ])
+        })
+        .collect()
 }
 
 pub fn admission_loopback(target_registry: &Path, request_value: &IOValue) -> Result<JobAdmissionLoopback> {
