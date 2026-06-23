@@ -11697,40 +11697,10 @@ mod tests {
 
     #[test]
     fn node_control_supervisor_policy_recovers_stale_lock_and_bounds_shutdown() {
-        let root = temp_dir("node-control-supervisor-policy");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &root,
-            node_id: "node:supervisor-policy",
-        })
-        .expect("init node");
-        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-        let startup = current_startup_receipt(&root).expect("startup");
-        let identity =
-            node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
-                .expect("parse identity");
-        let service_run_ref = local_ref("node-control-service-run", "stale").expect("service run ref");
-        let stale_lock = service_lock_value(&ServiceLockValueInput {
-            state_root: &root,
-            startup_receipt_ref: &startup.receipt_ref,
-            node_id: &identity.node_id,
-            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            max_ticks: 1,
-            max_requests_per_tick: 1,
-            service_run_ref: &service_run_ref,
-        })
-        .expect("stale lock");
-        write_preserves(&root.join(CONTROL_SERVICE_LOCK_FILE), &stale_lock).expect("write stale lock");
+        let root = initialized_control_root("node-control-supervisor-policy", "node:supervisor-policy");
+        write_active_service_lock(&root, "stale");
         let policy_refs = vec![local_ref("node-control-supervisor-policy", "recover").expect("policy ref")];
-        let recover_policy = node_control_supervisor_policy_value(&NodeControlSupervisorPolicyInput {
-            max_restarts: 1,
-            restart_window_ticks: 1,
-            heartbeat_timeout_ticks: 1,
-            shutdown_drain_ticks: 1,
-            stale_lock_recovery: true,
-            policy_refs: &policy_refs,
-            evidence_refs: &[],
-        })
-        .expect("recover policy");
+        let recover_policy = recovering_policy(&policy_refs);
 
         let recovered = serve_node_control(&NodeControlServeInput {
             state_root: &root,
@@ -11772,16 +11742,7 @@ mod tests {
             request_value: &shutdown.value,
         })
         .expect("submit shutdown");
-        let tight_policy = node_control_supervisor_policy_value(&NodeControlSupervisorPolicyInput {
-            max_restarts: 0,
-            restart_window_ticks: 1,
-            heartbeat_timeout_ticks: 1,
-            shutdown_drain_ticks: 0,
-            stale_lock_recovery: false,
-            policy_refs: &policy_refs,
-            evidence_refs: &[],
-        })
-        .expect("tight policy");
+        let tight_policy = bounded_shutdown_policy(&policy_refs);
         let stopped = serve_node_control(&NodeControlServeInput {
             state_root: &root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
@@ -11795,6 +11756,51 @@ mod tests {
         assert_eq!(stopped.supervisor_receipt_refs.len(), 2);
         let text = to_text(&stopped.service_receipt_value).expect("service receipt text");
         assert!(text.contains("exceeded supervisor bound"));
+    }
+
+    fn write_active_service_lock(root: &Path, service_suffix: &str) {
+        let startup = current_startup_receipt(root).expect("startup");
+        let identity =
+            node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
+                .expect("parse identity");
+        let service_run_ref = local_ref("node-control-service-run", service_suffix).expect("service run ref");
+        let lock_value = service_lock_value(&ServiceLockValueInput {
+            state_root: root,
+            startup_receipt_ref: &startup.receipt_ref,
+            node_id: &identity.node_id,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            max_ticks: 1,
+            max_requests_per_tick: 1,
+            service_run_ref: &service_run_ref,
+        })
+        .expect("service lock");
+        write_preserves(&root.join(CONTROL_SERVICE_LOCK_FILE), &lock_value).expect("write service lock");
+    }
+
+    fn recovering_policy(policy_refs: &[String]) -> IOValue {
+        node_control_supervisor_policy_value(&NodeControlSupervisorPolicyInput {
+            max_restarts: 1,
+            restart_window_ticks: 1,
+            heartbeat_timeout_ticks: 1,
+            shutdown_drain_ticks: 1,
+            stale_lock_recovery: true,
+            policy_refs,
+            evidence_refs: &[],
+        })
+        .expect("recover policy")
+    }
+
+    fn bounded_shutdown_policy(policy_refs: &[String]) -> IOValue {
+        node_control_supervisor_policy_value(&NodeControlSupervisorPolicyInput {
+            max_restarts: 0,
+            restart_window_ticks: 1,
+            heartbeat_timeout_ticks: 1,
+            shutdown_drain_ticks: 0,
+            stale_lock_recovery: false,
+            policy_refs,
+            evidence_refs: &[],
+        })
+        .expect("tight policy")
     }
 
     #[test]
