@@ -172,6 +172,12 @@ struct TrellisExecutionPlan {
     dependency_indices: BTreeMap<String, Vec<u64>>,
 }
 
+struct PlanMapping {
+    node_ids: Vec<String>,
+    node_index: BTreeMap<String, usize>,
+    edges: Vec<(usize, usize)>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobReceipt {
     pub receipt_ref: String,
@@ -4519,6 +4525,20 @@ fn execution_order(nodes: &[JobNode], edges: &[JobEdge]) -> Result<Vec<String>> 
 }
 
 fn trellis_execution_plan(nodes: &[JobNode], edges: &[JobEdge]) -> Result<TrellisExecutionPlan> {
+    let mapping = plan_mapping(nodes, edges)?;
+    if mapping.node_ids.len().checked_add(mapping.edges.len()).is_none() {
+        return Err(MoltenError::invalid_harness("job dag trellis mapping exceeds topo-sort size precondition"));
+    }
+    let order_ids = plan_order_ids(&mapping.edges, &mapping.node_ids)?;
+    let dependency_indices = plan_dependency_indices(&mapping.edges, &mapping.node_ids)?;
+    Ok(TrellisExecutionPlan {
+        order_ids,
+        node_index: mapping.node_index,
+        dependency_indices,
+    })
+}
+
+fn plan_mapping(nodes: &[JobNode], edges: &[JobEdge]) -> Result<PlanMapping> {
     ensure_count_at_most(nodes.len(), MAX_JOB_NODES, "trellis nodes")?;
     ensure_count_at_most(edges.len(), MAX_JOB_EDGES, "trellis edges")?;
     let mut node_ids = Vec::with_capacity(nodes.len());
@@ -4534,7 +4554,7 @@ fn trellis_execution_plan(nodes: &[JobNode], edges: &[JobEdge]) -> Result<Trelli
     for (index, node) in node_ids.iter().enumerate() {
         insert_bounded(&mut node_index, node.clone(), index, MAX_JOB_NODES, "trellis node index")?;
     }
-    let mut trellis_edges = Vec::with_capacity(edges.len());
+    let mut mapped_edges = Vec::with_capacity(edges.len());
     for edge in edges {
         let from = *node_index.get(&edge.from_node).ok_or_else(|| {
             MoltenError::invalid_harness(format!("trellis edge from unknown node {}", edge.from_node))
@@ -4542,16 +4562,21 @@ fn trellis_execution_plan(nodes: &[JobNode], edges: &[JobEdge]) -> Result<Trelli
         let to = *node_index
             .get(&edge.to_node)
             .ok_or_else(|| MoltenError::invalid_harness(format!("trellis edge to unknown node {}", edge.to_node)))?;
-        push_bounded(&mut trellis_edges, (from, to), MAX_JOB_EDGES, "trellis edges")?;
+        push_bounded(&mut mapped_edges, (from, to), MAX_JOB_EDGES, "trellis edges")?;
     }
-    trellis_edges.sort();
-    if node_ids.len().checked_add(trellis_edges.len()).is_none() {
-        return Err(MoltenError::invalid_harness("job dag trellis mapping exceeds topo-sort size precondition"));
-    }
-    let Some(order_indices) = trellis::topo_sort::topo_sort(&trellis_edges, node_ids.len()) else {
+    mapped_edges.sort();
+    Ok(PlanMapping {
+        node_ids,
+        node_index,
+        edges: mapped_edges,
+    })
+}
+
+fn plan_order_ids(edges: &[(usize, usize)], node_ids: &[String]) -> Result<Vec<String>> {
+    let Some(order_indices) = trellis::topo_sort::topo_sort(edges, node_ids.len()) else {
         return Err(MoltenError::invalid_harness("trellis topo_sort rejected cyclic job dag"));
     };
-    if !trellis::topo_sort::is_topo_order(&trellis_edges, node_ids.len(), &order_indices) {
+    if !trellis::topo_sort::is_topo_order(edges, node_ids.len(), &order_indices) {
         return Err(MoltenError::invalid_harness("trellis topo_sort produced invalid job order"));
     }
     let mut order_ids = Vec::with_capacity(order_indices.len());
@@ -4561,7 +4586,11 @@ fn trellis_execution_plan(nodes: &[JobNode], edges: &[JobEdge]) -> Result<Trelli
             .ok_or_else(|| MoltenError::invalid_harness(format!("trellis topo index {index} outside node set")))?;
         push_bounded(&mut order_ids, node_id.clone(), MAX_JOB_NODES, "trellis order ids")?;
     }
-    let incoming_counts = trellis_incoming_counts(&trellis_edges, node_ids.len())?;
+    Ok(order_ids)
+}
+
+fn plan_dependency_indices(edges: &[(usize, usize)], node_ids: &[String]) -> Result<BTreeMap<String, Vec<u64>>> {
+    let incoming_counts = trellis_incoming_counts(edges, node_ids.len())?;
     let mut dependency_indices = BTreeMap::new();
     for (index, node_id) in node_ids.iter().enumerate() {
         insert_bounded(
@@ -4572,7 +4601,7 @@ fn trellis_execution_plan(nodes: &[JobNode], edges: &[JobEdge]) -> Result<Trelli
             "trellis dependency index",
         )?;
     }
-    for (from, to) in &trellis_edges {
+    for (from, to) in edges {
         let to_node = node_ids
             .get(*to)
             .ok_or_else(|| MoltenError::invalid_harness(format!("trellis dependency index {to} outside node set")))?;
@@ -4590,11 +4619,7 @@ fn trellis_execution_plan(nodes: &[JobNode], edges: &[JobEdge]) -> Result<Trelli
         deps.sort();
         deps.dedup();
     }
-    Ok(TrellisExecutionPlan {
-        order_ids,
-        node_index,
-        dependency_indices,
-    })
+    Ok(dependency_indices)
 }
 
 fn trellis_incoming_counts(trellis_edges: &[(usize, usize)], node_count: usize) -> Result<Vec<usize>> {
