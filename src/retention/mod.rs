@@ -8913,233 +8913,24 @@ mod tests {
     #[test]
     fn destructive_admission_rejects_unreconciled_remote_clearance() {
         let root = temp_dir("retention-admission-remote-deny");
-        let requester_ref = fake_ref("requester-deny");
-        let object_ref = fake_ref("object-deny");
-        let remote_refs = vec![fake_ref("remote-a"), fake_ref("remote-b")];
-        let peer_refs = vec![fake_ref("peer-a"), fake_ref("peer-b")];
-        let wrong_peer_ref = fake_ref("peer-wrong");
-        let policy = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_POLICY,
-            label: "policy-deny",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let authority = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_AUTHORITY,
-            label: "authority-deny",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let support = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-            label: "support-deny",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let index = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REFERENCE_INDEX,
-            label: "index-deny",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let remote_gc = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REMOTE_GC,
-            label: "remote-gc-deny",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &remote_refs,
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let clearance_a = store_test_remote_clearance(TestRemoteClearanceInput {
-            root: &root,
-            label: "clearance-a",
-            requester_ref: &requester_ref,
-            peer_ref: &peer_refs[0],
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_ref: &remote_refs[0],
-            policy_ref: &policy,
-            authority_ref: &authority,
-            is_current: true,
-            revoked_refs: &[],
-            retained_refs: &[],
-        });
-        let wrong_peer_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
-            root: &root,
-            label: "wrong-peer-clearance",
-            requester_ref: &requester_ref,
-            peer_ref: &wrong_peer_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_ref: &remote_refs[0],
-            policy_ref: &policy,
-            authority_ref: &authority,
-            is_current: true,
-            revoked_refs: &[],
-            retained_refs: &[],
-        });
-        let stale_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
-            root: &root,
-            label: "stale-clearance",
-            requester_ref: &requester_ref,
-            peer_ref: &peer_refs[0],
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_ref: &remote_refs[0],
-            policy_ref: &policy,
-            authority_ref: &authority,
-            is_current: false,
-            revoked_refs: &[fake_ref("remote-revocation")],
-            retained_refs: &[],
-        });
-        let retained_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
-            root: &root,
-            label: "retained-clearance",
-            requester_ref: &requester_ref,
-            peer_ref: &peer_refs[0],
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_ref: &remote_refs[0],
-            policy_ref: &policy,
-            authority_ref: &authority,
-            is_current: true,
-            revoked_refs: &[],
-            retained_refs: &[fake_ref("remote-retained-object")],
-        });
-        let base = DestructiveRetentionEvidence {
-            requester_ref: Some(requester_ref.clone()),
-            policy_refs: vec![policy],
-            authority_refs: vec![authority],
-            evidence_refs: vec![support],
-            retained_refs: Vec::new(),
-            remote_peer_refs: peer_refs.clone(),
-            remote_refs: remote_refs.clone(),
-            reference_index_refs: vec![index],
-            remote_gc_refs: vec![remote_gc],
-            remote_clearance_refs: Vec::new(),
-            is_reference_index_complete: true,
-        };
-        let mut partial = base.clone();
-        partial.remote_clearance_refs = vec![clearance_a];
-        let partial_admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
-            root: &root,
-            evidence: &partial,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-        })
-        .expect("partial remote denial");
-        assert_eq!(partial_admission.decision, "deny");
-        assert!(partial_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing-remote")));
-        assert!(partial_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing-peer")));
+        let case = deny_case(&root);
+        let refs = denial_refs(&root, &case);
 
-        let mut wrong_peer = base.clone();
-        wrong_peer.remote_refs = vec![remote_refs[0].clone()];
-        wrong_peer.remote_peer_refs = vec![peer_refs[0].clone()];
-        wrong_peer.remote_clearance_refs = vec![wrong_peer_clearance];
-        let wrong_peer_admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
-            root: &root,
-            evidence: &wrong_peer,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-        })
-        .expect("wrong peer denial");
-        assert_eq!(wrong_peer_admission.decision, "deny");
-        assert!(wrong_peer_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing-peer")));
+        let mut partial = case.base();
+        partial.remote_clearance_refs = vec![refs.partial];
+        assert_denial(&root, &case, &partial, "partial remote denial", &["missing-remote", "missing-peer"]);
 
-        let mut stale = wrong_peer.clone();
-        stale.remote_clearance_refs = vec![stale_clearance];
-        let stale_admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
-            root: &root,
-            evidence: &stale,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-        })
-        .expect("stale remote denial");
-        assert_eq!(stale_admission.decision, "deny");
-        assert!(stale_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("stale")));
-        assert!(stale_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("revoked")));
+        let wrong_peer = case.scoped(refs.wrong_peer);
+        assert_denial(&root, &case, &wrong_peer, "wrong peer denial", &["missing-peer"]);
 
-        let mut retained = wrong_peer;
-        retained.remote_clearance_refs = vec![retained_clearance];
-        let retained_admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
-            root: &root,
-            evidence: &retained,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-        })
-        .expect("retained remote denial");
-        assert_eq!(retained_admission.decision, "deny");
-        assert!(retained_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("retained")));
+        let stale = case.scoped(refs.stale);
+        assert_denial(&root, &case, &stale, "stale remote denial", &["stale", "revoked"]);
 
-        let mut forged = base;
-        forged.remote_refs = vec![remote_refs[0].clone()];
-        forged.remote_peer_refs = vec![peer_refs[0].clone()];
-        forged.remote_clearance_refs = vec![fake_ref("forged-clearance")];
-        let forged_admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
-            root: &root,
-            evidence: &forged,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-        })
-        .expect("forged remote denial");
-        assert_eq!(forged_admission.decision, "deny");
-        assert!(forged_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("unreadable")));
+        let retained = case.scoped(refs.retained);
+        assert_denial(&root, &case, &retained, "retained remote denial", &["retained"]);
+
+        let forged = case.scoped(fake_ref("forged-clearance"));
+        assert_denial(&root, &case, &forged, "forged remote denial", &["unreadable"]);
     }
 
     #[test]
@@ -10392,6 +10183,193 @@ mod tests {
                 remote_refs,
             })
         })
+    }
+
+    struct DenyCase {
+        requester: String,
+        object: String,
+        remotes: Vec<String>,
+        peers: Vec<String>,
+        wrong_peer: String,
+        policy: String,
+        authority: String,
+        support: String,
+        index: String,
+        gc: String,
+    }
+
+    impl DenyCase {
+        fn base(&self) -> DestructiveRetentionEvidence {
+            DestructiveRetentionEvidence {
+                requester_ref: Some(self.requester.clone()),
+                policy_refs: vec![self.policy.clone()],
+                authority_refs: vec![self.authority.clone()],
+                evidence_refs: vec![self.support.clone()],
+                retained_refs: Vec::new(),
+                remote_peer_refs: self.peers.clone(),
+                remote_refs: self.remotes.clone(),
+                reference_index_refs: vec![self.index.clone()],
+                remote_gc_refs: vec![self.gc.clone()],
+                remote_clearance_refs: Vec::new(),
+                is_reference_index_complete: true,
+            }
+        }
+
+        fn scoped(&self, stored_ref: String) -> DestructiveRetentionEvidence {
+            let mut evidence = self.base();
+            evidence.remote_refs = vec![self.remotes[0].clone()];
+            evidence.remote_peer_refs = vec![self.peers[0].clone()];
+            evidence.remote_clearance_refs = vec![stored_ref];
+            evidence
+        }
+    }
+
+    struct DenyRefs {
+        partial: String,
+        wrong_peer: String,
+        stale: String,
+        retained: String,
+    }
+
+    struct ClearInput<'a> {
+        root: &'a Path,
+        case: &'a DenyCase,
+        label: &'a str,
+        peer: &'a str,
+        remote: &'a str,
+        is_current: bool,
+        revoked_refs: &'a [String],
+        retained_refs: &'a [String],
+    }
+
+    fn deny_case(root: &Path) -> DenyCase {
+        let requester = fake_ref("requester-deny");
+        let object = fake_ref("object-deny");
+        let remotes = vec![fake_ref("remote-a"), fake_ref("remote-b")];
+        let peers = vec![fake_ref("peer-a"), fake_ref("peer-b")];
+        let empty_refs: &[String] = &[];
+        let [policy, authority, support, index, gc] = [
+            (ADMISSION_KIND_POLICY, "policy-deny", empty_refs),
+            (ADMISSION_KIND_AUTHORITY, "authority-deny", empty_refs),
+            (ADMISSION_KIND_SUPPORTING_EVIDENCE, "support-deny", empty_refs),
+            (ADMISSION_KIND_REFERENCE_INDEX, "index-deny", empty_refs),
+            (ADMISSION_KIND_REMOTE_GC, "remote-gc-deny", remotes.as_slice()),
+        ]
+        .map(|(kind, label, remote_refs)| {
+            seed_ref(SeedInput {
+                root,
+                kind,
+                label: label.to_string(),
+                requester_ref: &requester,
+                object_ref: &object,
+                remote_refs,
+            })
+        });
+        DenyCase {
+            requester,
+            object,
+            remotes,
+            peers,
+            wrong_peer: fake_ref("peer-wrong"),
+            policy,
+            authority,
+            support,
+            index,
+            gc,
+        }
+    }
+
+    fn clear_ref(input: ClearInput<'_>) -> String {
+        store_test_remote_clearance(TestRemoteClearanceInput {
+            root: input.root,
+            label: input.label,
+            requester_ref: &input.case.requester,
+            peer_ref: input.peer,
+            object_ref: &input.case.object,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: input.remote,
+            policy_ref: &input.case.policy,
+            authority_ref: &input.case.authority,
+            is_current: input.is_current,
+            revoked_refs: input.revoked_refs,
+            retained_refs: input.retained_refs,
+        })
+    }
+
+    fn denial_refs(root: &Path, case: &DenyCase) -> DenyRefs {
+        let empty_refs: &[String] = &[];
+        let revoked_refs = vec![fake_ref("remote-revocation")];
+        let retained_refs = vec![fake_ref("remote-retained-object")];
+        DenyRefs {
+            partial: clear_ref(ClearInput {
+                root,
+                case,
+                label: "clearance-a",
+                peer: &case.peers[0],
+                remote: &case.remotes[0],
+                is_current: true,
+                revoked_refs: empty_refs,
+                retained_refs: empty_refs,
+            }),
+            wrong_peer: clear_ref(ClearInput {
+                root,
+                case,
+                label: "wrong-peer-clearance",
+                peer: &case.wrong_peer,
+                remote: &case.remotes[0],
+                is_current: true,
+                revoked_refs: empty_refs,
+                retained_refs: empty_refs,
+            }),
+            stale: clear_ref(ClearInput {
+                root,
+                case,
+                label: "stale-clearance",
+                peer: &case.peers[0],
+                remote: &case.remotes[0],
+                is_current: false,
+                revoked_refs: &revoked_refs,
+                retained_refs: empty_refs,
+            }),
+            retained: clear_ref(ClearInput {
+                root,
+                case,
+                label: "retained-clearance",
+                peer: &case.peers[0],
+                remote: &case.remotes[0],
+                is_current: true,
+                revoked_refs: empty_refs,
+                retained_refs: &retained_refs,
+            }),
+        }
+    }
+
+    fn assert_denial(
+        root: &Path,
+        case: &DenyCase,
+        evidence: &DestructiveRetentionEvidence,
+        reason: &str,
+        expected: &[&str],
+    ) {
+        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root,
+            evidence,
+            object_ref: &case.object,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect(reason);
+        assert_eq!(admission.decision, "deny");
+        for needle in expected {
+            assert!(
+                admission.diagnostics.iter().any(|diagnostic| diagnostic.contains(needle)),
+                "missing diagnostic {needle} in {:?}",
+                admission.diagnostics
+            );
+        }
     }
 
     struct LiveCase {
