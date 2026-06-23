@@ -1229,18 +1229,55 @@ fn secrets_fixture_retention_root(secret_ref: &str) -> Result<PathBuf> {
     Ok(std::env::temp_dir().join(format!("molten-secrets-retention-{process_id}")).join(root_ref))
 }
 
-pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
-    let labels = fixture_field_labels()?;
+struct FixtureRefs {
+    policy: Vec<String>,
+    evidence: Vec<String>,
+    authority: Vec<String>,
+    resource: Vec<String>,
+    effect: Vec<String>,
+    commitment: String,
+    encryption: String,
+}
+
+struct FixtureCore {
+    labels: Vec<ConfidentialLabel>,
+    refs: FixtureRefs,
+    secret: SecretRef,
+    encrypted: EncryptedRef,
+    marker: RedactionMarker,
+    transform: RedactionTransformReceipt,
+}
+
+struct FixtureReceipts {
+    reveal_denied: RevealReceipt,
+    reveal_pass: RevealReceipt,
+    decrypt_denied: DecryptReceipt,
+    decrypt_pass: DecryptReceipt,
+    replay: CommitmentReplayReceipt,
+}
+
+struct FixtureTail {
+    retention: retention::RetentionEvaluation,
+    cleanup: SecretCleanupReceipt,
+    private_bundle: PrivateBundleProfile,
+}
+
+fn fixture_refs() -> FixtureRefs {
+    FixtureRefs {
+        policy: vec![fixture_ref("secret-policy")],
+        evidence: vec![fixture_ref("secret-evidence")],
+        authority: vec![fixture_ref("secret-authority")],
+        resource: vec![fixture_ref("secret-resource")],
+        effect: vec![fixture_ref("secret-effect-handle")],
+        commitment: fixture_ref("secret-commitment"),
+        encryption: fixture_ref("secret-encryption-profile"),
+    }
+}
+
+fn fixture_secret(labels: &[ConfidentialLabel], refs: &FixtureRefs) -> Result<SecretRef> {
     let primary_label =
         labels.first().ok_or_else(|| MoltenError::invalid_harness("secrets fixture missing field label"))?;
-    let policy_refs = vec![fixture_ref("secret-policy")];
-    let evidence_refs = vec![fixture_ref("secret-evidence")];
-    let authority_refs = vec![fixture_ref("secret-authority")];
-    let resource_refs = vec![fixture_ref("secret-resource")];
-    let effect_refs = vec![fixture_ref("secret-effect-handle")];
-    let commitment_ref = fixture_ref("secret-commitment");
-    let encryption_ref = fixture_ref("secret-encryption-profile");
-    let secret_value = secret_ref_value(&SecretRefInput {
+    let value = secret_ref_value(&SecretRefInput {
         secret_id: "secret:fixture".to_string(),
         scope_ref: fixture_ref("scope-service"),
         allowed_uses: vec![
@@ -1249,23 +1286,29 @@ pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
             "export".to_string(),
             "adapter-use".to_string(),
         ],
-        commitment_ref: commitment_ref.clone(),
-        encryption_ref: encryption_ref.clone(),
+        commitment_ref: refs.commitment.clone(),
+        encryption_ref: refs.encryption.clone(),
         redaction_label_ref: primary_label.label_ref.clone(),
         expiry_ref: None,
         revocation_refs: Vec::new(),
-        evidence_refs: evidence_refs.clone(),
+        evidence_refs: refs.evidence.clone(),
     })?;
-    let secret = parse_secret_ref(&secret_value)?;
-    let encrypted_value = encrypted_ref_value(&EncryptedRefInput {
+    parse_secret_ref(&value)
+}
+
+fn fixture_encrypted(refs: &FixtureRefs) -> Result<EncryptedRef> {
+    let value = encrypted_ref_value(&EncryptedRefInput {
         ciphertext_ref: fixture_ref("ciphertext"),
-        commitment_ref: commitment_ref.clone(),
-        encryption_ref,
+        commitment_ref: refs.commitment.clone(),
+        encryption_ref: refs.encryption.clone(),
         schema_ref: fixture_ref("secret-schema"),
-        policy_refs: policy_refs.clone(),
-        evidence_refs: evidence_refs.clone(),
+        policy_refs: refs.policy.clone(),
+        evidence_refs: refs.evidence.clone(),
     })?;
-    let encrypted = parse_encrypted_ref(&encrypted_value)?;
+    parse_encrypted_ref(&value)
+}
+
+fn fixture_redaction() -> Result<(RedactionMarker, RedactionTransformReceipt)> {
     let sensitive_value = record("credential", vec![string("do-not-render")]);
     let redacted = redacted_view(&sensitive_value, None)?;
     let marker = redacted
@@ -1274,75 +1317,115 @@ pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
     let transform = redacted
         .transform_receipt
         .ok_or_else(|| MoltenError::invalid_harness("secrets fixture expected transform receipt"))?;
-    let reveal_denied_value = reveal_receipt_value(&RevealReceiptInput {
-        secret_ref: secret.secret_ref.clone(),
-        encrypted_ref: Some(encrypted.encrypted_ref.clone()),
+    Ok((marker, transform))
+}
+
+fn fixture_core() -> Result<FixtureCore> {
+    let labels = fixture_field_labels()?;
+    let refs = fixture_refs();
+    let secret = fixture_secret(&labels, &refs)?;
+    let encrypted = fixture_encrypted(&refs)?;
+    let (marker, transform) = fixture_redaction()?;
+    Ok(FixtureCore {
+        labels,
+        refs,
+        secret,
+        encrypted,
+        marker,
+        transform,
+    })
+}
+
+fn fixture_reveals(core: &FixtureCore) -> Result<(RevealReceipt, RevealReceipt)> {
+    let denied_value = reveal_receipt_value(&RevealReceiptInput {
+        secret_ref: core.secret.secret_ref.clone(),
+        encrypted_ref: Some(core.encrypted.encrypted_ref.clone()),
         requester_ref: fixture_ref("requester"),
         purpose: "debug".to_string(),
         plaintext_ref: Some(fixture_ref("plaintext")),
-        commitment_ref: commitment_ref.clone(),
+        commitment_ref: core.refs.commitment.clone(),
         authority_refs: Vec::new(),
-        policy_refs: policy_refs.clone(),
-        resource_refs: resource_refs.clone(),
-        effect_handle_refs: effect_refs.clone(),
+        policy_refs: core.refs.policy.clone(),
+        resource_refs: core.refs.resource.clone(),
+        effect_handle_refs: core.refs.effect.clone(),
         revocation_refs: Vec::new(),
     })?;
-    let reveal_denied = parse_reveal_receipt(&reveal_denied_value)?;
-    let reveal_pass_value = reveal_receipt_value(&RevealReceiptInput {
-        secret_ref: secret.secret_ref.clone(),
-        encrypted_ref: Some(encrypted.encrypted_ref.clone()),
+    let pass_value = reveal_receipt_value(&RevealReceiptInput {
+        secret_ref: core.secret.secret_ref.clone(),
+        encrypted_ref: Some(core.encrypted.encrypted_ref.clone()),
         requester_ref: fixture_ref("requester"),
         purpose: "debug".to_string(),
         plaintext_ref: Some(fixture_ref("plaintext")),
-        commitment_ref: commitment_ref.clone(),
-        authority_refs: authority_refs.clone(),
-        policy_refs: policy_refs.clone(),
-        resource_refs: resource_refs.clone(),
-        effect_handle_refs: effect_refs.clone(),
+        commitment_ref: core.refs.commitment.clone(),
+        authority_refs: core.refs.authority.clone(),
+        policy_refs: core.refs.policy.clone(),
+        resource_refs: core.refs.resource.clone(),
+        effect_handle_refs: core.refs.effect.clone(),
         revocation_refs: Vec::new(),
     })?;
-    let reveal_pass = parse_reveal_receipt(&reveal_pass_value)?;
-    let decrypt_denied_value = decrypt_receipt_value(&DecryptReceiptInput {
-        encrypted_ref: encrypted.encrypted_ref.clone(),
+    Ok((parse_reveal_receipt(&denied_value)?, parse_reveal_receipt(&pass_value)?))
+}
+
+fn fixture_decrypts(core: &FixtureCore, reveal_pass: &RevealReceipt) -> Result<(DecryptReceipt, DecryptReceipt)> {
+    let denied_value = decrypt_receipt_value(&DecryptReceiptInput {
+        encrypted_ref: core.encrypted.encrypted_ref.clone(),
         requester_ref: fixture_ref("requester"),
         purpose: "adapter-use".to_string(),
         plaintext_ref: Some(fixture_ref("plaintext")),
-        commitment_ref: commitment_ref.clone(),
-        expected_commitment_ref: commitment_ref.clone(),
+        commitment_ref: core.refs.commitment.clone(),
+        expected_commitment_ref: core.refs.commitment.clone(),
         reveal_receipt_ref: None,
         has_reveal_authority: false,
-        authority_refs: authority_refs.clone(),
-        policy_refs: policy_refs.clone(),
-        resource_refs: resource_refs.clone(),
-        effect_handle_refs: effect_refs.clone(),
+        authority_refs: core.refs.authority.clone(),
+        policy_refs: core.refs.policy.clone(),
+        resource_refs: core.refs.resource.clone(),
+        effect_handle_refs: core.refs.effect.clone(),
     })?;
-    let decrypt_denied = parse_decrypt_receipt(&decrypt_denied_value)?;
-    let decrypt_pass_value = decrypt_receipt_value(&DecryptReceiptInput {
-        encrypted_ref: encrypted.encrypted_ref.clone(),
+    let pass_value = decrypt_receipt_value(&DecryptReceiptInput {
+        encrypted_ref: core.encrypted.encrypted_ref.clone(),
         requester_ref: fixture_ref("requester"),
         purpose: "adapter-use".to_string(),
         plaintext_ref: reveal_pass.plaintext_ref.clone(),
-        commitment_ref: commitment_ref.clone(),
-        expected_commitment_ref: encrypted.commitment_ref.clone(),
+        commitment_ref: core.refs.commitment.clone(),
+        expected_commitment_ref: core.encrypted.commitment_ref.clone(),
         reveal_receipt_ref: Some(reveal_pass.receipt_ref.clone()),
         has_reveal_authority: reveal_pass.decision == "pass",
-        authority_refs: authority_refs.clone(),
-        policy_refs: policy_refs.clone(),
-        resource_refs: resource_refs.clone(),
-        effect_handle_refs: effect_refs.clone(),
+        authority_refs: core.refs.authority.clone(),
+        policy_refs: core.refs.policy.clone(),
+        resource_refs: core.refs.resource.clone(),
+        effect_handle_refs: core.refs.effect.clone(),
     })?;
-    let decrypt_pass = parse_decrypt_receipt(&decrypt_pass_value)?;
-    let replay_value = commitment_replay_receipt_value(&CommitmentReplayInput {
-        expected_commitment_ref: commitment_ref.clone(),
-        actual_commitment_ref: encrypted.commitment_ref.clone(),
+    Ok((parse_decrypt_receipt(&denied_value)?, parse_decrypt_receipt(&pass_value)?))
+}
+
+fn fixture_replay(core: &FixtureCore) -> Result<CommitmentReplayReceipt> {
+    let value = commitment_replay_receipt_value(&CommitmentReplayInput {
+        expected_commitment_ref: core.refs.commitment.clone(),
+        actual_commitment_ref: core.encrypted.commitment_ref.clone(),
         reveal_receipt_ref: None,
         is_plaintext_required: false,
     })?;
-    let replay = parse_commitment_replay_receipt(&replay_value)?;
-    let retention_root = secrets_fixture_retention_root(&secret.secret_ref)?;
-    let cleanup_retention = retention::evaluate_retention(retention::RetentionEvaluationInput {
+    parse_commitment_replay_receipt(&value)
+}
+
+fn fixture_receipts(core: &FixtureCore) -> Result<FixtureReceipts> {
+    let (reveal_denied, reveal_pass) = fixture_reveals(core)?;
+    let (decrypt_denied, decrypt_pass) = fixture_decrypts(core, &reveal_pass)?;
+    let replay = fixture_replay(core)?;
+    Ok(FixtureReceipts {
+        reveal_denied,
+        reveal_pass,
+        decrypt_denied,
+        decrypt_pass,
+        replay,
+    })
+}
+
+fn fixture_retention(core: &FixtureCore) -> Result<retention::RetentionEvaluation> {
+    let retention_root = secrets_fixture_retention_root(&core.secret.secret_ref)?;
+    retention::evaluate_retention(retention::RetentionEvaluationInput {
         root: &retention_root,
-        object_ref: &secret.secret_ref,
+        object_ref: &core.secret.secret_ref,
         object_kind: "secret-ref",
         retention_class: retention::CLASS_PRIVATE_SECRET_REF,
         action: retention::ACTION_REDACT,
@@ -1350,68 +1433,92 @@ pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
         is_reference_index_complete: true,
         retained_refs: &[],
         remote_refs: &[],
-        policy_refs: &policy_refs,
-        evidence_refs: &evidence_refs,
+        policy_refs: &core.refs.policy,
+        evidence_refs: &core.refs.evidence,
         has_delete_authority: true,
         has_remote_gc_clearance: true,
-    })?;
-    let cleanup_tombstone_ref = cleanup_retention
+    })
+}
+
+fn fixture_cleanup(core: &FixtureCore, retention: &retention::RetentionEvaluation) -> Result<SecretCleanupReceipt> {
+    let tombstone_ref = retention
         .receipt
         .tombstone_ref
         .clone()
         .ok_or_else(|| MoltenError::invalid_harness("secrets cleanup retention receipt missing tombstone"))?;
-    let cleanup_value = secret_cleanup_receipt_value(&SecretCleanupInput {
-        secret_ref: secret.secret_ref.clone(),
+    let value = secret_cleanup_receipt_value(&SecretCleanupInput {
+        secret_ref: core.secret.secret_ref.clone(),
         revocation_ref: fixture_ref("secret-revocation"),
-        tombstone_ref: cleanup_tombstone_ref,
-        retention_refs: vec![cleanup_retention.receipt.receipt_ref.clone()],
-        retention_receipts: vec![cleanup_retention.receipt.value.clone()],
-        authority_refs,
-        policy_refs: policy_refs.clone(),
+        tombstone_ref,
+        retention_refs: vec![retention.receipt.receipt_ref.clone()],
+        retention_receipts: vec![retention.receipt.value.clone()],
+        authority_refs: core.refs.authority.clone(),
+        policy_refs: core.refs.policy.clone(),
     })?;
-    let cleanup = parse_secret_cleanup_receipt(&cleanup_value)?;
-    let private_bundle_value = private_bundle_profile_value(&PrivateBundleProfileInput {
+    parse_secret_cleanup_receipt(&value)
+}
+
+fn fixture_private_bundle(core: &FixtureCore, receipts: &FixtureReceipts) -> Result<PrivateBundleProfile> {
+    let value = private_bundle_profile_value(&PrivateBundleProfileInput {
         profile_ref: fixture_ref("private-bundle-profile"),
-        encrypted_refs: vec![encrypted.encrypted_ref.clone()],
-        reveal_receipt_refs: vec![reveal_pass.receipt_ref.clone()],
-        transform_receipt_ref: transform.receipt_ref.clone(),
+        encrypted_refs: vec![core.encrypted.encrypted_ref.clone()],
+        reveal_receipt_refs: vec![receipts.reveal_pass.receipt_ref.clone()],
+        transform_receipt_ref: core.transform.receipt_ref.clone(),
         is_gate_preserving: true,
     })?;
-    let private_bundle = parse_private_bundle_profile(&private_bundle_value)?;
-    let mut evidence_values = Vec::new();
-    for label in &labels {
-        evidence_values.push_limited(label.value.clone(), MAX_SECRET_MARKERS, "secrets fixture evidence")?;
+    parse_private_bundle_profile(&value)
+}
+
+fn fixture_tail(core: &FixtureCore, receipts: &FixtureReceipts) -> Result<FixtureTail> {
+    let retention = fixture_retention(core)?;
+    let cleanup = fixture_cleanup(core, &retention)?;
+    let private_bundle = fixture_private_bundle(core, receipts)?;
+    Ok(FixtureTail {
+        retention,
+        cleanup,
+        private_bundle,
+    })
+}
+
+fn fixture_evidence_values(core: &FixtureCore, receipts: &FixtureReceipts, tail: &FixtureTail) -> Result<Vec<IOValue>> {
+    let mut values = Vec::new();
+    for label in &core.labels {
+        values.push_limited(label.value.clone(), MAX_SECRET_MARKERS, "secrets fixture evidence")?;
     }
     for value in [
-        secret.value.clone(),
-        encrypted.value.clone(),
-        marker.value.clone(),
-        transform.value.clone(),
-        reveal_denied.value.clone(),
-        reveal_pass.value.clone(),
-        decrypt_denied.value.clone(),
-        decrypt_pass.value.clone(),
-        replay.value.clone(),
-        cleanup_retention.receipt.value.clone(),
-        cleanup.value.clone(),
-        private_bundle.value.clone(),
+        core.secret.value.clone(),
+        core.encrypted.value.clone(),
+        core.marker.value.clone(),
+        core.transform.value.clone(),
+        receipts.reveal_denied.value.clone(),
+        receipts.reveal_pass.value.clone(),
+        receipts.decrypt_denied.value.clone(),
+        receipts.decrypt_pass.value.clone(),
+        receipts.replay.value.clone(),
+        tail.retention.receipt.value.clone(),
+        tail.cleanup.value.clone(),
+        tail.private_bundle.value.clone(),
     ] {
-        evidence_values.push_limited(value, MAX_SECRET_MARKERS, "secrets fixture evidence")?;
+        values.push_limited(value, MAX_SECRET_MARKERS, "secrets fixture evidence")?;
     }
-    if let Some(tombstone) = cleanup_retention.tombstone.as_ref() {
-        evidence_values.push_limited(tombstone.value.clone(), MAX_SECRET_MARKERS, "secrets fixture evidence")?;
+    if let Some(tombstone) = tail.retention.tombstone.as_ref() {
+        values.push_limited(tombstone.value.clone(), MAX_SECRET_MARKERS, "secrets fixture evidence")?;
     }
-    let report_value = record("secrets-fixture-report-v1", vec![
+    Ok(values)
+}
+
+fn fixture_report(core: &FixtureCore, receipts: &FixtureReceipts, tail: &FixtureTail) -> Result<(IOValue, String)> {
+    let value = record("secrets-fixture-report-v1", vec![
         string("molten.secrets.fixture-report.v1"),
         record("decision", vec![string("pass")]),
-        record("secret", vec![string(&secret.secret_ref)]),
-        record("encrypted", vec![string(&encrypted.encrypted_ref)]),
-        record("redaction", vec![string(&marker.marker_ref)]),
-        record("reveal", vec![string(&reveal_pass.receipt_ref)]),
-        record("decrypt", vec![string(&decrypt_pass.receipt_ref)]),
-        record("replay", vec![string(&replay.receipt_ref)]),
-        record("cleanup", vec![string(&cleanup.receipt_ref)]),
-        record("private-bundle", vec![string(&private_bundle.profile_ref)]),
+        record("secret", vec![string(&core.secret.secret_ref)]),
+        record("encrypted", vec![string(&core.encrypted.encrypted_ref)]),
+        record("redaction", vec![string(&core.marker.marker_ref)]),
+        record("reveal", vec![string(&receipts.reveal_pass.receipt_ref)]),
+        record("decrypt", vec![string(&receipts.decrypt_pass.receipt_ref)]),
+        record("replay", vec![string(&receipts.replay.receipt_ref)]),
+        record("cleanup", vec![string(&tail.cleanup.receipt_ref)]),
+        record("private-bundle", vec![string(&tail.private_bundle.profile_ref)]),
         checks_value(&[
             ("no-plaintext-default", "pass"),
             ("encrypted-ref-not-authority", "pass"),
@@ -1419,22 +1526,31 @@ pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
             ("gate-preserving-redaction", "pass"),
         ]),
     ]);
-    let report_ref = canonical_hash(&report_value)?;
+    let value_ref = canonical_hash(&value)?;
+    Ok((value, value_ref))
+}
+
+pub fn run_secrets_fixture() -> Result<SecretsFixtureRun> {
+    let core = fixture_core()?;
+    let receipts = fixture_receipts(&core)?;
+    let tail = fixture_tail(&core, &receipts)?;
+    let (report_value, report_ref) = fixture_report(&core, &receipts, &tail)?;
+    let mut evidence_values = fixture_evidence_values(&core, &receipts, &tail)?;
     evidence_values.push_limited(report_value.clone(), MAX_SECRET_MARKERS, "secrets fixture evidence")?;
     Ok(SecretsFixtureRun {
         value: report_value,
         report_ref,
-        secret,
-        encrypted,
-        marker,
-        transform,
-        reveal_denied,
-        reveal_pass,
-        decrypt_denied,
-        decrypt_pass,
-        replay,
-        cleanup,
-        private_bundle,
+        secret: core.secret,
+        encrypted: core.encrypted,
+        marker: core.marker,
+        transform: core.transform,
+        reveal_denied: receipts.reveal_denied,
+        reveal_pass: receipts.reveal_pass,
+        decrypt_denied: receipts.decrypt_denied,
+        decrypt_pass: receipts.decrypt_pass,
+        replay: receipts.replay,
+        cleanup: tail.cleanup,
+        private_bundle: tail.private_bundle,
         evidence_values,
     })
 }

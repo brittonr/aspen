@@ -211,6 +211,8 @@
 
 ## Patterns That Work
 
+- 2026-06-22 Octet secrets fixture split: extracting `src/secrets/mod.rs::run_secrets_fixture` into neutral same-file fixture core/receipt/tail helpers lowered the no-disabled probe from 7220 to 7218 by clearing the function-length finding without adding path/import/file debt. Validation passed `cargo fmt`, focused `cargo test secrets`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-secrets-fixture-0`.
+
 - 2026-06-22 Octet secrets summary split: extracting `src/secrets/mod.rs::secrets_summary` into same-file neutral `summary_core`/`summary_receipts`/`summary_profiles` helpers lowered the no-disabled probe from 7222 to 7220 by clearing the function-length finding while keeping path/import/file counts flat. Validation passed `cargo fmt`, focused `cargo test secrets`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-secrets-summary-0`.
 
 - 2026-06-22 Octet typed-storage migrate split: extracting `src/typed/storage.rs::migrate_value` source loading/validation, merged refs, next entry, pass receipt, and persistence into neutral same-file helpers lowered the no-disabled probe from 7224 to 7222 by clearing the function-length finding while keeping path/import/file counts flat. Validation passed `cargo fmt`, focused `cargo test typed_storage`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-typed-storage-migrate-0`.
