@@ -1840,6 +1840,27 @@ mod tests {
 
     #[test]
     fn compound_dynamic_attenuation_and_cleanup_artifacts_parse() {
+        let bundle = bundle();
+        check_profile(&bundle);
+        check_dynamic(&bundle.seed);
+        check_cleanup(&bundle.child);
+    }
+
+    struct Seed {
+        scope: EffectScope,
+        policy_ref: String,
+        capability_ref: String,
+        resource_refs: Vec<String>,
+        binding_ref: String,
+    }
+
+    struct Bundle {
+        seed: Seed,
+        parent: IOValue,
+        child: IOValue,
+    }
+
+    fn seed() -> Seed {
         let scope = scope(Some(fake_ref("actor-a")));
         let policy_ref = fake_ref("policy");
         let capability_ref = fake_ref("capability");
@@ -1858,14 +1879,25 @@ mod tests {
             evidence_refs: vec![fake_ref("binding-evidence")],
         })
         .expect("binding");
-        let parent = effect_handle_value(&EffectHandleInput {
+        let binding_ref = canonical_hash(&binding).expect("binding ref");
+        Seed {
+            scope,
+            policy_ref,
+            capability_ref,
+            resource_refs,
+            binding_ref,
+        }
+    }
+
+    fn parent(seed: &Seed) -> IOValue {
+        effect_handle_value(&EffectHandleInput {
             kind: ADAPTER_KIND_STORAGE.to_string(),
-            scope: scope.clone(),
-            handler_binding_ref: canonical_hash(&binding).expect("binding ref"),
+            scope: seed.scope.clone(),
+            handler_binding_ref: seed.binding_ref.clone(),
             operations: vec!["read".to_string(), "write".to_string()],
-            capability_context_ref: capability_ref.clone(),
+            capability_context_ref: seed.capability_ref.clone(),
             authority_context_ref: None,
-            resource_refs: resource_refs.clone(),
+            resource_refs: seed.resource_refs.clone(),
             not_before: Some(0),
             expires_at: Some(10),
             revocation_refs: Vec::new(),
@@ -1873,49 +1905,66 @@ mod tests {
             parent_handle_ref: None,
             evidence_refs: vec![fake_ref("parent-evidence")],
         })
-        .expect("parent handle");
-        let child = attenuated_handle_value(&parent, &HandleAttenuationInput {
-            scope: scope.clone(),
+        .expect("parent handle")
+    }
+
+    fn child(seed: &Seed, parent: &IOValue) -> IOValue {
+        attenuated_handle_value(parent, &HandleAttenuationInput {
+            scope: seed.scope.clone(),
             operations: vec!["read".to_string()],
             expires_at: Some(5),
             transfer: TRANSFER_LOCAL_ONLY.to_string(),
             evidence_refs: vec![fake_ref("attenuation-evidence")],
         })
-        .expect("attenuated child");
+        .expect("attenuated child")
+    }
+
+    fn bundle() -> Bundle {
+        let seed = seed();
+        let parent = parent(&seed);
+        let child = child(&seed, &parent);
+        Bundle { seed, parent, child }
+    }
+
+    fn check_profile(bundle: &Bundle) {
         let profile = compound_handler_profile_value(&CompoundHandlerProfileInput {
             profile: "storage-plus-trace".to_string(),
-            scope: scope.clone(),
-            handler_binding_refs: vec![canonical_hash(&binding).expect("binding ref")],
+            scope: bundle.seed.scope.clone(),
+            handler_binding_refs: vec![bundle.seed.binding_ref.clone()],
             child_handle_refs: vec![
-                canonical_hash(&parent).expect("parent ref"),
-                canonical_hash(&child).expect("child ref"),
+                canonical_hash(&bundle.parent).expect("parent ref"),
+                canonical_hash(&bundle.child).expect("child ref"),
             ],
-            policy_ref: policy_ref.clone(),
-            capability_context_ref: capability_ref.clone(),
+            policy_ref: bundle.seed.policy_ref.clone(),
+            capability_context_ref: bundle.seed.capability_ref.clone(),
             authority_context_ref: None,
-            resource_refs: resource_refs.clone(),
+            resource_refs: bundle.seed.resource_refs.clone(),
             evidence_refs: vec![fake_ref("profile-evidence")],
         })
         .expect("compound profile");
         let parsed_profile = parse_compound_handler_profile(&profile).expect("parse profile");
         assert_eq!(parsed_profile.child_handle_refs.len(), 2);
+    }
 
+    fn check_dynamic(seed: &Seed) {
         let dynamic = dynamic_operation_record_value(&DynamicOperationRecordInput {
             operation: "read".to_string(),
             adapter_ref: fake_ref("storage-adapter"),
             callable_ref: fake_ref("callable"),
             request_ref: fake_ref("request"),
             response_ref: fake_ref("response"),
-            policy_ref,
-            capability_context_ref: capability_ref,
-            resource_refs,
+            policy_ref: seed.policy_ref.clone(),
+            capability_context_ref: seed.capability_ref.clone(),
+            resource_refs: seed.resource_refs.clone(),
             evidence_refs: vec![fake_ref("dynamic-evidence")],
         })
         .expect("dynamic operation");
         assert_eq!(parse_dynamic_operation_record(&dynamic).expect("parse dynamic").operation, "read");
+    }
 
+    fn check_cleanup(child: &IOValue) {
         let cleanup = handle_cleanup_receipt_value(
-            &canonical_hash(&child).expect("child ref"),
+            &canonical_hash(child).expect("child ref"),
             "revoke-live-cache",
             false,
             true,
