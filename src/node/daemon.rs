@@ -10311,8 +10311,14 @@ mod tests {
         assert!(receipt_text.contains("peer peer:ticket does not match peer:other-ticket"));
     }
 
-    #[test]
-    fn node_control_live_ticket_and_authority_import_receipts_gate_bindings() {
+    struct ImportCase {
+        sender: PathBuf,
+        policy_refs: Vec<String>,
+        ticket: NodeControlLiveTicket,
+        admission: NodeControlLivePeerAdmission,
+    }
+
+    fn import_case() -> ImportCase {
         let receiver = temp_dir("node-control-live-import-receiver");
         let sender = temp_dir("node-control-live-import-sender");
         init_local_node(&NodeDaemonInitInput {
@@ -10344,13 +10350,22 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("admit peer");
+        ImportCase {
+            sender,
+            policy_refs,
+            ticket,
+            admission,
+        }
+    }
+
+    fn assert_ticket_imports(case: &ImportCase) {
         let imported_ticket = import_node_control_live_ticket(&NodeControlLiveTicketImportInput {
-            state_root: &sender,
-            ticket_value: &ticket.value,
-            peer_admission_value: Some(&admission.value),
+            state_root: &case.sender,
+            ticket_value: &case.ticket.value,
+            peer_admission_value: Some(&case.admission.value),
             expected_node: Some("node:live-import"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-import"),
             as_of_sequence: 2,
         })
@@ -10358,16 +10373,16 @@ mod tests {
         assert_eq!(imported_ticket.decision, "pass");
         assert_eq!(imported_ticket.imported_refs.len(), 2);
         assert_eq!(ledger::artifact_kind(&imported_ticket.receipt_value), "node-control-live-ticket-import-receipt");
-        read_node_ledger_artifact(&sender, &ticket.ticket_ref).expect("ticket imported");
-        read_node_ledger_artifact(&sender, &admission.admission_ref).expect("admission imported");
+        read_node_ledger_artifact(&case.sender, &case.ticket.ticket_ref).expect("ticket imported");
+        read_node_ledger_artifact(&case.sender, &case.admission.admission_ref).expect("admission imported");
 
         let stale_ticket = import_node_control_live_ticket(&NodeControlLiveTicketImportInput {
-            state_root: &sender,
-            ticket_value: &ticket.value,
-            peer_admission_value: Some(&admission.value),
+            state_root: &case.sender,
+            ticket_value: &case.ticket.value,
+            peer_admission_value: Some(&case.admission.value),
             expected_node: Some("node:live-import"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-import"),
             as_of_sequence: 8,
         })
@@ -10375,7 +10390,9 @@ mod tests {
         assert_eq!(stale_ticket.decision, "deny");
         assert!(stale_ticket.imported_refs.is_empty());
         assert!(stale_ticket.diagnostics.iter().any(|value| value.contains("expired at sequence")));
+    }
 
+    fn assert_grant_imports(case: &ImportCase) {
         let operations = vec!["status".to_string()];
         let grant_value = node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
             peer_id: "peer:live-import",
@@ -10385,13 +10402,13 @@ mod tests {
             resource_scope: "*",
             epoch: 1,
             expires_at: Some(4),
-            policy_refs: &policy_refs,
+            policy_refs: &case.policy_refs,
             revocation_refs: &[],
             evidence_refs: &[],
         })
         .expect("grant value");
         let imported_grant = import_node_control_authority_grant_checked(&NodeControlAuthorityGrantImportInput {
-            state_root: &sender,
+            state_root: &case.sender,
             grant_value: &grant_value,
             expected_peer: Some("peer:live-import"),
             expected_node: Some("node:live-import"),
@@ -10404,11 +10421,11 @@ mod tests {
         assert_eq!(imported_grant.decision, "pass");
         assert_eq!(imported_grant.imported_refs.len(), 1);
         assert_eq!(ledger::artifact_kind(&imported_grant.receipt_value), "node-control-authority-grant-import-receipt");
-        read_node_ledger_artifact(&sender, &imported_grant.grant_ref).expect("grant imported");
+        read_node_ledger_artifact(&case.sender, &imported_grant.grant_ref).expect("grant imported");
 
         let bad_operations = vec!["shutdown".to_string()];
         let denied_grant = import_node_control_authority_grant_checked(&NodeControlAuthorityGrantImportInput {
-            state_root: &sender,
+            state_root: &case.sender,
             grant_value: &grant_value,
             expected_peer: Some("peer:live-import"),
             expected_node: Some("node:live-import"),
@@ -10421,6 +10438,13 @@ mod tests {
         assert_eq!(denied_grant.decision, "deny");
         assert!(denied_grant.imported_refs.is_empty());
         assert!(denied_grant.diagnostics.iter().any(|value| value.contains("operation shutdown")));
+    }
+
+    #[test]
+    fn node_control_live_ticket_and_authority_import_receipts_gate_bindings() {
+        let case = import_case();
+        assert_ticket_imports(&case);
+        assert_grant_imports(&case);
     }
 
     #[test]
