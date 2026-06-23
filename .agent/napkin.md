@@ -222,6 +222,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet job DAG blob-ref execution split: extracting `src/job/dag.rs::execute_blob_ref_job` into neutral same-file `Preflight`/`FetchOutcome`/`OutputOutcome`/`FinishInput` helpers lowered the no-disabled probe from 7088 to 7086 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test blob_ref_job_submission`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check`, and probe `target/octet-burndown/probe-blob-exec-0`.
+
 - 2026-06-23 Octet job DAG schedule receipt split: extracting `src/job/dag.rs::job_worker_schedule_receipt_value` optional-ref validation, ref collection, and check augmentation into neutral same-file helpers (`optional_refs`, `validate_present_refs`, `collected_refs`, `checked_pairs`) lowered the no-disabled probe from 7090 to 7088 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test job_dag`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-schedule-refs-0`.
 
 - 2026-06-23 Octet job DAG stage memo split: extracting `src/job/dag.rs::run_stage_with_cache` into neutral same-file `StageMemo` plus `stage_memo_hit`/`stage_memo_store` lowered the no-disabled probe from 7093 to 7091 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test job_dag`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-stage-memo-split-0`.
