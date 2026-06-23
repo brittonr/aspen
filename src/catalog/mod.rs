@@ -869,7 +869,7 @@ fn registry_summary(
         "catalog classifications",
     )?;
     if let Ok(payload) = artifacts::read_payload(registry_root, &artifact.artifact_ref) {
-        for classification in known_catalog_classifications(&payload) {
+        for classification in known_classifications(&payload) {
             push_bounded(&mut classifications, classification, MAX_CATALOG_REFS, "catalog classifications")?;
         }
     }
@@ -926,7 +926,7 @@ fn ledger_summary(
     let mut classifications = Vec::new();
     push_bounded(&mut classifications, "ledger-artifact".to_string(), MAX_CATALOG_REFS, "catalog classifications")?;
     push_bounded(&mut classifications, format!("ledger-kind:{kind}"), MAX_CATALOG_REFS, "catalog classifications")?;
-    for classification in known_catalog_classifications(&value) {
+    for classification in known_classifications(&value) {
         push_bounded(&mut classifications, classification, MAX_CATALOG_REFS, "catalog classifications")?;
     }
     let dependent_refs = artifacts::impact_refs(registry_root, &[artifact_ref.to_string()]).unwrap_or_default();
@@ -969,11 +969,11 @@ fn ledger_summary(
     })
 }
 
-fn known_catalog_classifications(value: &IOValue) -> Vec<String> {
-    known_catalog_classifications_result(value).unwrap_or_default()
+fn known_classifications(value: &IOValue) -> Vec<String> {
+    known_classifications_result(value).unwrap_or_default()
 }
 
-fn known_catalog_classifications_result(value: &IOValue) -> Result<Vec<String>> {
+fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
     if let Ok(receipt) = artifacts::parse_artifact_receipt(value) {
         return Ok(vec![
             "artifact-receipt:registry".to_string(),
