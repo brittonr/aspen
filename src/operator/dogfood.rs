@@ -2879,8 +2879,24 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
 }
 
 pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
+    if let Some(summary) = base_summary(value) {
+        return Ok(summary);
+    }
+    if let Some(summary) = evidence_summary(value) {
+        return Ok(summary);
+    }
+    if let Some(summary) = promotion_summary(value) {
+        return Ok(summary);
+    }
+    if let Some(summary) = export_summary(value) {
+        return Ok(summary);
+    }
+    Err(MoltenError::invalid_harness("unsupported operator dogfood artifact for summary"))
+}
+
+fn base_summary(value: &IOValue) -> Option<String> {
     if let Ok(report) = parse_dogfood_report(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator dogfood report ref={} decision={} workflow={} final_state={} steps={} gates={} repro={} diagnostics={} (summary is non-normative)",
             report.report_ref,
             report.decision,
@@ -2893,7 +2909,7 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(workflow) = parse_operator_workflow(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator workflow ref={} id={} steps={} replay={} (summary is non-normative)",
             workflow.workflow_ref,
             workflow.workflow_id,
@@ -2902,7 +2918,7 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(checkpoint) = parse_operator_checkpoint(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator checkpoint ref={} workflow={} sequence={} step={} receipt={} (summary is non-normative)",
             checkpoint.checkpoint_ref,
             checkpoint.workflow_id,
@@ -2912,7 +2928,7 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(receipt) = parse_release_gate_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator release gate receipt ref={} decision={} report={} checks={} (summary is non-normative)",
             receipt.receipt_ref,
             receipt.decision,
@@ -2920,8 +2936,12 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
             receipt.checks.len()
         ));
     }
+    None
+}
+
+fn evidence_summary(value: &IOValue) -> Option<String> {
     if let Ok(evidence) = parse_nix_dogfood_evidence(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator Nix dogfood evidence ref={} output={} report={} release_gate={} nextest={} (summary is non-normative)",
             evidence.evidence_ref,
             evidence.output_path,
@@ -2931,7 +2951,7 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(receipt) = parse_nix_dogfood_verify_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator Nix dogfood verify receipt ref={} decision={} evidence={} report={} release_gate={} diagnostics={} (summary is non-normative)",
             receipt.receipt_ref,
             receipt.decision,
@@ -2942,7 +2962,7 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(bundle) = parse_release_evidence_bundle(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator release evidence bundle ref={} output={} report={} release_gate={} nix_verify={} members={} (summary is non-normative)",
             bundle.bundle_ref,
             bundle.output_path,
@@ -2953,7 +2973,7 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(receipt) = parse_release_evidence_bundle_verify_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator release evidence bundle verify receipt ref={} decision={} bundle={} report={} release_gate={} diagnostics={} (summary is non-normative)",
             receipt.receipt_ref,
             receipt.decision,
@@ -2963,8 +2983,12 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
             receipt.diagnostics.len()
         ));
     }
+    None
+}
+
+fn promotion_summary(value: &IOValue) -> Option<String> {
     if let Ok(receipt) = parse_release_promotion_gate_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator release promotion gate receipt ref={} decision={} bundle_verify={} key={} source={} octet={} cairn={} diagnostics={} (summary is non-normative)",
             receipt.receipt_ref,
             receipt.decision,
@@ -2977,7 +3001,7 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(summary) = parse_release_promotion_summary(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator release promotion summary ref={} decision={} promotion={} signed={} key={} source={} octet={} cairn={} diagnostics={} (summary is non-normative)",
             summary.summary_ref,
             summary.decision,
@@ -2990,8 +3014,12 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
             summary.diagnostics.len()
         ));
     }
+    None
+}
+
+fn export_summary(value: &IOValue) -> Option<String> {
     if let Ok(manifest) = parse_release_export_manifest(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator release export manifest ref={} promotion_summary={} members={} (summary is non-normative)",
             manifest.manifest_ref,
             manifest.promotion_summary_ref,
@@ -2999,7 +3027,7 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Ok(receipt) = parse_release_export_verify_receipt(value) {
-        return Ok(format!(
+        return Some(format!(
             "operator release export verify receipt ref={} decision={} manifest={} promotion_summary={} diagnostics={} (summary is non-normative)",
             receipt.receipt_ref,
             receipt.decision,
@@ -3008,7 +3036,7 @@ pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
             receipt.diagnostics.len()
         ));
     }
-    Err(MoltenError::invalid_harness("unsupported operator dogfood artifact for summary"))
+    None
 }
 
 struct StepCheckpointInput<'a> {
