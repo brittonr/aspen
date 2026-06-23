@@ -759,75 +759,7 @@ pub fn run_coordination_fixture() -> Result<CoordinationFixtureRun> {
     let mut evidence_values = vec![manifest_value.clone()];
     let mut receipt_refs = Vec::new();
     let mut assertion_refs = Vec::new();
-    let requests = vec![
-        fixture_request(FixtureRequestInput {
-            service: SERVICE_LOCK,
-            operation: OP_ACQUIRE,
-            key: "resource:alpha",
-            client_session: "client-a",
-            sequence: 1,
-            payload: None,
-            refs: &fixture_refs,
-        })?,
-        fixture_request(FixtureRequestInput {
-            service: SERVICE_LOCK,
-            operation: OP_ACQUIRE,
-            key: "resource:alpha",
-            client_session: "client-a",
-            sequence: 1,
-            payload: None,
-            refs: &fixture_refs,
-        })?,
-        fixture_request(FixtureRequestInput {
-            service: SERVICE_LOCK,
-            operation: OP_RELEASE,
-            key: "resource:alpha",
-            client_session: "client-b",
-            sequence: 2,
-            payload: Some(record("token", vec![u64_value(0)])),
-            refs: &fixture_refs,
-        })?,
-        fixture_request(FixtureRequestInput {
-            service: SERVICE_QUEUE,
-            operation: OP_ENQUEUE,
-            key: "queue:work",
-            client_session: "client-a",
-            sequence: 3,
-            payload: Some(record("item", vec![string("job-1")])),
-            refs: &fixture_refs,
-        })?,
-        fixture_request(FixtureRequestInput {
-            service: SERVICE_QUEUE,
-            operation: OP_DEQUEUE,
-            key: "queue:work",
-            client_session: "client-b",
-            sequence: 4,
-            payload: None,
-            refs: &fixture_refs,
-        })?,
-        fixture_request(FixtureRequestInput {
-            service: SERVICE_REGISTRY,
-            operation: OP_REGISTER,
-            key: "svc:api",
-            client_session: "client-a",
-            sequence: 5,
-            payload: Some(record("endpoint", vec![
-                string(fixture_ref("endpoint-api")),
-                string(fixture_ref("registry-evidence")),
-            ])),
-            refs: &fixture_refs,
-        })?,
-        fixture_request(FixtureRequestInput {
-            service: SERVICE_REGISTRY,
-            operation: OP_READ,
-            key: "svc:api",
-            client_session: "client-b",
-            sequence: 6,
-            payload: None,
-            refs: &fixture_refs,
-        })?,
-    ];
-    for request_value in requests {
+    for request_value in case_requests(&fixture_refs)? {
         let result = apply_coordination_request(&mut runtime, &request_value)?;
         evidence_values.push(request_value);
         evidence_values.extend(result.evidence_values.iter().cloned());
@@ -845,14 +777,7 @@ pub fn run_coordination_fixture() -> Result<CoordinationFixtureRun> {
         }
     }
     let final_state = snapshot_from_state(&runtime.state)?;
-    let report_value = record("coordination-fixture-report-v1", vec![
-        string("molten.coordination.fixture-report.v1"),
-        record("decision", vec![string("pass")]),
-        record("manifest", vec![string(canonical_hash(&manifest_value)?)]),
-        record("state", vec![string(&final_state.state_ref)]),
-        record("receipts", vec![strings_sequence(&receipt_refs)]),
-        record("assertions", vec![strings_sequence(&assertion_refs)]),
-    ]);
+    let report_value = case_report(&manifest_value, &final_state.state_ref, &receipt_refs, &assertion_refs)?;
     evidence_values.push(final_state.value.clone());
     evidence_values.push(report_value.clone());
     Ok(CoordinationFixtureRun {
@@ -864,6 +789,57 @@ pub fn run_coordination_fixture() -> Result<CoordinationFixtureRun> {
         evidence_values,
         report_value,
     })
+}
+
+fn case_requests(refs: &CoordinationRefSlices<'_>) -> Result<Vec<IOValue>> {
+    let cases = [
+        (SERVICE_LOCK, OP_ACQUIRE, "resource:alpha", "client-a", 1, None),
+        (SERVICE_LOCK, OP_ACQUIRE, "resource:alpha", "client-a", 1, None),
+        (SERVICE_LOCK, OP_RELEASE, "resource:alpha", "client-b", 2, Some(record("token", vec![u64_value(0)]))),
+        (SERVICE_QUEUE, OP_ENQUEUE, "queue:work", "client-a", 3, Some(record("item", vec![string("job-1")]))),
+        (SERVICE_QUEUE, OP_DEQUEUE, "queue:work", "client-b", 4, None),
+        (
+            SERVICE_REGISTRY,
+            OP_REGISTER,
+            "svc:api",
+            "client-a",
+            5,
+            Some(record("endpoint", vec![
+                string(fixture_ref("endpoint-api")),
+                string(fixture_ref("registry-evidence")),
+            ])),
+        ),
+        (SERVICE_REGISTRY, OP_READ, "svc:api", "client-b", 6, None),
+    ];
+    let mut requests = Vec::with_capacity(cases.len());
+    for (service, operation, key, client_session, sequence, payload) in cases {
+        requests.push(fixture_request(FixtureRequestInput {
+            service,
+            operation,
+            key,
+            client_session,
+            sequence,
+            payload,
+            refs,
+        })?);
+    }
+    Ok(requests)
+}
+
+fn case_report(
+    manifest_value: &IOValue,
+    final_state_ref: &str,
+    receipt_refs: &[String],
+    assertion_refs: &[String],
+) -> Result<IOValue> {
+    Ok(record("coordination-fixture-report-v1", vec![
+        string("molten.coordination.fixture-report.v1"),
+        record("decision", vec![string("pass")]),
+        record("manifest", vec![string(canonical_hash(manifest_value)?)]),
+        record("state", vec![string(final_state_ref)]),
+        record("receipts", vec![strings_sequence(receipt_refs)]),
+        record("assertions", vec![strings_sequence(assertion_refs)]),
+    ]))
 }
 
 pub fn coordination_apply_report_value(input: ApplyReportValueInput<'_>) -> Result<IOValue> {
@@ -991,28 +967,19 @@ fn apply_coordination_read(
         resource_refs: request.resource_refs.clone(),
     })?;
     let snapshot = snapshot_from_state(&runtime.state)?;
-    let mut diagnostics = read.diagnostics.clone();
     let decision = if read.decision == "pass" { "pass" } else { "deny" };
     let fact = status_fact_for(&runtime.state, &runtime.manifest, &request.service, &request.key)?;
-    let assertion = if decision == "pass" {
-        let placeholder_receipt_ref = fixture_ref("coordination-read-placeholder");
-        let value = coordination_status_assertion_value(StatusAssertionInput {
-            service: &request.service,
-            key: &request.key,
-            fact: &fact,
-            state_ref: &snapshot.state_ref,
-            receipt_ref: &placeholder_receipt_ref,
-        })?;
-        Some(parse_coordination_status_assertion(&value)?)
-    } else {
-        if diagnostics.is_empty() {
-            diagnostics.push_limited(
-                "coordination read-index denied".to_string(),
-                MAX_COORDINATION_DIAGNOSTICS,
-                "coordination diagnostics",
-            )?;
-        }
-        None
+    let (assertion_value, diagnostics) = read_assertion_value(ReadAssertionInput {
+        service: &request.service,
+        key: &request.key,
+        fact: &fact,
+        snapshot_ref: &snapshot.state_ref,
+        decision,
+        diagnostics: read.diagnostics.clone(),
+    })?;
+    let assertion = match assertion_value {
+        Some(value) => Some(parse_coordination_status_assertion(&value)?),
+        None => None,
     };
     let assertion_refs = assertion.as_ref().map_or_else(Vec::new, |item| vec![item.assertion_ref.clone()]);
     let receipt_value = coordination_receipt_value(ReceiptValueInput {
@@ -1032,18 +999,85 @@ fn apply_coordination_read(
         ],
     })?;
     let receipt = parse_coordination_receipt(&receipt_value)?;
-    let assertions = if let Some(assertion) = assertion {
+    let assertions = corrected_read_assertions(assertion, &fact, &receipt.receipt_ref)?;
+    Ok(finish_read(ReadFinishInput {
+        runtime,
+        request,
+        read,
+        snapshot,
+        receipt,
+        assertions,
+    }))
+}
+
+struct ReadAssertionInput<'a> {
+    service: &'a str,
+    key: &'a str,
+    fact: &'a IOValue,
+    snapshot_ref: &'a str,
+    decision: &'a str,
+    diagnostics: Vec<String>,
+}
+
+fn read_assertion_value(input: ReadAssertionInput<'_>) -> Result<(Option<IOValue>, Vec<String>)> {
+    let mut diagnostics = input.diagnostics;
+    if input.decision == "pass" {
+        let placeholder_receipt_ref = fixture_ref("coordination-read-placeholder");
+        let value = coordination_status_assertion_value(StatusAssertionInput {
+            service: input.service,
+            key: input.key,
+            fact: input.fact,
+            state_ref: input.snapshot_ref,
+            receipt_ref: &placeholder_receipt_ref,
+        })?;
+        return Ok((Some(value), diagnostics));
+    }
+    if diagnostics.is_empty() {
+        diagnostics.push_limited(
+            "coordination read-index denied".to_string(),
+            MAX_COORDINATION_DIAGNOSTICS,
+            "coordination diagnostics",
+        )?;
+    }
+    Ok((None, diagnostics))
+}
+
+fn corrected_read_assertions(
+    assertion: Option<CoordinationStatusAssertion>,
+    fact: &IOValue,
+    receipt_ref: &str,
+) -> Result<Vec<CoordinationStatusAssertion>> {
+    if let Some(assertion) = assertion {
         let corrected = coordination_status_assertion_value(StatusAssertionInput {
             service: &assertion.service,
             key: &assertion.key,
-            fact: &fact,
+            fact,
             state_ref: &assertion.state_ref,
-            receipt_ref: &receipt.receipt_ref,
+            receipt_ref,
         })?;
-        vec![parse_coordination_status_assertion(&corrected)?]
-    } else {
-        Vec::new()
-    };
+        return Ok(vec![parse_coordination_status_assertion(&corrected)?]);
+    }
+    Ok(Vec::new())
+}
+
+struct ReadFinishInput<'a> {
+    runtime: &'a mut CoordinationRuntime,
+    request: CoordinationRequest,
+    read: raft_control_plane::RaftReadReceipt,
+    snapshot: CoordinationStateSnapshot,
+    receipt: CoordinationReceipt,
+    assertions: Vec<CoordinationStatusAssertion>,
+}
+
+fn finish_read(input: ReadFinishInput<'_>) -> CoordinationApplyResult {
+    let ReadFinishInput {
+        runtime,
+        request,
+        read,
+        snapshot,
+        receipt,
+        assertions,
+    } = input;
     let evidence_values = evidence_values_for(EvidenceValuesInput {
         request: &request,
         receipt: &receipt,
@@ -1065,7 +1099,7 @@ fn apply_coordination_read(
     runtime.receipts.push(receipt);
     runtime.assertions.extend(assertions);
     runtime.applied_operations.insert(request.operation_id_ref.clone(), result.clone());
-    Ok(result)
+    result
 }
 
 fn commit_prepared_mutation(
