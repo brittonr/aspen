@@ -458,6 +458,15 @@ struct CheckpointVerifyReceiptValidationInput<'a> {
     range_predicate_ref: &'a str,
 }
 
+struct RangeBindingInput<'a> {
+    root: &'a Path,
+    value: &'a IOValue,
+    chain: &'a ChainScope,
+    anchor_link_ref: &'a str,
+    head_ref: &'a str,
+    range_predicate_ref: &'a str,
+}
+
 struct ForkDetectionInput<'a> {
     root: &'a Path,
     index: &'a ChainIndex,
@@ -1454,45 +1463,66 @@ fn validate_checkpoint_verify_receipt(input: CheckpointVerifyReceiptValidationIn
             "checkpoint verify receipt head {expected_head} does not match {head_ref}"
         )));
     }
+    validate_range_binding(RangeBindingInput {
+        root,
+        value: input.value,
+        chain,
+        anchor_link_ref,
+        head_ref,
+        range_predicate_ref,
+    })
+}
+
+fn validate_range_binding(input: RangeBindingInput<'_>) -> Result<()> {
+    let receipt = input
+        .value
+        .collect_simple_record("chain-verify-receipt-v1", Some(11))
+        .ok_or_else(|| MoltenError::invalid_harness("expected chain verify receipt for checkpoint"))?;
     let predicate_refs = record_ref_sequence(&receipt[8], "predicates")?;
-    if !predicate_refs.iter().any(|predicate_ref| predicate_ref == range_predicate_ref) {
+    if !predicate_refs.iter().any(|predicate_ref| predicate_ref == input.range_predicate_ref) {
         return Err(MoltenError::invalid_harness(format!(
-            "checkpoint verify receipt does not bind range predicate {range_predicate_ref}"
+            "checkpoint verify receipt does not bind range predicate {}",
+            input.range_predicate_ref
         )));
     }
-    let predicate_value = ledger::read_artifact(root, range_predicate_ref).map_err(|error| {
+    let predicate_value = ledger::read_artifact(input.root, input.range_predicate_ref).map_err(|error| {
         MoltenError::invalid_harness(format!(
-            "checkpoint range predicate {range_predicate_ref} is unavailable in ledger: {error}"
+            "checkpoint range predicate {} is unavailable in ledger: {error}",
+            input.range_predicate_ref
         ))
     })?;
     let predicate = parse_chain_predicate_receipt(&predicate_value)?;
     if predicate.predicate != CHECKPOINT_COVERS_RANGE_PREDICATE || predicate.decision != "pass" {
         return Err(MoltenError::invalid_harness(format!(
-            "checkpoint range predicate {range_predicate_ref} must be a passing {CHECKPOINT_COVERS_RANGE_PREDICATE} receipt"
+            "checkpoint range predicate {} must be a passing {CHECKPOINT_COVERS_RANGE_PREDICATE} receipt",
+            input.range_predicate_ref
         )));
     }
     let verified_links = record_ref_sequence(&receipt[6], "verified-links")?;
-    if verified_links.first().map(String::as_str) != Some(anchor_link_ref) {
+    if verified_links.first().map(String::as_str) != Some(input.anchor_link_ref) {
         return Err(MoltenError::invalid_harness("checkpoint verify receipt segment does not begin at anchor"));
     }
-    if verified_links.last().map(String::as_str) != Some(head_ref) {
+    if verified_links.last().map(String::as_str) != Some(input.head_ref) {
         return Err(MoltenError::invalid_harness("checkpoint verify receipt segment does not end at head"));
     }
     let payload_refs = record_ref_sequence(&receipt[7], "payloads")?;
     if predicate.subject_refs != verified_links {
         return Err(MoltenError::invalid_harness(format!(
-            "checkpoint range predicate {range_predicate_ref} subjects do not match verified range"
+            "checkpoint range predicate {} subjects do not match verified range",
+            input.range_predicate_ref
         )));
     }
     if predicate.input_refs != payload_refs {
         return Err(MoltenError::invalid_harness(format!(
-            "checkpoint range predicate {range_predicate_ref} inputs do not match verified payload refs"
+            "checkpoint range predicate {} inputs do not match verified payload refs",
+            input.range_predicate_ref
         )));
     }
-    let expected_context_refs = scope_context_refs(chain)?;
+    let expected_context_refs = scope_context_refs(input.chain)?;
     if predicate.context_refs != expected_context_refs {
         return Err(MoltenError::invalid_harness(format!(
-            "checkpoint range predicate {range_predicate_ref} context does not match checkpoint chain scope"
+            "checkpoint range predicate {} context does not match checkpoint chain scope",
+            input.range_predicate_ref
         )));
     }
     Ok(())
