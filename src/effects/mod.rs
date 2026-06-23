@@ -1644,6 +1644,46 @@ mod tests {
         (binding, handle, scope, policy_ref, capability_ref)
     }
 
+    fn storage_pair(
+        scope: &EffectScope,
+        policy_ref: &str,
+        capability_ref: &str,
+        suffix: &str,
+    ) -> (IOValue, IOValue, Vec<String>) {
+        let resource_refs = vec![fake_ref(&format!("resource-{suffix}"))];
+        let binding = handler_binding_value(&HandlerBindingInput {
+            profile: "local".to_string(),
+            scope: scope.clone(),
+            adapter_kind: "storage".to_string(),
+            adapter_ref: fake_ref(&format!("storage-{suffix}")),
+            executor_preflight_ref: None,
+            policy_ref: policy_ref.to_string(),
+            capability_context_ref: capability_ref.to_string(),
+            authority_context_ref: None,
+            resource_refs: resource_refs.clone(),
+            operations: vec!["read".to_string()],
+            evidence_refs: vec![fake_ref(&format!("evidence-{suffix}"))],
+        })
+        .expect("storage binding");
+        let handle = effect_handle_value(&EffectHandleInput {
+            kind: "storage".to_string(),
+            scope: scope.clone(),
+            handler_binding_ref: canonical_hash(&binding).expect("storage binding ref"),
+            operations: vec!["read".to_string()],
+            capability_context_ref: capability_ref.to_string(),
+            authority_context_ref: None,
+            resource_refs: resource_refs.clone(),
+            not_before: None,
+            expires_at: None,
+            revocation_refs: Vec::new(),
+            transfer: TRANSFER_LOCAL_ONLY.to_string(),
+            parent_handle_ref: None,
+            evidence_refs: vec![fake_ref(&format!("evidence-{suffix}"))],
+        })
+        .expect("storage handle");
+        (binding, handle, resource_refs)
+    }
+
     #[test]
     fn effect_manifest_profile_request_and_response_roundtrip() {
         let (manifest, profile, request) = manifest_profile_and_request("dataspace.send", "send");
@@ -1773,68 +1813,9 @@ mod tests {
         let scope = scope(Some(fake_ref("actor-a")));
         let policy_ref = fake_ref("policy");
         let capability_ref = fake_ref("capability");
-        let resource_a = vec![fake_ref("resource-a")];
-        let resource_b = vec![fake_ref("resource-b")];
-        let binding_a = handler_binding_value(&HandlerBindingInput {
-            profile: "local".to_string(),
-            scope: scope.clone(),
-            adapter_kind: "storage".to_string(),
-            adapter_ref: fake_ref("storage-a"),
-            executor_preflight_ref: None,
-            policy_ref: policy_ref.clone(),
-            capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
-            resource_refs: resource_a.clone(),
-            operations: vec!["read".to_string()],
-            evidence_refs: vec![fake_ref("evidence-a")],
-        })
-        .expect("binding a");
-        let binding_b = handler_binding_value(&HandlerBindingInput {
-            profile: "local".to_string(),
-            scope: scope.clone(),
-            adapter_kind: "storage".to_string(),
-            adapter_ref: fake_ref("storage-b"),
-            executor_preflight_ref: None,
-            policy_ref: policy_ref.clone(),
-            capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
-            resource_refs: resource_b.clone(),
-            operations: vec!["read".to_string()],
-            evidence_refs: vec![fake_ref("evidence-b")],
-        })
-        .expect("binding b");
-        let handle_a = effect_handle_value(&EffectHandleInput {
-            kind: "storage".to_string(),
-            scope: scope.clone(),
-            handler_binding_ref: canonical_hash(&binding_a).expect("binding a ref"),
-            operations: vec!["read".to_string()],
-            capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
-            resource_refs: resource_a.clone(),
-            not_before: None,
-            expires_at: None,
-            revocation_refs: Vec::new(),
-            transfer: TRANSFER_LOCAL_ONLY.to_string(),
-            parent_handle_ref: None,
-            evidence_refs: vec![fake_ref("evidence-a")],
-        })
-        .expect("handle a");
-        let handle_b = effect_handle_value(&EffectHandleInput {
-            kind: "storage".to_string(),
-            scope: scope.clone(),
-            handler_binding_ref: canonical_hash(&binding_b).expect("binding b ref"),
-            operations: vec!["read".to_string()],
-            capability_context_ref: capability_ref.clone(),
-            authority_context_ref: None,
-            resource_refs: resource_b.clone(),
-            not_before: None,
-            expires_at: None,
-            revocation_refs: Vec::new(),
-            transfer: TRANSFER_LOCAL_ONLY.to_string(),
-            parent_handle_ref: None,
-            evidence_refs: vec![fake_ref("evidence-b")],
-        })
-        .expect("handle b");
+        let (binding_a, handle_a, resource_a) = storage_pair(&scope, &policy_ref, &capability_ref, "a");
+        let (binding_b, handle_b, _) = storage_pair(&scope, &policy_ref, &capability_ref, "b");
+
         assert_ne!(canonical_hash(&handle_a).unwrap(), canonical_hash(&handle_b).unwrap());
         let request_a = EffectHandleRequest {
             kind: "storage",
