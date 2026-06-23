@@ -449,15 +449,45 @@ fn parse_chain_segment_bundle(value: &IOValue, fork_policy: ChainForkPolicy) -> 
     })
 }
 
+struct Parts<'a> {
+    artifacts: BTreeMap<String, &'a ChainBundleArtifact>,
+    links: BTreeMap<String, ChainLink>,
+    predicates: BTreeMap<String, ChainPredicateReceipt>,
+    has_forks: bool,
+}
+
+struct PrimaryCheck<'a> {
+    primary: &'a ParsedChainVerifyReceipt,
+    chain: &'a ChainScope,
+    anchor_ref: Option<&'a str>,
+    head_ref: Option<&'a str>,
+    fork_policy: ChainForkPolicy,
+    has_forks: bool,
+}
+
 fn validate_chain_bundle(input: ValidateChainBundleInput<'_>) -> Result<()> {
-    let chain = input.chain;
-    let anchor_ref = input.anchor_ref;
-    let head_ref = input.head_ref;
-    let artifacts = input.artifacts;
-    let verify_receipt_refs = input.verify_receipt_refs;
-    let checkpoint_refs = input.checkpoint_refs;
-    let fork_policy = input.fork_policy;
-    let artifact_map = artifacts
+    let parts = parsed_parts(input.artifacts)?;
+    anchors(input.chain, input.artifacts)?;
+    let receipts = receipts(input.verify_receipt_refs, &parts.artifacts)?;
+    let primary = primary(&receipts)?;
+    check_primary(PrimaryCheck {
+        primary,
+        chain: input.chain,
+        anchor_ref: input.anchor_ref,
+        head_ref: input.head_ref,
+        fork_policy: input.fork_policy,
+        has_forks: parts.has_forks,
+    })?;
+    validate_chain_links(&parts.links, primary, input.anchor_ref, input.head_ref)?;
+    payloads(primary, &parts.artifacts)?;
+    predicates(primary, &parts.predicates)?;
+    let checkpoints = checkpoints(input.checkpoint_refs, &parts.artifacts)?;
+    validate_bundle_checkpoints(input.chain, &checkpoints, &parts.artifacts, &parts.links, &parts.predicates)?;
+    Ok(())
+}
+
+fn parsed_parts(artifacts: &[ChainBundleArtifact]) -> Result<Parts<'_>> {
+    let parts = artifacts
         .iter()
         .map(|artifact| (artifact.artifact_ref.clone(), artifact))
         .collect::<BTreeMap<_, _>>();
@@ -473,68 +503,91 @@ fn validate_chain_bundle(input: ValidateChainBundleInput<'_>) -> Result<()> {
             parse_chain_predicate_receipt(&artifact.value).map(|receipt| (receipt.receipt_ref.clone(), receipt))
         })
         .collect::<Result<BTreeMap<_, _>>>()?;
-    let forks = artifacts
-        .iter()
-        .filter(|artifact| artifact.kind == "chain-fork-evidence")
-        .map(|artifact| parse_chain_fork_evidence(&artifact.value))
-        .collect::<Result<Vec<_>>>()?;
+    let mut has_forks = false;
+    for artifact in artifacts.iter().filter(|artifact| artifact.kind == "chain-fork-evidence") {
+        parse_chain_fork_evidence(&artifact.value)?;
+        has_forks = true;
+    }
+    Ok(Parts {
+        artifacts: parts,
+        links,
+        predicates,
+        has_forks,
+    })
+}
+
+fn anchors(chain: &ChainScope, artifacts: &[ChainBundleArtifact]) -> Result<()> {
     for artifact in artifacts.iter().filter(|artifact| artifact.kind == "chain-anchor") {
         let anchor = parse_chain_anchor(&artifact.value)?;
         if anchor.chain != *chain {
             return Err(MoltenError::invalid_harness("chain bundle anchor belongs to a different chain"));
         }
     }
-    let verify_receipts = verify_receipt_refs
-        .iter()
+    Ok(())
+}
+
+fn receipts(
+    refs: &[String],
+    artifacts: &BTreeMap<String, &ChainBundleArtifact>,
+) -> Result<Vec<ParsedChainVerifyReceipt>> {
+    refs.iter()
         .map(|verify_ref| {
-            let artifact = artifact_map.get(verify_ref).ok_or_else(|| {
+            let artifact = artifacts.get(verify_ref).ok_or_else(|| {
                 MoltenError::invalid_harness(format!("chain bundle missing verify receipt {verify_ref}"))
             })?;
             parse_chain_verify_receipt_value(&artifact.value)
         })
-        .collect::<Result<Vec<_>>>()?;
-    let primary = verify_receipts
+        .collect()
+}
+
+fn primary(receipts: &[ParsedChainVerifyReceipt]) -> Result<&ParsedChainVerifyReceipt> {
+    receipts
         .first()
-        .ok_or_else(|| MoltenError::invalid_harness("chain bundle must contain a verify receipt"))?;
+        .ok_or_else(|| MoltenError::invalid_harness("chain bundle must contain a verify receipt"))
+}
+
+fn check_primary(input: PrimaryCheck<'_>) -> Result<()> {
+    let primary = input.primary;
     if primary.decision != "pass" {
         return Err(MoltenError::invalid_harness(format!(
             "chain bundle verify receipt decision must be pass, got {}",
             primary.decision
         )));
     }
-    if &primary.chain != chain
-        || primary.anchor_ref.as_deref() != anchor_ref
-        || primary.expected_head.as_deref() != head_ref
+    if &primary.chain != input.chain
+        || primary.anchor_ref.as_deref() != input.anchor_ref
+        || primary.expected_head.as_deref() != input.head_ref
     {
         return Err(MoltenError::invalid_harness("chain bundle verify receipt does not match requested chain range"));
     }
-    if primary
+    let has_fork_diagnostics = primary
         .diagnostics
         .iter()
-        .any(|diagnostic| matches!(diagnostic.as_str(), "fork" | "sequence-conflict"))
-        && fork_policy == ChainForkPolicy::RejectUnexpectedForks
-    {
+        .any(|diagnostic| matches!(diagnostic.as_str(), "fork" | "sequence-conflict"));
+    if has_fork_diagnostics && input.fork_policy == ChainForkPolicy::RejectUnexpectedForks {
         return Err(MoltenError::invalid_harness(
             "chain bundle contains fork diagnostics rejected by production policy",
         ));
     }
-    if primary
-        .diagnostics
-        .iter()
-        .any(|diagnostic| matches!(diagnostic.as_str(), "fork" | "sequence-conflict"))
-        && forks.is_empty()
-    {
+    if has_fork_diagnostics && !input.has_forks {
         return Err(MoltenError::invalid_harness("chain bundle fork diagnostics require fork evidence artifacts"));
     }
-    validate_chain_links(&links, primary, anchor_ref, head_ref)?;
-    for payload_ref in &primary.payload_refs {
-        if !artifact_map.contains_key(payload_ref) {
+    Ok(())
+}
+
+fn payloads(verify: &ParsedChainVerifyReceipt, artifacts: &BTreeMap<String, &ChainBundleArtifact>) -> Result<()> {
+    for payload_ref in &verify.payload_refs {
+        if !artifacts.contains_key(payload_ref) {
             return Err(MoltenError::invalid_harness(format!(
                 "chain bundle missing payload artifact {payload_ref} named by verify receipt"
             )));
         }
     }
-    for predicate_ref in &primary.predicate_refs {
+    Ok(())
+}
+
+fn predicates(verify: &ParsedChainVerifyReceipt, predicates: &BTreeMap<String, ChainPredicateReceipt>) -> Result<()> {
+    for predicate_ref in &verify.predicate_refs {
         let Some(predicate) = predicates.get(predicate_ref) else {
             return Err(MoltenError::invalid_harness(format!(
                 "chain bundle missing predicate receipt {predicate_ref} named by verify receipt"
@@ -546,17 +599,18 @@ fn validate_chain_bundle(input: ValidateChainBundleInput<'_>) -> Result<()> {
             )));
         }
     }
-    let checkpoints = checkpoint_refs
-        .iter()
+    Ok(())
+}
+
+fn checkpoints(refs: &[String], artifacts: &BTreeMap<String, &ChainBundleArtifact>) -> Result<Vec<ChainCheckpoint>> {
+    refs.iter()
         .map(|checkpoint_ref| {
-            let artifact = artifact_map.get(checkpoint_ref).ok_or_else(|| {
+            let artifact = artifacts.get(checkpoint_ref).ok_or_else(|| {
                 MoltenError::invalid_harness(format!("chain bundle missing checkpoint {checkpoint_ref}"))
             })?;
             parse_chain_checkpoint(&artifact.value)
         })
-        .collect::<Result<Vec<_>>>()?;
-    validate_bundle_checkpoints(chain, &checkpoints, &artifact_map, &links, &predicates)?;
-    Ok(())
+        .collect()
 }
 
 fn validate_chain_links(
