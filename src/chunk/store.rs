@@ -967,6 +967,52 @@ pub fn sync_missing_chunks(source_root: &Path, dest_root: &Path, manifest_ref: &
     )?;
 
     let chunk_size = chunk_size_to_usize(manifest.chunk_size, "manifest chunk size")?;
+    let scan = scan_refs(dest_root, &manifest, chunk_size)?;
+    index_set_partial_fetch(dest_root, &manifest.manifest_ref, "in-progress", &scan.missing_before, &[])?;
+    index_set_manifest_chunk_availability(dest_root, &manifest, &scan.already_available, &scan.missing_before, None)?;
+
+    let fetched_chunks = copy_refs(CopyInput {
+        source_root,
+        dest_root,
+        manifest: &manifest,
+        chunk_size,
+        missing_before: &scan.missing_before,
+    })?;
+    verify_manifest(dest_root, manifest_ref)?;
+    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+        operation: "remote-sync",
+        decision: "pass",
+        manifest_ref: Some(&manifest.manifest_ref),
+        chunk_refs: &fetched_chunks,
+        checks: vec![
+            ("manifest-identity-preserved", "pass"),
+            ("missing-chunk-calculation", "pass"),
+            ("redb-partial-fetch-state", "pass"),
+            ("resumable-fetch", "pass"),
+            ("streaming-chunk-verification", "pass"),
+        ],
+        details: vec![
+            record("missing-before", vec![sequence(scan.missing_before.iter().map(string).collect())]),
+            record("fetched", vec![sequence(fetched_chunks.iter().map(string).collect())]),
+        ],
+    });
+    let available_after = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
+    index_set_manifest_chunk_availability(dest_root, &manifest, &available_after, &[], Some(&receipt_value))?;
+    index_set_partial_fetch(dest_root, &manifest.manifest_ref, "complete", &scan.missing_before, &fetched_chunks)?;
+    Ok(ChunkStoreSync {
+        manifest_ref: manifest.manifest_ref,
+        missing_before: scan.missing_before,
+        fetched_chunks,
+        receipt_value,
+    })
+}
+
+struct Scan {
+    missing_before: Vec<String>,
+    already_available: Vec<String>,
+}
+
+fn scan_refs(dest_root: &Path, manifest: &ChunkManifest, chunk_size: usize) -> Result<Scan> {
     let mut missing_before = Vec::new();
     let mut already_available = Vec::new();
     for chunk in &manifest.chunks {
@@ -988,53 +1034,46 @@ pub fn sync_missing_chunks(source_root: &Path, dest_root: &Path, manifest_ref: &
             )?;
         }
     }
-    index_set_partial_fetch(dest_root, &manifest.manifest_ref, "in-progress", &missing_before, &[])?;
-    index_set_manifest_chunk_availability(dest_root, &manifest, &already_available, &missing_before, None)?;
+    Ok(Scan {
+        missing_before,
+        already_available,
+    })
+}
 
+struct CopyInput<'a> {
+    source_root: &'a Path,
+    dest_root: &'a Path,
+    manifest: &'a ChunkManifest,
+    chunk_size: usize,
+    missing_before: &'a [String],
+}
+
+fn copy_refs(input: CopyInput<'_>) -> Result<Vec<String>> {
     let mut fetched_chunks = Vec::new();
-    for chunk_ref in &missing_before {
-        let chunk = manifest
+    for chunk_ref in input.missing_before {
+        let chunk = input
+            .manifest
             .chunks
             .iter()
             .find(|candidate| &candidate.chunk_ref == chunk_ref)
             .ok_or_else(|| MoltenError::invalid_harness(format!("manifest missing expected chunk {chunk_ref}")))?;
-        let bytes = read_verified_chunk(source_root, chunk, chunk_size)?;
-        fs::write(chunk_path(dest_root, &chunk.chunk_ref)?, bytes).map_err(MoltenError::from)?;
+        let bytes = read_verified_chunk(input.source_root, chunk, input.chunk_size)?;
+        fs::write(chunk_path(input.dest_root, &chunk.chunk_ref)?, bytes).map_err(MoltenError::from)?;
         push_bounded(
             &mut fetched_chunks,
             chunk.chunk_ref.clone(),
             MAX_CHUNK_STORE_CHUNKS,
             "chunk store fetched chunks",
         )?;
-        index_set_partial_fetch(dest_root, &manifest.manifest_ref, "in-progress", &missing_before, &fetched_chunks)?;
+        index_set_partial_fetch(
+            input.dest_root,
+            &input.manifest.manifest_ref,
+            "in-progress",
+            input.missing_before,
+            &fetched_chunks,
+        )?;
     }
-    verify_manifest(dest_root, manifest_ref)?;
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
-        operation: "remote-sync",
-        decision: "pass",
-        manifest_ref: Some(&manifest.manifest_ref),
-        chunk_refs: &fetched_chunks,
-        checks: vec![
-            ("manifest-identity-preserved", "pass"),
-            ("missing-chunk-calculation", "pass"),
-            ("redb-partial-fetch-state", "pass"),
-            ("resumable-fetch", "pass"),
-            ("streaming-chunk-verification", "pass"),
-        ],
-        details: vec![
-            record("missing-before", vec![sequence(missing_before.iter().map(string).collect())]),
-            record("fetched", vec![sequence(fetched_chunks.iter().map(string).collect())]),
-        ],
-    });
-    let available_after = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
-    index_set_manifest_chunk_availability(dest_root, &manifest, &available_after, &[], Some(&receipt_value))?;
-    index_set_partial_fetch(dest_root, &manifest.manifest_ref, "complete", &missing_before, &fetched_chunks)?;
-    Ok(ChunkStoreSync {
-        manifest_ref: manifest.manifest_ref,
-        missing_before,
-        fetched_chunks,
-        receipt_value,
-    })
+    Ok(fetched_chunks)
 }
 
 pub fn publish_iroh_blobs(
