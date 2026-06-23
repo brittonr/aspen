@@ -1207,15 +1207,113 @@ pub fn parse_release_evidence_bundle_verify_receipt(value: &IOValue) -> Result<R
     })
 }
 
+struct PromotionFacts {
+    output_path_ref: String,
+    source_ref: String,
+    octet_ref: String,
+    cairn_ref: String,
+    diagnostics: Vec<String>,
+    key: PromotionKeyFacts,
+    key_revocation_refs: Vec<String>,
+}
+
+struct PromotionKeyFacts {
+    selected_key_ref: String,
+    selected_key_id: String,
+    selected_signer: String,
+    selected_trust_root: String,
+    selected_generation: u64,
+    has_selected_key: bool,
+    diagnostic: Option<String>,
+}
+
 pub fn release_promotion_gate_receipt_value(
     input: &ReleasePromotionGateInput<'_>,
 ) -> Result<ReleasePromotionGateReceipt> {
     let bundle_verify = parse_release_evidence_bundle_verify_receipt(input.bundle_verify_value)?;
+    let facts = promotion_facts(input, &bundle_verify)?;
+    let decision = if facts.diagnostics.is_empty() { "pass" } else { "deny" };
+    let value = record("release-promotion-gate-receipt-v1", vec![
+        string(OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("bundle-verify", vec![
+            string(&bundle_verify.receipt_ref),
+            string(&bundle_verify.bundle_ref),
+            string(&bundle_verify.output_path_ref),
+            string(&bundle_verify.report_ref),
+            string(&bundle_verify.release_gate_ref),
+            string(&bundle_verify.nix_evidence_ref),
+            string(&bundle_verify.nix_verify_ref),
+        ]),
+        record("signed-keyring", vec![
+            record("selected-key", vec![
+                string(&facts.key.selected_key_ref),
+                string(&facts.key.selected_key_id),
+                string(&facts.key.selected_signer),
+                string(&facts.key.selected_trust_root),
+                u64_value(facts.key.selected_generation),
+            ]),
+            refs_sequence(&facts.key_revocation_refs),
+        ]),
+        record("evidence", vec![
+            record("source", vec![string(input.source_evidence), string(&facts.source_ref)]),
+            record("octet", vec![string(input.octet_evidence), string(&facts.octet_ref)]),
+            record("cairn", vec![string(input.cairn_evidence), string(&facts.cairn_ref)]),
+        ]),
+        record("diagnostics", vec![strings_sequence(&facts.diagnostics)]),
+        checks_value_from_pairs(&[
+            ("release-bundle-verify-pass", status(bundle_verify.decision == "pass")),
+            ("promotion-output-path-bound", status(facts.output_path_ref == bundle_verify.output_path_ref)),
+            ("signed-keyring-current", status(facts.key.has_selected_key)),
+            ("source-evidence-bound", status(!input.source_evidence.trim().is_empty())),
+            ("octet-evidence-bound", status(!input.octet_evidence.trim().is_empty())),
+            ("cairn-evidence-bound", status(!input.cairn_evidence.trim().is_empty())),
+            ("release-promotion-is-evidence-only", "pass"),
+            ("no-subsystem-authority-granted", "pass"),
+        ]),
+    ]);
+    parse_release_promotion_gate_receipt(&value)
+}
+
+fn promotion_facts(
+    input: &ReleasePromotionGateInput<'_>,
+    bundle_verify: &ReleaseEvidenceBundleVerifyReceipt,
+) -> Result<PromotionFacts> {
     let output_path_string = input.output_path.display().to_string();
-    let observed_output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
+    let output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
     let source_ref = raw_text_ref("molten.operator.release-promotion.source-evidence.v1", input.source_evidence);
     let octet_ref = raw_text_ref("molten.operator.release-promotion.octet-evidence.v1", input.octet_evidence);
     let cairn_ref = raw_text_ref("molten.operator.release-promotion.cairn-evidence.v1", input.cairn_evidence);
+    let key = promotion_key_facts(input)?;
+    let mut diagnostics = promotion_diagnostics(input, bundle_verify, &output_path_ref)?;
+    if let Some(diagnostic) = key.diagnostic.as_ref() {
+        diagnostics.push_limited_value(
+            diagnostic.clone(),
+            MAX_OPERATOR_DIAGNOSTICS,
+            "release promotion diagnostics",
+        )?;
+    }
+    let key_revocation_refs = input
+        .signed_key_revocations
+        .iter()
+        .map(|revocation| revocation.revocation_ref.clone())
+        .collect::<Vec<_>>();
+    Ok(PromotionFacts {
+        output_path_ref,
+        source_ref,
+        octet_ref,
+        cairn_ref,
+        diagnostics,
+        key,
+        key_revocation_refs,
+    })
+}
+
+fn promotion_diagnostics(
+    input: &ReleasePromotionGateInput<'_>,
+    bundle_verify: &ReleaseEvidenceBundleVerifyReceipt,
+    output_path_ref: &str,
+) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     if bundle_verify.decision != "pass" {
         diagnostics.push_limited_value(
@@ -1227,11 +1325,11 @@ pub fn release_promotion_gate_receipt_value(
             "release promotion diagnostics",
         )?;
     }
-    if observed_output_path_ref != bundle_verify.output_path_ref {
+    if output_path_ref != bundle_verify.output_path_ref {
         diagnostics.push_limited_value(
             format!(
                 "promotion output-path-ref mismatch: receipt={} observed={}",
-                bundle_verify.output_path_ref, observed_output_path_ref
+                bundle_verify.output_path_ref, output_path_ref
             ),
             MAX_OPERATOR_DIAGNOSTICS,
             "release promotion diagnostics",
@@ -1258,71 +1356,30 @@ pub fn release_promotion_gate_receipt_value(
             "release promotion diagnostics",
         )?;
     }
-    let selected_key = match select_release_promotion_key(input) {
-        Ok(key) => Some(key),
-        Err(error) => {
-            diagnostics.push_limited_value(
-                format!("signed keyring currentness failed: {error}"),
-                MAX_OPERATOR_DIAGNOSTICS,
-                "release promotion diagnostics",
-            )?;
-            None
-        }
-    };
-    let selected_key_ref =
-        selected_key.map_or_else(|| dogfood_ref("missing-signed-key"), |key| Ok(key.key_ref.clone()))?;
-    let selected_key_id = selected_key.map_or_else(|| "missing".to_string(), |key| key.key_id.clone());
-    let selected_signer =
-        selected_key.map_or_else(|| input.signed_signer.unwrap_or("missing").to_string(), |key| key.signer.clone());
-    let selected_trust_root =
-        selected_key.map_or_else(|| input.signed_trust_root.to_string(), |key| key.trust_root.clone());
-    let selected_generation = selected_key.map_or(0, |key| key.generation);
-    let key_revocation_refs = input
-        .signed_key_revocations
-        .iter()
-        .map(|revocation| revocation.revocation_ref.clone())
-        .collect::<Vec<_>>();
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = record("release-promotion-gate-receipt-v1", vec![
-        string(OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("bundle-verify", vec![
-            string(&bundle_verify.receipt_ref),
-            string(&bundle_verify.bundle_ref),
-            string(&bundle_verify.output_path_ref),
-            string(&bundle_verify.report_ref),
-            string(&bundle_verify.release_gate_ref),
-            string(&bundle_verify.nix_evidence_ref),
-            string(&bundle_verify.nix_verify_ref),
-        ]),
-        record("signed-keyring", vec![
-            record("selected-key", vec![
-                string(&selected_key_ref),
-                string(&selected_key_id),
-                string(&selected_signer),
-                string(&selected_trust_root),
-                u64_value(selected_generation),
-            ]),
-            refs_sequence(&key_revocation_refs),
-        ]),
-        record("evidence", vec![
-            record("source", vec![string(input.source_evidence), string(&source_ref)]),
-            record("octet", vec![string(input.octet_evidence), string(&octet_ref)]),
-            record("cairn", vec![string(input.cairn_evidence), string(&cairn_ref)]),
-        ]),
-        record("diagnostics", vec![strings_sequence(&diagnostics)]),
-        checks_value_from_pairs(&[
-            ("release-bundle-verify-pass", status(bundle_verify.decision == "pass")),
-            ("promotion-output-path-bound", status(observed_output_path_ref == bundle_verify.output_path_ref)),
-            ("signed-keyring-current", status(selected_key.is_some())),
-            ("source-evidence-bound", status(!input.source_evidence.trim().is_empty())),
-            ("octet-evidence-bound", status(!input.octet_evidence.trim().is_empty())),
-            ("cairn-evidence-bound", status(!input.cairn_evidence.trim().is_empty())),
-            ("release-promotion-is-evidence-only", "pass"),
-            ("no-subsystem-authority-granted", "pass"),
-        ]),
-    ]);
-    parse_release_promotion_gate_receipt(&value)
+    Ok(diagnostics)
+}
+
+fn promotion_key_facts(input: &ReleasePromotionGateInput<'_>) -> Result<PromotionKeyFacts> {
+    match select_release_promotion_key(input) {
+        Ok(key) => Ok(PromotionKeyFacts {
+            selected_key_ref: key.key_ref.clone(),
+            selected_key_id: key.key_id.clone(),
+            selected_signer: key.signer.clone(),
+            selected_trust_root: key.trust_root.clone(),
+            selected_generation: key.generation,
+            has_selected_key: true,
+            diagnostic: None,
+        }),
+        Err(error) => Ok(PromotionKeyFacts {
+            selected_key_ref: dogfood_ref("missing-signed-key")?,
+            selected_key_id: "missing".to_string(),
+            selected_signer: input.signed_signer.unwrap_or("missing").to_string(),
+            selected_trust_root: input.signed_trust_root.to_string(),
+            selected_generation: 0,
+            has_selected_key: false,
+            diagnostic: Some(format!("signed keyring currentness failed: {error}")),
+        }),
+    }
 }
 
 pub fn parse_release_promotion_gate_receipt(value: &IOValue) -> Result<ReleasePromotionGateReceipt> {
