@@ -8529,97 +8529,13 @@ mod tests {
     #[test]
     fn gc_plan_denies_missing_clearance_and_is_not_clearance() {
         let root = temp_dir("retention-gc-plan-deny");
-        let requester_ref = fake_ref("plan-deny-requester");
-        let object_ref = fake_ref("plan-deny-object");
-        let peer_ref = fake_ref("plan-deny-peer");
-        let remote_ref = fake_ref("plan-deny-remote");
-        let policy = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_POLICY,
-            label: "plan-deny-policy",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let authority = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_AUTHORITY,
-            label: "plan-deny-authority",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let support = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-            label: "plan-deny-support",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let index = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REFERENCE_INDEX,
-            label: "plan-deny-index",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let remote_gc = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REMOTE_GC,
-            label: "plan-deny-remote-gc",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: std::slice::from_ref(&remote_ref),
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let evidence = DestructiveRetentionEvidence {
-            requester_ref: Some(requester_ref),
-            policy_refs: vec![policy],
-            authority_refs: vec![authority],
-            evidence_refs: vec![support],
-            retained_refs: Vec::new(),
-            remote_peer_refs: vec![peer_ref],
-            remote_refs: vec![remote_ref],
-            reference_index_refs: vec![index],
-            remote_gc_refs: vec![remote_gc],
-            remote_clearance_refs: Vec::new(),
-            is_reference_index_complete: true,
-        };
+        let fixture = store_passing_plan_fixture(&root, "plan-deny");
+        let mut evidence = fixture.evidence.clone();
+        evidence.remote_clearance_refs.clear();
         let plan = store_retention_gc_plan(RetentionGcPlanInput {
             root: &root,
             subsystem: "ledger-gc",
-            object_ref: &object_ref,
+            object_ref: &fixture.object_ref,
             object_kind: "chunk",
             retention_class: CLASS_DURABLE_VALUE,
             action: ACTION_DELETE,
@@ -8633,7 +8549,7 @@ mod tests {
         let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
             root: &root,
             evidence: &plan_as_clearance,
-            object_ref: &object_ref,
+            object_ref: &fixture.object_ref,
             object_kind: "chunk",
             retention_class: CLASS_DURABLE_VALUE,
             action: ACTION_DELETE,

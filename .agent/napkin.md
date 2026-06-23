@@ -212,6 +212,8 @@
 
 ## Patterns That Work
 
+- 2026-06-22 Octet retention missing-clearance test reuse: replacing the verbose manual `gc_plan_denies_missing_clearance_and_is_not_clearance` setup with `store_passing_plan_fixture` plus clearing `remote_clearance_refs` lowered the no-disabled probe from 7206 to 7205. Validation passed `cargo fmt`, focused `cargo test gc_plan_denies_missing_clearance_and_is_not_clearance`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-retention-plan-clearance-0`.
+
 - 2026-06-22 Octet retention candidate flow helper: replacing repeated plan/apply/execution/audit setup in `src/retention/mod.rs::candidate_explain_lists_known_retention_gc_evidence` with neutral same-file `Flow`/`passing_flow` lowered the no-disabled probe from 7207 to 7206 by clearing one `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test candidate_explain_lists_known_retention_gc_evidence`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-retention-flow-0`.
 
 - 2026-06-22 Octet retention plan seed helper: compacting `src/retention/mod.rs::store_passing_plan_fixture` through neutral same-file `SeedInput`/`seed_ref` setup lowered the latest no-disabled probe from 7208 to 7207 by clearing one `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, `cargo test retention`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-plan-seed-0`.
