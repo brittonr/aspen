@@ -6873,82 +6873,131 @@ pub fn run_fixture(out: &Path) -> Result<Vec<(String, IOValue)>> {
     fs::create_dir_all(out).map_err(MoltenError::from)?;
     let root = out.join("state");
     ensure_store(&root)?;
-    let object_ref = synthetic_ref("retention-object")?;
-    let owner_ref = synthetic_ref("owner")?;
-    let policy_refs = vec![synthetic_ref("policy")?];
-    let evidence_refs = vec![synthetic_ref("evidence")?];
-    let class = retention_class_profile_value(&RetentionClassProfileInput {
+    let seed = seed_refs()?;
+    let class = class_value(&seed)?;
+    let pin = pin_step(&root, &seed)?;
+    let deny = eval_step(&root, &seed, ACTION_DELETE)?;
+    let unpin = unpin_object(UnpinObjectInput {
+        root: &root,
+        pin_ref: &pin.pin.pin_ref,
+        requester_ref: &seed.owner_ref,
+        policy_refs: &seed.policy_refs,
+        evidence_refs: &seed.evidence_refs,
+        has_authority: true,
+    })?;
+    let delete = eval_step(&root, &seed, ACTION_TOMBSTONE)?;
+    let artifacts = output_values(OutputValues {
+        class,
+        pin,
+        deny,
+        unpin,
+        delete,
+    })?;
+    for (name, value) in &artifacts {
+        write_store_value(&out.join(name), value)?;
+    }
+    Ok(artifacts)
+}
+
+struct SeedRefs {
+    object_ref: String,
+    owner_ref: String,
+    policy_refs: Vec<String>,
+    evidence_refs: Vec<String>,
+}
+
+fn seed_refs() -> Result<SeedRefs> {
+    Ok(SeedRefs {
+        object_ref: synthetic_ref("retention-object")?,
+        owner_ref: synthetic_ref("owner")?,
+        policy_refs: vec![synthetic_ref("policy")?],
+        evidence_refs: vec![synthetic_ref("evidence")?],
+    })
+}
+
+fn class_value(seed: &SeedRefs) -> Result<IOValue> {
+    retention_class_profile_value(&RetentionClassProfileInput {
         class_name: CLASS_PRIVATE_SECRET_REF.to_string(),
         minimum_age_seconds: 0,
         maximum_age_seconds: Some(86_400),
         deletion_authority_ref: synthetic_ref("authority")?,
-        policy_refs: policy_refs.clone(),
+        policy_refs: seed.policy_refs.clone(),
         has_secret_redaction_hook: true,
         has_remote_gc_plan: true,
         can_compact: true,
-    })?;
-    let pin = pin_object(&root, RetentionPinInput {
-        object_ref: object_ref.clone(),
+    })
+}
+
+fn pin_step(root: &Path, seed: &SeedRefs) -> Result<PinOperation> {
+    pin_object(root, RetentionPinInput {
+        object_ref: seed.object_ref.clone(),
         object_kind: "encrypted-ref".to_string(),
         retention_class: CLASS_PRIVATE_SECRET_REF.to_string(),
         source: SOURCE_SECRET_REDACTION.to_string(),
         reason: "private repro reveal pending".to_string(),
-        owner_ref: owner_ref.clone(),
+        owner_ref: seed.owner_ref.clone(),
         expiry_ref: None,
-        policy_refs: policy_refs.clone(),
-        evidence_refs: evidence_refs.clone(),
+        policy_refs: seed.policy_refs.clone(),
+        evidence_refs: seed.evidence_refs.clone(),
         has_authority: true,
-    })?;
-    let deny = evaluate_retention(RetentionEvaluationInput {
-        root: &root,
-        object_ref: &object_ref,
+    })
+}
+
+fn eval_step(root: &Path, seed: &SeedRefs, action: &str) -> Result<RetentionEvaluation> {
+    evaluate_retention(RetentionEvaluationInput {
+        root,
+        object_ref: &seed.object_ref,
         object_kind: "encrypted-ref",
         retention_class: CLASS_PRIVATE_SECRET_REF,
-        action: ACTION_DELETE,
-        requester_ref: &owner_ref,
+        action,
+        requester_ref: &seed.owner_ref,
         is_reference_index_complete: true,
         retained_refs: &[],
         remote_refs: &[],
-        policy_refs: &policy_refs,
-        evidence_refs: &evidence_refs,
+        policy_refs: &seed.policy_refs,
+        evidence_refs: &seed.evidence_refs,
         has_delete_authority: true,
         has_remote_gc_clearance: true,
-    })?;
-    let unpin = unpin_object(UnpinObjectInput {
-        root: &root,
-        pin_ref: &pin.pin.pin_ref,
-        requester_ref: &owner_ref,
-        policy_refs: &policy_refs,
-        evidence_refs: &evidence_refs,
-        has_authority: true,
-    })?;
-    let delete = evaluate_retention(RetentionEvaluationInput {
-        root: &root,
-        object_ref: &object_ref,
-        object_kind: "encrypted-ref",
-        retention_class: CLASS_PRIVATE_SECRET_REF,
-        action: ACTION_TOMBSTONE,
-        requester_ref: &owner_ref,
-        is_reference_index_complete: true,
-        retained_refs: &[],
-        remote_refs: &[],
-        policy_refs: &policy_refs,
-        evidence_refs: &evidence_refs,
-        has_delete_authority: true,
-        has_remote_gc_clearance: true,
-    })?;
+    })
+}
+
+struct OutputValues {
+    class: IOValue,
+    pin: PinOperation,
+    deny: RetentionEvaluation,
+    unpin: RetentionReceipt,
+    delete: RetentionEvaluation,
+}
+
+fn output_values(parts: OutputValues) -> Result<Vec<(String, IOValue)>> {
+    let OutputValues {
+        class,
+        pin,
+        deny,
+        unpin,
+        delete,
+    } = parts;
+    let PinOperation {
+        pin,
+        receipt: pin_receipt,
+    } = pin;
+    let RetentionEvaluation {
+        receipt: deny_receipt, ..
+    } = deny;
+    let RetentionEvaluation {
+        receipt: delete_receipt,
+        tombstone,
+        ..
+    } = delete;
     let mut artifacts = Vec::new();
     push_named(&mut artifacts, "retention-class.preserves", class)?;
-    push_named(&mut artifacts, "pin.preserves", pin.pin.value)?;
-    push_named(&mut artifacts, "pin-receipt.preserves", pin.receipt.value)?;
-    push_named(&mut artifacts, "delete-denied.preserves", deny.receipt.value)?;
+    push_named(&mut artifacts, "pin.preserves", pin.value)?;
+    push_named(&mut artifacts, "pin-receipt.preserves", pin_receipt.value)?;
+    push_named(&mut artifacts, "delete-denied.preserves", deny_receipt.value)?;
     push_named(&mut artifacts, "unpin-receipt.preserves", unpin.value)?;
-    push_named(&mut artifacts, "tombstone-receipt.preserves", delete.receipt.value)?;
-    if let Some(tombstone) = delete.tombstone {
+    push_named(&mut artifacts, "tombstone-receipt.preserves", delete_receipt.value)?;
+    if let Some(tombstone) = tombstone {
         push_named(&mut artifacts, "tombstone.preserves", tombstone.value)?;
-    }
-    for (name, value) in &artifacts {
-        write_store_value(&out.join(name), value)?;
     }
     Ok(artifacts)
 }

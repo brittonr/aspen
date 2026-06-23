@@ -213,6 +213,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet retention run-fixture split: extracting `src/retention/mod.rs::run_fixture` setup/output assembly into neutral same-file `SeedRefs`/`OutputValues` helpers lowered the no-disabled probe from 7190 to 7188 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, and probe `target/octet-burndown/probe-retention-run-fixture-0`.
+
 - 2026-06-23 Octet catalog chunk-store scan split: moving `src/catalog/mod.rs::chunk_store` manifest/chunk scan state into neutral same-file `StoreScan`/`ManifestScan` helpers lowered the no-disabled probe from 7192 to 7190 by clearing two `function_length` findings while non-trait/path/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test catalog`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-catalog-store-scan-0`.
 
 - 2026-06-23 Octet retention flow split: extracting `src/retention/mod.rs::retention_remote_gc_clearance_live_workflow_value` into neutral same-file `FlowParts`/`FlowRefs`/`FlowDiagnosticsInput` plus `response_notes`/`import_notes` lowered the no-disabled probe from 7194 to 7192 by clearing two `function_length` findings without new parameter/path debt. Validation passed `cargo fmt`, focused `cargo test remote_clearance_live`, `cargo fmt --check`, and probe `target/octet-burndown/probe-retention-flow-parts-v2-0`.
