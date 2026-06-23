@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-23 | self | Splitting `retention_remote_gc_clearance_live_workflow_value` through a six-argument `flow_diagnostics` helper removed the target function-length finding but kept the no-disabled probe flat by adding two `too_many_parameters` findings. | When extracting retention flow diagnostic helpers, group helper inputs in a neutral private input struct immediately; Octet's parameter threshold is lower than clippy's. |
 | 2026-06-22 | self | Splitting `src/runtime/vat/mod.rs::vat_replay_run` into helpers removed its `function_length` finding but stayed flat because private `VatReplayRunInput` still surfaced `path_segment_repetition`. | When extracting vat replay run helpers, also neutralize private helper/input names (`RunInput`, `objects`/`inputs`/`effects`/`tail`) so function-length reduction is not traded for path repetition. |
 | 2026-06-22 | self | Splitting `src/typed/storage.rs::schema_identity_structural_alias_and_migration_available_integrate_with_loads` through neutral `parsed_id`/`compatible`/`parsed_binding` helpers removed the test function-length finding and improved the no-disabled probe from 7232 to 7231. | For typed-storage schema tests, factor common identity/compatibility construction first, then keep the public test and case helper below Octet's threshold. |
 | 2026-06-22 | self | Extracting only the alternate schema-identity tail from `src/typed/storage.rs::schema_identity_structural_alias_and_migration_available_integrate_with_loads` left the original test over length and added a helper-length finding, worsening the no-disabled probe 7232 -> 7233. | For long typed-storage schema tests, split both the structural setup and alternate case into short helpers or revert; do not keep a single-tail helper that remains over Octet's threshold. |
@@ -211,6 +212,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-23 Octet retention flow split: extracting `src/retention/mod.rs::retention_remote_gc_clearance_live_workflow_value` into neutral same-file `FlowParts`/`FlowRefs`/`FlowDiagnosticsInput` plus `response_notes`/`import_notes` lowered the no-disabled probe from 7194 to 7192 by clearing two `function_length` findings without new parameter/path debt. Validation passed `cargo fmt`, focused `cargo test remote_clearance_live`, `cargo fmt --check`, and probe `target/octet-burndown/probe-retention-flow-parts-v2-0`.
 
 - 2026-06-23 Octet retention diagnostics table split: replacing the repetitive `src/retention/mod.rs::retention_diagnostics` push chain with a neutral same-file `push_notes` helper lowered the no-disabled probe from 7196 to 7194 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-retention-notes-0`.
 

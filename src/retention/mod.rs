@@ -2021,14 +2021,91 @@ pub fn retention_remote_gc_clearance_live_workflow_value(
     input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>,
 ) -> Result<IOValue> {
     validate_remote_gc_clearance_live_workflow_value_input(input)?;
+    let parts = flow_parts(input)?;
+    let refs = flow_refs(input);
+    let decision = if parts.diagnostics.is_empty() { "pass" } else { "deny" };
+    Ok(record("retention-remote-gc-clearance-live-workflow-v1", vec![
+        string(RETENTION_REMOTE_GC_CLEARANCE_LIVE_WORKFLOW_SCHEMA),
+        record("decision", vec![string(decision)]),
+        record("request", vec![string(&parts.request.request_ref), input.request_value.clone()]),
+        record("response", vec![string(&parts.response_ref), input.response_value.clone()]),
+        record("import", vec![string(&parts.import.import_ref), input.import_value.clone()]),
+        record("request-live", vec![strings_sequence(&refs.request)]),
+        record("response-live", vec![strings_sequence(&refs.response)]),
+        record("scope", vec![
+            record("requester", vec![string(&parts.request.requester_ref)]),
+            record("peer", vec![string(&parts.request.peer_ref)]),
+            record("remote", vec![string(&parts.request.remote_ref)]),
+            object_value(&parts.request.object_ref, &parts.request.object_kind),
+            record("class", vec![string(&parts.request.retention_class)]),
+            record("action", vec![string(&parts.request.action)]),
+        ]),
+        record("diagnostics", vec![sequence(parts.diagnostics.iter().map(string).collect())]),
+        checks_value(&[
+            (
+                "request-response-bound",
+                pass_or_deny(
+                    parts.response.as_ref().is_some_and(|value| value.request_ref == parts.request.request_ref),
+                ),
+            ),
+            ("live-transport-bound", pass_or_deny(input.transport_diagnostics.is_empty())),
+            ("import-gate", pass_or_deny(parts.import.decision == "pass")),
+            ("transport-is-not-authority", "pass"),
+            ("live-receipt-is-not-clearance", "pass"),
+            ("authority-policy-still-required", "pass"),
+            ("remote-gc-still-required", "pass"),
+        ]),
+    ]))
+}
+
+struct FlowParts {
+    request: RetentionRemoteGcClearanceRequest,
+    response_ref: String,
+    response: Option<RetentionRemoteGcClearanceResponse>,
+    import: RetentionRemoteGcClearanceImport,
+    diagnostics: Vec<String>,
+}
+
+struct FlowRefs {
+    request: Vec<String>,
+    response: Vec<String>,
+}
+
+struct FlowDiagnosticsInput<'a> {
+    request: &'a RetentionRemoteGcClearanceRequest,
+    response: Option<&'a RetentionRemoteGcClearanceResponse>,
+    response_ref: &'a str,
+    import: &'a RetentionRemoteGcClearanceImport,
+    parse_diagnostic: Option<String>,
+    transport_diagnostics: &'a [String],
+}
+
+fn flow_parts(input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>) -> Result<FlowParts> {
     let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
     let response_ref = canonical_hash(input.response_value)?;
-    let (response, response_parse_diagnostic) = match parse_retention_remote_gc_clearance_response(input.response_value)
-    {
+    let (response, parse_diagnostic) = match parse_retention_remote_gc_clearance_response(input.response_value) {
         Ok(response) => (Some(response), None),
         Err(error) => (None, Some(format!("remote-clearance-live-tampered-response:{error}"))),
     };
     let import = parse_retention_remote_gc_clearance_import(input.import_value)?;
+    let diagnostics = flow_diagnostics(FlowDiagnosticsInput {
+        request: &request,
+        response: response.as_ref(),
+        response_ref: &response_ref,
+        import: &import,
+        parse_diagnostic,
+        transport_diagnostics: input.transport_diagnostics,
+    })?;
+    Ok(FlowParts {
+        request,
+        response_ref,
+        response,
+        import,
+        diagnostics,
+    })
+}
+
+fn flow_diagnostics(input: FlowDiagnosticsInput<'_>) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     extend_bounded(
         &mut diagnostics,
@@ -2036,13 +2113,39 @@ pub fn retention_remote_gc_clearance_live_workflow_value(
         MAX_RETENTION_DIAGNOSTICS,
         "retention live workflow diagnostics",
     )?;
-    if let Some(diagnostic) = response_parse_diagnostic {
+    if let Some(diagnostic) = input.parse_diagnostic {
         push_bounded(&mut diagnostics, diagnostic, MAX_RETENTION_DIAGNOSTICS, "retention live workflow diagnostics")?;
     }
-    if let Some(response) = response.as_ref() {
+    extend_bounded(
+        &mut diagnostics,
+        response_notes(input.request, input.response)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        import_notes(input.request, input.response_ref, input.import)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        input.import.diagnostics.clone(),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    Ok(diagnostics)
+}
+
+fn response_notes(
+    request: &RetentionRemoteGcClearanceRequest,
+    response: Option<&RetentionRemoteGcClearanceResponse>,
+) -> Result<Vec<String>> {
+    let mut notes = Vec::new();
+    if let Some(response) = response {
         if response.request_ref != request.request_ref {
             push_bounded(
-                &mut diagnostics,
+                &mut notes,
                 "remote-clearance-live-wrong-request".to_string(),
                 MAX_RETENTION_DIAGNOSTICS,
                 "retention live workflow diagnostics",
@@ -2050,16 +2153,25 @@ pub fn retention_remote_gc_clearance_live_workflow_value(
         }
         if response.decision != "pass" {
             push_bounded(
-                &mut diagnostics,
+                &mut notes,
                 "remote-clearance-live-response-not-pass".to_string(),
                 MAX_RETENTION_DIAGNOSTICS,
                 "retention live workflow diagnostics",
             )?;
         }
     }
+    Ok(notes)
+}
+
+fn import_notes(
+    request: &RetentionRemoteGcClearanceRequest,
+    response_ref: &str,
+    import: &RetentionRemoteGcClearanceImport,
+) -> Result<Vec<String>> {
+    let mut notes = Vec::new();
     if import.request_ref != request.request_ref {
         push_bounded(
-            &mut diagnostics,
+            &mut notes,
             "remote-clearance-live-import-wrong-request".to_string(),
             MAX_RETENTION_DIAGNOSTICS,
             "retention live workflow diagnostics",
@@ -2067,7 +2179,7 @@ pub fn retention_remote_gc_clearance_live_workflow_value(
     }
     if import.response_ref != response_ref {
         push_bounded(
-            &mut diagnostics,
+            &mut notes,
             "remote-clearance-live-import-wrong-response".to_string(),
             MAX_RETENTION_DIAGNOSTICS,
             "retention live workflow diagnostics",
@@ -2075,7 +2187,7 @@ pub fn retention_remote_gc_clearance_live_workflow_value(
     }
     if import.peer_ref != request.peer_ref {
         push_bounded(
-            &mut diagnostics,
+            &mut notes,
             "remote-clearance-live-import-wrong-peer".to_string(),
             MAX_RETENTION_DIAGNOSTICS,
             "retention live workflow diagnostics",
@@ -2083,7 +2195,7 @@ pub fn retention_remote_gc_clearance_live_workflow_value(
     }
     if import.remote_ref != request.remote_ref {
         push_bounded(
-            &mut diagnostics,
+            &mut notes,
             "remote-clearance-live-import-wrong-remote".to_string(),
             MAX_RETENTION_DIAGNOSTICS,
             "retention live workflow diagnostics",
@@ -2091,61 +2203,30 @@ pub fn retention_remote_gc_clearance_live_workflow_value(
     }
     if import.decision != "pass" {
         push_bounded(
-            &mut diagnostics,
+            &mut notes,
             "remote-clearance-live-import-deny".to_string(),
             MAX_RETENTION_DIAGNOSTICS,
             "retention live workflow diagnostics",
         )?;
     }
-    extend_bounded(
-        &mut diagnostics,
-        import.diagnostics.clone(),
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let request_live_refs = vec![
-        input.request_control_ref.to_string(),
-        input.request_publish_ref.to_string(),
-        input.request_receive_ref.to_string(),
-        input.request_ingress_ref.to_string(),
-    ];
-    let response_live_refs = vec![
-        input.response_control_ref.to_string(),
-        input.response_publish_ref.to_string(),
-        input.response_receive_ref.to_string(),
-        input.response_ingress_ref.to_string(),
-    ];
-    Ok(record("retention-remote-gc-clearance-live-workflow-v1", vec![
-        string(RETENTION_REMOTE_GC_CLEARANCE_LIVE_WORKFLOW_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("request", vec![string(&request.request_ref), input.request_value.clone()]),
-        record("response", vec![string(&response_ref), input.response_value.clone()]),
-        record("import", vec![string(&import.import_ref), input.import_value.clone()]),
-        record("request-live", vec![strings_sequence(&request_live_refs)]),
-        record("response-live", vec![strings_sequence(&response_live_refs)]),
-        record("scope", vec![
-            record("requester", vec![string(&request.requester_ref)]),
-            record("peer", vec![string(&request.peer_ref)]),
-            record("remote", vec![string(&request.remote_ref)]),
-            object_value(&request.object_ref, &request.object_kind),
-            record("class", vec![string(&request.retention_class)]),
-            record("action", vec![string(&request.action)]),
-        ]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
-        checks_value(&[
-            (
-                "request-response-bound",
-                pass_or_deny(response.as_ref().is_some_and(|value| value.request_ref == request.request_ref)),
-            ),
-            ("live-transport-bound", pass_or_deny(input.transport_diagnostics.is_empty())),
-            ("import-gate", pass_or_deny(import.decision == "pass")),
-            ("transport-is-not-authority", "pass"),
-            ("live-receipt-is-not-clearance", "pass"),
-            ("authority-policy-still-required", "pass"),
-            ("remote-gc-still-required", "pass"),
-        ]),
-    ]))
+    Ok(notes)
+}
+
+fn flow_refs(input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>) -> FlowRefs {
+    FlowRefs {
+        request: vec![
+            input.request_control_ref.to_string(),
+            input.request_publish_ref.to_string(),
+            input.request_receive_ref.to_string(),
+            input.request_ingress_ref.to_string(),
+        ],
+        response: vec![
+            input.response_control_ref.to_string(),
+            input.response_publish_ref.to_string(),
+            input.response_receive_ref.to_string(),
+            input.response_ingress_ref.to_string(),
+        ],
+    }
 }
 
 pub fn parse_retention_remote_gc_clearance_live_workflow(
