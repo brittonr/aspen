@@ -10016,9 +10016,21 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("store live deny request");
+        let live_refs = fake_live_refs("retained");
+
+        assert_retained(&root, &request, &remote_ref, &live_refs);
+        assert_tampered(&root, &request, &peer_ref, &remote_ref, &live_refs);
+    }
+
+    fn assert_retained(
+        root: &Path,
+        request: &RetentionRemoteGcClearanceRequest,
+        remote_ref: &str,
+        live_refs: &[String],
+    ) {
         let retained_ref = fake_ref("live-deny-retained");
         let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
-            root: &root,
+            root,
             request_value: &request.value,
             evidence_refs: &[],
             retained_refs: std::slice::from_ref(&retained_ref),
@@ -10028,14 +10040,13 @@ mod tests {
         })
         .expect("store retained response");
         let wrong_peer_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
-            root: &root,
+            root,
             request_value: &request.value,
             response_value: &response.value,
             expected_peer_ref: Some(&fake_ref("wrong-live-peer")),
-            expected_remote_ref: Some(&remote_ref),
+            expected_remote_ref: Some(remote_ref),
         })
         .expect("wrong peer import");
-        let live_refs = fake_live_refs("retained");
         let retained_workflow =
             retention_remote_gc_clearance_live_workflow_value(&RetentionRemoteGcClearanceLiveWorkflowValueInput {
                 request_value: &request.value,
@@ -10062,14 +10073,22 @@ mod tests {
                 .iter()
                 .any(|diagnostic| diagnostic == "remote-clearance-expected-peer-mismatch")
         );
+    }
 
+    fn assert_tampered(
+        root: &Path,
+        request: &RetentionRemoteGcClearanceRequest,
+        peer_ref: &str,
+        remote_ref: &str,
+        live_refs: &[String],
+    ) {
         let tampered_response = record("not-a-remote-clearance-response", vec![string("tampered")]);
         let tampered_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
-            root: &root,
+            root,
             request_value: &request.value,
             response_value: &tampered_response,
-            expected_peer_ref: Some(&peer_ref),
-            expected_remote_ref: Some(&remote_ref),
+            expected_peer_ref: Some(peer_ref),
+            expected_remote_ref: Some(remote_ref),
         })
         .expect("tampered import");
         let tampered_workflow =
