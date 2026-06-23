@@ -1045,7 +1045,7 @@ fn vat_debug_receipt_value(input: VatDebugReceiptInput<'_>) -> IOValue {
     ])
 }
 
-struct VatReplayRunInput {
+struct RunInput {
     seed: &'static str,
     input_message: &'static str,
     effect_response: &'static str,
@@ -1065,7 +1065,7 @@ enum RunCase {
 }
 
 fn case_run(case: RunCase) -> Result<VatReplayRun> {
-    let mut input = VatReplayRunInput {
+    let mut input = RunInput {
         seed: "seed:vat-replay:0001",
         input_message: "deliver:root-to-helper",
         effect_response: "clock:logical:42",
@@ -1085,26 +1085,60 @@ fn case_run(case: RunCase) -> Result<VatReplayRun> {
     vat_replay_run(input)
 }
 
-fn vat_replay_run(run_input: VatReplayRunInput) -> Result<VatReplayRun> {
+struct Objects {
+    root_ref: String,
+    helper_ref: String,
+}
+
+struct Inputs {
+    initial_state_ref: String,
+    input_ref: String,
+}
+
+struct Effects {
+    effect_request_ref: String,
+    effect_response_ref: String,
+    random_request_ref: String,
+    random_response_ref: String,
+}
+
+struct Tail {
+    policy_decision_ref: String,
+    final_state_hash: String,
+    trace_ref: String,
+}
+
+fn objects() -> Result<Objects> {
     let root = VatObjectRef::new(LOCAL_VAT_ID, ROOT_OBJECT_ID, VatReferenceKind::Near, Vec::new());
-    let helper = VatObjectRef::new(LOCAL_VAT_ID, HELPER_OBJECT_ID, VatReferenceKind::Near, vec![root.object_ref()?]);
     let root_ref = root.object_ref()?;
+    let helper = VatObjectRef::new(LOCAL_VAT_ID, HELPER_OBJECT_ID, VatReferenceKind::Near, vec![root_ref.clone()]);
     let helper_ref = helper.object_ref()?;
+    Ok(Objects { root_ref, helper_ref })
+}
+
+fn inputs(run_input: &RunInput, objects: &Objects) -> Result<Inputs> {
     let initial_state = record("vat-replay-initial-state-v1", vec![
         string(run_input.seed),
-        sequence([root_ref.clone(), helper_ref.clone()].iter().map(string).collect()),
+        sequence([objects.root_ref.clone(), objects.helper_ref.clone()].iter().map(string).collect()),
     ]);
     let initial_state_ref = canonical_hash(&initial_state)?;
     let input = record("vat-replay-input-v1", vec![
         string(run_input.input_message),
-        record("sender-ref", vec![string(&root_ref)]),
-        record("target-ref", vec![string(&helper_ref)]),
+        record("sender-ref", vec![string(&objects.root_ref)]),
+        record("target-ref", vec![string(&objects.helper_ref)]),
     ]);
     let input_ref = canonical_hash(&input)?;
+    Ok(Inputs {
+        initial_state_ref,
+        input_ref,
+    })
+}
+
+fn effects(run_input: &RunInput, input_ref: &str) -> Result<Effects> {
     let effect_request = record("vat-replay-effect-request-v1", vec![
         string("clock"),
         string("logical-time"),
-        record("input-ref", vec![string(&input_ref)]),
+        record("input-ref", vec![string(input_ref)]),
         record("profile", vec![string("replay")]),
     ]);
     let effect_request_ref = canonical_hash(&effect_request)?;
@@ -1117,7 +1151,7 @@ fn vat_replay_run(run_input: VatReplayRunInput) -> Result<VatReplayRun> {
     let random_request = record("vat-replay-effect-request-v1", vec![
         string("random"),
         string(run_input.random_sequence),
-        record("input-ref", vec![string(&input_ref)]),
+        record("input-ref", vec![string(input_ref)]),
         record("profile", vec![string("replay")]),
     ]);
     let random_request_ref = canonical_hash(&random_request)?;
@@ -1127,51 +1161,98 @@ fn vat_replay_run(run_input: VatReplayRunInput) -> Result<VatReplayRun> {
         record("source", vec![string("seeded-prng")]),
     ]);
     let random_response_ref = canonical_hash(&random_response)?;
+    Ok(Effects {
+        effect_request_ref,
+        effect_response_ref,
+        random_request_ref,
+        random_response_ref,
+    })
+}
+
+fn tail(run_input: &RunInput, objects: &Objects, inputs: &Inputs, effects: &Effects) -> Result<Tail> {
     let policy_decision = record("vat-replay-policy-decision-v1", vec![
         string(run_input.policy_decision),
-        record("input-ref", vec![string(&input_ref)]),
-        record("effect-response-ref", vec![string(&effect_response_ref)]),
-        record("random-response-ref", vec![string(&random_response_ref)]),
+        record("input-ref", vec![string(&inputs.input_ref)]),
+        record("effect-response-ref", vec![string(&effects.effect_response_ref)]),
+        record("random-response-ref", vec![string(&effects.random_response_ref)]),
     ]);
     let policy_decision_ref = canonical_hash(&policy_decision)?;
     let final_state = record("vat-replay-final-state-v1", vec![
-        record("initial-state-ref", vec![string(&initial_state_ref)]),
-        record("input-ref", vec![string(&input_ref)]),
-        record("effect-response-ref", vec![string(&effect_response_ref)]),
-        record("random-response-ref", vec![string(&random_response_ref)]),
+        record("initial-state-ref", vec![string(&inputs.initial_state_ref)]),
+        record("input-ref", vec![string(&inputs.input_ref)]),
+        record("effect-response-ref", vec![string(&effects.effect_response_ref)]),
+        record("random-response-ref", vec![string(&effects.random_response_ref)]),
         record("policy-decision-ref", vec![string(&policy_decision_ref)]),
         record("state-marker", vec![string(run_input.state_marker)]),
-        sequence([root_ref.clone(), helper_ref.clone()].iter().map(string).collect()),
+        sequence([objects.root_ref.clone(), objects.helper_ref.clone()].iter().map(string).collect()),
     ]);
     let final_state_hash = canonical_hash(&final_state)?;
     let trace = record("vat-replay-turn-trace-v1", vec![
         string("turn:replay:0001"),
         record("scheduler-key", vec![string("logical:0:priority:0:queue:0:vat:fixture:local")]),
-        record("input-ref", vec![string(&input_ref)]),
-        record("effect-request-ref", vec![string(&effect_request_ref)]),
-        record("effect-response-ref", vec![string(&effect_response_ref)]),
-        record("random-request-ref", vec![string(&random_request_ref)]),
-        record("random-response-ref", vec![string(&random_response_ref)]),
+        record("input-ref", vec![string(&inputs.input_ref)]),
+        record("effect-request-ref", vec![string(&effects.effect_request_ref)]),
+        record("effect-response-ref", vec![string(&effects.effect_response_ref)]),
+        record("random-request-ref", vec![string(&effects.random_request_ref)]),
+        record("random-response-ref", vec![string(&effects.random_response_ref)]),
         record("policy-decision-ref", vec![string(&policy_decision_ref)]),
         record("after-state-ref", vec![string(&final_state_hash)]),
     ]);
     let trace_ref = canonical_hash(&trace)?;
-    let value = record("vat-deterministic-replay-run-v1", vec![
+    Ok(Tail {
+        policy_decision_ref,
+        final_state_hash,
+        trace_ref,
+    })
+}
+
+fn run_value(run_input: &RunInput, inputs: &Inputs, effects: &Effects, tail: &Tail) -> IOValue {
+    let Effects {
+        effect_request_ref,
+        effect_response_ref,
+        random_request_ref,
+        random_response_ref,
+    } = effects;
+    let Tail {
+        policy_decision_ref,
+        final_state_hash,
+        trace_ref,
+    } = tail;
+    record("vat-deterministic-replay-run-v1", vec![
         string(RUNTIME_VAT_REPLAY_FIXTURE_SCHEMA),
         record("profile", vec![string("replay")]),
         record("seed", vec![string(run_input.seed)]),
-        record("initial-state-ref", vec![string(&initial_state_ref)]),
-        record("input-ref", vec![string(&input_ref)]),
-        record("effect-request-ref", vec![string(&effect_request_ref)]),
-        record("effect-response-ref", vec![string(&effect_response_ref)]),
-        record("random-request-ref", vec![string(&random_request_ref)]),
-        record("random-response-ref", vec![string(&random_response_ref)]),
-        record("policy-decision-ref", vec![string(&policy_decision_ref)]),
-        record("trace-ref", vec![string(&trace_ref)]),
-        record("final-state-ref", vec![string(&final_state_hash)]),
+        record("initial-state-ref", vec![string(&inputs.initial_state_ref)]),
+        record("input-ref", vec![string(&inputs.input_ref)]),
+        record("effect-request-ref", vec![string(effect_request_ref)]),
+        record("effect-response-ref", vec![string(effect_response_ref)]),
+        record("random-request-ref", vec![string(random_request_ref)]),
+        record("random-response-ref", vec![string(random_response_ref)]),
+        record("policy-decision-ref", vec![string(policy_decision_ref)]),
+        record("trace-ref", vec![string(trace_ref)]),
+        record("final-state-ref", vec![string(final_state_hash)]),
         record("external-effects", vec![string("denied")]),
-    ]);
+    ])
+}
+
+fn vat_replay_run(run_input: RunInput) -> Result<VatReplayRun> {
+    let objects = objects()?;
+    let inputs = inputs(&run_input, &objects)?;
+    let effects = effects(&run_input, &inputs.input_ref)?;
+    let tail = tail(&run_input, &objects, &inputs, &effects)?;
+    let value = run_value(&run_input, &inputs, &effects, &tail);
     let run_ref = canonical_hash(&value)?;
+    let Effects {
+        effect_request_ref,
+        effect_response_ref,
+        random_request_ref,
+        random_response_ref,
+    } = effects;
+    let Tail {
+        policy_decision_ref,
+        final_state_hash,
+        trace_ref,
+    } = tail;
     Ok(VatReplayRun {
         value,
         run_ref,

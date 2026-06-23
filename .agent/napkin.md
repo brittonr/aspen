@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-22 | self | Splitting `src/runtime/vat/mod.rs::vat_replay_run` into helpers removed its `function_length` finding but stayed flat because private `VatReplayRunInput` still surfaced `path_segment_repetition`. | When extracting vat replay run helpers, also neutralize private helper/input names (`RunInput`, `objects`/`inputs`/`effects`/`tail`) so function-length reduction is not traded for path repetition. |
 | 2026-06-22 | self | Splitting `src/typed/storage.rs::schema_identity_structural_alias_and_migration_available_integrate_with_loads` through neutral `parsed_id`/`compatible`/`parsed_binding` helpers removed the test function-length finding and improved the no-disabled probe from 7232 to 7231. | For typed-storage schema tests, factor common identity/compatibility construction first, then keep the public test and case helper below Octet's threshold. |
 | 2026-06-22 | self | Extracting only the alternate schema-identity tail from `src/typed/storage.rs::schema_identity_structural_alias_and_migration_available_integrate_with_loads` left the original test over length and added a helper-length finding, worsening the no-disabled probe 7232 -> 7233. | For long typed-storage schema tests, split both the structural setup and alternate case into short helpers or revert; do not keep a single-tail helper that remains over Octet's threshold. |
 | 2026-06-22 | self | I called Steel `spawn-process` as `(spawn-process "git" (list ...))`, then as `(spawn-process (list ...))`; this harness expects a `CommandBuilder`, not raw argv. | Use `(spawn-process (command "prog" (list ...)))`, unwrap child with `Ok->value`, and unwrap/inspect `(wait child)` as an `Ok` result. |
@@ -210,6 +211,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-22 Octet vat replay-run split: extracting `src/runtime/vat/mod.rs::vat_replay_run` into neutral same-file object/input/effect/tail/value helpers plus renaming the private input carrier to `RunInput` lowered the no-disabled probe from 7214 to 7212 by clearing `function_length` without net path debt. Validation passed `cargo fmt`, focused `cargo test vat_replay`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-vat-run-v3-0`.
 
 - 2026-06-22 Octet vat distributed-ref split: extracting `src/runtime/vat/mod.rs::run_vat_distributed_ref_fixture` setup/state cases into neutral same-file `DistRefs`/`DistCase` helpers lowered the no-disabled probe from 7216 to 7214 by clearing the function-length finding while keeping path/import/file counts flat. Validation passed `cargo fmt`, focused `cargo test vat_distributed_ref_fixture_records_lifetime_and_handoff`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-vat-dist-0`.
 
