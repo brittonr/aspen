@@ -220,6 +220,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet retention destructive-evidence diagnostics table: replacing `src/retention/mod.rs::destructive_retention_evidence_diagnostics` repeated push chain with neutral `MissingNote`/`push_missing_notes` lowered the no-disabled probe from 7100 to 7098 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-retention-missing-notes-0`.
+
 - 2026-06-23 Octet retention live-import diagnostics split: extracting `src/retention/mod.rs::import_retention_remote_gc_clearance_live_workflow` request/response diagnostic assembly into neutral same-file `live_import_*` helpers lowered the no-disabled probe from 7102 to 7100 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-live-import-notes-0`.
 
 - 2026-06-23 Octet retention bundle scope diagnostics table: replacing the repetitive `src/retention/mod.rs::push_retention_bundle_scope_diagnostics` mismatch push chain with a neutral `MismatchNote` table/helper lowered the no-disabled probe from 7108 to 7105 by clearing three `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test candidate_bundle`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-retention-scope-notes-0`.

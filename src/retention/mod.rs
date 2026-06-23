@@ -3519,88 +3519,75 @@ fn validate_retention_gc_plan_input(input: &RetentionGcPlanInput<'_>) -> Result<
     validate_destructive_retention_evidence(input.evidence)
 }
 
+struct MissingNote<'a> {
+    emit: bool,
+    message: &'a str,
+}
+
+fn push_missing_notes<S>(diagnostics: &mut S, notes: &[MissingNote<'_>]) -> Result<()>
+where S: VecSink<String> {
+    for note in notes {
+        if note.emit {
+            push_bounded(
+                diagnostics,
+                note.message.to_string(),
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention destructive evidence diagnostics",
+            )?;
+        }
+    }
+    Ok(())
+}
+
 pub fn destructive_retention_evidence_diagnostics(
     input: &DestructiveRetentionEvidence,
     action: &str,
 ) -> Result<Vec<String>> {
     validate_destructive_retention_evidence(input)?;
     validate_action(action)?;
+    let is_destructive = is_destructive_action(action);
     let mut diagnostics = Vec::new();
-    if input.requester_ref.is_none() {
-        push_bounded(
-            &mut diagnostics,
-            "retention-requester-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention destructive evidence diagnostics",
-        )?;
-    }
-    if input.policy_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "retention-policy-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention destructive evidence diagnostics",
-        )?;
-    }
-    if is_destructive_action(action) && input.authority_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "delete-authority-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention destructive evidence diagnostics",
-        )?;
-    }
-    if is_destructive_action(action) && input.evidence_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "retention-evidence-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention destructive evidence diagnostics",
-        )?;
-    }
-    if !input.is_reference_index_complete {
-        push_bounded(
-            &mut diagnostics,
-            "incomplete-reference-proof".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention destructive evidence diagnostics",
-        )?;
-    }
-    if is_destructive_action(action) && input.is_reference_index_complete && input.reference_index_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "reference-index-evidence-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention destructive evidence diagnostics",
-        )?;
-    }
-    if !input.retained_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "retained-dependencies-present".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention destructive evidence diagnostics",
-        )?;
-    }
-    if is_destructive_action(action) && !input.remote_refs.is_empty() && input.remote_gc_refs.is_empty() {
-        push_bounded(
-            &mut diagnostics,
-            "remote-gc-evidence-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention destructive evidence diagnostics",
-        )?;
-    }
-    if is_destructive_action(action)
-        && (!input.remote_refs.is_empty() || !input.remote_peer_refs.is_empty())
-        && input.remote_clearance_refs.is_empty()
-    {
-        push_bounded(
-            &mut diagnostics,
-            "remote-clearance-evidence-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention destructive evidence diagnostics",
-        )?;
-    }
+    let notes = [
+        MissingNote {
+            emit: input.requester_ref.is_none(),
+            message: "retention-requester-missing",
+        },
+        MissingNote {
+            emit: input.policy_refs.is_empty(),
+            message: "retention-policy-missing",
+        },
+        MissingNote {
+            emit: is_destructive && input.authority_refs.is_empty(),
+            message: "delete-authority-missing",
+        },
+        MissingNote {
+            emit: is_destructive && input.evidence_refs.is_empty(),
+            message: "retention-evidence-missing",
+        },
+        MissingNote {
+            emit: !input.is_reference_index_complete,
+            message: "incomplete-reference-proof",
+        },
+        MissingNote {
+            emit: is_destructive && input.is_reference_index_complete && input.reference_index_refs.is_empty(),
+            message: "reference-index-evidence-missing",
+        },
+        MissingNote {
+            emit: !input.retained_refs.is_empty(),
+            message: "retained-dependencies-present",
+        },
+        MissingNote {
+            emit: is_destructive && !input.remote_refs.is_empty() && input.remote_gc_refs.is_empty(),
+            message: "remote-gc-evidence-missing",
+        },
+        MissingNote {
+            emit: is_destructive
+                && (!input.remote_refs.is_empty() || !input.remote_peer_refs.is_empty())
+                && input.remote_clearance_refs.is_empty(),
+            message: "remote-clearance-evidence-missing",
+        },
+    ];
+    push_missing_notes(&mut diagnostics, &notes)?;
     Ok(diagnostics)
 }
 
