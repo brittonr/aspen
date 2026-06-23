@@ -3248,6 +3248,58 @@ struct RetentionAdmissionFixtureInput<'a> {
     remote_refs: &'a [String],
 }
 
+struct JobParts {
+    job_ref: String,
+    provenance_values: Vec<IOValue>,
+}
+
+struct StageArtifacts {
+    base_ref: String,
+    source_ref: String,
+    map_ref: String,
+}
+
+struct JobSyncInput<'a> {
+    source: &'a Path,
+    target: &'a Path,
+    parts: &'a JobParts,
+    policy_refs: &'a [String],
+    capability_refs: &'a [String],
+}
+
+struct JobAdmissionParts {
+    authority_ref: String,
+    receipt_ref: String,
+    receipt_value: IOValue,
+    stage_order: Vec<String>,
+}
+
+struct JobAdmissionInput<'a> {
+    target: &'a Path,
+    job_ref: &'a str,
+    sync_ref: &'a str,
+    policy_refs: &'a [String],
+    capability_refs: &'a [String],
+    resource_refs: &'a [String],
+}
+
+struct JobExecutionParts {
+    request_ref: String,
+    receipt_ref: String,
+    decision: String,
+    diagnostics: Vec<String>,
+    output_refs: Vec<String>,
+}
+
+struct JobExecutionInput<'a> {
+    state_root: &'a Path,
+    target: &'a Path,
+    job_ref: &'a str,
+    admission: &'a JobAdmissionParts,
+    policy_refs: &'a [String],
+    resource_refs: &'a [String],
+}
+
 fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
     let JobStackInput {
         state_root,
@@ -3257,6 +3309,68 @@ fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
         capability_refs,
         resource_refs,
     } = input;
+    let parts = install_job_parts(source, policy_refs, capability_refs)?;
+    let sync_ref = sync_job_stack(JobSyncInput {
+        source,
+        target,
+        parts: &parts,
+        policy_refs,
+        capability_refs,
+    })?;
+    let admission = admit_job_stack(JobAdmissionInput {
+        target,
+        job_ref: &parts.job_ref,
+        sync_ref: &sync_ref,
+        policy_refs,
+        capability_refs,
+        resource_refs,
+    })?;
+    let execution = execute_job_stack(JobExecutionInput {
+        state_root,
+        target,
+        job_ref: &parts.job_ref,
+        admission: &admission,
+        policy_refs,
+        resource_refs,
+    })?;
+    let mut artifact_refs = vec![
+        parts.job_ref,
+        sync_ref,
+        admission.receipt_ref,
+        admission.authority_ref,
+        execution.request_ref.clone(),
+    ];
+    artifact_refs.extend(execution.output_refs);
+    Ok(JobDogfoodRun {
+        execution_request_ref: execution.request_ref,
+        execution_receipt_ref: execution.receipt_ref,
+        decision: execution.decision,
+        diagnostics: execution.diagnostics,
+        artifact_refs,
+    })
+}
+
+fn install_job_parts(source: &Path, policy_refs: &[String], capability_refs: &[String]) -> Result<JobParts> {
+    let stages = install_stage_artifacts(source, policy_refs, capability_refs)?;
+    let dag = job_graph_value(&stages, policy_refs)?;
+    let installed = job_dag::install_job_dag(source, &dag)?;
+    let provenance_refs = vec![
+        stages.base_ref,
+        stages.source_ref,
+        stages.map_ref,
+        installed.artifact_ref,
+    ];
+    Ok(JobParts {
+        job_ref: installed.job_ref,
+        provenance_values: provenance_values(&provenance_refs)?,
+    })
+}
+
+fn install_stage_artifacts(
+    source: &Path,
+    policy_refs: &[String],
+    capability_refs: &[String],
+) -> Result<StageArtifacts> {
     let base = artifacts::install_artifact(source, &artifacts::ArtifactInstallInput {
         kind: "schema".to_string(),
         payload: record("schema", vec![string("dogfood-job-base")]),
@@ -3290,10 +3404,18 @@ fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
         installer_ref: dogfood_ref("job-stage-installer")?,
         capability_refs: capability_refs.to_vec(),
     })?;
+    Ok(StageArtifacts {
+        base_ref: base.artifact_ref,
+        source_ref: source_stage.artifact_ref,
+        map_ref: map_stage.artifact_ref,
+    })
+}
+
+fn job_graph_value(stages: &StageArtifacts, policy_refs: &[String]) -> Result<IOValue> {
     let source_node = job_dag::job_node_value(job_dag::NodeValueInput {
         id: "source",
         kind: "source",
-        stage_artifact_ref: Some(&source_stage.artifact_ref),
+        stage_artifact_ref: Some(&stages.source_ref),
         input_ports: &[],
         output_ports: &["out".to_string()],
         config: record("source", vec![record("values", vec![sequence(vec![string("dogfood-job")])])]),
@@ -3304,7 +3426,7 @@ fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
     let map_node = job_dag::job_node_value(job_dag::NodeValueInput {
         id: "map",
         kind: "map",
-        stage_artifact_ref: Some(&map_stage.artifact_ref),
+        stage_artifact_ref: Some(&stages.map_ref),
         input_ports: &["in".to_string()],
         output_ports: &["out".to_string()],
         config: record("op", vec![string("identity")]),
@@ -3321,97 +3443,103 @@ fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
         partitioning: "single",
         materialization: "stream",
     })?;
-    let dag = job_dag::job_dag_value(job_dag::DagValueInput {
+    job_dag::job_dag_value(job_dag::DagValueInput {
         nodes: vec![source_node, map_node],
         edges: vec![edge],
         output_roots: &["map".to_string()],
         schema_refs: &[],
         effect_manifest_refs: &[],
         policy_refs,
-        evidence_refs: std::slice::from_ref(&base.artifact_ref),
-    })?;
-    let installed_job = job_dag::install_job_dag(source, &dag)?;
-    let mut sync_provenance = Vec::with_capacity(4);
-    for artifact_ref in [
-        base.artifact_ref.clone(),
-        source_stage.artifact_ref.clone(),
-        map_stage.artifact_ref.clone(),
-        installed_job.artifact_ref.clone(),
-    ] {
-        sync_provenance.push_limited_value(
-            crate::provenance::synthetic_reviewed_provenance_record(&artifact_ref)?,
+        evidence_refs: std::slice::from_ref(&stages.base_ref),
+    })
+}
+
+fn provenance_values(artifact_refs: &[String]) -> Result<Vec<IOValue>> {
+    let mut values = Vec::with_capacity(artifact_refs.len());
+    for artifact_ref in artifact_refs {
+        values.push_limited_value(
+            crate::provenance::synthetic_reviewed_provenance_record(artifact_ref)?,
             MAX_OPERATOR_REFS,
             "dogfood sync provenance",
         )?;
     }
+    Ok(values)
+}
+
+fn sync_job_stack(input: JobSyncInput<'_>) -> Result<String> {
     let sync_request = job_dag::job_sync_request_value(job_dag::SyncRequestValueInput {
-        job_ref: &installed_job.job_ref,
+        job_ref: &input.parts.job_ref,
         stage_ids: &[],
         target_peer: "peer:dogfood",
-        policy_refs,
-        capability_refs,
+        policy_refs: input.policy_refs,
+        capability_refs: input.capability_refs,
         evidence_refs: &[dogfood_ref("job-sync-evidence")?],
     })?;
     let sync = job_dag::sync_loopback(job_dag::SyncLoopbackInput {
-        source_registry: source,
-        target_registry: target,
+        source_registry: input.source,
+        target_registry: input.target,
         request_value: &sync_request,
-        provenance_values: &sync_provenance,
+        provenance_values: &input.parts.provenance_values,
         build_verification_values: &[],
     })?;
-    let sync_ref = canonical_hash(&sync.receipt_value)?;
-    let authority_context_ref =
-        install_job_execute_authority_context(target, &installed_job.job_ref, policy_refs, capability_refs)?;
-    let source_gate_ref = install_clean_octet_gate(target, policy_refs, capability_refs)?;
+    canonical_hash(&sync.receipt_value)
+}
+
+fn admit_job_stack(input: JobAdmissionInput<'_>) -> Result<JobAdmissionParts> {
+    let authority_ref =
+        install_job_execute_authority_context(input.target, input.job_ref, input.policy_refs, input.capability_refs)?;
+    let source_gate_ref = install_clean_octet_gate(input.target, input.policy_refs, input.capability_refs)?;
     let admission_request = job_dag::job_admission_request_value(job_dag::AdmissionRequestValueInput {
-        job_ref: &installed_job.job_ref,
-        sync_ref: &sync_ref,
+        job_ref: input.job_ref,
+        sync_ref: input.sync_ref,
         stage_ids: &[],
         target_peer: "peer:dogfood",
-        policy_refs,
-        capability_refs: std::slice::from_ref(&authority_context_ref),
-        evidence_refs: &[sync_ref.clone(), source_gate_ref],
-        resource_refs,
+        policy_refs: input.policy_refs,
+        capability_refs: std::slice::from_ref(&authority_ref),
+        evidence_refs: &[input.sync_ref.to_string(), source_gate_ref],
+        resource_refs: input.resource_refs,
     })?;
-    let admission = job_dag::admission_loopback(target, &admission_request)?;
-    let admission_ref = canonical_hash(&admission.receipt_value)?;
+    let admission = job_dag::admission_loopback(input.target, &admission_request)?;
+    Ok(JobAdmissionParts {
+        authority_ref,
+        receipt_ref: canonical_hash(&admission.receipt_value)?,
+        receipt_value: admission.receipt_value,
+        stage_order: admission.plan.stage_order,
+    })
+}
+
+fn execute_job_stack(input: JobExecutionInput<'_>) -> Result<JobExecutionParts> {
     let execution_request = job_dag::job_execution_request_value(job_dag::ExecutionRequestValueInput {
-        job_ref: &installed_job.job_ref,
-        admission_ref: &admission_ref,
-        stage_ids: &admission.plan.stage_order,
+        job_ref: input.job_ref,
+        admission_ref: &input.admission.receipt_ref,
+        stage_ids: &input.admission.stage_order,
         target_peer: "peer:dogfood",
         storage_profile_ref: &dogfood_ref("job-storage-profile")?,
         cache_profile_ref: &dogfood_ref("job-cache-profile")?,
         chunk_profile_ref: &dogfood_ref("job-chunk-profile")?,
-        policy_refs,
-        capability_refs: std::slice::from_ref(&authority_context_ref),
-        resource_refs,
+        policy_refs: input.policy_refs,
+        capability_refs: std::slice::from_ref(&input.admission.authority_ref),
+        resource_refs: input.resource_refs,
     })?;
-    let execution_request_ref = canonical_hash(&execution_request)?;
+    let request_ref = canonical_hash(&execution_request)?;
     let execution = job_dag::execution_loopback(job_dag::ExecutionLoopbackInput {
-        target_registry: target,
-        storage_root: &state_root.join("job-storage"),
-        cache_root: &state_root.join("job-cache"),
-        chunk_root: &state_root.join("job-chunks"),
-        admission_receipt_value: &admission.receipt_value,
+        target_registry: input.target,
+        storage_root: &input.state_root.join("job-storage"),
+        cache_root: &input.state_root.join("job-cache"),
+        chunk_root: &input.state_root.join("job-chunks"),
+        admission_receipt_value: &input.admission.receipt_value,
         request_value: &execution_request,
     })?;
-    let mut artifact_refs = vec![
-        installed_job.job_ref,
-        sync_ref,
-        admission_ref,
-        authority_context_ref,
-        execution_request_ref.clone(),
-    ];
+    let mut output_refs = Vec::new();
     if let Some(run) = execution.run.as_ref() {
-        artifact_refs.extend(run.output_refs.iter().cloned());
+        output_refs.extend(run.output_refs.iter().cloned());
     }
-    Ok(JobDogfoodRun {
-        execution_request_ref,
-        execution_receipt_ref: execution.receipt_ref,
+    Ok(JobExecutionParts {
+        request_ref,
+        receipt_ref: execution.receipt_ref,
         decision: execution.decision,
         diagnostics: execution.diagnostics,
-        artifact_refs,
+        output_refs,
     })
 }
 
