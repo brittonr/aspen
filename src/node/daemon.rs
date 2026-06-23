@@ -9479,70 +9479,121 @@ mod tests {
         })
         .expect("init node");
         run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-        let authority_refs = vec![local_ref("node-control-authority", "reproducible").expect("authority ref")];
-        let policy_refs = vec![local_ref("node-control-policy", "reproducible").expect("policy ref")];
-        let resource_refs = vec![local_ref("node-control-resource", "reproducible").expect("resource ref")];
+
+        let case = build_case(&root);
+        assert_install_passes(&root, &case);
+    }
+
+    struct BuildMaterial {
+        authority_refs: Vec<String>,
+        policy_refs: Vec<String>,
+        resource_refs: Vec<String>,
+        payload_ref: String,
+        source_refs: Vec<String>,
+        toolchain_refs: Vec<String>,
+        dependency_ref: String,
+        builder_ref: String,
+    }
+
+    struct BuildCase {
+        material: BuildMaterial,
+        evidence_refs: Vec<String>,
+    }
+
+    fn build_case(root: &Path) -> BuildCase {
+        let material = build_material(root);
+        let evidence_refs = verified_refs(root, &material);
+        BuildCase {
+            material,
+            evidence_refs,
+        }
+    }
+
+    fn build_material(root: &Path) -> BuildMaterial {
         let payload_value = record("node-control-install-payload", vec![string("reproducible-provenance")]);
-        let payload_ref = import_node_artifact(&root, &payload_value).expect("import payload");
-        let source_refs = vec![local_ref("node-control-source", "reproducible").expect("source ref")];
-        let toolchain_refs = vec![local_ref("node-control-toolchain", "reproducible").expect("toolchain ref")];
-        let dependency_ref = local_ref("node-control-deps", "reproducible").expect("deps ref");
-        let builder_ref = local_ref("node-control-builder", "reproducible").expect("builder ref");
-        let build_record = provenance::provenance_build_record_value(&provenance::ProvenanceBuildRecordInput {
-            expected_artifact_ref: &payload_ref,
-            source_refs: &source_refs,
-            dependency_closure_ref: &dependency_ref,
-            toolchain_refs: &toolchain_refs,
+        BuildMaterial {
+            authority_refs: vec![local_ref("node-control-authority", "reproducible").expect("authority ref")],
+            policy_refs: vec![local_ref("node-control-policy", "reproducible").expect("policy ref")],
+            resource_refs: vec![local_ref("node-control-resource", "reproducible").expect("resource ref")],
+            payload_ref: import_node_artifact(root, &payload_value).expect("import payload"),
+            source_refs: vec![local_ref("node-control-source", "reproducible").expect("source ref")],
+            toolchain_refs: vec![local_ref("node-control-toolchain", "reproducible").expect("toolchain ref")],
+            dependency_ref: local_ref("node-control-deps", "reproducible").expect("deps ref"),
+            builder_ref: local_ref("node-control-builder", "reproducible").expect("builder ref"),
+        }
+    }
+
+    fn build_record_for(material: &BuildMaterial) -> IOValue {
+        provenance::provenance_build_record_value(&provenance::ProvenanceBuildRecordInput {
+            expected_artifact_ref: &material.payload_ref,
+            source_refs: &material.source_refs,
+            dependency_closure_ref: &material.dependency_ref,
+            toolchain_refs: &material.toolchain_refs,
             build_params: &[],
-            builder_ref: &builder_ref,
+            builder_ref: &material.builder_ref,
             nix_derivation_refs: &[],
-            policy_refs: &policy_refs,
+            policy_refs: &material.policy_refs,
             evidence_refs: &[],
         })
-        .expect("build record");
-        let build_record_ref = import_node_artifact(&root, &build_record).expect("import build record");
+        .expect("build record")
+    }
+
+    fn provenance_record_for(material: &BuildMaterial, build_record_refs: &[String]) -> IOValue {
+        provenance::provenance_record_value(&provenance::ProvenanceRecordInput {
+            artifact_ref: &material.payload_ref,
+            trust_state: provenance::TRUST_STATE_REPRODUCIBLE_VERIFIED,
+            source_refs: &material.source_refs,
+            dependency_closure_ref: &material.dependency_ref,
+            toolchain_refs: &material.toolchain_refs,
+            builder_ref: &material.builder_ref,
+            review_refs: &[],
+            test_refs: &[],
+            source_gate_refs: &[],
+            policy_refs: &material.policy_refs,
+            build_record_refs,
+        })
+        .expect("reproducible provenance")
+    }
+
+    fn verified_refs(root: &Path, material: &BuildMaterial) -> Vec<String> {
+        let build_record = build_record_for(material);
+        let build_record_ref = import_node_artifact(root, &build_record).expect("import build record");
         let build_verification = provenance::verify_provenance_build(&provenance::ProvenanceBuildVerificationInput {
             build_record_value: &build_record,
-            actual_artifact_ref: &payload_ref,
+            actual_artifact_ref: &material.payload_ref,
             prior_diagnostics: &[],
         })
         .expect("verify build");
         let build_verification_ref =
-            import_node_artifact(&root, &build_verification.receipt_value).expect("import build verification");
+            import_node_artifact(root, &build_verification.receipt_value).expect("import build verification");
         let build_record_refs = vec![build_record_ref];
-        let provenance_record = provenance::provenance_record_value(&provenance::ProvenanceRecordInput {
-            artifact_ref: &payload_ref,
-            trust_state: provenance::TRUST_STATE_REPRODUCIBLE_VERIFIED,
-            source_refs: &source_refs,
-            dependency_closure_ref: &dependency_ref,
-            toolchain_refs: &toolchain_refs,
-            builder_ref: &builder_ref,
-            review_refs: &[],
-            test_refs: &[],
-            source_gate_refs: &[],
-            policy_refs: &policy_refs,
-            build_record_refs: &build_record_refs,
-        })
-        .expect("reproducible provenance");
-        let provenance_ref = import_node_artifact(&root, &provenance_record).expect("import provenance");
-        let evidence_refs = vec![provenance_ref, build_verification_ref];
-        let request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+        let provenance_record = provenance_record_for(material, &build_record_refs);
+        let provenance_ref = import_node_artifact(root, &provenance_record).expect("import provenance");
+        vec![provenance_ref, build_verification_ref]
+    }
+
+    fn install_request_for(case: &BuildCase) -> IOValue {
+        node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
-            payload_ref: Some(&payload_ref),
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &evidence_refs,
+            payload_ref: Some(&case.material.payload_ref),
+            authority_refs: &case.material.authority_refs,
+            policy_refs: &case.material.policy_refs,
+            resource_refs: &case.material.resource_refs,
+            evidence_refs: &case.evidence_refs,
         })
-        .expect("reproducible install request");
+        .expect("reproducible install request")
+    }
+
+    fn assert_install_passes(root: &Path, case: &BuildCase) {
+        let request = install_request_for(case);
         let submitted = submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
+            state_root: root,
             request_value: &request,
         })
         .expect("submit reproducible request");
         let dispatch = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
+            state_root: root,
             request_path: Some(&submitted.inbox_path),
         })
         .expect("dispatch reproducible request");
