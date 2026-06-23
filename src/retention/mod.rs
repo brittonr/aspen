@@ -9502,234 +9502,16 @@ mod tests {
     #[test]
     fn remote_clearance_live_multihost_import_workflow_binds_explicit_send_receive_evidence() {
         let root = temp_dir("retention-remote-clearance-live-multihost");
-        let requester_ref = fake_ref("multihost-requester");
-        let peer_ref = fake_ref("multihost-peer");
-        let object_ref = fake_ref("multihost-object");
-        let remote_ref = fake_ref("multihost-remote");
-        let policy = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_POLICY,
-            label: "multihost-policy",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let authority = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_AUTHORITY,
-            label: "multihost-authority",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let support = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-            label: "multihost-support",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let index = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REFERENCE_INDEX,
-            label: "multihost-index",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let remote_gc = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REMOTE_GC,
-            label: "multihost-remote-gc",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: std::slice::from_ref(&remote_ref),
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let request = store_retention_remote_gc_clearance_request(&root, &RetentionRemoteGcClearanceRequestInput {
-            requester_ref: &requester_ref,
-            peer_ref: &peer_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_ref: &remote_ref,
-            policy_ref: &policy,
-            authority_ref: &authority,
-            evidence_refs: std::slice::from_ref(&support),
-        })
-        .expect("request");
-        let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
-            root: &root,
-            request_value: &request.value,
-            evidence_refs: &[fake_ref("multihost-peer-evidence")],
-            retained_refs: &[],
-            is_current: true,
-            revoked_refs: &[],
-            diagnostics: &[],
-        })
-        .expect("response");
-        let request_control = remote_clearance_live_control_request_value(&LiveControlRequestInput {
-            target_ref: &request.request_ref,
-            payload_ref: None,
-            authority_refs: &[],
-            policy_refs: &[],
-            resource_refs: &[],
-            evidence_refs: std::slice::from_ref(&request.request_ref),
-        })
-        .expect("request control")
-        .1;
-        let response_control = remote_clearance_live_control_request_value(&LiveControlRequestInput {
-            target_ref: &response.response_ref,
-            payload_ref: Some(&request.request_ref),
-            authority_refs: &[],
-            policy_refs: &[],
-            resource_refs: &[],
-            evidence_refs: &[request.request_ref.clone(), response.response_ref.clone()],
-        })
-        .expect("response control")
-        .1;
-        let request_ingress_ref = fake_ref("multihost-request-ingress");
-        let response_ingress_ref = fake_ref("multihost-response-ingress");
-        let request_publish_ref = fake_ref("multihost-request-publish");
-        let response_publish_ref = fake_ref("multihost-response-publish");
-        let request_receive =
-            fake_live_transport_receipt("receive", "peer-node", "request-envelope", &request_ingress_ref);
-        let response_receive =
-            fake_live_transport_receipt("receive", "requester-node", "response-envelope", &response_ingress_ref);
-        let request_send = fake_live_send_receipt(
-            "requester-node",
-            "peer-node",
-            "request-envelope",
-            &request_publish_ref,
-            "request-ticket",
-        );
-        let response_send = fake_live_send_receipt(
-            "peer-node",
-            "requester-node",
-            "response-envelope",
-            &response_publish_ref,
-            "response-ticket",
-        );
-        let imported =
-            import_retention_remote_gc_clearance_live_workflow(RetentionRemoteGcClearanceLiveImportWorkflowInput {
-                root: &root,
-                request_value: &request.value,
-                response_value: &response.value,
-                request_control_value: &request_control,
-                request_send_receipt_value: &request_send,
-                request_receive_receipt_value: &request_receive,
-                request_ingress_ref: &request_ingress_ref,
-                response_control_value: &response_control,
-                response_send_receipt_value: &response_send,
-                response_receive_receipt_value: &response_receive,
-                response_ingress_ref: &response_ingress_ref,
-                expected_peer_ref: Some(&peer_ref),
-                expected_remote_ref: Some(&remote_ref),
-            })
-            .expect("live workflow import");
-        assert_eq!(imported.import.decision, "pass");
-        assert_eq!(imported.workflow.decision, "pass");
-        assert_eq!(imported.workflow.request_live_refs.len(), 4);
+        let material = fixture_material(&root);
+        let clearance_ref = assert_import_pass(&root, &material);
         let wrong_request_receive = fake_live_transport_receipt(
             "publish",
             "wrong-peer-node",
             "wrong-request-envelope",
             &fake_ref("wrong-request-ingress"),
         );
-        let wrong_receive_workflow =
-            import_retention_remote_gc_clearance_live_workflow(RetentionRemoteGcClearanceLiveImportWorkflowInput {
-                root: &root,
-                request_value: &request.value,
-                response_value: &response.value,
-                request_control_value: &request_control,
-                request_send_receipt_value: &request_send,
-                request_receive_receipt_value: &wrong_request_receive,
-                request_ingress_ref: &request_ingress_ref,
-                response_control_value: &response_control,
-                response_send_receipt_value: &response_send,
-                response_receive_receipt_value: &response_receive,
-                response_ingress_ref: &response_ingress_ref,
-                expected_peer_ref: Some(&peer_ref),
-                expected_remote_ref: Some(&remote_ref),
-            })
-            .expect("wrong receive workflow");
-        assert_eq!(wrong_receive_workflow.import.decision, "pass");
-        assert_eq!(wrong_receive_workflow.workflow.decision, "deny");
-        assert!(
-            wrong_receive_workflow
-                .workflow
-                .diagnostics
-                .iter()
-                .any(|value| value.contains("remote-clearance-live-request-receive-not-receive"))
-        );
-        assert!(
-            wrong_receive_workflow
-                .workflow
-                .diagnostics
-                .iter()
-                .any(|value| value == "remote-clearance-live-request-receive-wrong-envelope")
-        );
-        assert!(
-            wrong_receive_workflow
-                .workflow
-                .diagnostics
-                .iter()
-                .any(|value| value == "remote-clearance-live-request-receive-wrong-ingress")
-        );
-        let clearance_ref = imported.import.clearance_ref.clone().expect("clearance stored");
-        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
-            root: &root,
-            evidence: &DestructiveRetentionEvidence {
-                requester_ref: Some(requester_ref.clone()),
-                policy_refs: vec![policy],
-                authority_refs: vec![authority],
-                evidence_refs: vec![support],
-                retained_refs: Vec::new(),
-                remote_peer_refs: vec![peer_ref],
-                remote_refs: vec![remote_ref],
-                reference_index_refs: vec![index],
-                remote_gc_refs: vec![remote_gc],
-                remote_clearance_refs: vec![clearance_ref],
-                is_reference_index_complete: true,
-            },
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-        })
-        .expect("destructive admission");
-        assert_eq!(admission.decision, "pass");
+        assert_wrong_receive(&root, &material, &wrong_request_receive);
+        assert_case_pass(&root, &material.case, clearance_ref);
     }
 
     #[test]
@@ -10668,6 +10450,191 @@ mod tests {
         .expect("admit live clearance");
         assert_eq!(admission.decision, "pass");
         assert!(admission.has_remote_gc_clearance);
+    }
+
+    struct Pair {
+        request_value: IOValue,
+        response_value: IOValue,
+        request_ref: String,
+        response_ref: String,
+    }
+
+    struct Traffic {
+        request_ingress: String,
+        response_ingress: String,
+        request_receive: IOValue,
+        response_receive: IOValue,
+        request_send: IOValue,
+        response_send: IOValue,
+    }
+
+    struct Material {
+        case: LiveCase,
+        request_value: IOValue,
+        response_value: IOValue,
+        request_control: IOValue,
+        response_control: IOValue,
+        traffic: Traffic,
+    }
+
+    fn request_pair(root: &Path, case: &LiveCase) -> Pair {
+        let request = store_retention_remote_gc_clearance_request(root, &RetentionRemoteGcClearanceRequestInput {
+            requester_ref: &case.requester,
+            peer_ref: &case.peer,
+            object_ref: &case.object,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &case.remote,
+            policy_ref: &case.policy,
+            authority_ref: &case.authority,
+            evidence_refs: std::slice::from_ref(&case.support),
+        })
+        .expect("request");
+        let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
+            root,
+            request_value: &request.value,
+            evidence_refs: &[fake_ref("multihost-peer-evidence")],
+            retained_refs: &[],
+            is_current: true,
+            revoked_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("response");
+        Pair {
+            request_value: request.value,
+            response_value: response.value,
+            request_ref: request.request_ref,
+            response_ref: response.response_ref,
+        }
+    }
+
+    fn control_values(pair: &Pair) -> (IOValue, IOValue) {
+        let request_control = remote_clearance_live_control_request_value(&LiveControlRequestInput {
+            target_ref: &pair.request_ref,
+            payload_ref: None,
+            authority_refs: &[],
+            policy_refs: &[],
+            resource_refs: &[],
+            evidence_refs: std::slice::from_ref(&pair.request_ref),
+        })
+        .expect("request control")
+        .1;
+        let response_control = remote_clearance_live_control_request_value(&LiveControlRequestInput {
+            target_ref: &pair.response_ref,
+            payload_ref: Some(&pair.request_ref),
+            authority_refs: &[],
+            policy_refs: &[],
+            resource_refs: &[],
+            evidence_refs: &[pair.request_ref.clone(), pair.response_ref.clone()],
+        })
+        .expect("response control")
+        .1;
+        (request_control, response_control)
+    }
+
+    fn traffic_values() -> Traffic {
+        let request_ingress = fake_ref("multihost-request-ingress");
+        let response_ingress = fake_ref("multihost-response-ingress");
+        let request_publish = fake_ref("multihost-request-publish");
+        let response_publish = fake_ref("multihost-response-publish");
+        let request_receive = fake_live_transport_receipt("receive", "peer-node", "request-envelope", &request_ingress);
+        let response_receive =
+            fake_live_transport_receipt("receive", "requester-node", "response-envelope", &response_ingress);
+        let request_send = fake_live_send_receipt(
+            "requester-node",
+            "peer-node",
+            "request-envelope",
+            &request_publish,
+            "request-ticket",
+        );
+        let response_send = fake_live_send_receipt(
+            "peer-node",
+            "requester-node",
+            "response-envelope",
+            &response_publish,
+            "response-ticket",
+        );
+        Traffic {
+            request_ingress,
+            response_ingress,
+            request_receive,
+            response_receive,
+            request_send,
+            response_send,
+        }
+    }
+
+    fn fixture_material(root: &Path) -> Material {
+        let case = live_case(root, "multihost");
+        let pair = request_pair(root, &case);
+        let (request_control, response_control) = control_values(&pair);
+        Material {
+            case,
+            request_value: pair.request_value,
+            response_value: pair.response_value,
+            request_control,
+            response_control,
+            traffic: traffic_values(),
+        }
+    }
+
+    fn import_with(
+        root: &Path,
+        material: &Material,
+        request_receive: &IOValue,
+    ) -> RetentionRemoteGcClearanceLiveImportWorkflow {
+        import_retention_remote_gc_clearance_live_workflow(RetentionRemoteGcClearanceLiveImportWorkflowInput {
+            root,
+            request_value: &material.request_value,
+            response_value: &material.response_value,
+            request_control_value: &material.request_control,
+            request_send_receipt_value: &material.traffic.request_send,
+            request_receive_receipt_value: request_receive,
+            request_ingress_ref: &material.traffic.request_ingress,
+            response_control_value: &material.response_control,
+            response_send_receipt_value: &material.traffic.response_send,
+            response_receive_receipt_value: &material.traffic.response_receive,
+            response_ingress_ref: &material.traffic.response_ingress,
+            expected_peer_ref: Some(&material.case.peer),
+            expected_remote_ref: Some(&material.case.remote),
+        })
+        .expect("workflow import")
+    }
+
+    fn assert_import_pass(root: &Path, material: &Material) -> String {
+        let imported = import_with(root, material, &material.traffic.request_receive);
+        assert_eq!(imported.import.decision, "pass");
+        assert_eq!(imported.workflow.decision, "pass");
+        assert_eq!(imported.workflow.request_live_refs.len(), 4);
+        imported.import.clearance_ref.clone().expect("clearance stored")
+    }
+
+    fn assert_wrong_receive(root: &Path, material: &Material, wrong_request_receive: &IOValue) {
+        let workflow = import_with(root, material, wrong_request_receive);
+        assert_eq!(workflow.import.decision, "pass");
+        assert_eq!(workflow.workflow.decision, "deny");
+        assert!(
+            workflow
+                .workflow
+                .diagnostics
+                .iter()
+                .any(|value| value.contains("remote-clearance-live-request-receive-not-receive"))
+        );
+        assert!(
+            workflow
+                .workflow
+                .diagnostics
+                .iter()
+                .any(|value| value == "remote-clearance-live-request-receive-wrong-envelope")
+        );
+        assert!(
+            workflow
+                .workflow
+                .diagnostics
+                .iter()
+                .any(|value| value == "remote-clearance-live-request-receive-wrong-ingress")
+        );
     }
 
     fn store_passing_plan_fixture(root: &std::path::Path, label: &str) -> TestPlanFixture {
