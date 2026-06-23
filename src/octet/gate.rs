@@ -311,6 +311,30 @@ struct InputFiles {
     object_corpus: Option<GateFile>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DerivedEvidence {
+    structured_findings_ref: Option<String>,
+    structured_unkeyed: u64,
+    fingerprint_evidence_ref: Option<String>,
+}
+
+struct EvidenceInput<'a> {
+    status: Option<&'a OctetStatusArtifact>,
+    status_file: Option<&'a GateFile>,
+    summary: Option<&'a GateFile>,
+    object_corpus_receipt: Option<&'a OctetObjectCorpusReceipt>,
+    object_corpus: Option<&'a GateFile>,
+}
+
+struct OutcomeFacts<'a> {
+    status: Option<&'a OctetStatusArtifact>,
+    counts: &'a FindingCounts,
+    has_artifact_bindings: bool,
+    has_structured_findings_ref: bool,
+    structured_unkeyed: u64,
+    has_fingerprint_evidence_ref: bool,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct FindingCounts {
     total: u64,
@@ -413,106 +437,41 @@ struct ExpectedMetadata {
 pub fn evaluate_octet_gate(input: &OctetGateInput) -> Result<OctetGateEvaluation> {
     let mut checks = Vec::new();
     let mut diagnostics = Vec::new();
-    let has_artifacts_dir = input.artifacts_dir.is_dir();
-    push_check(&mut checks, "artifacts-dir-present", has_artifacts_dir);
-    if !has_artifacts_dir {
-        push_diagnostic(&mut diagnostics, format!("artifacts directory missing: {}", input.artifacts_dir.display()));
-    }
 
-    push_check(&mut checks, "profile-supported", input.profile == STRICT_PROFILE);
-    if input.profile != STRICT_PROFILE {
-        push_diagnostic(&mut diagnostics, format!("unsupported octet gate profile: {}", input.profile));
-    }
-
-    let command = read_required_file(
-        &input.artifacts_dir,
-        COMMAND_NAME,
-        "command-artifact-present",
-        &mut checks,
-        &mut diagnostics,
-    );
-    let status_file =
-        read_required_file(&input.artifacts_dir, STATUS_NAME, "status-artifact-present", &mut checks, &mut diagnostics);
-    let summary = read_required_file(
-        &input.artifacts_dir,
-        SUMMARY_NAME,
-        "summary-artifact-present",
-        &mut checks,
-        &mut diagnostics,
-    );
-    let object_corpus = read_required_file(
-        &input.artifacts_dir,
-        OBJECT_CORPUS_RECEIPT_NAME,
-        "object-corpus-artifact-present",
-        &mut checks,
-        &mut diagnostics,
-    );
-
-    let status = parse_status(status_file.as_ref(), &mut checks, &mut diagnostics);
-    let lint_counts = parse_summary_lints(summary.as_ref(), &mut checks, &mut diagnostics);
-    let object_corpus_receipt = validate_object_corpus(object_corpus.as_ref(), &mut checks, &mut diagnostics);
+    push_initial_checks(input, &mut checks, &mut diagnostics);
+    let files = read_required_inputs(&input.artifacts_dir, &mut checks, &mut diagnostics);
+    let status = parse_status(files.status_file.as_ref(), &mut checks, &mut diagnostics);
+    let lint_counts = parse_summary_lints(files.summary.as_ref(), &mut checks, &mut diagnostics);
+    let object_corpus_receipt = validate_object_corpus(files.object_corpus.as_ref(), &mut checks, &mut diagnostics);
     let has_valid_object_corpus = object_corpus_receipt.is_some();
-    let has_valid_command_shape = validate_command(command.as_ref(), &mut checks, &mut diagnostics);
+    let has_valid_command_shape = validate_command(files.command.as_ref(), &mut checks, &mut diagnostics);
     let has_current_metadata_binding =
-        validate_metadata_binding(command.as_ref(), status.as_ref(), &mut checks, &mut diagnostics);
+        validate_metadata_binding(files.command.as_ref(), status.as_ref(), &mut checks, &mut diagnostics);
     let counts = finding_counts(status.as_ref(), &lint_counts);
-    let structured_findings = status
-        .as_ref()
-        .zip(status_file.as_ref())
-        .zip(summary.as_ref())
-        .map(|((status, status_file), summary)| octet_structured_findings_value(status_file, summary, status));
-    let structured_findings_ref =
-        structured_findings.as_ref().map(|(value, _unkeyed)| canonical_hash(value)).transpose()?;
-    let structured_unkeyed = structured_findings
-        .as_ref()
-        .map(|(_value, unkeyed)| *unkeyed)
-        .unwrap_or_else(|| status.as_ref().map_or(0, |status| status.total_findings));
-    let fingerprint_evidence = object_corpus_receipt
-        .as_ref()
-        .zip(object_corpus.as_ref())
-        .map(|(receipt, file)| octet_fingerprint_evidence_value(file, receipt))
-        .transpose()?;
-    let fingerprint_evidence_ref = fingerprint_evidence.as_ref().map(canonical_hash).transpose()?;
-    let is_strict_status_clean = status.as_ref().is_some_and(|status| status.status == "clean");
-    let has_zero_critical_findings = counts.critical == 0;
-    let has_artifact_bindings =
-        command.is_some() && status_file.is_some() && summary.is_some() && object_corpus.is_some();
-    let has_structured_findings_ref = structured_findings_ref.is_some();
-    let has_keyed_structured_findings = has_structured_findings_ref && structured_unkeyed == 0;
-    let has_fingerprint_evidence_ref = fingerprint_evidence_ref.is_some();
+    let evidence = derive_evidence(EvidenceInput {
+        status: status.as_ref(),
+        status_file: files.status_file.as_ref(),
+        summary: files.summary.as_ref(),
+        object_corpus_receipt: object_corpus_receipt.as_ref(),
+        object_corpus: files.object_corpus.as_ref(),
+    })?;
+    let has_artifact_bindings = files.command.is_some()
+        && files.status_file.is_some()
+        && files.summary.is_some()
+        && files.object_corpus.is_some();
 
-    push_check(&mut checks, "strict-status-clean", is_strict_status_clean);
-    let denied_status = match status.as_ref() {
-        Some(status) if status.status == "clean" => None,
-        Some(status) => Some(status),
-        None => None,
-    };
-    if let Some(status) = denied_status {
-        push_diagnostic(
-            &mut diagnostics,
-            format!("strict profile denies octet status `{}` with {} findings", status.status, status.total_findings),
-        );
-    }
-    push_check(&mut checks, "no-critical-findings", has_zero_critical_findings);
-    if counts.critical > 0 {
-        push_diagnostic(&mut diagnostics, format!("unreviewed critical octet findings: {}", counts.critical));
-    }
-    push_check(&mut checks, "artifact-ref-binding", has_artifact_bindings);
-    push_check(&mut checks, "structured-findings-bound", has_structured_findings_ref);
-    push_check(&mut checks, "structured-findings-keyed", has_keyed_structured_findings);
-    push_check(&mut checks, "fingerprint-evidence-bound", has_fingerprint_evidence_ref);
-    if !has_structured_findings_ref {
-        push_diagnostic(&mut diagnostics, "missing structured octet findings artifact".to_string());
-    }
-    if has_structured_findings_ref && structured_unkeyed > 0 {
-        push_diagnostic(
-            &mut diagnostics,
-            format!("structured octet findings omitted stable keys for {structured_unkeyed} findings"),
-        );
-    }
-    if !has_fingerprint_evidence_ref {
-        push_diagnostic(&mut diagnostics, "missing octet fingerprint evidence artifact".to_string());
-    }
+    push_outcome_checks(
+        OutcomeFacts {
+            status: status.as_ref(),
+            counts: &counts,
+            has_artifact_bindings,
+            has_structured_findings_ref: evidence.structured_findings_ref.is_some(),
+            structured_unkeyed: evidence.structured_unkeyed,
+            has_fingerprint_evidence_ref: evidence.fingerprint_evidence_ref.is_some(),
+        },
+        &mut checks,
+        &mut diagnostics,
+    );
 
     let has_passing_gate_checks = checks.iter().all(|check| check.status == "pass")
         && has_valid_object_corpus
@@ -524,12 +483,12 @@ pub fn evaluate_octet_gate(input: &OctetGateInput) -> Result<OctetGateEvaluation
     let receipt_value = octet_gate_receipt_value(OctetGateReceiptInput {
         decision: &decision,
         policy_ref: &policy_ref,
-        command_ref: command.as_ref().map(|file| file.artifact_ref.as_str()),
-        status_ref: status_file.as_ref().map(|file| file.artifact_ref.as_str()),
-        summary_ref: summary.as_ref().map(|file| file.artifact_ref.as_str()),
-        structured_findings_ref: structured_findings_ref.as_deref(),
-        object_corpus_ref: object_corpus.as_ref().map(|file| file.artifact_ref.as_str()),
-        fingerprint_evidence_ref: fingerprint_evidence_ref.as_deref(),
+        command_ref: files.command.as_ref().map(|file| file.artifact_ref.as_str()),
+        status_ref: files.status_file.as_ref().map(|file| file.artifact_ref.as_str()),
+        summary_ref: files.summary.as_ref().map(|file| file.artifact_ref.as_str()),
+        structured_findings_ref: evidence.structured_findings_ref.as_deref(),
+        object_corpus_ref: files.object_corpus.as_ref().map(|file| file.artifact_ref.as_str()),
+        fingerprint_evidence_ref: evidence.fingerprint_evidence_ref.as_deref(),
         config_hash: status.as_ref().map(|status| status.metadata.config_hash.as_str()),
         profile_hash: status.as_ref().map(|status| status.metadata.profile_hash.as_str()),
         toolchain: status.as_ref().map(|status| status.metadata.toolchain.as_str()),
@@ -544,6 +503,115 @@ pub fn evaluate_octet_gate(input: &OctetGateInput) -> Result<OctetGateEvaluation
         receipt_value,
         diagnostics,
     })
+}
+
+fn push_initial_checks(
+    input: &OctetGateInput,
+    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) {
+    let has_artifacts_dir = input.artifacts_dir.is_dir();
+    push_check(checks, "artifacts-dir-present", has_artifacts_dir);
+    if !has_artifacts_dir {
+        push_diagnostic(diagnostics, format!("artifacts directory missing: {}", input.artifacts_dir.display()));
+    }
+
+    let is_profile_supported = input.profile == STRICT_PROFILE;
+    push_check(checks, "profile-supported", is_profile_supported);
+    if !is_profile_supported {
+        push_diagnostic(diagnostics, format!("unsupported octet gate profile: {}", input.profile));
+    }
+}
+
+fn read_required_inputs(
+    artifacts_dir: &Path,
+    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> InputFiles {
+    InputFiles {
+        command: read_required_file(artifacts_dir, COMMAND_NAME, "command-artifact-present", checks, diagnostics),
+        status_file: read_required_file(artifacts_dir, STATUS_NAME, "status-artifact-present", checks, diagnostics),
+        summary: read_required_file(artifacts_dir, SUMMARY_NAME, "summary-artifact-present", checks, diagnostics),
+        object_corpus: read_required_file(
+            artifacts_dir,
+            OBJECT_CORPUS_RECEIPT_NAME,
+            "object-corpus-artifact-present",
+            checks,
+            diagnostics,
+        ),
+    }
+}
+
+fn derive_evidence(input: EvidenceInput<'_>) -> Result<DerivedEvidence> {
+    let structured_findings = input
+        .status
+        .zip(input.status_file)
+        .zip(input.summary)
+        .map(|((status, status_file), summary)| octet_structured_findings_value(status_file, summary, status));
+    let structured_findings_ref =
+        structured_findings.as_ref().map(|(value, _unkeyed)| canonical_hash(value)).transpose()?;
+    let structured_unkeyed = structured_findings
+        .as_ref()
+        .map(|(_value, unkeyed)| *unkeyed)
+        .unwrap_or_else(|| input.status.map_or(0, |status| status.total_findings));
+    let fingerprint_evidence = input
+        .object_corpus_receipt
+        .zip(input.object_corpus)
+        .map(|(receipt, file)| octet_fingerprint_evidence_value(file, receipt))
+        .transpose()?;
+    let fingerprint_evidence_ref = fingerprint_evidence.as_ref().map(canonical_hash).transpose()?;
+    Ok(DerivedEvidence {
+        structured_findings_ref,
+        structured_unkeyed,
+        fingerprint_evidence_ref,
+    })
+}
+
+fn push_outcome_checks(
+    facts: OutcomeFacts<'_>,
+    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) {
+    let is_strict_status_clean = facts.status.is_some_and(|status| status.status == "clean");
+    push_check(checks, "strict-status-clean", is_strict_status_clean);
+    let denied_status = match facts.status {
+        Some(status) if status.status == "clean" => None,
+        Some(status) => Some(status),
+        None => None,
+    };
+    if let Some(status) = denied_status {
+        push_diagnostic(
+            diagnostics,
+            format!("strict profile denies octet status `{}` with {} findings", status.status, status.total_findings),
+        );
+    }
+
+    let has_zero_critical_findings = facts.counts.critical == 0;
+    push_check(checks, "no-critical-findings", has_zero_critical_findings);
+    if facts.counts.critical > 0 {
+        push_diagnostic(diagnostics, format!("unreviewed critical octet findings: {}", facts.counts.critical));
+    }
+    push_check(checks, "artifact-ref-binding", facts.has_artifact_bindings);
+    push_check(checks, "structured-findings-bound", facts.has_structured_findings_ref);
+    push_check(
+        checks,
+        "structured-findings-keyed",
+        facts.has_structured_findings_ref && facts.structured_unkeyed == 0,
+    );
+    push_check(checks, "fingerprint-evidence-bound", facts.has_fingerprint_evidence_ref);
+
+    if !facts.has_structured_findings_ref {
+        push_diagnostic(diagnostics, "missing structured octet findings artifact".to_string());
+    }
+    if facts.has_structured_findings_ref && facts.structured_unkeyed > 0 {
+        push_diagnostic(
+            diagnostics,
+            format!("structured octet findings omitted stable keys for {} findings", facts.structured_unkeyed),
+        );
+    }
+    if !facts.has_fingerprint_evidence_ref {
+        push_diagnostic(diagnostics, "missing octet fingerprint evidence artifact".to_string());
+    }
 }
 
 #[doc(hidden)]
