@@ -9205,261 +9205,14 @@ mod tests {
     fn remote_clearance_live_multihost_two_node_happy_path_uses_real_receive_evidence() {
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
         runtime.block_on(async {
-            let root = temp_dir("retention-remote-clearance-live-two-node-requester-store");
-            let peer_retention_root = temp_dir("retention-remote-clearance-live-two-node-peer-store");
-            let requester_node_root = temp_dir("retention-remote-clearance-live-two-node-requester-node");
-            let peer_node_root = temp_dir("retention-remote-clearance-live-two-node-peer-node");
-            crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
-                state_root: &requester_node_root,
-                node_id: "requester-node",
-            })
-            .expect("init requester node");
-            crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
-                state_root: &peer_node_root,
-                node_id: "peer-node",
-            })
-            .expect("init peer node");
-            crate::node_daemon::run_local_node(&crate::node_daemon::NodeDaemonRunInput {
-                state_root: &requester_node_root,
-            })
-            .expect("run requester node");
-            crate::node_daemon::run_local_node(&crate::node_daemon::NodeDaemonRunInput {
-                state_root: &peer_node_root,
-            })
-            .expect("run peer node");
-
-            let topic = crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC;
-            let mut peer_live = start_bound_live_node(&peer_node_root, topic).await;
-            let mut requester_live = start_bound_live_node(&requester_node_root, topic).await;
-            let control_policy_refs = vec![fake_ref("two-node-control-policy")];
-            let control_resource_refs = vec![fake_ref("two-node-control-resource")];
-            let request_evidence = install_live_direction_evidence(&LiveDirectionEvidenceInput {
-                sender_root: &requester_node_root,
-                receiver_root: &peer_node_root,
-                receiver_ticket: &peer_live.ticket,
-                sender_node_id: "requester-node",
-                receiver_node_id: "peer-node",
-                topic,
-                policy_refs: &control_policy_refs,
-            });
-            let response_evidence = install_live_direction_evidence(&LiveDirectionEvidenceInput {
-                sender_root: &peer_node_root,
-                receiver_root: &requester_node_root,
-                receiver_ticket: &requester_live.ticket,
-                sender_node_id: "peer-node",
-                receiver_node_id: "requester-node",
-                topic,
-                policy_refs: &control_policy_refs,
-            });
-
-            let requester_ref = fake_ref("two-node-requester");
-            let peer_ref = fake_ref("two-node-peer");
-            let object_ref = fake_ref("two-node-object");
-            let remote_ref = fake_ref("two-node-remote");
-            let policy = store_test_admission(TestAdmissionInput {
-                root: &root,
-                kind: ADMISSION_KIND_POLICY,
-                label: "two-node-policy",
-                requester_ref: &requester_ref,
-                object_ref: &object_ref,
-                object_kind: "chunk",
-                retention_class: CLASS_DURABLE_VALUE,
-                action: ACTION_DELETE,
-                remote_refs: &[],
-                is_reference_index_complete: true,
-                is_current: true,
-                revoked_refs: &[],
-            });
-            let authority = store_test_admission(TestAdmissionInput {
-                root: &root,
-                kind: ADMISSION_KIND_AUTHORITY,
-                label: "two-node-authority",
-                requester_ref: &requester_ref,
-                object_ref: &object_ref,
-                object_kind: "chunk",
-                retention_class: CLASS_DURABLE_VALUE,
-                action: ACTION_DELETE,
-                remote_refs: &[],
-                is_reference_index_complete: true,
-                is_current: true,
-                revoked_refs: &[],
-            });
-            let support = store_test_admission(TestAdmissionInput {
-                root: &root,
-                kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-                label: "two-node-support",
-                requester_ref: &requester_ref,
-                object_ref: &object_ref,
-                object_kind: "chunk",
-                retention_class: CLASS_DURABLE_VALUE,
-                action: ACTION_DELETE,
-                remote_refs: &[],
-                is_reference_index_complete: true,
-                is_current: true,
-                revoked_refs: &[],
-            });
-            let index = store_test_admission(TestAdmissionInput {
-                root: &root,
-                kind: ADMISSION_KIND_REFERENCE_INDEX,
-                label: "two-node-index",
-                requester_ref: &requester_ref,
-                object_ref: &object_ref,
-                object_kind: "chunk",
-                retention_class: CLASS_DURABLE_VALUE,
-                action: ACTION_DELETE,
-                remote_refs: &[],
-                is_reference_index_complete: true,
-                is_current: true,
-                revoked_refs: &[],
-            });
-            let remote_gc = store_test_admission(TestAdmissionInput {
-                root: &root,
-                kind: ADMISSION_KIND_REMOTE_GC,
-                label: "two-node-remote-gc",
-                requester_ref: &requester_ref,
-                object_ref: &object_ref,
-                object_kind: "chunk",
-                retention_class: CLASS_DURABLE_VALUE,
-                action: ACTION_DELETE,
-                remote_refs: std::slice::from_ref(&remote_ref),
-                is_reference_index_complete: true,
-                is_current: true,
-                revoked_refs: &[],
-            });
-
-            let request_send =
-                send_retention_remote_gc_clearance_live_request(RetentionRemoteGcClearanceLiveRequestSendInput {
-                    root: &root,
-                    requester_node_root: Some(&requester_node_root),
-                    peer_ticket_value: &peer_live.ticket.value,
-                    requester_node_id: "requester-node",
-                    peer_node_id: "peer-node",
-                    topic,
-                    sequence: 1,
-                    max_attempts: crate::node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
-                    join_timeout_ms: 10_000,
-                    requester_ref: &requester_ref,
-                    peer_ref: &peer_ref,
-                    object_ref: &object_ref,
-                    object_kind: "chunk",
-                    retention_class: CLASS_DURABLE_VALUE,
-                    action: ACTION_DELETE,
-                    remote_ref: &remote_ref,
-                    policy_ref: &policy,
-                    authority_ref: &authority,
-                    retention_evidence_refs: std::slice::from_ref(&support),
-                    peer_bootstrap_refs: &request_evidence.peer_bootstrap_refs,
-                    authority_refs: &request_evidence.authority_refs,
-                    policy_refs: &control_policy_refs,
-                    resource_refs: &control_resource_refs,
-                    transport_evidence_refs: &[],
-                })
-                .await
-                .expect("two-node request send");
-            let request_send_receipt =
-                crate::node_daemon::parse_node_control_live_send_receipt(&request_send.send.send_receipt_value)
-                    .expect("request send receipt");
-            assert_eq!(request_send_receipt.decision, "pass");
-            assert!(request_send.send.transport_receipt_ref.is_some());
-            let request_receive =
-                receive_one_live_ingress(&peer_node_root, topic, "peer-node", &mut peer_live.topic).await;
-            assert!(request_receive.has_enqueued);
-            assert_eq!(request_receive.envelope_ref, request_send.send.envelope_ref);
-
-            let peer_response_evidence = vec![fake_ref("two-node-peer-reference-index")];
-            let response_send =
-                send_retention_remote_gc_clearance_live_response(RetentionRemoteGcClearanceLiveResponseSendInput {
-                    root: &peer_retention_root,
-                    peer_node_root: Some(&peer_node_root),
-                    requester_ticket_value: &requester_live.ticket.value,
-                    request_value: &request_send.request.value,
-                    peer_node_id: "peer-node",
-                    requester_node_id: "requester-node",
-                    topic,
-                    sequence: 1,
-                    max_attempts: crate::node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
-                    join_timeout_ms: 10_000,
-                    response_evidence_refs: &peer_response_evidence,
-                    retained_refs: &[],
-                    is_current: true,
-                    revoked_refs: &[],
-                    response_diagnostics: &[],
-                    peer_bootstrap_refs: &response_evidence.peer_bootstrap_refs,
-                    authority_refs: &response_evidence.authority_refs,
-                    policy_refs: &control_policy_refs,
-                    resource_refs: &control_resource_refs,
-                    transport_evidence_refs: &[],
-                })
-                .await
-                .expect("two-node response send");
-            let response_send_receipt =
-                crate::node_daemon::parse_node_control_live_send_receipt(&response_send.send.send_receipt_value)
-                    .expect("response send receipt");
-            assert_eq!(response_send_receipt.decision, "pass");
-            assert!(response_send.send.transport_receipt_ref.is_some());
-            let response_receive =
-                receive_one_live_ingress(&requester_node_root, topic, "requester-node", &mut requester_live.topic)
-                    .await;
-            assert!(response_receive.has_enqueued);
-            assert_eq!(response_receive.envelope_ref, response_send.send.envelope_ref);
-
-            let imported =
-                import_retention_remote_gc_clearance_live_workflow(RetentionRemoteGcClearanceLiveImportWorkflowInput {
-                    root: &root,
-                    request_value: &request_send.request.value,
-                    response_value: &response_send.response.value,
-                    request_control_value: &request_send.control_value,
-                    request_send_receipt_value: &request_send.send.send_receipt_value,
-                    request_receive_receipt_value: &request_receive.transport_receipt_value,
-                    request_ingress_ref: &request_receive.ingress_receipt_ref,
-                    response_control_value: &response_send.control_value,
-                    response_send_receipt_value: &response_send.send.send_receipt_value,
-                    response_receive_receipt_value: &response_receive.transport_receipt_value,
-                    response_ingress_ref: &response_receive.ingress_receipt_ref,
-                    expected_peer_ref: Some(&peer_ref),
-                    expected_remote_ref: Some(&remote_ref),
-                })
-                .expect("two-node import workflow");
-            assert_eq!(imported.import.decision, "pass");
-            assert_eq!(imported.workflow.decision, "pass");
-            assert!(imported.workflow.diagnostics.is_empty());
-            assert_eq!(
-                imported.workflow.request_live_refs[1],
-                request_send.send.transport_receipt_ref.clone().expect("request publish receipt")
-            );
-            assert_eq!(imported.workflow.request_live_refs[2], request_receive.transport_receipt_ref);
-            assert_eq!(
-                imported.workflow.response_live_refs[1],
-                response_send.send.transport_receipt_ref.clone().expect("response publish receipt")
-            );
-            assert_eq!(imported.workflow.response_live_refs[2], response_receive.transport_receipt_ref);
-
-            let clearance_ref = imported.import.clearance_ref.clone().expect("clearance stored");
-            let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
-                root: &root,
-                evidence: &DestructiveRetentionEvidence {
-                    requester_ref: Some(requester_ref.clone()),
-                    policy_refs: vec![policy],
-                    authority_refs: vec![authority],
-                    evidence_refs: vec![support],
-                    retained_refs: Vec::new(),
-                    remote_peer_refs: vec![peer_ref],
-                    remote_refs: vec![remote_ref],
-                    reference_index_refs: vec![index],
-                    remote_gc_refs: vec![remote_gc],
-                    remote_clearance_refs: vec![clearance_ref],
-                    is_reference_index_complete: true,
-                },
-                object_ref: &object_ref,
-                object_kind: "chunk",
-                retention_class: CLASS_DURABLE_VALUE,
-                action: ACTION_DELETE,
-            })
-            .expect("two-node destructive admission");
-            assert_eq!(admission.decision, "pass");
-
-            peer_live.router.shutdown().await.expect("peer router shutdown");
-            requester_live.router.shutdown().await.expect("requester router shutdown");
+            let mut live = two_node_live().await;
+            let refs = two_node_refs(&live.roots.requester_store);
+            let request = send_two_node_request(&mut live, &refs).await;
+            let response = send_two_node_response(&mut live, &request).await;
+            let imported = import_two_node_workflow(&live.roots.requester_store, &refs, &request, &response);
+            assert_two_node_import(&imported, &request, &response);
+            assert_two_node_admission(&live.roots.requester_store, refs, imported);
+            live.shutdown().await;
         });
     }
 
@@ -9606,6 +9359,369 @@ mod tests {
     struct LiveDirectionEvidence {
         peer_bootstrap_refs: Vec<String>,
         authority_refs: Vec<String>,
+    }
+
+    struct TwoNodeRoots {
+        requester_store: PathBuf,
+        peer_store: PathBuf,
+        requester_node: PathBuf,
+        peer_node: PathBuf,
+    }
+
+    struct TwoNodeLive {
+        roots: TwoNodeRoots,
+        topic: &'static str,
+        peer_live: LiveNodeHarness,
+        requester_live: LiveNodeHarness,
+        control_policy_refs: Vec<String>,
+        control_resource_refs: Vec<String>,
+        request_evidence: LiveDirectionEvidence,
+        response_evidence: LiveDirectionEvidence,
+    }
+
+    struct TwoNodeRefs {
+        requester_ref: String,
+        peer_ref: String,
+        object_ref: String,
+        remote_ref: String,
+        policy: String,
+        authority: String,
+        support: String,
+        index: String,
+        remote_gc: String,
+    }
+
+    struct TwoNodeAdmissionInput<'a> {
+        root: &'a Path,
+        kind: &'a str,
+        label: &'a str,
+        requester_ref: &'a str,
+        object_ref: &'a str,
+        remote_refs: &'a [String],
+    }
+
+    struct SentRequest {
+        send: RetentionRemoteGcClearanceLiveRequestSend,
+        receive: crate::node_daemon::NodeControlLiveIngressReceive,
+    }
+
+    struct SentResponse {
+        send: RetentionRemoteGcClearanceLiveResponseSend,
+        receive: crate::node_daemon::NodeControlLiveIngressReceive,
+    }
+
+    impl TwoNodeLive {
+        async fn shutdown(self) {
+            self.peer_live.router.shutdown().await.expect("peer router shutdown");
+            self.requester_live.router.shutdown().await.expect("requester router shutdown");
+        }
+    }
+
+    fn two_node_roots() -> TwoNodeRoots {
+        let roots = TwoNodeRoots {
+            requester_store: temp_dir("retention-remote-clearance-live-two-node-requester-store"),
+            peer_store: temp_dir("retention-remote-clearance-live-two-node-peer-store"),
+            requester_node: temp_dir("retention-remote-clearance-live-two-node-requester-node"),
+            peer_node: temp_dir("retention-remote-clearance-live-two-node-peer-node"),
+        };
+        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+            state_root: &roots.requester_node,
+            node_id: "requester-node",
+        })
+        .expect("init requester node");
+        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+            state_root: &roots.peer_node,
+            node_id: "peer-node",
+        })
+        .expect("init peer node");
+        crate::node_daemon::run_local_node(&crate::node_daemon::NodeDaemonRunInput {
+            state_root: &roots.requester_node,
+        })
+        .expect("run requester node");
+        crate::node_daemon::run_local_node(&crate::node_daemon::NodeDaemonRunInput {
+            state_root: &roots.peer_node,
+        })
+        .expect("run peer node");
+        roots
+    }
+
+    async fn two_node_live() -> TwoNodeLive {
+        let roots = two_node_roots();
+        let topic = crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC;
+        let peer_live = start_bound_live_node(&roots.peer_node, topic).await;
+        let requester_live = start_bound_live_node(&roots.requester_node, topic).await;
+        let control_policy_refs = vec![fake_ref("two-node-control-policy")];
+        let control_resource_refs = vec![fake_ref("two-node-control-resource")];
+        let request_evidence = install_live_direction_evidence(&LiveDirectionEvidenceInput {
+            sender_root: &roots.requester_node,
+            receiver_root: &roots.peer_node,
+            receiver_ticket: &peer_live.ticket,
+            sender_node_id: "requester-node",
+            receiver_node_id: "peer-node",
+            topic,
+            policy_refs: &control_policy_refs,
+        });
+        let response_evidence = install_live_direction_evidence(&LiveDirectionEvidenceInput {
+            sender_root: &roots.peer_node,
+            receiver_root: &roots.requester_node,
+            receiver_ticket: &requester_live.ticket,
+            sender_node_id: "peer-node",
+            receiver_node_id: "requester-node",
+            topic,
+            policy_refs: &control_policy_refs,
+        });
+        TwoNodeLive {
+            roots,
+            topic,
+            peer_live,
+            requester_live,
+            control_policy_refs,
+            control_resource_refs,
+            request_evidence,
+            response_evidence,
+        }
+    }
+
+    fn two_node_refs(root: &Path) -> TwoNodeRefs {
+        let requester_ref = fake_ref("two-node-requester");
+        let peer_ref = fake_ref("two-node-peer");
+        let object_ref = fake_ref("two-node-object");
+        let remote_ref = fake_ref("two-node-remote");
+        let policy = store_two_node_admission(TwoNodeAdmissionInput {
+            root,
+            kind: ADMISSION_KIND_POLICY,
+            label: "two-node-policy",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            remote_refs: &[],
+        });
+        let authority = store_two_node_admission(TwoNodeAdmissionInput {
+            root,
+            kind: ADMISSION_KIND_AUTHORITY,
+            label: "two-node-authority",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            remote_refs: &[],
+        });
+        let support = store_two_node_admission(TwoNodeAdmissionInput {
+            root,
+            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
+            label: "two-node-support",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            remote_refs: &[],
+        });
+        let index = store_two_node_admission(TwoNodeAdmissionInput {
+            root,
+            kind: ADMISSION_KIND_REFERENCE_INDEX,
+            label: "two-node-index",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            remote_refs: &[],
+        });
+        let remote_gc = store_two_node_admission(TwoNodeAdmissionInput {
+            root,
+            kind: ADMISSION_KIND_REMOTE_GC,
+            label: "two-node-remote-gc",
+            requester_ref: &requester_ref,
+            object_ref: &object_ref,
+            remote_refs: std::slice::from_ref(&remote_ref),
+        });
+        TwoNodeRefs {
+            requester_ref,
+            peer_ref,
+            object_ref,
+            remote_ref,
+            policy,
+            authority,
+            support,
+            index,
+            remote_gc,
+        }
+    }
+
+    fn store_two_node_admission(input: TwoNodeAdmissionInput<'_>) -> String {
+        store_test_admission(TestAdmissionInput {
+            root: input.root,
+            kind: input.kind,
+            label: input.label,
+            requester_ref: input.requester_ref,
+            object_ref: input.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: input.remote_refs,
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        })
+    }
+
+    async fn send_two_node_request(live: &mut TwoNodeLive, refs: &TwoNodeRefs) -> SentRequest {
+        let send = send_retention_remote_gc_clearance_live_request(RetentionRemoteGcClearanceLiveRequestSendInput {
+            root: &live.roots.requester_store,
+            requester_node_root: Some(&live.roots.requester_node),
+            peer_ticket_value: &live.peer_live.ticket.value,
+            requester_node_id: "requester-node",
+            peer_node_id: "peer-node",
+            topic: live.topic,
+            sequence: 1,
+            max_attempts: crate::node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
+            join_timeout_ms: 10_000,
+            requester_ref: &refs.requester_ref,
+            peer_ref: &refs.peer_ref,
+            object_ref: &refs.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_ref: &refs.remote_ref,
+            policy_ref: &refs.policy,
+            authority_ref: &refs.authority,
+            retention_evidence_refs: std::slice::from_ref(&refs.support),
+            peer_bootstrap_refs: &live.request_evidence.peer_bootstrap_refs,
+            authority_refs: &live.request_evidence.authority_refs,
+            policy_refs: &live.control_policy_refs,
+            resource_refs: &live.control_resource_refs,
+            transport_evidence_refs: &[],
+        })
+        .await
+        .expect("two-node request send");
+        let receipt = crate::node_daemon::parse_node_control_live_send_receipt(&send.send.send_receipt_value)
+            .expect("request send receipt");
+        assert_eq!(receipt.decision, "pass");
+        assert!(send.send.transport_receipt_ref.is_some());
+        let receive =
+            receive_one_live_ingress(&live.roots.peer_node, live.topic, "peer-node", &mut live.peer_live.topic).await;
+        assert!(receive.has_enqueued);
+        assert_eq!(receive.envelope_ref, send.send.envelope_ref);
+        SentRequest { send, receive }
+    }
+
+    async fn send_two_node_response(live: &mut TwoNodeLive, request: &SentRequest) -> SentResponse {
+        let peer_response_evidence = vec![fake_ref("two-node-peer-reference-index")];
+        let send = send_retention_remote_gc_clearance_live_response(RetentionRemoteGcClearanceLiveResponseSendInput {
+            root: &live.roots.peer_store,
+            peer_node_root: Some(&live.roots.peer_node),
+            requester_ticket_value: &live.requester_live.ticket.value,
+            request_value: &request.send.request.value,
+            peer_node_id: "peer-node",
+            requester_node_id: "requester-node",
+            topic: live.topic,
+            sequence: 1,
+            max_attempts: crate::node_daemon::DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
+            join_timeout_ms: 10_000,
+            response_evidence_refs: &peer_response_evidence,
+            retained_refs: &[],
+            is_current: true,
+            revoked_refs: &[],
+            response_diagnostics: &[],
+            peer_bootstrap_refs: &live.response_evidence.peer_bootstrap_refs,
+            authority_refs: &live.response_evidence.authority_refs,
+            policy_refs: &live.control_policy_refs,
+            resource_refs: &live.control_resource_refs,
+            transport_evidence_refs: &[],
+        })
+        .await
+        .expect("two-node response send");
+        let receipt = crate::node_daemon::parse_node_control_live_send_receipt(&send.send.send_receipt_value)
+            .expect("response send receipt");
+        assert_eq!(receipt.decision, "pass");
+        assert!(send.send.transport_receipt_ref.is_some());
+        let receive = receive_one_live_ingress(
+            &live.roots.requester_node,
+            live.topic,
+            "requester-node",
+            &mut live.requester_live.topic,
+        )
+        .await;
+        assert!(receive.has_enqueued);
+        assert_eq!(receive.envelope_ref, send.send.envelope_ref);
+        SentResponse { send, receive }
+    }
+
+    fn import_two_node_workflow(
+        root: &Path,
+        refs: &TwoNodeRefs,
+        request: &SentRequest,
+        response: &SentResponse,
+    ) -> RetentionRemoteGcClearanceLiveImportWorkflow {
+        import_retention_remote_gc_clearance_live_workflow(RetentionRemoteGcClearanceLiveImportWorkflowInput {
+            root,
+            request_value: &request.send.request.value,
+            response_value: &response.send.response.value,
+            request_control_value: &request.send.control_value,
+            request_send_receipt_value: &request.send.send.send_receipt_value,
+            request_receive_receipt_value: &request.receive.transport_receipt_value,
+            request_ingress_ref: &request.receive.ingress_receipt_ref,
+            response_control_value: &response.send.control_value,
+            response_send_receipt_value: &response.send.send.send_receipt_value,
+            response_receive_receipt_value: &response.receive.transport_receipt_value,
+            response_ingress_ref: &response.receive.ingress_receipt_ref,
+            expected_peer_ref: Some(&refs.peer_ref),
+            expected_remote_ref: Some(&refs.remote_ref),
+        })
+        .expect("two-node import workflow")
+    }
+
+    fn assert_two_node_import(
+        imported: &RetentionRemoteGcClearanceLiveImportWorkflow,
+        request: &SentRequest,
+        response: &SentResponse,
+    ) {
+        assert_eq!(imported.import.decision, "pass");
+        assert_eq!(imported.workflow.decision, "pass");
+        assert!(imported.workflow.diagnostics.is_empty());
+        assert_eq!(
+            imported.workflow.request_live_refs[1],
+            request.send.send.transport_receipt_ref.clone().expect("request publish receipt")
+        );
+        assert_eq!(imported.workflow.request_live_refs[2], request.receive.transport_receipt_ref);
+        assert_eq!(
+            imported.workflow.response_live_refs[1],
+            response.send.send.transport_receipt_ref.clone().expect("response publish receipt")
+        );
+        assert_eq!(imported.workflow.response_live_refs[2], response.receive.transport_receipt_ref);
+    }
+
+    fn assert_two_node_admission(
+        root: &Path,
+        refs: TwoNodeRefs,
+        imported: RetentionRemoteGcClearanceLiveImportWorkflow,
+    ) {
+        let clearance_ref = imported.import.clearance_ref.expect("clearance stored");
+        let TwoNodeRefs {
+            requester_ref,
+            peer_ref,
+            object_ref,
+            remote_ref,
+            policy,
+            authority,
+            support,
+            index,
+            remote_gc,
+        } = refs;
+        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root,
+            evidence: &DestructiveRetentionEvidence {
+                requester_ref: Some(requester_ref),
+                policy_refs: vec![policy],
+                authority_refs: vec![authority],
+                evidence_refs: vec![support],
+                retained_refs: Vec::new(),
+                remote_peer_refs: vec![peer_ref],
+                remote_refs: vec![remote_ref],
+                reference_index_refs: vec![index],
+                remote_gc_refs: vec![remote_gc],
+                remote_clearance_refs: vec![clearance_ref],
+                is_reference_index_complete: true,
+            },
+            object_ref: &object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("two-node destructive admission");
+        assert_eq!(admission.decision, "pass");
     }
 
     async fn start_bound_live_node(state_root: &Path, topic: &str) -> LiveNodeHarness {

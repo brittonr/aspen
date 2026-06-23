@@ -217,6 +217,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet retention two-node live test split: extracting `src/retention/mod.rs::remote_clearance_live_multihost_two_node_happy_path_uses_real_receive_evidence` into same-file `TwoNode*` setup, send/receive, import, and admission helpers lowered the no-disabled probe from 7166 to 7165 by clearing one test `function_length` finding. Validation passed `cargo fmt`, focused `cargo test remote_clearance_live_multihost_two_node_happy_path_uses_real_receive_evidence -- --nocapture`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-retention-two-node-split-0`.
+
 - 2026-06-23 Octet chunk Iroh fetch split: extracting `src/chunk/store.rs::fetch_iroh_blobs` into neutral same-file claim/ticket/manifest/plan/copy/finish helpers lowered the no-disabled probe from 7168 to 7166 by clearing the remaining chunk-store function-length finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test chunk_store`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-iroh-fetch-split-0`.
 
 - 2026-06-23 Octet chunk lineage split: extracting `src/chunk/store.rs::build_chunk_lineage` into neutral same-file `LinkSeries`/`PassEvidence` plus short predicate/verify helpers lowered the no-disabled probe from 7172 to 7170 by clearing two `function_length` findings while validation passed `cargo fmt`, focused `cargo test chunk_lineage_chains_bind_manifest_publication_fetch_and_scope`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-chunk-lineage-series-v2-0`.
