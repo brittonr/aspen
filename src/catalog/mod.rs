@@ -308,127 +308,27 @@ pub fn receipts(
 
 pub fn chunk_store(chunk_root: &Path, input: &CatalogChunkStoreInput) -> Result<CatalogQueryResult> {
     validate_visibility(&input.visibility)?;
-    let hidden = hidden_set(&input.visibility);
-    let manifest_refs = crate::chunk_store::list_manifest_refs(chunk_root)?;
-    let available_chunk_refs = crate::chunk_store::list_chunk_refs(chunk_root)?.into_iter().collect::<BTreeSet<_>>();
-    let mut visible_manifest_refs = Vec::new();
-    let mut manifest_items = Vec::new();
-    let mut total_chunk_refs = 0usize;
-    let mut visible_unique_chunks = BTreeSet::new();
-    let mut visible_available_chunks = BTreeSet::new();
-    let mut visible_missing_chunks = BTreeSet::new();
-    let mut visible_manifest_pins = 0usize;
-    let mut visible_chunk_pins = BTreeSet::new();
-    for manifest_ref in manifest_refs {
-        if hidden.contains(&manifest_ref) {
-            continue;
-        }
-        let manifest = crate::chunk_store::read_manifest(chunk_root, &manifest_ref)?;
-        if hidden.contains(&manifest.root_ref) {
-            continue;
-        }
-        push_bounded(
-            &mut visible_manifest_refs,
-            manifest_ref.clone(),
-            MAX_CATALOG_REFS,
-            "chunk catalog manifest refs",
-        )?;
-        let is_manifest_pinned = crate::chunk_store::manifest_is_pinned(chunk_root, &manifest_ref)?;
-        if is_manifest_pinned {
-            visible_manifest_pins =
-                checked_count_sum(visible_manifest_pins, 1, MAX_CATALOG_REFS, "chunk catalog pins")?;
-        }
-        let mut visible_chunks = Vec::new();
-        let mut hidden_chunk_count = 0usize;
-        let mut manifest_available = 0usize;
-        let mut manifest_missing = 0usize;
-        let mut manifest_chunk_pins = 0usize;
-        for chunk in &manifest.chunks {
-            total_chunk_refs = checked_count_sum(total_chunk_refs, 1, MAX_CATALOG_REFS, "chunk catalog chunk refs")?;
-            if hidden.contains(&chunk.chunk_ref) {
-                hidden_chunk_count =
-                    checked_count_sum(hidden_chunk_count, 1, MAX_CATALOG_REFS, "chunk catalog hidden chunks")?;
-                continue;
-            }
-            insert_bounded(
-                &mut visible_unique_chunks,
-                chunk.chunk_ref.clone(),
-                MAX_CATALOG_REFS,
-                "chunk catalog unique chunks",
-            )?;
-            push_bounded(
-                &mut visible_chunks,
-                chunk.chunk_ref.clone(),
-                MAX_CATALOG_REFS,
-                "chunk catalog visible chunks",
-            )?;
-            if available_chunk_refs.contains(&chunk.chunk_ref) {
-                manifest_available =
-                    checked_count_sum(manifest_available, 1, MAX_CATALOG_REFS, "chunk catalog available")?;
-                insert_bounded(
-                    &mut visible_available_chunks,
-                    chunk.chunk_ref.clone(),
-                    MAX_CATALOG_REFS,
-                    "chunk catalog available chunks",
-                )?;
-            } else {
-                manifest_missing = checked_count_sum(manifest_missing, 1, MAX_CATALOG_REFS, "chunk catalog missing")?;
-                insert_bounded(
-                    &mut visible_missing_chunks,
-                    chunk.chunk_ref.clone(),
-                    MAX_CATALOG_REFS,
-                    "chunk catalog missing chunks",
-                )?;
-            }
-            if crate::chunk_store::chunk_is_pinned(chunk_root, &chunk.chunk_ref)? {
-                manifest_chunk_pins =
-                    checked_count_sum(manifest_chunk_pins, 1, MAX_CATALOG_REFS, "chunk catalog chunk pins")?;
-                insert_bounded(
-                    &mut visible_chunk_pins,
-                    chunk.chunk_ref.clone(),
-                    MAX_CATALOG_REFS,
-                    "chunk catalog pinned chunks",
-                )?;
-            }
-        }
-        push_bounded(
-            &mut manifest_items,
-            chunk_manifest_catalog_value(&ChunkManifestCatalogInput {
-                manifest: &manifest,
-                is_manifest_pinned,
-                available_chunks: manifest_available,
-                missing_chunks: manifest_missing,
-                chunk_pins: manifest_chunk_pins,
-                hidden_chunk_count,
-                visible_chunks: &visible_chunks,
-            })?,
-            MAX_CATALOG_ITEMS,
-            "chunk catalog items",
-        )?;
-    }
-    let dedup_hits = total_chunk_refs.saturating_sub(visible_unique_chunks.len());
+    let scan = StoreScan::new(chunk_root, hidden_set(&input.visibility))?.scan()?;
+    let dedup_hits = scan.dedup_hits();
     let mut items = Vec::new();
     push_bounded(
         &mut items,
         chunk_store_catalog_status_value(&ChunkStoreCatalogStatusInput {
-            manifest_refs: &visible_manifest_refs,
-            total_chunk_refs,
-            unique_chunks: visible_unique_chunks.len(),
-            available_chunks: visible_available_chunks.len(),
-            missing_chunks: visible_missing_chunks.len(),
-            manifest_pins: visible_manifest_pins,
-            chunk_pins: visible_chunk_pins.len(),
+            manifest_refs: &scan.visible_manifest_refs,
+            total_chunk_refs: scan.total_chunk_refs,
+            unique_chunks: scan.visible_unique_chunks.len(),
+            available_chunks: scan.visible_available_chunks.len(),
+            missing_chunks: scan.visible_missing_chunks.len(),
+            manifest_pins: scan.visible_manifest_pins,
+            chunk_pins: scan.visible_chunk_pins.len(),
             dedup_hits,
         })?,
         MAX_CATALOG_ITEMS,
         "chunk catalog items",
     )?;
-    for item in manifest_items {
-        push_bounded(&mut items, item, MAX_CATALOG_ITEMS, "chunk catalog items")?;
-    }
     let query_value = catalog_query_value(&CatalogQueryValueInput {
         operation: "chunk-store",
-        root_refs: &visible_manifest_refs,
+        root_refs: &scan.visible_manifest_refs,
         include_dependencies: false,
         include_dependents: false,
         filters: &[CatalogFilter::Text("chunk-store:".to_string())],
@@ -436,7 +336,160 @@ pub fn chunk_store(chunk_root: &Path, input: &CatalogChunkStoreInput) -> Result<
         render_mode: "chunk-store-status",
         include_payload: false,
     })?;
+    for item in scan.manifest_items {
+        push_bounded(&mut items, item, MAX_CATALOG_ITEMS, "chunk catalog items")?;
+    }
     finish_query("chunk-store", query_value, items, Vec::new())
+}
+
+struct StoreScan<'a> {
+    chunk_root: &'a Path,
+    hidden: BTreeSet<String>,
+    available_chunk_refs: BTreeSet<String>,
+    visible_manifest_refs: Vec<String>,
+    manifest_items: Vec<IOValue>,
+    total_chunk_refs: usize,
+    visible_unique_chunks: BTreeSet<String>,
+    visible_available_chunks: BTreeSet<String>,
+    visible_missing_chunks: BTreeSet<String>,
+    visible_manifest_pins: usize,
+    visible_chunk_pins: BTreeSet<String>,
+}
+
+#[derive(Default)]
+struct ManifestScan {
+    visible_chunks: Vec<String>,
+    hidden_chunk_count: usize,
+    available: usize,
+    missing: usize,
+    chunk_pins: usize,
+}
+
+impl<'a> StoreScan<'a> {
+    fn new(chunk_root: &'a Path, hidden: BTreeSet<String>) -> Result<Self> {
+        Ok(Self {
+            chunk_root,
+            hidden,
+            available_chunk_refs: crate::chunk_store::list_chunk_refs(chunk_root)?.into_iter().collect(),
+            visible_manifest_refs: Vec::new(),
+            manifest_items: Vec::new(),
+            total_chunk_refs: 0,
+            visible_unique_chunks: BTreeSet::new(),
+            visible_available_chunks: BTreeSet::new(),
+            visible_missing_chunks: BTreeSet::new(),
+            visible_manifest_pins: 0,
+            visible_chunk_pins: BTreeSet::new(),
+        })
+    }
+
+    fn scan(mut self) -> Result<Self> {
+        for manifest_ref in crate::chunk_store::list_manifest_refs(self.chunk_root)? {
+            self.add_manifest(manifest_ref)?;
+        }
+        Ok(self)
+    }
+
+    fn add_manifest(&mut self, manifest_ref: String) -> Result<()> {
+        if self.hidden.contains(&manifest_ref) {
+            return Ok(());
+        }
+        let manifest = crate::chunk_store::read_manifest(self.chunk_root, &manifest_ref)?;
+        if self.hidden.contains(&manifest.root_ref) {
+            return Ok(());
+        }
+        push_bounded(
+            &mut self.visible_manifest_refs,
+            manifest_ref.clone(),
+            MAX_CATALOG_REFS,
+            "chunk catalog manifest refs",
+        )?;
+        let is_manifest_pinned = crate::chunk_store::manifest_is_pinned(self.chunk_root, &manifest_ref)?;
+        if is_manifest_pinned {
+            self.visible_manifest_pins =
+                checked_count_sum(self.visible_manifest_pins, 1, MAX_CATALOG_REFS, "chunk catalog pins")?;
+        }
+        let stats = self.add_chunks(&manifest.chunks)?;
+        push_bounded(
+            &mut self.manifest_items,
+            chunk_manifest_catalog_value(&ChunkManifestCatalogInput {
+                manifest: &manifest,
+                is_manifest_pinned,
+                available_chunks: stats.available,
+                missing_chunks: stats.missing,
+                chunk_pins: stats.chunk_pins,
+                hidden_chunk_count: stats.hidden_chunk_count,
+                visible_chunks: &stats.visible_chunks,
+            })?,
+            MAX_CATALOG_ITEMS,
+            "chunk catalog items",
+        )
+    }
+
+    fn add_chunks(&mut self, chunks: &[crate::chunk_store::ChunkRef]) -> Result<ManifestScan> {
+        let mut stats = ManifestScan::default();
+        for chunk in chunks {
+            self.total_chunk_refs =
+                checked_count_sum(self.total_chunk_refs, 1, MAX_CATALOG_REFS, "chunk catalog chunk refs")?;
+            if self.hidden.contains(&chunk.chunk_ref) {
+                stats.hidden_chunk_count =
+                    checked_count_sum(stats.hidden_chunk_count, 1, MAX_CATALOG_REFS, "chunk catalog hidden chunks")?;
+                continue;
+            }
+            insert_bounded(
+                &mut self.visible_unique_chunks,
+                chunk.chunk_ref.clone(),
+                MAX_CATALOG_REFS,
+                "chunk catalog unique chunks",
+            )?;
+            push_bounded(
+                &mut stats.visible_chunks,
+                chunk.chunk_ref.clone(),
+                MAX_CATALOG_REFS,
+                "chunk catalog visible chunks",
+            )?;
+            self.add_available(chunk, &mut stats)?;
+            self.add_pin(chunk, &mut stats)?;
+        }
+        Ok(stats)
+    }
+
+    fn add_available(&mut self, chunk: &crate::chunk_store::ChunkRef, stats: &mut ManifestScan) -> Result<()> {
+        if self.available_chunk_refs.contains(&chunk.chunk_ref) {
+            stats.available = checked_count_sum(stats.available, 1, MAX_CATALOG_REFS, "chunk catalog available")?;
+            insert_bounded(
+                &mut self.visible_available_chunks,
+                chunk.chunk_ref.clone(),
+                MAX_CATALOG_REFS,
+                "chunk catalog available chunks",
+            )?;
+        } else {
+            stats.missing = checked_count_sum(stats.missing, 1, MAX_CATALOG_REFS, "chunk catalog missing")?;
+            insert_bounded(
+                &mut self.visible_missing_chunks,
+                chunk.chunk_ref.clone(),
+                MAX_CATALOG_REFS,
+                "chunk catalog missing chunks",
+            )?;
+        }
+        Ok(())
+    }
+
+    fn add_pin(&mut self, chunk: &crate::chunk_store::ChunkRef, stats: &mut ManifestScan) -> Result<()> {
+        if crate::chunk_store::chunk_is_pinned(self.chunk_root, &chunk.chunk_ref)? {
+            stats.chunk_pins = checked_count_sum(stats.chunk_pins, 1, MAX_CATALOG_REFS, "chunk catalog chunk pins")?;
+            insert_bounded(
+                &mut self.visible_chunk_pins,
+                chunk.chunk_ref.clone(),
+                MAX_CATALOG_REFS,
+                "chunk catalog pinned chunks",
+            )?;
+        }
+        Ok(())
+    }
+
+    fn dedup_hits(&self) -> usize {
+        self.total_chunk_refs.saturating_sub(self.visible_unique_chunks.len())
+    }
 }
 
 pub fn resolve_short_id(
