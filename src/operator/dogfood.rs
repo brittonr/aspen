@@ -1033,40 +1033,67 @@ pub fn parse_release_evidence_bundle(value: &IOValue) -> Result<ReleaseEvidenceB
     })
 }
 
-pub fn verify_release_evidence_bundle(
-    input: &ReleaseEvidenceBundleVerifyInput<'_>,
-) -> Result<ReleaseEvidenceBundleVerifyReceipt> {
-    let bundle = parse_release_evidence_bundle(input.bundle_value)?;
-    let observed_result = observe_release_bundle_output(input.output_path);
-    let mut diagnostics = Vec::new();
-    let output_path_string = input.output_path.display().to_string();
+struct BundleObservation {
+    observed: ObservedReleaseBundleOutput,
+    is_output_observed: bool,
+}
+
+fn fallback_output(
+    output_path: String,
+    output_path_ref: String,
+    bundle: &ReleaseEvidenceBundle,
+) -> ObservedReleaseBundleOutput {
+    ObservedReleaseBundleOutput {
+        output_path,
+        output_path_ref,
+        report_ref: bundle.report_ref.clone(),
+        release_gate_ref: bundle.release_gate_ref.clone(),
+        replay_verify_ref: bundle.replay_verify_ref.clone(),
+        replay_index_ref: bundle.replay_index_ref.clone(),
+        nix_evidence_ref: bundle.nix_evidence_ref.clone(),
+        nix_verify_ref: bundle.nix_verify_ref.clone(),
+        summary_ref: bundle.summary_ref.clone(),
+        nextest_marker_ref: bundle.nextest_marker_ref.clone(),
+        nextest_check_path: bundle.nextest_check_path.clone(),
+        member_refs: bundle.member_refs.clone(),
+    }
+}
+
+fn observed_or_fallback(
+    output_path: &Path,
+    bundle: &ReleaseEvidenceBundle,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<BundleObservation> {
+    let output_path_string = output_path.display().to_string();
     let fallback_output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
-    let mut is_output_observed = true;
-    let observed = match observed_result {
-        Ok(observed) => observed,
+    match observe_release_bundle_output(output_path) {
+        Ok(observed) => Ok(BundleObservation {
+            observed,
+            is_output_observed: true,
+        }),
         Err(error) => {
-            is_output_observed = false;
             diagnostics.push_limited_value(
                 format!("release evidence bundle output observation failed: {error}"),
                 MAX_OPERATOR_DIAGNOSTICS,
                 "release evidence bundle verify diagnostics",
             )?;
-            ObservedReleaseBundleOutput {
-                output_path: output_path_string,
-                output_path_ref: fallback_output_path_ref,
-                report_ref: bundle.report_ref.clone(),
-                release_gate_ref: bundle.release_gate_ref.clone(),
-                replay_verify_ref: bundle.replay_verify_ref.clone(),
-                replay_index_ref: bundle.replay_index_ref.clone(),
-                nix_evidence_ref: bundle.nix_evidence_ref.clone(),
-                nix_verify_ref: bundle.nix_verify_ref.clone(),
-                summary_ref: bundle.summary_ref.clone(),
-                nextest_marker_ref: bundle.nextest_marker_ref.clone(),
-                nextest_check_path: bundle.nextest_check_path.clone(),
-                member_refs: bundle.member_refs.clone(),
-            }
+            Ok(BundleObservation {
+                observed: fallback_output(output_path_string, fallback_output_path_ref, bundle),
+                is_output_observed: false,
+            })
         }
-    };
+    }
+}
+
+pub fn verify_release_evidence_bundle(
+    input: &ReleaseEvidenceBundleVerifyInput<'_>,
+) -> Result<ReleaseEvidenceBundleVerifyReceipt> {
+    let bundle = parse_release_evidence_bundle(input.bundle_value)?;
+    let mut diagnostics = Vec::new();
+    let BundleObservation {
+        observed,
+        is_output_observed,
+    } = observed_or_fallback(input.output_path, &bundle, &mut diagnostics)?;
     for diagnostic in release_bundle_mismatch_diagnostics(&bundle, &observed)? {
         diagnostics.push_limited_value(
             diagnostic,

@@ -219,6 +219,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet operator release bundle split: extracting `src/operator/dogfood.rs::verify_release_evidence_bundle` output fallback observation into neutral same-file `BundleObservation`/`observed_or_fallback` helpers lowered the no-disabled probe from 7128 to 7126 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test nix_dogfood_release_evidence_verifies_and_denies_stale_refs`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-release-bundle-observation-0`.
+
 - 2026-06-23 Octet baseline check split: extracting `src/octet/gate.rs::check_octet_warning_baseline` check/diagnostic emission into neutral same-file `BaselineFacts`/`DiagnosticInput` helpers lowered the no-disabled probe from 7133 to 7131 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test baseline_check`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-octet-baseline-facts-0`.
 
 - 2026-06-23 Octet evidence verify segment split: extracting `src/evidence/chain.rs::verify_chain_segment_with_policy` traversal, anchor diagnostics, and receipt finishing into neutral same-file `LinkWalkInput`/`WalkState`/`FinishInput` helpers lowered the no-disabled probe from 7135 to 7133; a traversal-only split stayed flat because the function was still over threshold. Validation passed `cargo fmt`, focused `cargo test evidence_chain`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-evidence-walk-v2-0`.
