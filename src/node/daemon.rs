@@ -9072,113 +9072,120 @@ mod tests {
 
     #[test]
     fn control_inbox_dispatch_imports_receipts_and_denies_missing_operation_payloads() {
-        let root = temp_dir("node-control-socket");
+        let root = initialized_control_root("node-control-socket", "node:control");
+        let status = assert_status_dispatch(&root);
+        assert_missing_payload_denied(&root, &status);
+        assert_missing_authority_denied(&root, &status);
+        assert_shutdown_dispatch(&root);
+        assert_dispatch_requires_lock(&root);
+    }
+
+    fn initialized_control_root(label: &str, node_id: &str) -> PathBuf {
+        let root = temp_dir(label);
         init_local_node(&NodeDaemonInitInput {
             state_root: &root,
-            node_id: "node:control",
+            node_id,
         })
         .expect("init node");
         run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-        let status_request = status_request().expect("status request");
+        root
+    }
+
+    fn submit_and_dispatch(root: &Path, request_value: &IOValue) -> NodeControlDispatch {
         let submitted = submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
-            request_value: &status_request.value,
+            state_root: root,
+            request_value,
         })
-        .expect("submit status");
+        .expect("submit request");
         assert!(submitted.inbox_path.exists());
-        let dispatched = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
+        dispatch_control_request(&NodeControlDispatchInput {
+            state_root: root,
             request_path: Some(&submitted.inbox_path),
         })
-        .expect("dispatch status");
+        .expect("dispatch request")
+    }
+
+    fn assert_status_dispatch(root: &Path) -> node_runtime::NodeControlRequest {
+        let request = status_request().expect("status request");
+        let dispatched = submit_and_dispatch(root, &request.value);
         assert_eq!(dispatched.operation, "status");
         let receipt =
             node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value).expect("control receipt");
         assert_eq!(receipt.decision, "pass");
-        assert_eq!(receipt.request_ref, status_request.request_ref);
+        assert_eq!(receipt.request_ref, request.request_ref);
+        assert_ledger_contains(root, &[
+            "node-control-request",
+            "node-control-queue-receipt",
+            "node-health-receipt",
+            "node-control-receipt",
+        ]);
+        request
+    }
+
+    fn assert_ledger_contains(root: &Path, expected: &[&str]) {
         let kinds = ledger::list_artifacts(&root.join("ledger"))
             .expect("list ledger")
             .into_iter()
             .map(|entry| entry.artifact_kind)
             .collect::<Vec<_>>();
-        assert!(kinds.iter().any(|kind| kind == "node-control-request"));
-        assert!(kinds.iter().any(|kind| kind == "node-control-queue-receipt"));
-        assert!(kinds.iter().any(|kind| kind == "node-health-receipt"));
-        assert!(kinds.iter().any(|kind| kind == "node-control-receipt"));
+        for expected_kind in expected {
+            assert!(kinds.iter().any(|kind| kind.as_str() == *expected_kind), "missing ledger kind {expected_kind}");
+        }
+    }
 
+    fn assert_missing_payload_denied(root: &Path, status: &node_runtime::NodeControlRequest) {
         let target_ref = local_ref("install-target", "fixture").expect("target ref");
         let install_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: Some(&target_ref),
             payload_ref: None,
-            authority_refs: &status_request.authority_refs,
-            policy_refs: &status_request.policy_refs,
-            resource_refs: &status_request.resource_refs,
+            authority_refs: &status.authority_refs,
+            policy_refs: &status.policy_refs,
+            resource_refs: &status.resource_refs,
             evidence_refs: &[],
         })
         .expect("install request");
-        let install_submitted = submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
-            request_value: &install_value,
-        })
-        .expect("submit install");
-        let install_dispatch = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
-            request_path: Some(&install_submitted.inbox_path),
-        })
-        .expect("dispatch install");
-        let install_receipt =
-            node_runtime::parse_node_control_receipt(&install_dispatch.control_receipt_value).expect("install receipt");
-        assert_eq!(install_receipt.decision, "deny");
-        assert!(install_receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("requires payload ref")));
+        let dispatch = submit_and_dispatch(root, &install_value);
+        let receipt =
+            node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("install receipt");
+        assert_eq!(receipt.decision, "deny");
+        assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("requires payload ref")));
+    }
 
+    fn assert_missing_authority_denied(root: &Path, status: &node_runtime::NodeControlRequest) {
         let missing_authority = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "status",
             target_ref: None,
             payload_ref: None,
             authority_refs: &[],
-            policy_refs: &status_request.policy_refs,
-            resource_refs: &status_request.resource_refs,
+            policy_refs: &status.policy_refs,
+            resource_refs: &status.resource_refs,
             evidence_refs: &[],
         })
         .expect("missing authority request");
-        let missing_submitted = submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
-            request_value: &missing_authority,
-        })
-        .expect("submit missing authority");
-        let missing_dispatch = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
-            request_path: Some(&missing_submitted.inbox_path),
-        })
-        .expect("dispatch missing authority");
-        let missing_receipt =
-            node_runtime::parse_node_control_receipt(&missing_dispatch.control_receipt_value).expect("missing receipt");
-        assert_eq!(missing_receipt.decision, "deny");
-        assert!(missing_receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("authority refs missing")));
+        let dispatch = submit_and_dispatch(root, &missing_authority);
+        let receipt =
+            node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("missing receipt");
+        assert_eq!(receipt.decision, "deny");
+        assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("authority refs missing")));
+    }
 
-        let shutdown_request = shutdown_request().expect("shutdown request");
-        let shutdown_submitted = submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
-            request_value: &shutdown_request.value,
-        })
-        .expect("submit shutdown");
-        let shutdown_dispatch = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
-            request_path: Some(&shutdown_submitted.inbox_path),
-        })
-        .expect("dispatch shutdown");
-        let shutdown_receipt = node_runtime::parse_node_control_receipt(&shutdown_dispatch.control_receipt_value)
-            .expect("shutdown receipt");
-        assert_eq!(shutdown_receipt.decision, "pass");
+    fn assert_shutdown_dispatch(root: &Path) {
+        let request = shutdown_request().expect("shutdown request");
+        let dispatch = submit_and_dispatch(root, &request.value);
+        let receipt =
+            node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("shutdown receipt");
+        assert_eq!(receipt.decision, "pass");
         assert!(!root.join(CONTROL_LOCK_FILE).exists());
+    }
 
-        let after_stop = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
+    fn assert_dispatch_requires_lock(root: &Path) {
+        let error = dispatch_control_request(&NodeControlDispatchInput {
+            state_root: root,
             request_path: None,
         })
         .expect_err("dispatch requires lock");
-        assert!(after_stop.to_string().contains("active node lock"));
+        assert!(error.to_string().contains("active node lock"));
     }
 
     #[test]
