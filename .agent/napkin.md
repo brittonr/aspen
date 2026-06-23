@@ -220,6 +220,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet retention live-import diagnostics split: extracting `src/retention/mod.rs::import_retention_remote_gc_clearance_live_workflow` request/response diagnostic assembly into neutral same-file `live_import_*` helpers lowered the no-disabled probe from 7102 to 7100 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-live-import-notes-0`.
+
 - 2026-06-23 Octet retention bundle scope diagnostics table: replacing the repetitive `src/retention/mod.rs::push_retention_bundle_scope_diagnostics` mismatch push chain with a neutral `MismatchNote` table/helper lowered the no-disabled probe from 7108 to 7105 by clearing three `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test candidate_bundle`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-retention-scope-notes-0`.
 
 - 2026-06-23 Octet operator Nix evidence test split: extracting `src/operator/dogfood.rs::nix_dogfood_release_evidence_verifies_and_denies_stale_refs` into neutral same-file `NixCase` plus output/signing/promotion/stale assertion helpers lowered the no-disabled probe from 7109 to 7108 by clearing one test `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test nix_dogfood_release_evidence_verifies_and_denies_stale_refs`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-nix-evidence-test-0`.

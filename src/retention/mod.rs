@@ -1930,65 +1930,18 @@ pub fn import_retention_remote_gc_clearance_live_workflow(
     let response_send = node_daemon::parse_node_control_live_send_receipt(input.response_send_receipt_value)?;
     let request_receive = parse_node_live_transport_receipt(input.request_receive_receipt_value)?;
     let response_receive = parse_node_live_transport_receipt(input.response_receive_receipt_value)?;
-    let mut diagnostics = Vec::new();
-    extend_bounded(
-        &mut diagnostics,
-        node_live_control_diagnostics("request-control", &request_control, &request.request_ref, None),
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    extend_bounded(
-        &mut diagnostics,
-        node_live_send_diagnostics("request-send", &request_send),
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    extend_bounded(
-        &mut diagnostics,
-        node_live_transport_diagnostics_from("request-receive", &request_receive)?,
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    extend_bounded(
-        &mut diagnostics,
-        node_live_receive_binding_diagnostics(
-            "request-receive",
-            &request_send,
-            &request_receive,
-            input.request_ingress_ref,
-        ),
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    extend_bounded(
-        &mut diagnostics,
-        node_live_control_diagnostics("response-control", &response_control, &response_ref, Some(&request.request_ref)),
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    extend_bounded(
-        &mut diagnostics,
-        node_live_send_diagnostics("response-send", &response_send),
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    extend_bounded(
-        &mut diagnostics,
-        node_live_transport_diagnostics_from("response-receive", &response_receive)?,
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    extend_bounded(
-        &mut diagnostics,
-        node_live_receive_binding_diagnostics(
-            "response-receive",
-            &response_send,
-            &response_receive,
-            input.response_ingress_ref,
-        ),
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
+    let diagnostics = live_import_diagnostics(LiveImportDiagnosticsInput {
+        request: &request,
+        response_ref: &response_ref,
+        request_control: &request_control,
+        response_control: &response_control,
+        request_send: &request_send,
+        response_send: &response_send,
+        request_receive: &request_receive,
+        response_receive: &response_receive,
+        request_ingress_ref: input.request_ingress_ref,
+        response_ingress_ref: input.response_ingress_ref,
+    })?;
     let request_publish_ref = live_send_publish_ref(&request_send);
     let response_publish_ref = live_send_publish_ref(&response_send);
     let request_receive_ref = request_receive.receipt_ref.clone();
@@ -2015,6 +1968,103 @@ pub fn import_retention_remote_gc_clearance_live_workflow(
         request_send_receipt_ref: request_send.receipt_ref,
         response_send_receipt_ref: response_send.receipt_ref,
     })
+}
+
+struct LiveImportDiagnosticsInput<'a> {
+    request: &'a RetentionRemoteGcClearanceRequest,
+    response_ref: &'a str,
+    request_control: &'a node_runtime::NodeControlRequest,
+    response_control: &'a node_runtime::NodeControlRequest,
+    request_send: &'a node_daemon::NodeControlLiveSendReceipt,
+    response_send: &'a node_daemon::NodeControlLiveSendReceipt,
+    request_receive: &'a NodeLiveTransportReceipt,
+    response_receive: &'a NodeLiveTransportReceipt,
+    request_ingress_ref: &'a str,
+    response_ingress_ref: &'a str,
+}
+
+fn live_import_diagnostics(input: LiveImportDiagnosticsInput<'_>) -> Result<Vec<String>> {
+    let mut diagnostics = live_import_request_diagnostics(&input)?;
+    extend_bounded(
+        &mut diagnostics,
+        live_import_response_diagnostics(&input)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    Ok(diagnostics)
+}
+
+fn live_import_request_diagnostics(input: &LiveImportDiagnosticsInput<'_>) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    extend_bounded(
+        &mut diagnostics,
+        node_live_control_diagnostics("request-control", input.request_control, &input.request.request_ref, None),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_send_diagnostics("request-send", input.request_send),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_transport_diagnostics_from("request-receive", input.request_receive)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_receive_binding_diagnostics(
+            "request-receive",
+            input.request_send,
+            input.request_receive,
+            input.request_ingress_ref,
+        ),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    Ok(diagnostics)
+}
+
+fn live_import_response_diagnostics(input: &LiveImportDiagnosticsInput<'_>) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    extend_bounded(
+        &mut diagnostics,
+        node_live_control_diagnostics(
+            "response-control",
+            input.response_control,
+            input.response_ref,
+            Some(&input.request.request_ref),
+        ),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_send_diagnostics("response-send", input.response_send),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_transport_diagnostics_from("response-receive", input.response_receive)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_receive_binding_diagnostics(
+            "response-receive",
+            input.response_send,
+            input.response_receive,
+            input.response_ingress_ref,
+        ),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    Ok(diagnostics)
 }
 
 pub fn retention_remote_gc_clearance_live_workflow_value(
