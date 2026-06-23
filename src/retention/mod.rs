@@ -7451,6 +7451,16 @@ fn parse_embedded_value(value: &Value<IOValue>, label: &str) -> Result<(String, 
     Ok((value_ref, embedded))
 }
 
+fn push_import_diagnostic<S>(diagnostics: &mut S, diagnostic: &str) -> Result<()>
+where S: VecSink<String> {
+    push_bounded(
+        diagnostics,
+        diagnostic.to_string(),
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention remote clearance import diagnostics",
+    )
+}
+
 fn push_remote_clearance_import_diagnostics<S>(
     diagnostics: &mut S,
     request: &RetentionRemoteGcClearanceRequest,
@@ -7461,97 +7471,42 @@ where
     S: VecSink<String>,
 {
     if response.request_ref != request.request_ref {
-        push_bounded(
-            diagnostics,
-            "remote-clearance-wrong-request".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, "remote-clearance-wrong-request")?;
     }
     if response.decision != "pass" {
-        push_bounded(
-            diagnostics,
-            "remote-clearance-response-not-pass".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, "remote-clearance-response-not-pass")?;
     }
     let clearance = &response.clearance;
     if clearance.decision != "pass" {
-        push_bounded(
-            diagnostics,
-            "remote-clearance-not-pass".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, "remote-clearance-not-pass")?;
     }
     if !clearance.is_current {
-        push_bounded(
-            diagnostics,
-            "remote-clearance-stale".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, "remote-clearance-stale")?;
     }
     if !clearance.revoked_refs.is_empty() {
-        push_bounded(
-            diagnostics,
-            "remote-clearance-revoked".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, "remote-clearance-revoked")?;
     }
     if !clearance.retained_refs.is_empty() {
-        push_bounded(
-            diagnostics,
-            "remote-clearance-retained".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, "remote-clearance-retained")?;
     }
     if clearance.peer_ref != request.peer_ref {
-        push_bounded(
-            diagnostics,
-            "remote-clearance-wrong-peer".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, "remote-clearance-wrong-peer")?;
     }
     if clearance.remote_ref != request.remote_ref {
-        push_bounded(
-            diagnostics,
-            "remote-clearance-wrong-remote".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, "remote-clearance-wrong-remote")?;
     }
     if let Some(expected_peer_ref) = input.expected_peer_ref
         && expected_peer_ref != request.peer_ref
     {
-        push_bounded(
-            diagnostics,
-            "remote-clearance-expected-peer-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, "remote-clearance-expected-peer-mismatch")?;
     }
     if let Some(expected_remote_ref) = input.expected_remote_ref
         && expected_remote_ref != request.remote_ref
     {
-        push_bounded(
-            diagnostics,
-            "remote-clearance-expected-remote-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, "remote-clearance-expected-remote-mismatch")?;
     }
     for diagnostic in &response.diagnostics {
-        push_bounded(
-            diagnostics,
-            diagnostic.clone(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance import diagnostics",
-        )?;
+        push_import_diagnostic(diagnostics, diagnostic)?;
     }
     Ok(())
 }
