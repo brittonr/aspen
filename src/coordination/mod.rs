@@ -1102,23 +1102,71 @@ fn finish_read(input: ReadFinishInput<'_>) -> CoordinationApplyResult {
     result
 }
 
-fn commit_prepared_mutation(
-    runtime: &mut CoordinationRuntime,
+type Proposal = raft_control_plane::ControlRegistryProposal;
+
+struct ChangeInput<'a> {
+    runtime: &'a mut CoordinationRuntime,
+    request: &'a CoordinationRequest,
+    snapshot: &'a CoordinationStateSnapshot,
+}
+
+struct PartsInput<'a> {
+    prepared: &'a PreparedMutation,
+    request: &'a CoordinationRequest,
+    manifest: &'a CoordinationServiceManifest,
+    snapshot: &'a CoordinationStateSnapshot,
+    proposal_ref: &'a str,
+}
+
+struct PassReceiptInput<'a> {
+    request: &'a CoordinationRequest,
+    proposal_ref: &'a str,
+    token_ref: Option<&'a str>,
+    state_ref: &'a str,
+    assertion_refs: &'a [String],
+    checks: &'a [(&'a str, &'a str)],
+}
+
+struct SuccessParts {
+    token: Option<FencingToken>,
+    receipt: CoordinationReceipt,
+    assertion: CoordinationStatusAssertion,
+}
+
+struct ValuesInput<'a> {
+    proposal: &'a Proposal,
+    request: &'a CoordinationRequest,
+    receipt: &'a CoordinationReceipt,
+    token: Option<&'a FencingToken>,
+    snapshot: &'a CoordinationStateSnapshot,
+    assertion: &'a CoordinationStatusAssertion,
+}
+
+struct SuccessInput<'a> {
+    runtime: &'a mut CoordinationRuntime,
     request: CoordinationRequest,
     prepared: PreparedMutation,
-) -> Result<CoordinationApplyResult> {
-    let after_snapshot = snapshot_from_state(&prepared.state)?;
+    snapshot: CoordinationStateSnapshot,
+    proposal: Proposal,
+}
+
+fn propose_change(input: ChangeInput<'_>) -> Result<Proposal> {
+    let ChangeInput {
+        runtime,
+        request,
+        snapshot,
+    } = input;
     let command =
         raft_control_plane::control_registry_command_value(&raft_control_plane::ControlRegistryCommandInput {
             operation: "set-coordination-state".to_string(),
             namespace: coordination_namespace(&request.service),
             name: request.key.clone(),
-            target_ref: Some(after_snapshot.state_ref.clone()),
+            target_ref: Some(snapshot.state_ref.clone()),
         })?;
     let evidence_refs = vec![
         request.request_ref.clone(),
         request.operation_id_ref.clone(),
-        after_snapshot.state_ref.clone(),
+        snapshot.state_ref.clone(),
     ];
     let envelope = raft_control_plane::raft_command_envelope_value(&raft_control_plane::RaftCommandEnvelopeInput {
         group_ref: runtime.raft.manifest.manifest_ref.clone(),
@@ -1130,31 +1178,39 @@ fn commit_prepared_mutation(
         resource_refs: request.resource_refs.clone(),
         evidence_refs,
     })?;
-    let proposal = raft_control_plane::propose_control_registry_command(&mut runtime.raft, &envelope)?;
-    if proposal.decision != "pass" {
-        let diagnostics = vec!["control-plane commit denied for coordination mutation".to_string()];
-        return deny_result(runtime, request, after_snapshot, diagnostics, &["control-plane-commit", "fail"]);
-    }
-    runtime.next_sequence = runtime
-        .next_sequence
-        .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("coordination raft sequence overflow"))?;
-    let token = materialize_token(prepared.token, &proposal.commit_receipt.receipt_ref)?;
-    let token_ref = token.as_ref().map(|item| item.token_ref.clone());
-    let fact = if let Some(token) = &token {
-        status_fact_for_token(&prepared.state, &runtime.manifest, &request.service, &request.key, token)?
+    raft_control_plane::propose_control_registry_command(&mut runtime.raft, &envelope)
+}
+
+fn fact_for(
+    prepared: &PreparedMutation,
+    manifest: &CoordinationServiceManifest,
+    request: &CoordinationRequest,
+    token: Option<&FencingToken>,
+) -> Result<IOValue> {
+    if let Some(token) = token {
+        status_fact_for_token(&prepared.state, manifest, &request.service, &request.key, token)
     } else {
-        prepared.status_fact.clone()
-    };
-    let placeholder_receipt_ref = fixture_ref("coordination-mutation-placeholder");
-    let assertion = parse_coordination_status_assertion(&coordination_status_assertion_value(StatusAssertionInput {
+        Ok(prepared.status_fact.clone())
+    }
+}
+
+fn status_assertion_for(
+    request: &CoordinationRequest,
+    fact: &IOValue,
+    state_ref: &str,
+    receipt_ref: &str,
+) -> Result<CoordinationStatusAssertion> {
+    let value = coordination_status_assertion_value(StatusAssertionInput {
         service: &request.service,
         key: &request.key,
-        fact: &fact,
-        state_ref: &after_snapshot.state_ref,
-        receipt_ref: &placeholder_receipt_ref,
-    })?)?;
-    let assertion_refs = vec![assertion.assertion_ref.clone()];
+        fact,
+        state_ref,
+        receipt_ref,
+    })?;
+    parse_coordination_status_assertion(&value)
+}
+
+fn pass_checks(prepared: &PreparedMutation) -> Vec<(&'static str, &'static str)> {
     let mut checks = vec![
         ("coordination-request-bound", "pass"),
         ("control-plane-command", "pass"),
@@ -1164,27 +1220,66 @@ fn commit_prepared_mutation(
         ("dataspace-reflection-after-commit", "pass"),
     ];
     checks.extend(prepared.checks.iter().copied());
-    let receipt_value = coordination_receipt_value(ReceiptValueInput {
+    checks
+}
+
+fn pass_receipt(input: PassReceiptInput<'_>) -> Result<CoordinationReceipt> {
+    let PassReceiptInput {
+        request,
+        proposal_ref,
+        token_ref,
+        state_ref,
+        assertion_refs,
+        checks,
+    } = input;
+    let value = coordination_receipt_value(ReceiptValueInput {
         decision: "pass",
         service: &request.service,
         operation: &request.operation,
         request_ref: &request.request_ref,
-        raft_receipt_ref: Some(&proposal.commit_receipt.receipt_ref),
-        token_ref: token_ref.as_deref(),
-        state_ref: &after_snapshot.state_ref,
-        dataspace_assertion_refs: &assertion_refs,
+        raft_receipt_ref: Some(proposal_ref),
+        token_ref,
+        state_ref,
+        dataspace_assertion_refs: assertion_refs,
         diagnostics: &[],
+        checks,
+    })?;
+    parse_coordination_receipt(&value)
+}
+
+fn success_parts(input: PartsInput<'_>) -> Result<SuccessParts> {
+    let token = materialize_token(input.prepared.token.clone(), input.proposal_ref)?;
+    let token_ref = token.as_ref().map(|item| item.token_ref.clone());
+    let fact = fact_for(input.prepared, input.manifest, input.request, token.as_ref())?;
+    let placeholder_receipt_ref = fixture_ref("coordination-mutation-placeholder");
+    let assertion = status_assertion_for(input.request, &fact, &input.snapshot.state_ref, &placeholder_receipt_ref)?;
+    let assertion_refs = vec![assertion.assertion_ref.clone()];
+    let checks = pass_checks(input.prepared);
+    let receipt = pass_receipt(PassReceiptInput {
+        request: input.request,
+        proposal_ref: input.proposal_ref,
+        token_ref: token_ref.as_deref(),
+        state_ref: &input.snapshot.state_ref,
+        assertion_refs: &assertion_refs,
         checks: &checks,
     })?;
-    let receipt = parse_coordination_receipt(&receipt_value)?;
-    let assertion = parse_coordination_status_assertion(&coordination_status_assertion_value(StatusAssertionInput {
-        service: &request.service,
-        key: &request.key,
-        fact: &fact,
-        state_ref: &after_snapshot.state_ref,
-        receipt_ref: &receipt.receipt_ref,
-    })?)?;
-    runtime.state = prepared.state;
+    let assertion = status_assertion_for(input.request, &fact, &input.snapshot.state_ref, &receipt.receipt_ref)?;
+    Ok(SuccessParts {
+        token,
+        receipt,
+        assertion,
+    })
+}
+
+fn success_values(input: ValuesInput<'_>) -> Vec<IOValue> {
+    let ValuesInput {
+        proposal,
+        request,
+        receipt,
+        token,
+        snapshot,
+        assertion,
+    } = input;
     let mut evidence_values = vec![
         proposal.envelope.value.clone(),
         proposal.commit_receipt.value.clone(),
@@ -1195,30 +1290,85 @@ fn commit_prepared_mutation(
     }
     evidence_values.extend(proposal.predicates.iter().map(|value| value.value.clone()));
     evidence_values.extend(evidence_values_for(EvidenceValuesInput {
-        request: &request,
-        receipt: &receipt,
-        token: token.as_ref(),
-        snapshot: &after_snapshot,
-        assertions: std::slice::from_ref(&assertion),
+        request,
+        receipt,
+        token,
+        snapshot,
+        assertions: std::slice::from_ref(assertion),
         read: None,
     }));
-    if let Some(token) = &token {
+    evidence_values
+}
+
+fn record_success(input: SuccessInput<'_>) -> Result<CoordinationApplyResult> {
+    let SuccessInput {
+        runtime,
+        request,
+        prepared,
+        snapshot,
+        proposal,
+    } = input;
+    runtime.next_sequence = runtime
+        .next_sequence
+        .checked_add(1)
+        .ok_or_else(|| MoltenError::invalid_harness("coordination raft sequence overflow"))?;
+    let parts = success_parts(PartsInput {
+        prepared: &prepared,
+        request: &request,
+        manifest: &runtime.manifest,
+        snapshot: &snapshot,
+        proposal_ref: &proposal.commit_receipt.receipt_ref,
+    })?;
+    runtime.state = prepared.state;
+    let evidence_values = success_values(ValuesInput {
+        proposal: &proposal,
+        request: &request,
+        receipt: &parts.receipt,
+        token: parts.token.as_ref(),
+        snapshot: &snapshot,
+        assertion: &parts.assertion,
+    });
+    if let Some(token) = &parts.token {
         runtime.tokens.push(token.clone());
     }
-    runtime.receipts.push(receipt.clone());
-    runtime.assertions.push(assertion.clone());
+    runtime.receipts.push(parts.receipt.clone());
+    runtime.assertions.push(parts.assertion.clone());
     let result = CoordinationApplyResult {
-        receipt: receipt.clone(),
+        receipt: parts.receipt.clone(),
         request: request.clone(),
-        token,
-        state_snapshot: after_snapshot,
-        assertions: vec![assertion],
+        token: parts.token,
+        state_snapshot: snapshot,
+        assertions: vec![parts.assertion],
         raft_commit_ref: Some(proposal.commit_receipt.receipt_ref),
         raft_read_receipt: None,
         evidence_values,
     };
     runtime.applied_operations.insert(request.operation_id_ref.clone(), result.clone());
     Ok(result)
+}
+
+fn commit_prepared_mutation(
+    runtime: &mut CoordinationRuntime,
+    request: CoordinationRequest,
+    prepared: PreparedMutation,
+) -> Result<CoordinationApplyResult> {
+    let snapshot = snapshot_from_state(&prepared.state)?;
+    let proposal = propose_change(ChangeInput {
+        runtime,
+        request: &request,
+        snapshot: &snapshot,
+    })?;
+    if proposal.decision != "pass" {
+        let diagnostics = vec!["control-plane commit denied for coordination mutation".to_string()];
+        return deny_result(runtime, request, snapshot, diagnostics, &["control-plane-commit", "fail"]);
+    }
+    record_success(SuccessInput {
+        runtime,
+        request,
+        prepared,
+        snapshot,
+        proposal,
+    })
 }
 
 fn deny_result(
