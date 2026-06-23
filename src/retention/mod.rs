@@ -5849,108 +5849,58 @@ fn push_file_ref_notes(
     Ok(())
 }
 
-fn push_retention_bundle_scope_diagnostics(
-    bundle: &RetentionCandidateBundle,
-    explain: &RetentionCandidateExplain,
-    diagnostics: &mut impl VecSink<String>,
-) -> Result<()> {
-    if bundle.explain_ref != explain.explain_ref {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-explain-ref-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
+struct MismatchNote {
+    is_same: bool,
+    note: &'static str,
+}
+
+impl MismatchNote {
+    fn new(is_same: bool, note: &'static str) -> Self {
+        Self { is_same, note }
     }
-    if bundle.object_ref != explain.object_ref {
+}
+
+fn push_mismatch_notes(checks: &[MismatchNote], diagnostics: &mut impl VecSink<String>) -> Result<()> {
+    for check in checks {
+        if check.is_same {
+            continue;
+        }
         push_bounded(
             diagnostics,
-            "retention-bundle-object-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
-    }
-    if bundle.object_kind != explain.object_kind {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-kind-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
-    }
-    if bundle.retention_class != explain.retention_class {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-class-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
-    }
-    if bundle.action != explain.action {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-action-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
-    }
-    if bundle.subsystem != explain.subsystem {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-subsystem-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
-    }
-    if bundle.gc_plan_refs != explain.gc_plan_refs {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-plan-refs-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
-    }
-    if bundle.gc_apply_refs != explain.gc_apply_refs {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-apply-refs-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
-    }
-    if bundle.gc_execution_refs != explain.gc_execution_refs {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-execute-refs-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
-    }
-    if bundle.gc_audit_refs != explain.gc_audit_refs {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-audit-refs-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
-    }
-    if bundle.retention_receipt_refs != explain.retention_receipt_refs {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-receipt-refs-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention bundle verify diagnostics",
-        )?;
-    }
-    if bundle.tombstone_refs != explain.tombstone_refs {
-        push_bounded(
-            diagnostics,
-            "retention-bundle-tombstone-refs-mismatch".to_string(),
+            check.note.to_string(),
             MAX_RETENTION_DIAGNOSTICS,
             "retention bundle verify diagnostics",
         )?;
     }
     Ok(())
+}
+
+fn push_retention_bundle_scope_diagnostics(
+    bundle: &RetentionCandidateBundle,
+    explain: &RetentionCandidateExplain,
+    diagnostics: &mut impl VecSink<String>,
+) -> Result<()> {
+    let checks = [
+        MismatchNote::new(bundle.explain_ref == explain.explain_ref, "retention-bundle-explain-ref-mismatch"),
+        MismatchNote::new(bundle.object_ref == explain.object_ref, "retention-bundle-object-mismatch"),
+        MismatchNote::new(bundle.object_kind == explain.object_kind, "retention-bundle-kind-mismatch"),
+        MismatchNote::new(bundle.retention_class == explain.retention_class, "retention-bundle-class-mismatch"),
+        MismatchNote::new(bundle.action == explain.action, "retention-bundle-action-mismatch"),
+        MismatchNote::new(bundle.subsystem == explain.subsystem, "retention-bundle-subsystem-mismatch"),
+        MismatchNote::new(bundle.gc_plan_refs == explain.gc_plan_refs, "retention-bundle-plan-refs-mismatch"),
+        MismatchNote::new(bundle.gc_apply_refs == explain.gc_apply_refs, "retention-bundle-apply-refs-mismatch"),
+        MismatchNote::new(
+            bundle.gc_execution_refs == explain.gc_execution_refs,
+            "retention-bundle-execute-refs-mismatch",
+        ),
+        MismatchNote::new(bundle.gc_audit_refs == explain.gc_audit_refs, "retention-bundle-audit-refs-mismatch"),
+        MismatchNote::new(
+            bundle.retention_receipt_refs == explain.retention_receipt_refs,
+            "retention-bundle-receipt-refs-mismatch",
+        ),
+        MismatchNote::new(bundle.tombstone_refs == explain.tombstone_refs, "retention-bundle-tombstone-refs-mismatch"),
+    ];
+    push_mismatch_notes(&checks, diagnostics)
 }
 
 fn retention_candidate_bundle_expected_refs(bundle: &RetentionCandidateBundle) -> Result<Vec<String>> {

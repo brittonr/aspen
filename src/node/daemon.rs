@@ -11920,14 +11920,41 @@ mod tests {
         job_ref: String,
     }
 
+    struct StagePair {
+        source_ref: String,
+        map_ref: String,
+    }
+
+    struct AdmissionParts {
+        receipt_value: IOValue,
+        receipt_ref: String,
+        stage_order: Vec<String>,
+        policy_refs: Vec<String>,
+        capability_refs: Vec<String>,
+        resource_refs: Vec<String>,
+    }
+
     fn install_node_job_fixture(root: &Path) -> NodeJobFixture {
         let registry = root.join("registry");
+        let stages = install_stage_pair(&registry);
+        let dag_value = graph_value(&stages);
+        let installed = job_dag::install_job_dag(&registry, &dag_value).expect("install job dag");
+        let admission = admit_graph(&registry, &installed.job_ref);
+        let execution_request = execution_request_value(&installed.job_ref, &admission);
+        NodeJobFixture {
+            execution_request,
+            admission_receipt: admission.receipt_value,
+            job_ref: installed.job_ref,
+        }
+    }
+
+    fn install_stage_pair(registry: &Path) -> StagePair {
         let stage_schema = local_ref("node-job-stage-schema", "ops").expect("stage schema");
         let stage_policy = local_ref("node-job-stage-policy", "ops").expect("stage policy");
         let stage_evidence = local_ref("node-job-stage-evidence", "ops").expect("stage evidence");
         let stage_installer = local_ref("node-job-stage-installer", "ops").expect("stage installer");
         let stage_capability = local_ref("node-job-stage-capability", "ops").expect("stage capability");
-        let source_stage = artifacts::install_artifact(&registry, &artifacts::ArtifactInstallInput {
+        let source_stage = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
             kind: "stage".to_string(),
             payload: job_dag::builtin_stage_operation_value("source").expect("source operation"),
             schema_refs: vec![stage_schema.clone()],
@@ -11939,7 +11966,7 @@ mod tests {
             capability_refs: vec![stage_capability.clone()],
         })
         .expect("install source stage");
-        let map_stage = artifacts::install_artifact(&registry, &artifacts::ArtifactInstallInput {
+        let map_stage = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
             kind: "stage".to_string(),
             payload: job_dag::builtin_stage_operation_value("identity").expect("identity operation"),
             schema_refs: vec![stage_schema],
@@ -11951,10 +11978,17 @@ mod tests {
             capability_refs: vec![stage_capability],
         })
         .expect("install map stage");
-        let source_node = job_dag::job_node_value(job_dag::NodeValueInput {
+        StagePair {
+            source_ref: source_stage.artifact_ref,
+            map_ref: map_stage.artifact_ref,
+        }
+    }
+
+    fn source_vertex_value(stage_ref: &str) -> IOValue {
+        job_dag::job_node_value(job_dag::NodeValueInput {
             id: "source",
             kind: "source",
-            stage_artifact_ref: Some(&source_stage.artifact_ref),
+            stage_artifact_ref: Some(stage_ref),
             input_ports: &[],
             output_ports: &["out".to_string()],
             config: record("source", vec![record("values", vec![sequence(vec![string("node-job")])])]),
@@ -11962,11 +11996,14 @@ mod tests {
             policy_refs: &[],
             evidence_refs: &[],
         })
-        .expect("source node");
-        let map_node = job_dag::job_node_value(job_dag::NodeValueInput {
+        .expect("source node")
+    }
+
+    fn map_vertex_value(stage_ref: &str) -> IOValue {
+        job_dag::job_node_value(job_dag::NodeValueInput {
             id: "map",
             kind: "map",
-            stage_artifact_ref: Some(&map_stage.artifact_ref),
+            stage_artifact_ref: Some(stage_ref),
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
             config: record("op", vec![string("identity")]),
@@ -11974,8 +12011,11 @@ mod tests {
             policy_refs: &[],
             evidence_refs: &[],
         })
-        .expect("map node");
-        let edge = job_dag::job_edge_value(job_dag::EdgeValueInput {
+        .expect("map node")
+    }
+
+    fn fixture_edge_value() -> IOValue {
+        job_dag::job_edge_value(job_dag::EdgeValueInput {
             from_node: "source",
             from_port: "out",
             to_node: "map",
@@ -11984,27 +12024,35 @@ mod tests {
             partitioning: "single",
             materialization: "stream",
         })
-        .expect("edge");
-        let dag_value = job_dag::job_dag_value(job_dag::DagValueInput {
-            nodes: vec![source_node, map_node],
-            edges: vec![edge],
+        .expect("edge")
+    }
+
+    fn graph_value(stages: &StagePair) -> IOValue {
+        job_dag::job_dag_value(job_dag::DagValueInput {
+            nodes: vec![
+                source_vertex_value(&stages.source_ref),
+                map_vertex_value(&stages.map_ref),
+            ],
+            edges: vec![fixture_edge_value()],
             output_roots: &["map".to_string()],
             schema_refs: &[],
             effect_manifest_refs: &[],
             policy_refs: &[],
             evidence_refs: &[],
         })
-        .expect("dag value");
-        let installed = job_dag::install_job_dag(&registry, &dag_value).expect("install job dag");
-        let authority_ref = install_node_job_authority(&registry, &installed.job_ref);
-        let gate_ref = install_node_clean_gate(&registry);
-        let sync_ref = local_ref("node-job-sync", &installed.job_ref).expect("sync ref");
-        let resource_refs = vec![local_ref("node-job-resource", &installed.job_ref).expect("resource ref")];
-        let policy_refs = vec![local_ref("node-job-policy", &installed.job_ref).expect("policy ref")];
-        let capability_refs = vec![authority_ref.clone()];
+        .expect("dag value")
+    }
+
+    fn admit_graph(registry: &Path, graph_ref: &str) -> AdmissionParts {
+        let authority_ref = install_node_job_authority(registry, graph_ref);
+        let gate_ref = install_node_clean_gate(registry);
+        let sync_ref = local_ref("node-job-sync", graph_ref).expect("sync ref");
+        let resource_refs = vec![local_ref("node-job-resource", graph_ref).expect("resource ref")];
+        let policy_refs = vec![local_ref("node-job-policy", graph_ref).expect("policy ref")];
+        let capability_refs = vec![authority_ref];
         let evidence_refs = vec![sync_ref.clone(), gate_ref];
         let admission_request = job_dag::job_admission_request_value(job_dag::AdmissionRequestValueInput {
-            job_ref: &installed.job_ref,
+            job_ref: graph_ref,
             sync_ref: &sync_ref,
             stage_ids: &[],
             target_peer: "node:ops",
@@ -12014,27 +12062,32 @@ mod tests {
             resource_refs: &resource_refs,
         })
         .expect("admission request");
-        let admission = job_dag::admission_loopback(&registry, &admission_request).expect("admission loopback");
+        let admission = job_dag::admission_loopback(registry, &admission_request).expect("admission loopback");
         assert_eq!(admission.plan.decision, "pass");
-        let admission_ref = canonical_hash(&admission.receipt_value).expect("admission ref");
-        let execution_request = job_dag::job_execution_request_value(job_dag::ExecutionRequestValueInput {
-            job_ref: &installed.job_ref,
-            admission_ref: &admission_ref,
-            stage_ids: &admission.plan.stage_order,
-            target_peer: "node:ops",
-            storage_profile_ref: &local_ref("node-job-storage", &installed.job_ref).expect("storage ref"),
-            cache_profile_ref: &local_ref("node-job-cache", &installed.job_ref).expect("cache ref"),
-            chunk_profile_ref: &local_ref("node-job-chunks", &installed.job_ref).expect("chunks ref"),
-            policy_refs: &policy_refs,
-            capability_refs: &capability_refs,
-            resource_refs: &resource_refs,
-        })
-        .expect("execution request");
-        NodeJobFixture {
-            execution_request,
-            admission_receipt: admission.receipt_value,
-            job_ref: installed.job_ref,
+        AdmissionParts {
+            receipt_ref: canonical_hash(&admission.receipt_value).expect("admission ref"),
+            receipt_value: admission.receipt_value,
+            stage_order: admission.plan.stage_order,
+            policy_refs,
+            capability_refs,
+            resource_refs,
         }
+    }
+
+    fn execution_request_value(graph_ref: &str, admission: &AdmissionParts) -> IOValue {
+        job_dag::job_execution_request_value(job_dag::ExecutionRequestValueInput {
+            job_ref: graph_ref,
+            admission_ref: &admission.receipt_ref,
+            stage_ids: &admission.stage_order,
+            target_peer: "node:ops",
+            storage_profile_ref: &local_ref("node-job-storage", graph_ref).expect("storage ref"),
+            cache_profile_ref: &local_ref("node-job-cache", graph_ref).expect("cache ref"),
+            chunk_profile_ref: &local_ref("node-job-chunks", graph_ref).expect("chunks ref"),
+            policy_refs: &admission.policy_refs,
+            capability_refs: &admission.capability_refs,
+            resource_refs: &admission.resource_refs,
+        })
+        .expect("execution request")
     }
 
     fn install_node_job_authority(registry: &Path, job_ref: &str) -> String {
