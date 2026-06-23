@@ -2531,6 +2531,14 @@ struct GcAuditScope<'a> {
     retention: RetentionAuditScope<'a>,
 }
 
+struct GateAdmissions {
+    policy: AdmissionRefsResult,
+    authority: AdmissionRefsResult,
+    supporting: AdmissionRefsResult,
+    reference_index: AdmissionRefsResult,
+    remote_gc: AdmissionRefsResult,
+}
+
 struct RetentionGateInputs<'a> {
     input: &'a RetentionGcPlanInput<'a>,
     policy: AdmissionRefsResult,
@@ -2593,90 +2601,109 @@ fn remote_clearance_live_control_request_value(input: &LiveControlRequestInput<'
     Ok((reference, value))
 }
 
-fn retention_gate_inputs<'a>(input: &'a RetentionGcPlanInput<'a>) -> Result<RetentionGateInputs<'a>> {
-    let scope = AdmissionScope {
+fn gate_scope<'a>(input: &'a RetentionGcPlanInput<'a>) -> AdmissionScope<'a> {
+    AdmissionScope {
         requester_ref: input.evidence.requester_ref.as_deref(),
         object_ref: input.object_ref,
         object_kind: input.object_kind,
         retention_class: input.retention_class,
         action: input.action,
-    };
+    }
+}
+
+fn gate_admissions(input: &RetentionGcPlanInput<'_>, scope: &AdmissionScope<'_>) -> Result<GateAdmissions> {
     let policy = admit_evidence_refs(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.policy_refs,
         expected_kind: ADMISSION_KIND_POLICY,
-        scope: &scope,
+        scope,
         required_remote_refs: &[],
     })?;
     let authority = admit_evidence_refs(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.authority_refs,
         expected_kind: ADMISSION_KIND_AUTHORITY,
-        scope: &scope,
+        scope,
         required_remote_refs: &[],
     })?;
     let supporting = admit_evidence_refs(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.evidence_refs,
         expected_kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-        scope: &scope,
+        scope,
         required_remote_refs: &[],
     })?;
     let reference_index = admit_evidence_refs(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.reference_index_refs,
         expected_kind: ADMISSION_KIND_REFERENCE_INDEX,
-        scope: &scope,
+        scope,
         required_remote_refs: &[],
     })?;
     let remote_gc = admit_evidence_refs(AdmissionRefsInput {
         root: input.root,
         refs: &input.evidence.remote_gc_refs,
         expected_kind: ADMISSION_KIND_REMOTE_GC,
-        scope: &scope,
+        scope,
         required_remote_refs: &input.evidence.remote_refs,
     })?;
-    let remote_clearance = admit_remote_clearance_refs(RemoteClearanceRefsInput {
-        root: input.root,
-        refs: &input.evidence.remote_clearance_refs,
-        scope: &scope,
-        required_remote_refs: &input.evidence.remote_refs,
-        required_peer_refs: &input.evidence.remote_peer_refs,
-        policy_refs: &input.evidence.policy_refs,
-        authority_refs: &input.evidence.authority_refs,
-    })?;
-    let has_local_remote_gc_plan = input.evidence.remote_refs.is_empty()
-        || input
-            .evidence
-            .remote_refs
-            .iter()
-            .all(|reference| remote_gc.remote_refs.iter().any(|remote| remote == reference));
-    let has_remote_ref_clearance = input.evidence.remote_refs.is_empty()
-        || input
-            .evidence
-            .remote_refs
-            .iter()
-            .all(|reference| remote_clearance.remote_refs.iter().any(|remote| remote == reference));
-    let has_remote_peer_clearance = input.evidence.remote_peer_refs.is_empty()
-        || input
-            .evidence
-            .remote_peer_refs
-            .iter()
-            .all(|peer| remote_clearance.peer_refs.iter().any(|cleared_peer| cleared_peer == peer));
-    let has_remote_gc_clearance = has_local_remote_gc_plan && has_remote_ref_clearance && has_remote_peer_clearance;
-    let has_delete_authority = is_destructive_action(input.action)
-        && !authority.admitted_refs.is_empty()
-        && !policy.admitted_refs.is_empty()
-        && !supporting.admitted_refs.is_empty()
-        && (!input.evidence.is_reference_index_complete || !reference_index.admitted_refs.is_empty())
-        && has_remote_gc_clearance;
-    Ok(RetentionGateInputs {
-        input,
+    Ok(GateAdmissions {
         policy,
         authority,
         supporting,
         reference_index,
         remote_gc,
+    })
+}
+
+fn gate_remote_clearance(
+    input: &RetentionGcPlanInput<'_>,
+    scope: &AdmissionScope<'_>,
+) -> Result<RemoteClearanceRefsResult> {
+    admit_remote_clearance_refs(RemoteClearanceRefsInput {
+        root: input.root,
+        refs: &input.evidence.remote_clearance_refs,
+        scope,
+        required_remote_refs: &input.evidence.remote_refs,
+        required_peer_refs: &input.evidence.remote_peer_refs,
+        policy_refs: &input.evidence.policy_refs,
+        authority_refs: &input.evidence.authority_refs,
+    })
+}
+
+fn has_all_refs(required: &[String], admitted: &[String]) -> bool {
+    required.is_empty() || required.iter().all(|reference| admitted.iter().any(|candidate| candidate == reference))
+}
+
+fn is_clearance_complete(
+    input: &RetentionGcPlanInput<'_>,
+    remote_gc: &AdmissionRefsResult,
+    remote_clearance: &RemoteClearanceRefsResult,
+) -> bool {
+    let has_local_plan = has_all_refs(&input.evidence.remote_refs, &remote_gc.remote_refs);
+    let has_remote_refs = has_all_refs(&input.evidence.remote_refs, &remote_clearance.remote_refs);
+    let has_remote_peers = has_all_refs(&input.evidence.remote_peer_refs, &remote_clearance.peer_refs);
+    has_local_plan && has_remote_refs && has_remote_peers
+}
+
+fn retention_gate_inputs<'a>(input: &'a RetentionGcPlanInput<'a>) -> Result<RetentionGateInputs<'a>> {
+    let scope = gate_scope(input);
+    let admissions = gate_admissions(input, &scope)?;
+    let remote_clearance = gate_remote_clearance(input, &scope)?;
+    let has_remote_gc_clearance = is_clearance_complete(input, &admissions.remote_gc, &remote_clearance);
+    let has_delete_authority = is_destructive_action(input.action)
+        && !admissions.authority.admitted_refs.is_empty()
+        && !admissions.policy.admitted_refs.is_empty()
+        && !admissions.supporting.admitted_refs.is_empty()
+        && (!input.evidence.is_reference_index_complete || !admissions.reference_index.admitted_refs.is_empty())
+        && has_remote_gc_clearance;
+    Ok(RetentionGateInputs {
+        input,
+        policy: admissions.policy,
+        authority: admissions.authority,
+        supporting: admissions.supporting,
+        reference_index: admissions.reference_index,
+        remote_gc: admissions.remote_gc,
         remote_clearance,
         has_delete_authority,
         has_remote_gc_clearance,
