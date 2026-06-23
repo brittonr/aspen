@@ -8724,36 +8724,7 @@ mod tests {
     fn candidate_explain_lists_known_retention_gc_evidence() {
         let root = temp_dir("retention-candidate-explain");
         let fixture = store_passing_plan_fixture(&root, "explain-pass");
-        let plan = store_retention_gc_plan(RetentionGcPlanInput {
-            root: &root,
-            subsystem: "ledger-gc",
-            object_ref: &fixture.object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            evidence: &fixture.evidence,
-        })
-        .expect("store explain plan");
-        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
-            root: &root,
-            plan_ref: &plan.plan_ref,
-        })
-        .expect("apply explain plan");
-        let execution = store_retention_gc_execution_gate(RetentionGcExecutionGateInput {
-            root: &root,
-            subsystem: "ledger-gc",
-            action: ACTION_DELETE,
-            object_ref: &fixture.object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            apply_ref: Some(&apply.apply_ref),
-        })
-        .expect("store explain execution");
-        let audit = audit_retention_gc_execution(RetentionGcAuditInput {
-            root: &root,
-            execution_ref: &execution.execution_ref,
-        })
-        .expect("audit explain execution");
+        let flow = passing_flow(&root, &fixture, "ledger-gc");
         let explain = explain_retention_candidate(RetentionCandidateExplainInput {
             root: &root,
             object_ref: &fixture.object_ref,
@@ -8766,10 +8737,10 @@ mod tests {
         assert_eq!(explain.pin_refs.len(), 0);
         assert_eq!(explain.admission_refs.len(), 5);
         assert_eq!(explain.remote_clearance_refs.len(), 1);
-        assert_eq!(explain.gc_plan_refs, vec![plan.plan_ref.clone()]);
-        assert_eq!(explain.gc_apply_refs, vec![apply.apply_ref.clone()]);
-        assert_eq!(explain.gc_execution_refs, vec![execution.execution_ref.clone()]);
-        assert_eq!(explain.gc_audit_refs, vec![audit.audit_ref.clone()]);
+        assert_eq!(explain.gc_plan_refs, vec![flow.plan.plan_ref.clone()]);
+        assert_eq!(explain.gc_apply_refs, vec![flow.apply.apply_ref.clone()]);
+        assert_eq!(explain.gc_execution_refs, vec![flow.execution.execution_ref.clone()]);
+        assert_eq!(explain.gc_audit_refs, vec![flow.audit.audit_ref.clone()]);
         assert_eq!(explain.retention_receipt_refs.len(), 1);
         assert_eq!(explain.tombstone_refs.len(), 1);
         assert!(explain.diagnostics.is_empty());
@@ -8806,7 +8777,7 @@ mod tests {
         );
         let tampered_path = bundle_dir
             .join("artifacts/gc-plans")
-            .join(format!("{}.preserves", ref_file_name(&plan.plan_ref).expect("plan file name")));
+            .join(format!("{}.preserves", ref_file_name(&flow.plan.plan_ref).expect("plan file name")));
         write_store_value(&tampered_path, &record("tampered", vec![string("plan")])).expect("tamper bundle plan");
         let tampered = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
             bundle_dir: &bundle_dir,
@@ -10695,6 +10666,52 @@ mod tests {
         requester_ref: String,
         object_ref: String,
         evidence: DestructiveRetentionEvidence,
+    }
+
+    struct Flow {
+        plan: RetentionGcPlan,
+        apply: RetentionGcApply,
+        execution: RetentionGcExecutionGate,
+        audit: RetentionGcAudit,
+    }
+
+    fn passing_flow(root: &Path, fixture: &TestPlanFixture, subsystem: &str) -> Flow {
+        let plan = store_retention_gc_plan(RetentionGcPlanInput {
+            root,
+            subsystem,
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            evidence: &fixture.evidence,
+        })
+        .expect("store plan");
+        let apply = apply_retention_gc_plan(RetentionGcApplyFromPlanInput {
+            root,
+            plan_ref: &plan.plan_ref,
+        })
+        .expect("apply plan");
+        let execution = store_retention_gc_execution_gate(RetentionGcExecutionGateInput {
+            root,
+            subsystem,
+            action: ACTION_DELETE,
+            object_ref: &fixture.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            apply_ref: Some(&apply.apply_ref),
+        })
+        .expect("store execution");
+        let audit = audit_retention_gc_execution(RetentionGcAuditInput {
+            root,
+            execution_ref: &execution.execution_ref,
+        })
+        .expect("audit execution");
+        Flow {
+            plan,
+            apply,
+            execution,
+            audit,
+        }
     }
 
     struct SeedInput<'a> {
