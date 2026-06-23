@@ -2610,39 +2610,107 @@ pub fn execution_loopback(input: ExecutionLoopbackInput<'_>) -> Result<JobExecut
     let mut diagnostics = Vec::new();
     let mut checks = Vec::new();
 
+    check_receipt_bindings(&request, &admission, &mut diagnostics, &mut checks);
+    check_admission_readiness(&admission, &mut diagnostics, &mut checks);
+
+    let dag = match read_job_dag(input.target_registry, &request.job_ref) {
+        Ok(dag) => dag,
+        Err(error) => {
+            diagnostics.push(format!("target job unavailable before execution: {error}"));
+            return deny_result(DenyInput {
+                request,
+                admission,
+                diagnostics,
+                checks,
+                extra_checks: &[("target-job-present", "fail"), ("no-stage-execution-on-deny", "pass")],
+            });
+        }
+    };
+    push_check(&mut checks, "target-job-present", true);
+
+    check_target_selection(
+        SelectionInput {
+            target_registry: input.target_registry,
+            request: &request,
+            admission: &admission,
+            dag: &dag,
+        },
+        &mut diagnostics,
+        &mut checks,
+    )?;
+
+    if checks.iter().any(|(_, status)| *status != "pass") {
+        return deny_result(DenyInput {
+            request,
+            admission,
+            diagnostics,
+            checks,
+            extra_checks: &[("no-stage-execution-on-deny", "pass")],
+        });
+    }
+
+    let run = run_job_dag(&dag, &JobRunOptions {
+        registry_root: input.target_registry,
+        storage_root: input.storage_root,
+        cache_root: input.cache_root,
+        chunk_root: input.chunk_root,
+        ledger_root: None,
+        output_request: None,
+    })?;
+    pass_result(PassInput {
+        request,
+        admission,
+        run,
+        diagnostics,
+        checks,
+    })
+}
+
+fn check_receipt_bindings(
+    request: &JobExecutionRequest,
+    admission: &JobAdmissionReceipt,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    checks: &mut impl crate::bounded::VecSink<(&'static str, &'static str)>,
+) {
     let has_matching_admission_ref = admission.receipt_ref == request.admission_ref;
-    push_check(&mut checks, "admission-ref-binding", has_matching_admission_ref);
+    push_check(checks, "admission-ref-binding", has_matching_admission_ref);
     if !has_matching_admission_ref {
-        diagnostics.push(format!(
+        diagnostics.push_item(format!(
             "job execution request admission ref {} does not match receipt {}",
             request.admission_ref, admission.receipt_ref
         ));
     }
 
     let is_admission_pass = admission.decision == "pass";
-    push_check(&mut checks, "admission-pass", is_admission_pass);
+    push_check(checks, "admission-pass", is_admission_pass);
     if !is_admission_pass {
-        diagnostics.push(format!("job execution admission decision is {}", admission.decision));
+        diagnostics.push_item(format!("job execution admission decision is {}", admission.decision));
     }
 
     let has_matching_job_ref = admission.job_ref == request.job_ref;
-    push_check(&mut checks, "job-ref-binding", has_matching_job_ref);
+    push_check(checks, "job-ref-binding", has_matching_job_ref);
     if !has_matching_job_ref {
-        diagnostics.push(format!(
+        diagnostics.push_item(format!(
             "job execution request job {} does not match admission job {}",
             request.job_ref, admission.job_ref
         ));
     }
 
     let has_matching_target_peer = admission.target_peer == request.target_peer;
-    push_check(&mut checks, "target-peer-binding", has_matching_target_peer);
+    push_check(checks, "target-peer-binding", has_matching_target_peer);
     if !has_matching_target_peer {
-        diagnostics.push(format!(
+        diagnostics.push_item(format!(
             "job execution target peer {} does not match admission target peer {}",
             request.target_peer, admission.target_peer
         ));
     }
+}
 
+fn check_admission_readiness(
+    admission: &JobAdmissionReceipt,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    checks: &mut impl crate::bounded::VecSink<(&'static str, &'static str)>,
+) {
     let required_admission_checks = [
         "target-closure-present",
         "trellis-topology",
@@ -2656,142 +2724,132 @@ pub fn execution_loopback(input: ExecutionLoopbackInput<'_>) -> Result<JobExecut
     let has_required_admission_checks = required_admission_checks
         .iter()
         .all(|required| admission.checks.iter().any(|check| check == *required));
-    push_check(&mut checks, "admission-checkset", has_required_admission_checks);
+    push_check(checks, "admission-checkset", has_required_admission_checks);
     if !has_required_admission_checks {
-        diagnostics.push("job execution admission receipt is missing required target-side checks".to_string());
+        diagnostics.push_item("job execution admission receipt is missing required target-side checks".to_string());
     }
 
     let has_authority_receipts = !admission.authority_receipt_refs.is_empty();
-    push_check(&mut checks, "authority-receipt-binding", has_authority_receipts);
+    push_check(checks, "authority-receipt-binding", has_authority_receipts);
     if !has_authority_receipts {
-        diagnostics.push("job execution admission has no authority receipt refs".to_string());
+        diagnostics.push_item("job execution admission has no authority receipt refs".to_string());
     }
 
     let has_resource_profile = admission.resource_verdict == "pass";
-    push_check(&mut checks, "resource-profile-binding", has_resource_profile);
+    push_check(checks, "resource-profile-binding", has_resource_profile);
     if !has_resource_profile {
-        diagnostics.push(format!("job execution resource verdict is {}", admission.resource_verdict));
+        diagnostics.push_item(format!("job execution resource verdict is {}", admission.resource_verdict));
     }
+}
 
-    let dag = match read_job_dag(input.target_registry, &request.job_ref) {
-        Ok(dag) => dag,
-        Err(error) => {
-            diagnostics.push(format!("target job unavailable before execution: {error}"));
-            let receipt_value = job_execution_receipt_value(ExecutionReceiptValueInput {
-                decision: "deny",
-                request: &request,
-                admission: &admission,
-                stage_receipt_refs: &[],
-                output_refs: &[],
-                run_receipt_refs: &[],
-                diagnostics: &diagnostics,
-                checks: &checks_with_extra(&checks, &[
-                    ("target-job-present", "fail"),
-                    ("no-stage-execution-on-deny", "pass"),
-                ]),
-            })?;
-            let receipt_ref = canonical_hash(&receipt_value)?;
-            return Ok(JobExecutionLoopback {
-                receipt_ref,
-                request,
-                admission,
-                run: None,
-                decision: "deny".to_string(),
-                diagnostics,
-                receipt_value,
-            });
-        }
-    };
-    push_check(&mut checks, "target-job-present", true);
+struct SelectionInput<'a> {
+    target_registry: &'a Path,
+    request: &'a JobExecutionRequest,
+    admission: &'a JobAdmissionReceipt,
+    dag: &'a JobDag,
+}
 
-    let stage_order = if request.stage_ids.is_empty() {
-        admission.stage_order.clone()
+fn check_target_selection(
+    input: SelectionInput<'_>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+    checks: &mut impl crate::bounded::VecSink<(&'static str, &'static str)>,
+) -> Result<()> {
+    let stage_order = if input.request.stage_ids.is_empty() {
+        input.admission.stage_order.clone()
     } else {
-        request.stage_ids.clone()
+        input.request.stage_ids.clone()
     };
-    let has_selected_stage_binding = stage_order == admission.stage_order;
-    push_check(&mut checks, "selected-stage-binding", has_selected_stage_binding);
+    let has_selected_stage_binding = stage_order == input.admission.stage_order;
+    push_check(checks, "selected-stage-binding", has_selected_stage_binding);
     if !has_selected_stage_binding {
-        diagnostics.push("job execution selected stages do not match admission stage order".to_string());
+        diagnostics.push_item("job execution selected stages do not match admission stage order".to_string());
     }
 
-    let full_stage_order = trellis_execution_plan(&dag.nodes, &dag.edges)?.order_ids;
+    let full_stage_order = trellis_execution_plan(&input.dag.nodes, &input.dag.edges)?.order_ids;
     let has_full_stage_selection = stage_order == full_stage_order;
-    push_check(&mut checks, "selected-stages-full-target", has_full_stage_selection);
+    push_check(checks, "selected-stages-full-target", has_full_stage_selection);
     if !has_full_stage_selection {
-        diagnostics
-            .push("job execution loopback currently requires admitted stages to cover the full target DAG".to_string());
+        diagnostics.push_item(
+            "job execution loopback currently requires admitted stages to cover the full target DAG".to_string(),
+        );
     }
 
-    let closure = recompute_execution_closure(input.target_registry, &dag, &stage_order);
-    match closure {
+    match recompute_execution_closure(input.target_registry, input.dag, &stage_order) {
         Ok(closure_refs) => {
-            let has_recomputed_closure = sorted_unique(&closure_refs) == sorted_unique(&admission.closure_refs);
-            push_check(&mut checks, "target-closure-recomputed", has_recomputed_closure);
+            let has_recomputed_closure = sorted_unique(&closure_refs) == sorted_unique(&input.admission.closure_refs);
+            push_check(checks, "target-closure-recomputed", has_recomputed_closure);
             if !has_recomputed_closure {
-                diagnostics.push("job execution recomputed target closure diverges from admission closure".to_string());
+                diagnostics
+                    .push_item("job execution recomputed target closure diverges from admission closure".to_string());
             }
         }
         Err(error) => {
-            push_check(&mut checks, "target-closure-recomputed", false);
-            diagnostics.push(format!("job execution target closure recompute failed: {error}"));
+            push_check(checks, "target-closure-recomputed", false);
+            diagnostics.push_item(format!("job execution target closure recompute failed: {error}"));
         }
     }
 
-    let has_request_ref_bindings = refs_are_bound_in_admission(&request.policy_refs, &admission.refs)
-        && refs_are_bound_in_admission(&request.capability_refs, &admission.refs)
-        && refs_are_bound_in_admission(&request.resource_refs, &admission.refs);
-    push_check(&mut checks, "request-ref-binding", has_request_ref_bindings);
+    let has_request_ref_bindings = refs_are_bound_in_admission(&input.request.policy_refs, &input.admission.refs)
+        && refs_are_bound_in_admission(&input.request.capability_refs, &input.admission.refs)
+        && refs_are_bound_in_admission(&input.request.resource_refs, &input.admission.refs);
+    push_check(checks, "request-ref-binding", has_request_ref_bindings);
     if !has_request_ref_bindings {
-        diagnostics
-            .push("job execution request policy/capability/resource refs are not all bound by admission".to_string());
+        diagnostics.push_item(
+            "job execution request policy/capability/resource refs are not all bound by admission".to_string(),
+        );
     }
+    Ok(())
+}
 
-    let decision = if checks.iter().all(|(_, status)| *status == "pass") {
-        "pass"
-    } else {
-        "deny"
-    };
-    if decision == "deny" {
-        let receipt_value = job_execution_receipt_value(ExecutionReceiptValueInput {
-            decision: "deny",
-            request: &request,
-            admission: &admission,
-            stage_receipt_refs: &[],
-            output_refs: &[],
-            run_receipt_refs: &[],
-            diagnostics: &diagnostics,
-            checks: &checks_with_extra(&checks, &[("no-stage-execution-on-deny", "pass")]),
-        })?;
-        let receipt_ref = canonical_hash(&receipt_value)?;
-        return Ok(JobExecutionLoopback {
-            receipt_ref,
-            request,
-            admission,
-            run: None,
-            decision: decision.to_string(),
-            diagnostics,
-            receipt_value,
-        });
-    }
+struct DenyInput<'a> {
+    request: JobExecutionRequest,
+    admission: JobAdmissionReceipt,
+    diagnostics: Vec<String>,
+    checks: Vec<(&'static str, &'static str)>,
+    extra_checks: &'a [(&'static str, &'static str)],
+}
 
-    let run = run_job_dag(&dag, &JobRunOptions {
-        registry_root: input.target_registry,
-        storage_root: input.storage_root,
-        cache_root: input.cache_root,
-        chunk_root: input.chunk_root,
-        ledger_root: None,
-        output_request: None,
+fn deny_result(input: DenyInput<'_>) -> Result<JobExecutionLoopback> {
+    let receipt_value = job_execution_receipt_value(ExecutionReceiptValueInput {
+        decision: "deny",
+        request: &input.request,
+        admission: &input.admission,
+        stage_receipt_refs: &[],
+        output_refs: &[],
+        run_receipt_refs: &[],
+        diagnostics: &input.diagnostics,
+        checks: &checks_with_extra(&input.checks, input.extra_checks),
     })?;
+    let receipt_ref = canonical_hash(&receipt_value)?;
+    Ok(JobExecutionLoopback {
+        receipt_ref,
+        request: input.request,
+        admission: input.admission,
+        run: None,
+        decision: "deny".to_string(),
+        diagnostics: input.diagnostics,
+        receipt_value,
+    })
+}
+
+struct PassInput {
+    request: JobExecutionRequest,
+    admission: JobAdmissionReceipt,
+    run: JobRun,
+    diagnostics: Vec<String>,
+    checks: Vec<(&'static str, &'static str)>,
+}
+
+fn pass_result(input: PassInput) -> Result<JobExecutionLoopback> {
     let receipt_value = job_execution_receipt_value(ExecutionReceiptValueInput {
         decision: "pass",
-        request: &request,
-        admission: &admission,
-        stage_receipt_refs: &run.stage_receipt_refs,
-        output_refs: &run.output_refs,
-        run_receipt_refs: &[canonical_hash(&run.receipt_value)?],
-        diagnostics: &diagnostics,
-        checks: &checks_with_extra(&checks, &[
+        request: &input.request,
+        admission: &input.admission,
+        stage_receipt_refs: &input.run.stage_receipt_refs,
+        output_refs: &input.run.output_refs,
+        run_receipt_refs: &[canonical_hash(&input.run.receipt_value)?],
+        diagnostics: &input.diagnostics,
+        checks: &checks_with_extra(&input.checks, &[
             ("executed-on-target-state", "pass"),
             ("stage-receipts-bound", "pass"),
             ("output-refs-bound", "pass"),
@@ -2800,11 +2858,11 @@ pub fn execution_loopback(input: ExecutionLoopbackInput<'_>) -> Result<JobExecut
     let receipt_ref = canonical_hash(&receipt_value)?;
     Ok(JobExecutionLoopback {
         receipt_ref,
-        request,
-        admission,
-        run: Some(run),
+        request: input.request,
+        admission: input.admission,
+        run: Some(input.run),
         decision: "pass".to_string(),
-        diagnostics,
+        diagnostics: input.diagnostics,
         receipt_value,
     })
 }
