@@ -680,6 +680,68 @@ pub fn build_chain_index(root: &Path) -> Result<ChainIndex> {
     Ok(index)
 }
 
+fn prior_head(index: &ChainIndex, link: &ChainLink) -> Result<Option<String>> {
+    if let Some(previous_ref) = &link.previous_link_ref {
+        let previous = index.links_by_ref.get(previous_ref).ok_or_else(|| {
+            MoltenError::invalid_harness(format!("append previous link {previous_ref} is unavailable in ledger"))
+        })?;
+        validate_append(previous, link)?;
+        let children = index.children_for_parent(previous_ref);
+        if !children.is_empty() {
+            return Err(MoltenError::invalid_harness(format!(
+                "unexpected fork for parent {previous_ref}: existing children {:?}",
+                children
+            )));
+        }
+        let current_heads = index.heads_for_chain(&link.chain);
+        if current_heads != vec![previous_ref.clone()] {
+            return Err(MoltenError::invalid_harness(format!(
+                "stale chain head for {:?}: expected current head {}, found {:?}",
+                link.chain, previous_ref, current_heads
+            )));
+        }
+        ensure_sequence_unoccupied(index, link)?;
+        return Ok(Some(previous_ref.clone()));
+    }
+
+    validate_genesis(link)?;
+    let current_heads = index.heads_for_chain(&link.chain);
+    if !current_heads.is_empty() {
+        return Err(MoltenError::invalid_harness(format!(
+            "genesis append has stale chain head for {:?}: existing heads {:?}",
+            link.chain, current_heads
+        )));
+    }
+    ensure_sequence_unoccupied(index, link)?;
+    Ok(None)
+}
+
+fn append_predicate_ref(root: &Path, link: &ChainLink, head_before: Option<&str>) -> Result<String> {
+    let predicate = if head_before.is_some() {
+        APPEND_VALID_PREDICATE
+    } else {
+        GENESIS_VALID_PREDICATE
+    };
+    let predicate_subject_refs = vec![link.link_ref.clone()];
+    let predicate_input_refs = predicate_input_refs(link);
+    let predicate_context_refs = predicate_context_refs(link);
+    let predicate_checks = vec![
+        ChainCheck::pass("trellis-bounded-predicate"),
+        ChainCheck::pass("predicate-decision-binding"),
+    ];
+    store_chain_predicate_receipt(StoreChainPredicateReceiptInput {
+        root,
+        receipt: ChainPredicateReceiptValueInput {
+            predicate,
+            decision: "pass",
+            subject_refs: &predicate_subject_refs,
+            input_refs: &predicate_input_refs,
+            context_refs: &predicate_context_refs,
+            checks: &predicate_checks,
+        },
+    })
+}
+
 pub fn append_chain_link(root: &Path, value: &IOValue) -> Result<ChainAppend> {
     let link = parse_chain_link(value)?;
     let index = build_chain_index(root)?;
@@ -696,40 +758,7 @@ pub fn append_chain_link(root: &Path, value: &IOValue) -> Result<ChainAppend> {
         ))
     })?;
 
-    let head_before = if let Some(previous_ref) = &link.previous_link_ref {
-        let previous = index.links_by_ref.get(previous_ref).ok_or_else(|| {
-            MoltenError::invalid_harness(format!("append previous link {previous_ref} is unavailable in ledger"))
-        })?;
-        validate_append(previous, &link)?;
-        let children = index.children_for_parent(previous_ref);
-        if !children.is_empty() {
-            return Err(MoltenError::invalid_harness(format!(
-                "unexpected fork for parent {previous_ref}: existing children {:?}",
-                children
-            )));
-        }
-        let current_heads = index.heads_for_chain(&link.chain);
-        if current_heads != vec![previous_ref.clone()] {
-            return Err(MoltenError::invalid_harness(format!(
-                "stale chain head for {:?}: expected current head {}, found {:?}",
-                link.chain, previous_ref, current_heads
-            )));
-        }
-        ensure_sequence_unoccupied(&index, &link)?;
-        Some(previous_ref.clone())
-    } else {
-        validate_genesis(&link)?;
-        let current_heads = index.heads_for_chain(&link.chain);
-        if !current_heads.is_empty() {
-            return Err(MoltenError::invalid_harness(format!(
-                "genesis append has stale chain head for {:?}: existing heads {:?}",
-                link.chain, current_heads
-            )));
-        }
-        ensure_sequence_unoccupied(&index, &link)?;
-        None
-    };
-
+    let head_before = prior_head(&index, &link)?;
     let imported = ledger::import_artifact(root, value)?;
     if imported.artifact_ref != link.link_ref {
         return Err(MoltenError::invalid_harness(format!(
@@ -737,29 +766,8 @@ pub fn append_chain_link(root: &Path, value: &IOValue) -> Result<ChainAppend> {
             imported.artifact_ref, link.link_ref
         )));
     }
-    let predicate = if head_before.is_some() {
-        APPEND_VALID_PREDICATE
-    } else {
-        GENESIS_VALID_PREDICATE
-    };
-    let predicate_subject_refs = vec![link.link_ref.clone()];
-    let predicate_input_refs = predicate_input_refs(&link);
-    let predicate_context_refs = predicate_context_refs(&link);
-    let predicate_checks = vec![
-        ChainCheck::pass("trellis-bounded-predicate"),
-        ChainCheck::pass("predicate-decision-binding"),
-    ];
-    let predicate_receipt_ref = store_chain_predicate_receipt(StoreChainPredicateReceiptInput {
-        root,
-        receipt: ChainPredicateReceiptValueInput {
-            predicate,
-            decision: "pass",
-            subject_refs: &predicate_subject_refs,
-            input_refs: &predicate_input_refs,
-            context_refs: &predicate_context_refs,
-            checks: &predicate_checks,
-        },
-    })?;
+
+    let predicate_receipt_ref = append_predicate_ref(root, &link, head_before.as_deref())?;
     let receipt_value = chain_append_receipt_value(&link, head_before.as_deref(), &predicate_receipt_ref);
     let receipt_ref = canonical_hash(&receipt_value)?;
     let imported_receipt = ledger::import_artifact(root, &receipt_value)?;
