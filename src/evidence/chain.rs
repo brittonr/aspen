@@ -1662,30 +1662,45 @@ fn predicate_context_refs(link: &ChainLink) -> Vec<String> {
 }
 
 fn store_segment_predicate_receipts(input: SegmentPredicateReceiptsInput<'_>) -> Result<Vec<String>> {
-    let mut refs = Vec::new();
     let scope_refs = scope_context_refs(input.chain)?;
-    let segment_decision = predicate_decision(input.diagnostics, input.fork_policy, &[
+    let mut refs = Vec::with_capacity(4);
+    refs.push(gap_receipt_ref(&input, &scope_refs)?);
+    refs.push(fork_receipt_ref(&input, &scope_refs)?);
+    if let Some(receipt_ref) = anchor_receipt_ref(&input, &scope_refs)? {
+        refs.push(receipt_ref);
+    }
+    if let Some(receipt_ref) = checkpoint_receipt_ref(&input, &scope_refs)? {
+        refs.push(receipt_ref);
+    }
+    Ok(refs)
+}
+
+fn gap_receipt_ref(input: &SegmentPredicateReceiptsInput<'_>, scope_refs: &[String]) -> Result<String> {
+    let decision = predicate_decision(input.diagnostics, input.fork_policy, &[
         "gap",
         "genesis-invalid",
         "append-invalid",
         "cycle",
     ]);
-    let segment_checks = vec![
+    let checks = vec![
         ChainCheck::pass("segment-contiguity"),
         ChainCheck::pass("canonical-link-order"),
     ];
-    refs.push(store_chain_predicate_receipt(StoreChainPredicateReceiptInput {
+    store_chain_predicate_receipt(StoreChainPredicateReceiptInput {
         root: input.root,
         receipt: ChainPredicateReceiptValueInput {
             predicate: SEGMENT_NO_GAP_PREDICATE,
-            decision: segment_decision,
+            decision,
             subject_refs: input.verified_links,
             input_refs: input.payload_refs,
-            context_refs: &scope_refs,
-            checks: &segment_checks,
+            context_refs: scope_refs,
+            checks: &checks,
         },
-    })?);
-    let fork_decision = match (
+    })
+}
+
+fn fork_receipt_ref(input: &SegmentPredicateReceiptsInput<'_>, scope_refs: &[String]) -> Result<String> {
+    let decision = match (
         input
             .diagnostics
             .iter()
@@ -1696,67 +1711,76 @@ fn store_segment_predicate_receipts(input: SegmentPredicateReceiptsInput<'_>) ->
         (true, ChainForkPolicy::RejectUnexpectedForks) => "fail",
         (true, ChainForkPolicy::RetainForkEvidence) => "retained",
     };
-    let fork_checks = vec![
+    let checks = vec![
         ChainCheck::pass("fork-policy-profile"),
         ChainCheck::pass("fork-evidence-binding"),
     ];
-    refs.push(store_chain_predicate_receipt(StoreChainPredicateReceiptInput {
+    store_chain_predicate_receipt(StoreChainPredicateReceiptInput {
         root: input.root,
         receipt: ChainPredicateReceiptValueInput {
             predicate: SEGMENT_NO_FORK_PREDICATE,
-            decision: fork_decision,
+            decision,
             subject_refs: input.discovered_heads,
             input_refs: input.verified_links,
-            context_refs: &scope_refs,
-            checks: &fork_checks,
+            context_refs: scope_refs,
+            checks: &checks,
         },
-    })?);
-    if input.anchor_ref.is_some() || input.expected_head.is_some() {
-        let mut subjects = Vec::new();
-        if let Some(anchor_ref) = input.anchor_ref {
-            subjects.push(anchor_ref.to_string());
-        }
-        if let Some(expected_head) = input.expected_head {
-            subjects.push(expected_head.to_string());
-        }
-        let anchor_checks = vec![ChainCheck::pass("anchor-descent"), ChainCheck::pass("head-binding")];
-        refs.push(store_chain_predicate_receipt(StoreChainPredicateReceiptInput {
-            root: input.root,
-            receipt: ChainPredicateReceiptValueInput {
-                predicate: DESCENDS_FROM_ANCHOR_PREDICATE,
-                decision: predicate_decision(input.diagnostics, input.fork_policy, &[
-                    "missing-anchor",
-                    "anchor-chain-mismatch",
-                    "anchor-descent",
-                    "missing-head",
-                    "head-chain-mismatch",
-                    "stale-head",
-                ]),
-                subject_refs: &subjects,
-                input_refs: input.verified_links,
-                context_refs: &scope_refs,
-                checks: &anchor_checks,
-            },
-        })?);
+    })
+}
+
+fn anchor_receipt_ref(input: &SegmentPredicateReceiptsInput<'_>, scope_refs: &[String]) -> Result<Option<String>> {
+    if input.anchor_ref.is_none() && input.expected_head.is_none() {
+        return Ok(None);
     }
-    if input.anchor_ref.is_some() && input.expected_head.is_some() && input.decision == "pass" {
-        let checkpoint_checks = vec![
-            ChainCheck::pass("checkpoint-range-coverage"),
-            ChainCheck::pass("verified-range"),
-        ];
-        refs.push(store_chain_predicate_receipt(StoreChainPredicateReceiptInput {
-            root: input.root,
-            receipt: ChainPredicateReceiptValueInput {
-                predicate: CHECKPOINT_COVERS_RANGE_PREDICATE,
-                decision: "pass",
-                subject_refs: input.verified_links,
-                input_refs: input.payload_refs,
-                context_refs: &scope_refs,
-                checks: &checkpoint_checks,
-            },
-        })?);
+    let mut subjects = Vec::with_capacity(2);
+    if let Some(anchor_ref) = input.anchor_ref {
+        subjects.push(anchor_ref.to_string());
     }
-    Ok(refs)
+    if let Some(expected_head) = input.expected_head {
+        subjects.push(expected_head.to_string());
+    }
+    let checks = vec![ChainCheck::pass("anchor-descent"), ChainCheck::pass("head-binding")];
+    let receipt_ref = store_chain_predicate_receipt(StoreChainPredicateReceiptInput {
+        root: input.root,
+        receipt: ChainPredicateReceiptValueInput {
+            predicate: DESCENDS_FROM_ANCHOR_PREDICATE,
+            decision: predicate_decision(input.diagnostics, input.fork_policy, &[
+                "missing-anchor",
+                "anchor-chain-mismatch",
+                "anchor-descent",
+                "missing-head",
+                "head-chain-mismatch",
+                "stale-head",
+            ]),
+            subject_refs: &subjects,
+            input_refs: input.verified_links,
+            context_refs: scope_refs,
+            checks: &checks,
+        },
+    })?;
+    Ok(Some(receipt_ref))
+}
+
+fn checkpoint_receipt_ref(input: &SegmentPredicateReceiptsInput<'_>, scope_refs: &[String]) -> Result<Option<String>> {
+    if input.anchor_ref.is_none() || input.expected_head.is_none() || input.decision != "pass" {
+        return Ok(None);
+    }
+    let checks = vec![
+        ChainCheck::pass("checkpoint-range-coverage"),
+        ChainCheck::pass("verified-range"),
+    ];
+    let receipt_ref = store_chain_predicate_receipt(StoreChainPredicateReceiptInput {
+        root: input.root,
+        receipt: ChainPredicateReceiptValueInput {
+            predicate: CHECKPOINT_COVERS_RANGE_PREDICATE,
+            decision: "pass",
+            subject_refs: input.verified_links,
+            input_refs: input.payload_refs,
+            context_refs: scope_refs,
+            checks: &checks,
+        },
+    })?;
+    Ok(Some(receipt_ref))
 }
 
 fn predicate_decision(
