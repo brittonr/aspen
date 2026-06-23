@@ -1426,11 +1426,71 @@ pub fn parse_release_promotion_gate_receipt(value: &IOValue) -> Result<ReleasePr
     })
 }
 
+struct GateReadback {
+    promotion: Option<ReleasePromotionGateReceipt>,
+    diagnostics: Vec<String>,
+}
+
+struct SummarySigned {
+    envelope_ref: String,
+    subject_ref: String,
+    key_ref: String,
+}
+
+struct SignedReadback {
+    signed: Option<SummarySigned>,
+    diagnostics: Vec<String>,
+}
+
+struct SummaryFacts {
+    promotion: Option<ReleasePromotionGateReceipt>,
+    signed: Option<SummarySigned>,
+    diagnostics: Vec<String>,
+}
+
+struct SummaryRefs {
+    promotion_ref: String,
+    promotion_decision: String,
+    bundle_verify_ref: String,
+    bundle_ref: String,
+    source_ref: String,
+    octet_ref: String,
+    cairn_ref: String,
+    signed_envelope_ref: String,
+    signed_subject_ref: String,
+    signed_key_ref: String,
+}
+
 pub fn release_promotion_summary_value(input: &ReleasePromotionSummaryInput<'_>) -> Result<ReleasePromotionSummary> {
     let output_path_string = input.output_path.display().to_string();
     let output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
-    let mut diagnostics = Vec::new();
+    let facts = summary_facts(input, &output_path_ref)?;
+    let refs = summary_refs(&facts)?;
+    let value = summary_record(&output_path_string, &output_path_ref, &facts, &refs);
+    parse_release_promotion_summary(&value)
+}
 
+fn summary_facts(input: &ReleasePromotionSummaryInput<'_>, output_path_ref: &str) -> Result<SummaryFacts> {
+    let gate = read_summary_gate(input, output_path_ref)?;
+    let expected_subject_ref = gate.promotion.as_ref().map(|promotion| promotion.receipt_ref.as_str());
+    let signed = read_signed_summary(input, expected_subject_ref)?;
+    let mut diagnostics = gate.diagnostics;
+    for diagnostic in signed.diagnostics {
+        diagnostics.push_limited_value(
+            diagnostic,
+            MAX_OPERATOR_DIAGNOSTICS,
+            "release promotion summary diagnostics",
+        )?;
+    }
+    Ok(SummaryFacts {
+        promotion: gate.promotion,
+        signed: signed.signed,
+        diagnostics,
+    })
+}
+
+fn read_summary_gate(input: &ReleasePromotionSummaryInput<'_>, output_path_ref: &str) -> Result<GateReadback> {
+    let mut diagnostics = Vec::new();
     let promotion_result = read_output_text(input.output_path, "release-promotion-gate.preserves")
         .and_then(|text| parse_text(&text))
         .and_then(|value| parse_release_promotion_gate_receipt(&value));
@@ -1446,26 +1506,43 @@ pub fn release_promotion_summary_value(input: &ReleasePromotionSummaryInput<'_>)
         }
     };
     if let Some(promotion) = promotion.as_ref() {
-        if promotion.decision != "pass" {
+        for diagnostic in summary_gate_diagnostics(promotion, output_path_ref)? {
             diagnostics.push_limited_value(
-                format!("release promotion gate receipt {} decision is {}", promotion.receipt_ref, promotion.decision),
-                MAX_OPERATOR_DIAGNOSTICS,
-                "release promotion summary diagnostics",
-            )?;
-        }
-        if promotion.output_path_ref != output_path_ref {
-            diagnostics.push_limited_value(
-                format!(
-                    "release promotion summary output-path-ref mismatch: receipt={} observed={}",
-                    promotion.output_path_ref, output_path_ref
-                ),
+                diagnostic,
                 MAX_OPERATOR_DIAGNOSTICS,
                 "release promotion summary diagnostics",
             )?;
         }
     }
+    Ok(GateReadback { promotion, diagnostics })
+}
 
-    let expected_subject_ref = promotion.as_ref().map(|promotion| promotion.receipt_ref.as_str());
+fn summary_gate_diagnostics(promotion: &ReleasePromotionGateReceipt, output_path_ref: &str) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    if promotion.decision != "pass" {
+        diagnostics.push_limited_value(
+            format!("release promotion gate receipt {} decision is {}", promotion.receipt_ref, promotion.decision),
+            MAX_OPERATOR_DIAGNOSTICS,
+            "release promotion summary diagnostics",
+        )?;
+    }
+    if promotion.output_path_ref != output_path_ref {
+        diagnostics.push_limited_value(
+            format!(
+                "release promotion summary output-path-ref mismatch: receipt={} observed={}",
+                promotion.output_path_ref, output_path_ref
+            ),
+            MAX_OPERATOR_DIAGNOSTICS,
+            "release promotion summary diagnostics",
+        )?;
+    }
+    Ok(diagnostics)
+}
+
+fn read_signed_summary(
+    input: &ReleasePromotionSummaryInput<'_>,
+    expected_subject_ref: Option<&str>,
+) -> Result<SignedReadback> {
     let signed_result = read_output_text(input.output_path, "release-promotion-gate.signed.preserves")
         .and_then(|text| parse_text(&text))
         .and_then(|value| {
@@ -1480,92 +1557,125 @@ pub fn release_promotion_summary_value(input: &ReleasePromotionSummaryInput<'_>)
                 revocations: input.signed_key_revocations,
             })
         });
-    let signed = match signed_result {
-        Ok(signed) => Some(signed),
-        Err(error) => {
-            diagnostics.push_limited_value(
-                format!("signed promotion receipt verification failed: {error}"),
-                MAX_OPERATOR_DIAGNOSTICS,
-                "release promotion summary diagnostics",
-            )?;
-            None
-        }
-    };
+    match signed_result {
+        Ok(signed) => Ok(SignedReadback {
+            signed: Some(SummarySigned {
+                envelope_ref: signed.receipt.envelope_ref,
+                subject_ref: signed.receipt.subject_ref,
+                key_ref: signed.key_ref,
+            }),
+            diagnostics: Vec::new(),
+        }),
+        Err(error) => Ok(SignedReadback {
+            signed: None,
+            diagnostics: vec![format!("signed promotion receipt verification failed: {error}")],
+        }),
+    }
+}
 
-    let promotion_ref = promotion
+fn summary_refs(facts: &SummaryFacts) -> Result<SummaryRefs> {
+    let promotion_ref = facts
+        .promotion
         .as_ref()
         .map_or_else(|| dogfood_ref("missing-release-promotion-gate"), |promotion| Ok(promotion.receipt_ref.clone()))?;
-    let promotion_decision = promotion.as_ref().map_or("missing", |promotion| promotion.decision.as_str());
-    let bundle_verify_ref = promotion.as_ref().map_or_else(
+    let promotion_decision = facts
+        .promotion
+        .as_ref()
+        .map_or_else(|| "missing".to_string(), |promotion| promotion.decision.clone());
+    let bundle_verify_ref = facts.promotion.as_ref().map_or_else(
         || dogfood_ref("missing-release-bundle-verify"),
         |promotion| Ok(promotion.bundle_verify_ref.clone()),
     )?;
-    let bundle_ref = promotion
+    let bundle_ref = facts
+        .promotion
         .as_ref()
         .map_or_else(|| dogfood_ref("missing-release-evidence-bundle"), |promotion| Ok(promotion.bundle_ref.clone()))?;
-    let source_ref = promotion
+    let source_ref = facts
+        .promotion
         .as_ref()
         .map_or_else(|| dogfood_ref("missing-source-evidence"), |promotion| Ok(promotion.source_ref.clone()))?;
-    let octet_ref = promotion
+    let octet_ref = facts
+        .promotion
         .as_ref()
         .map_or_else(|| dogfood_ref("missing-octet-evidence"), |promotion| Ok(promotion.octet_ref.clone()))?;
-    let cairn_ref = promotion
+    let cairn_ref = facts
+        .promotion
         .as_ref()
         .map_or_else(|| dogfood_ref("missing-cairn-evidence"), |promotion| Ok(promotion.cairn_ref.clone()))?;
-    let signed_envelope_ref = signed.as_ref().map_or_else(
-        || dogfood_ref("missing-signed-release-promotion"),
-        |signed| Ok(signed.receipt.envelope_ref.clone()),
-    )?;
-    let signed_subject_ref = signed.as_ref().map_or_else(
+    let signed_envelope_ref = facts
+        .signed
+        .as_ref()
+        .map_or_else(|| dogfood_ref("missing-signed-release-promotion"), |signed| Ok(signed.envelope_ref.clone()))?;
+    let signed_subject_ref = facts.signed.as_ref().map_or_else(
         || dogfood_ref("missing-signed-release-promotion-subject"),
-        |signed| Ok(signed.receipt.subject_ref.clone()),
+        |signed| Ok(signed.subject_ref.clone()),
     )?;
-    let signed_key_ref = signed
+    let signed_key_ref = facts
+        .signed
         .as_ref()
         .map_or_else(|| dogfood_ref("missing-signed-release-key"), |signed| Ok(signed.key_ref.clone()))?;
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = record("release-promotion-summary-v1", vec![
+    Ok(SummaryRefs {
+        promotion_ref,
+        promotion_decision,
+        bundle_verify_ref,
+        bundle_ref,
+        source_ref,
+        octet_ref,
+        cairn_ref,
+        signed_envelope_ref,
+        signed_subject_ref,
+        signed_key_ref,
+    })
+}
+
+fn summary_record(
+    output_path_string: &str,
+    output_path_ref: &str,
+    facts: &SummaryFacts,
+    refs: &SummaryRefs,
+) -> IOValue {
+    let decision = if facts.diagnostics.is_empty() { "pass" } else { "deny" };
+    record("release-promotion-summary-v1", vec![
         string(OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA),
         record("decision", vec![string(decision)]),
-        record("output", vec![string(&output_path_string), string(&output_path_ref)]),
+        record("output", vec![string(output_path_string), string(output_path_ref)]),
         record("promotion", vec![
-            string(&promotion_ref),
-            string(promotion_decision),
-            string(&bundle_verify_ref),
-            string(&bundle_ref),
+            string(&refs.promotion_ref),
+            string(&refs.promotion_decision),
+            string(&refs.bundle_verify_ref),
+            string(&refs.bundle_ref),
         ]),
         record("signed-promotion", vec![
-            string(&signed_envelope_ref),
-            string(&signed_subject_ref),
-            string(&signed_key_ref),
+            string(&refs.signed_envelope_ref),
+            string(&refs.signed_subject_ref),
+            string(&refs.signed_key_ref),
             string(RELEASE_PROMOTION_SIGNING_PURPOSE),
         ]),
         record("evidence", vec![
-            record("source", vec![string(&source_ref)]),
-            record("octet", vec![string(&octet_ref)]),
-            record("cairn", vec![string(&cairn_ref)]),
+            record("source", vec![string(&refs.source_ref)]),
+            record("octet", vec![string(&refs.octet_ref)]),
+            record("cairn", vec![string(&refs.cairn_ref)]),
         ]),
-        record("diagnostics", vec![strings_sequence(&diagnostics)]),
+        record("diagnostics", vec![strings_sequence(&facts.diagnostics)]),
         checks_value_from_pairs(&[
             (
                 "release-promotion-pass",
-                status(promotion.as_ref().is_some_and(|promotion| promotion.decision == "pass")),
+                status(facts.promotion.as_ref().is_some_and(|promotion| promotion.decision == "pass")),
             ),
             (
                 "release-promotion-output-bound",
-                status(promotion.as_ref().is_some_and(|promotion| promotion.output_path_ref == output_path_ref)),
+                status(facts.promotion.as_ref().is_some_and(|promotion| promotion.output_path_ref == output_path_ref)),
             ),
-            ("signed-promotion-present", status(signed.is_some())),
+            ("signed-promotion-present", status(facts.signed.is_some())),
             (
                 "signed-promotion-subject-bound",
-                status(signed.as_ref().is_some_and(|signed| signed.receipt.subject_ref == promotion_ref)),
+                status(facts.signed.as_ref().is_some_and(|signed| signed.subject_ref == refs.promotion_ref)),
             ),
-            ("signed-promotion-keyring-current", status(signed.is_some())),
+            ("signed-promotion-keyring-current", status(facts.signed.is_some())),
             ("release-promotion-summary-is-evidence-only", "pass"),
             ("no-release-authority-granted", "pass"),
         ]),
-    ]);
-    parse_release_promotion_summary(&value)
+    ])
 }
 
 pub fn parse_release_promotion_summary(value: &IOValue) -> Result<ReleasePromotionSummary> {
