@@ -6851,12 +6851,30 @@ mod tests {
         delivery_log: crate::remote_dataspace::RemoteDeliveryLog,
     }
 
-    fn worker_fixture(name: &str) -> WorkerFixture {
-        let root = temp_dir(name);
-        let source = root.join("source");
-        let target = root.join("target");
-        let ledger = root.join("worker-ledger");
-        let base = artifacts::install_artifact(&source, &artifacts::ArtifactInstallInput {
+    struct SeedArtifacts {
+        base: artifacts::ArtifactInstall,
+        source_stage: artifacts::ArtifactInstall,
+        map_stage: artifacts::ArtifactInstall,
+    }
+
+    struct FlowParts {
+        authority_context_ref: String,
+        resource_refs: Vec<String>,
+        admission: JobAdmissionLoopback,
+        admission_ref: String,
+        execution_request: IOValue,
+        execution_request_ref: String,
+    }
+
+    struct RequestParts {
+        peer_bootstrap_ref: String,
+        node_identity_ref: String,
+        evidence_refs: Vec<String>,
+        worker_request: IOValue,
+    }
+
+    fn seed_artifacts(source: &Path) -> SeedArtifacts {
+        let base = artifacts::install_artifact(source, &artifacts::ArtifactInstallInput {
             kind: "schema".to_string(),
             payload: record("schema", vec![string("worker-base")]),
             schema_refs: vec![test_ref("worker-schema")],
@@ -6868,7 +6886,7 @@ mod tests {
             capability_refs: vec![test_ref("worker-capability")],
         })
         .expect("install worker base");
-        let source_stage = artifacts::install_artifact(&source, &artifacts::ArtifactInstallInput {
+        let source_stage = artifacts::install_artifact(source, &artifacts::ArtifactInstallInput {
             kind: "stage".to_string(),
             payload: builtin_stage_operation_value("source").expect("source operation"),
             schema_refs: vec![test_ref("worker-stage-schema")],
@@ -6880,7 +6898,7 @@ mod tests {
             capability_refs: vec![test_ref("worker-stage-capability")],
         })
         .expect("install worker source stage");
-        let map_stage = artifacts::install_artifact(&source, &artifacts::ArtifactInstallInput {
+        let map_stage = artifacts::install_artifact(source, &artifacts::ArtifactInstallInput {
             kind: "stage".to_string(),
             payload: builtin_stage_operation_value("identity").expect("identity operation"),
             schema_refs: vec![test_ref("worker-stage-schema")],
@@ -6892,10 +6910,18 @@ mod tests {
             capability_refs: vec![test_ref("worker-stage-capability")],
         })
         .expect("install worker map stage");
+        SeedArtifacts {
+            base,
+            source_stage,
+            map_stage,
+        }
+    }
+
+    fn seed_graph(source: &Path, seed: &SeedArtifacts) -> JobInstall {
         let source_node = job_node_value(NodeValueInput {
             id: "source",
             kind: "source",
-            stage_artifact_ref: Some(&source_stage.artifact_ref),
+            stage_artifact_ref: Some(&seed.source_stage.artifact_ref),
             input_ports: &[],
             output_ports: &["out".to_string()],
             config: record("source", vec![record("values", vec![sequence(vec![string("remote-x")])])]),
@@ -6907,7 +6933,7 @@ mod tests {
         let map_node = job_node_value(NodeValueInput {
             id: "map",
             kind: "map",
-            stage_artifact_ref: Some(&map_stage.artifact_ref),
+            stage_artifact_ref: Some(&seed.map_stage.artifact_ref),
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
             config: record("op", vec![string("identity")]),
@@ -6919,9 +6945,12 @@ mod tests {
         let edge = stream_edge_value("source", "map").expect("worker edge");
         let dag_value =
             test_dag_value(vec![source_node, map_node], vec![edge], &["map".to_string()]).expect("worker dag value");
-        let installed_job = install_job_dag(&source, &dag_value).expect("install worker job");
+        install_job_dag(source, &dag_value).expect("install worker job")
+    }
+
+    fn synced_ref(source: &Path, target: &Path, installed: &JobInstall, seed: &SeedArtifacts) -> String {
         let sync_request = job_sync_request_value(SyncRequestValueInput {
-            job_ref: &installed_job.job_ref,
+            job_ref: &installed.job_ref,
             stage_ids: &[],
             target_peer: "peer:b",
             policy_refs: &[test_ref("worker-sync-policy")],
@@ -6930,39 +6959,42 @@ mod tests {
         })
         .expect("worker sync request");
         let sync_provenance = reviewed_provenance_values(&[
-            base.artifact_ref.clone(),
-            source_stage.artifact_ref.clone(),
-            map_stage.artifact_ref.clone(),
-            installed_job.artifact_ref.clone(),
+            seed.base.artifact_ref.clone(),
+            seed.source_stage.artifact_ref.clone(),
+            seed.map_stage.artifact_ref.clone(),
+            installed.artifact_ref.clone(),
         ]);
         let synced = sync_loopback(SyncLoopbackInput {
-            source_registry: &source,
-            target_registry: &target,
+            source_registry: source,
+            target_registry: target,
             request_value: &sync_request,
             provenance_values: &sync_provenance,
             build_verification_values: &[],
         })
         .expect("worker sync loopback");
-        let sync_ref = canonical_hash(&synced.receipt_value).expect("worker sync ref");
-        let authority_context_ref = install_job_execute_authority_context(&target, &installed_job.job_ref);
-        let source_gate_ref = install_clean_octet_gate(&target);
+        canonical_hash(&synced.receipt_value).expect("worker sync ref")
+    }
+
+    fn flow_parts(target: &Path, installed: &JobInstall, sync_ref: &str) -> FlowParts {
+        let authority_context_ref = install_job_execute_authority_context(target, &installed.job_ref);
+        let source_gate_ref = install_clean_octet_gate(target);
         let resource_refs = vec![test_ref("worker-resource-a"), test_ref("worker-resource-b")];
         let admission_request = job_admission_request_value(AdmissionRequestValueInput {
-            job_ref: &installed_job.job_ref,
-            sync_ref: &sync_ref,
+            job_ref: &installed.job_ref,
+            sync_ref,
             stage_ids: &[],
             target_peer: "peer:b",
             policy_refs: &[test_ref("worker-admission-policy")],
             capability_refs: std::slice::from_ref(&authority_context_ref),
-            evidence_refs: &[sync_ref.clone(), source_gate_ref],
+            evidence_refs: &[sync_ref.to_string(), source_gate_ref],
             resource_refs: &resource_refs,
         })
         .expect("worker admission request");
-        let admission = admission_loopback(&target, &admission_request).expect("worker admission");
+        let admission = admission_loopback(target, &admission_request).expect("worker admission");
         assert_eq!(admission.plan.decision, "pass");
         let admission_ref = canonical_hash(&admission.receipt_value).expect("worker admission ref");
         let execution_request = job_execution_request_value(ExecutionRequestValueInput {
-            job_ref: &installed_job.job_ref,
+            job_ref: &installed.job_ref,
             admission_ref: &admission_ref,
             stage_ids: &admission.plan.stage_order,
             target_peer: "peer:b",
@@ -6975,30 +7007,74 @@ mod tests {
         })
         .expect("worker execution request");
         let execution_request_ref = canonical_hash(&execution_request).expect("worker execution request ref");
+        FlowParts {
+            authority_context_ref,
+            resource_refs,
+            admission,
+            admission_ref,
+            execution_request,
+            execution_request_ref,
+        }
+    }
+
+    fn request_parts(installed: &JobInstall, sync_ref: &str, flow: &FlowParts) -> RequestParts {
         let peer_bootstrap_ref = test_ref("worker-peer-bootstrap");
         let node_identity_ref = test_ref("worker-node-identity");
         let evidence_refs = vec![
-            sync_ref.clone(),
-            admission_ref.clone(),
-            execution_request_ref.clone(),
+            sync_ref.to_string(),
+            flow.admission_ref.clone(),
+            flow.execution_request_ref.clone(),
             peer_bootstrap_ref.clone(),
             node_identity_ref.clone(),
         ];
         let worker_request = job_worker_request_value(JobWorkerRequestValueInput {
-            job_ref: &installed_job.job_ref,
+            job_ref: &installed.job_ref,
             target_peer: "peer:b",
-            stage_ids: &admission.plan.stage_order,
-            sync_ref: &sync_ref,
-            admission_ref: &admission_ref,
-            execution_request_ref: &execution_request_ref,
-            authority_refs: std::slice::from_ref(&authority_context_ref),
-            resource_refs: &resource_refs,
+            stage_ids: &flow.admission.plan.stage_order,
+            sync_ref,
+            admission_ref: &flow.admission_ref,
+            execution_request_ref: &flow.execution_request_ref,
+            authority_refs: std::slice::from_ref(&flow.authority_context_ref),
+            resource_refs: &flow.resource_refs,
             peer_bootstrap_refs: std::slice::from_ref(&peer_bootstrap_ref),
             node_identity_refs: std::slice::from_ref(&node_identity_ref),
             evidence_refs: &evidence_refs,
         })
         .expect("worker request");
-        let (delivery, delivery_log) = deliver_worker_request(&root.join("transport"), &worker_request, "peer:b", true);
+        RequestParts {
+            peer_bootstrap_ref,
+            node_identity_ref,
+            evidence_refs,
+            worker_request,
+        }
+    }
+
+    fn worker_fixture(name: &str) -> WorkerFixture {
+        let root = temp_dir(name);
+        let source = root.join("source");
+        let target = root.join("target");
+        let ledger = root.join("worker-ledger");
+        let seed = seed_artifacts(&source);
+        let installed_job = seed_graph(&source, &seed);
+        let sync_ref = synced_ref(&source, &target, &installed_job, &seed);
+        let flow = flow_parts(&target, &installed_job, &sync_ref);
+        let request = request_parts(&installed_job, &sync_ref, &flow);
+        let (delivery, delivery_log) =
+            deliver_worker_request(&root.join("transport"), &request.worker_request, "peer:b", true);
+        let FlowParts {
+            authority_context_ref,
+            resource_refs,
+            admission,
+            admission_ref,
+            execution_request,
+            execution_request_ref,
+        } = flow;
+        let RequestParts {
+            peer_bootstrap_ref,
+            node_identity_ref,
+            evidence_refs,
+            worker_request,
+        } = request;
         WorkerFixture {
             root,
             source,
