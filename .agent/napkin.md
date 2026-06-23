@@ -217,6 +217,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet chunk Iroh fetch split: extracting `src/chunk/store.rs::fetch_iroh_blobs` into neutral same-file claim/ticket/manifest/plan/copy/finish helpers lowered the no-disabled probe from 7168 to 7166 by clearing the remaining chunk-store function-length finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test chunk_store`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-iroh-fetch-split-0`.
+
 - 2026-06-23 Octet chunk lineage split: extracting `src/chunk/store.rs::build_chunk_lineage` into neutral same-file `LinkSeries`/`PassEvidence` plus short predicate/verify helpers lowered the no-disabled probe from 7172 to 7170 by clearing two `function_length` findings while validation passed `cargo fmt`, focused `cargo test chunk_lineage_chains_bind_manifest_publication_fetch_and_scope`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-chunk-lineage-series-v2-0`.
 
 - 2026-06-23 Octet retention bundle verify split: extracting `src/retention/mod.rs::verify_retention_candidate_bundle` into neutral same-file expected-ref/group/file-note helpers lowered the no-disabled probe from 7174 to 7172 by clearing the function-length finding while validation passed `cargo fmt`, focused `cargo test retention`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-retention-bundle-verify-0`.

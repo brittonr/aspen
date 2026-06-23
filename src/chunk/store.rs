@@ -1265,6 +1265,389 @@ fn finish_pass(input: FinishInput<'_>) -> Result<ChunkStoreIrohPublish> {
     })
 }
 
+fn manifest_refs(manifest: &ChunkManifest) -> Vec<String> {
+    manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect()
+}
+
+fn claim_manifest(dest_root: &Path, ticket: &str, expected_manifest_ref: Option<&str>) -> Result<String> {
+    let advertised_manifest_ref = match ticket.strip_prefix("iroh-local-chunk:") {
+        Some(manifest_ref) => manifest_ref,
+        None => {
+            let receipt_value = denial_receipt_value(
+                "iroh-fetch",
+                None,
+                &[],
+                "unsupported Iroh chunk ticket; expected iroh-local-chunk:<manifest-ref>",
+                vec![("ticket-shape", "fail"), ("deny-unsupported-ticket", "pass")],
+            );
+            store_receipt(dest_root, &receipt_value)?;
+            return Err(MoltenError::invalid_harness(
+                "unsupported Iroh chunk ticket; expected iroh-local-chunk:<manifest-ref>",
+            ));
+        }
+    };
+    if let Some(expected) = expected_manifest_ref
+        && expected != advertised_manifest_ref
+    {
+        let message = format!("Iroh chunk ticket advertises manifest {advertised_manifest_ref}, expected {expected}");
+        let receipt_value = denial_receipt_value("iroh-fetch", Some(advertised_manifest_ref), &[], &message, vec![
+            ("ticket-manifest-binding", "fail"),
+            ("deny-wrong-manifest", "pass"),
+        ]);
+        store_receipt(dest_root, &receipt_value)?;
+        return Err(MoltenError::invalid_harness(message));
+    }
+    Ok(advertised_manifest_ref.to_string())
+}
+
+fn loaded_ticket(iroh_root: &Path, dest_root: &Path, advertised_manifest_ref: &str) -> Result<IrohChunkTicket> {
+    let ticket_value = match read_iroh_ticket(iroh_root, advertised_manifest_ref) {
+        Ok(ticket_value) => ticket_value,
+        Err(error) => {
+            let receipt_value =
+                denial_receipt_value("iroh-fetch", Some(advertised_manifest_ref), &[], error.to_string(), vec![
+                    ("ticket-availability", "fail"),
+                    ("deny-missing-or-invalid-ticket", "pass"),
+                ]);
+            store_receipt(dest_root, &receipt_value)?;
+            return Err(error);
+        }
+    };
+    let parsed_ticket = match parse_iroh_ticket_value(&ticket_value) {
+        Ok(parsed_ticket) => parsed_ticket,
+        Err(error) => {
+            let receipt_value =
+                denial_receipt_value("iroh-fetch", Some(advertised_manifest_ref), &[], error.to_string(), vec![
+                    ("ticket-shape", "fail"),
+                    ("deny-missing-or-invalid-ticket", "pass"),
+                ]);
+            store_receipt(dest_root, &receipt_value)?;
+            return Err(error);
+        }
+    };
+    if parsed_ticket.manifest_ref != advertised_manifest_ref {
+        let message = format!(
+            "Iroh ticket manifest {} does not match advertised manifest {advertised_manifest_ref}",
+            parsed_ticket.manifest_ref
+        );
+        let receipt_value = denial_receipt_value("iroh-fetch", Some(advertised_manifest_ref), &[], &message, vec![
+            ("ticket-manifest-binding", "fail"),
+            ("deny-wrong-manifest", "pass"),
+        ]);
+        store_receipt(dest_root, &receipt_value)?;
+        return Err(MoltenError::invalid_harness(message));
+    }
+    Ok(parsed_ticket)
+}
+
+fn received_manifest(iroh_root: &Path, dest_root: &Path, parsed_ticket: &IrohChunkTicket) -> Result<ChunkManifest> {
+    let manifest_bytes = match read_iroh_blob(iroh_root, &parsed_ticket.manifest_blob_ref) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            let receipt_value =
+                denial_receipt_value("iroh-fetch", Some(&parsed_ticket.manifest_ref), &[], error.to_string(), vec![
+                    ("manifest-blob-availability", "fail"),
+                    ("deny-missing-manifest-blob", "pass"),
+                ]);
+            store_receipt(dest_root, &receipt_value)?;
+            return Err(error);
+        }
+    };
+    if hash_blob_bytes(&manifest_bytes) != parsed_ticket.manifest_blob_ref {
+        let message = format!("Iroh manifest blob {} failed blob hash verification", parsed_ticket.manifest_blob_ref);
+        let receipt_value = denial_receipt_value("iroh-fetch", Some(&parsed_ticket.manifest_ref), &[], &message, vec![
+            ("manifest-blob-verification", "fail"),
+            ("deny-corrupt-manifest-blob", "pass"),
+        ]);
+        store_receipt(dest_root, &receipt_value)?;
+        return Err(MoltenError::invalid_harness(message));
+    }
+    let manifest_value = parse_canonical_bytes(&manifest_bytes)?;
+    let manifest_ref = canonical_hash(&manifest_value)?;
+    if manifest_ref != parsed_ticket.manifest_ref {
+        let message = format!("Iroh manifest blob hashes to {manifest_ref}, expected {}", parsed_ticket.manifest_ref);
+        let receipt_value = denial_receipt_value("iroh-fetch", Some(&parsed_ticket.manifest_ref), &[], &message, vec![
+            ("manifest-identity-preserved", "fail"),
+            ("transport-does-not-grant-trust", "pass"),
+        ]);
+        store_receipt(dest_root, &receipt_value)?;
+        return Err(MoltenError::invalid_harness(message));
+    }
+    write_immutable_bytes(
+        &manifest_path(dest_root, &manifest_ref)?,
+        &manifest_bytes,
+        &manifest_ref,
+        parse_canonical_bytes,
+    )?;
+    parse_manifest_value(&manifest_value, Some(&manifest_ref))
+}
+
+fn ticket_parts(parsed_ticket: &IrohChunkTicket) -> BTreeMap<String, IrohChunkBlob> {
+    parsed_ticket.chunks.iter().map(|chunk| (chunk.chunk_ref.clone(), chunk.clone())).collect()
+}
+
+fn require_part(
+    parts: &BTreeMap<String, IrohChunkBlob>,
+    dest_root: &Path,
+    manifest: &ChunkManifest,
+    refs: &[String],
+    part_ref: &str,
+) -> Result<()> {
+    if parts.contains_key(part_ref) {
+        return Ok(());
+    }
+    let message = format!("Iroh ticket lacks blob mapping for chunk {part_ref}");
+    let receipt_value = denial_receipt_value("iroh-fetch", Some(&manifest.manifest_ref), refs, &message, vec![
+        ("ticket-chunk-map", "fail"),
+        ("deny-incomplete-ticket", "pass"),
+    ]);
+    store_receipt(dest_root, &receipt_value)?;
+    Err(MoltenError::invalid_harness(message))
+}
+
+fn available_ref(
+    dest_root: &Path,
+    manifest: &ChunkManifest,
+    refs: &[String],
+    part: &ChunkRef,
+    part_size: usize,
+) -> Result<Option<String>> {
+    let dest_chunk_path = chunk_path(dest_root, &part.chunk_ref)?;
+    if !dest_chunk_path.exists() {
+        return Ok(None);
+    }
+    match read_verified_chunk(dest_root, part, part_size) {
+        Ok(_) => Ok(Some(part.chunk_ref.clone())),
+        Err(error) => {
+            let receipt_value =
+                denial_receipt_value("iroh-fetch", Some(&manifest.manifest_ref), refs, error.to_string(), vec![
+                    ("existing-chunk-verification", "fail"),
+                    ("deny-corrupt-dedup-source", "pass"),
+                ]);
+            store_receipt(dest_root, &receipt_value)?;
+            Err(error)
+        }
+    }
+}
+
+fn plan_incoming(
+    dest_root: &Path,
+    manifest: &ChunkManifest,
+    refs: &[String],
+    parts: &BTreeMap<String, IrohChunkBlob>,
+    part_size: usize,
+) -> Result<Scan> {
+    let mut missing_before = Vec::new();
+    let mut already_available = Vec::new();
+    for part in &manifest.chunks {
+        require_part(parts, dest_root, manifest, refs, &part.chunk_ref)?;
+        if let Some(part_ref) = available_ref(dest_root, manifest, refs, part, part_size)? {
+            push_bounded(
+                &mut already_available,
+                part_ref,
+                MAX_CHUNK_STORE_CHUNKS,
+                "chunk store already available chunks",
+            )?;
+        } else {
+            push_bounded(
+                &mut missing_before,
+                part.chunk_ref.clone(),
+                MAX_CHUNK_STORE_CHUNKS,
+                "chunk store missing-before chunks",
+            )?;
+        }
+    }
+    Ok(Scan {
+        missing_before,
+        already_available,
+    })
+}
+
+fn part_for<'a>(manifest: &'a ChunkManifest, part_ref: &str) -> Result<&'a ChunkRef> {
+    manifest
+        .chunks
+        .iter()
+        .find(|candidate| candidate.chunk_ref == part_ref)
+        .ok_or_else(|| MoltenError::invalid_harness(format!("manifest missing expected chunk {part_ref}")))
+}
+
+fn blob_for<'a>(parts: &'a BTreeMap<String, IrohChunkBlob>, part_ref: &str) -> Result<&'a IrohChunkBlob> {
+    parts
+        .get(part_ref)
+        .ok_or_else(|| MoltenError::invalid_harness(format!("Iroh ticket lacks blob mapping for chunk {part_ref}")))
+}
+
+fn require_blob_len(
+    dest_root: &Path,
+    manifest: &ChunkManifest,
+    refs: &[String],
+    part: &ChunkRef,
+    blob: &IrohChunkBlob,
+) -> Result<()> {
+    if blob.length == part.length {
+        return Ok(());
+    }
+    let message = format!(
+        "Iroh ticket length {} for chunk {} does not match manifest length {}",
+        blob.length, part.chunk_ref, part.length
+    );
+    let receipt_value = denial_receipt_value("iroh-fetch", Some(&manifest.manifest_ref), refs, &message, vec![
+        ("ticket-chunk-map", "fail"),
+        ("deny-incomplete-ticket", "pass"),
+    ]);
+    store_receipt(dest_root, &receipt_value)?;
+    Err(MoltenError::invalid_harness(message))
+}
+
+struct BlobInput<'a> {
+    iroh_root: &'a Path,
+    dest_root: &'a Path,
+    manifest: &'a ChunkManifest,
+    refs: &'a [String],
+    blob: &'a IrohChunkBlob,
+}
+
+fn blob_bytes(input: BlobInput<'_>) -> Result<Vec<u8>> {
+    let bytes: Vec<u8> = match read_iroh_blob(input.iroh_root, &input.blob.blob_ref) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            let receipt_value = denial_receipt_value(
+                "iroh-fetch",
+                Some(&input.manifest.manifest_ref),
+                input.refs,
+                error.to_string(),
+                vec![("chunk-blob-availability", "fail"), ("deny-missing-chunk-blob", "pass")],
+            );
+            store_receipt(input.dest_root, &receipt_value)?;
+            return Err(error);
+        }
+    };
+    if hash_blob_bytes(&bytes) == input.blob.blob_ref {
+        return Ok(bytes);
+    }
+    let message = format!("Iroh chunk blob {} failed blob hash verification", input.blob.blob_ref);
+    let receipt_value =
+        denial_receipt_value("iroh-fetch", Some(&input.manifest.manifest_ref), input.refs, &message, vec![
+            ("chunk-blob-verification", "fail"),
+            ("deny-corrupt-chunk-blob", "pass"),
+        ]);
+    store_receipt(input.dest_root, &receipt_value)?;
+    Err(MoltenError::invalid_harness(message))
+}
+
+struct IncomingInput<'a> {
+    iroh_root: &'a Path,
+    dest_root: &'a Path,
+    manifest: &'a ChunkManifest,
+    refs: &'a [String],
+    parts: &'a BTreeMap<String, IrohChunkBlob>,
+    missing_before: &'a [String],
+    part_size: usize,
+}
+
+fn copy_incoming(input: IncomingInput<'_>) -> Result<Vec<String>> {
+    let mut fetched_chunks = Vec::new();
+    for part_ref in input.missing_before {
+        let part = part_for(input.manifest, part_ref)?;
+        let blob = blob_for(input.parts, part_ref)?;
+        require_blob_len(input.dest_root, input.manifest, input.refs, part, blob)?;
+        let bytes = blob_bytes(BlobInput {
+            iroh_root: input.iroh_root,
+            dest_root: input.dest_root,
+            manifest: input.manifest,
+            refs: input.refs,
+            blob,
+        })?;
+        if let Err(error) = verify_raw_chunk_bytes(&bytes, &part.chunk_ref, part.length, input.part_size) {
+            let receipt_value = denial_receipt_value(
+                "iroh-fetch",
+                Some(&input.manifest.manifest_ref),
+                input.refs,
+                error.to_string(),
+                vec![
+                    ("streaming-chunk-verification", "fail"),
+                    ("deny-corrupt-chunk-blob", "pass"),
+                ],
+            );
+            store_receipt(input.dest_root, &receipt_value)?;
+            return Err(error);
+        }
+        fs::write(chunk_path(input.dest_root, &part.chunk_ref)?, bytes).map_err(MoltenError::from)?;
+        push_bounded(
+            &mut fetched_chunks,
+            part.chunk_ref.clone(),
+            MAX_CHUNK_STORE_CHUNKS,
+            "chunk store fetched chunks",
+        )?;
+        index_set_partial_fetch(
+            input.dest_root,
+            &input.manifest.manifest_ref,
+            "in-progress",
+            input.missing_before,
+            &fetched_chunks,
+        )?;
+    }
+    Ok(fetched_chunks)
+}
+
+struct FinishIncoming<'a> {
+    dest_root: &'a Path,
+    ticket_text: &'a str,
+    peer: &'a str,
+    manifest: ChunkManifest,
+    parsed_ticket: IrohChunkTicket,
+    missing_before: Vec<String>,
+    fetched_chunks: Vec<String>,
+}
+
+fn finish_incoming(input: FinishIncoming<'_>) -> Result<ChunkStoreIrohFetch> {
+    verify_manifest(input.dest_root, &input.manifest.manifest_ref)?;
+    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+        operation: "iroh-fetch",
+        decision: "pass",
+        manifest_ref: Some(&input.manifest.manifest_ref),
+        chunk_refs: &input.fetched_chunks,
+        checks: vec![
+            ("ticket-manifest-binding", "pass"),
+            ("manifest-identity-preserved", "pass"),
+            ("missing-chunk-calculation", "pass"),
+            ("resumable-fetch", "pass"),
+            ("streaming-chunk-verification", "pass"),
+            ("transport-does-not-grant-trust", "pass"),
+        ],
+        details: vec![
+            record("peer", vec![string(input.peer)]),
+            record("ticket", vec![string(input.ticket_text)]),
+            record("manifest-blob-ref", vec![string(&input.parsed_ticket.manifest_blob_ref)]),
+            record("missing-before", vec![sequence(input.missing_before.iter().map(string).collect())]),
+            record("fetched", vec![sequence(input.fetched_chunks.iter().map(string).collect())]),
+        ],
+    });
+    let available_after = manifest_refs(&input.manifest);
+    index_set_manifest_chunk_availability(
+        input.dest_root,
+        &input.manifest,
+        &available_after,
+        &[],
+        Some(&receipt_value),
+    )?;
+    index_set_partial_fetch(
+        input.dest_root,
+        &input.manifest.manifest_ref,
+        "complete",
+        &input.missing_before,
+        &input.fetched_chunks,
+    )?;
+    Ok(ChunkStoreIrohFetch {
+        ticket: input.ticket_text.to_string(),
+        manifest_ref: input.manifest.manifest_ref,
+        manifest_blob_ref: input.parsed_ticket.manifest_blob_ref,
+        missing_before: input.missing_before,
+        fetched_chunks: input.fetched_chunks,
+        receipt_value,
+    })
+}
+
 pub fn publish_iroh_blobs(
     store_root: &Path,
     iroh_root: &Path,
@@ -1331,111 +1714,10 @@ pub fn fetch_iroh_blobs(
 ) -> Result<ChunkStoreIrohFetch> {
     ensure_dirs(dest_root)?;
     ensure_iroh_dirs(iroh_root)?;
-    let advertised_manifest_ref = match ticket.strip_prefix("iroh-local-chunk:") {
-        Some(manifest_ref) => manifest_ref,
-        None => {
-            let receipt_value = denial_receipt_value(
-                "iroh-fetch",
-                None,
-                &[],
-                "unsupported Iroh chunk ticket; expected iroh-local-chunk:<manifest-ref>",
-                vec![("ticket-shape", "fail"), ("deny-unsupported-ticket", "pass")],
-            );
-            store_receipt(dest_root, &receipt_value)?;
-            return Err(MoltenError::invalid_harness(
-                "unsupported Iroh chunk ticket; expected iroh-local-chunk:<manifest-ref>",
-            ));
-        }
-    };
-    if let Some(expected) = expected_manifest_ref
-        && expected != advertised_manifest_ref
-    {
-        let message = format!("Iroh chunk ticket advertises manifest {advertised_manifest_ref}, expected {expected}");
-        let receipt_value = denial_receipt_value("iroh-fetch", Some(advertised_manifest_ref), &[], &message, vec![
-            ("ticket-manifest-binding", "fail"),
-            ("deny-wrong-manifest", "pass"),
-        ]);
-        store_receipt(dest_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
-    }
-
-    let ticket_value = match read_iroh_ticket(iroh_root, advertised_manifest_ref) {
-        Ok(ticket_value) => ticket_value,
-        Err(error) => {
-            let receipt_value =
-                denial_receipt_value("iroh-fetch", Some(advertised_manifest_ref), &[], error.to_string(), vec![
-                    ("ticket-availability", "fail"),
-                    ("deny-missing-or-invalid-ticket", "pass"),
-                ]);
-            store_receipt(dest_root, &receipt_value)?;
-            return Err(error);
-        }
-    };
-    let parsed_ticket = match parse_iroh_ticket_value(&ticket_value) {
-        Ok(parsed_ticket) => parsed_ticket,
-        Err(error) => {
-            let receipt_value =
-                denial_receipt_value("iroh-fetch", Some(advertised_manifest_ref), &[], error.to_string(), vec![
-                    ("ticket-shape", "fail"),
-                    ("deny-missing-or-invalid-ticket", "pass"),
-                ]);
-            store_receipt(dest_root, &receipt_value)?;
-            return Err(error);
-        }
-    };
-    if parsed_ticket.manifest_ref != advertised_manifest_ref {
-        let message = format!(
-            "Iroh ticket manifest {} does not match advertised manifest {advertised_manifest_ref}",
-            parsed_ticket.manifest_ref
-        );
-        let receipt_value = denial_receipt_value("iroh-fetch", Some(advertised_manifest_ref), &[], &message, vec![
-            ("ticket-manifest-binding", "fail"),
-            ("deny-wrong-manifest", "pass"),
-        ]);
-        store_receipt(dest_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
-    }
-
-    let manifest_bytes = match read_iroh_blob(iroh_root, &parsed_ticket.manifest_blob_ref) {
-        Ok(bytes) => bytes,
-        Err(error) => {
-            let receipt_value =
-                denial_receipt_value("iroh-fetch", Some(&parsed_ticket.manifest_ref), &[], error.to_string(), vec![
-                    ("manifest-blob-availability", "fail"),
-                    ("deny-missing-manifest-blob", "pass"),
-                ]);
-            store_receipt(dest_root, &receipt_value)?;
-            return Err(error);
-        }
-    };
-    if hash_blob_bytes(&manifest_bytes) != parsed_ticket.manifest_blob_ref {
-        let message = format!("Iroh manifest blob {} failed blob hash verification", parsed_ticket.manifest_blob_ref);
-        let receipt_value = denial_receipt_value("iroh-fetch", Some(&parsed_ticket.manifest_ref), &[], &message, vec![
-            ("manifest-blob-verification", "fail"),
-            ("deny-corrupt-manifest-blob", "pass"),
-        ]);
-        store_receipt(dest_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
-    }
-    let manifest_value = parse_canonical_bytes(&manifest_bytes)?;
-    let manifest_ref = canonical_hash(&manifest_value)?;
-    if manifest_ref != parsed_ticket.manifest_ref {
-        let message = format!("Iroh manifest blob hashes to {manifest_ref}, expected {}", parsed_ticket.manifest_ref);
-        let receipt_value = denial_receipt_value("iroh-fetch", Some(&parsed_ticket.manifest_ref), &[], &message, vec![
-            ("manifest-identity-preserved", "fail"),
-            ("transport-does-not-grant-trust", "pass"),
-        ]);
-        store_receipt(dest_root, &receipt_value)?;
-        return Err(MoltenError::invalid_harness(message));
-    }
-    write_immutable_bytes(
-        &manifest_path(dest_root, &manifest_ref)?,
-        &manifest_bytes,
-        &manifest_ref,
-        parse_canonical_bytes,
-    )?;
-    let manifest = parse_manifest_value(&manifest_value, Some(&manifest_ref))?;
-    let chunk_refs = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
+    let advertised_manifest_ref = claim_manifest(dest_root, ticket, expected_manifest_ref)?;
+    let parsed_ticket = loaded_ticket(iroh_root, dest_root, &advertised_manifest_ref)?;
+    let manifest = received_manifest(iroh_root, dest_root, &parsed_ticket)?;
+    let chunk_refs = manifest_refs(&manifest);
     if let Some(message) = unsupported_transform_message(&manifest) {
         let receipt_value =
             denial_receipt_value("iroh-fetch", Some(&manifest.manifest_ref), &chunk_refs, &message, vec![
@@ -1446,159 +1728,30 @@ pub fn fetch_iroh_blobs(
         return Err(MoltenError::invalid_harness(message));
     }
 
-    let ticket_chunks = parsed_ticket
-        .chunks
-        .iter()
-        .map(|chunk| (chunk.chunk_ref.clone(), chunk.clone()))
-        .collect::<BTreeMap<_, _>>();
+    let ticket_chunks = ticket_parts(&parsed_ticket);
     let chunk_size = chunk_size_to_usize(manifest.chunk_size, "manifest chunk size")?;
-    let mut missing_before = Vec::new();
-    let mut already_available = Vec::new();
-    for chunk in &manifest.chunks {
-        if !ticket_chunks.contains_key(&chunk.chunk_ref) {
-            let message = format!("Iroh ticket lacks blob mapping for chunk {}", chunk.chunk_ref);
-            let receipt_value =
-                denial_receipt_value("iroh-fetch", Some(&manifest.manifest_ref), &chunk_refs, &message, vec![
-                    ("ticket-chunk-map", "fail"),
-                    ("deny-incomplete-ticket", "pass"),
-                ]);
-            store_receipt(dest_root, &receipt_value)?;
-            return Err(MoltenError::invalid_harness(message));
-        }
-        let dest_chunk_path = chunk_path(dest_root, &chunk.chunk_ref)?;
-        if dest_chunk_path.exists() {
-            match read_verified_chunk(dest_root, chunk, chunk_size) {
-                Ok(_) => push_bounded(
-                    &mut already_available,
-                    chunk.chunk_ref.clone(),
-                    MAX_CHUNK_STORE_CHUNKS,
-                    "chunk store already available chunks",
-                )?,
-                Err(error) => {
-                    let receipt_value = denial_receipt_value(
-                        "iroh-fetch",
-                        Some(&manifest.manifest_ref),
-                        &chunk_refs,
-                        error.to_string(),
-                        vec![
-                            ("existing-chunk-verification", "fail"),
-                            ("deny-corrupt-dedup-source", "pass"),
-                        ],
-                    );
-                    store_receipt(dest_root, &receipt_value)?;
-                    return Err(error);
-                }
-            }
-        } else {
-            push_bounded(
-                &mut missing_before,
-                chunk.chunk_ref.clone(),
-                MAX_CHUNK_STORE_CHUNKS,
-                "chunk store missing-before chunks",
-            )?;
-        }
-    }
-    index_set_partial_fetch(dest_root, &manifest.manifest_ref, "in-progress", &missing_before, &[])?;
-    index_set_manifest_chunk_availability(dest_root, &manifest, &already_available, &missing_before, None)?;
+    let scan = plan_incoming(dest_root, &manifest, &chunk_refs, &ticket_chunks, chunk_size)?;
+    index_set_partial_fetch(dest_root, &manifest.manifest_ref, "in-progress", &scan.missing_before, &[])?;
+    index_set_manifest_chunk_availability(dest_root, &manifest, &scan.already_available, &scan.missing_before, None)?;
 
-    let mut fetched_chunks = Vec::new();
-    for chunk_ref in &missing_before {
-        let chunk = manifest
-            .chunks
-            .iter()
-            .find(|candidate| &candidate.chunk_ref == chunk_ref)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("manifest missing expected chunk {chunk_ref}")))?;
-        let blob = ticket_chunks.get(chunk_ref).ok_or_else(|| {
-            MoltenError::invalid_harness(format!("Iroh ticket lacks blob mapping for chunk {chunk_ref}"))
-        })?;
-        if blob.length != chunk.length {
-            let message = format!(
-                "Iroh ticket length {} for chunk {chunk_ref} does not match manifest length {}",
-                blob.length, chunk.length
-            );
-            let receipt_value =
-                denial_receipt_value("iroh-fetch", Some(&manifest.manifest_ref), &chunk_refs, &message, vec![
-                    ("ticket-chunk-map", "fail"),
-                    ("deny-incomplete-ticket", "pass"),
-                ]);
-            store_receipt(dest_root, &receipt_value)?;
-            return Err(MoltenError::invalid_harness(message));
-        }
-        let bytes: Vec<u8> = match read_iroh_blob(iroh_root, &blob.blob_ref) {
-            Ok(bytes) => bytes,
-            Err(error) => {
-                let receipt_value = denial_receipt_value(
-                    "iroh-fetch",
-                    Some(&manifest.manifest_ref),
-                    &chunk_refs,
-                    error.to_string(),
-                    vec![("chunk-blob-availability", "fail"), ("deny-missing-chunk-blob", "pass")],
-                );
-                store_receipt(dest_root, &receipt_value)?;
-                return Err(error);
-            }
-        };
-        if hash_blob_bytes(&bytes) != blob.blob_ref {
-            let message = format!("Iroh chunk blob {} failed blob hash verification", blob.blob_ref);
-            let receipt_value =
-                denial_receipt_value("iroh-fetch", Some(&manifest.manifest_ref), &chunk_refs, &message, vec![
-                    ("chunk-blob-verification", "fail"),
-                    ("deny-corrupt-chunk-blob", "pass"),
-                ]);
-            store_receipt(dest_root, &receipt_value)?;
-            return Err(MoltenError::invalid_harness(message));
-        }
-        if let Err(error) = verify_raw_chunk_bytes(&bytes, &chunk.chunk_ref, chunk.length, chunk_size) {
-            let receipt_value =
-                denial_receipt_value("iroh-fetch", Some(&manifest.manifest_ref), &chunk_refs, error.to_string(), vec![
-                    ("streaming-chunk-verification", "fail"),
-                    ("deny-corrupt-chunk-blob", "pass"),
-                ]);
-            store_receipt(dest_root, &receipt_value)?;
-            return Err(error);
-        }
-        fs::write(chunk_path(dest_root, &chunk.chunk_ref)?, bytes).map_err(MoltenError::from)?;
-        push_bounded(
-            &mut fetched_chunks,
-            chunk.chunk_ref.clone(),
-            MAX_CHUNK_STORE_CHUNKS,
-            "chunk store fetched chunks",
-        )?;
-        index_set_partial_fetch(dest_root, &manifest.manifest_ref, "in-progress", &missing_before, &fetched_chunks)?;
-    }
+    let fetched_chunks = copy_incoming(IncomingInput {
+        iroh_root,
+        dest_root,
+        manifest: &manifest,
+        refs: &chunk_refs,
+        parts: &ticket_chunks,
+        missing_before: &scan.missing_before,
+        part_size: chunk_size,
+    })?;
 
-    verify_manifest(dest_root, &manifest.manifest_ref)?;
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
-        operation: "iroh-fetch",
-        decision: "pass",
-        manifest_ref: Some(&manifest.manifest_ref),
-        chunk_refs: &fetched_chunks,
-        checks: vec![
-            ("ticket-manifest-binding", "pass"),
-            ("manifest-identity-preserved", "pass"),
-            ("missing-chunk-calculation", "pass"),
-            ("resumable-fetch", "pass"),
-            ("streaming-chunk-verification", "pass"),
-            ("transport-does-not-grant-trust", "pass"),
-        ],
-        details: vec![
-            record("peer", vec![string(peer)]),
-            record("ticket", vec![string(ticket)]),
-            record("manifest-blob-ref", vec![string(&parsed_ticket.manifest_blob_ref)]),
-            record("missing-before", vec![sequence(missing_before.iter().map(string).collect())]),
-            record("fetched", vec![sequence(fetched_chunks.iter().map(string).collect())]),
-        ],
-    });
-    let available_after = manifest.chunks.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
-    index_set_manifest_chunk_availability(dest_root, &manifest, &available_after, &[], Some(&receipt_value))?;
-    index_set_partial_fetch(dest_root, &manifest.manifest_ref, "complete", &missing_before, &fetched_chunks)?;
-    Ok(ChunkStoreIrohFetch {
-        ticket: ticket.to_string(),
-        manifest_ref: manifest.manifest_ref,
-        manifest_blob_ref: parsed_ticket.manifest_blob_ref,
-        missing_before,
+    finish_incoming(FinishIncoming {
+        dest_root,
+        ticket_text: ticket,
+        peer,
+        manifest,
+        parsed_ticket,
+        missing_before: scan.missing_before,
         fetched_chunks,
-        receipt_value,
     })
 }
 
