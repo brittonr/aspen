@@ -2701,44 +2701,7 @@ pub fn execution_loopback(input: ExecutionLoopbackInput<'_>) -> Result<JobExecut
 pub fn fusion_preview_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<JobFusionPreview> {
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
-    let positions = plan
-        .order_ids
-        .iter()
-        .enumerate()
-        .map(|(index, node_id)| (node_id.clone(), index))
-        .collect::<BTreeMap<_, _>>();
-    let node_map = dag.nodes.iter().map(|node| (node.id.clone(), node)).collect::<BTreeMap<_, _>>();
-    let mut edges = dag.edges.iter().collect::<Vec<_>>();
-    edges.sort_by(|left, right| fusion_edge_sort_key(&positions, left).cmp(&fusion_edge_sort_key(&positions, right)));
-    let mut chain_values = Vec::new();
-    let mut chains = Vec::new();
-    for edge in edges {
-        let from = node_map
-            .get(&edge.from_node)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("fusion edge from missing node {}", edge.from_node)))?;
-        let to = node_map
-            .get(&edge.to_node)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("fusion edge to missing node {}", edge.to_node)))?;
-        if fusion_edge_safe(from, to, edge) {
-            let chain = vec![from.id.clone(), to.id.clone()];
-            push_bounded(
-                &mut chain_values,
-                record("job-fusion-chain-v1", vec![
-                    record("stages", vec![sequence(chain.iter().map(string).collect())]),
-                    record("reason", vec![string("pure-adjacent-map-filter")]),
-                    checks_value(&[
-                        "trellis-adjacent-order",
-                        "no-materialization-boundary",
-                        "no-effect-policy-boundary",
-                        "schema-boundary-preserved",
-                    ]),
-                ]),
-                MAX_JOB_EDGES,
-                "job fusion chain values",
-            )?;
-            push_bounded(&mut chains, chain, MAX_JOB_EDGES, "job fusion chains")?;
-        }
-    }
+    let (chain_values, chains) = adjacent_chains(dag, &plan.order_ids)?;
     let value = record("job-fusion-plan-v1", vec![
         string(JOB_FUSION_PLAN_SCHEMA),
         record("job", vec![string(&dag.job_ref)]),
@@ -2774,6 +2737,47 @@ pub fn fusion_preview_job_dag(dag: &JobDag, output_request: Option<&IOValue>) ->
         value,
         receipt_value,
     })
+}
+
+fn adjacent_chains(dag: &JobDag, order_ids: &[String]) -> Result<(Vec<IOValue>, Vec<Vec<String>>)> {
+    let positions = order_ids
+        .iter()
+        .enumerate()
+        .map(|(index, node_id)| (node_id.clone(), index))
+        .collect::<BTreeMap<_, _>>();
+    let node_map = dag.nodes.iter().map(|node| (node.id.clone(), node)).collect::<BTreeMap<_, _>>();
+    let mut edges = dag.edges.iter().collect::<Vec<_>>();
+    edges.sort_by(|left, right| fusion_edge_sort_key(&positions, left).cmp(&fusion_edge_sort_key(&positions, right)));
+
+    let mut chain_values = Vec::new();
+    let mut chains = Vec::new();
+    for edge in edges {
+        let from = node_map
+            .get(&edge.from_node)
+            .ok_or_else(|| MoltenError::invalid_harness(format!("fusion edge from missing node {}", edge.from_node)))?;
+        let to = node_map
+            .get(&edge.to_node)
+            .ok_or_else(|| MoltenError::invalid_harness(format!("fusion edge to missing node {}", edge.to_node)))?;
+        if fusion_edge_safe(from, to, edge) {
+            let chain = vec![from.id.clone(), to.id.clone()];
+            push_bounded(&mut chain_values, adjacent_chain_value(&chain), MAX_JOB_EDGES, "job fusion chain values")?;
+            push_bounded(&mut chains, chain, MAX_JOB_EDGES, "job fusion chains")?;
+        }
+    }
+    Ok((chain_values, chains))
+}
+
+fn adjacent_chain_value(chain: &[String]) -> IOValue {
+    record("job-fusion-chain-v1", vec![
+        record("stages", vec![sequence(chain.iter().map(string).collect())]),
+        record("reason", vec![string("pure-adjacent-map-filter")]),
+        checks_value(&[
+            "trellis-adjacent-order",
+            "no-materialization-boundary",
+            "no-effect-policy-boundary",
+            "schema-boundary-preserved",
+        ]),
+    ])
 }
 
 fn selected_stage_set(
