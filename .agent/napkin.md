@@ -218,6 +218,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet effects chaos/profiling test split: extracting `src/effects/mod.rs::chaos_and_profiling_profiles_are_bounded_evidence_only` into neutral same-file `Env` plus short chaos/metric helpers lowered the no-disabled probe from 7154 to 7153 by clearing one `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test chaos_and_profiling_profiles_are_bounded_evidence_only`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-effects-chaos-split-0`.
+
 - 2026-06-23 Octet effects handle split: extracting `src/effects/mod.rs::validate_parsed_handle_for_request` into neutral same-file binding/context/lifetime helpers lowered the no-disabled probe from 7157 to 7155 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test effects`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-effects-handle-split-0`.
 
 - 2026-06-23 Octet coordination commit split: extracting `src/coordination/mod.rs::commit_prepared_mutation` into neutral same-file proposal/parts/receipt/evidence helpers lowered the no-disabled probe from 7161 to 7159 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test coordination`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-coordination-commit-split-0`.
