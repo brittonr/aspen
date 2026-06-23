@@ -220,6 +220,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet node live-workflow protocol split: extracting `src/node/daemon.rs::gate_node_control_live_workflow_protocol` repeated send/receive legs into neutral same-file `RolePair`/`LegInput`/`RunValues` helpers lowered the no-disabled probe from 7111 to 7109 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_live_workflow_bundle_reconcile_binds_receiver_evidence`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-node-flow-values-0`.
+
 - 2026-06-23 Octet operator retention-GC split: extracting `src/operator/dogfood.rs::run_retention_gc_workflow` into neutral same-file `GcSeed`/`GcAdmissions`/`GcFlow` helpers lowered the no-disabled probe from 7114 to 7112 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test local_node_dogfood_runs_and_gates_release`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-operator-gc-split-0`.
 
 - 2026-06-23 Octet job stack split: extracting `src/operator/dogfood.rs::run_job_stack` setup/sync/admission/execution pieces into neutral same-file `JobParts`/`StageArtifacts`/input helpers lowered the no-disabled probe from 7116 to 7114 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test local_node_dogfood_runs_and_gates_release`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-job-stack-parts-0`.
