@@ -455,12 +455,55 @@ pub fn parse_fencing_token(value: &IOValue) -> Result<FencingToken> {
 }
 
 pub fn coordination_state_snapshot_value(state: &CoordinationState) -> Result<IOValue> {
+    let records = state_records(state)?;
+    let retention_refs = retention_refs_for_state(state)?;
+    Ok(record("coordination-state-snapshot-v1", vec![
+        string(COORDINATION_STATE_SNAPSHOT_SCHEMA),
+        record("locks", vec![sequence(records.locks)]),
+        record("queues", vec![sequence(records.queues)]),
+        record("semaphores", vec![sequence(records.semaphores)]),
+        record("rates", vec![sequence(records.rates)]),
+        record("elections", vec![sequence(records.elections)]),
+        record("barriers", vec![sequence(records.barriers)]),
+        record("registry", vec![sequence(records.registry)]),
+        record("next-fencing-token", vec![u64_value(state.next_fencing_token)]),
+        record("retention", vec![strings_sequence(&retention_refs)]),
+        checks_value(&[
+            ("deterministic-state-order", "pass"),
+            ("active-state-retention-pins", "pass"),
+            ("control-plane-reflection-source", "pass"),
+        ]),
+    ]))
+}
+
+struct StateRecords {
+    locks: Vec<IOValue>,
+    queues: Vec<IOValue>,
+    semaphores: Vec<IOValue>,
+    rates: Vec<IOValue>,
+    elections: Vec<IOValue>,
+    barriers: Vec<IOValue>,
+    registry: Vec<IOValue>,
+}
+
+fn state_records(state: &CoordinationState) -> Result<StateRecords> {
     ensure_count_at_most(state.locks.len(), MAX_COORDINATION_ITEMS, "coordination locks")?;
     ensure_count_at_most(state.queues.len(), MAX_COORDINATION_ITEMS, "coordination queues")?;
     ensure_count_at_most(state.semaphores.len(), MAX_COORDINATION_ITEMS, "coordination semaphores")?;
     ensure_count_at_most(state.registry.len(), MAX_COORDINATION_ITEMS, "coordination registry")?;
-    let locks = state
-        .locks
+    Ok(StateRecords {
+        locks: lock_records(&state.locks),
+        queues: queue_records(&state.queues),
+        semaphores: semaphore_records(&state.semaphores),
+        rates: rate_records(&state.rates),
+        elections: election_records(&state.elections),
+        barriers: barrier_records(&state.barriers),
+        registry: registry_records(&state.registry),
+    })
+}
+
+fn lock_records(locks: &BTreeMap<String, LockState>) -> Vec<IOValue> {
+    locks
         .iter()
         .map(|(key, lock)| {
             record("lock", vec![
@@ -471,23 +514,32 @@ pub fn coordination_state_snapshot_value(state: &CoordinationState) -> Result<IO
                 u64_value(lock.lease_epoch),
             ])
         })
-        .collect();
-    let queues = state
-        .queues
+        .collect()
+}
+
+fn queue_records(queues: &BTreeMap<String, Vec<String>>) -> Vec<IOValue> {
+    queues
         .iter()
         .map(|(key, items)| record("queue", vec![string(key), strings_sequence(items)]))
-        .collect();
-    let semaphores = state
-        .semaphores
+        .collect()
+}
+
+fn semaphore_records(semaphores: &BTreeMap<String, BTreeSet<String>>) -> Vec<IOValue> {
+    semaphores
         .iter()
         .map(|(key, holders)| {
             let values = holders.iter().cloned().collect::<Vec<_>>();
             record("semaphore", vec![string(key), strings_sequence(&values)])
         })
-        .collect();
-    let rates = state.rates.iter().map(|(key, used)| record("rate", vec![string(key), u64_value(*used)])).collect();
-    let elections = state
-        .elections
+        .collect()
+}
+
+fn rate_records(rates: &BTreeMap<String, u64>) -> Vec<IOValue> {
+    rates.iter().map(|(key, used)| record("rate", vec![string(key), u64_value(*used)])).collect()
+}
+
+fn election_records(elections: &BTreeMap<String, ElectionState>) -> Vec<IOValue> {
+    elections
         .iter()
         .map(|(key, election)| {
             record("election", vec![
@@ -497,9 +549,11 @@ pub fn coordination_state_snapshot_value(state: &CoordinationState) -> Result<IO
                 string(&election.token_ref),
             ])
         })
-        .collect();
-    let barriers = state
-        .barriers
+        .collect()
+}
+
+fn barrier_records(barriers: &BTreeMap<String, BarrierState>) -> Vec<IOValue> {
+    barriers
         .iter()
         .map(|(key, barrier)| {
             let participants = barrier.participants.iter().cloned().collect::<Vec<_>>();
@@ -510,32 +564,16 @@ pub fn coordination_state_snapshot_value(state: &CoordinationState) -> Result<IO
                 string(if barrier.is_released { "released" } else { "waiting" }),
             ])
         })
-        .collect();
-    let registry = state
-        .registry
+        .collect()
+}
+
+fn registry_records(registry: &BTreeMap<String, RegistryEntry>) -> Vec<IOValue> {
+    registry
         .iter()
         .map(|(key, entry)| {
             record("registry-entry", vec![string(key), string(&entry.endpoint_ref), string(&entry.evidence_ref)])
         })
-        .collect();
-    let retention_refs = retention_refs_for_state(state)?;
-    Ok(record("coordination-state-snapshot-v1", vec![
-        string(COORDINATION_STATE_SNAPSHOT_SCHEMA),
-        record("locks", vec![sequence(locks)]),
-        record("queues", vec![sequence(queues)]),
-        record("semaphores", vec![sequence(semaphores)]),
-        record("rates", vec![sequence(rates)]),
-        record("elections", vec![sequence(elections)]),
-        record("barriers", vec![sequence(barriers)]),
-        record("registry", vec![sequence(registry)]),
-        record("next-fencing-token", vec![u64_value(state.next_fencing_token)]),
-        record("retention", vec![strings_sequence(&retention_refs)]),
-        checks_value(&[
-            ("deterministic-state-order", "pass"),
-            ("active-state-retention-pins", "pass"),
-            ("control-plane-reflection-source", "pass"),
-        ]),
-    ]))
+        .collect()
 }
 
 pub fn parse_coordination_state_snapshot(value: &IOValue) -> Result<CoordinationStateSnapshot> {
