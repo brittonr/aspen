@@ -1622,10 +1622,44 @@ pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> 
     ensure_count_at_most(dag.nodes.len(), MAX_JOB_NODES, "job run nodes")?;
     ensure_count_at_most(dag.edges.len(), MAX_JOB_EDGES, "job run edges")?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
+    let stages = run_stages(dag, &request, &plan, options)?;
+    let finish = complete_run(CompleteInput {
+        dag,
+        request: &request,
+        plan: &plan,
+        outputs_by_index: &stages.outputs_by_index,
+        output_refs_by_index: &stages.output_refs_by_index,
+        stage_receipt_refs: &stages.receipt_refs,
+    })?;
+    if let Some(ledger_root) = options.ledger_root {
+        ledger::import_artifact(ledger_root, &finish.receipt_value)?;
+    }
+    Ok(JobRun {
+        job_ref: dag.job_ref.clone(),
+        request_ref: request.request_ref,
+        stage_receipt_refs: stages.receipt_refs,
+        output_refs: finish.output_refs,
+        output_value: finish.output_value,
+        receipt_value: finish.receipt_value,
+    })
+}
+
+struct RunStages {
+    receipt_refs: Vec<String>,
+    outputs_by_index: Vec<Option<Vec<IOValue>>>,
+    output_refs_by_index: Vec<Option<Vec<String>>>,
+}
+
+fn run_stages(
+    dag: &JobDag,
+    request: &JobOutputRequest,
+    plan: &TrellisExecutionPlan,
+    options: &JobRunOptions<'_>,
+) -> Result<RunStages> {
     let mut completed_indices = Vec::with_capacity(plan.order_ids.len());
     let mut outputs_by_index: Vec<Option<Vec<IOValue>>> = vec![None; dag.nodes.len()];
     let mut output_refs_by_index: Vec<Option<Vec<String>>> = vec![None; dag.nodes.len()];
-    let mut stage_receipt_refs = Vec::with_capacity(plan.order_ids.len());
+    let mut receipt_refs = Vec::with_capacity(plan.order_ids.len());
     for node_id in &plan.order_ids {
         let deps = plan.dependency_indices.get(node_id).cloned().unwrap_or_default();
         if !trellis::job_dag::all_deps_satisfied(&deps, &completed_indices)
@@ -1637,14 +1671,14 @@ pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> 
         }
         let node = find_job_node(&dag.nodes, node_id)?;
         let inputs = gather_inputs(node, &dag.edges, &outputs_by_index, &plan.node_index)?;
-        let stage = run_stage_with_cache(dag, &request, node, &inputs, options)?;
+        let stage = run_stage_with_cache(dag, request, node, &inputs, options)?;
         let receipt_ref = canonical_hash(&stage.receipt_value)?;
         if let Some(ledger_root) = options.ledger_root {
             ledger::import_artifact(ledger_root, &stage.receipt_value)?;
         }
         ensure_count_at_most(stage.output_refs.len(), MAX_JOB_REFS, "job stage output refs")?;
         ensure_count_at_most(stage.output_values.len(), MAX_JOB_STAGE_VALUES, "job stage output values")?;
-        push_bounded(&mut stage_receipt_refs, receipt_ref, MAX_JOB_NODES, "job stage receipt refs")?;
+        push_bounded(&mut receipt_refs, receipt_ref, MAX_JOB_NODES, "job stage receipt refs")?;
         let node_index = *plan
             .node_index
             .get(node_id)
@@ -1664,6 +1698,32 @@ pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> 
             "trellis completed node indices",
         )?;
     }
+    Ok(RunStages {
+        receipt_refs,
+        outputs_by_index,
+        output_refs_by_index,
+    })
+}
+
+struct RunFinish {
+    output_refs: Vec<String>,
+    output_value: IOValue,
+    receipt_value: IOValue,
+}
+
+struct CompleteInput<'a> {
+    dag: &'a JobDag,
+    request: &'a JobOutputRequest,
+    plan: &'a TrellisExecutionPlan,
+    outputs_by_index: &'a [Option<Vec<IOValue>>],
+    output_refs_by_index: &'a [Option<Vec<String>>],
+    stage_receipt_refs: &'a [String],
+}
+
+fn complete_run(input: CompleteInput<'_>) -> Result<RunFinish> {
+    let dag = input.dag;
+    let request = input.request;
+    let stage_receipt_refs = input.stage_receipt_refs;
     let roots = if request.roots.is_empty() {
         sink_nodes(dag)?
     } else {
@@ -1673,16 +1733,17 @@ pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> 
     let mut final_values = Vec::with_capacity(roots.len());
     let mut final_refs = Vec::with_capacity(roots.len());
     for root in roots {
-        let root_index = *plan
-            .node_index
-            .get(&root)
-            .ok_or_else(|| MoltenError::invalid_harness(format!("job output root {root} missing from node index")))?;
-        let values = outputs_by_index
+        let root_index =
+            *input.plan.node_index.get(&root).ok_or_else(|| {
+                MoltenError::invalid_harness(format!("job output root {root} missing from node index"))
+            })?;
+        let values = input
+            .outputs_by_index
             .get(root_index)
             .and_then(Option::as_ref)
             .ok_or_else(|| MoltenError::invalid_harness(format!("job output root {root} was not executed")))?;
         extend_cloned_bounded(&mut final_values, values, MAX_JOB_STAGE_VALUES, "job final values")?;
-        if let Some(refs) = output_refs_by_index.get(root_index).and_then(Option::as_ref) {
+        if let Some(refs) = input.output_refs_by_index.get(root_index).and_then(Option::as_ref) {
             extend_cloned_bounded(&mut final_refs, refs, MAX_JOB_REFS, "job final refs")?;
         }
     }
@@ -1698,18 +1759,18 @@ pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> 
     )?;
     let mut evidence_refs = Vec::with_capacity(evidence_count);
     extend_cloned_bounded(&mut evidence_refs, &dag.evidence_refs, MAX_JOB_REFS, "job receipt evidence refs")?;
-    extend_cloned_bounded(&mut evidence_refs, &stage_receipt_refs, MAX_JOB_REFS, "job receipt evidence refs")?;
+    extend_cloned_bounded(&mut evidence_refs, stage_receipt_refs, MAX_JOB_REFS, "job receipt evidence refs")?;
     let receipt_value = job_receipt_value(JobReceiptInput {
         operation: "run",
         decision: "pass",
         job_ref: Some(&dag.job_ref),
         request_ref: Some(&request.request_ref),
         stage_id: None,
-        input_refs: &stage_receipt_refs,
+        input_refs: stage_receipt_refs,
         output_refs: &final_refs,
         cache_ref: None,
         effect_refs: &[],
-        policy_refs: &combined_policy_refs(dag, &request, None),
+        policy_refs: &combined_policy_refs(dag, request, None),
         evidence_refs: &evidence_refs,
         diagnostics: &[],
         checks: &[
@@ -1720,13 +1781,7 @@ pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> 
             ("output-refs-bound", "pass"),
         ],
     })?;
-    if let Some(ledger_root) = options.ledger_root {
-        ledger::import_artifact(ledger_root, &receipt_value)?;
-    }
-    Ok(JobRun {
-        job_ref: dag.job_ref.clone(),
-        request_ref: request.request_ref,
-        stage_receipt_refs,
+    Ok(RunFinish {
         output_refs: final_refs,
         output_value,
         receipt_value,
