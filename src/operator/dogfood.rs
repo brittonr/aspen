@@ -862,36 +862,63 @@ pub fn parse_nix_dogfood_evidence(value: &IOValue) -> Result<NixDogfoodEvidence>
     })
 }
 
-pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<NixDogfoodVerifyReceipt> {
-    let evidence = parse_nix_dogfood_evidence(input.evidence_value)?;
-    let observed_result = observe_nix_dogfood_output(input.output_path);
-    let mut diagnostics = Vec::new();
-    let output_path_string = input.output_path.display().to_string();
+struct NixObservation {
+    observed: ObservedNixDogfoodOutput,
+    is_output_observed: bool,
+}
+
+fn fallback_nix_output(
+    output_path: String,
+    output_path_ref: String,
+    evidence: &NixDogfoodEvidence,
+) -> ObservedNixDogfoodOutput {
+    ObservedNixDogfoodOutput {
+        output_path,
+        output_path_ref,
+        report_ref: evidence.report_ref.clone(),
+        release_gate_ref: evidence.release_gate_ref.clone(),
+        replay_verify_ref: evidence.replay_verify_ref.clone(),
+        replay_index_ref: evidence.replay_index_ref.clone(),
+        summary_ref: evidence.summary_ref.clone(),
+        nextest_marker_ref: evidence.nextest_marker_ref.clone(),
+        nextest_check_path: evidence.nextest_check_path.clone(),
+        file_refs: evidence.file_refs.clone(),
+    }
+}
+
+fn observed_nix_or_fallback(
+    output_path: &Path,
+    evidence: &NixDogfoodEvidence,
+    diagnostics: &mut impl PushLimited<String>,
+) -> Result<NixObservation> {
+    let output_path_string = output_path.display().to_string();
     let fallback_output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
-    let mut is_output_observed = true;
-    let observed = match observed_result {
-        Ok(observed) => observed,
+    match observe_nix_dogfood_output(output_path) {
+        Ok(observed) => Ok(NixObservation {
+            observed,
+            is_output_observed: true,
+        }),
         Err(error) => {
-            is_output_observed = false;
             diagnostics.push_limited_value(
                 format!("Nix dogfood output observation failed: {error}"),
                 MAX_OPERATOR_DIAGNOSTICS,
                 "Nix dogfood verify diagnostics",
             )?;
-            ObservedNixDogfoodOutput {
-                output_path: output_path_string,
-                output_path_ref: fallback_output_path_ref,
-                report_ref: evidence.report_ref.clone(),
-                release_gate_ref: evidence.release_gate_ref.clone(),
-                replay_verify_ref: evidence.replay_verify_ref.clone(),
-                replay_index_ref: evidence.replay_index_ref.clone(),
-                summary_ref: evidence.summary_ref.clone(),
-                nextest_marker_ref: evidence.nextest_marker_ref.clone(),
-                nextest_check_path: evidence.nextest_check_path.clone(),
-                file_refs: evidence.file_refs.clone(),
-            }
+            Ok(NixObservation {
+                observed: fallback_nix_output(output_path_string, fallback_output_path_ref, evidence),
+                is_output_observed: false,
+            })
         }
-    };
+    }
+}
+
+pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<NixDogfoodVerifyReceipt> {
+    let evidence = parse_nix_dogfood_evidence(input.evidence_value)?;
+    let mut diagnostics = Vec::new();
+    let NixObservation {
+        observed,
+        is_output_observed,
+    } = observed_nix_or_fallback(input.output_path, &evidence, &mut diagnostics)?;
     for diagnostic in [
         mismatch_diagnostic("output-path-ref", &evidence.output_path_ref, &observed.output_path_ref),
         mismatch_diagnostic("report-ref", &evidence.report_ref, &observed.report_ref),
