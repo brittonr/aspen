@@ -5707,45 +5707,96 @@ mod tests {
 
     #[test]
     fn sync_plan_and_loopback_copy_dependency_closure_without_execution() {
+        let case = copy_case();
+        let sync_ref = assert_copy(&case);
+        let flow = passing_flow(&case, sync_ref);
+        assert_target_run(&case, &flow);
+        assert_wrong_peer_execution(&case, &flow);
+        assert_other_reference_denial(&case, &flow);
+        assert_stale_closure_execution(&case, &flow);
+        assert_missing_admission_inputs(&case, &flow);
+        assert_unsatisfied_stage_denial(&case, &flow);
+    }
+
+    struct CopyArtifacts {
+        base: artifacts::ArtifactInstall,
+        source_stage: artifacts::ArtifactInstall,
+        stage: artifacts::ArtifactInstall,
+    }
+
+    struct CopyCase {
+        root: PathBuf,
+        source: PathBuf,
+        target: PathBuf,
+        base: artifacts::ArtifactInstall,
+        source_stage: artifacts::ArtifactInstall,
+        stage: artifacts::ArtifactInstall,
+        installed_job: JobInstall,
+        request: IOValue,
+    }
+
+    struct CopyFlow {
+        sync_ref: String,
+        source_gate_ref: String,
+        authority_context_ref: String,
+        admission: JobAdmissionLoopback,
+        admission_ref: String,
+    }
+
+    fn install_case_artifact(
+        registry: &Path,
+        kind: &str,
+        payload: IOValue,
+        dependency_refs: Vec<String>,
+        label: &str,
+    ) -> artifacts::ArtifactInstall {
+        artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
+            kind: kind.to_string(),
+            payload,
+            schema_refs: vec![test_ref("schema")],
+            dependency_refs,
+            effect_manifest_ref: None,
+            policy_refs: vec![test_ref("policy")],
+            evidence_refs: vec![test_ref("evidence")],
+            installer_ref: test_ref("installer"),
+            capability_refs: vec![test_ref("capability")],
+        })
+        .expect(label)
+    }
+
+    fn copy_artifacts(source: &Path) -> CopyArtifacts {
+        let base =
+            install_case_artifact(source, "schema", record("schema", vec![string("base")]), Vec::new(), "install base");
+        let source_stage = install_case_artifact(
+            source,
+            "stage",
+            builtin_stage_operation_value("source").expect("source stage op"),
+            Vec::new(),
+            "install source stage",
+        );
+        let stage = install_case_artifact(
+            source,
+            "stage",
+            builtin_stage_operation_value("identity").expect("stage op"),
+            vec![base.artifact_ref.clone()],
+            "install stage",
+        );
+        CopyArtifacts {
+            base,
+            source_stage,
+            stage,
+        }
+    }
+
+    fn copy_case() -> CopyCase {
         let root = temp_dir("job-sync");
         let source = root.join("source");
         let target = root.join("target");
-        let base = artifacts::install_artifact(&source, &artifacts::ArtifactInstallInput {
-            kind: "schema".to_string(),
-            payload: record("schema", vec![string("base")]),
-            schema_refs: vec![test_ref("schema")],
-            dependency_refs: Vec::new(),
-            effect_manifest_ref: None,
-            policy_refs: vec![test_ref("policy")],
-            evidence_refs: vec![test_ref("evidence")],
-            installer_ref: test_ref("installer"),
-            capability_refs: vec![test_ref("capability")],
-        })
-        .expect("install base");
-        let source_stage = artifacts::install_artifact(&source, &artifacts::ArtifactInstallInput {
-            kind: "stage".to_string(),
-            payload: builtin_stage_operation_value("source").expect("source stage op"),
-            schema_refs: vec![test_ref("schema")],
-            dependency_refs: Vec::new(),
-            effect_manifest_ref: None,
-            policy_refs: vec![test_ref("policy")],
-            evidence_refs: vec![test_ref("evidence")],
-            installer_ref: test_ref("installer"),
-            capability_refs: vec![test_ref("capability")],
-        })
-        .expect("install source stage");
-        let stage = artifacts::install_artifact(&source, &artifacts::ArtifactInstallInput {
-            kind: "stage".to_string(),
-            payload: builtin_stage_operation_value("identity").expect("stage op"),
-            schema_refs: vec![test_ref("schema")],
-            dependency_refs: vec![base.artifact_ref.clone()],
-            effect_manifest_ref: None,
-            policy_refs: vec![test_ref("policy")],
-            evidence_refs: vec![test_ref("evidence")],
-            installer_ref: test_ref("installer"),
-            capability_refs: vec![test_ref("capability")],
-        })
-        .expect("install stage");
+        let CopyArtifacts {
+            base,
+            source_stage,
+            stage,
+        } = copy_artifacts(&source);
         let source_node = job_node_value(NodeValueInput {
             id: "source",
             kind: "source",
@@ -5782,13 +5833,26 @@ mod tests {
             evidence_refs: &[test_ref("sync-evidence")],
         })
         .expect("sync request");
-        let plan = sync_plan_value(&source, &target, &request).expect("sync plan");
-        assert!(plan.missing_refs.contains(&base.artifact_ref));
-        assert!(plan.missing_refs.contains(&stage.artifact_ref));
+        CopyCase {
+            root,
+            source,
+            target,
+            base,
+            source_stage,
+            stage,
+            installed_job,
+            request,
+        }
+    }
+
+    fn assert_copy(case: &CopyCase) -> String {
+        let plan = sync_plan_value(&case.source, &case.target, &case.request).expect("sync plan");
+        assert!(plan.missing_refs.contains(&case.base.artifact_ref));
+        assert!(plan.missing_refs.contains(&case.stage.artifact_ref));
         let denied = sync_loopback(SyncLoopbackInput {
-            source_registry: &source,
-            target_registry: &target,
-            request_value: &request,
+            source_registry: &case.source,
+            target_registry: &case.target,
+            request_value: &case.request,
             provenance_values: &[],
             build_verification_values: &[],
         })
@@ -5796,45 +5860,47 @@ mod tests {
         assert_eq!(denied.decision, "deny");
         assert!(denied.installed_refs.is_empty());
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing provenance")));
-        assert!(artifacts::list_artifacts(&target, None).expect("target artifacts").is_empty());
+        assert!(artifacts::list_artifacts(&case.target, None).expect("target artifacts").is_empty());
         let sync_provenance = reviewed_provenance_values(&[
-            base.artifact_ref.clone(),
-            source_stage.artifact_ref.clone(),
-            stage.artifact_ref.clone(),
-            installed_job.artifact_ref.clone(),
+            case.base.artifact_ref.clone(),
+            case.source_stage.artifact_ref.clone(),
+            case.stage.artifact_ref.clone(),
+            case.installed_job.artifact_ref.clone(),
         ]);
         let synced = sync_loopback(SyncLoopbackInput {
-            source_registry: &source,
-            target_registry: &target,
-            request_value: &request,
+            source_registry: &case.source,
+            target_registry: &case.target,
+            request_value: &case.request,
             provenance_values: &sync_provenance,
             build_verification_values: &[],
         })
         .expect("sync loopback");
-        assert!(synced.installed_refs.contains(&base.artifact_ref));
-        assert!(synced.installed_refs.contains(&source_stage.artifact_ref));
-        assert!(synced.installed_refs.contains(&stage.artifact_ref));
+        assert!(synced.installed_refs.contains(&case.base.artifact_ref));
+        assert!(synced.installed_refs.contains(&case.source_stage.artifact_ref));
+        assert!(synced.installed_refs.contains(&case.stage.artifact_ref));
         assert_eq!(
-            artifacts::read_artifact(&target, &base.artifact_ref).expect("target base").value,
-            base.artifact.value
+            artifacts::read_artifact(&case.target, &case.base.artifact_ref).expect("target base").value,
+            case.base.artifact.value
         );
         let second = sync_loopback(SyncLoopbackInput {
-            source_registry: &source,
-            target_registry: &target,
-            request_value: &request,
+            source_registry: &case.source,
+            target_registry: &case.target,
+            request_value: &case.request,
             provenance_values: &sync_provenance,
             build_verification_values: &[],
         })
         .expect("sync no-op");
         assert!(second.installed_refs.is_empty());
-        assert!(second.already_present_refs.contains(&base.artifact_ref));
+        assert!(second.already_present_refs.contains(&case.base.artifact_ref));
         assert!(to_text(&second.receipt_value).expect("receipt text").contains("no-execution"));
+        canonical_hash(&synced.receipt_value).expect("sync receipt ref")
+    }
 
-        let sync_ref = canonical_hash(&synced.receipt_value).expect("sync receipt ref");
-        let authority_context_ref = install_job_execute_authority_context(&target, &installed_job.job_ref);
-        let source_gate_ref = install_clean_octet_gate(&target);
+    fn passing_flow(case: &CopyCase, sync_ref: String) -> CopyFlow {
+        let authority_context_ref = install_job_execute_authority_context(&case.target, &case.installed_job.job_ref);
+        let source_gate_ref = install_clean_octet_gate(&case.target);
         let admission_request = job_admission_request_value(AdmissionRequestValueInput {
-            job_ref: &installed_job.job_ref,
+            job_ref: &case.installed_job.job_ref,
             sync_ref: &sync_ref,
             stage_ids: &[],
             target_peer: "peer:loopback",
@@ -5844,91 +5910,111 @@ mod tests {
             resource_refs: &[test_ref("resource-1"), test_ref("resource-2")],
         })
         .expect("admission request");
-        let admission = admission_loopback(&target, &admission_request).expect("admission loopback");
+        let admission = admission_loopback(&case.target, &admission_request).expect("admission loopback");
         assert_eq!(admission.plan.decision, "pass");
         assert!(to_text(&admission.receipt_value).expect("admission receipt").contains("no-execution"));
-
         let admission_ref = canonical_hash(&admission.receipt_value).expect("admission ref");
-        let execution_request = job_execution_request_value(ExecutionRequestValueInput {
-            job_ref: &installed_job.job_ref,
-            admission_ref: &admission_ref,
-            stage_ids: &admission.plan.stage_order,
+        CopyFlow {
+            sync_ref,
+            source_gate_ref,
+            authority_context_ref,
+            admission,
+            admission_ref,
+        }
+    }
+
+    fn passing_execution(case: &CopyCase, flow: &CopyFlow) -> (IOValue, JobExecutionLoopback) {
+        let request = job_execution_request_value(ExecutionRequestValueInput {
+            job_ref: &case.installed_job.job_ref,
+            admission_ref: &flow.admission_ref,
+            stage_ids: &flow.admission.plan.stage_order,
             target_peer: "peer:loopback",
             storage_profile_ref: &test_ref("storage-profile"),
             cache_profile_ref: &test_ref("cache-profile"),
             chunk_profile_ref: &test_ref("chunk-profile"),
             policy_refs: &[test_ref("admit-policy")],
-            capability_refs: std::slice::from_ref(&authority_context_ref),
+            capability_refs: std::slice::from_ref(&flow.authority_context_ref),
             resource_refs: &[test_ref("resource-1"), test_ref("resource-2")],
         })
         .expect("execution request");
         let execution = execution_loopback(ExecutionLoopbackInput {
-            target_registry: &target,
-            storage_root: &root.join("storage"),
-            cache_root: &root.join("cache"),
-            chunk_root: &root.join("chunks"),
-            admission_receipt_value: &admission.receipt_value,
-            request_value: &execution_request,
+            target_registry: &case.target,
+            storage_root: &case.root.join("storage"),
+            cache_root: &case.root.join("cache"),
+            chunk_root: &case.root.join("chunks"),
+            admission_receipt_value: &flow.admission.receipt_value,
+            request_value: &request,
         })
         .expect("execution loopback");
+        (request, execution)
+    }
+
+    fn assert_target_run(case: &CopyCase, flow: &CopyFlow) {
+        let (request, execution) = passing_execution(case, flow);
         assert_eq!(execution.decision, "pass");
         assert!(to_text(&execution.run.as_ref().expect("run").output_value).expect("execution output").contains("x"));
-        let equivalent_source_run =
-            run_job_dag(&read_job_dag(&source, &installed_job.job_ref).expect("source job"), &JobRunOptions {
-                registry_root: &source,
-                storage_root: &root.join("source-storage"),
-                cache_root: &root.join("source-cache"),
-                chunk_root: &root.join("source-chunks"),
+        let equivalent_source_run = run_job_dag(
+            &read_job_dag(&case.source, &case.installed_job.job_ref).expect("source job"),
+            &JobRunOptions {
+                registry_root: &case.source,
+                storage_root: &case.root.join("source-storage"),
+                cache_root: &case.root.join("source-cache"),
+                chunk_root: &case.root.join("source-chunks"),
                 ledger_root: None,
                 output_request: None,
-            })
-            .expect("equivalent source run");
+            },
+        )
+        .expect("equivalent source run");
         assert_eq!(execution.run.as_ref().expect("execution run").output_value, equivalent_source_run.output_value);
-        assert_eq!(crate::ledger::artifact_kind(&execution_request), "job-execution-request");
+        assert_eq!(crate::ledger::artifact_kind(&request), "job-execution-request");
         assert_eq!(crate::ledger::artifact_kind(&execution.receipt_value), "job-execution-receipt");
         let execution_text = to_text(&execution.receipt_value).expect("execution receipt");
         assert!(execution_text.contains("job-execution-receipt-v1"));
         assert!(execution_text.contains("executed-on-target-state"));
-        assert!(execution_text.contains(&admission.plan.request.sync_ref));
-        assert!(execution_text.contains(&admission.plan.authority_receipt_refs[0]));
+        assert!(execution_text.contains(&flow.admission.plan.request.sync_ref));
+        assert!(execution_text.contains(&flow.admission.plan.authority_receipt_refs[0]));
         assert!(execution_text.contains(&test_ref("resource-1")));
         assert!(execution_text.contains(&execution.run.as_ref().expect("execution run refs").stage_receipt_refs[0]));
         assert!(execution_text.contains(&execution.run.as_ref().expect("execution output refs").output_refs[0]));
+    }
 
-        let wrong_peer_request = job_execution_request_value(ExecutionRequestValueInput {
-            job_ref: &installed_job.job_ref,
-            admission_ref: &admission_ref,
-            stage_ids: &admission.plan.stage_order,
+    fn assert_wrong_peer_execution(case: &CopyCase, flow: &CopyFlow) {
+        let request = job_execution_request_value(ExecutionRequestValueInput {
+            job_ref: &case.installed_job.job_ref,
+            admission_ref: &flow.admission_ref,
+            stage_ids: &flow.admission.plan.stage_order,
             target_peer: "peer:other",
             storage_profile_ref: &test_ref("storage-profile"),
             cache_profile_ref: &test_ref("cache-profile"),
             chunk_profile_ref: &test_ref("chunk-profile"),
             policy_refs: &[test_ref("admit-policy")],
-            capability_refs: std::slice::from_ref(&authority_context_ref),
+            capability_refs: std::slice::from_ref(&flow.authority_context_ref),
             resource_refs: &[test_ref("resource-1"), test_ref("resource-2")],
         })
         .expect("wrong peer request");
-        let denied_execution = execution_loopback(ExecutionLoopbackInput {
-            target_registry: &target,
-            storage_root: &root.join("storage-deny"),
-            cache_root: &root.join("cache-deny"),
-            chunk_root: &root.join("chunks-deny"),
-            admission_receipt_value: &admission.receipt_value,
-            request_value: &wrong_peer_request,
+        let denied = execution_loopback(ExecutionLoopbackInput {
+            target_registry: &case.target,
+            storage_root: &case.root.join("storage-deny"),
+            cache_root: &case.root.join("cache-deny"),
+            chunk_root: &case.root.join("chunks-deny"),
+            admission_receipt_value: &flow.admission.receipt_value,
+            request_value: &request,
         })
         .expect("denied execution receipt");
-        assert_eq!(denied_execution.decision, "deny");
-        assert!(denied_execution.run.is_none());
+        assert_eq!(denied.decision, "deny");
+        assert!(denied.run.is_none());
         assert!(
-            to_text(&denied_execution.receipt_value)
+            to_text(&denied.receipt_value)
                 .expect("denied execution receipt")
                 .contains("no-stage-execution-on-deny")
         );
+    }
 
-        let wrong_job_request = job_execution_request_value(ExecutionRequestValueInput {
+    fn assert_other_reference_denial(case: &CopyCase, flow: &CopyFlow) {
+        let request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &test_ref("other-job"),
-            admission_ref: &admission_ref,
-            stage_ids: &admission.plan.stage_order,
+            admission_ref: &flow.admission_ref,
+            stage_ids: &flow.admission.plan.stage_order,
             target_peer: "peer:loopback",
             storage_profile_ref: &test_ref("storage-profile"),
             cache_profile_ref: &test_ref("cache-profile"),
@@ -5938,30 +6024,32 @@ mod tests {
             resource_refs: &[],
         })
         .expect("wrong job request");
-        let wrong_job = execution_loopback(ExecutionLoopbackInput {
-            target_registry: &target,
-            storage_root: &root.join("storage-wrong-job"),
-            cache_root: &root.join("cache-wrong-job"),
-            chunk_root: &root.join("chunks-wrong-job"),
-            admission_receipt_value: &admission.receipt_value,
-            request_value: &wrong_job_request,
+        let denied = execution_loopback(ExecutionLoopbackInput {
+            target_registry: &case.target,
+            storage_root: &case.root.join("storage-wrong-job"),
+            cache_root: &case.root.join("cache-wrong-job"),
+            chunk_root: &case.root.join("chunks-wrong-job"),
+            admission_receipt_value: &flow.admission.receipt_value,
+            request_value: &request,
         })
         .expect("wrong job execution denial");
-        assert_eq!(wrong_job.decision, "deny");
-        assert!(wrong_job.diagnostics.iter().any(|diagnostic| diagnostic.contains("does not match admission job")));
+        assert_eq!(denied.decision, "deny");
+        assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("does not match admission job")));
+    }
 
+    fn assert_stale_closure_execution(case: &CopyCase, flow: &CopyFlow) {
         let stale_ref = test_ref("stale-stage-artifact");
-        let tampered_admission = parse_text(&to_text(&admission.receipt_value).expect("admission text").replacen(
-            &stage.artifact_ref,
+        let tampered_admission = parse_text(&to_text(&flow.admission.receipt_value).expect("admission text").replacen(
+            &case.stage.artifact_ref,
             &stale_ref,
             1,
         ))
         .expect("tampered admission parse");
         let tampered_admission_ref = canonical_hash(&tampered_admission).expect("tampered admission ref");
-        let stale_request = job_execution_request_value(ExecutionRequestValueInput {
-            job_ref: &installed_job.job_ref,
+        let request = job_execution_request_value(ExecutionRequestValueInput {
+            job_ref: &case.installed_job.job_ref,
             admission_ref: &tampered_admission_ref,
-            stage_ids: &admission.plan.stage_order,
+            stage_ids: &flow.admission.plan.stage_order,
             target_peer: "peer:loopback",
             storage_profile_ref: &test_ref("storage-profile"),
             cache_profile_ref: &test_ref("cache-profile"),
@@ -5971,21 +6059,23 @@ mod tests {
             resource_refs: &[],
         })
         .expect("stale closure request");
-        let stale = execution_loopback(ExecutionLoopbackInput {
-            target_registry: &target,
-            storage_root: &root.join("storage-stale"),
-            cache_root: &root.join("cache-stale"),
-            chunk_root: &root.join("chunks-stale"),
+        let denied = execution_loopback(ExecutionLoopbackInput {
+            target_registry: &case.target,
+            storage_root: &case.root.join("storage-stale"),
+            cache_root: &case.root.join("cache-stale"),
+            chunk_root: &case.root.join("chunks-stale"),
             admission_receipt_value: &tampered_admission,
-            request_value: &stale_request,
+            request_value: &request,
         })
         .expect("stale closure denial");
-        assert_eq!(stale.decision, "deny");
-        assert!(stale.diagnostics.iter().any(|diagnostic| diagnostic.contains("closure diverges")));
+        assert_eq!(denied.decision, "deny");
+        assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("closure diverges")));
+    }
 
-        let missing_authority = job_admission_request_value(AdmissionRequestValueInput {
-            job_ref: &installed_job.job_ref,
-            sync_ref: &sync_ref,
+    fn assert_missing_admission_inputs(case: &CopyCase, flow: &CopyFlow) {
+        let request = job_admission_request_value(AdmissionRequestValueInput {
+            job_ref: &case.installed_job.job_ref,
+            sync_ref: &flow.sync_ref,
             stage_ids: &[],
             target_peer: "peer:loopback",
             policy_refs: &[],
@@ -5994,16 +6084,16 @@ mod tests {
             resource_refs: &[],
         })
         .expect("missing authority request");
-        let denied = admission_plan_value(&target, &missing_authority).expect("authority denial");
+        let denied = admission_plan_value(&case.target, &request).expect("authority denial");
         assert_eq!(denied.decision, "deny");
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("policy")));
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("strict Octet source gate")));
-        let denied_admission = admission_loopback(&target, &missing_authority).expect("denied admission receipt");
-        let denied_admission_ref = canonical_hash(&denied_admission.receipt_value).expect("denied admission ref");
-        let denied_execution_request = job_execution_request_value(ExecutionRequestValueInput {
-            job_ref: &installed_job.job_ref,
-            admission_ref: &denied_admission_ref,
-            stage_ids: &denied_admission.plan.stage_order,
+        let admission = admission_loopback(&case.target, &request).expect("denied admission receipt");
+        let admission_ref = canonical_hash(&admission.receipt_value).expect("denied admission ref");
+        let execution_request = job_execution_request_value(ExecutionRequestValueInput {
+            job_ref: &case.installed_job.job_ref,
+            admission_ref: &admission_ref,
+            stage_ids: &admission.plan.stage_order,
             target_peer: "peer:loopback",
             storage_profile_ref: &test_ref("storage-profile"),
             cache_profile_ref: &test_ref("cache-profile"),
@@ -6014,29 +6104,31 @@ mod tests {
         })
         .expect("denied execution request");
         let denied_by_admission = execution_loopback(ExecutionLoopbackInput {
-            target_registry: &target,
-            storage_root: &root.join("storage-denied-admission"),
-            cache_root: &root.join("cache-denied-admission"),
-            chunk_root: &root.join("chunks-denied-admission"),
-            admission_receipt_value: &denied_admission.receipt_value,
-            request_value: &denied_execution_request,
+            target_registry: &case.target,
+            storage_root: &case.root.join("storage-denied-admission"),
+            cache_root: &case.root.join("cache-denied-admission"),
+            chunk_root: &case.root.join("chunks-denied-admission"),
+            admission_receipt_value: &admission.receipt_value,
+            request_value: &execution_request,
         })
         .expect("denied admission execution receipt");
         assert_eq!(denied_by_admission.decision, "deny");
         assert!(denied_by_admission.diagnostics.iter().any(|diagnostic| diagnostic.contains("admission decision")));
+    }
 
-        let unsatisfied = job_admission_request_value(AdmissionRequestValueInput {
-            job_ref: &installed_job.job_ref,
-            sync_ref: &sync_ref,
+    fn assert_unsatisfied_stage_denial(case: &CopyCase, flow: &CopyFlow) {
+        let request = job_admission_request_value(AdmissionRequestValueInput {
+            job_ref: &case.installed_job.job_ref,
+            sync_ref: &flow.sync_ref,
             stage_ids: &["map".to_string()],
             target_peer: "peer:loopback",
             policy_refs: &[test_ref("admit-policy")],
-            capability_refs: std::slice::from_ref(&authority_context_ref),
-            evidence_refs: &[sync_ref.clone(), source_gate_ref],
+            capability_refs: std::slice::from_ref(&flow.authority_context_ref),
+            evidence_refs: &[flow.sync_ref.clone(), flow.source_gate_ref.clone()],
             resource_refs: &[test_ref("resource-1")],
         })
         .expect("unsatisfied request");
-        let denied = admission_plan_value(&target, &unsatisfied).expect("unsatisfied denial");
+        let denied = admission_plan_value(&case.target, &request).expect("unsatisfied denial");
         assert_eq!(denied.decision, "deny");
         assert!(
             denied
