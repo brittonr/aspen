@@ -303,6 +303,14 @@ struct GateFile {
     text: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InputFiles {
+    command: Option<GateFile>,
+    status_file: Option<GateFile>,
+    summary: Option<GateFile>,
+    object_corpus: Option<GateFile>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 struct FindingCounts {
     total: u64,
@@ -598,91 +606,10 @@ pub fn build_octet_warning_baseline(input: &OctetWarningBaselineInput) -> Result
 pub fn import_octet_artifacts_to_ledger(input: &OctetArtifactLedgerInput) -> Result<OctetArtifactLedgerImport> {
     let mut checks = Vec::new();
     let mut diagnostics = Vec::new();
-    let command = read_required_file(
-        &input.artifacts_dir,
-        COMMAND_NAME,
-        "ledger-command-artifact-present",
-        &mut checks,
-        &mut diagnostics,
-    );
-    let status_file = read_required_file(
-        &input.artifacts_dir,
-        STATUS_NAME,
-        "ledger-status-artifact-present",
-        &mut checks,
-        &mut diagnostics,
-    );
-    let summary = read_required_file(
-        &input.artifacts_dir,
-        SUMMARY_NAME,
-        "ledger-summary-artifact-present",
-        &mut checks,
-        &mut diagnostics,
-    );
-    let object_corpus = read_required_file(
-        &input.artifacts_dir,
-        OBJECT_CORPUS_RECEIPT_NAME,
-        "ledger-object-corpus-artifact-present",
-        &mut checks,
-        &mut diagnostics,
-    );
-    let mut values = Vec::with_capacity(MAX_OCTET_ARTIFACT_VALUES);
-    if let Some(command) = command.as_ref() {
-        values.push(octet_raw_artifact_value(
-            "octet-command-artifact-v1",
-            OCTET_COMMAND_ARTIFACT_SCHEMA,
-            COMMAND_NAME,
-            command,
-        ));
-    }
-    if let Some(status_file) = status_file.as_ref() {
-        values.push(octet_raw_artifact_value(
-            "octet-status-artifact-v1",
-            OCTET_STATUS_ARTIFACT_SCHEMA,
-            STATUS_NAME,
-            status_file,
-        ));
-    }
-    if let Some(summary) = summary.as_ref() {
-        values.push(octet_raw_artifact_value(
-            "octet-summary-artifact-v1",
-            OCTET_SUMMARY_ARTIFACT_SCHEMA,
-            SUMMARY_NAME,
-            summary,
-        ));
-    }
-    if let Some(object_corpus) = object_corpus.as_ref() {
-        values.push(octet_raw_artifact_value(
-            "octet-object-corpus-artifact-v1",
-            OCTET_OBJECT_CORPUS_ARTIFACT_SCHEMA,
-            OBJECT_CORPUS_RECEIPT_NAME,
-            object_corpus,
-        ));
-    }
-    let status = parse_status(status_file.as_ref(), &mut checks, &mut diagnostics);
-    if let Some((status, status_file, summary)) = status
-        .as_ref()
-        .zip(status_file.as_ref())
-        .zip(summary.as_ref())
-        .map(|((status, status_file), summary)| (status, status_file, summary))
-    {
-        let (structured, unkeyed) = octet_structured_findings_value(status_file, summary, status);
-        if unkeyed == 0 {
-            values.push(structured);
-        } else {
-            push_diagnostic(
-                &mut diagnostics,
-                format!("structured findings omitted stable keys for {unkeyed} findings"),
-            );
-        }
-    }
-    if let Some((object_corpus_receipt, object_corpus)) =
-        validate_object_corpus(object_corpus.as_ref(), &mut checks, &mut diagnostics)
-            .as_ref()
-            .zip(object_corpus.as_ref())
-    {
-        values.push(octet_fingerprint_evidence_value(object_corpus, object_corpus_receipt)?);
-    }
+    let files = read_import_files(&input.artifacts_dir, &mut checks, &mut diagnostics);
+    let mut values = raw_values(&files);
+    add_structured_value(&mut values, &files, &mut checks, &mut diagnostics);
+    add_fingerprint_value(&mut values, &files, &mut checks, &mut diagnostics)?;
     ensure_count_at_most(values.len(), MAX_OCTET_IMPORTED_REFS, "octet imported artifacts")?;
     let mut imported_refs = Vec::with_capacity(values.len());
     for value in &values {
@@ -709,6 +636,118 @@ pub fn import_octet_artifacts_to_ledger(input: &OctetArtifactLedgerInput) -> Res
         receipt_value,
         diagnostics,
     })
+}
+
+fn read_import_files(
+    artifacts_dir: &Path,
+    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> InputFiles {
+    InputFiles {
+        command: read_required_file(
+            artifacts_dir,
+            COMMAND_NAME,
+            "ledger-command-artifact-present",
+            checks,
+            diagnostics,
+        ),
+        status_file: read_required_file(
+            artifacts_dir,
+            STATUS_NAME,
+            "ledger-status-artifact-present",
+            checks,
+            diagnostics,
+        ),
+        summary: read_required_file(
+            artifacts_dir,
+            SUMMARY_NAME,
+            "ledger-summary-artifact-present",
+            checks,
+            diagnostics,
+        ),
+        object_corpus: read_required_file(
+            artifacts_dir,
+            OBJECT_CORPUS_RECEIPT_NAME,
+            "ledger-object-corpus-artifact-present",
+            checks,
+            diagnostics,
+        ),
+    }
+}
+
+fn raw_values(files: &InputFiles) -> Vec<IOValue> {
+    let mut values = Vec::with_capacity(MAX_OCTET_ARTIFACT_VALUES);
+    if let Some(command) = files.command.as_ref() {
+        values.push(octet_raw_artifact_value(
+            "octet-command-artifact-v1",
+            OCTET_COMMAND_ARTIFACT_SCHEMA,
+            COMMAND_NAME,
+            command,
+        ));
+    }
+    if let Some(status_file) = files.status_file.as_ref() {
+        values.push(octet_raw_artifact_value(
+            "octet-status-artifact-v1",
+            OCTET_STATUS_ARTIFACT_SCHEMA,
+            STATUS_NAME,
+            status_file,
+        ));
+    }
+    if let Some(summary) = files.summary.as_ref() {
+        values.push(octet_raw_artifact_value(
+            "octet-summary-artifact-v1",
+            OCTET_SUMMARY_ARTIFACT_SCHEMA,
+            SUMMARY_NAME,
+            summary,
+        ));
+    }
+    if let Some(object_corpus) = files.object_corpus.as_ref() {
+        values.push(octet_raw_artifact_value(
+            "octet-object-corpus-artifact-v1",
+            OCTET_OBJECT_CORPUS_ARTIFACT_SCHEMA,
+            OBJECT_CORPUS_RECEIPT_NAME,
+            object_corpus,
+        ));
+    }
+    values
+}
+
+fn add_structured_value(
+    values: &mut impl crate::bounded::VecSink<IOValue>,
+    files: &InputFiles,
+    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) {
+    let status = parse_status(files.status_file.as_ref(), checks, diagnostics);
+    if let Some((status, status_file, summary)) = status
+        .as_ref()
+        .zip(files.status_file.as_ref())
+        .zip(files.summary.as_ref())
+        .map(|((status, status_file), summary)| (status, status_file, summary))
+    {
+        let (structured, unkeyed) = octet_structured_findings_value(status_file, summary, status);
+        if unkeyed == 0 {
+            values.push_item(structured);
+        } else {
+            push_diagnostic(diagnostics, format!("structured findings omitted stable keys for {unkeyed} findings"));
+        }
+    }
+}
+
+fn add_fingerprint_value(
+    values: &mut impl crate::bounded::VecSink<IOValue>,
+    files: &InputFiles,
+    checks: &mut impl crate::bounded::VecSink<GateCheck>,
+    diagnostics: &mut impl crate::bounded::VecSink<String>,
+) -> Result<()> {
+    if let Some((object_corpus_receipt, object_corpus)) =
+        validate_object_corpus(files.object_corpus.as_ref(), checks, diagnostics)
+            .as_ref()
+            .zip(files.object_corpus.as_ref())
+    {
+        values.push_item(octet_fingerprint_evidence_value(object_corpus, object_corpus_receipt)?);
+    }
+    Ok(())
 }
 
 pub fn build_octet_review_manifest(input: &OctetReviewManifestInput) -> Result<OctetReviewManifestArtifact> {
