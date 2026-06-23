@@ -2962,31 +2962,49 @@ mod tests {
         .expect_err("missing range predicate rejected");
         assert!(missing_predicate.to_string().contains("predicate"));
 
+        let case = MismatchCase {
+            root: &root,
+            chain: &chain,
+            genesis: &genesis,
+            verified: &verified,
+        };
+        assert_bad_subjects(&case);
+        assert_wrong_kind(&case);
+    }
+
+    struct MismatchCase<'a> {
+        root: &'a Path,
+        chain: &'a ChainScope,
+        genesis: &'a ChainLink,
+        verified: &'a ChainVerify,
+    }
+
+    fn assert_bad_subjects(case: &MismatchCase<'_>) {
         let wrong_range_subjects = vec![ref_for("wrong-range-subject")];
-        let checkpoint_context_refs = scope_context_refs(&chain).expect("scope context");
+        let checkpoint_context_refs = scope_context_refs(case.chain).expect("scope context");
         let predicate_checkpoint_checks = vec![ChainCheck::pass("checkpoint-range-coverage")];
         let tampered_predicate_value = chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
             predicate: CHECKPOINT_COVERS_RANGE_PREDICATE,
             decision: "pass",
             subject_refs: &wrong_range_subjects,
-            input_refs: &verified.payload_refs,
+            input_refs: &case.verified.payload_refs,
             context_refs: &checkpoint_context_refs,
             checks: &predicate_checkpoint_checks,
         });
-        let tampered_predicate_ref = ledger::import_artifact(&root, &tampered_predicate_value)
+        let tampered_predicate_ref = ledger::import_artifact(case.root, &tampered_predicate_value)
             .expect("import tampered predicate")
             .artifact_ref;
-        let fake_verify_link_refs = vec![genesis.link_ref.clone()];
+        let fake_verify_link_refs = vec![case.genesis.link_ref.clone()];
         let fake_verify_diagnostics = Vec::new();
         let fake_verify_predicate_refs = vec![tampered_predicate_ref.clone()];
         let fake_verify_receipt = ChainVerifyReceiptValueInput {
             decision: "pass",
-            chain: &chain,
-            anchor_ref: Some(&genesis.link_ref),
-            expected_head: Some(&genesis.link_ref),
+            chain: case.chain,
+            anchor_ref: Some(&case.genesis.link_ref),
+            expected_head: Some(&case.genesis.link_ref),
             discovered_heads: &fake_verify_link_refs,
             verified_links: &fake_verify_link_refs,
-            payload_refs: &verified.payload_refs,
+            payload_refs: &case.verified.payload_refs,
             diagnostics: &fake_verify_diagnostics,
         };
         let fake_verify_value = chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
@@ -2994,13 +3012,14 @@ mod tests {
             predicate_receipt_refs: &fake_verify_predicate_refs,
             fork_policy: ChainForkPolicy::RejectUnexpectedForks,
         });
-        let fake_verify_ref =
-            ledger::import_artifact(&root, &fake_verify_value).expect("import fake verify receipt").artifact_ref;
-        let tampered_predicate = accept_chain_checkpoint(&root, &ChainCheckpointInput {
-            chain: chain.clone(),
+        let fake_verify_ref = ledger::import_artifact(case.root, &fake_verify_value)
+            .expect("import fake verify receipt")
+            .artifact_ref;
+        let tampered_predicate = accept_chain_checkpoint(case.root, &ChainCheckpointInput {
+            chain: case.chain.clone(),
             prior_checkpoint_ref: None,
-            anchor_link_ref: genesis.link_ref.clone(),
-            head_ref: genesis.link_ref.clone(),
+            anchor_link_ref: case.genesis.link_ref.clone(),
+            head_ref: case.genesis.link_ref.clone(),
             verify_receipt_ref: fake_verify_ref,
             range_predicate_ref: tampered_predicate_ref,
             policy_refs: Vec::new(),
@@ -3010,22 +3029,25 @@ mod tests {
         })
         .expect_err("tampered range predicate rejected");
         assert!(tampered_predicate.to_string().contains("subjects"));
+    }
 
-        let wrong_predicate_ref = verified
+    fn assert_wrong_kind(case: &MismatchCase<'_>) {
+        let wrong_predicate_ref = case
+            .verified
             .predicate_receipt_refs
             .iter()
             .find(|predicate_ref| {
-                let value = ledger::read_artifact(&root, predicate_ref).expect("read predicate");
+                let value = ledger::read_artifact(case.root, predicate_ref).expect("read predicate");
                 parse_chain_predicate_receipt(&value).expect("parse predicate").predicate == SEGMENT_NO_GAP_PREDICATE
             })
             .expect("no-gap predicate")
             .clone();
-        let wrong_predicate = accept_chain_checkpoint(&root, &ChainCheckpointInput {
-            chain,
+        let wrong_predicate = accept_chain_checkpoint(case.root, &ChainCheckpointInput {
+            chain: case.chain.clone(),
             prior_checkpoint_ref: None,
-            anchor_link_ref: genesis.link_ref.clone(),
-            head_ref: genesis.link_ref,
-            verify_receipt_ref: verified.receipt_ref,
+            anchor_link_ref: case.genesis.link_ref.clone(),
+            head_ref: case.genesis.link_ref.clone(),
+            verify_receipt_ref: case.verified.receipt_ref.clone(),
             range_predicate_ref: wrong_predicate_ref,
             policy_refs: Vec::new(),
             membership_refs: Vec::new(),
