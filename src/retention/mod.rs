@@ -8759,25 +8759,7 @@ mod tests {
         let root = temp_dir("retention-bundle-profile");
         let object_ref = fake_ref("bundle-profile-object");
         let plan_ref = fake_ref("bundle-profile-plan");
-        let explain_value = retention_candidate_explain_value(&RetentionCandidateExplainValueInput {
-            object_ref: &object_ref,
-            object_kind: Some("encrypted-ref"),
-            retention_class: Some(CLASS_PRIVATE_SECRET_REF),
-            action: Some(ACTION_DELETE),
-            subsystem: Some("ledger-gc"),
-            pin_refs: &[],
-            admission_refs: &[],
-            remote_clearance_refs: &[],
-            remote_clearance_import_refs: &[],
-            gc_plan_refs: std::slice::from_ref(&plan_ref),
-            gc_apply_refs: &[],
-            gc_execution_refs: &[],
-            gc_audit_refs: &[],
-            retention_receipt_refs: &[],
-            tombstone_refs: &[],
-            diagnostics: &[],
-        })
-        .expect("sensitive explain value");
+        let explain_value = sensitive_explain_value(&object_ref, &plan_ref);
         let public_dir = root.join("public");
         let public_bundle = export_retention_candidate_bundle(RetentionCandidateBundleExportInput {
             root: &root,
@@ -10446,6 +10428,29 @@ mod tests {
             resource_refs,
             evidence_refs,
         }
+    }
+
+    fn sensitive_explain_value(object_ref: &str, plan_ref: &str) -> IOValue {
+        let plan_refs = vec![plan_ref.to_string()];
+        retention_candidate_explain_value(&RetentionCandidateExplainValueInput {
+            object_ref,
+            object_kind: Some("encrypted-ref"),
+            retention_class: Some(CLASS_PRIVATE_SECRET_REF),
+            action: Some(ACTION_DELETE),
+            subsystem: Some("ledger-gc"),
+            pin_refs: &[],
+            admission_refs: &[],
+            remote_clearance_refs: &[],
+            remote_clearance_import_refs: &[],
+            gc_plan_refs: &plan_refs,
+            gc_apply_refs: &[],
+            gc_execution_refs: &[],
+            gc_audit_refs: &[],
+            retention_receipt_refs: &[],
+            tombstone_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("sensitive explain value")
     }
 
     fn fake_live_refs(label: &str) -> Vec<String> {
