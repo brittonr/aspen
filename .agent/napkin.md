@@ -218,6 +218,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet evidence verify segment split: extracting `src/evidence/chain.rs::verify_chain_segment_with_policy` traversal, anchor diagnostics, and receipt finishing into neutral same-file `LinkWalkInput`/`WalkState`/`FinishInput` helpers lowered the no-disabled probe from 7135 to 7133; a traversal-only split stayed flat because the function was still over threshold. Validation passed `cargo fmt`, focused `cargo test evidence_chain`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-evidence-walk-v2-0`.
+
 - 2026-06-23 Octet evidence checkpoint range-binding split: extracting the range/predicate tail of `src/evidence/chain.rs::validate_checkpoint_verify_receipt` into neutral same-file `RangeBindingInput`/`validate_range_binding` lowered the no-disabled probe from 7137 to 7135 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test evidence_chain`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-range-binding-0`.
 
 - 2026-06-23 Octet evidence chain diagnostic test split: extracting `chain_verify_receipt_reports_fork_gap_stale_head_and_missing_payload` into neutral same-file `assert_*_diagnostic` helpers lowered the no-disabled probe from 7141 to 7140 by clearing one test `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test chain_verify_receipt_reports_fork_gap_stale_head_and_missing_payload`, and probe `target/octet-burndown/probe-chain-diagnostic-test-split-0`.

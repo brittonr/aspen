@@ -505,6 +505,41 @@ struct SegmentPredicateReceiptsInput<'a> {
     fork_policy: ChainForkPolicy,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct LinkWalkInput<'a> {
+    root: &'a Path,
+    index: &'a ChainIndex,
+    chain: &'a ChainScope,
+    anchor_ref: Option<&'a str>,
+    head_ref: &'a str,
+}
+
+#[derive(Debug, Default)]
+struct WalkState {
+    reverse_segment: Vec<String>,
+    payload_refs: BTreeSet<String>,
+    seen_refs: BTreeSet<String>,
+}
+
+struct WalkOutput {
+    verified_links: Vec<String>,
+    payload_refs: Vec<String>,
+}
+
+struct FinishInput<'a> {
+    root: &'a Path,
+    decision: String,
+    chain: &'a ChainScope,
+    anchor_ref: Option<&'a str>,
+    expected_head: Option<&'a str>,
+    discovered_heads: Vec<String>,
+    verified_links: Vec<String>,
+    payload_refs: Vec<String>,
+    diagnostics: Vec<ChainDiagnostic>,
+    predicate_receipt_refs: Vec<String>,
+    fork_policy: ChainForkPolicy,
+}
+
 pub fn genesis_checks() -> Vec<ChainCheck> {
     vec![
         ChainCheck::pass("genesis-sequence"),
@@ -955,21 +990,7 @@ pub fn verify_chain_segment_with_policy(
         diagnostics.push(ChainDiagnostic::new("missing-chain", "no links found for requested chain", Vec::new()));
     }
 
-    if let Some(anchor_ref) = anchor_ref {
-        match index.links_by_ref.get(anchor_ref) {
-            Some(anchor) if &anchor.chain == chain => {}
-            Some(_) => diagnostics.push(ChainDiagnostic::new(
-                "anchor-chain-mismatch",
-                "anchor link belongs to a different chain scope/id/epoch",
-                vec![anchor_ref.to_string()],
-            )),
-            None => diagnostics.push(ChainDiagnostic::new(
-                "missing-anchor",
-                "anchor link is unavailable in the ledger",
-                vec![anchor_ref.to_string()],
-            )),
-        }
-    }
+    note_anchor(&index, chain, anchor_ref, &mut diagnostics);
 
     let selected_head = select_head_for_verification(expected_head, &discovered_heads, &index, chain, &mut diagnostics);
     detect_forks_sequence_conflicts_and_store_evidence(ForkDetectionInput {
@@ -983,79 +1004,21 @@ pub fn verify_chain_segment_with_policy(
         diagnostics: &mut diagnostics,
     })?;
 
-    let mut verified_links = Vec::new();
-    let mut payload_refs = BTreeSet::new();
-    ensure_count_at_most(index.links_by_ref.len(), MAX_EVIDENCE_CHAIN_LINKS, "evidence chain links")?;
-    if let Some(head_ref) = selected_head {
-        let mut reverse_segment = Vec::new();
-        let mut current_ref = head_ref.clone();
-        let mut seen = BTreeSet::new();
-        for _ in 0..=index.links_by_ref.len() {
-            if !seen.insert(current_ref.clone()) {
-                diagnostics.push(ChainDiagnostic::new("cycle", "chain segment contains a repeated link ref", vec![
-                    current_ref,
-                ]));
-                break;
-            }
-            let Some(link) = index.links_by_ref.get(&current_ref) else {
-                diagnostics.push(ChainDiagnostic::new(
-                    "missing-link",
-                    "chain segment names an unavailable previous link",
-                    vec![current_ref],
-                ));
-                break;
-            };
-            if &link.chain != chain {
-                diagnostics.push(ChainDiagnostic::new(
-                    "link-chain-mismatch",
-                    "chain segment crossed into a different scope/id/epoch",
-                    vec![link.link_ref.clone()],
-                ));
-                break;
-            }
-            if let Err(error) = ledger::read_artifact(root, &link.payload.artifact_ref) {
-                diagnostics.push(ChainDiagnostic::new(
-                    "missing-payload",
-                    format!("payload ref is unavailable in the ledger: {error}"),
-                    vec![link.payload.artifact_ref.clone(), link.link_ref.clone()],
-                ));
-            } else {
-                payload_refs.insert(link.payload.artifact_ref.clone());
-            }
-            push_bounded(
-                &mut reverse_segment,
-                link.link_ref.clone(),
-                MAX_EVIDENCE_CHAIN_LINKS,
-                "evidence chain verified links",
-            )?;
-            if anchor_ref == Some(link.link_ref.as_str()) {
-                break;
-            }
-            if let Some(previous_ref) = &link.previous_link_ref {
-                current_ref = previous_ref.clone();
-            } else {
-                if let Some(anchor_ref) = anchor_ref {
-                    diagnostics.push(ChainDiagnostic::new(
-                        "anchor-descent",
-                        "head does not descend from requested anchor",
-                        vec![anchor_ref.to_string(), link.link_ref.clone()],
-                    ));
-                }
-                break;
-            }
-        }
-        if reverse_segment.len() > index.links_by_ref.len() {
-            diagnostics.push(ChainDiagnostic::new(
-                "chain-bound",
-                "chain segment traversal exceeded available link count",
-                vec![head_ref.clone()],
-            ));
-        }
-        verified_links = reverse_segment.into_iter().rev().collect();
-        validate_verified_segment(&index, anchor_ref, &verified_links, &mut diagnostics);
-    }
-
-    let payload_refs = payload_refs.into_iter().collect::<Vec<_>>();
+    let (verified_links, payload_refs) = if let Some(head_ref) = selected_head {
+        let walked = walk_links(
+            LinkWalkInput {
+                root,
+                index: &index,
+                chain,
+                anchor_ref,
+                head_ref: &head_ref,
+            },
+            &mut diagnostics,
+        )?;
+        (walked.verified_links, walked.payload_refs)
+    } else {
+        (Vec::new(), Vec::new())
+    };
     let decision = if diagnostics.iter().any(|diagnostic| diagnostic_is_fatal(diagnostic, fork_policy)) {
         "fail"
     } else {
@@ -1074,23 +1037,144 @@ pub fn verify_chain_segment_with_policy(
         diagnostics: &diagnostics,
         fork_policy,
     })?;
-    let receipt = ChainVerifyReceiptValueInput {
-        decision: &decision,
+    finish_verify(FinishInput {
+        root,
+        decision,
         chain,
         anchor_ref,
         expected_head,
-        discovered_heads: &discovered_heads,
-        verified_links: &verified_links,
-        payload_refs: &payload_refs,
-        diagnostics: &diagnostics,
-    };
-    let receipt_value = chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
-        receipt,
-        predicate_receipt_refs: &predicate_receipt_refs,
+        discovered_heads,
+        verified_links,
+        payload_refs,
+        diagnostics,
+        predicate_receipt_refs,
         fork_policy,
-    });
+    })
+}
+
+fn note_anchor(
+    index: &ChainIndex,
+    chain: &ChainScope,
+    anchor_ref: Option<&str>,
+    diagnostics: &mut impl crate::bounded::VecSink<ChainDiagnostic>,
+) {
+    if let Some(anchor_ref) = anchor_ref {
+        match index.links_by_ref.get(anchor_ref) {
+            Some(anchor) if &anchor.chain == chain => {}
+            Some(_) => diagnostics.push_item(ChainDiagnostic::new(
+                "anchor-chain-mismatch",
+                "anchor link belongs to a different chain scope/id/epoch",
+                vec![anchor_ref.to_string()],
+            )),
+            None => diagnostics.push_item(ChainDiagnostic::new(
+                "missing-anchor",
+                "anchor link is unavailable in the ledger",
+                vec![anchor_ref.to_string()],
+            )),
+        }
+    }
+}
+
+fn walk_links(
+    input: LinkWalkInput<'_>,
+    diagnostics: &mut impl crate::bounded::VecSink<ChainDiagnostic>,
+) -> Result<WalkOutput> {
+    ensure_count_at_most(input.index.links_by_ref.len(), MAX_EVIDENCE_CHAIN_LINKS, "evidence chain links")?;
+    let mut state = WalkState::default();
+    let mut current_ref = input.head_ref.to_string();
+    for _ in 0..=input.index.links_by_ref.len() {
+        let Some(previous_ref) = walk_next(input, &current_ref, &mut state, diagnostics)? else {
+            break;
+        };
+        current_ref = previous_ref;
+    }
+    if state.reverse_segment.len() > input.index.links_by_ref.len() {
+        diagnostics.push_item(ChainDiagnostic::new(
+            "chain-bound",
+            "chain segment traversal exceeded available link count",
+            vec![input.head_ref.to_string()],
+        ));
+    }
+    let verified_links = state.reverse_segment.into_iter().rev().collect::<Vec<_>>();
+    validate_verified_segment(input.index, input.anchor_ref, &verified_links, diagnostics);
+    Ok(WalkOutput {
+        verified_links,
+        payload_refs: state.payload_refs.into_iter().collect(),
+    })
+}
+
+fn walk_next(
+    input: LinkWalkInput<'_>,
+    current_ref: &str,
+    state: &mut WalkState,
+    diagnostics: &mut impl crate::bounded::VecSink<ChainDiagnostic>,
+) -> Result<Option<String>> {
+    if !state.seen_refs.insert(current_ref.to_string()) {
+        diagnostics.push_item(ChainDiagnostic::new("cycle", "chain segment contains a repeated link ref", vec![
+            current_ref.to_string(),
+        ]));
+        return Ok(None);
+    }
+    let Some(link) = input.index.links_by_ref.get(current_ref) else {
+        diagnostics.push_item(ChainDiagnostic::new(
+            "missing-link",
+            "chain segment names an unavailable previous link",
+            vec![current_ref.to_string()],
+        ));
+        return Ok(None);
+    };
+    if &link.chain != input.chain {
+        diagnostics.push_item(ChainDiagnostic::new(
+            "link-chain-mismatch",
+            "chain segment crossed into a different scope/id/epoch",
+            vec![link.link_ref.clone()],
+        ));
+        return Ok(None);
+    }
+    note_payload(input.root, link, state, diagnostics);
+    push_bounded(
+        &mut state.reverse_segment,
+        link.link_ref.clone(),
+        MAX_EVIDENCE_CHAIN_LINKS,
+        "evidence chain verified links",
+    )?;
+    if input.anchor_ref == Some(link.link_ref.as_str()) {
+        return Ok(None);
+    }
+    if let Some(previous_ref) = &link.previous_link_ref {
+        return Ok(Some(previous_ref.clone()));
+    }
+    if let Some(anchor_ref) = input.anchor_ref {
+        diagnostics.push_item(ChainDiagnostic::new(
+            "anchor-descent",
+            "head does not descend from requested anchor",
+            vec![anchor_ref.to_string(), link.link_ref.clone()],
+        ));
+    }
+    Ok(None)
+}
+
+fn note_payload(
+    root: &Path,
+    link: &ChainLink,
+    state: &mut WalkState,
+    diagnostics: &mut impl crate::bounded::VecSink<ChainDiagnostic>,
+) {
+    if let Err(error) = ledger::read_artifact(root, &link.payload.artifact_ref) {
+        diagnostics.push_item(ChainDiagnostic::new(
+            "missing-payload",
+            format!("payload ref is unavailable in the ledger: {error}"),
+            vec![link.payload.artifact_ref.clone(), link.link_ref.clone()],
+        ));
+    } else {
+        state.payload_refs.insert(link.payload.artifact_ref.clone());
+    }
+}
+
+fn finish_verify(input: FinishInput<'_>) -> Result<ChainVerify> {
+    let receipt_value = finish_value(&input);
     let receipt_ref = canonical_hash(&receipt_value)?;
-    let imported_receipt = ledger::import_artifact(root, &receipt_value)?;
+    let imported_receipt = ledger::import_artifact(input.root, &receipt_value)?;
     if imported_receipt.artifact_ref != receipt_ref {
         return Err(MoltenError::invalid_harness(format!(
             "imported chain verify receipt ref mismatch: got {}, expected {receipt_ref}",
@@ -1099,17 +1183,35 @@ pub fn verify_chain_segment_with_policy(
     }
 
     Ok(ChainVerify {
-        decision,
-        chain: chain.clone(),
-        anchor_ref: anchor_ref.map(ToOwned::to_owned),
-        expected_head: expected_head.map(ToOwned::to_owned),
-        discovered_heads,
-        verified_links,
-        payload_refs,
-        diagnostics,
-        predicate_receipt_refs,
+        decision: input.decision,
+        chain: input.chain.clone(),
+        anchor_ref: input.anchor_ref.map(ToOwned::to_owned),
+        expected_head: input.expected_head.map(ToOwned::to_owned),
+        discovered_heads: input.discovered_heads,
+        verified_links: input.verified_links,
+        payload_refs: input.payload_refs,
+        diagnostics: input.diagnostics,
+        predicate_receipt_refs: input.predicate_receipt_refs,
         receipt_ref,
         receipt_value,
+    })
+}
+
+fn finish_value(input: &FinishInput<'_>) -> IOValue {
+    let receipt = ChainVerifyReceiptValueInput {
+        decision: &input.decision,
+        chain: input.chain,
+        anchor_ref: input.anchor_ref,
+        expected_head: input.expected_head,
+        discovered_heads: &input.discovered_heads,
+        verified_links: &input.verified_links,
+        payload_refs: &input.payload_refs,
+        diagnostics: &input.diagnostics,
+    };
+    chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
+        receipt,
+        predicate_receipt_refs: &input.predicate_receipt_refs,
+        fork_policy: input.fork_policy,
     })
 }
 
