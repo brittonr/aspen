@@ -2046,12 +2046,29 @@ struct SyncInstallCandidate {
     payload: IOValue,
 }
 
-pub fn sync_loopback(input: SyncLoopbackInput<'_>) -> Result<JobSyncLoopback> {
-    let plan = sync_plan_value(input.source_registry, input.target_registry, input.request_value)?;
-    let ordered_refs = sync_install_order(input.source_registry, &plan.root_refs)?;
+struct CandidateSelection {
+    install_candidates: Vec<SyncInstallCandidate>,
+    already_present_refs: Vec<String>,
+    provenance_receipt_refs: Vec<String>,
+    diagnostics: Vec<String>,
+}
+
+struct ReceiptInput<'a> {
+    plan: &'a JobSyncPlan,
+    decision: &'a str,
+    installed_refs: &'a [String],
+    already_present_refs: &'a [String],
+    provenance_receipt_refs: &'a [String],
+    diagnostics: &'a [String],
+}
+
+fn collect_candidates(
+    input: &SyncLoopbackInput<'_>,
+    plan: &JobSyncPlan,
+    ordered_refs: Vec<String>,
+) -> Result<CandidateSelection> {
     let missing = plan.missing_refs.iter().cloned().collect::<BTreeSet<_>>();
     let mut install_candidates = Vec::new();
-    let mut installed_refs = Vec::new();
     let mut already_present_refs = Vec::new();
     let mut provenance_receipt_refs = Vec::new();
     let mut diagnostics = Vec::new();
@@ -2099,67 +2116,108 @@ pub fn sync_loopback(input: SyncLoopbackInput<'_>) -> Result<JobSyncLoopback> {
             }
         }
     }
-    if diagnostics.is_empty() {
-        for candidate in install_candidates {
-            let installed = artifacts::install_artifact(input.target_registry, &artifacts::ArtifactInstallInput {
-                kind: candidate.source.kind.clone(),
-                payload: candidate.payload,
-                schema_refs: candidate.source.schema_refs.clone(),
-                dependency_refs: candidate.source.dependency_refs.clone(),
-                effect_manifest_ref: candidate.source.effect_manifest_ref.clone(),
-                policy_refs: candidate.source.policy_refs.clone(),
-                evidence_refs: candidate.source.evidence_refs.clone(),
-                installer_ref: local_ref("job-sync-installer", &plan.request.request_ref)?,
-                capability_refs: if plan.request.capability_refs.is_empty() {
-                    vec![local_ref("job-sync-capability", &plan.request.request_ref)?]
-                } else {
-                    plan.request.capability_refs.clone()
-                },
-            })?;
-            if installed.decision != "pass" || installed.artifact_ref != candidate.artifact_ref {
-                return Err(MoltenError::invalid_harness(format!(
-                    "job sync install mismatch for {}: decision={} installed={}",
-                    candidate.artifact_ref, installed.decision, installed.artifact_ref
-                )));
-            }
-            let target = artifacts::read_artifact(input.target_registry, &candidate.artifact_ref)?;
-            if target.value != candidate.source.value {
-                return Err(MoltenError::invalid_harness(format!(
-                    "job sync target artifact {} differs from source",
-                    candidate.artifact_ref
-                )));
-            }
-            push_bounded(&mut installed_refs, candidate.artifact_ref, MAX_JOB_REFS, "job sync installed refs")?;
+    Ok(CandidateSelection {
+        install_candidates,
+        already_present_refs,
+        provenance_receipt_refs,
+        diagnostics,
+    })
+}
+
+fn apply_candidates(
+    target_registry: &Path,
+    request: &JobSyncRequest,
+    candidates: Vec<SyncInstallCandidate>,
+) -> Result<Vec<String>> {
+    let mut installed_refs = Vec::new();
+    for candidate in candidates {
+        let installed = artifacts::install_artifact(target_registry, &artifacts::ArtifactInstallInput {
+            kind: candidate.source.kind.clone(),
+            payload: candidate.payload,
+            schema_refs: candidate.source.schema_refs.clone(),
+            dependency_refs: candidate.source.dependency_refs.clone(),
+            effect_manifest_ref: candidate.source.effect_manifest_ref.clone(),
+            policy_refs: candidate.source.policy_refs.clone(),
+            evidence_refs: candidate.source.evidence_refs.clone(),
+            installer_ref: local_ref("job-sync-installer", &request.request_ref)?,
+            capability_refs: if request.capability_refs.is_empty() {
+                vec![local_ref("job-sync-capability", &request.request_ref)?]
+            } else {
+                request.capability_refs.clone()
+            },
+        })?;
+        if installed.decision != "pass" || installed.artifact_ref != candidate.artifact_ref {
+            return Err(MoltenError::invalid_harness(format!(
+                "job sync install mismatch for {}: decision={} installed={}",
+                candidate.artifact_ref, installed.decision, installed.artifact_ref
+            )));
         }
+        let target = artifacts::read_artifact(target_registry, &candidate.artifact_ref)?;
+        if target.value != candidate.source.value {
+            return Err(MoltenError::invalid_harness(format!(
+                "job sync target artifact {} differs from source",
+                candidate.artifact_ref
+            )));
+        }
+        push_bounded(&mut installed_refs, candidate.artifact_ref, MAX_JOB_REFS, "job sync installed refs")?;
     }
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let mut refs = plan.closure_refs.clone();
-    extend_cloned_bounded(&mut refs, &installed_refs, MAX_JOB_REFS, "job sync refs")?;
-    extend_cloned_bounded(&mut refs, &already_present_refs, MAX_JOB_REFS, "job sync refs")?;
-    extend_cloned_bounded(&mut refs, &provenance_receipt_refs, MAX_JOB_REFS, "job sync refs")?;
-    push_bounded(&mut refs, plan.plan_ref.clone(), MAX_JOB_REFS, "job sync refs")?;
-    let receipt_value = record("job-sync-receipt-v1", vec![
+    Ok(installed_refs)
+}
+
+fn loopback_receipt(input: ReceiptInput<'_>) -> Result<IOValue> {
+    let mut refs = input.plan.closure_refs.clone();
+    extend_cloned_bounded(&mut refs, input.installed_refs, MAX_JOB_REFS, "job sync refs")?;
+    extend_cloned_bounded(&mut refs, input.already_present_refs, MAX_JOB_REFS, "job sync refs")?;
+    extend_cloned_bounded(&mut refs, input.provenance_receipt_refs, MAX_JOB_REFS, "job sync refs")?;
+    push_bounded(&mut refs, input.plan.plan_ref.clone(), MAX_JOB_REFS, "job sync refs")?;
+    let is_clean = input.diagnostics.is_empty();
+    Ok(record("job-sync-receipt-v1", vec![
         string(JOB_SYNC_RECEIPT_SCHEMA),
         record("operation", vec![string("sync-loopback")]),
-        record("decision", vec![string(decision)]),
-        record("job", vec![string(&plan.request.job_ref)]),
-        record("request", vec![string(&plan.request.request_ref)]),
-        record("artifact", vec![string(&plan.plan_ref)]),
-        record("installed", vec![refs_sequence(&installed_refs)]),
-        record("already-present", vec![refs_sequence(&already_present_refs)]),
-        record("provenance", vec![refs_sequence(&provenance_receipt_refs)]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+        record("decision", vec![string(input.decision)]),
+        record("job", vec![string(&input.plan.request.job_ref)]),
+        record("request", vec![string(&input.plan.request.request_ref)]),
+        record("artifact", vec![string(&input.plan.plan_ref)]),
+        record("installed", vec![refs_sequence(input.installed_refs)]),
+        record("already-present", vec![refs_sequence(input.already_present_refs)]),
+        record("provenance", vec![refs_sequence(input.provenance_receipt_refs)]),
+        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
         record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&[
-            ("hash-verify-before-install", status(diagnostics.is_empty())),
-            ("provenance-before-install", status(diagnostics.is_empty())),
+            ("hash-verify-before-install", status(is_clean)),
+            ("provenance-before-install", status(is_clean)),
             ("dependency-closure", "pass"),
-            ("loopback-transfer", status(diagnostics.is_empty())),
+            ("loopback-transfer", status(is_clean)),
             ("no-execution", "pass"),
             ("no-mobile-closures", "pass"),
             ("canonical-receipt", "pass"),
         ]),
-    ]);
+    ]))
+}
+
+pub fn sync_loopback(input: SyncLoopbackInput<'_>) -> Result<JobSyncLoopback> {
+    let plan = sync_plan_value(input.source_registry, input.target_registry, input.request_value)?;
+    let ordered_refs = sync_install_order(input.source_registry, &plan.root_refs)?;
+    let CandidateSelection {
+        install_candidates,
+        already_present_refs,
+        provenance_receipt_refs,
+        diagnostics,
+    } = collect_candidates(&input, &plan, ordered_refs)?;
+    let installed_refs = if diagnostics.is_empty() {
+        apply_candidates(input.target_registry, &plan.request, install_candidates)?
+    } else {
+        Vec::new()
+    };
+    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let receipt_value = loopback_receipt(ReceiptInput {
+        plan: &plan,
+        decision,
+        installed_refs: &installed_refs,
+        already_present_refs: &already_present_refs,
+        provenance_receipt_refs: &provenance_receipt_refs,
+        diagnostics: &diagnostics,
+    })?;
     let receipt_ref = canonical_hash(&receipt_value)?;
     Ok(JobSyncLoopback {
         receipt_ref,
