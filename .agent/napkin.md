@@ -218,6 +218,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet effects local/production case split: extracting `src/effects/mod.rs::dataspace_blob_and_storage_handlers_bind_local_and_production_operations` into neutral same-file `Case`/`Material` plus `material_for`/`assert_profile`/`handle_for`/`assert_operations` helpers lowered the no-disabled probe from 7153 to 7152 by clearing one `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test dataspace_blob_and_storage_handlers_bind_local_and_production_operations`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-effects-dataspace-case-0`.
+
 - 2026-06-23 Octet effects chaos/profiling test split: extracting `src/effects/mod.rs::chaos_and_profiling_profiles_are_bounded_evidence_only` into neutral same-file `Env` plus short chaos/metric helpers lowered the no-disabled probe from 7154 to 7153 by clearing one `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test chaos_and_profiling_profiles_are_bounded_evidence_only`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-effects-chaos-split-0`.
 
 - 2026-06-23 Octet effects handle split: extracting `src/effects/mod.rs::validate_parsed_handle_for_request` into neutral same-file binding/context/lifetime helpers lowered the no-disabled probe from 7157 to 7155 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test effects`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-effects-handle-split-0`.
