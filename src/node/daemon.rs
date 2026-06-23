@@ -9369,40 +9369,54 @@ mod tests {
 
     #[test]
     fn node_control_provenance_gate_denies_missing_and_tampered_evidence_before_side_effects() {
-        let root = temp_dir("node-control-provenance");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &root,
-            node_id: "node:provenance",
-        })
-        .expect("init node");
-        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-        let authority_refs = vec![local_ref("node-control-authority", "provenance").expect("authority ref")];
-        let policy_refs = vec![local_ref("node-control-policy", "provenance").expect("policy ref")];
-        let resource_refs = vec![local_ref("node-control-resource", "provenance").expect("resource ref")];
+        let root = initialized_control_root("node-control-provenance", "node:provenance");
+        let refs = case_refs("provenance");
 
+        assert_missing_case(&root, &refs);
+        assert_queued_case(&root, &refs);
+        assert_tampered_case(&root, &refs);
+    }
+
+    struct CaseRefs {
+        authority_refs: Vec<String>,
+        policy_refs: Vec<String>,
+        resource_refs: Vec<String>,
+    }
+
+    fn case_refs(label: &str) -> CaseRefs {
+        CaseRefs {
+            authority_refs: vec![local_ref("node-control-authority", label).expect("authority ref")],
+            policy_refs: vec![local_ref("node-control-policy", label).expect("policy ref")],
+            resource_refs: vec![local_ref("node-control-resource", label).expect("resource ref")],
+        }
+    }
+
+    fn request_value(payload_ref: &str, refs: &CaseRefs, evidence_refs: &[String]) -> IOValue {
+        node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "install",
+            target_ref: None,
+            payload_ref: Some(payload_ref),
+            authority_refs: &refs.authority_refs,
+            policy_refs: &refs.policy_refs,
+            resource_refs: &refs.resource_refs,
+            evidence_refs,
+        })
+        .expect("install request")
+    }
+
+    fn assert_registry_empty(root: &Path) {
+        assert!(
+            artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
+                .expect("list registry")
+                .is_empty()
+        );
+    }
+
+    fn assert_missing_case(root: &Path, refs: &CaseRefs) {
         let payload_value = record("node-control-install-payload", vec![string("missing-provenance")]);
-        let payload_ref = import_node_artifact(&root, &payload_value).expect("import payload");
-        let missing_provenance_request =
-            node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-                operation: "install",
-                target_ref: None,
-                payload_ref: Some(&payload_ref),
-                authority_refs: &authority_refs,
-                policy_refs: &policy_refs,
-                resource_refs: &resource_refs,
-                evidence_refs: &[],
-            })
-            .expect("missing provenance request");
-        let submitted = submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
-            request_value: &missing_provenance_request,
-        })
-        .expect("submit missing provenance");
-        let dispatch = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
-            request_path: Some(&submitted.inbox_path),
-        })
-        .expect("dispatch missing provenance");
+        let payload_ref = import_node_artifact(root, &payload_value).expect("import payload");
+        let request = request_value(&payload_ref, refs, &[]);
+        let dispatch = submit_and_dispatch(root, &request);
         let receipt =
             node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("control receipt");
         assert_eq!(receipt.decision, "deny");
@@ -9413,88 +9427,47 @@ mod tests {
                 .any(|reference| crate::preserves_rail::validate_content_ref(reference).is_ok())
         );
         assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("provenance evidence refs missing")));
-        assert!(
-            artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
-                .expect("list registry")
-                .is_empty()
-        );
+        assert_registry_empty(root);
+    }
 
-        let queued_payload = record("node-control-install-payload", vec![string("queued-missing-provenance")]);
-        let queued_payload_ref = import_node_artifact(&root, &queued_payload).expect("import queued payload");
-        let queued_request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "install",
-            target_ref: None,
-            payload_ref: Some(&queued_payload_ref),
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("queued missing provenance request");
-        let queued = node_runtime::parse_node_control_request(&queued_request).expect("queued request parse");
+    fn assert_queued_case(root: &Path, refs: &CaseRefs) {
+        let payload = record("node-control-install-payload", vec![string("queued-missing-provenance")]);
+        let payload_ref = import_node_artifact(root, &payload).expect("import queued payload");
+        let request = request_value(&payload_ref, refs, &[]);
+        let queued = node_runtime::parse_node_control_request(&request).expect("queued request parse");
         submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
-            request_value: &queued_request,
+            state_root: root,
+            request_value: &request,
         })
         .expect("submit queued missing provenance");
         let loop_result = run_control_loop(&NodeControlLoopInput {
-            state_root: &root,
+            state_root: root,
             max_requests: 1,
         })
         .expect("process queued missing provenance");
         assert_eq!(loop_result.processed_request_refs, vec![queued.request_ref.clone()]);
-        let queued_receipt_value =
-            read_preserves(&control_outbox_receipt_path(&root, &queued.request_ref)).expect("queued receipt value");
-        let queued_receipt = node_runtime::parse_node_control_receipt(&queued_receipt_value).expect("queued receipt");
-        assert_eq!(queued_receipt.decision, "deny");
-        assert!(
-            queued_receipt
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.contains("missing provenance evidence"))
-        );
+        let value =
+            read_preserves(&control_outbox_receipt_path(root, &queued.request_ref)).expect("queued receipt value");
+        let receipt = node_runtime::parse_node_control_receipt(&value).expect("queued receipt");
+        assert_eq!(receipt.decision, "deny");
+        assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("missing provenance evidence")));
+    }
 
-        let tampered_payload = record("node-control-install-payload", vec![string("tampered-provenance")]);
-        let tampered_payload_ref = import_node_artifact(&root, &tampered_payload).expect("import tampered payload");
+    fn assert_tampered_case(root: &Path, refs: &CaseRefs) {
+        let payload = record("node-control-install-payload", vec![string("tampered-provenance")]);
+        let payload_ref = import_node_artifact(root, &payload).expect("import tampered payload");
         let wrong_artifact_ref = local_ref("node-control-wrong-provenance-artifact", "tampered").expect("wrong ref");
         let wrong_provenance =
             provenance::synthetic_reviewed_provenance_record(&wrong_artifact_ref).expect("wrong provenance");
-        let wrong_provenance_ref = import_node_artifact(&root, &wrong_provenance).expect("import wrong provenance");
-        let tampered_evidence_refs = vec![wrong_provenance_ref];
-        let tampered_request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-            operation: "install",
-            target_ref: None,
-            payload_ref: Some(&tampered_payload_ref),
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &tampered_evidence_refs,
-        })
-        .expect("tampered request");
-        let tampered_submitted = submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
-            request_value: &tampered_request,
-        })
-        .expect("submit tampered provenance");
-        let tampered_dispatch = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
-            request_path: Some(&tampered_submitted.inbox_path),
-        })
-        .expect("dispatch tampered provenance");
-        let tampered_receipt = node_runtime::parse_node_control_receipt(&tampered_dispatch.control_receipt_value)
-            .expect("tampered receipt");
-        assert_eq!(tampered_receipt.decision, "deny");
-        assert!(
-            tampered_receipt
-                .diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.contains("no provenance record matches"))
-        );
-        assert!(
-            artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
-                .expect("list registry after tampered")
-                .is_empty()
-        );
+        let wrong_ref = import_node_artifact(root, &wrong_provenance).expect("import wrong provenance");
+        let evidence_refs = vec![wrong_ref];
+        let request = request_value(&payload_ref, refs, &evidence_refs);
+        let dispatch = submit_and_dispatch(root, &request);
+        let receipt =
+            node_runtime::parse_node_control_receipt(&dispatch.control_receipt_value).expect("tampered receipt");
+        assert_eq!(receipt.decision, "deny");
+        assert!(receipt.diagnostics.iter().any(|diagnostic| diagnostic.contains("no provenance record matches")));
+        assert_registry_empty(root);
     }
 
     #[test]
