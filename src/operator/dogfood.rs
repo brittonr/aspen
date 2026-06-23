@@ -4301,30 +4301,19 @@ mod tests {
 
     #[test]
     fn missing_receipt_and_non_replayable_mandatory_steps_deny_report() {
+        let report = report_with_mandatory_gaps();
+        let parsed = parse_dogfood_report(&report).expect("parse report");
+        assert_eq!(parsed.decision, "deny");
+        assert!(parsed.diagnostics.iter().any(|diagnostic| diagnostic.contains("lacks canonical receipt")));
+        assert!(parsed.diagnostics.iter().any(|diagnostic| diagnostic.contains("non-release replay status")));
+        assert_gate_rejects(&report);
+    }
+
+    fn report_with_mandatory_gaps() -> IOValue {
         let request_ref = dogfood_ref("request").expect("request ref");
-        let missing_step = operator_step_value(&OperatorStepInput {
-            name: "install-artifact",
-            request_ref: Some(&request_ref),
-            receipt_ref: None,
-            decision: "pass",
-            replay_status: "deterministic",
-            mandatory: true,
-            artifact_refs: &[],
-            diagnostics: &[],
-        })
-        .expect("missing step");
+        let missing_step = mandatory_step("install-artifact", &request_ref, None, "deterministic");
         let live_receipt = dogfood_ref("live-receipt").expect("live receipt");
-        let live_step = operator_step_value(&OperatorStepInput {
-            name: "live-diagnostic",
-            request_ref: Some(&request_ref),
-            receipt_ref: Some(&live_receipt),
-            decision: "pass",
-            replay_status: "non-replayable",
-            mandatory: true,
-            artifact_refs: &[],
-            diagnostics: &[],
-        })
-        .expect("live step");
+        let live_step = mandatory_step("live-diagnostic", &request_ref, Some(&live_receipt), "non-replayable");
         let policy_refs = vec![dogfood_ref("policy").expect("policy")];
         let capability_refs = vec![dogfood_ref("capability").expect("capability")];
         let resource_refs = vec![dogfood_ref("resource").expect("resource")];
@@ -4347,7 +4336,7 @@ mod tests {
             state_root_ref: &dogfood_ref("state").expect("state"),
         })
         .expect("checkpoint");
-        let report = dogfood_report_value(&DogfoodReportInput {
+        dogfood_report_value(&DogfoodReportInput {
             workflow_value: &workflow,
             checkpoint_values: &[checkpoint],
             gate_receipt_refs: &[dogfood_ref("gate").expect("gate")],
@@ -4355,14 +4344,27 @@ mod tests {
             final_state_ref: &dogfood_ref("final-state").expect("final state"),
             diagnostics: &[],
         })
-        .expect("report");
-        let parsed = parse_dogfood_report(&report).expect("parse report");
-        assert_eq!(parsed.decision, "deny");
-        assert!(parsed.diagnostics.iter().any(|diagnostic| diagnostic.contains("lacks canonical receipt")));
-        assert!(parsed.diagnostics.iter().any(|diagnostic| diagnostic.contains("non-release replay status")));
+        .expect("report")
+    }
+
+    fn mandatory_step(name: &str, request_ref: &str, receipt_ref: Option<&str>, replay_status: &str) -> IOValue {
+        operator_step_value(&OperatorStepInput {
+            name,
+            request_ref: Some(request_ref),
+            receipt_ref,
+            decision: "pass",
+            replay_status,
+            mandatory: true,
+            artifact_refs: &[],
+            diagnostics: &[],
+        })
+        .expect("mandatory step")
+    }
+
+    fn assert_gate_rejects(report: &IOValue) {
         assert!(
             release_gate_receipt_value(&ReleaseGateInput {
-                report_value: &report,
+                report_value: report,
                 node_startup_ref: &dogfood_ref("startup").expect("startup"),
                 node_shutdown_ref: &dogfood_ref("shutdown").expect("shutdown"),
                 harness_gate_refs: &[dogfood_ref("harness-gate").expect("harness gate")],
