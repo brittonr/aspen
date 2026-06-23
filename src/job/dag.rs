@@ -3904,6 +3904,16 @@ pub fn dag_summary(dag: &JobDag) -> String {
     )
 }
 
+struct StageMemo<'a> {
+    dag: &'a JobDag,
+    request: &'a JobOutputRequest,
+    node: &'a JobNode,
+    inputs: &'a [IOValue],
+    cache_root: &'a Path,
+    key_input: &'a eval_cache::EvalCacheKeyInput,
+    key_ref: &'a str,
+}
+
 fn run_stage_with_cache(
     dag: &JobDag,
     request: &JobOutputRequest,
@@ -3915,89 +3925,107 @@ fn run_stage_with_cache(
     let key_input = stage_cache_key_input(dag, request, node, inputs)?;
     let key_value = eval_cache::eval_cache_key_value(&key_input)?;
     let key = eval_cache::parse_eval_cache_key(&key_value)?;
-    if is_cacheable {
-        let current_policy_refs = combined_policy_refs(dag, request, Some(node));
-        if let Ok(hit) = eval_cache::get(options.cache_root, &key.key_ref, &eval_cache::EvalCacheGetInput {
-            current_policy_refs,
-            current_capability_refs: Vec::new(),
-            current_revocation_refs: Vec::new(),
-            semantic: true,
-        }) && let Some(output) = hit.output
-        {
-            let output_values = parse_cached_stage_output(&output)?;
-            let output_refs = refs_for_values(&output_values)?;
-            let cache_ref = canonical_hash(&hit.receipt_value)?;
-            let receipt_value = job_receipt_value(JobReceiptInput {
-                operation: "memo-hit",
-                decision: "pass",
-                job_ref: Some(&dag.job_ref),
-                request_ref: Some(&request.request_ref),
-                stage_id: Some(&node.id),
-                input_refs: &refs_for_values(inputs)?,
-                output_refs: &output_refs,
-                cache_ref: Some(&cache_ref),
-                effect_refs: &[],
-                policy_refs: &combined_policy_refs(dag, request, Some(node)),
-                evidence_refs: std::slice::from_ref(&cache_ref),
-                diagnostics: &[],
-                checks: &[
-                    ("eval-cache-hit", "pass"),
-                    ("memo-key-bound", "pass"),
-                    ("policy-current-revalidation", "pass"),
-                ],
-            })?;
-            return Ok(JobStageRun {
-                node_id: node.id.clone(),
-                output_values,
-                output_refs,
-                receipt_value,
-            });
-        }
+    let memo = StageMemo {
+        dag,
+        request,
+        node,
+        inputs,
+        cache_root: options.cache_root,
+        key_input: &key_input,
+        key_ref: &key.key_ref,
+    };
+    if is_cacheable && let Some(hit) = stage_memo_hit(&memo)? {
+        return Ok(hit);
     }
     let stage = execute_stage(dag, request, node, inputs, options)?;
     if is_cacheable {
-        let stage_output = sequence(stage.output_values.clone());
-        let policy_refs = combined_policy_refs(dag, request, Some(node));
-        let tier = if policy_refs.is_empty() {
-            eval_cache::TIER_PURE
-        } else {
-            eval_cache::TIER_POLICY_CURRENT
-        };
-        let cache_put = eval_cache::put(options.cache_root, &key_input, &eval_cache::EvalCacheValueInput {
-            tier: tier.to_string(),
-            status: eval_cache::STATUS_PASS.to_string(),
-            output: Some(stage_output),
-            dependency_refs: key_input.dependency_refs.clone(),
-            policy_refs: policy_refs.clone(),
-            evidence_refs: vec![canonical_hash(&stage.receipt_value)?],
-            diagnostics: Vec::new(),
-        })?;
-        let cache_ref = canonical_hash(&cache_put.receipt_value)?;
-        let stage_receipt_ref = canonical_hash(&stage.receipt_value)?;
-        let evidence_refs = vec![stage_receipt_ref, cache_ref.clone()];
-        let receipt_value = job_receipt_value(JobReceiptInput {
-            operation: "stage",
-            decision: "pass",
-            job_ref: Some(&dag.job_ref),
-            request_ref: Some(&request.request_ref),
-            stage_id: Some(&node.id),
-            input_refs: &refs_for_values(inputs)?,
-            output_refs: &stage.output_refs,
-            cache_ref: Some(&cache_ref),
-            effect_refs: &[],
-            policy_refs: &policy_refs,
-            evidence_refs: &evidence_refs,
-            diagnostics: &[],
-            checks: &[
-                ("eval-cache-miss", "pass"),
-                ("stage-executed", "pass"),
-                ("memo-key-bound", "pass"),
-            ],
-        })?;
-        Ok(JobStageRun { receipt_value, ..stage })
+        stage_memo_store(&memo, stage)
     } else {
         Ok(stage)
     }
+}
+
+fn stage_memo_hit(input: &StageMemo<'_>) -> Result<Option<JobStageRun>> {
+    let current_policy_refs = combined_policy_refs(input.dag, input.request, Some(input.node));
+    if let Ok(hit) = eval_cache::get(input.cache_root, input.key_ref, &eval_cache::EvalCacheGetInput {
+        current_policy_refs,
+        current_capability_refs: Vec::new(),
+        current_revocation_refs: Vec::new(),
+        semantic: true,
+    }) && let Some(output) = hit.output
+    {
+        let output_values = parse_cached_stage_output(&output)?;
+        let output_refs = refs_for_values(&output_values)?;
+        let cache_ref = canonical_hash(&hit.receipt_value)?;
+        let receipt_value = job_receipt_value(JobReceiptInput {
+            operation: "memo-hit",
+            decision: "pass",
+            job_ref: Some(&input.dag.job_ref),
+            request_ref: Some(&input.request.request_ref),
+            stage_id: Some(&input.node.id),
+            input_refs: &refs_for_values(input.inputs)?,
+            output_refs: &output_refs,
+            cache_ref: Some(&cache_ref),
+            effect_refs: &[],
+            policy_refs: &combined_policy_refs(input.dag, input.request, Some(input.node)),
+            evidence_refs: std::slice::from_ref(&cache_ref),
+            diagnostics: &[],
+            checks: &[
+                ("eval-cache-hit", "pass"),
+                ("memo-key-bound", "pass"),
+                ("policy-current-revalidation", "pass"),
+            ],
+        })?;
+        return Ok(Some(JobStageRun {
+            node_id: input.node.id.clone(),
+            output_values,
+            output_refs,
+            receipt_value,
+        }));
+    }
+    Ok(None)
+}
+
+fn stage_memo_store(input: &StageMemo<'_>, stage: JobStageRun) -> Result<JobStageRun> {
+    let stage_output = sequence(stage.output_values.clone());
+    let policy_refs = combined_policy_refs(input.dag, input.request, Some(input.node));
+    let tier = if policy_refs.is_empty() {
+        eval_cache::TIER_PURE
+    } else {
+        eval_cache::TIER_POLICY_CURRENT
+    };
+    let cache_put = eval_cache::put(input.cache_root, input.key_input, &eval_cache::EvalCacheValueInput {
+        tier: tier.to_string(),
+        status: eval_cache::STATUS_PASS.to_string(),
+        output: Some(stage_output),
+        dependency_refs: input.key_input.dependency_refs.clone(),
+        policy_refs: policy_refs.clone(),
+        evidence_refs: vec![canonical_hash(&stage.receipt_value)?],
+        diagnostics: Vec::new(),
+    })?;
+    let cache_ref = canonical_hash(&cache_put.receipt_value)?;
+    let stage_receipt_ref = canonical_hash(&stage.receipt_value)?;
+    let evidence_refs = vec![stage_receipt_ref, cache_ref.clone()];
+    let receipt_value = job_receipt_value(JobReceiptInput {
+        operation: "stage",
+        decision: "pass",
+        job_ref: Some(&input.dag.job_ref),
+        request_ref: Some(&input.request.request_ref),
+        stage_id: Some(&input.node.id),
+        input_refs: &refs_for_values(input.inputs)?,
+        output_refs: &stage.output_refs,
+        cache_ref: Some(&cache_ref),
+        effect_refs: &[],
+        policy_refs: &policy_refs,
+        evidence_refs: &evidence_refs,
+        diagnostics: &[],
+        checks: &[
+            ("eval-cache-miss", "pass"),
+            ("stage-executed", "pass"),
+            ("memo-key-bound", "pass"),
+        ],
+    })?;
+    Ok(JobStageRun { receipt_value, ..stage })
 }
 
 fn execute_stage(
