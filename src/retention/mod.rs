@@ -9339,80 +9339,7 @@ mod tests {
         .expect("init peer node");
         let request_live = live_direction_refs(&peer_node_root, requester_node_id, "request");
         let response_live = live_direction_refs(&requester_node_root, peer_node_id, "response");
-        let requester_ref = fake_ref("live-requester");
-        let peer_ref = fake_ref("live-peer");
-        let object_ref = fake_ref("live-object");
-        let remote_ref = fake_ref("live-remote");
-        let policy = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_POLICY,
-            label: "live-policy",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let authority = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_AUTHORITY,
-            label: "live-authority",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let support = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-            label: "live-support",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let index = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REFERENCE_INDEX,
-            label: "live-index",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let remote_gc = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REMOTE_GC,
-            label: "live-remote-gc",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: std::slice::from_ref(&remote_ref),
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
+        let case = live_case(&root, "live");
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
         let live = runtime
             .block_on(run_retention_remote_gc_clearance_live_loopback(RetentionRemoteGcClearanceLiveLoopbackInput {
@@ -9424,16 +9351,16 @@ mod tests {
                 topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
                 request_sequence: 1,
                 response_sequence: 1,
-                requester_ref: &requester_ref,
-                peer_ref: &peer_ref,
-                object_ref: &object_ref,
+                requester_ref: &case.requester,
+                peer_ref: &case.peer,
+                object_ref: &case.object,
                 object_kind: "chunk",
                 retention_class: CLASS_DURABLE_VALUE,
                 action: ACTION_DELETE,
-                remote_ref: &remote_ref,
-                policy_ref: &policy,
-                authority_ref: &authority,
-                retention_evidence_refs: std::slice::from_ref(&support),
+                remote_ref: &case.remote,
+                policy_ref: &case.policy,
+                authority_ref: &case.authority,
+                retention_evidence_refs: std::slice::from_ref(&case.support),
                 response_evidence_refs: &[fake_ref("live-peer-evidence")],
                 retained_refs: &[],
                 is_current: true,
@@ -9454,29 +9381,7 @@ mod tests {
         assert_eq!(live.workflow.decision, "pass");
         assert_eq!(live.import.decision, "pass");
         let clearance_ref = live.import.clearance_ref.clone().expect("live clearance imported");
-        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
-            root: &root,
-            evidence: &DestructiveRetentionEvidence {
-                requester_ref: Some(requester_ref.clone()),
-                policy_refs: vec![policy],
-                authority_refs: vec![authority],
-                evidence_refs: vec![support],
-                retained_refs: Vec::new(),
-                remote_peer_refs: vec![peer_ref.clone()],
-                remote_refs: vec![remote_ref.clone()],
-                reference_index_refs: vec![index],
-                remote_gc_refs: vec![remote_gc],
-                remote_clearance_refs: vec![clearance_ref],
-                is_reference_index_complete: true,
-            },
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-        })
-        .expect("admit live clearance");
-        assert_eq!(admission.decision, "pass");
-        assert!(admission.has_remote_gc_clearance);
+        assert_case_pass(&root, &case, clearance_ref);
     }
 
     #[test]
@@ -10661,14 +10566,15 @@ mod tests {
         })
     }
 
-    fn store_passing_plan_fixture(root: &std::path::Path, label: &str) -> TestPlanFixture {
-        let requester_ref = fake_ref(&format!("{label}-requester"));
-        let object_ref = fake_ref(&format!("{label}-object"));
-        let peer_ref = fake_ref(&format!("{label}-peer"));
-        let remote_ref = fake_ref(&format!("{label}-remote"));
+    fn seed_set(
+        root: &Path,
+        label: &str,
+        requester_ref: &str,
+        object_ref: &str,
+        remote_refs: &[String],
+    ) -> [String; 5] {
         let empty_refs: &[String] = &[];
-        let remote_refs = std::slice::from_ref(&remote_ref);
-        let [policy, authority, support, index, remote_gc] = [
+        [
             (ADMISSION_KIND_POLICY, "policy", empty_refs),
             (ADMISSION_KIND_AUTHORITY, "authority", empty_refs),
             (ADMISSION_KIND_SUPPORTING_EVIDENCE, "support", empty_refs),
@@ -10680,11 +10586,79 @@ mod tests {
                 root,
                 kind,
                 label: format!("{label}-{suffix}"),
-                requester_ref: &requester_ref,
-                object_ref: &object_ref,
+                requester_ref,
+                object_ref,
                 remote_refs,
             })
-        });
+        })
+    }
+
+    struct LiveCase {
+        requester: String,
+        peer: String,
+        object: String,
+        remote: String,
+        policy: String,
+        authority: String,
+        support: String,
+        index: String,
+        gc: String,
+    }
+
+    fn live_case(root: &Path, label: &str) -> LiveCase {
+        let requester = fake_ref(&format!("{label}-requester"));
+        let peer = fake_ref(&format!("{label}-peer"));
+        let object = fake_ref(&format!("{label}-object"));
+        let remote = fake_ref(&format!("{label}-remote"));
+        let seeds = seed_set(root, label, &requester, &object, std::slice::from_ref(&remote));
+        let [policy, authority, support, index, gc] = seeds;
+        LiveCase {
+            requester,
+            peer,
+            object,
+            remote,
+            policy,
+            authority,
+            support,
+            index,
+            gc,
+        }
+    }
+
+    fn assert_case_pass(root: &Path, case: &LiveCase, clearance: String) {
+        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
+            root,
+            evidence: &DestructiveRetentionEvidence {
+                requester_ref: Some(case.requester.clone()),
+                policy_refs: vec![case.policy.clone()],
+                authority_refs: vec![case.authority.clone()],
+                evidence_refs: vec![case.support.clone()],
+                retained_refs: Vec::new(),
+                remote_peer_refs: vec![case.peer.clone()],
+                remote_refs: vec![case.remote.clone()],
+                reference_index_refs: vec![case.index.clone()],
+                remote_gc_refs: vec![case.gc.clone()],
+                remote_clearance_refs: vec![clearance],
+                is_reference_index_complete: true,
+            },
+            object_ref: &case.object,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+        })
+        .expect("admit live clearance");
+        assert_eq!(admission.decision, "pass");
+        assert!(admission.has_remote_gc_clearance);
+    }
+
+    fn store_passing_plan_fixture(root: &std::path::Path, label: &str) -> TestPlanFixture {
+        let requester_ref = fake_ref(&format!("{label}-requester"));
+        let object_ref = fake_ref(&format!("{label}-object"));
+        let peer_ref = fake_ref(&format!("{label}-peer"));
+        let remote_ref = fake_ref(&format!("{label}-remote"));
+        let remote_refs = std::slice::from_ref(&remote_ref);
+        let [policy, authority, support, index, remote_gc] =
+            seed_set(root, label, &requester_ref, &object_ref, remote_refs);
         let remote_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
             root,
             label: &format!("{label}-clearance"),
