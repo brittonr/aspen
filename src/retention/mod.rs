@@ -8549,117 +8549,15 @@ mod tests {
     #[test]
     fn gc_plan_lists_gates_and_avoids_receipts_or_tombstones() {
         let root = temp_dir("retention-gc-plan-pass");
-        let requester_ref = fake_ref("plan-requester");
-        let object_ref = fake_ref("plan-object");
-        let peer_ref = fake_ref("plan-peer");
-        let remote_ref = fake_ref("plan-remote");
-        let policy = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_POLICY,
-            label: "plan-policy",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let authority = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_AUTHORITY,
-            label: "plan-authority",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let support = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-            label: "plan-support",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let index = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REFERENCE_INDEX,
-            label: "plan-index",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let remote_gc = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REMOTE_GC,
-            label: "plan-remote-gc",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: std::slice::from_ref(&remote_ref),
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let remote_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
-            root: &root,
-            label: "plan-clearance",
-            requester_ref: &requester_ref,
-            peer_ref: &peer_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_ref: &remote_ref,
-            policy_ref: &policy,
-            authority_ref: &authority,
-            is_current: true,
-            revoked_refs: &[],
-            retained_refs: &[],
-        });
-        let evidence = DestructiveRetentionEvidence {
-            requester_ref: Some(requester_ref),
-            policy_refs: vec![policy],
-            authority_refs: vec![authority],
-            evidence_refs: vec![support],
-            retained_refs: Vec::new(),
-            remote_peer_refs: vec![peer_ref],
-            remote_refs: vec![remote_ref],
-            reference_index_refs: vec![index],
-            remote_gc_refs: vec![remote_gc],
-            remote_clearance_refs: vec![remote_clearance],
-            is_reference_index_complete: true,
-        };
+        let fixture = store_passing_plan_fixture(&root, "plan-pass");
         let plan = store_retention_gc_plan(RetentionGcPlanInput {
             root: &root,
             subsystem: "chunk-gc",
-            object_ref: &object_ref,
+            object_ref: &fixture.object_ref,
             object_kind: "chunk",
             retention_class: CLASS_DURABLE_VALUE,
             action: ACTION_DELETE,
-            evidence: &evidence,
+            evidence: &fixture.evidence,
         })
         .expect("store plan");
         assert_eq!(plan.decision, "pass");

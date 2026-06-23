@@ -212,6 +212,8 @@
 
 ## Patterns That Work
 
+- 2026-06-22 Octet retention GC plan fixture reuse: replacing the verbose setup in `src/retention/mod.rs::gc_plan_lists_gates_and_avoids_receipts_or_tombstones` with existing neutral `store_passing_plan_fixture` lowered the no-disabled probe from 7212 to 7211 by clearing one `function_length` finding without path/import/file churn. Validation passed `cargo fmt`, focused `cargo test gc_plan_lists_gates_and_avoids_receipts_or_tombstones`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-retention-plan-list-0`.
+
 - 2026-06-22 Octet vat replay-run split: extracting `src/runtime/vat/mod.rs::vat_replay_run` into neutral same-file object/input/effect/tail/value helpers plus renaming the private input carrier to `RunInput` lowered the no-disabled probe from 7214 to 7212 by clearing `function_length` without net path debt. Validation passed `cargo fmt`, focused `cargo test vat_replay`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-vat-run-v3-0`.
 
 - 2026-06-22 Octet vat distributed-ref split: extracting `src/runtime/vat/mod.rs::run_vat_distributed_ref_fixture` setup/state cases into neutral same-file `DistRefs`/`DistCase` helpers lowered the no-disabled probe from 7216 to 7214 by clearing the function-length finding while keeping path/import/file counts flat. Validation passed `cargo fmt`, focused `cargo test vat_distributed_ref_fixture_records_lifetime_and_handoff`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-vat-dist-0`.
