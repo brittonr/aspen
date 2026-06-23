@@ -1733,9 +1733,7 @@ pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> 
     })
 }
 
-pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<JobPlan> {
-    let request = request_for_analysis(dag, output_request)?;
-    let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
+fn stage_plan_values(dag: &JobDag, plan: &TrellisExecutionPlan) -> Result<Vec<IOValue>> {
     let mut node_map = BTreeMap::new();
     for node in &dag.nodes {
         insert_bounded(&mut node_map, node.id.clone(), node, MAX_JOB_NODES, "job plan node map")?;
@@ -1749,7 +1747,7 @@ pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<Jo
             .node_index
             .get(node_id)
             .ok_or_else(|| MoltenError::invalid_harness(format!("job plan missing index for {node_id}")))?;
-        let deps = dependency_ids(&plan, node_id)?;
+        let deps = dependency_ids(plan, node_id)?;
         push_bounded(
             &mut stage_values,
             record("job-stage-plan-v1", vec![
@@ -1770,6 +1768,13 @@ pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<Jo
             "job plan stage values",
         )?;
     }
+    Ok(stage_values)
+}
+
+pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<JobPlan> {
+    let request = request_for_analysis(dag, output_request)?;
+    let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
+    let stage_values = stage_plan_values(dag, &plan)?;
     let value = record("job-plan-v1", vec![
         string(JOB_PLAN_SCHEMA),
         record("job", vec![string(&dag.job_ref)]),
