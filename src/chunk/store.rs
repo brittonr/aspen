@@ -2161,12 +2161,48 @@ pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLinea
 
     let chain = ChainScope::new("chunk-lineage", manifest.manifest_ref.clone(), manifest.root_ref.clone());
     let producer = chunk_lineage_producer()?;
+    let series = link_series(&manifest, &receipts, &chain, &producer)?;
+    let evidence = pass_evidence(&chain, &manifest, &series.refs, &series.receipt_refs)?;
+    let value = chunk_lineage_value(&ChunkLineageValueInput {
+        manifest_ref: &manifest.manifest_ref,
+        root_ref: &manifest.root_ref,
+        link_values: &series.values,
+        receipt_values: &series.receipt_values,
+        verify_receipt_value: &evidence.verify_value,
+        predicate_values: &evidence.predicate_values,
+    });
+    let lineage_ref = canonical_hash(&value)?;
+    Ok(ChunkLineage {
+        lineage_ref,
+        manifest_ref: manifest.manifest_ref,
+        root_ref: manifest.root_ref,
+        link_refs: series.refs,
+        receipt_refs: series.receipt_refs,
+        verify_receipt_ref: evidence.verify_ref,
+        predicate_receipt_refs: evidence.predicate_refs,
+        value,
+    })
+}
+
+struct LinkSeries {
+    refs: Vec<String>,
+    values: Vec<IOValue>,
+    receipt_refs: Vec<String>,
+    receipt_values: Vec<IOValue>,
+}
+
+fn link_series(
+    manifest: &ChunkManifest,
+    receipts: &[ChunkStoreReceipt],
+    chain: &ChainScope,
+    producer: &ChainProducer,
+) -> Result<LinkSeries> {
     ensure_count_at_most(receipts.len(), MAX_CHUNK_STORE_RECEIPTS, "chunk lineage receipts")?;
     let mut links = Vec::with_capacity(receipts.len());
-    let mut link_values = Vec::with_capacity(receipts.len());
+    let mut values = Vec::with_capacity(receipts.len());
     let mut receipt_refs = Vec::with_capacity(receipts.len());
     let mut receipt_values = Vec::with_capacity(receipts.len());
-    for receipt in &receipts {
+    for receipt in receipts {
         let payload = ChainPayload::new("chunk-store-receipt", receipt.receipt_ref.clone(), CHUNK_STORE_RECEIPT_SCHEMA);
         let trellis_input_ref = canonical_hash(&record("chunk-lineage-input", vec![
             string(&manifest.manifest_ref),
@@ -2178,7 +2214,7 @@ pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLinea
             ChainLinkInput::append(
                 previous,
                 payload,
-                chunk_lineage_context_refs(&manifest, receipt)?,
+                chunk_lineage_context_refs(manifest, receipt)?,
                 producer.clone(),
                 trellis_input_ref,
             )
@@ -2186,7 +2222,7 @@ pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLinea
             ChainLinkInput::genesis(
                 chain.clone(),
                 payload,
-                chunk_lineage_context_refs(&manifest, receipt)?,
+                chunk_lineage_context_refs(manifest, receipt)?,
                 producer.clone(),
                 trellis_input_ref,
             )
@@ -2205,16 +2241,66 @@ pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLinea
             MAX_CHUNK_STORE_RECEIPTS,
             "chunk lineage receipt values",
         )?;
-        push_bounded(&mut link_values, link_value, MAX_CHUNK_STORE_RECEIPTS, "chunk lineage link values")?;
+        push_bounded(&mut values, link_value, MAX_CHUNK_STORE_RECEIPTS, "chunk lineage link values")?;
         push_bounded(&mut links, link, MAX_CHUNK_STORE_RECEIPTS, "chunk lineage links")?;
     }
+    Ok(LinkSeries {
+        refs: links.iter().map(|link| link.link_ref.clone()).collect(),
+        values,
+        receipt_refs,
+        receipt_values,
+    })
+}
 
-    let link_refs = links.iter().map(|link| link.link_ref.clone()).collect::<Vec<_>>();
-    let context_refs = vec![
-        manifest.manifest_ref.clone(),
-        manifest.root_ref.clone(),
-        manifest.metadata_ref.clone(),
-    ];
+struct PassEvidence {
+    predicate_values: Vec<IOValue>,
+    predicate_refs: Vec<String>,
+    verify_value: IOValue,
+    verify_ref: String,
+}
+
+struct Ends {
+    head_ref: String,
+    anchor_ref: String,
+}
+
+fn pass_evidence(
+    chain: &ChainScope,
+    manifest: &ChunkManifest,
+    link_refs: &[String],
+    receipt_refs: &[String],
+) -> Result<PassEvidence> {
+    let ends = chain_ends(link_refs)?;
+    let predicate_values = predicate_set(PredicateInput {
+        manifest,
+        link_refs,
+        receipt_refs,
+        ends: &ends,
+    });
+    let predicate_refs = predicate_values
+        .iter()
+        .map(parse_chain_predicate_receipt)
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .map(|receipt| receipt.receipt_ref)
+        .collect::<Vec<_>>();
+    let verify_value = verify_value(VerifyInput {
+        chain,
+        link_refs,
+        receipt_refs,
+        ends: &ends,
+        predicate_refs: &predicate_refs,
+    });
+    let verify_ref = canonical_hash(&verify_value)?;
+    Ok(PassEvidence {
+        predicate_values,
+        predicate_refs,
+        verify_value,
+        verify_ref,
+    })
+}
+
+fn chain_ends(link_refs: &[String]) -> Result<Ends> {
     let head_ref = link_refs
         .last()
         .cloned()
@@ -2223,6 +2309,22 @@ pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLinea
         .first()
         .cloned()
         .ok_or_else(|| MoltenError::invalid_harness("chunk lineage requires at least one chain link"))?;
+    Ok(Ends { head_ref, anchor_ref })
+}
+
+struct PredicateInput<'a> {
+    manifest: &'a ChunkManifest,
+    link_refs: &'a [String],
+    receipt_refs: &'a [String],
+    ends: &'a Ends,
+}
+
+fn predicate_set(input: PredicateInput<'_>) -> Vec<IOValue> {
+    let context_refs = vec![
+        input.manifest.manifest_ref.clone(),
+        input.manifest.root_ref.clone(),
+        input.manifest.metadata_ref.clone(),
+    ];
     let segment_checks = vec![
         ChainCheck::pass("segment-contiguity"),
         ChainCheck::pass("canonical-link-order"),
@@ -2231,26 +2333,26 @@ pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLinea
         ChainCheck::pass("fork-policy-profile"),
         ChainCheck::pass("fork-evidence-binding"),
     ];
-    let anchor_subject_refs = vec![anchor_ref.clone(), head_ref.clone()];
+    let anchor_subject_refs = vec![input.ends.anchor_ref.clone(), input.ends.head_ref.clone()];
     let anchor_checks = vec![ChainCheck::pass("anchor-descent"), ChainCheck::pass("head-binding")];
     let checkpoint_checks = vec![
         ChainCheck::pass("checkpoint-range-coverage"),
         ChainCheck::pass("verified-range"),
     ];
-    let predicate_values = vec![
+    vec![
         chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
             predicate: SEGMENT_NO_GAP_PREDICATE,
             decision: "pass",
-            subject_refs: &link_refs,
-            input_refs: &receipt_refs,
+            subject_refs: input.link_refs,
+            input_refs: input.receipt_refs,
             context_refs: &context_refs,
             checks: &segment_checks,
         }),
         chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
             predicate: SEGMENT_NO_FORK_PREDICATE,
             decision: "pass",
-            subject_refs: std::slice::from_ref(&head_ref),
-            input_refs: &link_refs,
+            subject_refs: std::slice::from_ref(&input.ends.head_ref),
+            input_refs: input.link_refs,
             context_refs: &context_refs,
             checks: &fork_checks,
         }),
@@ -2258,61 +2360,45 @@ pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLinea
             predicate: DESCENDS_FROM_ANCHOR_PREDICATE,
             decision: "pass",
             subject_refs: &anchor_subject_refs,
-            input_refs: &link_refs,
+            input_refs: input.link_refs,
             context_refs: &context_refs,
             checks: &anchor_checks,
         }),
         chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
             predicate: CHECKPOINT_COVERS_RANGE_PREDICATE,
             decision: "pass",
-            subject_refs: &link_refs,
-            input_refs: &receipt_refs,
+            subject_refs: input.link_refs,
+            input_refs: input.receipt_refs,
             context_refs: &context_refs,
             checks: &checkpoint_checks,
         }),
-    ];
-    let predicate_receipt_refs = predicate_values
-        .iter()
-        .map(parse_chain_predicate_receipt)
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .map(|receipt| receipt.receipt_ref)
-        .collect::<Vec<_>>();
+    ]
+}
+
+struct VerifyInput<'a> {
+    chain: &'a ChainScope,
+    link_refs: &'a [String],
+    receipt_refs: &'a [String],
+    ends: &'a Ends,
+    predicate_refs: &'a [String],
+}
+
+fn verify_value(input: VerifyInput<'_>) -> IOValue {
     let verify_diagnostics = Vec::new();
     let verify_receipt = ChainVerifyReceiptValueInput {
         decision: "pass",
-        chain: &chain,
-        anchor_ref: Some(&anchor_ref),
-        expected_head: Some(&head_ref),
-        discovered_heads: std::slice::from_ref(&head_ref),
-        verified_links: &link_refs,
-        payload_refs: &receipt_refs,
+        chain: input.chain,
+        anchor_ref: Some(&input.ends.anchor_ref),
+        expected_head: Some(&input.ends.head_ref),
+        discovered_heads: std::slice::from_ref(&input.ends.head_ref),
+        verified_links: input.link_refs,
+        payload_refs: input.receipt_refs,
         diagnostics: &verify_diagnostics,
     };
-    let verify_receipt_value = chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
+    chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
         receipt: verify_receipt,
-        predicate_receipt_refs: &predicate_receipt_refs,
+        predicate_receipt_refs: input.predicate_refs,
         fork_policy: ChainForkPolicy::RejectUnexpectedForks,
-    });
-    let verify_receipt_ref = canonical_hash(&verify_receipt_value)?;
-    let value = chunk_lineage_value(&ChunkLineageValueInput {
-        manifest_ref: &manifest.manifest_ref,
-        root_ref: &manifest.root_ref,
-        link_values: &link_values,
-        receipt_values: &receipt_values,
-        verify_receipt_value: &verify_receipt_value,
-        predicate_values: &predicate_values,
-    });
-    let lineage_ref = canonical_hash(&value)?;
-    Ok(ChunkLineage {
-        lineage_ref,
-        manifest_ref: manifest.manifest_ref,
-        root_ref: manifest.root_ref,
-        link_refs,
-        receipt_refs,
-        verify_receipt_ref,
-        predicate_receipt_refs,
-        value,
     })
 }
 
