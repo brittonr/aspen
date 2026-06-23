@@ -211,6 +211,8 @@
 
 ## Patterns That Work
 
+- 2026-06-22 Octet vat distributed-ref split: extracting `src/runtime/vat/mod.rs::run_vat_distributed_ref_fixture` setup/state cases into neutral same-file `DistRefs`/`DistCase` helpers lowered the no-disabled probe from 7216 to 7214 by clearing the function-length finding while keeping path/import/file counts flat. Validation passed `cargo fmt`, focused `cargo test vat_distributed_ref_fixture_records_lifetime_and_handoff`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-vat-dist-0`.
+
 - 2026-06-22 Octet vat replay fixture split: replacing repeated `src/runtime/vat/mod.rs::run_vat_replay_fixture` replay-run literals with a neutral same-file `RunCase`/`case_run` helper lowered the no-disabled probe from 7218 to 7216 by clearing the function-length finding without changing path/import/file counts. Validation passed `cargo fmt`, focused `cargo test vat_replay_fixture_reports_identity_and_first_divergence`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-vat-replay-0`.
 
 - 2026-06-22 Octet secrets fixture split: extracting `src/secrets/mod.rs::run_secrets_fixture` into neutral same-file fixture core/receipt/tail helpers lowered the no-disabled probe from 7220 to 7218 by clearing the function-length finding without adding path/import/file debt. Validation passed `cargo fmt`, focused `cargo test secrets`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-secrets-fixture-0`.

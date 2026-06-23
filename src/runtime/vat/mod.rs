@@ -521,78 +521,90 @@ pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
     })
 }
 
-pub fn run_vat_distributed_ref_fixture() -> Result<VatDistributedRefFixture> {
+struct DistRefs {
+    far: VatObjectRef,
+    replacement: VatObjectRef,
+    far_ref: String,
+    replacement_ref: String,
+    session_ref: String,
+    pending_call_ref: String,
+    stale_call_ref: String,
+}
+
+enum DistCase {
+    Live,
+    Disconnected,
+    Handoff,
+    StaleUse,
+    PendingOpen,
+}
+
+fn dist_refs() -> Result<DistRefs> {
     let far = VatObjectRef::new(REMOTE_VAT_ID, FAR_OBJECT_ID, VatReferenceKind::Far, Vec::new());
     let replacement = VatObjectRef::new(REMOTE_VAT_ID, "object:remote:handoff", VatReferenceKind::Far, Vec::new());
-    let far_ref = far.object_ref()?;
-    let replacement_ref = replacement.object_ref()?;
-    let session_ref = canonical_hash(&record("vat-session-descriptor-v1", vec![string("session:primary")]))?;
-    let pending_call_ref = canonical_hash(&record("vat-pending-call-v1", vec![string("call:primary")]))?;
-    let stale_call_ref = canonical_hash(&record("vat-pending-call-v1", vec![string("call:stale")]))?;
+    Ok(DistRefs {
+        far_ref: far.object_ref()?,
+        replacement_ref: replacement.object_ref()?,
+        session_ref: canonical_hash(&record("vat-session-descriptor-v1", vec![string("session:primary")]))?,
+        pending_call_ref: canonical_hash(&record("vat-pending-call-v1", vec![string("call:primary")]))?,
+        stale_call_ref: canonical_hash(&record("vat-pending-call-v1", vec![string("call:stale")]))?,
+        far,
+        replacement,
+    })
+}
 
-    let live = evaluate_distributed_ref_lifetime(&RuntimeDistributedRefLifetimeState {
-        far_ref: far_ref.clone(),
-        session_ref: session_ref.clone(),
-        replacement_ref: None,
-        is_session_live: true,
-        is_handoff_admitted: false,
-        pending_call_refs: Vec::new(),
-        failed_pending_call_refs: Vec::new(),
-        attempted_use_refs: vec![far_ref.clone()],
-    })?;
-    let disconnected_cleanup = evaluate_distributed_ref_lifetime(&RuntimeDistributedRefLifetimeState {
-        far_ref: far_ref.clone(),
-        session_ref: session_ref.clone(),
-        replacement_ref: None,
-        is_session_live: false,
-        is_handoff_admitted: false,
-        pending_call_refs: vec![pending_call_ref.clone()],
-        failed_pending_call_refs: vec![pending_call_ref],
-        attempted_use_refs: Vec::new(),
-    })?;
-    let handoff = evaluate_distributed_ref_lifetime(&RuntimeDistributedRefLifetimeState {
-        far_ref: far_ref.clone(),
-        session_ref: session_ref.clone(),
-        replacement_ref: Some(replacement_ref.clone()),
-        is_session_live: false,
-        is_handoff_admitted: true,
-        pending_call_refs: Vec::new(),
-        failed_pending_call_refs: Vec::new(),
-        attempted_use_refs: vec![replacement_ref],
-    })?;
-    let stale_use = evaluate_distributed_ref_lifetime(&RuntimeDistributedRefLifetimeState {
-        far_ref: far_ref.clone(),
-        session_ref: session_ref.clone(),
+fn dist_state(refs: &DistRefs, case: DistCase) -> RuntimeDistributedRefLifetimeState {
+    let mut state = RuntimeDistributedRefLifetimeState {
+        far_ref: refs.far_ref.clone(),
+        session_ref: refs.session_ref.clone(),
         replacement_ref: None,
         is_session_live: false,
         is_handoff_admitted: false,
         pending_call_refs: Vec::new(),
-        failed_pending_call_refs: Vec::new(),
-        attempted_use_refs: vec![far_ref.clone()],
-    })?;
-    let pending_not_failed = evaluate_distributed_ref_lifetime(&RuntimeDistributedRefLifetimeState {
-        far_ref,
-        session_ref,
-        replacement_ref: None,
-        is_session_live: false,
-        is_handoff_admitted: false,
-        pending_call_refs: vec![stale_call_ref],
         failed_pending_call_refs: Vec::new(),
         attempted_use_refs: Vec::new(),
-    })?;
+    };
+    match case {
+        DistCase::Live => {
+            state.is_session_live = true;
+            state.attempted_use_refs.push(refs.far_ref.clone());
+        }
+        DistCase::Disconnected => {
+            state.pending_call_refs.push(refs.pending_call_ref.clone());
+            state.failed_pending_call_refs.push(refs.pending_call_ref.clone());
+        }
+        DistCase::Handoff => {
+            state.replacement_ref = Some(refs.replacement_ref.clone());
+            state.is_handoff_admitted = true;
+            state.attempted_use_refs.push(refs.replacement_ref.clone());
+        }
+        DistCase::StaleUse => state.attempted_use_refs.push(refs.far_ref.clone()),
+        DistCase::PendingOpen => state.pending_call_refs.push(refs.stale_call_ref.clone()),
+    }
+    state
+}
 
-    let receipts = vec![
-        live.receipt,
-        disconnected_cleanup.receipt,
-        handoff.receipt,
-        stale_use.receipt,
-        pending_not_failed.receipt,
-    ];
+fn dist_receipts(refs: &DistRefs) -> Result<Vec<RuntimePredicateReceipt>> {
+    [
+        DistCase::Live,
+        DistCase::Disconnected,
+        DistCase::Handoff,
+        DistCase::StaleUse,
+        DistCase::PendingOpen,
+    ]
+    .into_iter()
+    .map(|case| evaluate_distributed_ref_lifetime(&dist_state(refs, case)).map(|outcome| outcome.receipt))
+    .collect()
+}
+
+pub fn run_vat_distributed_ref_fixture() -> Result<VatDistributedRefFixture> {
+    let refs = dist_refs()?;
+    let receipts = dist_receipts(&refs)?;
     let diagnostics = fixture_diagnostics(&receipts);
     let value = record("vat-distributed-ref-fixture-v1", vec![
         string(RUNTIME_VAT_DISTRIBUTED_REF_FIXTURE_SCHEMA),
         string(LOCAL_VAT_ID),
-        sequence([far, replacement].iter().map(VatObjectRef::value).collect()),
+        sequence(vec![refs.far.value(), refs.replacement.value()]),
         sequence(receipts.iter().map(|receipt| receipt.value.clone()).collect()),
         sequence(diagnostics.iter().map(string).collect()),
     ]);
