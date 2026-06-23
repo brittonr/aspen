@@ -218,6 +218,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet evidence chain diagnostic test split: extracting `chain_verify_receipt_reports_fork_gap_stale_head_and_missing_payload` into neutral same-file `assert_*_diagnostic` helpers lowered the no-disabled probe from 7141 to 7140 by clearing one test `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test chain_verify_receipt_reports_fork_gap_stale_head_and_missing_payload`, and probe `target/octet-burndown/probe-chain-diagnostic-test-split-0`.
+
 - 2026-06-23 Octet evidence append split: extracting `src/evidence/chain.rs::append_chain_link` prior-head validation and predicate receipt assembly into neutral same-file `prior_head`/`append_predicate_ref` helpers lowered the no-disabled probe from 7143 to 7141 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test evidence_chain`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-evidence-append-split-0`.
 
 - 2026-06-23 Octet Wasm executor split: extracting `src/harness/wasm/executor.rs::execute_wasm_actor_step` and `execute_preserves_abi` into neutral same-file `Prepared`/`Compiled`/`Parts`/input-output helpers lowered the no-disabled probe from 7145 to 7143; note that clearing the public `execute_wasm_actor_step` function length exposed path repetition on that public name, so splitting the ABI helper in the same candidate was needed for a net decrease.

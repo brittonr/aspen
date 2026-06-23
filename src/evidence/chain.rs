@@ -2578,94 +2578,93 @@ mod tests {
 
     #[test]
     fn chain_verify_receipt_reports_fork_gap_stale_head_and_missing_payload() {
-        let fork_root = temp_dir("chain-verify-fork");
-        let fork_chain = ChainScope::new("evidence-ledger", "node-a", "epoch-1");
-        let fork_genesis = import_genesis_link(&fork_root, fork_chain.clone(), "payload-a");
+        assert_fork_diagnostic();
+        assert_gap_diagnostic();
+        assert_stale_head_diagnostic();
+        assert_missing_payload_diagnostic();
+    }
+
+    fn assert_fork_diagnostic() {
+        let root = temp_dir("chain-verify-fork");
+        let scope = ChainScope::new("evidence-ledger", "node-a", "epoch-1");
+        let genesis = import_genesis_link(&root, scope.clone(), "payload-a");
         import_raw_link(
-            &fork_root,
+            &root,
             &ChainLinkInput::append(
-                &fork_genesis,
-                stored_payload(&fork_root, "payload-b"),
+                &genesis,
+                stored_payload(&root, "payload-b"),
                 Vec::new(),
                 sample_producer(),
                 ref_for("append-b"),
             ),
         );
         import_raw_link(
-            &fork_root,
+            &root,
             &ChainLinkInput::append(
-                &fork_genesis,
-                stored_payload(&fork_root, "payload-c"),
+                &genesis,
+                stored_payload(&root, "payload-c"),
                 Vec::new(),
                 sample_producer(),
                 ref_for("append-c"),
             ),
         );
-        let forked = verify_chain_segment(&fork_root, &fork_chain, None, None).expect("verify forked chain");
-        assert_eq!(forked.decision, "fail");
-        assert!(has_diagnostic(&forked, "fork"));
+        let verified = verify_chain_segment(&root, &scope, None, None).expect("verify forked chain");
+        assert_eq!(verified.decision, "fail");
+        assert!(has_diagnostic(&verified, "fork"));
+    }
 
-        let gap_root = temp_dir("chain-verify-gap");
-        let gap_chain = ChainScope::new("evidence-ledger", "node-a", "epoch-1");
-        let gap_genesis = import_genesis_link(&gap_root, gap_chain.clone(), "payload-a");
-        let mut gap_input = ChainLinkInput::append(
-            &gap_genesis,
-            stored_payload(&gap_root, "payload-gap"),
+    fn assert_gap_diagnostic() {
+        let root = temp_dir("chain-verify-gap");
+        let scope = ChainScope::new("evidence-ledger", "node-a", "epoch-1");
+        let genesis = import_genesis_link(&root, scope.clone(), "payload-a");
+        let mut input = ChainLinkInput::append(
+            &genesis,
+            stored_payload(&root, "payload-gap"),
             Vec::new(),
             sample_producer(),
             ref_for("gap-input"),
         );
-        gap_input.sequence += 1;
-        let gap_link = import_raw_link(&gap_root, &gap_input);
-        let gap =
-            verify_chain_segment(&gap_root, &gap_chain, None, Some(&gap_link.link_ref)).expect("verify gap chain");
-        assert_eq!(gap.decision, "fail");
-        assert!(has_diagnostic(&gap, "gap"));
+        input.sequence += 1;
+        let link = import_raw_link(&root, &input);
+        let verified = verify_chain_segment(&root, &scope, None, Some(&link.link_ref)).expect("verify gap chain");
+        assert_eq!(verified.decision, "fail");
+        assert!(has_diagnostic(&verified, "gap"));
+    }
 
-        let stale_root = temp_dir("chain-verify-stale");
-        let stale_chain = ChainScope::new("evidence-ledger", "node-a", "epoch-1");
-        let stale_genesis_value = chain_link_value(&ChainLinkInput::genesis(
-            stale_chain.clone(),
-            stored_payload(&stale_root, "payload-a"),
+    fn assert_stale_head_diagnostic() {
+        let root = temp_dir("chain-verify-stale");
+        let scope = ChainScope::new("evidence-ledger", "node-a", "epoch-1");
+        let genesis_value = chain_link_value(&ChainLinkInput::genesis(
+            scope.clone(),
+            stored_payload(&root, "payload-a"),
             Vec::new(),
             sample_producer(),
             ref_for("genesis-input"),
         ));
-        let stale_genesis = parse_chain_link(&stale_genesis_value).expect("parse stale genesis");
-        append_chain_link(&stale_root, &stale_genesis_value).expect("append stale genesis");
-        let stale_child_value = chain_link_value(&ChainLinkInput::append(
-            &stale_genesis,
-            stored_payload(&stale_root, "payload-b"),
+        let genesis = parse_chain_link(&genesis_value).expect("parse stale genesis");
+        append_chain_link(&root, &genesis_value).expect("append stale genesis");
+        let child_value = chain_link_value(&ChainLinkInput::append(
+            &genesis,
+            stored_payload(&root, "payload-b"),
             Vec::new(),
             sample_producer(),
             ref_for("append-input"),
         ));
-        append_chain_link(&stale_root, &stale_child_value).expect("append stale child");
-        let stale = verify_chain_segment(&stale_root, &stale_chain, None, Some(&stale_genesis.link_ref))
-            .expect("verify stale head");
-        assert_eq!(stale.decision, "fail");
-        assert!(has_diagnostic(&stale, "stale-head"));
+        append_chain_link(&root, &child_value).expect("append stale child");
+        let verified = verify_chain_segment(&root, &scope, None, Some(&genesis.link_ref)).expect("verify stale head");
+        assert_eq!(verified.decision, "fail");
+        assert!(has_diagnostic(&verified, "stale-head"));
+    }
 
-        let missing_payload_root = temp_dir("chain-verify-missing-payload");
-        let missing_payload_chain = ChainScope::new("evidence-ledger", "node-a", "epoch-1");
-        let missing_payload_value = chain_link_value(&sample_genesis_input(
-            &missing_payload_chain.scope,
-            &missing_payload_chain.id,
-            &missing_payload_chain.epoch,
-            "missing-payload",
-        ));
-        let missing_payload_link = parse_chain_link(&missing_payload_value).expect("parse missing payload link");
-        ledger::import_artifact(&missing_payload_root, &missing_payload_value)
-            .expect("raw import missing payload link");
-        let missing_payload = verify_chain_segment(
-            &missing_payload_root,
-            &missing_payload_chain,
-            None,
-            Some(&missing_payload_link.link_ref),
-        )
-        .expect("verify missing payload");
-        assert_eq!(missing_payload.decision, "fail");
-        assert!(has_diagnostic(&missing_payload, "missing-payload"));
+    fn assert_missing_payload_diagnostic() {
+        let root = temp_dir("chain-verify-missing-payload");
+        let scope = ChainScope::new("evidence-ledger", "node-a", "epoch-1");
+        let value = chain_link_value(&sample_genesis_input(&scope.scope, &scope.id, &scope.epoch, "missing-payload"));
+        let link = parse_chain_link(&value).expect("parse missing payload link");
+        ledger::import_artifact(&root, &value).expect("raw import missing payload link");
+        let verified = verify_chain_segment(&root, &scope, None, Some(&link.link_ref)).expect("verify missing payload");
+        assert_eq!(verified.decision, "fail");
+        assert!(has_diagnostic(&verified, "missing-payload"));
     }
 
     #[test]
