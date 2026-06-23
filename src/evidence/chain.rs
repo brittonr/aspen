@@ -558,108 +558,95 @@ pub fn chain_link_ref(value: &IOValue) -> Result<String> {
     canonical_hash(value)
 }
 
-pub fn build_chain_index(root: &Path) -> Result<ChainIndex> {
-    let mut index = ChainIndex::default();
-    for entry in ledger::list_artifacts(root)? {
-        let value = ledger::read_artifact(root, &entry.artifact_ref)?;
-        match entry.artifact_kind.as_str() {
-            "chain-link" => {
-                let link = parse_chain_link(&value)?;
-                if link.link_ref != entry.artifact_ref {
-                    return Err(MoltenError::invalid_harness(format!(
-                        "ledger chain-link ref mismatch: index entry {} parsed as {}",
-                        entry.artifact_ref, link.link_ref
-                    )));
-                }
-                index.links_by_chain.entry(link.chain.clone()).or_default().insert(link.link_ref.clone());
-                index
-                    .links_by_sequence
-                    .entry((link.chain.clone(), link.sequence))
-                    .or_default()
-                    .insert(link.link_ref.clone());
-                index
-                    .links_by_payload
-                    .entry(link.payload.artifact_ref.clone())
-                    .or_default()
-                    .insert(link.link_ref.clone());
-                if let Some(parent_ref) = &link.previous_link_ref {
-                    index.children_by_parent.entry(parent_ref.clone()).or_default().insert(link.link_ref.clone());
-                }
-                index.links_by_ref.insert(link.link_ref.clone(), link);
-            }
-            "chain-predicate-receipt" => {
-                let receipt = parse_chain_predicate_receipt(&value)?;
-                if receipt.receipt_ref != entry.artifact_ref {
-                    return Err(MoltenError::invalid_harness(format!(
-                        "ledger chain-predicate-receipt ref mismatch: index entry {} parsed as {}",
-                        entry.artifact_ref, receipt.receipt_ref
-                    )));
-                }
-                index
-                    .predicate_receipts_by_predicate
-                    .entry(receipt.predicate.clone())
-                    .or_default()
-                    .insert(receipt.receipt_ref.clone());
-                index.predicate_receipts_by_ref.insert(receipt.receipt_ref.clone(), receipt);
-            }
-            "chain-fork-evidence" => {
-                let fork = parse_chain_fork_evidence(&value)?;
-                if fork.evidence_ref != entry.artifact_ref {
-                    return Err(MoltenError::invalid_harness(format!(
-                        "ledger chain-fork-evidence ref mismatch: index entry {} parsed as {}",
-                        entry.artifact_ref, fork.evidence_ref
-                    )));
-                }
-                index
-                    .fork_evidence_by_chain
-                    .entry(fork.chain.clone())
-                    .or_default()
-                    .insert(fork.evidence_ref.clone());
-                if let Some(parent_ref) = &fork.parent_ref {
-                    index
-                        .fork_evidence_by_parent
-                        .entry(parent_ref.clone())
-                        .or_default()
-                        .insert(fork.evidence_ref.clone());
-                }
-                index.fork_evidence_by_ref.insert(fork.evidence_ref.clone(), fork);
-            }
-            "chain-anchor" => {
-                let anchor = parse_chain_anchor(&value)?;
-                if anchor.anchor_ref != entry.artifact_ref {
-                    return Err(MoltenError::invalid_harness(format!(
-                        "ledger chain-anchor ref mismatch: index entry {} parsed as {}",
-                        entry.artifact_ref, anchor.anchor_ref
-                    )));
-                }
-                index.anchors_by_chain.entry(anchor.chain.clone()).or_default().insert(anchor.anchor_ref.clone());
-                index.anchor_links_by_chain.entry(anchor.chain.clone()).or_default().insert(anchor.link_ref.clone());
-                index.anchors_by_ref.insert(anchor.anchor_ref.clone(), anchor);
-            }
-            "chain-checkpoint" => {
-                let checkpoint = parse_chain_checkpoint(&value)?;
-                if checkpoint.checkpoint_ref != entry.artifact_ref {
-                    return Err(MoltenError::invalid_harness(format!(
-                        "ledger chain-checkpoint ref mismatch: index entry {} parsed as {}",
-                        entry.artifact_ref, checkpoint.checkpoint_ref
-                    )));
-                }
-                index
-                    .checkpoints_by_chain
-                    .entry(checkpoint.chain.clone())
-                    .or_default()
-                    .insert(checkpoint.checkpoint_ref.clone());
-                index
-                    .checkpoint_heads_by_chain
-                    .entry(checkpoint.chain.clone())
-                    .or_default()
-                    .insert(checkpoint.head_ref.clone());
-                index.checkpoints_by_ref.insert(checkpoint.checkpoint_ref.clone(), checkpoint);
-            }
-            _ => {}
-        }
+fn ensure_entry_ref(kind: &str, entry_ref: &str, parsed_ref: &str) -> Result<()> {
+    if parsed_ref == entry_ref {
+        return Ok(());
     }
 
+    Err(MoltenError::invalid_harness(format!(
+        "ledger {kind} ref mismatch: index entry {entry_ref} parsed as {parsed_ref}"
+    )))
+}
+
+fn index_link_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) -> Result<()> {
+    let link = parse_chain_link(value)?;
+    ensure_entry_ref("chain-link", entry_ref, &link.link_ref)?;
+    index.links_by_chain.entry(link.chain.clone()).or_default().insert(link.link_ref.clone());
+    index
+        .links_by_sequence
+        .entry((link.chain.clone(), link.sequence))
+        .or_default()
+        .insert(link.link_ref.clone());
+    index
+        .links_by_payload
+        .entry(link.payload.artifact_ref.clone())
+        .or_default()
+        .insert(link.link_ref.clone());
+    if let Some(parent_ref) = &link.previous_link_ref {
+        index.children_by_parent.entry(parent_ref.clone()).or_default().insert(link.link_ref.clone());
+    }
+    index.links_by_ref.insert(link.link_ref.clone(), link);
+    Ok(())
+}
+
+fn index_predicate_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) -> Result<()> {
+    let receipt = parse_chain_predicate_receipt(value)?;
+    ensure_entry_ref("chain-predicate-receipt", entry_ref, &receipt.receipt_ref)?;
+    index
+        .predicate_receipts_by_predicate
+        .entry(receipt.predicate.clone())
+        .or_default()
+        .insert(receipt.receipt_ref.clone());
+    index.predicate_receipts_by_ref.insert(receipt.receipt_ref.clone(), receipt);
+    Ok(())
+}
+
+fn index_fork_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) -> Result<()> {
+    let fork = parse_chain_fork_evidence(value)?;
+    ensure_entry_ref("chain-fork-evidence", entry_ref, &fork.evidence_ref)?;
+    index
+        .fork_evidence_by_chain
+        .entry(fork.chain.clone())
+        .or_default()
+        .insert(fork.evidence_ref.clone());
+    if let Some(parent_ref) = &fork.parent_ref {
+        index
+            .fork_evidence_by_parent
+            .entry(parent_ref.clone())
+            .or_default()
+            .insert(fork.evidence_ref.clone());
+    }
+    index.fork_evidence_by_ref.insert(fork.evidence_ref.clone(), fork);
+    Ok(())
+}
+
+fn index_anchor_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) -> Result<()> {
+    let anchor = parse_chain_anchor(value)?;
+    ensure_entry_ref("chain-anchor", entry_ref, &anchor.anchor_ref)?;
+    index.anchors_by_chain.entry(anchor.chain.clone()).or_default().insert(anchor.anchor_ref.clone());
+    index.anchor_links_by_chain.entry(anchor.chain.clone()).or_default().insert(anchor.link_ref.clone());
+    index.anchors_by_ref.insert(anchor.anchor_ref.clone(), anchor);
+    Ok(())
+}
+
+fn index_checkpoint_entry(index: &mut ChainIndex, entry_ref: &str, value: &IOValue) -> Result<()> {
+    let checkpoint = parse_chain_checkpoint(value)?;
+    ensure_entry_ref("chain-checkpoint", entry_ref, &checkpoint.checkpoint_ref)?;
+    index
+        .checkpoints_by_chain
+        .entry(checkpoint.chain.clone())
+        .or_default()
+        .insert(checkpoint.checkpoint_ref.clone());
+    index
+        .checkpoint_heads_by_chain
+        .entry(checkpoint.chain.clone())
+        .or_default()
+        .insert(checkpoint.head_ref.clone());
+    index.checkpoints_by_ref.insert(checkpoint.checkpoint_ref.clone(), checkpoint);
+    Ok(())
+}
+
+fn finish_heads(index: &mut ChainIndex) -> Result<()> {
     for (chain, links) in &index.links_by_chain {
         let mut heads = links.clone();
         for link_ref in links {
@@ -672,6 +659,24 @@ pub fn build_chain_index(root: &Path) -> Result<ChainIndex> {
         }
         index.heads_by_chain.insert(chain.clone(), heads);
     }
+    Ok(())
+}
+
+pub fn build_chain_index(root: &Path) -> Result<ChainIndex> {
+    let mut index = ChainIndex::default();
+    for entry in ledger::list_artifacts(root)? {
+        let value = ledger::read_artifact(root, &entry.artifact_ref)?;
+        match entry.artifact_kind.as_str() {
+            "chain-link" => index_link_entry(&mut index, &entry.artifact_ref, &value)?,
+            "chain-predicate-receipt" => index_predicate_entry(&mut index, &entry.artifact_ref, &value)?,
+            "chain-fork-evidence" => index_fork_entry(&mut index, &entry.artifact_ref, &value)?,
+            "chain-anchor" => index_anchor_entry(&mut index, &entry.artifact_ref, &value)?,
+            "chain-checkpoint" => index_checkpoint_entry(&mut index, &entry.artifact_ref, &value)?,
+            _ => {}
+        }
+    }
+
+    finish_heads(&mut index)?;
     Ok(index)
 }
 

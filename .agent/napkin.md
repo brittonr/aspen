@@ -218,6 +218,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet evidence chain index split: extracting `src/evidence/chain.rs::build_chain_index` branch bodies into neutral same-file `index_*_entry`, `ensure_entry_ref`, and `finish_heads` helpers lowered the no-disabled probe from 7147 to 7145 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test evidence_chain`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-chain-index-split-0`.
+
 - 2026-06-23 Octet Steel executor split: extracting `src/harness/steel/executor.rs::execute_steel_actor_step` into neutral same-file `Prepared`/`Execution`/`FinishInput` plus `prepare_run`/`run_vm`/`finish_value` lowered the no-disabled probe from 7151 to 7149 by clearing two `function_length` findings without adding path/import/file debt. Validation passed `cargo fmt`, focused `cargo test steel_executor`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-steel-executor-split-0`.
 
 - 2026-06-23 Octet effects compound artifact test split: extracting `src/effects/mod.rs::compound_dynamic_attenuation_and_cleanup_artifacts_parse` into neutral same-file `Seed`/`Bundle` plus `seed`/`parent`/`child`/`check_*` helpers lowered the no-disabled probe from 7152 to 7151 by clearing one `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test compound_dynamic_attenuation_and_cleanup_artifacts_parse`, and probe `target/octet-burndown/probe-effects-compound-split-0`.
