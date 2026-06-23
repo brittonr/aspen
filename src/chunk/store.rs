@@ -321,93 +321,140 @@ pub fn put_bytes_with_metadata(input: &PutBytesWithMetadataInput<'_>) -> Result<
     })
 }
 
+struct Ready {
+    chunk_size: usize,
+    metadata_ref: String,
+}
+
+struct Written {
+    values: Vec<IOValue>,
+    refs: Vec<ChunkRef>,
+    dedup_refs: Vec<String>,
+    dedup_hits: usize,
+}
+
+struct FinalizeInput<'a> {
+    root: &'a Path,
+    object_kind: &'a str,
+    total_len: u64,
+    chunk_size_input: u64,
+    chunk_size: usize,
+    transforms: &'a ChunkTransforms,
+    metadata_ref: &'a str,
+    policy_refs: &'a [String],
+    written: Written,
+}
+
 pub fn put_bytes_with_transforms(input: &PutBytesWithTransformsInput<'_>) -> Result<ChunkStorePut> {
-    let root = input.root;
-    let object_kind = input.object_kind;
-    let bytes = input.bytes;
-    let chunk_size_input = input.chunk_size;
-    let metadata = input.metadata;
-    let policy_refs = input.policy_refs;
-    let transforms = input.transforms;
-    ensure_dirs(root)?;
-    if object_kind.is_empty() {
+    let ready = prepare_put(input)?;
+    let written = write_put_parts(input.root, input.bytes, ready.chunk_size, input.transforms)?;
+    finish_put(FinalizeInput {
+        root: input.root,
+        object_kind: input.object_kind,
+        total_len: input.bytes.len() as u64,
+        chunk_size_input: input.chunk_size,
+        chunk_size: ready.chunk_size,
+        transforms: input.transforms,
+        metadata_ref: &ready.metadata_ref,
+        policy_refs: input.policy_refs,
+        written,
+    })
+}
+
+fn prepare_put(input: &PutBytesWithTransformsInput<'_>) -> Result<Ready> {
+    ensure_dirs(input.root)?;
+    if input.object_kind.is_empty() {
         let receipt_value =
             denial_receipt_value("manifest-create", None, &[], "chunk store object kind must not be empty", vec![
                 ("object-kind", "fail"),
                 ("denial-receipt", "pass"),
             ]);
-        store_receipt(root, &receipt_value)?;
+        store_receipt(input.root, &receipt_value)?;
         return Err(MoltenError::invalid_harness("chunk store object kind must not be empty"));
     }
-    if chunk_size_input == 0 {
+    if input.chunk_size == 0 {
         let receipt_value =
             denial_receipt_value("manifest-create", None, &[], "fixed_v1 chunk size must be non-zero", vec![
                 ("chunk-size", "fail"),
                 ("denial-receipt", "pass"),
             ]);
-        store_receipt(root, &receipt_value)?;
+        store_receipt(input.root, &receipt_value)?;
         return Err(MoltenError::invalid_harness("fixed_v1 chunk size must be non-zero"));
     }
-    let chunk_size = match chunk_size_to_usize(chunk_size_input, "fixed_v1 chunk size") {
+    let chunk_size = match chunk_size_to_usize(input.chunk_size, "fixed_v1 chunk size") {
         Ok(chunk_size) => chunk_size,
         Err(error) => {
             let receipt_value = denial_receipt_value("manifest-create", None, &[], error.to_string(), vec![
                 ("chunk-size", "fail"),
                 ("denial-receipt", "pass"),
             ]);
-            store_receipt(root, &receipt_value)?;
+            store_receipt(input.root, &receipt_value)?;
             return Err(error);
         }
     };
-    if let Err(error) = validate_put_transforms(transforms) {
+    if let Err(error) = validate_put_transforms(input.transforms) {
         let receipt_value = denial_receipt_value("manifest-create", None, &[], error.to_string(), vec![
             ("confidentiality-policy", "fail"),
             ("transform-ordering", "fail"),
             ("deny-plaintext-hash-leakage", "pass"),
         ]);
-        store_receipt(root, &receipt_value)?;
+        store_receipt(input.root, &receipt_value)?;
         return Err(error);
     }
-    if let Err(error) = validate_put_bounds(bytes.len(), chunk_size, policy_refs.len()) {
+    if let Err(error) = validate_put_bounds(input.bytes.len(), chunk_size, input.policy_refs.len()) {
         let receipt_value = denial_receipt_value("manifest-create", None, &[], error.to_string(), vec![
             ("resource-bounds", "fail"),
             ("denial-receipt", "pass"),
         ]);
-        store_receipt(root, &receipt_value)?;
+        store_receipt(input.root, &receipt_value)?;
         return Err(error);
     }
-    let metadata_ref = canonical_hash(metadata)?;
+    let metadata_ref = canonical_hash(input.metadata)?;
     write_immutable_bytes(
-        &metadata_path(root, &metadata_ref)?,
-        &canonical_bytes(metadata)?,
+        &metadata_path(input.root, &metadata_ref)?,
+        &canonical_bytes(input.metadata)?,
         &metadata_ref,
         parse_canonical_bytes,
     )?;
+    Ok(Ready {
+        chunk_size,
+        metadata_ref,
+    })
+}
 
-    let mut chunk_values = Vec::new();
-    let mut chunk_refs = Vec::new();
-    let mut dedup_chunk_refs = Vec::new();
+fn ensure_part(root: &Path, chunk: &[u8], chunk_size: usize) -> Result<(String, bool)> {
+    let chunk_ref = hash_chunk(chunk, chunk_size);
+    let path = chunk_path(root, &chunk_ref)?;
+    if path.exists() {
+        if let Err(error) = verify_raw_chunk_file(&path, &chunk_ref, chunk.len() as u64, chunk_size) {
+            let receipt_value =
+                denial_receipt_value("dedup-hit", None, std::slice::from_ref(&chunk_ref), error.to_string(), vec![
+                    ("existing-chunk-hash-binding", "fail"),
+                    ("deny-corrupt-dedup-source", "pass"),
+                ]);
+            store_receipt(root, &receipt_value)?;
+            return Err(error);
+        }
+        Ok((chunk_ref, true))
+    } else {
+        fs::write(&path, chunk).map_err(MoltenError::from)?;
+        Ok((chunk_ref, false))
+    }
+}
+
+fn write_put_parts(root: &Path, bytes: &[u8], chunk_size: usize, transforms: &ChunkTransforms) -> Result<Written> {
+    let mut values = Vec::new();
+    let mut refs = Vec::new();
+    let mut dedup_refs = Vec::new();
     let mut dedup_hits = 0usize;
     for chunk in bytes.chunks(chunk_size) {
-        let chunk_ref = hash_chunk(chunk, chunk_size);
-        let path = chunk_path(root, &chunk_ref)?;
-        if path.exists() {
-            if let Err(error) = verify_raw_chunk_file(&path, &chunk_ref, chunk.len() as u64, chunk_size) {
-                let receipt_value =
-                    denial_receipt_value("dedup-hit", None, std::slice::from_ref(&chunk_ref), error.to_string(), vec![
-                        ("existing-chunk-hash-binding", "fail"),
-                        ("deny-corrupt-dedup-source", "pass"),
-                    ]);
-                store_receipt(root, &receipt_value)?;
-                return Err(error);
-            }
+        let (chunk_ref, was_present) = ensure_part(root, chunk, chunk_size)?;
+        if was_present {
             dedup_hits += 1;
-            push_bounded(&mut dedup_chunk_refs, chunk_ref.clone(), MAX_CHUNK_STORE_CHUNKS, "chunk store dedup chunks")?;
-        } else {
-            fs::write(&path, chunk).map_err(MoltenError::from)?;
+            push_bounded(&mut dedup_refs, chunk_ref.clone(), MAX_CHUNK_STORE_CHUNKS, "chunk store dedup chunks")?;
         }
         push_bounded(
-            &mut chunk_refs,
+            &mut refs,
             ChunkRef {
                 chunk_ref: chunk_ref.clone(),
                 length: chunk.len() as u64,
@@ -419,37 +466,71 @@ pub fn put_bytes_with_transforms(input: &PutBytesWithTransformsInput<'_>) -> Res
             "chunk store chunk refs",
         )?;
         push_bounded(
-            &mut chunk_values,
+            &mut values,
             chunk_ref_value(&chunk_ref, chunk.len() as u64, chunk_size, transforms),
             MAX_CHUNK_STORE_CHUNKS,
             "chunk store chunk values",
         )?;
     }
+    Ok(Written {
+        values,
+        refs,
+        dedup_refs,
+        dedup_hits,
+    })
+}
 
-    let root_ref = chunk_root_ref(&chunk_refs)?;
+fn note_reuse(root: &Path, manifest_ref: &str, refs: &[String]) -> Result<()> {
+    if refs.is_empty() {
+        return Ok(());
+    }
+    let dedup_receipt = self::receipt_value(ChunkStoreReceiptValueInput {
+        operation: "dedup-hit",
+        decision: "pass",
+        manifest_ref: Some(manifest_ref),
+        chunk_refs: refs,
+        checks: vec![
+            ("existing-chunk-hash-binding", "pass"),
+            ("dedup-no-rewrite", "pass"),
+            ("receipt-index-update", "pass"),
+        ],
+        details: vec![record("dedup-hits", vec![u64_value(refs.len() as u64)])],
+    });
+    store_receipt(root, &dedup_receipt)
+}
+
+fn finish_put(input: FinalizeInput<'_>) -> Result<ChunkStorePut> {
+    let Written {
+        values,
+        refs,
+        dedup_refs,
+        dedup_hits,
+    } = input.written;
+    let root_ref = chunk_root_ref(&refs)?;
     let manifest_value = manifest_value(&ChunkManifestValueInput {
-        object_kind,
-        total_len: bytes.len() as u64,
-        chunk_size: chunk_size_input,
-        transforms,
-        metadata_ref: &metadata_ref,
-        policy_refs,
-        chunks: &chunk_values,
+        object_kind: input.object_kind,
+        total_len: input.total_len,
+        chunk_size: input.chunk_size_input,
+        transforms: input.transforms,
+        metadata_ref: input.metadata_ref,
+        policy_refs: input.policy_refs,
+        chunks: &values,
         root_ref: &root_ref,
         evidence_refs: &[],
     });
     let manifest_ref = canonical_hash(&manifest_value)?;
     write_immutable_bytes(
-        &manifest_path(root, &manifest_ref)?,
+        &manifest_path(input.root, &manifest_ref)?,
         &canonical_bytes(&manifest_value)?,
         &manifest_ref,
         parse_canonical_bytes,
     )?;
+    let receipt_chunk_refs = refs.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>();
     let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
         operation: "manifest-create",
         decision: "pass",
         manifest_ref: Some(&manifest_ref),
-        chunk_refs: &chunk_refs.iter().map(|chunk| chunk.chunk_ref.clone()).collect::<Vec<_>>(),
+        chunk_refs: &receipt_chunk_refs,
         checks: vec![
             ("fixed-v1-chunking", "pass"),
             ("chunk-hash-binding", "pass"),
@@ -461,33 +542,19 @@ pub fn put_bytes_with_transforms(input: &PutBytesWithTransformsInput<'_>) -> Res
             ("redb-index-update", "pass"),
         ],
         details: vec![
-            record("object-kind", vec![string(object_kind)]),
-            record("total-len", vec![u64_value(bytes.len() as u64)]),
-            record("chunk-size", vec![u64_value(chunk_size as u64)]),
+            record("object-kind", vec![string(input.object_kind)]),
+            record("total-len", vec![u64_value(input.total_len)]),
+            record("chunk-size", vec![u64_value(input.chunk_size as u64)]),
             record("dedup-hits", vec![u64_value(dedup_hits as u64)]),
         ],
     });
-    index_put(root, &manifest_value, &chunk_refs, &receipt_value)?;
-    if !dedup_chunk_refs.is_empty() {
-        let dedup_receipt = self::receipt_value(ChunkStoreReceiptValueInput {
-            operation: "dedup-hit",
-            decision: "pass",
-            manifest_ref: Some(&manifest_ref),
-            chunk_refs: &dedup_chunk_refs,
-            checks: vec![
-                ("existing-chunk-hash-binding", "pass"),
-                ("dedup-no-rewrite", "pass"),
-                ("receipt-index-update", "pass"),
-            ],
-            details: vec![record("dedup-hits", vec![u64_value(dedup_chunk_refs.len() as u64)])],
-        });
-        store_receipt(root, &dedup_receipt)?;
-    }
+    index_put(input.root, &manifest_value, &refs, &receipt_value)?;
+    note_reuse(input.root, &manifest_ref, &dedup_refs)?;
     Ok(ChunkStorePut {
         manifest_ref,
-        object_kind: object_kind.to_string(),
-        total_len: bytes.len() as u64,
-        chunk_refs: chunk_refs.into_iter().map(|chunk| chunk.chunk_ref).collect(),
+        object_kind: input.object_kind.to_string(),
+        total_len: input.total_len,
+        chunk_refs: refs.into_iter().map(|chunk| chunk.chunk_ref).collect(),
         dedup_hits,
         manifest_value,
         receipt_value,
