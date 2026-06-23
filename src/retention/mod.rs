@@ -8936,146 +8936,30 @@ mod tests {
     #[test]
     fn remote_clearance_workflow_imports_peer_clearance_and_denies_wrong_request() {
         let root = temp_dir("retention-remote-clearance-workflow");
-        let requester_ref = fake_ref("workflow-requester");
-        let peer_ref = fake_ref("workflow-peer");
-        let object_ref = fake_ref("workflow-object");
-        let remote_ref = fake_ref("workflow-remote");
-        let policy = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_POLICY,
-            label: "workflow-policy",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let authority = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_AUTHORITY,
-            label: "workflow-authority",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let support = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-            label: "workflow-support",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let index = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REFERENCE_INDEX,
-            label: "workflow-index",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let remote_gc = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REMOTE_GC,
-            label: "workflow-remote-gc",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: std::slice::from_ref(&remote_ref),
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let request = store_retention_remote_gc_clearance_request(&root, &RetentionRemoteGcClearanceRequestInput {
-            requester_ref: &requester_ref,
-            peer_ref: &peer_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_ref: &remote_ref,
-            policy_ref: &policy,
-            authority_ref: &authority,
-            evidence_refs: std::slice::from_ref(&support),
-        })
-        .expect("store request");
-        let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
-            root: &root,
-            request_value: &request.value,
-            evidence_refs: &[fake_ref("workflow-peer-evidence")],
-            retained_refs: &[],
-            is_current: true,
-            revoked_refs: &[],
-            diagnostics: &[],
-        })
-        .expect("store response");
+        let case = live_case(&root, "workflow");
+        let pair = pair_with_label(&root, &case, "workflow-peer-evidence");
+
         let import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
             root: &root,
-            request_value: &request.value,
-            response_value: &response.value,
-            expected_peer_ref: Some(&peer_ref),
-            expected_remote_ref: Some(&remote_ref),
+            request_value: &pair.request_value,
+            response_value: &pair.response_value,
+            expected_peer_ref: Some(&case.peer),
+            expected_remote_ref: Some(&case.remote),
         })
         .expect("import clearance");
         assert_eq!(import.decision, "pass");
         let clearance_ref = import.clearance_ref.clone().expect("clearance imported");
-        let admission = admit_destructive_retention_evidence(DestructiveRetentionAdmissionInput {
-            root: &root,
-            evidence: &DestructiveRetentionEvidence {
-                requester_ref: Some(requester_ref.clone()),
-                policy_refs: vec![policy],
-                authority_refs: vec![authority],
-                evidence_refs: vec![support],
-                retained_refs: Vec::new(),
-                remote_peer_refs: vec![peer_ref.clone()],
-                remote_refs: vec![remote_ref.clone()],
-                reference_index_refs: vec![index],
-                remote_gc_refs: vec![remote_gc],
-                remote_clearance_refs: vec![clearance_ref],
-                is_reference_index_complete: true,
-            },
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-        })
-        .expect("admit imported clearance");
-        assert_eq!(admission.decision, "pass");
-        assert!(admission.has_remote_gc_clearance);
+        assert_case_pass(&root, &case, clearance_ref);
 
         let wrong_request =
             store_retention_remote_gc_clearance_request(&root, &RetentionRemoteGcClearanceRequestInput {
-                requester_ref: &requester_ref,
-                peer_ref: &peer_ref,
+                requester_ref: &case.requester,
+                peer_ref: &case.peer,
                 object_ref: &fake_ref("workflow-wrong-object"),
                 object_kind: "chunk",
                 retention_class: CLASS_DURABLE_VALUE,
                 action: ACTION_DELETE,
-                remote_ref: &remote_ref,
+                remote_ref: &case.remote,
                 policy_ref: &fake_ref("workflow-wrong-policy"),
                 authority_ref: &fake_ref("workflow-wrong-authority"),
                 evidence_refs: &[],
@@ -9084,21 +8968,22 @@ mod tests {
         let wrong_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
             root: &root,
             request_value: &wrong_request.value,
-            response_value: &response.value,
-            expected_peer_ref: Some(&peer_ref),
-            expected_remote_ref: Some(&remote_ref),
+            response_value: &pair.response_value,
+            expected_peer_ref: Some(&case.peer),
+            expected_remote_ref: Some(&case.remote),
         })
         .expect("deny wrong request import");
         assert_eq!(wrong_import.decision, "deny");
         assert!(wrong_import.clearance_ref.is_none());
         assert!(wrong_import.diagnostics.iter().any(|diagnostic| diagnostic == "remote-clearance-wrong-request"));
 
+        let tampered_response = record("not-a-remote-clearance-response", vec![string("tampered")]);
         let tampered_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
             root: &root,
-            request_value: &request.value,
-            response_value: &record("not-a-remote-clearance-response", vec![string("tampered")]),
-            expected_peer_ref: Some(&peer_ref),
-            expected_remote_ref: Some(&remote_ref),
+            request_value: &pair.request_value,
+            response_value: &tampered_response,
+            expected_peer_ref: Some(&case.peer),
+            expected_remote_ref: Some(&case.remote),
         })
         .expect("deny tampered response import");
         assert_eq!(tampered_import.decision, "deny");
@@ -9177,117 +9062,16 @@ mod tests {
 
     #[test]
     fn remote_clearance_live_multihost_request_and_response_send_write_artifacts_on_denied_transport() {
-        let root = temp_dir("retention-remote-clearance-live-multihost-send");
-        let requester_node_root = temp_dir("retention-remote-clearance-live-multihost-requester");
-        let peer_node_root = temp_dir("retention-remote-clearance-live-multihost-peer");
-        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
-            state_root: &requester_node_root,
-            node_id: "requester-node",
-        })
-        .expect("init requester node");
-        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
-            state_root: &peer_node_root,
-            node_id: "peer-node",
-        })
-        .expect("init peer node");
-        let ticket_policy = vec![fake_ref("multihost-ticket-policy")];
-        let ticket_evidence = vec![fake_ref("multihost-ticket-evidence")];
-        let peer_ticket = crate::node_daemon::export_node_control_live_ticket(
-            &crate::node_daemon::NodeControlLiveTicketExportInput {
-                state_root: &peer_node_root,
-                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
-                policy_refs: &ticket_policy,
-                evidence_refs: &ticket_evidence,
-            },
-        )
-        .expect("peer ticket");
-        let requester_ticket = crate::node_daemon::export_node_control_live_ticket(
-            &crate::node_daemon::NodeControlLiveTicketExportInput {
-                state_root: &requester_node_root,
-                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
-                policy_refs: &ticket_policy,
-                evidence_refs: &ticket_evidence,
-            },
-        )
-        .expect("requester ticket");
-        let requester_ref = fake_ref("multihost-send-requester");
-        let peer_ref = fake_ref("multihost-send-peer");
-        let object_ref = fake_ref("multihost-send-object");
-        let remote_ref = fake_ref("multihost-send-remote");
-        let policy_ref = fake_ref("multihost-send-policy");
-        let authority_ref = fake_ref("multihost-send-authority");
-        let evidence_ref = fake_ref("multihost-send-evidence");
+        let case = no_endpoint_case();
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
-        let request_send = runtime
-            .block_on(send_retention_remote_gc_clearance_live_request(RetentionRemoteGcClearanceLiveRequestSendInput {
-                root: &root,
-                requester_node_root: Some(&requester_node_root),
-                peer_ticket_value: &peer_ticket.value,
-                requester_node_id: "requester-node",
-                peer_node_id: "peer-node",
-                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
-                sequence: 1,
-                max_attempts: 1,
-                join_timeout_ms: 1,
-                requester_ref: &requester_ref,
-                peer_ref: &peer_ref,
-                object_ref: &object_ref,
-                object_kind: "chunk",
-                retention_class: CLASS_DURABLE_VALUE,
-                action: ACTION_DELETE,
-                remote_ref: &remote_ref,
-                policy_ref: &policy_ref,
-                authority_ref: &authority_ref,
-                retention_evidence_refs: std::slice::from_ref(&evidence_ref),
-                peer_bootstrap_refs: &[],
-                authority_refs: &[],
-                policy_refs: &[],
-                resource_refs: &[],
-                transport_evidence_refs: &[],
-            }))
-            .expect("request send");
-        assert_eq!(request_send.request.peer_ref, peer_ref);
-        let request_send_receipt =
-            crate::node_daemon::parse_node_control_live_send_receipt(&request_send.send.send_receipt_value)
-                .expect("request send receipt");
-        assert_eq!(request_send_receipt.decision, "deny");
-        assert!(
-            request_send_receipt
-                .diagnostics
-                .iter()
-                .any(|value| value.contains("ticket has no endpoint addresses"))
-        );
-        let response_send = runtime
-            .block_on(send_retention_remote_gc_clearance_live_response(
-                RetentionRemoteGcClearanceLiveResponseSendInput {
-                    root: &root,
-                    peer_node_root: Some(&peer_node_root),
-                    requester_ticket_value: &requester_ticket.value,
-                    request_value: &request_send.request.value,
-                    peer_node_id: "peer-node",
-                    requester_node_id: "requester-node",
-                    topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
-                    sequence: 1,
-                    max_attempts: 1,
-                    join_timeout_ms: 1,
-                    response_evidence_refs: std::slice::from_ref(&evidence_ref),
-                    retained_refs: &[],
-                    is_current: true,
-                    revoked_refs: &[],
-                    response_diagnostics: &[],
-                    peer_bootstrap_refs: &[],
-                    authority_refs: &[],
-                    policy_refs: &[],
-                    resource_refs: &[],
-                    transport_evidence_refs: &[],
-                },
-            ))
-            .expect("response send");
-        assert_eq!(response_send.response.request_ref, request_send.request.request_ref);
-        let response_send_receipt =
-            crate::node_daemon::parse_node_control_live_send_receipt(&response_send.send.send_receipt_value)
-                .expect("response send receipt");
-        assert_eq!(response_send_receipt.decision, "deny");
+
+        let request = case_request(&runtime, &case);
+        assert_eq!(request.request.peer_ref, case.peer);
+        assert_send_denial(&request.send.send_receipt_value, Some("ticket has no endpoint addresses"));
+
+        let response = case_response(&runtime, &case, &request);
+        assert_eq!(response.response.request_ref, request.request.request_ref);
+        assert_send_denial(&response.send.send_receipt_value, None);
     }
 
     #[test]
@@ -10456,6 +10240,10 @@ mod tests {
     }
 
     fn request_pair(root: &Path, case: &LiveCase) -> Pair {
+        pair_with_label(root, case, "multihost-peer-evidence")
+    }
+
+    fn pair_with_label(root: &Path, case: &LiveCase, label: &str) -> Pair {
         let request = store_retention_remote_gc_clearance_request(root, &RetentionRemoteGcClearanceRequestInput {
             requester_ref: &case.requester,
             peer_ref: &case.peer,
@@ -10472,7 +10260,7 @@ mod tests {
         let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
             root,
             request_value: &request.value,
-            evidence_refs: &[fake_ref("multihost-peer-evidence")],
+            evidence_refs: &[fake_ref(label)],
             retained_refs: &[],
             is_current: true,
             revoked_refs: &[],
@@ -10540,6 +10328,155 @@ mod tests {
             response_receive,
             request_send,
             response_send,
+        }
+    }
+
+    struct TicketPair {
+        requester_root: PathBuf,
+        peer_root: PathBuf,
+        peer_ticket: crate::node_daemon::NodeControlLiveTicket,
+        requester_ticket: crate::node_daemon::NodeControlLiveTicket,
+    }
+
+    struct NoEndpointCase {
+        root: PathBuf,
+        nodes: TicketPair,
+        requester: String,
+        peer: String,
+        object: String,
+        remote: String,
+        policy: String,
+        authority: String,
+        evidence: String,
+    }
+
+    fn ticket_pair() -> TicketPair {
+        let requester_root = temp_dir("retention-remote-clearance-live-multihost-requester");
+        let peer_root = temp_dir("retention-remote-clearance-live-multihost-peer");
+        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+            state_root: &requester_root,
+            node_id: "requester-node",
+        })
+        .expect("init requester node");
+        crate::node_daemon::init_local_node(&crate::node_daemon::NodeDaemonInitInput {
+            state_root: &peer_root,
+            node_id: "peer-node",
+        })
+        .expect("init peer node");
+        let policy = vec![fake_ref("multihost-ticket-policy")];
+        let evidence = vec![fake_ref("multihost-ticket-evidence")];
+        let peer_ticket = crate::node_daemon::export_node_control_live_ticket(
+            &crate::node_daemon::NodeControlLiveTicketExportInput {
+                state_root: &peer_root,
+                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                policy_refs: &policy,
+                evidence_refs: &evidence,
+            },
+        )
+        .expect("peer ticket");
+        let requester_ticket = crate::node_daemon::export_node_control_live_ticket(
+            &crate::node_daemon::NodeControlLiveTicketExportInput {
+                state_root: &requester_root,
+                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                policy_refs: &policy,
+                evidence_refs: &evidence,
+            },
+        )
+        .expect("requester ticket");
+        TicketPair {
+            requester_root,
+            peer_root,
+            peer_ticket,
+            requester_ticket,
+        }
+    }
+
+    fn no_endpoint_case() -> NoEndpointCase {
+        NoEndpointCase {
+            root: temp_dir("retention-remote-clearance-live-multihost-send"),
+            nodes: ticket_pair(),
+            requester: fake_ref("multihost-send-requester"),
+            peer: fake_ref("multihost-send-peer"),
+            object: fake_ref("multihost-send-object"),
+            remote: fake_ref("multihost-send-remote"),
+            policy: fake_ref("multihost-send-policy"),
+            authority: fake_ref("multihost-send-authority"),
+            evidence: fake_ref("multihost-send-evidence"),
+        }
+    }
+
+    fn case_request(
+        runtime: &tokio::runtime::Runtime,
+        case: &NoEndpointCase,
+    ) -> RetentionRemoteGcClearanceLiveRequestSend {
+        runtime
+            .block_on(send_retention_remote_gc_clearance_live_request(RetentionRemoteGcClearanceLiveRequestSendInput {
+                root: &case.root,
+                requester_node_root: Some(&case.nodes.requester_root),
+                peer_ticket_value: &case.nodes.peer_ticket.value,
+                requester_node_id: "requester-node",
+                peer_node_id: "peer-node",
+                topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                sequence: 1,
+                max_attempts: 1,
+                join_timeout_ms: 1,
+                requester_ref: &case.requester,
+                peer_ref: &case.peer,
+                object_ref: &case.object,
+                object_kind: "chunk",
+                retention_class: CLASS_DURABLE_VALUE,
+                action: ACTION_DELETE,
+                remote_ref: &case.remote,
+                policy_ref: &case.policy,
+                authority_ref: &case.authority,
+                retention_evidence_refs: std::slice::from_ref(&case.evidence),
+                peer_bootstrap_refs: &[],
+                authority_refs: &[],
+                policy_refs: &[],
+                resource_refs: &[],
+                transport_evidence_refs: &[],
+            }))
+            .expect("request send")
+    }
+
+    fn case_response(
+        runtime: &tokio::runtime::Runtime,
+        case: &NoEndpointCase,
+        request: &RetentionRemoteGcClearanceLiveRequestSend,
+    ) -> RetentionRemoteGcClearanceLiveResponseSend {
+        runtime
+            .block_on(send_retention_remote_gc_clearance_live_response(
+                RetentionRemoteGcClearanceLiveResponseSendInput {
+                    root: &case.root,
+                    peer_node_root: Some(&case.nodes.peer_root),
+                    requester_ticket_value: &case.nodes.requester_ticket.value,
+                    request_value: &request.request.value,
+                    peer_node_id: "peer-node",
+                    requester_node_id: "requester-node",
+                    topic: crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+                    sequence: 1,
+                    max_attempts: 1,
+                    join_timeout_ms: 1,
+                    response_evidence_refs: std::slice::from_ref(&case.evidence),
+                    retained_refs: &[],
+                    is_current: true,
+                    revoked_refs: &[],
+                    response_diagnostics: &[],
+                    peer_bootstrap_refs: &[],
+                    authority_refs: &[],
+                    policy_refs: &[],
+                    resource_refs: &[],
+                    transport_evidence_refs: &[],
+                },
+            ))
+            .expect("response send")
+    }
+
+    fn assert_send_denial(value: &IOValue, expected: Option<&str>) {
+        let receipt = crate::node_daemon::parse_node_control_live_send_receipt(value).expect("send receipt");
+        assert_eq!(receipt.decision, "deny");
+        if let Some(needle) = expected {
+            assert!(receipt.diagnostics.iter().any(|value| value.contains(needle)));
         }
     }
 
