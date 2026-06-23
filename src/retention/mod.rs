@@ -10697,80 +10697,55 @@ mod tests {
         evidence: DestructiveRetentionEvidence,
     }
 
+    struct SeedInput<'a> {
+        root: &'a Path,
+        kind: &'a str,
+        label: String,
+        requester_ref: &'a str,
+        object_ref: &'a str,
+        remote_refs: &'a [String],
+    }
+
+    fn seed_ref(input: SeedInput<'_>) -> String {
+        store_test_admission(TestAdmissionInput {
+            root: input.root,
+            kind: input.kind,
+            label: &input.label,
+            requester_ref: input.requester_ref,
+            object_ref: input.object_ref,
+            object_kind: "chunk",
+            retention_class: CLASS_DURABLE_VALUE,
+            action: ACTION_DELETE,
+            remote_refs: input.remote_refs,
+            is_reference_index_complete: true,
+            is_current: true,
+            revoked_refs: &[],
+        })
+    }
+
     fn store_passing_plan_fixture(root: &std::path::Path, label: &str) -> TestPlanFixture {
         let requester_ref = fake_ref(&format!("{label}-requester"));
         let object_ref = fake_ref(&format!("{label}-object"));
         let peer_ref = fake_ref(&format!("{label}-peer"));
         let remote_ref = fake_ref(&format!("{label}-remote"));
-        let policy = store_test_admission(TestAdmissionInput {
-            root,
-            kind: ADMISSION_KIND_POLICY,
-            label: &format!("{label}-policy"),
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let authority = store_test_admission(TestAdmissionInput {
-            root,
-            kind: ADMISSION_KIND_AUTHORITY,
-            label: &format!("{label}-authority"),
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let support = store_test_admission(TestAdmissionInput {
-            root,
-            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-            label: &format!("{label}-support"),
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let index = store_test_admission(TestAdmissionInput {
-            root,
-            kind: ADMISSION_KIND_REFERENCE_INDEX,
-            label: &format!("{label}-index"),
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let remote_gc = store_test_admission(TestAdmissionInput {
-            root,
-            kind: ADMISSION_KIND_REMOTE_GC,
-            label: &format!("{label}-remote-gc"),
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "chunk",
-            retention_class: CLASS_DURABLE_VALUE,
-            action: ACTION_DELETE,
-            remote_refs: std::slice::from_ref(&remote_ref),
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
+        let empty_refs: &[String] = &[];
+        let remote_refs = std::slice::from_ref(&remote_ref);
+        let [policy, authority, support, index, remote_gc] = [
+            (ADMISSION_KIND_POLICY, "policy", empty_refs),
+            (ADMISSION_KIND_AUTHORITY, "authority", empty_refs),
+            (ADMISSION_KIND_SUPPORTING_EVIDENCE, "support", empty_refs),
+            (ADMISSION_KIND_REFERENCE_INDEX, "index", empty_refs),
+            (ADMISSION_KIND_REMOTE_GC, "remote-gc", remote_refs),
+        ]
+        .map(|(kind, suffix, remote_refs)| {
+            seed_ref(SeedInput {
+                root,
+                kind,
+                label: format!("{label}-{suffix}"),
+                requester_ref: &requester_ref,
+                object_ref: &object_ref,
+                remote_refs,
+            })
         });
         let remote_clearance = store_test_remote_clearance(TestRemoteClearanceInput {
             root,
