@@ -8383,62 +8383,14 @@ mod tests {
         let root = temp_dir("retention-admission-stale");
         let requester_ref = fake_ref("requester");
         let object_ref = fake_ref("object");
-        let stale_authority = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_AUTHORITY,
-            label: "stale-authority",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "artifact",
-            retention_class: CLASS_PUBLIC_ARTIFACT,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: false,
-            revoked_refs: &[fake_ref("revocation")],
-        });
-        let policy = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_POLICY,
-            label: "policy",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "artifact",
-            retention_class: CLASS_PUBLIC_ARTIFACT,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let support = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-            label: "support",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "artifact",
-            retention_class: CLASS_PUBLIC_ARTIFACT,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
-        let index = store_test_admission(TestAdmissionInput {
-            root: &root,
-            kind: ADMISSION_KIND_REFERENCE_INDEX,
-            label: "index",
-            requester_ref: &requester_ref,
-            object_ref: &object_ref,
-            object_kind: "artifact",
-            retention_class: CLASS_PUBLIC_ARTIFACT,
-            action: ACTION_DELETE,
-            remote_refs: &[],
-            is_reference_index_complete: true,
-            is_current: true,
-            revoked_refs: &[],
-        });
+        let stale_authority =
+            scoped_ref(&root, ADMISSION_KIND_AUTHORITY, "stale-authority", &requester_ref, &object_ref, false, &[
+                fake_ref("revocation"),
+            ]);
+        let policy = scoped_ref(&root, ADMISSION_KIND_POLICY, "policy", &requester_ref, &object_ref, true, &[]);
+        let support =
+            scoped_ref(&root, ADMISSION_KIND_SUPPORTING_EVIDENCE, "support", &requester_ref, &object_ref, true, &[]);
+        let index = scoped_ref(&root, ADMISSION_KIND_REFERENCE_INDEX, "index", &requester_ref, &object_ref, true, &[]);
         let evidence = DestructiveRetentionEvidence {
             requester_ref: Some(requester_ref),
             policy_refs: vec![policy],
@@ -10691,6 +10643,31 @@ mod tests {
         })
         .expect("store test remote clearance")
         .clearance_ref
+    }
+
+    fn scoped_ref(
+        root: &Path,
+        kind: &str,
+        label: &str,
+        requester_ref: &str,
+        object_ref: &str,
+        is_current: bool,
+        revoked_refs: &[String],
+    ) -> String {
+        store_test_admission(TestAdmissionInput {
+            root,
+            kind,
+            label,
+            requester_ref,
+            object_ref,
+            object_kind: "artifact",
+            retention_class: CLASS_PUBLIC_ARTIFACT,
+            action: ACTION_DELETE,
+            remote_refs: &[],
+            is_reference_index_complete: true,
+            is_current,
+            revoked_refs,
+        })
     }
 
     fn store_test_admission(input: TestAdmissionInput<'_>) -> String {
