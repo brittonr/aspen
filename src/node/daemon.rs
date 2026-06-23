@@ -9647,14 +9647,18 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("ingress envelope");
+        assert_enqueued_then_denied(&root, &envelope);
+    }
+
+    fn assert_enqueued_then_denied(root: &Path, envelope: &NodeControlIngressEnvelope) {
         let published = publish_node_control_ingress(&NodeControlIngressPublishInput {
-            state_root: &root,
+            state_root: root,
             envelope_value: &envelope.value,
         })
         .expect("publish ingress");
         assert_eq!(ledger::artifact_kind(&published.receipt_value), "node-control-ingress-receipt");
         let delivered = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
-            state_root: &root,
+            state_root: root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             envelope_ref: &envelope.envelope_ref,
         })
@@ -9663,7 +9667,7 @@ mod tests {
         assert!(delivered.queue_receipt_ref.is_some());
 
         let duplicate = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
-            state_root: &root,
+            state_root: root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             envelope_ref: &envelope.envelope_ref,
         })
@@ -9672,12 +9676,12 @@ mod tests {
         assert!(duplicate.idempotency_receipt_ref.is_some());
 
         let loop_result = run_control_loop(&NodeControlLoopInput {
-            state_root: &root,
+            state_root: root,
             max_requests: 1,
         })
         .expect("dispatch ingress request");
         assert_eq!(loop_result.processed_request_refs.len(), 1);
-        let control_value = read_preserves(&control_outbox_receipt_path(&root, &delivered.request_ref))
+        let control_value = read_preserves(&control_outbox_receipt_path(root, &delivered.request_ref))
             .expect("read ingress dispatch receipt");
         let control = node_runtime::parse_node_control_receipt(&control_value).expect("parse control receipt");
         assert_eq!(control.decision, "deny");
