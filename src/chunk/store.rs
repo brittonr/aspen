@@ -2429,48 +2429,12 @@ pub fn parse_chunk_lineage_value(value: &IOValue) -> Result<ChunkLineage> {
         .iter()
         .map(|receipt_value| parse_receipt_value(receipt_value, None))
         .collect::<Result<Vec<_>>>()?;
-    let mut links = Vec::with_capacity(link_values.len());
-    let mut link_refs = Vec::with_capacity(link_values.len());
-    let mut receipt_refs = Vec::with_capacity(receipts.len());
-    for (position, (link_value, receipt)) in link_values.iter().zip(receipts.iter()).enumerate() {
-        if receipt.manifest_ref.as_deref() != Some(&manifest_ref) || receipt.decision != "pass" {
-            return Err(MoltenError::invalid_harness(
-                "chunk lineage receipt does not bind the lineage manifest as pass evidence",
-            ));
-        }
-        let link = parse_chain_link(link_value)?;
-        if link.chain.scope != "chunk-lineage" || link.chain.id != manifest_ref || link.chain.epoch != root_ref {
-            return Err(MoltenError::invalid_harness("chunk lineage link scope must be per manifest/root, not global"));
-        }
-        if link.sequence != position as u64 {
-            return Err(MoltenError::invalid_harness("chunk lineage link sequence is not contiguous"));
-        }
-        if position == 0 {
-            if link.previous_link_ref.is_some() {
-                return Err(MoltenError::invalid_harness("chunk lineage genesis link must not name a previous link"));
-            }
-        } else if link.previous_link_ref.as_deref() != link_refs.get(position - 1).map(String::as_str) {
-            return Err(MoltenError::invalid_harness("chunk lineage link does not bind previous lineage receipt"));
-        }
-        if link.payload.artifact_ref != receipt.receipt_ref || link.payload.schema != CHUNK_STORE_RECEIPT_SCHEMA {
-            return Err(MoltenError::invalid_harness(
-                "chunk lineage link payload does not bind embedded chunk-store receipt",
-            ));
-        }
-        require_lineage_context(&link.context_refs, "manifest", &manifest_ref)?;
-        require_lineage_context(&link.context_refs, "chunk-root", &root_ref)?;
-        for chunk_ref in &receipt.chunk_refs {
-            require_lineage_context(&link.context_refs, "chunk", chunk_ref)?;
-        }
-        push_bounded(
-            &mut receipt_refs,
-            receipt.receipt_ref.clone(),
-            MAX_CHUNK_STORE_RECEIPTS,
-            "chunk lineage receipt refs",
-        )?;
-        push_bounded(&mut link_refs, link.link_ref.clone(), MAX_CHUNK_STORE_RECEIPTS, "chunk lineage link refs")?;
-        push_bounded(&mut links, link, MAX_CHUNK_STORE_RECEIPTS, "chunk lineage links")?;
-    }
+    let entries = parsed_entries(EntryInput {
+        manifest_ref: &manifest_ref,
+        root_ref: &root_ref,
+        link_values: &link_values,
+        receipts: &receipts,
+    })?;
 
     let predicates = predicate_values.iter().map(parse_chain_predicate_receipt).collect::<Result<Vec<_>>>()?;
     let predicate_receipt_refs = predicates.iter().map(|predicate| predicate.receipt_ref.clone()).collect::<Vec<_>>();
@@ -2478,16 +2442,18 @@ pub fn parse_chunk_lineage_value(value: &IOValue) -> Result<ChunkLineage> {
     require_chunk_lineage_predicate(&predicates, SEGMENT_NO_FORK_PREDICATE)?;
     require_chunk_lineage_predicate(&predicates, DESCENDS_FROM_ANCHOR_PREDICATE)?;
     let range_predicate = require_chunk_lineage_predicate(&predicates, CHECKPOINT_COVERS_RANGE_PREDICATE)?;
-    if range_predicate.subject_refs != link_refs || range_predicate.input_refs != receipt_refs {
+    if range_predicate.subject_refs.as_slice() != entries.link_refs.as_slice()
+        || range_predicate.input_refs.as_slice() != entries.receipt_refs.as_slice()
+    {
         return Err(MoltenError::invalid_harness(
             "chunk lineage range predicate does not bind lineage links and receipts",
         ));
     }
     validate_chunk_lineage_verify_receipt(
         &verify_receipt_value,
-        &links[0].chain,
-        &link_refs,
-        &receipt_refs,
+        &entries.first_chain,
+        &entries.link_refs,
+        &entries.receipt_refs,
         &predicate_receipt_refs,
     )?;
     let verify_receipt_ref = canonical_hash(&verify_receipt_value)?;
@@ -2495,11 +2461,112 @@ pub fn parse_chunk_lineage_value(value: &IOValue) -> Result<ChunkLineage> {
         lineage_ref: canonical_hash(value)?,
         manifest_ref,
         root_ref,
-        link_refs,
-        receipt_refs,
+        link_refs: entries.link_refs,
+        receipt_refs: entries.receipt_refs,
         verify_receipt_ref,
         predicate_receipt_refs,
         value: value.clone(),
+    })
+}
+
+struct EntryInput<'a> {
+    manifest_ref: &'a str,
+    root_ref: &'a str,
+    link_values: &'a [IOValue],
+    receipts: &'a [ChunkStoreReceipt],
+}
+
+struct ParsedEntries {
+    first_chain: ChainScope,
+    link_refs: Vec<String>,
+    receipt_refs: Vec<String>,
+}
+
+fn parsed_entries(input: EntryInput<'_>) -> Result<ParsedEntries> {
+    let mut first_chain = None;
+    let mut link_refs = Vec::with_capacity(input.link_values.len());
+    let mut receipt_refs = Vec::with_capacity(input.receipts.len());
+    for (position, (link_value, receipt)) in input.link_values.iter().zip(input.receipts.iter()).enumerate() {
+        let previous_ref = if position == 0 {
+            None
+        } else {
+            link_refs.get(position - 1).map(String::as_str)
+        };
+        let entry = checked_entry(LinkInput {
+            manifest_ref: input.manifest_ref,
+            root_ref: input.root_ref,
+            position,
+            previous_ref,
+            value: link_value,
+            receipt,
+        })?;
+        if position == 0 {
+            first_chain = Some(entry.chain);
+        }
+        push_bounded(
+            &mut receipt_refs,
+            receipt.receipt_ref.clone(),
+            MAX_CHUNK_STORE_RECEIPTS,
+            "chunk lineage receipt refs",
+        )?;
+        push_bounded(&mut link_refs, entry.link_ref, MAX_CHUNK_STORE_RECEIPTS, "chunk lineage link refs")?;
+    }
+    let first_chain = first_chain.ok_or_else(|| MoltenError::invalid_harness("chunk lineage missing first link"))?;
+    Ok(ParsedEntries {
+        first_chain,
+        link_refs,
+        receipt_refs,
+    })
+}
+
+struct LinkInput<'a> {
+    manifest_ref: &'a str,
+    root_ref: &'a str,
+    position: usize,
+    previous_ref: Option<&'a str>,
+    value: &'a IOValue,
+    receipt: &'a ChunkStoreReceipt,
+}
+
+struct CheckedEntry {
+    chain: ChainScope,
+    link_ref: String,
+}
+
+fn checked_entry(input: LinkInput<'_>) -> Result<CheckedEntry> {
+    if input.receipt.manifest_ref.as_deref() != Some(input.manifest_ref) || input.receipt.decision != "pass" {
+        return Err(MoltenError::invalid_harness(
+            "chunk lineage receipt does not bind the lineage manifest as pass evidence",
+        ));
+    }
+    let link = parse_chain_link(input.value)?;
+    if link.chain.scope != "chunk-lineage" || link.chain.id != input.manifest_ref || link.chain.epoch != input.root_ref
+    {
+        return Err(MoltenError::invalid_harness("chunk lineage link scope must be per manifest/root, not global"));
+    }
+    if link.sequence != input.position as u64 {
+        return Err(MoltenError::invalid_harness("chunk lineage link sequence is not contiguous"));
+    }
+    if input.position == 0 {
+        if link.previous_link_ref.is_some() {
+            return Err(MoltenError::invalid_harness("chunk lineage genesis link must not name a previous link"));
+        }
+    } else if link.previous_link_ref.as_deref() != input.previous_ref {
+        return Err(MoltenError::invalid_harness("chunk lineage link does not bind previous lineage receipt"));
+    }
+    if link.payload.artifact_ref != input.receipt.receipt_ref || link.payload.schema != CHUNK_STORE_RECEIPT_SCHEMA {
+        return Err(MoltenError::invalid_harness(
+            "chunk lineage link payload does not bind embedded chunk-store receipt",
+        ));
+    }
+    require_lineage_context(&link.context_refs, "manifest", input.manifest_ref)?;
+    require_lineage_context(&link.context_refs, "chunk-root", input.root_ref)?;
+    for chunk_ref in &input.receipt.chunk_refs {
+        require_lineage_context(&link.context_refs, "chunk", chunk_ref)?;
+    }
+    Ok(CheckedEntry {
+        chain: link.chain,
+        link_ref: link.link_ref,
     })
 }
 
