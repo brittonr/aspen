@@ -831,69 +831,13 @@ pub fn run_vat_time_travel_fixture() -> Result<VatDebugFixture> {
 }
 
 pub fn run_vat_replay_fixture() -> Result<VatReplayFixture> {
-    let expected = vat_replay_run(VatReplayRunInput {
-        seed: "seed:vat-replay:0001",
-        input_message: "deliver:root-to-helper",
-        effect_response: "clock:logical:42",
-        random_sequence: "random-seq:0001",
-        random_response: "random:seeded:7",
-        policy_decision: "policy:allow",
-        state_marker: "state:committed",
-    })?;
-    let actual = vat_replay_run(VatReplayRunInput {
-        seed: "seed:vat-replay:0001",
-        input_message: "deliver:root-to-helper",
-        effect_response: "clock:logical:42",
-        random_sequence: "random-seq:0001",
-        random_response: "random:seeded:7",
-        policy_decision: "policy:allow",
-        state_marker: "state:committed",
-    })?;
-    let changed_input = vat_replay_run(VatReplayRunInput {
-        seed: "seed:vat-replay:0001",
-        input_message: "deliver:root-to-helper:changed",
-        effect_response: "clock:logical:42",
-        random_sequence: "random-seq:0001",
-        random_response: "random:seeded:7",
-        policy_decision: "policy:allow",
-        state_marker: "state:committed",
-    })?;
-    let changed_effect = vat_replay_run(VatReplayRunInput {
-        seed: "seed:vat-replay:0001",
-        input_message: "deliver:root-to-helper",
-        effect_response: "clock:logical:43",
-        random_sequence: "random-seq:0001",
-        random_response: "random:seeded:7",
-        policy_decision: "policy:allow",
-        state_marker: "state:committed",
-    })?;
-    let changed_sequence = vat_replay_run(VatReplayRunInput {
-        seed: "seed:vat-replay:0001",
-        input_message: "deliver:root-to-helper",
-        effect_response: "clock:logical:42",
-        random_sequence: "random-seq:changed",
-        random_response: "random:seeded:7",
-        policy_decision: "policy:allow",
-        state_marker: "state:committed",
-    })?;
-    let changed_policy = vat_replay_run(VatReplayRunInput {
-        seed: "seed:vat-replay:0001",
-        input_message: "deliver:root-to-helper",
-        effect_response: "clock:logical:42",
-        random_sequence: "random-seq:0001",
-        random_response: "random:seeded:7",
-        policy_decision: "policy:deny",
-        state_marker: "state:committed",
-    })?;
-    let changed_state = vat_replay_run(VatReplayRunInput {
-        seed: "seed:vat-replay:0001",
-        input_message: "deliver:root-to-helper",
-        effect_response: "clock:logical:42",
-        random_sequence: "random-seq:0001",
-        random_response: "random:seeded:7",
-        policy_decision: "policy:allow",
-        state_marker: "state:diverged",
-    })?;
+    let expected = case_run(RunCase::Baseline)?;
+    let actual = case_run(RunCase::Baseline)?;
+    let changed_input = case_run(RunCase::Input)?;
+    let changed_effect = case_run(RunCase::Effect)?;
+    let changed_sequence = case_run(RunCase::Sequence)?;
+    let changed_policy = case_run(RunCase::Policy)?;
+    let changed_state = case_run(RunCase::State)?;
     let generic_pass =
         deterministic_replay::verify_fixture_value(deterministic_replay::ReplayFixtureVariant::Baseline)?;
     let generic_deny =
@@ -1097,6 +1041,36 @@ struct VatReplayRunInput {
     random_response: &'static str,
     policy_decision: &'static str,
     state_marker: &'static str,
+}
+
+enum RunCase {
+    Baseline,
+    Input,
+    Effect,
+    Sequence,
+    Policy,
+    State,
+}
+
+fn case_run(case: RunCase) -> Result<VatReplayRun> {
+    let mut input = VatReplayRunInput {
+        seed: "seed:vat-replay:0001",
+        input_message: "deliver:root-to-helper",
+        effect_response: "clock:logical:42",
+        random_sequence: "random-seq:0001",
+        random_response: "random:seeded:7",
+        policy_decision: "policy:allow",
+        state_marker: "state:committed",
+    };
+    match case {
+        RunCase::Baseline => {}
+        RunCase::Input => input.input_message = "deliver:root-to-helper:changed",
+        RunCase::Effect => input.effect_response = "clock:logical:43",
+        RunCase::Sequence => input.random_sequence = "random-seq:changed",
+        RunCase::Policy => input.policy_decision = "policy:deny",
+        RunCase::State => input.state_marker = "state:diverged",
+    }
+    vat_replay_run(input)
 }
 
 fn vat_replay_run(run_input: VatReplayRunInput) -> Result<VatReplayRun> {
