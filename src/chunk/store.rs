@@ -2559,29 +2559,29 @@ pub fn index_status(root: &Path) -> Result<ChunkStoreIndexStatus> {
 
 pub fn rebuild_index(root: &Path) -> Result<ChunkStoreIndexRebuild> {
     ensure_dirs(root)?;
+    let inputs = scan_inputs(root)?;
+    let receipt_value = write_inputs(root, &inputs)?;
+    Ok(ChunkStoreIndexRebuild {
+        status: index_status(root)?,
+        receipt_value,
+    })
+}
+
+struct IndexInputs {
+    manifest_entries: Vec<(String, Vec<u8>, ChunkManifest)>,
+    chunk_entries: BTreeMap<String, (ChunkRef, String)>,
+    pinned_manifests: Vec<String>,
+    pinned_chunks: Vec<String>,
+}
+
+fn scan_inputs(root: &Path) -> Result<IndexInputs> {
     let mut manifest_entries = Vec::new();
     let mut chunk_entries: BTreeMap<String, (ChunkRef, String)> = BTreeMap::new();
     for manifest_ref in list_manifest_refs(root)? {
         let bytes = fs::read(manifest_path(root, &manifest_ref)?).map_err(MoltenError::from)?;
         let value = parse_canonical_bytes(&bytes)?;
         let manifest = parse_manifest_value(&value, Some(&manifest_ref))?;
-        let chunk_size = chunk_size_to_usize(manifest.chunk_size, "manifest chunk size")?;
-        for chunk in &manifest.chunks {
-            let available = if chunk_path(root, &chunk.chunk_ref)?.exists() {
-                read_verified_chunk(root, chunk, chunk_size)?;
-                "available"
-            } else {
-                "missing"
-            };
-            chunk_entries
-                .entry(chunk.chunk_ref.clone())
-                .and_modify(|(_existing, status)| {
-                    if available == "available" {
-                        *status = "available".to_string();
-                    }
-                })
-                .or_insert_with(|| (chunk.clone(), available.to_string()));
-        }
+        scan_manifest_chunks(root, &manifest, &mut chunk_entries)?;
         push_bounded(
             &mut manifest_entries,
             (manifest_ref, bytes, manifest),
@@ -2589,38 +2589,93 @@ pub fn rebuild_index(root: &Path) -> Result<ChunkStoreIndexRebuild> {
             "chunk store index manifest entries",
         )?;
     }
-    let pinned_manifests = pinned_refs(&root.join("pins").join("manifests"))?;
-    let pinned_chunks = pinned_refs(&root.join("pins").join("chunks"))?;
+    Ok(IndexInputs {
+        manifest_entries,
+        chunk_entries,
+        pinned_manifests: pinned_refs(&root.join("pins").join("manifests"))?,
+        pinned_chunks: pinned_refs(&root.join("pins").join("chunks"))?,
+    })
+}
 
+fn scan_manifest_chunks(
+    root: &Path,
+    manifest: &ChunkManifest,
+    chunk_entries: &mut BTreeMap<String, (ChunkRef, String)>,
+) -> Result<()> {
+    let chunk_size = chunk_size_to_usize(manifest.chunk_size, "manifest chunk size")?;
+    for chunk in &manifest.chunks {
+        let available = if chunk_path(root, &chunk.chunk_ref)?.exists() {
+            read_verified_chunk(root, chunk, chunk_size)?;
+            "available"
+        } else {
+            "missing"
+        };
+        chunk_entries
+            .entry(chunk.chunk_ref.clone())
+            .and_modify(|(_existing, status)| {
+                if available == "available" {
+                    *status = "available".to_string();
+                }
+            })
+            .or_insert_with(|| (chunk.clone(), available.to_string()));
+    }
+    Ok(())
+}
+
+fn write_inputs(root: &Path, inputs: &IndexInputs) -> Result<IOValue> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     clear_index_tables_in_tx(&write_txn)?;
-    {
-        let mut manifests = write_txn.open_table(INDEX_MANIFESTS).map_err(index_error)?;
-        for (manifest_ref, bytes, _manifest) in &manifest_entries {
-            manifests.insert(manifest_ref.as_str(), bytes.as_slice()).map_err(index_error)?;
-        }
+    write_manifest_entries(&write_txn, &inputs.manifest_entries)?;
+    write_entries(&write_txn, &inputs.chunk_entries)?;
+    write_pin_entries(&write_txn, &inputs.pinned_manifests, &inputs.pinned_chunks)?;
+    let receipt_value = rebuild_receipt(inputs);
+    store_receipt_in_tx(&write_txn, &receipt_value)?;
+    write_txn.commit().map_err(index_error)?;
+    drop(db);
+    Ok(receipt_value)
+}
+
+fn write_manifest_entries(
+    write_txn: &redb::WriteTransaction,
+    manifest_entries: &[(String, Vec<u8>, ChunkManifest)],
+) -> Result<()> {
+    let mut manifests = write_txn.open_table(INDEX_MANIFESTS).map_err(index_error)?;
+    for (manifest_ref, bytes, _manifest) in manifest_entries {
+        manifests.insert(manifest_ref.as_str(), bytes.as_slice()).map_err(index_error)?;
     }
-    {
-        let mut chunks = write_txn.open_table(INDEX_CHUNKS).map_err(index_error)?;
-        let mut availability = write_txn.open_table(INDEX_AVAILABILITY).map_err(index_error)?;
-        for (chunk_ref, (chunk, status)) in &chunk_entries {
-            let value = canonical_bytes(&chunk_index_value(chunk))?;
-            chunks.insert(chunk_ref.as_str(), value.as_slice()).map_err(index_error)?;
-            availability.insert(chunk_ref.as_str(), status.as_str()).map_err(index_error)?;
-        }
+    Ok(())
+}
+
+fn write_entries(write_txn: &redb::WriteTransaction, entries: &BTreeMap<String, (ChunkRef, String)>) -> Result<()> {
+    let mut chunks = write_txn.open_table(INDEX_CHUNKS).map_err(index_error)?;
+    let mut availability = write_txn.open_table(INDEX_AVAILABILITY).map_err(index_error)?;
+    for (chunk_ref, (chunk, status)) in entries {
+        let value = canonical_bytes(&chunk_index_value(chunk))?;
+        chunks.insert(chunk_ref.as_str(), value.as_slice()).map_err(index_error)?;
+        availability.insert(chunk_ref.as_str(), status.as_str()).map_err(index_error)?;
     }
-    {
-        let mut pins = write_txn.open_table(INDEX_PINS).map_err(index_error)?;
-        for manifest_ref in &pinned_manifests {
-            pins.insert(pin_key("manifest", manifest_ref).as_str(), "manifest").map_err(index_error)?;
-        }
-        for chunk_ref in &pinned_chunks {
-            pins.insert(pin_key("chunk", chunk_ref).as_str(), "chunk").map_err(index_error)?;
-        }
+    Ok(())
+}
+
+fn write_pin_entries(
+    write_txn: &redb::WriteTransaction,
+    pinned_manifests: &[String],
+    pinned_chunks: &[String],
+) -> Result<()> {
+    let mut pins = write_txn.open_table(INDEX_PINS).map_err(index_error)?;
+    for manifest_ref in pinned_manifests {
+        pins.insert(pin_key("manifest", manifest_ref).as_str(), "manifest").map_err(index_error)?;
     }
-    let chunk_refs = chunk_entries.keys().cloned().collect::<Vec<_>>();
-    let receipt_value = receipt_value(ChunkStoreReceiptValueInput {
+    for chunk_ref in pinned_chunks {
+        pins.insert(pin_key("chunk", chunk_ref).as_str(), "chunk").map_err(index_error)?;
+    }
+    Ok(())
+}
+
+fn rebuild_receipt(inputs: &IndexInputs) -> IOValue {
+    let chunk_refs = inputs.chunk_entries.keys().cloned().collect::<Vec<_>>();
+    receipt_value(ChunkStoreReceiptValueInput {
         operation: "index-rebuild",
         decision: "pass",
         manifest_ref: None,
@@ -2632,18 +2687,11 @@ pub fn rebuild_index(root: &Path) -> Result<ChunkStoreIndexRebuild> {
             ("redb-index-pins", "pass"),
         ],
         details: vec![
-            record("manifests", vec![u64_value(manifest_entries.len() as u64)]),
-            record("chunks", vec![u64_value(chunk_entries.len() as u64)]),
-            record("manifest-pins", vec![u64_value(pinned_manifests.len() as u64)]),
-            record("chunk-pins", vec![u64_value(pinned_chunks.len() as u64)]),
+            record("manifests", vec![u64_value(inputs.manifest_entries.len() as u64)]),
+            record("chunks", vec![u64_value(inputs.chunk_entries.len() as u64)]),
+            record("manifest-pins", vec![u64_value(inputs.pinned_manifests.len() as u64)]),
+            record("chunk-pins", vec![u64_value(inputs.pinned_chunks.len() as u64)]),
         ],
-    });
-    store_receipt_in_tx(&write_txn, &receipt_value)?;
-    write_txn.commit().map_err(index_error)?;
-    drop(db);
-    Ok(ChunkStoreIndexRebuild {
-        status: index_status(root)?,
-        receipt_value,
     })
 }
 
