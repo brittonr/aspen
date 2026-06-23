@@ -3490,48 +3490,11 @@ pub fn job_worker_schedule_receipt_value(input: JobWorkerScheduleReceiptValueInp
     validate_non_empty(input.lease_key, "job worker schedule lease key")?;
     validate_non_empty(input.worker_session, "job worker schedule worker session")?;
     validate_ref(input.coordination_report_ref, "job worker schedule coordination report ref")?;
-    for (label, reference) in [
-        ("enqueue receipt", input.enqueue_receipt_ref),
-        ("enqueue duplicate receipt", input.enqueue_duplicate_receipt_ref),
-        ("dequeue receipt", input.dequeue_receipt_ref),
-        ("lease receipt", input.lease_receipt_ref),
-        ("release receipt", input.release_receipt_ref),
-        ("token", input.token_ref),
-        ("worker receipt", input.worker_receipt_ref),
-        ("result", input.result_ref),
-    ] {
-        if let Some(reference) = reference {
-            validate_ref(reference, &format!("job worker schedule {label} ref"))?;
-        }
-    }
+    validate_present_refs(&optional_refs(&input))?;
     validate_refs(input.refs, "job worker schedule refs")?;
     ensure_count_at_most(input.diagnostics.len(), MAX_JOB_REFS, "job worker schedule diagnostics")?;
-    let mut refs = vec![
-        input.job_ref.to_string(),
-        input.request_ref.to_string(),
-        input.coordination_report_ref.to_string(),
-    ];
-    for reference in [
-        input.enqueue_receipt_ref,
-        input.enqueue_duplicate_receipt_ref,
-        input.dequeue_receipt_ref,
-        input.lease_receipt_ref,
-        input.release_receipt_ref,
-        input.token_ref,
-        input.worker_receipt_ref,
-        input.result_ref,
-    ]
-    .into_iter()
-    .flatten()
-    {
-        push_bounded(&mut refs, reference.to_string(), MAX_JOB_REFS, "job worker schedule refs")?;
-    }
-    extend_cloned_bounded(&mut refs, input.refs, MAX_JOB_REFS, "job worker schedule refs")?;
-    let mut checks = input.checks.to_vec();
-    checks.push(("coordination-queue-bound", "pass"));
-    checks.push(("coordination-lease-bound", status(input.token_ref.is_some())));
-    checks.push(("transport-is-not-authority", "pass"));
-    checks.push(("canonical-receipt", "pass"));
+    let refs = collected_refs(&input)?;
+    let checks = checked_pairs(&input);
     Ok(record("job-worker-schedule-receipt-v1", vec![
         string(JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -3554,6 +3517,52 @@ pub fn job_worker_schedule_receipt_value(input: JobWorkerScheduleReceiptValueInp
         record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
+}
+
+fn optional_refs<'a>(input: &JobWorkerScheduleReceiptValueInput<'a>) -> [(&'static str, Option<&'a str>); 8] {
+    [
+        ("enqueue receipt", input.enqueue_receipt_ref),
+        ("enqueue duplicate receipt", input.enqueue_duplicate_receipt_ref),
+        ("dequeue receipt", input.dequeue_receipt_ref),
+        ("lease receipt", input.lease_receipt_ref),
+        ("release receipt", input.release_receipt_ref),
+        ("token", input.token_ref),
+        ("worker receipt", input.worker_receipt_ref),
+        ("result", input.result_ref),
+    ]
+}
+
+fn validate_present_refs(pairs: &[(&str, Option<&str>)]) -> Result<()> {
+    for (label, reference) in pairs {
+        if let Some(reference) = reference {
+            validate_ref(reference, &format!("job worker schedule {label} ref"))?;
+        }
+    }
+    Ok(())
+}
+
+fn collected_refs(input: &JobWorkerScheduleReceiptValueInput<'_>) -> Result<Vec<String>> {
+    let mut refs = vec![
+        input.job_ref.to_string(),
+        input.request_ref.to_string(),
+        input.coordination_report_ref.to_string(),
+    ];
+    for (_, reference) in optional_refs(input) {
+        if let Some(reference) = reference {
+            push_bounded(&mut refs, reference.to_string(), MAX_JOB_REFS, "job worker schedule refs")?;
+        }
+    }
+    extend_cloned_bounded(&mut refs, input.refs, MAX_JOB_REFS, "job worker schedule refs")?;
+    Ok(refs)
+}
+
+fn checked_pairs<'a>(input: &JobWorkerScheduleReceiptValueInput<'a>) -> Vec<(&'a str, &'a str)> {
+    let mut checks = input.checks.to_vec();
+    checks.push(("coordination-queue-bound", "pass"));
+    checks.push(("coordination-lease-bound", status(input.token_ref.is_some())));
+    checks.push(("transport-is-not-authority", "pass"));
+    checks.push(("canonical-receipt", "pass"));
+    checks
 }
 
 fn blob_ref_job_status_value(
