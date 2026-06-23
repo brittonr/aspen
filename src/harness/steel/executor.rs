@@ -50,28 +50,86 @@ pub fn execute_steel_actor_step(
         )));
     };
 
-    if config.source.len() > STEEL_MAX_SOURCE_BYTES {
+    let prepared = prepare_run(actor_id, &config.source, &config.callable, actor_input)?;
+    let operation = AdmissionRequest::from_step(step).action.as_str().to_string();
+    validate_hostcall_effect_binding_request(hostcall_request, &operation)?;
+    let execution = run_vm(actor_id, &config.callable, prepared.script, &operation, &config.allowed_hostcalls)?;
+    let source_ref = steel_source_ref(config)?;
+
+    Ok(Some(finish_value(FinishInput {
+        actor_id,
+        source_ref: &source_ref,
+        callable: &config.callable,
+        source_bytes: config.source.len() as u64,
+        operation: &operation,
+        actor_input,
+        input_text: &prepared.input_text,
+        output_text: &execution.output_text,
+        estimated_fuel: prepared.estimated_fuel,
+        hostcall_count: execution.hostcall_count,
+    })?))
+}
+
+struct Prepared {
+    input_text: String,
+    script: String,
+    estimated_fuel: u64,
+}
+
+struct Execution {
+    output_text: String,
+    hostcall_count: u64,
+}
+
+struct FinishInput<'a> {
+    actor_id: &'a str,
+    source_ref: &'a str,
+    callable: &'a str,
+    source_bytes: u64,
+    operation: &'a str,
+    actor_input: &'a IOValue,
+    input_text: &'a str,
+    output_text: &'a str,
+    estimated_fuel: u64,
+    hostcall_count: u64,
+}
+
+fn prepare_run(actor_id: &str, source: &str, callable: &str, actor_input: &IOValue) -> Result<Prepared> {
+    if source.len() > STEEL_MAX_SOURCE_BYTES {
         return Err(MoltenError::invalid_harness(format!(
             "Steel executor source for actor {actor_id} exceeds deterministic resource limit"
         )));
     }
-    validate_steel_resource_shape(actor_id, &config.callable, &config.source)?;
+    validate_steel_resource_shape(actor_id, callable, source)?;
     let input_text = to_text(actor_input)?;
     if input_text.len() > STEEL_MAX_INPUT_BYTES {
         return Err(MoltenError::invalid_harness(format!(
             "Steel executor input for actor {actor_id} exceeds deterministic resource limit"
         )));
     }
-    let script = format!("{}\n({} \"{}\")", config.source, config.callable, escape_steel_string(&input_text));
-    let estimated_fuel = estimate_steel_fuel(&config.source, &input_text);
+    let script = format!("{}\n({} \"{}\")", source, callable, escape_steel_string(&input_text));
+    let estimated_fuel = estimate_steel_fuel(source, &input_text);
     if estimated_fuel > STEEL_FUEL_LIMIT {
         return Err(MoltenError::invalid_harness(format!(
             "Steel executor estimated fuel for actor {actor_id} exceeds deterministic resource limit"
         )));
     }
-    let allowed_hostcalls = config.allowed_hostcalls.clone();
-    let expected_operation = AdmissionRequest::from_step(step).action.as_str().to_string();
-    validate_hostcall_effect_binding_request(hostcall_request, &expected_operation)?;
+    Ok(Prepared {
+        input_text,
+        script,
+        estimated_fuel,
+    })
+}
+
+fn run_vm(
+    actor_id: &str,
+    callable: &str,
+    script: String,
+    expected_operation: &str,
+    allowed_hostcalls: &[String],
+) -> Result<Execution> {
+    let expected_operation = expected_operation.to_string();
+    let allowed_hostcalls = allowed_hostcalls.to_vec();
     let hostcall_counter = Arc::new(AtomicU64::new(0));
     let hostcall_counter_for_vm = Arc::clone(&hostcall_counter);
     let mut engine = Engine::new();
@@ -85,8 +143,7 @@ pub fn execute_steel_actor_step(
     });
     let values = engine.run(script).map_err(|error| {
         MoltenError::invalid_harness(format!(
-            "Steel executor actor {actor_id} callable {} failed in reviewed VM: {error}",
-            config.callable
+            "Steel executor actor {actor_id} callable {callable} failed in reviewed VM: {error}"
         ))
     })?;
     let output_text = values.last().map_or_else(|| "#<void>".to_string(), ToString::to_string);
@@ -101,31 +158,36 @@ pub fn execute_steel_actor_step(
             "Steel executor hostcall count for actor {actor_id} exceeds deterministic resource limit"
         )));
     }
-    let output_value = string(&output_text);
-    let input_ref = canonical_hash(actor_input)?;
-    let output_ref = canonical_hash(&output_value)?;
-    let source_ref = steel_source_ref(config)?;
-    let operation = AdmissionRequest::from_step(step).action.as_str().to_string();
-    let hostcalls = vec![operation.clone()];
+    Ok(Execution {
+        output_text,
+        hostcall_count,
+    })
+}
 
-    Ok(Some(steel_execution_receipt_value(SteelExecutionReceiptInput {
-        actor_id,
-        source_ref: &source_ref,
-        callable: &config.callable,
-        operation: &operation,
+fn finish_value(input: FinishInput<'_>) -> Result<IOValue> {
+    let output_value = string(input.output_text);
+    let input_ref = canonical_hash(input.actor_input)?;
+    let output_ref = canonical_hash(&output_value)?;
+    let hostcalls = vec![input.operation.to_string()];
+
+    Ok(steel_execution_receipt_value(SteelExecutionReceiptInput {
+        actor_id: input.actor_id,
+        source_ref: input.source_ref,
+        callable: input.callable,
+        operation: input.operation,
         input_ref: &input_ref,
         output_ref: &output_ref,
         hostcalls: &hostcalls,
         resource_limits: SteelResourceReceiptInput {
             fuel_limit: STEEL_FUEL_LIMIT,
-            fuel_remaining: STEEL_FUEL_LIMIT.saturating_sub(estimated_fuel),
-            source_bytes: config.source.len() as u64,
-            input_bytes: input_text.len() as u64,
-            output_bytes: output_text.len() as u64,
+            fuel_remaining: STEEL_FUEL_LIMIT.saturating_sub(input.estimated_fuel),
+            source_bytes: input.source_bytes,
+            input_bytes: input.input_text.len() as u64,
+            output_bytes: input.output_text.len() as u64,
             hostcall_limit: STEEL_MAX_HOSTCALLS,
-            hostcall_count,
+            hostcall_count: input.hostcall_count,
         },
-    })))
+    }))
 }
 
 fn validate_steel_resource_shape(actor_id: &str, callable: &str, source: &str) -> Result<()> {

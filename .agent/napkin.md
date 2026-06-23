@@ -218,6 +218,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet Steel executor split: extracting `src/harness/steel/executor.rs::execute_steel_actor_step` into neutral same-file `Prepared`/`Execution`/`FinishInput` plus `prepare_run`/`run_vm`/`finish_value` lowered the no-disabled probe from 7151 to 7149 by clearing two `function_length` findings without adding path/import/file debt. Validation passed `cargo fmt`, focused `cargo test steel_executor`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-steel-executor-split-0`.
+
 - 2026-06-23 Octet effects compound artifact test split: extracting `src/effects/mod.rs::compound_dynamic_attenuation_and_cleanup_artifacts_parse` into neutral same-file `Seed`/`Bundle` plus `seed`/`parent`/`child`/`check_*` helpers lowered the no-disabled probe from 7152 to 7151 by clearing one `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test compound_dynamic_attenuation_and_cleanup_artifacts_parse`, and probe `target/octet-burndown/probe-effects-compound-split-0`.
 
 - 2026-06-23 Octet effects local/production case split: extracting `src/effects/mod.rs::dataspace_blob_and_storage_handlers_bind_local_and_production_operations` into neutral same-file `Case`/`Material` plus `material_for`/`assert_profile`/`handle_for`/`assert_operations` helpers lowered the no-disabled probe from 7153 to 7152 by clearing one `function_length` finding while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test dataspace_blob_and_storage_handlers_bind_local_and_production_operations`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-effects-dataspace-case-0`.
