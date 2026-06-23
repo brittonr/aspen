@@ -3549,75 +3549,112 @@ fn run_retention_gc_workflow(input: RetentionDogfoodInput<'_>) -> Result<Retenti
     let peer_ref = dogfood_ref("retention-peer")?;
     let remote_ref = dogfood_ref("retention-remote-cache")?;
     let remote_refs = vec![remote_ref.clone()];
-    let object_kind = "chunk";
-    let retention_class = retention::CLASS_DURABLE_VALUE;
-    let action = retention::ACTION_DELETE;
-    let policy = store_retention_admission_fixture(RetentionAdmissionFixtureInput {
+    let seed = GcSeed {
         root: input.root,
-        kind: retention::ADMISSION_KIND_POLICY,
-        label: "policy",
-        requester_ref: &requester_ref,
         object_ref: &object_ref,
-        object_kind,
-        retention_class,
-        action,
-        remote_refs: &[],
-    })?;
-    let authority = store_retention_admission_fixture(RetentionAdmissionFixtureInput {
-        root: input.root,
-        kind: retention::ADMISSION_KIND_AUTHORITY,
-        label: "authority",
         requester_ref: &requester_ref,
-        object_ref: &object_ref,
-        object_kind,
-        retention_class,
-        action,
-        remote_refs: &[],
-    })?;
-    let support = store_retention_admission_fixture(RetentionAdmissionFixtureInput {
-        root: input.root,
-        kind: retention::ADMISSION_KIND_SUPPORTING_EVIDENCE,
-        label: "support",
-        requester_ref: &requester_ref,
-        object_ref: &object_ref,
-        object_kind,
-        retention_class,
-        action,
-        remote_refs: &[],
-    })?;
-    let index = store_retention_admission_fixture(RetentionAdmissionFixtureInput {
-        root: input.root,
-        kind: retention::ADMISSION_KIND_REFERENCE_INDEX,
-        label: "index",
-        requester_ref: &requester_ref,
-        object_ref: &object_ref,
-        object_kind,
-        retention_class,
-        action,
-        remote_refs: &[],
-    })?;
-    let remote_gc = store_retention_admission_fixture(RetentionAdmissionFixtureInput {
-        root: input.root,
-        kind: retention::ADMISSION_KIND_REMOTE_GC,
-        label: "remote-gc",
-        requester_ref: &requester_ref,
-        object_ref: &object_ref,
-        object_kind,
-        retention_class,
-        action,
+        peer_ref: &peer_ref,
+        remote_ref: &remote_ref,
         remote_refs: &remote_refs,
-    })?;
+        object_kind: "chunk",
+        class: retention::CLASS_DURABLE_VALUE,
+        action: retention::ACTION_DELETE,
+    };
+    let admissions = gc_admissions(seed)?;
+    let flow = gc_flow(input, seed, &admissions.evidence)?;
+    let ledger_import_refs = import_gc_values(input.ledger_root, &admissions, &flow)?;
+    let (mcp_call, catalog_receipt_ref) = gc_catalog(input.registry_root, input.ledger_root, seed.object_ref)?;
+    let bundle_diagnostics = gc_bundle_diagnostics(&flow)?;
+    let artifact_refs = gc_artifact_refs(&admissions, &flow, &mcp_call.response_ref, ledger_import_refs);
+    Ok(finish_gc_run(GcFinishInput {
+        object_ref,
+        flow,
+        mcp_call,
+        catalog_receipt_ref,
+        artifact_refs,
+        bundle_diagnostics,
+    }))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct GcSeed<'a> {
+    root: &'a Path,
+    object_ref: &'a str,
+    requester_ref: &'a str,
+    peer_ref: &'a str,
+    remote_ref: &'a str,
+    remote_refs: &'a [String],
+    object_kind: &'a str,
+    class: &'a str,
+    action: &'a str,
+}
+
+struct GcAdmissions {
+    policy: retention::RetentionEvidenceAdmission,
+    authority: retention::RetentionEvidenceAdmission,
+    support: retention::RetentionEvidenceAdmission,
+    index: retention::RetentionEvidenceAdmission,
+    remote_gc: retention::RetentionEvidenceAdmission,
+    clearance: retention::RetentionRemoteGcClearance,
+    evidence: retention::DestructiveRetentionEvidence,
+}
+
+struct GcFlow {
+    plan: retention::RetentionGcPlan,
+    apply: retention::RetentionGcApply,
+    execution: retention::RetentionGcExecutionGate,
+    audit: retention::RetentionGcAudit,
+    explain: retention::RetentionCandidateExplain,
+    bundle: retention::RetentionCandidateBundle,
+    profile: retention::RetentionCandidateBundleProfile,
+    verify: retention::RetentionCandidateBundleVerify,
+}
+
+struct GcFinishInput {
+    object_ref: String,
+    flow: GcFlow,
+    mcp_call: catalog_mcp::CatalogMcpCall,
+    catalog_receipt_ref: String,
+    artifact_refs: Vec<String>,
+    bundle_diagnostics: Vec<String>,
+}
+
+fn store_gc_fixture(
+    seed: GcSeed<'_>,
+    kind: &str,
+    label: &str,
+    remote_refs: &[String],
+) -> Result<retention::RetentionEvidenceAdmission> {
+    store_retention_admission_fixture(RetentionAdmissionFixtureInput {
+        root: seed.root,
+        kind,
+        label,
+        requester_ref: seed.requester_ref,
+        object_ref: seed.object_ref,
+        object_kind: seed.object_kind,
+        retention_class: seed.class,
+        action: seed.action,
+        remote_refs,
+    })
+}
+
+fn gc_admissions(seed: GcSeed<'_>) -> Result<GcAdmissions> {
+    let policy = store_gc_fixture(seed, retention::ADMISSION_KIND_POLICY, "policy", &[])?;
+    let authority = store_gc_fixture(seed, retention::ADMISSION_KIND_AUTHORITY, "authority", &[])?;
+    let support = store_gc_fixture(seed, retention::ADMISSION_KIND_SUPPORTING_EVIDENCE, "support", &[])?;
+    let index = store_gc_fixture(seed, retention::ADMISSION_KIND_REFERENCE_INDEX, "index", &[])?;
+    let remote_gc = store_gc_fixture(seed, retention::ADMISSION_KIND_REMOTE_GC, "remote-gc", seed.remote_refs)?;
     let clearance_evidence = vec![support.admission_ref.clone()];
     let clearance =
-        retention::store_retention_remote_gc_clearance(input.root, &retention::RetentionRemoteGcClearanceInput {
+        retention::store_retention_remote_gc_clearance(seed.root, &retention::RetentionRemoteGcClearanceInput {
             decision: "pass",
-            requester_ref: &requester_ref,
-            peer_ref: &peer_ref,
-            object_ref: &object_ref,
-            object_kind,
-            retention_class,
-            action,
-            remote_ref: &remote_ref,
+            requester_ref: seed.requester_ref,
+            peer_ref: seed.peer_ref,
+            object_ref: seed.object_ref,
+            object_kind: seed.object_kind,
+            retention_class: seed.class,
+            action: seed.action,
+            remote_ref: seed.remote_ref,
             policy_ref: &policy.admission_ref,
             authority_ref: &authority.admission_ref,
             evidence_refs: &clearance_evidence,
@@ -3627,26 +3664,42 @@ fn run_retention_gc_workflow(input: RetentionDogfoodInput<'_>) -> Result<Retenti
             diagnostics: &[],
         })?;
     let evidence = retention::DestructiveRetentionEvidence {
-        requester_ref: Some(requester_ref),
+        requester_ref: Some(seed.requester_ref.to_string()),
         policy_refs: vec![policy.admission_ref.clone()],
         authority_refs: vec![authority.admission_ref.clone()],
         evidence_refs: vec![support.admission_ref.clone()],
         retained_refs: Vec::new(),
-        remote_peer_refs: vec![peer_ref],
-        remote_refs,
+        remote_peer_refs: vec![seed.peer_ref.to_string()],
+        remote_refs: seed.remote_refs.to_vec(),
         reference_index_refs: vec![index.admission_ref.clone()],
         remote_gc_refs: vec![remote_gc.admission_ref.clone()],
         remote_clearance_refs: vec![clearance.clearance_ref.clone()],
         is_reference_index_complete: true,
     };
+    Ok(GcAdmissions {
+        policy,
+        authority,
+        support,
+        index,
+        remote_gc,
+        clearance,
+        evidence,
+    })
+}
+
+fn gc_flow(
+    input: RetentionDogfoodInput<'_>,
+    seed: GcSeed<'_>,
+    evidence: &retention::DestructiveRetentionEvidence,
+) -> Result<GcFlow> {
     let plan = retention::store_retention_gc_plan(retention::RetentionGcPlanInput {
         root: input.root,
         subsystem: "ledger-gc",
-        object_ref: &object_ref,
-        object_kind,
-        retention_class,
-        action,
-        evidence: &evidence,
+        object_ref: seed.object_ref,
+        object_kind: seed.object_kind,
+        retention_class: seed.class,
+        action: seed.action,
+        evidence,
     })?;
     let apply = retention::apply_retention_gc_plan(retention::RetentionGcApplyFromPlanInput {
         root: input.root,
@@ -3655,10 +3708,10 @@ fn run_retention_gc_workflow(input: RetentionDogfoodInput<'_>) -> Result<Retenti
     let execution = retention::store_retention_gc_execution_gate(retention::RetentionGcExecutionGateInput {
         root: input.root,
         subsystem: "ledger-gc",
-        action,
-        object_ref: &object_ref,
-        object_kind,
-        retention_class,
+        action: seed.action,
+        object_ref: seed.object_ref,
+        object_kind: seed.object_kind,
+        retention_class: seed.class,
         apply_ref: Some(&apply.apply_ref),
     })?;
     let audit = retention::audit_retention_gc_execution(retention::RetentionGcAuditInput {
@@ -3667,10 +3720,10 @@ fn run_retention_gc_workflow(input: RetentionDogfoodInput<'_>) -> Result<Retenti
     })?;
     let explain = retention::explain_retention_candidate(retention::RetentionCandidateExplainInput {
         root: input.root,
-        object_ref: &object_ref,
-        object_kind: Some(object_kind),
-        retention_class: Some(retention_class),
-        action: Some(action),
+        object_ref: seed.object_ref,
+        object_kind: Some(seed.object_kind),
+        retention_class: Some(seed.class),
+        action: Some(seed.action),
         subsystem: Some("ledger-gc"),
     })?;
     let bundle = retention::export_retention_candidate_bundle(retention::RetentionCandidateBundleExportInput {
@@ -3685,60 +3738,116 @@ fn run_retention_gc_workflow(input: RetentionDogfoodInput<'_>) -> Result<Retenti
     let verify = retention::verify_retention_candidate_bundle(retention::RetentionCandidateBundleVerifyInput {
         bundle_dir: input.bundle_dir,
     })?;
-    let mut ledger_import_refs = Vec::new();
+    Ok(GcFlow {
+        plan,
+        apply,
+        execution,
+        audit,
+        explain,
+        bundle,
+        profile,
+        verify,
+    })
+}
+
+fn import_gc_values(root: &Path, admissions: &GcAdmissions, flow: &GcFlow) -> Result<Vec<String>> {
+    let mut refs = Vec::new();
     for value in [
-        &policy.value,
-        &authority.value,
-        &support.value,
-        &index.value,
-        &remote_gc.value,
-        &clearance.value,
-        &plan.value,
-        &apply.value,
-        &execution.value,
-        &audit.value,
-        &explain.value,
-        &bundle.value,
-        &profile.value,
-        &verify.value,
+        &admissions.policy.value,
+        &admissions.authority.value,
+        &admissions.support.value,
+        &admissions.index.value,
+        &admissions.remote_gc.value,
+        &admissions.clearance.value,
+        &flow.plan.value,
+        &flow.apply.value,
+        &flow.execution.value,
+        &flow.audit.value,
+        &flow.explain.value,
+        &flow.bundle.value,
+        &flow.profile.value,
+        &flow.verify.value,
     ] {
-        let imported = ledger::import_artifact(input.ledger_root, value)?;
-        ledger_import_refs.push_limited_value(
+        let imported = ledger::import_artifact(root, value)?;
+        refs.push_limited_value(
             canonical_hash(&imported.receipt_value)?,
             MAX_OPERATOR_REFS,
             "retention dogfood ledger imports",
         )?;
     }
+    Ok(refs)
+}
+
+fn gc_catalog(
+    registry_root: &Path,
+    ledger_root: &Path,
+    object_ref: &str,
+) -> Result<(catalog_mcp::CatalogMcpCall, String)> {
     let mcp_request = catalog_mcp::mcp_request_value("search_retention_gc", vec![
         record("stage", vec![string("audit")]),
-        record("object-ref", vec![string(&object_ref)]),
+        record("object-ref", vec![string(object_ref)]),
         record("subsystem", vec![string("ledger-gc")]),
     ])?;
-    let mcp_call = catalog_mcp::call(input.registry_root, Some(input.ledger_root), &mcp_request)?;
+    let mcp_call = catalog_mcp::call(registry_root, Some(ledger_root), &mcp_request)?;
     let catalog_receipt_ref = canonical_hash(&mcp_call.receipt_value)?;
-    let mut bundle_diagnostics = Vec::new();
-    append_dogfood_diagnostics(&mut bundle_diagnostics, "retention-bundle", &bundle.diagnostics)?;
-    append_dogfood_diagnostics(&mut bundle_diagnostics, "retention-bundle-profile", &profile.diagnostics)?;
-    append_dogfood_diagnostics(&mut bundle_diagnostics, "retention-bundle-verify", &verify.diagnostics)?;
-    let mut artifact_refs = vec![
-        policy.admission_ref,
-        authority.admission_ref,
-        support.admission_ref,
-        index.admission_ref,
-        remote_gc.admission_ref,
-        clearance.clearance_ref,
-        plan.plan_ref.clone(),
-        apply.apply_ref.clone(),
-        execution.execution_ref.clone(),
-        audit.audit_ref.clone(),
-        explain.explain_ref.clone(),
-        bundle.bundle_ref.clone(),
-        profile.profile_ref.clone(),
-        verify.verify_ref.clone(),
-        mcp_call.response_ref.clone(),
+    Ok((mcp_call, catalog_receipt_ref))
+}
+
+fn gc_bundle_diagnostics(flow: &GcFlow) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    append_dogfood_diagnostics(&mut diagnostics, "retention-bundle", &flow.bundle.diagnostics)?;
+    append_dogfood_diagnostics(&mut diagnostics, "retention-bundle-profile", &flow.profile.diagnostics)?;
+    append_dogfood_diagnostics(&mut diagnostics, "retention-bundle-verify", &flow.verify.diagnostics)?;
+    Ok(diagnostics)
+}
+
+fn gc_artifact_refs(
+    admissions: &GcAdmissions,
+    flow: &GcFlow,
+    response_ref: &str,
+    ledger_import_refs: Vec<String>,
+) -> Vec<String> {
+    let mut refs = vec![
+        admissions.policy.admission_ref.clone(),
+        admissions.authority.admission_ref.clone(),
+        admissions.support.admission_ref.clone(),
+        admissions.index.admission_ref.clone(),
+        admissions.remote_gc.admission_ref.clone(),
+        admissions.clearance.clearance_ref.clone(),
+        flow.plan.plan_ref.clone(),
+        flow.apply.apply_ref.clone(),
+        flow.execution.execution_ref.clone(),
+        flow.audit.audit_ref.clone(),
+        flow.explain.explain_ref.clone(),
+        flow.bundle.bundle_ref.clone(),
+        flow.profile.profile_ref.clone(),
+        flow.verify.verify_ref.clone(),
+        response_ref.to_string(),
     ];
-    artifact_refs.extend(ledger_import_refs);
-    Ok(RetentionDogfoodRun {
+    refs.extend(ledger_import_refs);
+    refs
+}
+
+fn finish_gc_run(input: GcFinishInput) -> RetentionDogfoodRun {
+    let GcFinishInput {
+        object_ref,
+        flow,
+        mcp_call,
+        catalog_receipt_ref,
+        artifact_refs,
+        bundle_diagnostics,
+    } = input;
+    let GcFlow {
+        plan,
+        apply,
+        execution,
+        audit,
+        explain,
+        bundle,
+        profile,
+        verify,
+    } = flow;
+    RetentionDogfoodRun {
         object_ref,
         plan_ref: plan.plan_ref,
         plan_decision: plan.decision,
@@ -3763,7 +3872,7 @@ fn run_retention_gc_workflow(input: RetentionDogfoodInput<'_>) -> Result<Retenti
         catalog_response_ref: mcp_call.response_ref,
         catalog_decision: mcp_call.decision,
         artifact_refs,
-    })
+    }
 }
 
 fn store_retention_admission_fixture(
