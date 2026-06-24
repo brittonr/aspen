@@ -170,7 +170,7 @@ pub fn list(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogLis
         validate_non_empty(kind, "catalog list kind")?;
     }
     let filters = input.kind.as_ref().map(|kind| vec![CatalogFilter::ArtifactKind(kind.clone())]).unwrap_or_default();
-    let query_value = catalog_query_value(&CatalogQueryValueInput {
+    let query_value = build_query_value(&QueryValueInput {
         operation: "list",
         root_refs: &[],
         include_dependencies: true,
@@ -198,7 +198,7 @@ pub fn search(
     validate_visibility(&input.visibility)?;
     validate_refs(&input.root_refs, "catalog search root ref")?;
     validate_filters(&input.filters)?;
-    let query_value = catalog_query_value(&CatalogQueryValueInput {
+    let query_value = build_query_value(&QueryValueInput {
         operation: "search",
         root_refs: &input.root_refs,
         include_dependencies: input.include_dependencies,
@@ -225,7 +225,7 @@ pub fn search(
 pub fn view(registry_root: &Path, ledger_root: Option<&Path>, input: &CatalogViewInput) -> Result<CatalogQueryResult> {
     validate_visibility(&input.visibility)?;
     let full_ref = resolve_reference(registry_root, ledger_root, &input.reference, &input.visibility)?;
-    let query_value = catalog_query_value(&CatalogQueryValueInput {
+    let query_value = build_query_value(&QueryValueInput {
         operation: "view",
         root_refs: std::slice::from_ref(&full_ref),
         include_dependencies: false,
@@ -288,7 +288,7 @@ pub fn receipts(
 ) -> Result<CatalogQueryResult> {
     validate_visibility(&input.visibility)?;
     let full_ref = resolve_reference(registry_root, ledger_root, &input.reference, &input.visibility)?;
-    let query_value = catalog_query_value(&CatalogQueryValueInput {
+    let query_value = build_query_value(&QueryValueInput {
         operation: "receipts",
         root_refs: std::slice::from_ref(&full_ref),
         include_dependencies: false,
@@ -326,7 +326,7 @@ pub fn chunk_store(chunk_root: &Path, input: &CatalogChunkStoreInput) -> Result<
         MAX_CATALOG_ITEMS,
         "chunk catalog items",
     )?;
-    let query_value = catalog_query_value(&CatalogQueryValueInput {
+    let query_value = build_query_value(&QueryValueInput {
         operation: "chunk-store",
         root_refs: &scan.visible_manifest_refs,
         include_dependencies: false,
@@ -499,7 +499,7 @@ pub fn resolve_short_id(
 ) -> Result<CatalogShortIdResolution> {
     validate_visibility(&input.visibility)?;
     validate_non_empty(&input.prefix, "catalog short id prefix")?;
-    let query_value = catalog_query_value(&CatalogQueryValueInput {
+    let query_value = build_query_value(&QueryValueInput {
         operation: "short-id",
         root_refs: &[],
         include_dependencies: false,
@@ -644,7 +644,7 @@ fn short_id_receipt_value(
     refs: &[String],
     outcome: &ShortIdOutcome,
 ) -> Result<IOValue> {
-    catalog_receipt_value(&CatalogReceiptValueInput {
+    build_receipt_value(&ReceiptValueInput {
         operation: "short-id",
         decision: &outcome.decision,
         query_ref,
@@ -718,7 +718,7 @@ fn graph_query(
 ) -> Result<CatalogQueryResult> {
     validate_visibility(&input.visibility)?;
     let full_ref = resolve_reference(registry_root, ledger_root, &input.reference, &input.visibility)?;
-    let query_value = catalog_query_value(&CatalogQueryValueInput {
+    let query_value = build_query_value(&QueryValueInput {
         operation,
         root_refs: std::slice::from_ref(&full_ref),
         include_dependencies: operation == "deps" && input.transitive,
@@ -883,7 +883,7 @@ fn registry_summary(
             "catalog classifications",
         )?;
     }
-    let value = catalog_summary_value(&CatalogSummaryValueInput {
+    let value = build_summary_value(&SummaryValueInput {
         artifact_ref: &artifact.artifact_ref,
         artifact_kind: &artifact.kind,
         payload_ref: &payload_ref,
@@ -936,7 +936,7 @@ fn ledger_summary(
             push_bounded(&mut name_refs, pointer.pointer_ref, MAX_CATALOG_REFS, "catalog name refs")?;
         }
     }
-    let value = catalog_summary_value(&CatalogSummaryValueInput {
+    let value = build_summary_value(&SummaryValueInput {
         artifact_ref,
         artifact_kind: &kind,
         payload_ref: artifact_ref,
@@ -1834,7 +1834,7 @@ fn finish_query(
     for item in &items {
         push_bounded(&mut refs, canonical_hash(item)?, MAX_CATALOG_REFS, "catalog receipt refs")?;
     }
-    let receipt_value = catalog_receipt_value(&CatalogReceiptValueInput {
+    let receipt_value = build_receipt_value(&ReceiptValueInput {
         operation,
         decision,
         query_ref: &query_ref,
@@ -1858,7 +1858,7 @@ fn finish_query(
     })
 }
 
-struct CatalogSummaryValueInput<'a> {
+struct SummaryValueInput<'a> {
     artifact_ref: &'a str,
     artifact_kind: &'a str,
     payload_ref: &'a str,
@@ -1874,7 +1874,7 @@ struct CatalogSummaryValueInput<'a> {
     redaction_profile_ref: Option<&'a str>,
 }
 
-struct CatalogQueryValueInput<'a> {
+struct QueryValueInput<'a> {
     operation: &'a str,
     root_refs: &'a [String],
     include_dependencies: bool,
@@ -1885,7 +1885,7 @@ struct CatalogQueryValueInput<'a> {
     include_payload: bool,
 }
 
-struct CatalogReceiptValueInput<'a> {
+struct ReceiptValueInput<'a> {
     operation: &'a str,
     decision: &'a str,
     query_ref: &'a str,
@@ -1895,7 +1895,7 @@ struct CatalogReceiptValueInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-fn catalog_summary_value(input: &CatalogSummaryValueInput<'_>) -> Result<IOValue> {
+fn build_summary_value(input: &SummaryValueInput<'_>) -> Result<IOValue> {
     validate_ref(input.artifact_ref, "catalog artifact ref")?;
     validate_non_empty(input.artifact_kind, "catalog artifact kind")?;
     validate_ref(input.payload_ref, "catalog payload ref")?;
@@ -1957,7 +1957,7 @@ fn catalog_view_value(
     ]))
 }
 
-fn catalog_query_value(input: &CatalogQueryValueInput<'_>) -> Result<IOValue> {
+fn build_query_value(input: &QueryValueInput<'_>) -> Result<IOValue> {
     validate_non_empty(input.operation, "catalog operation")?;
     validate_refs(input.root_refs, "catalog query root ref")?;
     validate_filters(input.filters)?;
@@ -2008,7 +2008,7 @@ fn catalog_result_value(
     ]))
 }
 
-fn catalog_receipt_value(input: &CatalogReceiptValueInput<'_>) -> Result<IOValue> {
+fn build_receipt_value(input: &ReceiptValueInput<'_>) -> Result<IOValue> {
     validate_non_empty(input.operation, "catalog receipt operation")?;
     validate_decision(input.decision)?;
     validate_ref(input.query_ref, "catalog receipt query ref")?;
