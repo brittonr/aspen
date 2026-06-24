@@ -3439,119 +3439,167 @@ pub fn parse_node_control_live_workflow_bundle(value: &IOValue) -> Result<NodeCo
     })
 }
 
+struct AckParts {
+    apply_receipt_ref: String,
+    send_receipt_ref: Option<String>,
+    ingress_receipt_ref: Option<String>,
+    queue_receipt_ref: Option<String>,
+    control_receipt_ref: Option<String>,
+    reconcile_receipt_ref: String,
+    bundle_ref: String,
+    envelope_ref: Option<String>,
+    operation_ref: Option<String>,
+    request_ref: Option<String>,
+    receiver_decision: String,
+    receiver_diagnostics: Vec<String>,
+    diagnostics: Vec<String>,
+    apply_receipt_value: IOValue,
+    send_receipt_value: Option<IOValue>,
+    ingress_receipt_value: Option<IOValue>,
+    queue_receipt_value: Option<IOValue>,
+    control_receipt_value: Option<IOValue>,
+    reconcile_receipt_value: IOValue,
+}
+
+impl AckParts {
+    fn into_ack(self, value: &IOValue) -> Result<NodeControlLiveWorkflowBundleAck> {
+        Ok(NodeControlLiveWorkflowBundleAck {
+            ack_ref: canonical_hash(value)?,
+            ack_value: value.clone(),
+            apply_receipt_ref: self.apply_receipt_ref,
+            send_receipt_ref: self.send_receipt_ref,
+            ingress_receipt_ref: self.ingress_receipt_ref,
+            queue_receipt_ref: self.queue_receipt_ref,
+            control_receipt_ref: self.control_receipt_ref,
+            reconcile_receipt_ref: self.reconcile_receipt_ref,
+            bundle_ref: self.bundle_ref,
+            envelope_ref: self.envelope_ref,
+            operation_ref: self.operation_ref,
+            request_ref: self.request_ref,
+            receiver_decision: self.receiver_decision,
+            receiver_diagnostics: self.receiver_diagnostics,
+            diagnostics: self.diagnostics,
+            apply_receipt_value: self.apply_receipt_value,
+            send_receipt_value: self.send_receipt_value,
+            ingress_receipt_value: self.ingress_receipt_value,
+            queue_receipt_value: self.queue_receipt_value,
+            control_receipt_value: self.control_receipt_value,
+            reconcile_receipt_value: self.reconcile_receipt_value,
+        })
+    }
+}
+
+fn validate_ack_members(parts: &AckParts) -> Result<()> {
+    let apply = parse_node_control_live_workflow_bundle_apply_receipt(&parts.apply_receipt_value)?;
+    let reconcile = parse_node_control_live_workflow_bundle_reconcile_receipt(&parts.reconcile_receipt_value)?;
+    if let Some(value) = parts.send_receipt_value.as_ref() {
+        parse_node_control_live_send_receipt(value)?;
+    }
+    if let Some(value) = parts.ingress_receipt_value.as_ref() {
+        parse_node_control_ingress_receipt(value)?;
+    }
+    if let Some(value) = parts.queue_receipt_value.as_ref() {
+        parse_node_control_queue_receipt(value)?;
+    }
+    if let Some(value) = parts.control_receipt_value.as_ref() {
+        node_runtime::parse_node_control_receipt(value)?;
+    }
+    validate_member_ref(&apply.receipt_ref, &parts.apply_receipt_ref, "ack apply receipt")?;
+    validate_member_ref(&reconcile.receipt_ref, &parts.reconcile_receipt_ref, "ack reconcile receipt")?;
+    validate_optional_member_ref(
+        parts.send_receipt_value.as_ref(),
+        parts.send_receipt_ref.as_deref(),
+        "ack send receipt",
+    )?;
+    validate_optional_member_ref(
+        parts.ingress_receipt_value.as_ref(),
+        parts.ingress_receipt_ref.as_deref(),
+        "ack ingress receipt",
+    )?;
+    validate_optional_member_ref(
+        parts.queue_receipt_value.as_ref(),
+        parts.queue_receipt_ref.as_deref(),
+        "ack queue receipt",
+    )?;
+    validate_optional_member_ref(
+        parts.control_receipt_value.as_ref(),
+        parts.control_receipt_ref.as_deref(),
+        "ack control receipt",
+    )?;
+    validate_ack_reconcile(parts, &reconcile)
+}
+
+fn validate_ack_reconcile(parts: &AckParts, reconcile: &NodeControlLiveWorkflowBundleReconcileReceipt) -> Result<()> {
+    if reconcile.apply_receipt_ref != parts.apply_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack apply ref mismatch"));
+    }
+    if reconcile.bundle_ref != parts.bundle_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack bundle ref mismatch"));
+    }
+    if reconcile.send_receipt_ref != parts.send_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack send ref mismatch"));
+    }
+    if reconcile.ingress_receipt_ref != parts.ingress_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack ingress ref mismatch"));
+    }
+    if reconcile.queue_receipt_ref != parts.queue_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack queue ref mismatch"));
+    }
+    if reconcile.control_receipt_ref != parts.control_receipt_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack control ref mismatch"));
+    }
+    if reconcile.envelope_ref != parts.envelope_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack envelope ref mismatch"));
+    }
+    if reconcile.operation_ref != parts.operation_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack operation ref mismatch"));
+    }
+    if reconcile.request_ref != parts.request_ref {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack request ref mismatch"));
+    }
+    if reconcile.decision != parts.receiver_decision {
+        return Err(MoltenError::invalid_harness("node control live workflow bundle ack receiver decision mismatch"));
+    }
+    if reconcile.diagnostics != parts.receiver_diagnostics {
+        return Err(MoltenError::invalid_harness(
+            "node control live workflow bundle ack receiver diagnostics mismatch",
+        ));
+    }
+    Ok(())
+}
+
 pub fn parse_node_control_live_workflow_bundle_ack(value: &IOValue) -> Result<NodeControlLiveWorkflowBundleAck> {
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-ack-v1", Some(22))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-ack-v1 ...>"))?;
     require_schema(&fields[0], NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA, "node control live workflow bundle ack")?;
-    let apply_receipt_value = record_value(&fields[1], "apply-receipt")?;
-    let send_receipt_value = record_optional_value(&fields[2], "send-receipt")?;
-    let ingress_receipt_value = record_optional_value(&fields[3], "ingress-receipt")?;
-    let queue_receipt_value = record_optional_value(&fields[4], "queue-receipt")?;
-    let control_receipt_value = record_optional_value(&fields[5], "control-receipt")?;
-    let reconcile_receipt_value = record_value(&fields[6], "reconcile-receipt")?;
-    let apply_receipt_ref = record_ref_string(&fields[7], "apply-ref")?;
-    let send_receipt_ref = record_optional_ref_string(&fields[8], "send-ref")?;
-    let ingress_receipt_ref = record_optional_ref_string(&fields[9], "ingress-ref")?;
-    let queue_receipt_ref = record_optional_ref_string(&fields[10], "queue-ref")?;
-    let control_receipt_ref = record_optional_ref_string(&fields[11], "control-ref")?;
-    let reconcile_receipt_ref = record_ref_string(&fields[12], "reconcile-ref")?;
-    let bundle_ref = record_ref_string(&fields[13], "bundle")?;
-    let envelope_ref = record_optional_ref_string(&fields[14], "envelope")?;
-    let operation_ref = record_optional_ref_string(&fields[15], "operation")?;
-    let request_ref = record_optional_ref_string(&fields[16], "request")?;
     let receiver_decision = record_string(&fields[17], "receiver-decision")?;
     validate_decision(&receiver_decision)?;
-    let receiver_diagnostics = record_strings(&fields[18], "receiver-diagnostics")?;
-    let diagnostics = record_strings(&fields[19], "diagnostics")?;
     let _checks = record_sequence_len(&fields[20], "checks")?;
     let _member_refs = record_sequence_len(&fields[21], "member-refs")?;
-    let apply = parse_node_control_live_workflow_bundle_apply_receipt(&apply_receipt_value)?;
-    let reconcile = parse_node_control_live_workflow_bundle_reconcile_receipt(&reconcile_receipt_value)?;
-    if let Some(value) = send_receipt_value.as_ref() {
-        parse_node_control_live_send_receipt(value)?;
-    }
-    if let Some(value) = ingress_receipt_value.as_ref() {
-        parse_node_control_ingress_receipt(value)?;
-    }
-    if let Some(value) = queue_receipt_value.as_ref() {
-        parse_node_control_queue_receipt(value)?;
-    }
-    if let Some(value) = control_receipt_value.as_ref() {
-        node_runtime::parse_node_control_receipt(value)?;
-    }
-    validate_member_ref(&apply.receipt_ref, &apply_receipt_ref, "ack apply receipt")?;
-    validate_member_ref(&reconcile.receipt_ref, &reconcile_receipt_ref, "ack reconcile receipt")?;
-    validate_optional_member_ref(send_receipt_value.as_ref(), send_receipt_ref.as_deref(), "ack send receipt")?;
-    validate_optional_member_ref(
-        ingress_receipt_value.as_ref(),
-        ingress_receipt_ref.as_deref(),
-        "ack ingress receipt",
-    )?;
-    validate_optional_member_ref(queue_receipt_value.as_ref(), queue_receipt_ref.as_deref(), "ack queue receipt")?;
-    validate_optional_member_ref(
-        control_receipt_value.as_ref(),
-        control_receipt_ref.as_deref(),
-        "ack control receipt",
-    )?;
-    if reconcile.apply_receipt_ref != apply_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack apply ref mismatch"));
-    }
-    if reconcile.bundle_ref != bundle_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack bundle ref mismatch"));
-    }
-    if reconcile.send_receipt_ref != send_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack send ref mismatch"));
-    }
-    if reconcile.ingress_receipt_ref != ingress_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack ingress ref mismatch"));
-    }
-    if reconcile.queue_receipt_ref != queue_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack queue ref mismatch"));
-    }
-    if reconcile.control_receipt_ref != control_receipt_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack control ref mismatch"));
-    }
-    if reconcile.envelope_ref != envelope_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack envelope ref mismatch"));
-    }
-    if reconcile.operation_ref != operation_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack operation ref mismatch"));
-    }
-    if reconcile.request_ref != request_ref {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack request ref mismatch"));
-    }
-    if reconcile.decision != receiver_decision {
-        return Err(MoltenError::invalid_harness("node control live workflow bundle ack receiver decision mismatch"));
-    }
-    if reconcile.diagnostics != receiver_diagnostics {
-        return Err(MoltenError::invalid_harness(
-            "node control live workflow bundle ack receiver diagnostics mismatch",
-        ));
-    }
-    Ok(NodeControlLiveWorkflowBundleAck {
-        ack_ref: canonical_hash(value)?,
-        ack_value: value.clone(),
-        apply_receipt_ref,
-        send_receipt_ref,
-        ingress_receipt_ref,
-        queue_receipt_ref,
-        control_receipt_ref,
-        reconcile_receipt_ref,
-        bundle_ref,
-        envelope_ref,
-        operation_ref,
-        request_ref,
+    let parts = AckParts {
+        apply_receipt_value: record_value(&fields[1], "apply-receipt")?,
+        send_receipt_value: record_optional_value(&fields[2], "send-receipt")?,
+        ingress_receipt_value: record_optional_value(&fields[3], "ingress-receipt")?,
+        queue_receipt_value: record_optional_value(&fields[4], "queue-receipt")?,
+        control_receipt_value: record_optional_value(&fields[5], "control-receipt")?,
+        reconcile_receipt_value: record_value(&fields[6], "reconcile-receipt")?,
+        apply_receipt_ref: record_ref_string(&fields[7], "apply-ref")?,
+        send_receipt_ref: record_optional_ref_string(&fields[8], "send-ref")?,
+        ingress_receipt_ref: record_optional_ref_string(&fields[9], "ingress-ref")?,
+        queue_receipt_ref: record_optional_ref_string(&fields[10], "queue-ref")?,
+        control_receipt_ref: record_optional_ref_string(&fields[11], "control-ref")?,
+        reconcile_receipt_ref: record_ref_string(&fields[12], "reconcile-ref")?,
+        bundle_ref: record_ref_string(&fields[13], "bundle")?,
+        envelope_ref: record_optional_ref_string(&fields[14], "envelope")?,
+        operation_ref: record_optional_ref_string(&fields[15], "operation")?,
+        request_ref: record_optional_ref_string(&fields[16], "request")?,
         receiver_decision,
-        receiver_diagnostics,
-        diagnostics,
-        apply_receipt_value,
-        send_receipt_value,
-        ingress_receipt_value,
-        queue_receipt_value,
-        control_receipt_value,
-        reconcile_receipt_value,
-    })
+        receiver_diagnostics: record_strings(&fields[18], "receiver-diagnostics")?,
+        diagnostics: record_strings(&fields[19], "diagnostics")?,
+    };
+    validate_ack_members(&parts)?;
+    parts.into_ack(value)
 }
 
 pub fn import_node_control_live_workflow_bundle(
