@@ -2313,10 +2313,10 @@ pub fn build_chunk_lineage(root: &Path, manifest_ref: &str) -> Result<ChunkLinea
     }
 
     let chain = ChainScope::new("chunk-lineage", manifest.manifest_ref.clone(), manifest.root_ref.clone());
-    let producer = chunk_lineage_producer()?;
+    let producer = lineage_producer()?;
     let series = link_series(&manifest, &receipts, &chain, &producer)?;
     let evidence = pass_evidence(&chain, &manifest, &series.refs, &series.receipt_refs)?;
-    let value = chunk_lineage_value(&ChunkLineageValueInput {
+    let value = lineage_value(&LineageValueInput {
         manifest_ref: &manifest.manifest_ref,
         root_ref: &manifest.root_ref,
         link_values: &series.values,
@@ -2367,7 +2367,7 @@ fn link_series(
             ChainLinkInput::append(
                 previous,
                 payload,
-                chunk_lineage_context_refs(manifest, receipt)?,
+                lineage_context_refs(manifest, receipt)?,
                 producer.clone(),
                 trellis_input_ref,
             )
@@ -2375,7 +2375,7 @@ fn link_series(
             ChainLinkInput::genesis(
                 chain.clone(),
                 payload,
-                chunk_lineage_context_refs(manifest, receipt)?,
+                lineage_context_refs(manifest, receipt)?,
                 producer.clone(),
                 trellis_input_ref,
             )
@@ -2740,14 +2740,14 @@ fn lineage_operation_rank(operation: &str) -> (u8, &str) {
     (rank, operation)
 }
 
-fn chunk_lineage_producer() -> Result<ChainProducer> {
+fn lineage_producer() -> Result<ChainProducer> {
     Ok(ChainProducer::new(
         "molten-chunk-lineage",
         canonical_hash(&record("chunk-lineage-producer-key", vec![string("molten")]))?,
     ))
 }
 
-fn chunk_lineage_context_refs(manifest: &ChunkManifest, receipt: &ChunkStoreReceipt) -> Result<Vec<ChainContextRef>> {
+fn lineage_context_refs(manifest: &ChunkManifest, receipt: &ChunkStoreReceipt) -> Result<Vec<ChainContextRef>> {
     let mut refs = vec![
         ChainContextRef::new("manifest", manifest.manifest_ref.clone()),
         ChainContextRef::new("chunk-root", manifest.root_ref.clone()),
@@ -2889,7 +2889,7 @@ fn collect_detail_context_refs_push_child(input: DetailPushInput<'_>) -> Result<
     push_bounded(input.values, input.value, MAX_CHUNK_STORE_CONTEXT_REFS, "chunk lineage detail scan values")
 }
 
-struct ChunkLineageValueInput<'a> {
+struct LineageValueInput<'a> {
     manifest_ref: &'a str,
     root_ref: &'a str,
     link_values: &'a [IOValue],
@@ -2898,7 +2898,7 @@ struct ChunkLineageValueInput<'a> {
     predicate_values: &'a [IOValue],
 }
 
-fn chunk_lineage_value(input: &ChunkLineageValueInput<'_>) -> IOValue {
+fn lineage_value(input: &LineageValueInput<'_>) -> IOValue {
     record("chunk-lineage-v1", vec![
         string(CHUNK_LINEAGE_SCHEMA),
         record("manifest", vec![string(input.manifest_ref)]),
