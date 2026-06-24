@@ -3518,6 +3518,138 @@ fn read_retention_remote_gc_clearance(root: &Path, clearance_ref: &str) -> Resul
     parse_retention_remote_gc_clearance(&value)
 }
 
+fn admit_refs<'a>(
+    root: &'a Path,
+    refs: &'a [String],
+    expected_kind: &'a str,
+    scope: &'a AdmissionScope<'a>,
+    required_remote_refs: &'a [String],
+) -> Result<AdmissionRefsResult> {
+    admit_evidence_refs(AdmissionRefsInput {
+        root,
+        refs,
+        expected_kind,
+        scope,
+        required_remote_refs,
+    })
+}
+
+fn admit_clear_refs<'a>(
+    root: &'a Path,
+    evidence: &'a DestructiveRetentionEvidence,
+    scope: &'a AdmissionScope<'a>,
+) -> Result<RemoteClearanceRefsResult> {
+    admit_remote_clearance_refs(RemoteClearanceRefsInput {
+        root,
+        refs: &evidence.remote_clearance_refs,
+        scope,
+        required_remote_refs: &evidence.remote_refs,
+        required_peer_refs: &evidence.remote_peer_refs,
+        policy_refs: &evidence.policy_refs,
+        authority_refs: &evidence.authority_refs,
+    })
+}
+
+struct AdmitSet {
+    policy: AdmissionRefsResult,
+    authority: AdmissionRefsResult,
+    supporting: AdmissionRefsResult,
+    reference_index: AdmissionRefsResult,
+    remote_gc: AdmissionRefsResult,
+    remote_clearance: RemoteClearanceRefsResult,
+}
+
+struct AdmitFlags {
+    has_policy: bool,
+    has_authority: bool,
+    has_supporting: bool,
+    has_reference_index: bool,
+    has_remote_refs: bool,
+}
+
+fn admit_set<'a>(
+    root: &'a Path,
+    evidence: &'a DestructiveRetentionEvidence,
+    scope: &'a AdmissionScope<'a>,
+) -> Result<AdmitSet> {
+    Ok(AdmitSet {
+        policy: admit_refs(root, &evidence.policy_refs, ADMISSION_KIND_POLICY, scope, &[])?,
+        authority: admit_refs(root, &evidence.authority_refs, ADMISSION_KIND_AUTHORITY, scope, &[])?,
+        supporting: admit_refs(root, &evidence.evidence_refs, ADMISSION_KIND_SUPPORTING_EVIDENCE, scope, &[])?,
+        reference_index: admit_refs(root, &evidence.reference_index_refs, ADMISSION_KIND_REFERENCE_INDEX, scope, &[])?,
+        remote_gc: admit_refs(root, &evidence.remote_gc_refs, ADMISSION_KIND_REMOTE_GC, scope, &evidence.remote_refs)?,
+        remote_clearance: admit_clear_refs(root, evidence, scope)?,
+    })
+}
+
+fn has_required_remote_refs(
+    evidence: &DestructiveRetentionEvidence,
+    remote_gc: &AdmissionRefsResult,
+    remote_clearance: &RemoteClearanceRefsResult,
+) -> bool {
+    let has_local_remote_gc_plan = evidence.remote_refs.is_empty()
+        || evidence
+            .remote_refs
+            .iter()
+            .all(|reference| remote_gc.remote_refs.iter().any(|remote| remote == reference));
+    let has_remote_ref_clearance = evidence.remote_refs.is_empty()
+        || evidence
+            .remote_refs
+            .iter()
+            .all(|reference| remote_clearance.remote_refs.iter().any(|remote| remote == reference));
+    let has_remote_peer_clearance = evidence.remote_peer_refs.is_empty()
+        || evidence
+            .remote_peer_refs
+            .iter()
+            .all(|peer| remote_clearance.peer_refs.iter().any(|cleared_peer| cleared_peer == peer));
+    has_local_remote_gc_plan && has_remote_ref_clearance && has_remote_peer_clearance
+}
+
+fn admit_flags(evidence: &DestructiveRetentionEvidence, set: &AdmitSet) -> AdmitFlags {
+    AdmitFlags {
+        has_policy: !set.policy.admitted_refs.is_empty(),
+        has_authority: !set.authority.admitted_refs.is_empty(),
+        has_supporting: !set.supporting.admitted_refs.is_empty(),
+        has_reference_index: !set.reference_index.admitted_refs.is_empty(),
+        has_remote_refs: has_required_remote_refs(evidence, &set.remote_gc, &set.remote_clearance),
+    }
+}
+
+fn push_admit_notes<S>(diagnostics: &mut S, notes: Vec<String>) -> Result<()>
+where S: VecSink<String> {
+    for diagnostic in notes {
+        push_bounded(diagnostics, diagnostic, MAX_RETENTION_DIAGNOSTICS, "retention admission diagnostics")?;
+    }
+    Ok(())
+}
+
+fn push_admit_refs<S>(admitted_refs: &mut S, refs: Vec<String>) -> Result<()>
+where S: VecSink<String> {
+    for reference in refs {
+        push_bounded(admitted_refs, reference, MAX_RETENTION_REFS, "retention admitted refs")?;
+    }
+    Ok(())
+}
+
+fn collect_admit_outputs<D, R>(diagnostics: &mut D, admitted_refs: &mut R, set: AdmitSet) -> Result<()>
+where
+    D: VecSink<String>,
+    R: VecSink<String>,
+{
+    push_admit_notes(diagnostics, set.policy.diagnostics)?;
+    push_admit_notes(diagnostics, set.authority.diagnostics)?;
+    push_admit_notes(diagnostics, set.supporting.diagnostics)?;
+    push_admit_notes(diagnostics, set.reference_index.diagnostics)?;
+    push_admit_notes(diagnostics, set.remote_gc.diagnostics)?;
+    push_admit_notes(diagnostics, set.remote_clearance.diagnostics)?;
+    push_admit_refs(admitted_refs, set.policy.admitted_refs)?;
+    push_admit_refs(admitted_refs, set.authority.admitted_refs)?;
+    push_admit_refs(admitted_refs, set.supporting.admitted_refs)?;
+    push_admit_refs(admitted_refs, set.reference_index.admitted_refs)?;
+    push_admit_refs(admitted_refs, set.remote_gc.admitted_refs)?;
+    push_admit_refs(admitted_refs, set.remote_clearance.admitted_refs)
+}
+
 pub fn admit_destructive_retention_evidence(
     input: DestructiveRetentionAdmissionInput<'_>,
 ) -> Result<DestructiveRetentionAdmission> {
@@ -3536,108 +3668,22 @@ pub fn admit_destructive_retention_evidence(
         retention_class: input.retention_class,
         action: input.action,
     };
-    let policy = admit_evidence_refs(AdmissionRefsInput {
-        root: input.root,
-        refs: &input.evidence.policy_refs,
-        expected_kind: ADMISSION_KIND_POLICY,
-        scope: &scope,
-        required_remote_refs: &[],
-    })?;
-    let authority = admit_evidence_refs(AdmissionRefsInput {
-        root: input.root,
-        refs: &input.evidence.authority_refs,
-        expected_kind: ADMISSION_KIND_AUTHORITY,
-        scope: &scope,
-        required_remote_refs: &[],
-    })?;
-    let supporting = admit_evidence_refs(AdmissionRefsInput {
-        root: input.root,
-        refs: &input.evidence.evidence_refs,
-        expected_kind: ADMISSION_KIND_SUPPORTING_EVIDENCE,
-        scope: &scope,
-        required_remote_refs: &[],
-    })?;
-    let reference_index = admit_evidence_refs(AdmissionRefsInput {
-        root: input.root,
-        refs: &input.evidence.reference_index_refs,
-        expected_kind: ADMISSION_KIND_REFERENCE_INDEX,
-        scope: &scope,
-        required_remote_refs: &[],
-    })?;
-    let remote_gc = admit_evidence_refs(AdmissionRefsInput {
-        root: input.root,
-        refs: &input.evidence.remote_gc_refs,
-        expected_kind: ADMISSION_KIND_REMOTE_GC,
-        scope: &scope,
-        required_remote_refs: &input.evidence.remote_refs,
-    })?;
-    let remote_clearance = admit_remote_clearance_refs(RemoteClearanceRefsInput {
-        root: input.root,
-        refs: &input.evidence.remote_clearance_refs,
-        scope: &scope,
-        required_remote_refs: &input.evidence.remote_refs,
-        required_peer_refs: &input.evidence.remote_peer_refs,
-        policy_refs: &input.evidence.policy_refs,
-        authority_refs: &input.evidence.authority_refs,
-    })?;
-    let has_policy_admission = !policy.admitted_refs.is_empty();
-    let has_authority_admission = !authority.admitted_refs.is_empty();
-    let has_supporting_admission = !supporting.admitted_refs.is_empty();
-    let has_reference_index_admission = !reference_index.admitted_refs.is_empty();
-    for diagnostic in policy
-        .diagnostics
-        .into_iter()
-        .chain(authority.diagnostics)
-        .chain(supporting.diagnostics)
-        .chain(reference_index.diagnostics)
-        .chain(remote_gc.diagnostics)
-        .chain(remote_clearance.diagnostics)
-    {
-        push_bounded(&mut diagnostics, diagnostic, MAX_RETENTION_DIAGNOSTICS, "retention admission diagnostics")?;
-    }
-    for reference in policy
-        .admitted_refs
-        .into_iter()
-        .chain(authority.admitted_refs)
-        .chain(supporting.admitted_refs)
-        .chain(reference_index.admitted_refs)
-        .chain(remote_gc.admitted_refs.clone())
-        .chain(remote_clearance.admitted_refs.clone())
-    {
-        push_bounded(&mut admitted_refs, reference, MAX_RETENTION_REFS, "retention admitted refs")?;
-    }
-    let has_local_remote_gc_plan = input.evidence.remote_refs.is_empty()
-        || input
-            .evidence
-            .remote_refs
-            .iter()
-            .all(|reference| remote_gc.remote_refs.iter().any(|remote| remote == reference));
-    let has_remote_ref_clearance = input.evidence.remote_refs.is_empty()
-        || input
-            .evidence
-            .remote_refs
-            .iter()
-            .all(|reference| remote_clearance.remote_refs.iter().any(|remote| remote == reference));
-    let has_remote_peer_clearance = input.evidence.remote_peer_refs.is_empty()
-        || input
-            .evidence
-            .remote_peer_refs
-            .iter()
-            .all(|peer| remote_clearance.peer_refs.iter().any(|cleared_peer| cleared_peer == peer));
-    let has_remote_refs_clearance = has_local_remote_gc_plan && has_remote_ref_clearance && has_remote_peer_clearance;
+    let set = admit_set(input.root, input.evidence, &scope)?;
+    let flags = admit_flags(input.evidence, &set);
+    collect_admit_outputs(&mut diagnostics, &mut admitted_refs, set)?;
     let has_delete_authority = is_destructive_action(input.action)
-        && has_authority_admission
-        && has_policy_admission
-        && has_supporting_admission
-        && (!input.evidence.is_reference_index_complete || has_reference_index_admission)
-        && has_remote_refs_clearance;
+        && flags.has_authority
+        && flags.has_policy
+        && flags.has_supporting
+        && (!input.evidence.is_reference_index_complete || flags.has_reference_index)
+        && flags.has_remote_refs;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     Ok(DestructiveRetentionAdmission {
         decision: decision.to_string(),
         diagnostics,
         admitted_refs,
         has_delete_authority,
-        has_remote_gc_clearance: has_remote_refs_clearance,
+        has_remote_gc_clearance: flags.has_remote_refs,
     })
 }
 

@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-23 | self | While shortening `src/retention/mod.rs::admit_destructive_retention_evidence`, I moved `remote_gc.diagnostics` / `remote_clearance.diagnostics` before later borrowing those structs for remote-clearance checks, causing E0382 partial-move compile errors. | Compute/clone any later-needed remote-clearance booleans before consuming result diagnostics, or pass only the needed fields into merge helpers. |
 | 2026-06-23 | self | While splitting `src/retention/mod.rs::admit_remote_clearance_refs`, my first helper locals `state_is_admitted` / `bindings_are_admitted` added four `bool_naming` findings and worsened the no-disabled probe despite clearing function length. | For Octet boolean locals, keep the predicate prefix at the start (`is_state_admitted`, `is_binding_admitted`) before probing; mid-name `is` / `are` does not satisfy the lint. |
 | 2026-06-23 | self | While refining `src/job/dag.rs::admission_plan_value`, I reused `status(...)` for the plan decision/resource verdict and changed denials from `"deny"` to `"fail"`, breaking focused job DAG tests. | Keep receipt/check status strings distinct: checks use `pass/fail`, but receipt decisions and resource verdicts use `pass/deny`; do not reuse `status` for decisions. |
 | 2026-06-23 | self | While splitting `src/job/dag.rs::admission_plan_value`, my first helper shape left the plan finish helper over `function_length` and added two `too_many_parameters` findings on a six-argument stage scan helper, worsening the probe 7065 -> 7067. | For job DAG admission splits, group per-stage scan inputs in a small neutral struct and keep finish/record helpers short enough before accepting; rerun the no-disabled probe and revert/refine if the total does not drop. |
@@ -227,6 +228,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-23 Octet retention admission-set split: extracting `src/retention/mod.rs::admit_destructive_retention_evidence` evidence-admission collection/flags/output merging into neutral same-file `AdmitSet`/`AdmitFlags` helpers lowered the no-disabled probe from 7040 to 7038 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-admit-set-0`.
 
 - 2026-06-23 Octet retention execution-gate split: extracting `src/retention/mod.rs::store_retention_gc_execution_gate` apply readback/diagnostic collection into neutral same-file `ExecutionGateParts`/`execution_gate_parts` lowered the no-disabled probe from 7043 to 7041 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-execution-gate-parts-0`.
 
