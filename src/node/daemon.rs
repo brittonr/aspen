@@ -5020,84 +5020,217 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
         .supervisor_policy_value
         .map(|value| import_node_control_supervisor_policy(input.state_root, value))
         .transpose()?;
-    let mut supervisor_receipt_refs = Vec::new();
     require_active_lock(input.state_root)?;
     let startup = current_startup_receipt(input.state_root)?;
-    if input.state_root.join(CONTROL_SERVICE_LOCK_FILE).exists() {
-        if let Some(policy) = supervisor_policy.as_ref()
-            && policy.stale_lock_recovery
-        {
-            let lock_value = read_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE))?;
-            let stale_lock_ref = canonical_hash(&lock_value)?;
-            let diagnostics = vec!["node control stale service lock recovered by supervisor policy".to_string()];
-            let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
-                decision: "pass",
-                operation: "stale-lock-recover",
-                startup_receipt_ref: &startup.receipt_ref,
-                service_lock_ref: Some(&stale_lock_ref),
-                supervisor_policy_ref: Some(&policy.policy_ref),
-                topic: input.topic,
-                diagnostics: &diagnostics,
-            })?;
-            supervisor_receipt_refs.push(receipt_ref);
-            fs::remove_file(input.state_root.join(CONTROL_SERVICE_LOCK_FILE)).map_err(MoltenError::from)?;
-        } else {
-            return denied_duplicate_service_run(input, &startup, supervisor_policy.as_ref(), &supervisor_receipt_refs);
-        }
+
+    let existing_lock = handle_existing_service_lock(input, &startup, supervisor_policy.as_ref(), Vec::new())?;
+    if let Some(denied) = existing_lock.denied {
+        return Ok(denied);
     }
     if let Some(policy) = supervisor_policy.as_ref() {
         let prior_runs = count_prior_supervised_service_runs(input.state_root, &policy.policy_ref)?;
         if prior_runs > policy.max_restarts {
-            let diagnostics = vec![format!(
-                "node control supervisor restart attempts {prior_runs} exceeded bound {}",
-                policy.max_restarts
-            )];
-            let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
-                decision: "deny",
-                operation: "restart-attempt-deny",
-                startup_receipt_ref: &startup.receipt_ref,
-                service_lock_ref: None,
-                supervisor_policy_ref: Some(&policy.policy_ref),
-                topic: input.topic,
-                diagnostics: &diagnostics,
-            })?;
-            supervisor_receipt_refs.push(receipt_ref);
-            let receipt_value = service_run_receipt_value(&ServiceRunReceiptValueInput {
-                decision: "deny",
-                startup_receipt_ref: &startup.receipt_ref,
-                service_lock_ref: None,
-                topic: input.topic,
-                max_ticks: input.max_ticks,
-                max_requests_per_tick: input.max_requests_per_tick,
-                ticks: 0,
-                heartbeat_receipt_refs: &[],
-                ingress_receipt_refs: &[],
-                loop_receipt_refs: &[],
-                processed_request_refs: &[],
-                has_stopped: false,
-                supervisor_policy_ref: Some(&policy.policy_ref),
-                supervisor_receipt_refs: &supervisor_receipt_refs,
-                diagnostics: &diagnostics,
-            })?;
-            let service_receipt_ref = canonical_hash(&receipt_value)?;
-            write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
-            import_node_artifact(input.state_root, &receipt_value)?;
-            return Ok(NodeControlServe {
-                service_receipt_ref,
-                service_receipt_value: receipt_value,
-                service_lock_ref: None,
-                heartbeat_receipt_refs: Vec::new(),
-                ingress_receipt_refs: Vec::new(),
-                loop_receipt_refs: Vec::new(),
-                processed_request_refs: Vec::new(),
-                supervisor_policy_ref: Some(policy.policy_ref.clone()),
-                supervisor_receipt_refs,
-                ticks: 0,
-                has_stopped: false,
-                decision: "deny".to_string(),
-            });
+            return denied_restart_attempt(input, &startup, policy, prior_runs, &existing_lock.supervisor_receipt_refs);
         }
     }
+
+    let start = start_service_run(input, &startup, supervisor_policy.as_ref(), existing_lock.supervisor_receipt_refs)?;
+    let run = run_service_ticks(ServiceTickInput {
+        state_root: input.state_root,
+        topic: input.topic,
+        max_ticks: input.max_ticks,
+        max_requests_per_tick: input.max_requests_per_tick,
+        tick_capacity: max_ticks,
+        event_capacity: max_ticks.saturating_mul(max_requests_per_tick),
+        startup_receipt_ref: &startup.receipt_ref,
+        service_lock_ref: &start.service_lock_ref,
+    })?;
+    let shutdown = note_shutdown_drain(ShutdownDrainInput {
+        state_root: input.state_root,
+        topic: input.topic,
+        startup_receipt_ref: &startup.receipt_ref,
+        service_lock_ref: &start.service_lock_ref,
+        policy: supervisor_policy.as_ref(),
+        run,
+        supervisor_receipt_refs: start.supervisor_receipt_refs,
+    })?;
+    remove_service_lock(input.state_root, &start.service_lock_ref)?;
+    finish_service_run(FinishServiceInput {
+        state_root: input.state_root,
+        topic: input.topic,
+        max_ticks: input.max_ticks,
+        max_requests_per_tick: input.max_requests_per_tick,
+        startup_receipt_ref: &startup.receipt_ref,
+        service_lock_ref: &start.service_lock_ref,
+        supervisor_policy_ref: supervisor_policy.as_ref().map(|policy| policy.policy_ref.as_str()),
+        supervisor_receipt_refs: shutdown.supervisor_receipt_refs,
+        run: shutdown.run,
+    })
+}
+
+struct ExistingServiceLock {
+    supervisor_receipt_refs: Vec<String>,
+    denied: Option<NodeControlServe>,
+}
+
+struct ServiceStart {
+    service_lock_ref: String,
+    supervisor_receipt_refs: Vec<String>,
+}
+
+struct ServiceTickInput<'a> {
+    state_root: &'a Path,
+    topic: &'a str,
+    max_ticks: u64,
+    max_requests_per_tick: u64,
+    tick_capacity: usize,
+    event_capacity: usize,
+    startup_receipt_ref: &'a str,
+    service_lock_ref: &'a str,
+}
+
+struct ServiceRunParts {
+    heartbeat_receipt_refs: Vec<String>,
+    ingress_receipt_refs: Vec<String>,
+    loop_receipt_refs: Vec<String>,
+    processed_request_refs: Vec<String>,
+    diagnostics: Vec<String>,
+    ticks: u64,
+    has_stopped: bool,
+}
+
+struct ShutdownDrainInput<'a> {
+    state_root: &'a Path,
+    topic: &'a str,
+    startup_receipt_ref: &'a str,
+    service_lock_ref: &'a str,
+    policy: Option<&'a NodeControlSupervisorPolicy>,
+    run: ServiceRunParts,
+    supervisor_receipt_refs: Vec<String>,
+}
+
+struct ShutdownDrain {
+    run: ServiceRunParts,
+    supervisor_receipt_refs: Vec<String>,
+}
+
+struct FinishServiceInput<'a> {
+    state_root: &'a Path,
+    topic: &'a str,
+    max_ticks: u64,
+    max_requests_per_tick: u64,
+    startup_receipt_ref: &'a str,
+    service_lock_ref: &'a str,
+    supervisor_policy_ref: Option<&'a str>,
+    supervisor_receipt_refs: Vec<String>,
+    run: ServiceRunParts,
+}
+
+fn handle_existing_service_lock(
+    input: &NodeControlServeInput<'_>,
+    startup: &node_runtime::NodeStartupReceipt,
+    supervisor_policy: Option<&NodeControlSupervisorPolicy>,
+    mut supervisor_receipt_refs: Vec<String>,
+) -> Result<ExistingServiceLock> {
+    if !input.state_root.join(CONTROL_SERVICE_LOCK_FILE).exists() {
+        return Ok(ExistingServiceLock {
+            supervisor_receipt_refs,
+            denied: None,
+        });
+    }
+    if let Some(policy) = supervisor_policy
+        && policy.stale_lock_recovery
+    {
+        let lock_value = read_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE))?;
+        let stale_lock_ref = canonical_hash(&lock_value)?;
+        let diagnostics = vec!["node control stale service lock recovered by supervisor policy".to_string()];
+        let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
+            decision: "pass",
+            operation: "stale-lock-recover",
+            startup_receipt_ref: &startup.receipt_ref,
+            service_lock_ref: Some(&stale_lock_ref),
+            supervisor_policy_ref: Some(&policy.policy_ref),
+            topic: input.topic,
+            diagnostics: &diagnostics,
+        })?;
+        supervisor_receipt_refs.push(receipt_ref);
+        fs::remove_file(input.state_root.join(CONTROL_SERVICE_LOCK_FILE)).map_err(MoltenError::from)?;
+        return Ok(ExistingServiceLock {
+            supervisor_receipt_refs,
+            denied: None,
+        });
+    }
+    let denied = denied_duplicate_service_run(input, startup, supervisor_policy, &supervisor_receipt_refs)?;
+    Ok(ExistingServiceLock {
+        supervisor_receipt_refs,
+        denied: Some(denied),
+    })
+}
+
+fn denied_restart_attempt(
+    input: &NodeControlServeInput<'_>,
+    startup: &node_runtime::NodeStartupReceipt,
+    policy: &NodeControlSupervisorPolicy,
+    prior_runs: u64,
+    inherited_supervisor_receipt_refs: &[String],
+) -> Result<NodeControlServe> {
+    let diagnostics = vec![format!(
+        "node control supervisor restart attempts {prior_runs} exceeded bound {}",
+        policy.max_restarts
+    )];
+    let mut supervisor_receipt_refs = inherited_supervisor_receipt_refs.to_vec();
+    let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
+        decision: "deny",
+        operation: "restart-attempt-deny",
+        startup_receipt_ref: &startup.receipt_ref,
+        service_lock_ref: None,
+        supervisor_policy_ref: Some(&policy.policy_ref),
+        topic: input.topic,
+        diagnostics: &diagnostics,
+    })?;
+    supervisor_receipt_refs.push(receipt_ref);
+    let receipt_value = service_run_receipt_value(&ServiceRunReceiptValueInput {
+        decision: "deny",
+        startup_receipt_ref: &startup.receipt_ref,
+        service_lock_ref: None,
+        topic: input.topic,
+        max_ticks: input.max_ticks,
+        max_requests_per_tick: input.max_requests_per_tick,
+        ticks: 0,
+        heartbeat_receipt_refs: &[],
+        ingress_receipt_refs: &[],
+        loop_receipt_refs: &[],
+        processed_request_refs: &[],
+        has_stopped: false,
+        supervisor_policy_ref: Some(&policy.policy_ref),
+        supervisor_receipt_refs: &supervisor_receipt_refs,
+        diagnostics: &diagnostics,
+    })?;
+    let service_receipt_ref = canonical_hash(&receipt_value)?;
+    write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
+    import_node_artifact(input.state_root, &receipt_value)?;
+    Ok(NodeControlServe {
+        service_receipt_ref,
+        service_receipt_value: receipt_value,
+        service_lock_ref: None,
+        heartbeat_receipt_refs: Vec::new(),
+        ingress_receipt_refs: Vec::new(),
+        loop_receipt_refs: Vec::new(),
+        processed_request_refs: Vec::new(),
+        supervisor_policy_ref: Some(policy.policy_ref.clone()),
+        supervisor_receipt_refs,
+        ticks: 0,
+        has_stopped: false,
+        decision: "deny".to_string(),
+    })
+}
+
+fn start_service_run(
+    input: &NodeControlServeInput<'_>,
+    startup: &node_runtime::NodeStartupReceipt,
+    supervisor_policy: Option<&NodeControlSupervisorPolicy>,
+    mut supervisor_receipt_refs: Vec<String>,
+) -> Result<ServiceStart> {
     let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
     let service_run_id = local_ref(
         "node-control-service-run",
@@ -5115,7 +5248,7 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
     let service_lock_ref = canonical_hash(&lock_value)?;
     write_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE), &lock_value)?;
     import_node_artifact(input.state_root, &lock_value)?;
-    if let Some(policy) = supervisor_policy.as_ref() {
+    if let Some(policy) = supervisor_policy {
         let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
             decision: "pass",
             operation: "restart-attempt",
@@ -5127,97 +5260,131 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
         })?;
         supervisor_receipt_refs.push(receipt_ref);
     }
+    Ok(ServiceStart {
+        service_lock_ref,
+        supervisor_receipt_refs,
+    })
+}
 
-    let max_service_events = max_ticks.saturating_mul(max_requests_per_tick);
-    let mut heartbeat_receipt_refs = Vec::with_capacity(max_ticks);
-    let mut ingress_receipt_refs = Vec::with_capacity(max_service_events);
-    let mut loop_receipt_refs = Vec::with_capacity(max_ticks);
-    let mut processed_request_refs = Vec::with_capacity(max_service_events);
-    let mut diagnostics = Vec::with_capacity(max_ticks.saturating_mul(2));
-    let mut has_stopped = false;
-    let mut ticks = 0_u64;
+fn run_service_ticks(input: ServiceTickInput<'_>) -> Result<ServiceRunParts> {
+    let mut run = ServiceRunParts {
+        heartbeat_receipt_refs: Vec::with_capacity(input.tick_capacity),
+        ingress_receipt_refs: Vec::with_capacity(input.event_capacity),
+        loop_receipt_refs: Vec::with_capacity(input.tick_capacity),
+        processed_request_refs: Vec::with_capacity(input.event_capacity),
+        diagnostics: Vec::with_capacity(input.tick_capacity.saturating_mul(2)),
+        ticks: 0,
+        has_stopped: false,
+    };
 
     for tick in 0..input.max_ticks {
-        ticks = tick + 1;
-        let heartbeat_value = service_heartbeat_receipt_value(&ServiceHeartbeatValueInput {
-            startup_receipt_ref: &startup.receipt_ref,
-            service_lock_ref: &service_lock_ref,
-            tick,
-            delivered_count: ingress_receipt_refs.len() as u64,
-            processed_count: processed_request_refs.len() as u64,
-            diagnostics: &diagnostics,
-        })?;
-        let heartbeat_ref = canonical_hash(&heartbeat_value)?;
-        write_preserves(&control_service_heartbeat_path(input.state_root, &heartbeat_ref), &heartbeat_value)?;
-        import_node_artifact(input.state_root, &heartbeat_value)?;
-        heartbeat_receipt_refs.push(heartbeat_ref);
-
-        let envelope_refs = match pending_ingress_envelope_refs(input.state_root, input.topic) {
-            Ok(envelope_refs) => envelope_refs,
-            Err(error) => {
-                diagnostics.push(format!("node control service ingress scan failed: {error}"));
-                break;
-            }
-        };
-        for envelope_ref in envelope_refs {
-            let delivered = match deliver_node_control_ingress(&NodeControlIngressDeliverInput {
-                state_root: input.state_root,
-                topic: input.topic,
-                envelope_ref: &envelope_ref,
-            }) {
-                Ok(delivered) => delivered,
-                Err(error) => {
-                    diagnostics.push(format!("node control service ingress delivery {envelope_ref} failed: {error}"));
-                    continue;
-                }
-            };
-            let receipt = node_ingress_receipt_decision(&delivered.ingress_receipt_value)?;
-            if receipt != "pass" {
-                diagnostics
-                    .push(format!("node control service ingress {} decision {}", delivered.envelope_ref, receipt));
-            }
-            ingress_receipt_refs.push(delivered.ingress_receipt_ref);
-        }
-
-        if !input.state_root.join(CONTROL_LOCK_FILE).exists() {
-            has_stopped = true;
-            break;
-        }
-        let loop_run = match run_control_loop(&NodeControlLoopInput {
-            state_root: input.state_root,
-            max_requests: input.max_requests_per_tick,
-        }) {
-            Ok(loop_run) => loop_run,
-            Err(error) => {
-                diagnostics.push(format!("node control service loop failed: {error}"));
-                break;
-            }
-        };
-        processed_request_refs.extend(loop_run.processed_request_refs.iter().cloned());
-        loop_receipt_refs.push(loop_run.loop_receipt_ref);
-        if loop_run.has_stopped || !input.state_root.join(CONTROL_LOCK_FILE).exists() {
-            has_stopped = true;
+        run.ticks = tick + 1;
+        if run_service_tick(&input, &mut run, tick)? {
             break;
         }
     }
-
-    if !has_stopped {
+    if !run.has_stopped {
         match has_pending_service_work(input.state_root, input.topic) {
-            Ok(true) => diagnostics.push("node control service reached max ticks with pending work".to_string()),
+            Ok(true) => run.diagnostics.push("node control service reached max ticks with pending work".to_string()),
             Ok(false) => {}
-            Err(error) => diagnostics.push(format!("node control service pending-work scan failed: {error}")),
+            Err(error) => run.diagnostics.push(format!("node control service pending-work scan failed: {error}")),
         }
     }
-    if let Some(policy) = supervisor_policy.as_ref()
-        && has_stopped
+    Ok(run)
+}
+
+fn run_service_tick(input: &ServiceTickInput<'_>, run: &mut ServiceRunParts, tick: u64) -> Result<bool> {
+    write_service_heartbeat(input, run, tick)?;
+    if deliver_service_ingress(input, run)? {
+        return Ok(true);
+    }
+    process_service_loop(input, run)
+}
+
+fn write_service_heartbeat(input: &ServiceTickInput<'_>, run: &mut ServiceRunParts, tick: u64) -> Result<()> {
+    let heartbeat_value = service_heartbeat_receipt_value(&ServiceHeartbeatValueInput {
+        startup_receipt_ref: input.startup_receipt_ref,
+        service_lock_ref: input.service_lock_ref,
+        tick,
+        delivered_count: run.ingress_receipt_refs.len() as u64,
+        processed_count: run.processed_request_refs.len() as u64,
+        diagnostics: &run.diagnostics,
+    })?;
+    let heartbeat_ref = canonical_hash(&heartbeat_value)?;
+    write_preserves(&control_service_heartbeat_path(input.state_root, &heartbeat_ref), &heartbeat_value)?;
+    import_node_artifact(input.state_root, &heartbeat_value)?;
+    run.heartbeat_receipt_refs.push(heartbeat_ref);
+    Ok(())
+}
+
+fn deliver_service_ingress(input: &ServiceTickInput<'_>, run: &mut ServiceRunParts) -> Result<bool> {
+    let envelope_refs = match pending_ingress_envelope_refs(input.state_root, input.topic) {
+        Ok(envelope_refs) => envelope_refs,
+        Err(error) => {
+            run.diagnostics.push(format!("node control service ingress scan failed: {error}"));
+            return Ok(true);
+        }
+    };
+    for envelope_ref in envelope_refs {
+        let delivered = match deliver_node_control_ingress(&NodeControlIngressDeliverInput {
+            state_root: input.state_root,
+            topic: input.topic,
+            envelope_ref: &envelope_ref,
+        }) {
+            Ok(delivered) => delivered,
+            Err(error) => {
+                run.diagnostics
+                    .push(format!("node control service ingress delivery {envelope_ref} failed: {error}"));
+                continue;
+            }
+        };
+        let receipt = node_ingress_receipt_decision(&delivered.ingress_receipt_value)?;
+        if receipt != "pass" {
+            run.diagnostics
+                .push(format!("node control service ingress {} decision {}", delivered.envelope_ref, receipt));
+        }
+        run.ingress_receipt_refs.push(delivered.ingress_receipt_ref);
+    }
+    Ok(false)
+}
+
+fn process_service_loop(input: &ServiceTickInput<'_>, run: &mut ServiceRunParts) -> Result<bool> {
+    if !input.state_root.join(CONTROL_LOCK_FILE).exists() {
+        run.has_stopped = true;
+        return Ok(true);
+    }
+    let loop_run = match run_control_loop(&NodeControlLoopInput {
+        state_root: input.state_root,
+        max_requests: input.max_requests_per_tick,
+    }) {
+        Ok(loop_run) => loop_run,
+        Err(error) => {
+            run.diagnostics.push(format!("node control service loop failed: {error}"));
+            return Ok(true);
+        }
+    };
+    run.processed_request_refs.extend(loop_run.processed_request_refs.iter().cloned());
+    run.loop_receipt_refs.push(loop_run.loop_receipt_ref);
+    if loop_run.has_stopped || !input.state_root.join(CONTROL_LOCK_FILE).exists() {
+        run.has_stopped = true;
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+fn note_shutdown_drain(input: ShutdownDrainInput<'_>) -> Result<ShutdownDrain> {
+    let mut run = input.run;
+    let mut supervisor_receipt_refs = input.supervisor_receipt_refs;
+    if let Some(policy) = input.policy
+        && run.has_stopped
     {
         let mut shutdown_diagnostics = Vec::new();
-        if ticks > policy.shutdown_drain_ticks {
+        if run.ticks > policy.shutdown_drain_ticks {
             let diagnostic = format!(
-                "node control shutdown drain ticks {ticks} exceeded supervisor bound {}",
-                policy.shutdown_drain_ticks
+                "node control shutdown drain ticks {} exceeded supervisor bound {}",
+                run.ticks, policy.shutdown_drain_ticks
             );
-            diagnostics.push(diagnostic.clone());
+            run.diagnostics.push(diagnostic.clone());
             shutdown_diagnostics.push(diagnostic);
         }
         let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
@@ -5227,32 +5394,42 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
                 "deny"
             },
             operation: "shutdown-drain",
-            startup_receipt_ref: &startup.receipt_ref,
-            service_lock_ref: Some(&service_lock_ref),
+            startup_receipt_ref: input.startup_receipt_ref,
+            service_lock_ref: Some(input.service_lock_ref),
             supervisor_policy_ref: Some(&policy.policy_ref),
             topic: input.topic,
             diagnostics: &shutdown_diagnostics,
         })?;
         supervisor_receipt_refs.push(receipt_ref);
     }
-    remove_service_lock(input.state_root, &service_lock_ref)?;
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    Ok(ShutdownDrain {
+        run,
+        supervisor_receipt_refs,
+    })
+}
+
+fn finish_service_run(input: FinishServiceInput<'_>) -> Result<NodeControlServe> {
+    let decision = if input.run.diagnostics.is_empty() {
+        "pass"
+    } else {
+        "deny"
+    };
     let receipt_value = service_run_receipt_value(&ServiceRunReceiptValueInput {
         decision,
-        startup_receipt_ref: &startup.receipt_ref,
-        service_lock_ref: Some(&service_lock_ref),
+        startup_receipt_ref: input.startup_receipt_ref,
+        service_lock_ref: Some(input.service_lock_ref),
         topic: input.topic,
         max_ticks: input.max_ticks,
         max_requests_per_tick: input.max_requests_per_tick,
-        ticks,
-        heartbeat_receipt_refs: &heartbeat_receipt_refs,
-        ingress_receipt_refs: &ingress_receipt_refs,
-        loop_receipt_refs: &loop_receipt_refs,
-        processed_request_refs: &processed_request_refs,
-        has_stopped,
-        supervisor_policy_ref: supervisor_policy.as_ref().map(|policy| policy.policy_ref.as_str()),
-        supervisor_receipt_refs: &supervisor_receipt_refs,
-        diagnostics: &diagnostics,
+        ticks: input.run.ticks,
+        heartbeat_receipt_refs: &input.run.heartbeat_receipt_refs,
+        ingress_receipt_refs: &input.run.ingress_receipt_refs,
+        loop_receipt_refs: &input.run.loop_receipt_refs,
+        processed_request_refs: &input.run.processed_request_refs,
+        has_stopped: input.run.has_stopped,
+        supervisor_policy_ref: input.supervisor_policy_ref,
+        supervisor_receipt_refs: &input.supervisor_receipt_refs,
+        diagnostics: &input.run.diagnostics,
     })?;
     let service_receipt_ref = canonical_hash(&receipt_value)?;
     write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
@@ -5260,15 +5437,15 @@ pub fn serve_node_control(input: &NodeControlServeInput<'_>) -> Result<NodeContr
     Ok(NodeControlServe {
         service_receipt_ref,
         service_receipt_value: receipt_value,
-        service_lock_ref: Some(service_lock_ref),
-        heartbeat_receipt_refs,
-        ingress_receipt_refs,
-        loop_receipt_refs,
-        processed_request_refs,
-        supervisor_policy_ref: supervisor_policy.map(|policy| policy.policy_ref),
-        supervisor_receipt_refs,
-        ticks,
-        has_stopped,
+        service_lock_ref: Some(input.service_lock_ref.to_string()),
+        heartbeat_receipt_refs: input.run.heartbeat_receipt_refs,
+        ingress_receipt_refs: input.run.ingress_receipt_refs,
+        loop_receipt_refs: input.run.loop_receipt_refs,
+        processed_request_refs: input.run.processed_request_refs,
+        supervisor_policy_ref: input.supervisor_policy_ref.map(|value| value.to_string()),
+        supervisor_receipt_refs: input.supervisor_receipt_refs,
+        ticks: input.run.ticks,
+        has_stopped: input.run.has_stopped,
         decision: decision.to_string(),
     })
 }
