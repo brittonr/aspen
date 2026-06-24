@@ -228,6 +228,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet retention execution-gate split: extracting `src/retention/mod.rs::store_retention_gc_execution_gate` apply readback/diagnostic collection into neutral same-file `ExecutionGateParts`/`execution_gate_parts` lowered the no-disabled probe from 7043 to 7041 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-execution-gate-parts-0`.
+
 - 2026-06-23 Octet retention bundle export group split: extracting `src/retention/mod.rs::export_retention_candidate_bundle` repeated artifact-group export calls into neutral same-file `GroupSpec`/`export_groups` lowered the no-disabled probe from 7047 to 7045 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-export-groups-0`.
 
 - 2026-06-23 Octet node-control operation test split: extracting `src/node/daemon.rs::control_operation_dispatch_installs_runs_and_gates_with_receipts` into neutral same-file `OpCase` plus `assert_install`/`assert_gate`/`assert_run`/`assert_ledger` lowered the no-disabled probe from 7057 to 7056 by clearing one `function_length` finding while lint-family counts stayed otherwise flat. Validation passed `cargo fmt`, focused `cargo test control_operation_dispatch_installs_runs_and_gates_with_receipts`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-node-control-ops-test-split-0`.

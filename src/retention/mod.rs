@@ -4198,6 +4198,71 @@ pub fn read_retention_gc_execution_gate(root: &Path, execution_ref: &str) -> Res
     Ok(gate)
 }
 
+#[derive(Debug, Default)]
+struct ExecutionGateParts {
+    plan_ref: Option<String>,
+    recomputed_plan_ref: Option<String>,
+    retention_receipt_ref: Option<String>,
+    tombstone_ref: Option<String>,
+    diagnostics: Vec<String>,
+}
+
+fn execution_gate_parts(input: &RetentionGcExecutionGateInput<'_>) -> Result<ExecutionGateParts> {
+    let mut parts = ExecutionGateParts::default();
+    let Some(apply_ref) = input.apply_ref else {
+        push_bounded(
+            &mut parts.diagnostics,
+            "retention-gc-execute-apply-missing".to_string(),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC execution diagnostics",
+        )?;
+        return Ok(parts);
+    };
+    require_ref(apply_ref, "retention GC execution apply ref")?;
+    match read_retention_gc_apply(input.root, apply_ref) {
+        Ok(apply) => {
+            parts.plan_ref = Some(apply.plan_ref.clone());
+            parts.recomputed_plan_ref = Some(apply.recomputed_plan_ref.clone());
+            parts.retention_receipt_ref = apply.retention_receipt_ref.clone();
+            parts.tombstone_ref = apply.tombstone_ref.clone();
+            extend_bounded(
+                &mut parts.diagnostics,
+                execution_gate_apply_diagnostics(input, &apply)?,
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC execution diagnostics",
+            )?;
+            if let Some(receipt_ref) = apply.retention_receipt_ref.as_ref() {
+                extend_bounded(
+                    &mut parts.diagnostics,
+                    execution_gate_receipt_diagnostics(input.root, input, receipt_ref)?,
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention GC execution diagnostics",
+                )?;
+            } else {
+                push_bounded(
+                    &mut parts.diagnostics,
+                    "retention-gc-execute-retention-receipt-missing".to_string(),
+                    MAX_RETENTION_DIAGNOSTICS,
+                    "retention GC execution diagnostics",
+                )?;
+            }
+            extend_bounded(
+                &mut parts.diagnostics,
+                execution_gate_tombstone_binding_diagnostics(input.root, input, &apply)?,
+                MAX_RETENTION_DIAGNOSTICS,
+                "retention GC execution diagnostics",
+            )?;
+        }
+        Err(error) => push_bounded(
+            &mut parts.diagnostics,
+            format!("retention-gc-execute-apply-unreadable:{error}"),
+            MAX_RETENTION_DIAGNOSTICS,
+            "retention GC execution diagnostics",
+        )?,
+    }
+    Ok(parts)
+}
+
 pub fn store_retention_gc_execution_gate(input: RetentionGcExecutionGateInput<'_>) -> Result<RetentionGcExecutionGate> {
     ensure_store(input.root)?;
     validate_name(input.subsystem, "retention GC execution subsystem")?;
@@ -4205,65 +4270,10 @@ pub fn store_retention_gc_execution_gate(input: RetentionGcExecutionGateInput<'_
     require_ref(input.object_ref, "retention GC execution object ref")?;
     validate_name(input.object_kind, "retention GC execution object kind")?;
     validate_retention_class(input.retention_class)?;
-    let mut diagnostics = Vec::new();
-    let mut plan_ref = None;
-    let mut recomputed_plan_ref = None;
-    let mut retention_receipt_ref = None;
-    let mut tombstone_ref = None;
-    if let Some(apply_ref) = input.apply_ref {
-        require_ref(apply_ref, "retention GC execution apply ref")?;
-        match read_retention_gc_apply(input.root, apply_ref) {
-            Ok(apply) => {
-                plan_ref = Some(apply.plan_ref.clone());
-                recomputed_plan_ref = Some(apply.recomputed_plan_ref.clone());
-                retention_receipt_ref = apply.retention_receipt_ref.clone();
-                tombstone_ref = apply.tombstone_ref.clone();
-                extend_bounded(
-                    &mut diagnostics,
-                    execution_gate_apply_diagnostics(&input, &apply)?,
-                    MAX_RETENTION_DIAGNOSTICS,
-                    "retention GC execution diagnostics",
-                )?;
-                if let Some(receipt_ref) = apply.retention_receipt_ref.as_ref() {
-                    extend_bounded(
-                        &mut diagnostics,
-                        execution_gate_receipt_diagnostics(input.root, &input, receipt_ref)?,
-                        MAX_RETENTION_DIAGNOSTICS,
-                        "retention GC execution diagnostics",
-                    )?;
-                } else {
-                    push_bounded(
-                        &mut diagnostics,
-                        "retention-gc-execute-retention-receipt-missing".to_string(),
-                        MAX_RETENTION_DIAGNOSTICS,
-                        "retention GC execution diagnostics",
-                    )?;
-                }
-                extend_bounded(
-                    &mut diagnostics,
-                    execution_gate_tombstone_binding_diagnostics(input.root, &input, &apply)?,
-                    MAX_RETENTION_DIAGNOSTICS,
-                    "retention GC execution diagnostics",
-                )?;
-            }
-            Err(error) => push_bounded(
-                &mut diagnostics,
-                format!("retention-gc-execute-apply-unreadable:{error}"),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC execution diagnostics",
-            )?,
-        }
-    } else {
-        push_bounded(
-            &mut diagnostics,
-            "retention-gc-execute-apply-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC execution diagnostics",
-        )?;
-    }
-    diagnostics.sort();
-    diagnostics.dedup();
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let mut parts = execution_gate_parts(&input)?;
+    parts.diagnostics.sort();
+    parts.diagnostics.dedup();
+    let decision = if parts.diagnostics.is_empty() { "pass" } else { "deny" };
     let value = retention_gc_execution_gate_value(&RetentionGcExecutionGateValueInput {
         decision,
         subsystem: input.subsystem,
@@ -4272,11 +4282,11 @@ pub fn store_retention_gc_execution_gate(input: RetentionGcExecutionGateInput<'_
         object_kind: input.object_kind,
         retention_class: input.retention_class,
         apply_ref: input.apply_ref,
-        plan_ref: plan_ref.as_deref(),
-        recomputed_plan_ref: recomputed_plan_ref.as_deref(),
-        retention_receipt_ref: retention_receipt_ref.as_deref(),
-        tombstone_ref: tombstone_ref.as_deref(),
-        diagnostics: &diagnostics,
+        plan_ref: parts.plan_ref.as_deref(),
+        recomputed_plan_ref: parts.recomputed_plan_ref.as_deref(),
+        retention_receipt_ref: parts.retention_receipt_ref.as_deref(),
+        tombstone_ref: parts.tombstone_ref.as_deref(),
+        diagnostics: &parts.diagnostics,
     })?;
     let gate = parse_retention_gc_execution_gate(&value)?;
     write_store_value(&gc_execute_path(input.root, &gate.execution_ref)?, &gate.value)?;
