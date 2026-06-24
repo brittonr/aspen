@@ -2464,418 +2464,206 @@ pub fn run_local_node_dogfood(input: &LocalNodeDogfoodInput<'_>) -> Result<Local
     if let Some(dirty_reason) = dirty_state_reason(input.state_root)? {
         return dirty_state_report(&state_root_ref, dirty_reason);
     }
-    fs::create_dir_all(input.state_root).map_err(MoltenError::from)?;
-    let registry_root = input.state_root.join("registry");
-    let ledger_root = input.state_root.join("ledger");
-    let job_source_root = input.state_root.join("job-source-registry");
-    let job_target_root = input.state_root.join("job-target-registry");
-    let retention_root = input.state_root.join("retention-store");
-    let retention_bundle_root = input.state_root.join("retention-bundle");
+    let mut run = LocalRunState::new(input.state_root, state_root_ref)?;
+    let start = run.record_start()?;
+    let installed = run.record_install(&start.startup_ref)?;
+    run.record_service()?;
+    let remote = run.record_remote()?;
+    let job = run.record_job()?;
+    let retention_gc = run.record_gc()?;
+    run.record_catalog(&installed, &remote.run.gate_receipt_value)?;
+    run.record_repro(&remote.gate_ref)?;
+    run.finish(&start, &installed, &job, &retention_gc)
+}
 
-    let policy_refs = vec![dogfood_ref("operator-policy")?];
-    let capability_refs = vec![dogfood_ref("operator-capability")?];
-    let resource_refs = vec![dogfood_ref("operator-resource")?];
-    let mut step_checkpoints = StepCheckpointBuffers::default();
-    let mut gate_receipt_refs = Vec::new();
-    let mut repro_bundle_refs = Vec::new();
-    let mut harness_gate_refs = Vec::new();
-    let mut catalog_query_refs = Vec::new();
-    let mut repro_verify_refs = Vec::new();
-    let mut replay_index_refs = Vec::new();
+struct LocalRunState<'a> {
+    state_root: &'a Path,
+    state_root_ref: String,
+    registry_root: std::path::PathBuf,
+    ledger_root: std::path::PathBuf,
+    job_source_root: std::path::PathBuf,
+    job_target_root: std::path::PathBuf,
+    retention_root: std::path::PathBuf,
+    retention_bundle_root: std::path::PathBuf,
+    policy_refs: Vec<String>,
+    capability_refs: Vec<String>,
+    resource_refs: Vec<String>,
+    step_checkpoints: StepCheckpointBuffers,
+    gate_receipt_refs: Vec<String>,
+    repro_bundle_refs: Vec<String>,
+    harness_gate_refs: Vec<String>,
+    catalog_query_refs: Vec<String>,
+    repro_verify_refs: Vec<String>,
+    replay_index_refs: Vec<String>,
+}
 
-    let identity_resolution = resolve_identity(input.state_root, &policy_refs)?;
-    let identity = identity_resolution
-        .identity
-        .clone()
-        .ok_or_else(|| MoltenError::invalid_harness("local dogfood identity resolution denied"))?;
-    let identity_startup =
-        node_identity::node_identity_startup_evidence_value(&identity.identity_ref, &identity_resolution.receipt_ref)?;
-    let identity_startup_ref = canonical_hash(&identity_startup)?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "clean-state",
-        request_ref: Some(&state_root_ref),
-        receipt_ref: Some(&identity_resolution.receipt_ref),
-        result_ref: Some(&identity_startup_ref),
-        decision: "pass",
-        replay_status: "recorded",
-        mandatory: true,
-        artifact_refs: &[identity.identity_ref.clone(), identity_startup_ref.clone()],
-        diagnostics: &[],
-        state_root_ref: &state_root_ref,
-    })?;
+impl<'a> LocalRunState<'a> {
+    fn new(state_root: &'a Path, state_root_ref: String) -> Result<Self> {
+        fs::create_dir_all(state_root).map_err(MoltenError::from)?;
+        Ok(Self {
+            state_root,
+            state_root_ref,
+            registry_root: state_root.join("registry"),
+            ledger_root: state_root.join("ledger"),
+            job_source_root: state_root.join("job-source-registry"),
+            job_target_root: state_root.join("job-target-registry"),
+            retention_root: state_root.join("retention-store"),
+            retention_bundle_root: state_root.join("retention-bundle"),
+            policy_refs: vec![dogfood_ref("operator-policy")?],
+            capability_refs: vec![dogfood_ref("operator-capability")?],
+            resource_refs: vec![dogfood_ref("operator-resource")?],
+            step_checkpoints: StepCheckpointBuffers::default(),
+            gate_receipt_refs: Vec::new(),
+            repro_bundle_refs: Vec::new(),
+            harness_gate_refs: Vec::new(),
+            catalog_query_refs: Vec::new(),
+            repro_verify_refs: Vec::new(),
+            replay_index_refs: Vec::new(),
+        })
+    }
 
-    let node_started =
-        start_node(&identity, &identity_resolution.receipt_ref, &policy_refs, &capability_refs, &resource_refs)?;
-    let startup_ref = node_started.startup_receipt.receipt_ref.clone();
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "start-node",
-        request_ref: Some(&node_started.config.config_ref),
-        receipt_ref: Some(&startup_ref),
-        result_ref: Some(&startup_ref),
-        decision: &node_started.decision,
-        replay_status: "recorded",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&node_started.config.config_ref),
-        diagnostics: &node_started.startup_receipt.diagnostics,
-        state_root_ref: &state_root_ref,
-    })?;
+    fn record_start(&mut self) -> Result<StartSteps> {
+        record_start_steps(StartStepInput {
+            state_root: self.state_root,
+            state_root_ref: &self.state_root_ref,
+            policy_refs: &self.policy_refs,
+            capability_refs: &self.capability_refs,
+            resource_refs: &self.resource_refs,
+            checkpoints: &mut self.step_checkpoints,
+        })
+    }
 
-    let installed = artifacts::install_artifact(&registry_root, &artifacts::ArtifactInstallInput {
-        kind: "operator-artifact".to_string(),
-        payload: record("dogfood-artifact", vec![string("local-node")]),
-        schema_refs: Vec::new(),
-        dependency_refs: Vec::new(),
-        effect_manifest_ref: None,
-        policy_refs: policy_refs.clone(),
-        evidence_refs: vec![startup_ref.clone()],
-        installer_ref: capability_refs[0].clone(),
-        capability_refs: capability_refs.clone(),
-    })?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "install-artifact",
-        request_ref: Some(&startup_ref),
-        receipt_ref: Some(&canonical_hash(&installed.receipt_value)?),
-        result_ref: Some(&installed.artifact_ref),
-        decision: &installed.decision,
-        replay_status: "deterministic",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&installed.artifact_ref),
-        diagnostics: &[],
-        state_root_ref: &state_root_ref,
-    })?;
+    fn record_install(&mut self, startup_ref: &str) -> Result<artifacts::ArtifactInstall> {
+        record_install_step(InstallStepInput {
+            registry_root: &self.registry_root,
+            startup_ref,
+            policy_refs: &self.policy_refs,
+            capability_refs: &self.capability_refs,
+            state_root_ref: &self.state_root_ref,
+            checkpoints: &mut self.step_checkpoints,
+        })
+    }
 
-    let service_suite = crate::service_runtime::two_service_suite_value()?;
-    let service_run = crate::service_runtime::run_service_runtime_suite_value(&service_suite)?;
-    let service_decision = if service_run.lifecycle_receipts.iter().all(service_lifecycle_pass) {
-        "pass"
-    } else {
-        "deny"
-    };
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "start-service",
-        request_ref: Some(&canonical_hash(&service_suite)?),
-        receipt_ref: Some(&service_run.report_ref),
-        result_ref: Some(&service_run.report_ref),
-        decision: service_decision,
-        replay_status: "deterministic",
-        mandatory: true,
-        artifact_refs: &service_run.readiness_assertions.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?,
-        diagnostics: &[],
-        state_root_ref: &state_root_ref,
-    })?;
+    fn record_service(&mut self) -> Result<()> {
+        record_service_step(ServiceStepInput {
+            state_root_ref: &self.state_root_ref,
+            checkpoints: &mut self.step_checkpoints,
+        })
+    }
 
-    let remote = remote_dataspace::two_peer_service_ready_harness(
-        &input.state_root.join("remote-dataspace"),
-        remote_dataspace::RemoteDeliveryEvidence {
-            peer_bootstrap_refs: vec![dogfood_ref("remote-peer-bootstrap")?],
-            capability_refs: vec![dogfood_ref("remote-capability")?],
-            policy_refs: policy_refs.clone(),
-            resource_refs: resource_refs.clone(),
-            authority_refs: vec![dogfood_ref("remote-authority")?],
-        },
-    )?;
-    let remote_gate_ref = canonical_hash(&remote.gate_receipt_value)?;
-    gate_receipt_refs.push_limited_value(remote_gate_ref.clone(), MAX_OPERATOR_REFS, "dogfood gate refs")?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "publish-remote-assertion",
-        request_ref: Some(&remote.delivery_log.log_ref),
-        receipt_ref: Some(&remote_gate_ref),
-        result_ref: Some(&remote_gate_ref),
-        decision: "pass",
-        replay_status: "recorded",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&remote.delivery_log.log_ref),
-        diagnostics: &[],
-        state_root_ref: &state_root_ref,
-    })?;
+    fn record_remote(&mut self) -> Result<RemoteStep> {
+        let remote = record_remote_step(RemoteStepInput {
+            state_root: self.state_root,
+            state_root_ref: &self.state_root_ref,
+            policy_refs: &self.policy_refs,
+            resource_refs: &self.resource_refs,
+            checkpoints: &mut self.step_checkpoints,
+        })?;
+        self.gate_receipt_refs
+            .push_limited_value(remote.gate_ref.clone(), MAX_OPERATOR_REFS, "dogfood gate refs")?;
+        Ok(remote)
+    }
 
-    let job = run_job_stack(JobStackInput {
-        state_root: input.state_root,
-        source: &job_source_root,
-        target: &job_target_root,
-        policy_refs: &policy_refs,
-        capability_refs: &capability_refs,
-        resource_refs: &resource_refs,
-    })?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "run-job-dag",
-        request_ref: Some(&job.execution_request_ref),
-        receipt_ref: Some(&job.execution_receipt_ref),
-        result_ref: Some(&job.execution_receipt_ref),
-        decision: &job.decision,
-        replay_status: "recorded",
-        mandatory: true,
-        artifact_refs: &job.artifact_refs,
-        diagnostics: &job.diagnostics,
-        state_root_ref: &state_root_ref,
-    })?;
+    fn record_job(&mut self) -> Result<JobDogfoodRun> {
+        record_job_step(JobStepInput {
+            state_root: self.state_root,
+            source: &self.job_source_root,
+            target: &self.job_target_root,
+            state_root_ref: &self.state_root_ref,
+            policy_refs: &self.policy_refs,
+            capability_refs: &self.capability_refs,
+            resource_refs: &self.resource_refs,
+            checkpoints: &mut self.step_checkpoints,
+        })
+    }
 
-    let retention_gc = run_retention_gc_workflow(RetentionDogfoodInput {
-        root: &retention_root,
-        bundle_dir: &retention_bundle_root,
-        ledger_root: &ledger_root,
-        registry_root: &registry_root,
-    })?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "plan-retention-gc",
-        request_ref: Some(&retention_gc.object_ref),
-        receipt_ref: Some(&retention_gc.plan_ref),
-        result_ref: Some(&retention_gc.plan_ref),
-        decision: &retention_gc.plan_decision,
-        replay_status: "deterministic",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&retention_gc.plan_ref),
-        diagnostics: &retention_gc.plan_diagnostics,
-        state_root_ref: &state_root_ref,
-    })?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "apply-retention-gc-plan",
-        request_ref: Some(&retention_gc.plan_ref),
-        receipt_ref: Some(&retention_gc.apply_ref),
-        result_ref: Some(&retention_gc.apply_ref),
-        decision: &retention_gc.apply_decision,
-        replay_status: "recorded",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&retention_gc.apply_ref),
-        diagnostics: &retention_gc.apply_diagnostics,
-        state_root_ref: &state_root_ref,
-    })?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "execute-retention-gc",
-        request_ref: Some(&retention_gc.apply_ref),
-        receipt_ref: Some(&retention_gc.execution_ref),
-        result_ref: Some(&retention_gc.execution_ref),
-        decision: &retention_gc.execution_decision,
-        replay_status: "deterministic",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&retention_gc.execution_ref),
-        diagnostics: &retention_gc.execution_diagnostics,
-        state_root_ref: &state_root_ref,
-    })?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "audit-retention-gc",
-        request_ref: Some(&retention_gc.execution_ref),
-        receipt_ref: Some(&retention_gc.audit_ref),
-        result_ref: Some(&retention_gc.audit_ref),
-        decision: &retention_gc.audit_decision,
-        replay_status: "deterministic",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&retention_gc.audit_ref),
-        diagnostics: &retention_gc.audit_diagnostics,
-        state_root_ref: &state_root_ref,
-    })?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "export-retention-gc-bundle",
-        request_ref: Some(&retention_gc.explain_ref),
-        receipt_ref: Some(&retention_gc.bundle_verify_ref),
-        result_ref: Some(&retention_gc.bundle_ref),
-        decision: &retention_gc.bundle_verify_decision,
-        replay_status: "recorded",
-        mandatory: true,
-        artifact_refs: &[
-            retention_gc.bundle_ref.clone(),
-            retention_gc.bundle_profile_ref.clone(),
-            retention_gc.bundle_verify_ref.clone(),
-        ],
-        diagnostics: &retention_gc.bundle_diagnostics,
-        state_root_ref: &state_root_ref,
-    })?;
-    catalog_query_refs.push_limited_value(
-        retention_gc.catalog_receipt_ref.clone(),
-        MAX_OPERATOR_REFS,
-        "catalog query refs",
-    )?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "search-retention-gc-catalog",
-        request_ref: Some(&retention_gc.catalog_request_ref),
-        receipt_ref: Some(&retention_gc.catalog_receipt_ref),
-        result_ref: Some(&retention_gc.catalog_response_ref),
-        decision: &retention_gc.catalog_decision,
-        replay_status: "deterministic",
-        mandatory: true,
-        artifact_refs: &retention_gc.artifact_refs,
-        diagnostics: &[],
-        state_root_ref: &state_root_ref,
-    })?;
+    fn record_gc(&mut self) -> Result<RetentionDogfoodRun> {
+        let retention_gc = record_gc_steps(GcStepInput {
+            root: &self.retention_root,
+            bundle_dir: &self.retention_bundle_root,
+            ledger_root: &self.ledger_root,
+            registry_root: &self.registry_root,
+            state_root_ref: &self.state_root_ref,
+            checkpoints: &mut self.step_checkpoints,
+        })?;
+        self.catalog_query_refs.push_limited_value(
+            retention_gc.catalog_receipt_ref.clone(),
+            MAX_OPERATOR_REFS,
+            "catalog query refs",
+        )?;
+        Ok(retention_gc)
+    }
 
-    ledger::import_artifact(&ledger_root, &installed.artifact.value)?;
-    ledger::import_artifact(&ledger_root, &remote.gate_receipt_value)?;
-    let mcp_request =
-        catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string("operator-artifact")])])?;
-    let mcp_call = catalog_mcp::call(&registry_root, Some(&ledger_root), &mcp_request)?;
-    let mcp_receipt_ref = canonical_hash(&mcp_call.receipt_value)?;
-    catalog_query_refs.push_limited_value(mcp_receipt_ref.clone(), MAX_OPERATOR_REFS, "catalog query refs")?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "query-catalog-mcp",
-        request_ref: Some(&mcp_call.request.request_ref),
-        receipt_ref: Some(&mcp_receipt_ref),
-        result_ref: Some(&mcp_call.response_ref),
-        decision: &mcp_call.decision,
-        replay_status: "deterministic",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&mcp_call.response_ref),
-        diagnostics: &[],
-        state_root_ref: &state_root_ref,
-    })?;
+    fn record_catalog(&mut self, installed: &artifacts::ArtifactInstall, remote_gate_value: &IOValue) -> Result<()> {
+        let mcp_receipt_ref = record_catalog_step(CatalogStepInput {
+            ledger_root: &self.ledger_root,
+            registry_root: &self.registry_root,
+            state_root_ref: &self.state_root_ref,
+            installed,
+            remote_gate_value,
+            checkpoints: &mut self.step_checkpoints,
+        })?;
+        self.catalog_query_refs.push_limited_value(mcp_receipt_ref, MAX_OPERATOR_REFS, "catalog query refs")
+    }
 
-    let repro = build_dogfood_repro()?;
-    harness_gate_refs.push_limited_value(repro.gate_ref.clone(), MAX_OPERATOR_REFS, "harness gate refs")?;
-    gate_receipt_refs.push_limited_value(repro.gate_ref.clone(), MAX_OPERATOR_REFS, "dogfood gate refs")?;
-    repro_bundle_refs.push_limited_value(repro.bundle_ref.clone(), MAX_OPERATOR_REFS, "dogfood repro refs")?;
-    repro_verify_refs.push_limited_value(repro.verify_ref.clone(), MAX_OPERATOR_REFS, "dogfood repro verify refs")?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "export-redacted-repro",
-        request_ref: Some(&repro.report_ref),
-        receipt_ref: Some(&repro.verify_ref),
-        result_ref: Some(&repro.bundle_ref),
-        decision: "pass",
-        replay_status: "recorded",
-        mandatory: true,
-        artifact_refs: &[repro.gate_ref.clone(), repro.bundle_ref.clone()],
-        diagnostics: &[],
-        state_root_ref: &state_root_ref,
-    })?;
+    fn record_repro(&mut self, remote_gate_ref: &str) -> Result<()> {
+        let repro = record_repro_steps(ReproStepInput {
+            state_root_ref: &self.state_root_ref,
+            remote_gate_ref,
+            checkpoints: &mut self.step_checkpoints,
+        })?;
+        self.harness_gate_refs
+            .push_limited_value(repro.gate_ref.clone(), MAX_OPERATOR_REFS, "harness gate refs")?;
+        self.gate_receipt_refs
+            .push_limited_value(repro.gate_ref.clone(), MAX_OPERATOR_REFS, "dogfood gate refs")?;
+        self.repro_bundle_refs
+            .push_limited_value(repro.bundle_ref.clone(), MAX_OPERATOR_REFS, "dogfood repro refs")?;
+        self.repro_verify_refs
+            .push_limited_value(repro.verify_ref, MAX_OPERATOR_REFS, "dogfood repro verify refs")
+    }
 
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "gate-evidence",
-        request_ref: Some(&repro.report_ref),
-        receipt_ref: Some(&repro.gate_ref),
-        result_ref: Some(&repro.gate_ref),
-        decision: "pass",
-        replay_status: "deterministic",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&remote_gate_ref),
-        diagnostics: &[],
-        state_root_ref: &state_root_ref,
-    })?;
-
-    let replay_verify =
-        crate::deterministic_replay::verify_fixture_value(crate::deterministic_replay::ReplayFixtureVariant::Baseline)?;
-    let replay_index =
-        crate::deterministic_replay::index_replay_evidence(&[crate::deterministic_replay::ReplayIndexInput {
-            expected_ref: Some(replay_verify.receipt_ref.clone()),
-            value: replay_verify.value.clone(),
-        }])?;
-    replay_index_refs.push_limited_value(
-        replay_index.index_ref.clone(),
-        MAX_OPERATOR_REFS,
-        "dogfood replay index refs",
-    )?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "index-replay-evidence",
-        request_ref: Some(&replay_verify.receipt_ref),
-        receipt_ref: Some(&replay_index.index_ref),
-        result_ref: Some(&replay_index.index_ref),
-        decision: &replay_index.decision,
-        replay_status: "deterministic",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&replay_verify.receipt_ref),
-        diagnostics: &[],
-        state_root_ref: &state_root_ref,
-    })?;
-
-    let shutdown = node_runtime::node_shutdown_receipt_value(&node_runtime::ShutdownReceiptValueInput {
-        decision: "pass",
-        startup_receipt_ref: &startup_ref,
-        adapter_receipts: &node_started.adapter_receipts,
-        drained_job_refs: std::slice::from_ref(&job.execution_receipt_ref),
-        index_receipt_refs: &[dogfood_ref("shutdown-index")?],
-        diagnostics: &[],
-    })?;
-    let shutdown_ref = canonical_hash(&shutdown)?;
-    let health = node_runtime::node_restart_health_receipt_value(&node_runtime::RestartHealthReceiptValueInput {
-        startup_receipt: &node_started.startup_receipt,
-        shutdown_receipt_ref: Some(&shutdown_ref),
-        index_receipt_refs: &[dogfood_ref("restart-health-index")?],
-        head_refs: &[installed.artifact_ref.clone(), job.execution_receipt_ref.clone()],
-        open_job_refs: &[],
-        diagnostics: &[],
-    })?;
-    let health_ref = canonical_hash(&health)?;
-    push_step_checkpoint(&mut step_checkpoints, StepCheckpointInput {
-        name: "shutdown-node",
-        request_ref: Some(&startup_ref),
-        receipt_ref: Some(&shutdown_ref),
-        result_ref: Some(&health_ref),
-        decision: "pass",
-        replay_status: "recorded",
-        mandatory: true,
-        artifact_refs: std::slice::from_ref(&health_ref),
-        diagnostics: &[],
-        state_root_ref: &state_root_ref,
-    })?;
-
-    let workflow_value = operator_workflow_value(&OperatorWorkflowInput {
-        workflow_id: LOCAL_NODE_WORKFLOW_ID,
-        steps: &step_checkpoints.steps,
-        policy_refs: &policy_refs,
-        capability_refs: &capability_refs,
-        resource_refs: &resource_refs,
-        replay_profile: "recorded",
-    })?;
-    let final_state_ref = canonical_hash(&record("operator-dogfood-final-state", vec![
-        string(&state_root_ref),
-        string(&shutdown_ref),
-        string(&health_ref),
-    ]))?;
-    let report_value = dogfood_report_value(&DogfoodReportInput {
-        workflow_value: &workflow_value,
-        checkpoint_values: &step_checkpoints.checkpoints,
-        gate_receipt_refs: &gate_receipt_refs,
-        repro_bundle_refs: &repro_bundle_refs,
-        final_state_ref: &final_state_ref,
-        diagnostics: &[],
-    })?;
-    let report = parse_dogfood_report(&report_value)?;
-    let validation_command_refs = vec![dogfood_ref("cargo-nextest-ci")?];
-    let retention_gc_release_refs = vec![
-        retention_gc.audit_ref.clone(),
-        retention_gc.bundle_verify_ref.clone(),
-        retention_gc.catalog_receipt_ref.clone(),
-    ];
-    let release_gate_value = if report.decision == "pass" {
-        Some(release_gate_receipt_value(&ReleaseGateInput {
-            report_value: &report_value,
-            node_startup_ref: &startup_ref,
-            node_shutdown_ref: &shutdown_ref,
-            harness_gate_refs: &harness_gate_refs,
-            catalog_query_refs: &catalog_query_refs,
-            repro_verify_refs: &repro_verify_refs,
-            replay_index_refs: &replay_index_refs,
-            retention_gc_refs: &retention_gc_release_refs,
-            validation_command_refs: &validation_command_refs,
-        })?)
-    } else {
-        None
-    };
-    let import_refs = import_dogfood_evidence(DogfoodEvidenceImportInput {
-        ledger_root: &ledger_root,
-        workflow_value: &workflow_value,
-        step_values: &step_checkpoints.steps,
-        checkpoint_values: &step_checkpoints.checkpoints,
-        report_value: &report_value,
-        release_gate_value: release_gate_value.as_ref(),
-        replay_verify_value: &replay_verify.value,
-        replay_index_value: &replay_index.value,
-    })?;
-    let release_gate_ref = release_gate_value.as_ref().map(canonical_hash).transpose()?;
-    let StepCheckpointBuffers { steps, checkpoints } = step_checkpoints;
-    Ok(LocalNodeDogfoodRun {
-        decision: report.decision,
-        workflow_ref: canonical_hash(&workflow_value)?,
-        workflow_value,
-        step_values: steps,
-        checkpoint_values: checkpoints,
-        report_ref: report.report_ref,
-        report_value,
-        release_gate_ref,
-        release_gate_value,
-        replay_verify_ref: Some(replay_verify.receipt_ref),
-        replay_verify_value: Some(replay_verify.value),
-        replay_index_ref: Some(replay_index.index_ref),
-        replay_index_value: Some(replay_index.value),
-        ledger_import_receipt_refs: import_refs,
-    })
+    fn finish(
+        self,
+        start: &StartSteps,
+        installed: &artifacts::ArtifactInstall,
+        job: &JobDogfoodRun,
+        retention_gc: &RetentionDogfoodRun,
+    ) -> Result<LocalNodeDogfoodRun> {
+        let Self {
+            state_root_ref,
+            ledger_root,
+            policy_refs,
+            capability_refs,
+            resource_refs,
+            step_checkpoints,
+            gate_receipt_refs,
+            repro_bundle_refs,
+            harness_gate_refs,
+            catalog_query_refs,
+            repro_verify_refs,
+            replay_index_refs,
+            ..
+        } = self;
+        finish_run(FinishInput {
+            ledger_root: &ledger_root,
+            state_root_ref: &state_root_ref,
+            startup_ref: &start.startup_ref,
+            node_started: &start.node_started,
+            installed,
+            job,
+            retention_gc,
+            step_checkpoints,
+            policy_refs: &policy_refs,
+            capability_refs: &capability_refs,
+            resource_refs: &resource_refs,
+            gate_receipt_refs,
+            repro_bundle_refs,
+            harness_gate_refs,
+            catalog_query_refs,
+            repro_verify_refs,
+            replay_index_refs,
+        })
+    }
 }
 
 pub fn operator_dogfood_summary(value: &IOValue) -> Result<String> {
@@ -3233,6 +3021,765 @@ struct RetentionDogfoodRun {
     catalog_response_ref: String,
     catalog_decision: String,
     artifact_refs: Vec<String>,
+}
+
+struct GcStepInput<'a> {
+    root: &'a Path,
+    bundle_dir: &'a Path,
+    ledger_root: &'a Path,
+    registry_root: &'a Path,
+    state_root_ref: &'a str,
+    checkpoints: &'a mut StepCheckpointBuffers,
+}
+
+fn record_gc_steps(input: GcStepInput<'_>) -> Result<RetentionDogfoodRun> {
+    let GcStepInput {
+        root,
+        bundle_dir,
+        ledger_root,
+        registry_root,
+        state_root_ref,
+        checkpoints,
+    } = input;
+    let retention_gc = run_retention_gc_workflow(RetentionDogfoodInput {
+        root,
+        bundle_dir,
+        ledger_root,
+        registry_root,
+    })?;
+    record_gc_plan_steps(checkpoints, state_root_ref, &retention_gc)?;
+    record_gc_review_steps(checkpoints, state_root_ref, &retention_gc)?;
+    Ok(retention_gc)
+}
+
+fn record_gc_plan_steps(
+    checkpoints: &mut StepCheckpointBuffers,
+    state_root_ref: &str,
+    retention_gc: &RetentionDogfoodRun,
+) -> Result<()> {
+    push_step_checkpoint(checkpoints, StepCheckpointInput {
+        name: "plan-retention-gc",
+        request_ref: Some(&retention_gc.object_ref),
+        receipt_ref: Some(&retention_gc.plan_ref),
+        result_ref: Some(&retention_gc.plan_ref),
+        decision: &retention_gc.plan_decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&retention_gc.plan_ref),
+        diagnostics: &retention_gc.plan_diagnostics,
+        state_root_ref,
+    })?;
+    push_step_checkpoint(checkpoints, StepCheckpointInput {
+        name: "apply-retention-gc-plan",
+        request_ref: Some(&retention_gc.plan_ref),
+        receipt_ref: Some(&retention_gc.apply_ref),
+        result_ref: Some(&retention_gc.apply_ref),
+        decision: &retention_gc.apply_decision,
+        replay_status: "recorded",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&retention_gc.apply_ref),
+        diagnostics: &retention_gc.apply_diagnostics,
+        state_root_ref,
+    })?;
+    push_step_checkpoint(checkpoints, StepCheckpointInput {
+        name: "execute-retention-gc",
+        request_ref: Some(&retention_gc.apply_ref),
+        receipt_ref: Some(&retention_gc.execution_ref),
+        result_ref: Some(&retention_gc.execution_ref),
+        decision: &retention_gc.execution_decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&retention_gc.execution_ref),
+        diagnostics: &retention_gc.execution_diagnostics,
+        state_root_ref,
+    })
+}
+
+fn record_gc_review_steps(
+    checkpoints: &mut StepCheckpointBuffers,
+    state_root_ref: &str,
+    retention_gc: &RetentionDogfoodRun,
+) -> Result<()> {
+    push_step_checkpoint(checkpoints, StepCheckpointInput {
+        name: "audit-retention-gc",
+        request_ref: Some(&retention_gc.execution_ref),
+        receipt_ref: Some(&retention_gc.audit_ref),
+        result_ref: Some(&retention_gc.audit_ref),
+        decision: &retention_gc.audit_decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&retention_gc.audit_ref),
+        diagnostics: &retention_gc.audit_diagnostics,
+        state_root_ref,
+    })?;
+    push_step_checkpoint(checkpoints, StepCheckpointInput {
+        name: "export-retention-gc-bundle",
+        request_ref: Some(&retention_gc.explain_ref),
+        receipt_ref: Some(&retention_gc.bundle_verify_ref),
+        result_ref: Some(&retention_gc.bundle_ref),
+        decision: &retention_gc.bundle_verify_decision,
+        replay_status: "recorded",
+        mandatory: true,
+        artifact_refs: &[
+            retention_gc.bundle_ref.clone(),
+            retention_gc.bundle_profile_ref.clone(),
+            retention_gc.bundle_verify_ref.clone(),
+        ],
+        diagnostics: &retention_gc.bundle_diagnostics,
+        state_root_ref,
+    })?;
+    push_step_checkpoint(checkpoints, StepCheckpointInput {
+        name: "search-retention-gc-catalog",
+        request_ref: Some(&retention_gc.catalog_request_ref),
+        receipt_ref: Some(&retention_gc.catalog_receipt_ref),
+        result_ref: Some(&retention_gc.catalog_response_ref),
+        decision: &retention_gc.catalog_decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: &retention_gc.artifact_refs,
+        diagnostics: &[],
+        state_root_ref,
+    })
+}
+
+struct FinishInput<'a> {
+    ledger_root: &'a Path,
+    state_root_ref: &'a str,
+    startup_ref: &'a str,
+    node_started: &'a node_runtime::NodeRuntimeStart,
+    installed: &'a artifacts::ArtifactInstall,
+    job: &'a JobDogfoodRun,
+    retention_gc: &'a RetentionDogfoodRun,
+    step_checkpoints: StepCheckpointBuffers,
+    policy_refs: &'a [String],
+    capability_refs: &'a [String],
+    resource_refs: &'a [String],
+    gate_receipt_refs: Vec<String>,
+    repro_bundle_refs: Vec<String>,
+    harness_gate_refs: Vec<String>,
+    catalog_query_refs: Vec<String>,
+    repro_verify_refs: Vec<String>,
+    replay_index_refs: Vec<String>,
+}
+
+struct ReplayShutdownInput<'a> {
+    state_root_ref: &'a str,
+    startup_ref: &'a str,
+    node_started: &'a node_runtime::NodeRuntimeStart,
+    installed: &'a artifacts::ArtifactInstall,
+    job: &'a JobDogfoodRun,
+    step_checkpoints: StepCheckpointBuffers,
+    replay_index_refs: Vec<String>,
+}
+
+struct ReplayShutdown {
+    replay_verify: crate::deterministic_replay::ReplayVerifyReceipt,
+    replay_index: crate::deterministic_replay::ReplayIndexReceipt,
+    shutdown_ref: String,
+    health_ref: String,
+    step_checkpoints: StepCheckpointBuffers,
+    replay_index_refs: Vec<String>,
+}
+
+struct ReplayStep {
+    replay_verify: crate::deterministic_replay::ReplayVerifyReceipt,
+    replay_index: crate::deterministic_replay::ReplayIndexReceipt,
+    replay_index_refs: Vec<String>,
+}
+
+struct ShutdownStepInput<'a> {
+    state_root_ref: &'a str,
+    startup_ref: &'a str,
+    node_started: &'a node_runtime::NodeRuntimeStart,
+    installed: &'a artifacts::ArtifactInstall,
+    job: &'a JobDogfoodRun,
+    checkpoints: &'a mut StepCheckpointBuffers,
+}
+
+struct ShutdownStep {
+    shutdown_ref: String,
+    health_ref: String,
+}
+
+fn record_replay_shutdown(input: ReplayShutdownInput<'_>) -> Result<ReplayShutdown> {
+    let ReplayShutdownInput {
+        state_root_ref,
+        startup_ref,
+        node_started,
+        installed,
+        job,
+        mut step_checkpoints,
+        replay_index_refs,
+    } = input;
+    let replay = record_replay_step(state_root_ref, &mut step_checkpoints, replay_index_refs)?;
+    let shutdown = record_shutdown_step(ShutdownStepInput {
+        state_root_ref,
+        startup_ref,
+        node_started,
+        installed,
+        job,
+        checkpoints: &mut step_checkpoints,
+    })?;
+    Ok(ReplayShutdown {
+        replay_verify: replay.replay_verify,
+        replay_index: replay.replay_index,
+        shutdown_ref: shutdown.shutdown_ref,
+        health_ref: shutdown.health_ref,
+        step_checkpoints,
+        replay_index_refs: replay.replay_index_refs,
+    })
+}
+
+fn record_replay_step(
+    state_root_ref: &str,
+    checkpoints: &mut StepCheckpointBuffers,
+    mut replay_index_refs: Vec<String>,
+) -> Result<ReplayStep> {
+    let replay_verify =
+        crate::deterministic_replay::verify_fixture_value(crate::deterministic_replay::ReplayFixtureVariant::Baseline)?;
+    let replay_index =
+        crate::deterministic_replay::index_replay_evidence(&[crate::deterministic_replay::ReplayIndexInput {
+            expected_ref: Some(replay_verify.receipt_ref.clone()),
+            value: replay_verify.value.clone(),
+        }])?;
+    replay_index_refs.push_limited_value(
+        replay_index.index_ref.clone(),
+        MAX_OPERATOR_REFS,
+        "dogfood replay index refs",
+    )?;
+    push_step_checkpoint(checkpoints, StepCheckpointInput {
+        name: "index-replay-evidence",
+        request_ref: Some(&replay_verify.receipt_ref),
+        receipt_ref: Some(&replay_index.index_ref),
+        result_ref: Some(&replay_index.index_ref),
+        decision: &replay_index.decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&replay_verify.receipt_ref),
+        diagnostics: &[],
+        state_root_ref,
+    })?;
+    Ok(ReplayStep {
+        replay_verify,
+        replay_index,
+        replay_index_refs,
+    })
+}
+
+fn record_shutdown_step(input: ShutdownStepInput<'_>) -> Result<ShutdownStep> {
+    let shutdown = node_runtime::node_shutdown_receipt_value(&node_runtime::ShutdownReceiptValueInput {
+        decision: "pass",
+        startup_receipt_ref: input.startup_ref,
+        adapter_receipts: &input.node_started.adapter_receipts,
+        drained_job_refs: std::slice::from_ref(&input.job.execution_receipt_ref),
+        index_receipt_refs: &[dogfood_ref("shutdown-index")?],
+        diagnostics: &[],
+    })?;
+    let shutdown_ref = canonical_hash(&shutdown)?;
+    let health = node_runtime::node_restart_health_receipt_value(&node_runtime::RestartHealthReceiptValueInput {
+        startup_receipt: &input.node_started.startup_receipt,
+        shutdown_receipt_ref: Some(&shutdown_ref),
+        index_receipt_refs: &[dogfood_ref("restart-health-index")?],
+        head_refs: &[
+            input.installed.artifact_ref.clone(),
+            input.job.execution_receipt_ref.clone(),
+        ],
+        open_job_refs: &[],
+        diagnostics: &[],
+    })?;
+    let health_ref = canonical_hash(&health)?;
+    push_step_checkpoint(input.checkpoints, StepCheckpointInput {
+        name: "shutdown-node",
+        request_ref: Some(input.startup_ref),
+        receipt_ref: Some(&shutdown_ref),
+        result_ref: Some(&health_ref),
+        decision: "pass",
+        replay_status: "recorded",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&health_ref),
+        diagnostics: &[],
+        state_root_ref: input.state_root_ref,
+    })?;
+    Ok(ShutdownStep {
+        shutdown_ref,
+        health_ref,
+    })
+}
+
+struct FinishReportInput<'a> {
+    state_root_ref: &'a str,
+    shutdown_ref: &'a str,
+    health_ref: &'a str,
+    checkpoints: &'a StepCheckpointBuffers,
+    policy_refs: &'a [String],
+    capability_refs: &'a [String],
+    resource_refs: &'a [String],
+    gate_receipt_refs: &'a [String],
+    repro_bundle_refs: &'a [String],
+}
+
+struct FinishReport {
+    workflow_value: IOValue,
+    report_value: IOValue,
+    report: DogfoodReport,
+}
+
+fn build_finish_report(input: FinishReportInput<'_>) -> Result<FinishReport> {
+    let workflow_value = operator_workflow_value(&OperatorWorkflowInput {
+        workflow_id: LOCAL_NODE_WORKFLOW_ID,
+        steps: &input.checkpoints.steps,
+        policy_refs: input.policy_refs,
+        capability_refs: input.capability_refs,
+        resource_refs: input.resource_refs,
+        replay_profile: "recorded",
+    })?;
+    let final_state_ref = canonical_hash(&record("operator-dogfood-final-state", vec![
+        string(input.state_root_ref),
+        string(input.shutdown_ref),
+        string(input.health_ref),
+    ]))?;
+    let report_value = dogfood_report_value(&DogfoodReportInput {
+        workflow_value: &workflow_value,
+        checkpoint_values: &input.checkpoints.checkpoints,
+        gate_receipt_refs: input.gate_receipt_refs,
+        repro_bundle_refs: input.repro_bundle_refs,
+        final_state_ref: &final_state_ref,
+        diagnostics: &[],
+    })?;
+    let report = parse_dogfood_report(&report_value)?;
+    Ok(FinishReport {
+        workflow_value,
+        report_value,
+        report,
+    })
+}
+
+struct ReleaseValueInput<'a> {
+    report: &'a DogfoodReport,
+    report_value: &'a IOValue,
+    startup_ref: &'a str,
+    shutdown_ref: &'a str,
+    harness_gate_refs: &'a [String],
+    catalog_query_refs: &'a [String],
+    repro_verify_refs: &'a [String],
+    replay_index_refs: &'a [String],
+    retention_gc: &'a RetentionDogfoodRun,
+}
+
+fn build_release_value(input: ReleaseValueInput<'_>) -> Result<Option<IOValue>> {
+    let validation_command_refs = vec![dogfood_ref("cargo-nextest-ci")?];
+    let retention_gc_release_refs = vec![
+        input.retention_gc.audit_ref.clone(),
+        input.retention_gc.bundle_verify_ref.clone(),
+        input.retention_gc.catalog_receipt_ref.clone(),
+    ];
+    if input.report.decision == "pass" {
+        Ok(Some(release_gate_receipt_value(&ReleaseGateInput {
+            report_value: input.report_value,
+            node_startup_ref: input.startup_ref,
+            node_shutdown_ref: input.shutdown_ref,
+            harness_gate_refs: input.harness_gate_refs,
+            catalog_query_refs: input.catalog_query_refs,
+            repro_verify_refs: input.repro_verify_refs,
+            replay_index_refs: input.replay_index_refs,
+            retention_gc_refs: &retention_gc_release_refs,
+            validation_command_refs: &validation_command_refs,
+        })?))
+    } else {
+        Ok(None)
+    }
+}
+
+struct FinishReplay {
+    replay_verify: crate::deterministic_replay::ReplayVerifyReceipt,
+    replay_index: crate::deterministic_replay::ReplayIndexReceipt,
+    shutdown_ref: String,
+    health_ref: String,
+}
+
+struct FinishState<'a> {
+    input: FinishInput<'a>,
+}
+
+impl<'a> FinishState<'a> {
+    fn record_replay(&mut self) -> Result<FinishReplay> {
+        let replay = record_replay_shutdown(ReplayShutdownInput {
+            state_root_ref: self.input.state_root_ref,
+            startup_ref: self.input.startup_ref,
+            node_started: self.input.node_started,
+            installed: self.input.installed,
+            job: self.input.job,
+            step_checkpoints: std::mem::take(&mut self.input.step_checkpoints),
+            replay_index_refs: std::mem::take(&mut self.input.replay_index_refs),
+        })?;
+        self.input.step_checkpoints = replay.step_checkpoints;
+        self.input.replay_index_refs = replay.replay_index_refs;
+        Ok(FinishReplay {
+            replay_verify: replay.replay_verify,
+            replay_index: replay.replay_index,
+            shutdown_ref: replay.shutdown_ref,
+            health_ref: replay.health_ref,
+        })
+    }
+
+    fn build_report(&self, replay: &FinishReplay) -> Result<FinishReport> {
+        build_finish_report(FinishReportInput {
+            state_root_ref: self.input.state_root_ref,
+            shutdown_ref: &replay.shutdown_ref,
+            health_ref: &replay.health_ref,
+            checkpoints: &self.input.step_checkpoints,
+            policy_refs: self.input.policy_refs,
+            capability_refs: self.input.capability_refs,
+            resource_refs: self.input.resource_refs,
+            gate_receipt_refs: &self.input.gate_receipt_refs,
+            repro_bundle_refs: &self.input.repro_bundle_refs,
+        })
+    }
+
+    fn build_release(&self, replay: &FinishReplay, finish_report: &FinishReport) -> Result<Option<IOValue>> {
+        build_release_value(ReleaseValueInput {
+            report: &finish_report.report,
+            report_value: &finish_report.report_value,
+            startup_ref: self.input.startup_ref,
+            shutdown_ref: &replay.shutdown_ref,
+            harness_gate_refs: &self.input.harness_gate_refs,
+            catalog_query_refs: &self.input.catalog_query_refs,
+            repro_verify_refs: &self.input.repro_verify_refs,
+            replay_index_refs: &self.input.replay_index_refs,
+            retention_gc: self.input.retention_gc,
+        })
+    }
+
+    fn import_evidence(
+        &self,
+        replay: &FinishReplay,
+        finish_report: &FinishReport,
+        release_gate_value: Option<&IOValue>,
+    ) -> Result<Vec<String>> {
+        import_dogfood_evidence(DogfoodEvidenceImportInput {
+            ledger_root: self.input.ledger_root,
+            workflow_value: &finish_report.workflow_value,
+            step_values: &self.input.step_checkpoints.steps,
+            checkpoint_values: &self.input.step_checkpoints.checkpoints,
+            report_value: &finish_report.report_value,
+            release_gate_value,
+            replay_verify_value: &replay.replay_verify.value,
+            replay_index_value: &replay.replay_index.value,
+        })
+    }
+
+    fn complete(
+        self,
+        replay: FinishReplay,
+        finish_report: FinishReport,
+        release_gate_value: Option<IOValue>,
+        import_refs: Vec<String>,
+    ) -> Result<LocalNodeDogfoodRun> {
+        let release_gate_ref = release_gate_value.as_ref().map(canonical_hash).transpose()?;
+        let StepCheckpointBuffers { steps, checkpoints } = self.input.step_checkpoints;
+        Ok(LocalNodeDogfoodRun {
+            decision: finish_report.report.decision,
+            workflow_ref: canonical_hash(&finish_report.workflow_value)?,
+            workflow_value: finish_report.workflow_value,
+            step_values: steps,
+            checkpoint_values: checkpoints,
+            report_ref: finish_report.report.report_ref,
+            report_value: finish_report.report_value,
+            release_gate_ref,
+            release_gate_value,
+            replay_verify_ref: Some(replay.replay_verify.receipt_ref),
+            replay_verify_value: Some(replay.replay_verify.value),
+            replay_index_ref: Some(replay.replay_index.index_ref),
+            replay_index_value: Some(replay.replay_index.value),
+            ledger_import_receipt_refs: import_refs,
+        })
+    }
+}
+
+fn finish_run(input: FinishInput<'_>) -> Result<LocalNodeDogfoodRun> {
+    let mut finish = FinishState { input };
+    let replay = finish.record_replay()?;
+    let finish_report = finish.build_report(&replay)?;
+    let release_gate_value = finish.build_release(&replay, &finish_report)?;
+    let import_refs = finish.import_evidence(&replay, &finish_report, release_gate_value.as_ref())?;
+    finish.complete(replay, finish_report, release_gate_value, import_refs)
+}
+
+struct StartStepInput<'a> {
+    state_root: &'a Path,
+    state_root_ref: &'a str,
+    policy_refs: &'a [String],
+    capability_refs: &'a [String],
+    resource_refs: &'a [String],
+    checkpoints: &'a mut StepCheckpointBuffers,
+}
+
+struct StartSteps {
+    node_started: node_runtime::NodeRuntimeStart,
+    startup_ref: String,
+}
+
+fn record_start_steps(input: StartStepInput<'_>) -> Result<StartSteps> {
+    let StartStepInput {
+        state_root,
+        state_root_ref,
+        policy_refs,
+        capability_refs,
+        resource_refs,
+        checkpoints,
+    } = input;
+    let identity_resolution = resolve_identity(state_root, policy_refs)?;
+    let identity = identity_resolution
+        .identity
+        .clone()
+        .ok_or_else(|| MoltenError::invalid_harness("local dogfood identity resolution denied"))?;
+    let identity_startup =
+        node_identity::node_identity_startup_evidence_value(&identity.identity_ref, &identity_resolution.receipt_ref)?;
+    let identity_startup_ref = canonical_hash(&identity_startup)?;
+    push_step_checkpoint(checkpoints, StepCheckpointInput {
+        name: "clean-state",
+        request_ref: Some(state_root_ref),
+        receipt_ref: Some(&identity_resolution.receipt_ref),
+        result_ref: Some(&identity_startup_ref),
+        decision: "pass",
+        replay_status: "recorded",
+        mandatory: true,
+        artifact_refs: &[identity.identity_ref.clone(), identity_startup_ref.clone()],
+        diagnostics: &[],
+        state_root_ref,
+    })?;
+
+    let node_started =
+        start_node(&identity, &identity_resolution.receipt_ref, policy_refs, capability_refs, resource_refs)?;
+    let startup_ref = node_started.startup_receipt.receipt_ref.clone();
+    push_step_checkpoint(checkpoints, StepCheckpointInput {
+        name: "start-node",
+        request_ref: Some(&node_started.config.config_ref),
+        receipt_ref: Some(&startup_ref),
+        result_ref: Some(&startup_ref),
+        decision: &node_started.decision,
+        replay_status: "recorded",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&node_started.config.config_ref),
+        diagnostics: &node_started.startup_receipt.diagnostics,
+        state_root_ref,
+    })?;
+    Ok(StartSteps {
+        node_started,
+        startup_ref,
+    })
+}
+
+struct InstallStepInput<'a> {
+    registry_root: &'a Path,
+    startup_ref: &'a str,
+    policy_refs: &'a [String],
+    capability_refs: &'a [String],
+    state_root_ref: &'a str,
+    checkpoints: &'a mut StepCheckpointBuffers,
+}
+
+fn record_install_step(input: InstallStepInput<'_>) -> Result<artifacts::ArtifactInstall> {
+    let InstallStepInput {
+        registry_root,
+        startup_ref,
+        policy_refs,
+        capability_refs,
+        state_root_ref,
+        checkpoints,
+    } = input;
+    let installed = artifacts::install_artifact(registry_root, &artifacts::ArtifactInstallInput {
+        kind: "operator-artifact".to_string(),
+        payload: record("dogfood-artifact", vec![string("local-node")]),
+        schema_refs: Vec::new(),
+        dependency_refs: Vec::new(),
+        effect_manifest_ref: None,
+        policy_refs: policy_refs.to_vec(),
+        evidence_refs: vec![startup_ref.to_string()],
+        installer_ref: capability_refs[0].clone(),
+        capability_refs: capability_refs.to_vec(),
+    })?;
+    push_step_checkpoint(checkpoints, StepCheckpointInput {
+        name: "install-artifact",
+        request_ref: Some(startup_ref),
+        receipt_ref: Some(&canonical_hash(&installed.receipt_value)?),
+        result_ref: Some(&installed.artifact_ref),
+        decision: &installed.decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&installed.artifact_ref),
+        diagnostics: &[],
+        state_root_ref,
+    })?;
+    Ok(installed)
+}
+
+struct ServiceStepInput<'a> {
+    state_root_ref: &'a str,
+    checkpoints: &'a mut StepCheckpointBuffers,
+}
+
+fn record_service_step(input: ServiceStepInput<'_>) -> Result<()> {
+    let service_suite = crate::service_runtime::two_service_suite_value()?;
+    let service_run = crate::service_runtime::run_service_runtime_suite_value(&service_suite)?;
+    let service_decision = if service_run.lifecycle_receipts.iter().all(service_lifecycle_pass) {
+        "pass"
+    } else {
+        "deny"
+    };
+    push_step_checkpoint(input.checkpoints, StepCheckpointInput {
+        name: "start-service",
+        request_ref: Some(&canonical_hash(&service_suite)?),
+        receipt_ref: Some(&service_run.report_ref),
+        result_ref: Some(&service_run.report_ref),
+        decision: service_decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: &service_run.readiness_assertions.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?,
+        diagnostics: &[],
+        state_root_ref: input.state_root_ref,
+    })
+}
+
+struct RemoteStepInput<'a> {
+    state_root: &'a Path,
+    state_root_ref: &'a str,
+    policy_refs: &'a [String],
+    resource_refs: &'a [String],
+    checkpoints: &'a mut StepCheckpointBuffers,
+}
+
+struct RemoteStep {
+    run: remote_dataspace::RemoteTwoPeerHarness,
+    gate_ref: String,
+}
+
+fn record_remote_step(input: RemoteStepInput<'_>) -> Result<RemoteStep> {
+    let remote = remote_dataspace::two_peer_service_ready_harness(
+        &input.state_root.join("remote-dataspace"),
+        remote_dataspace::RemoteDeliveryEvidence {
+            peer_bootstrap_refs: vec![dogfood_ref("remote-peer-bootstrap")?],
+            capability_refs: vec![dogfood_ref("remote-capability")?],
+            policy_refs: input.policy_refs.to_vec(),
+            resource_refs: input.resource_refs.to_vec(),
+            authority_refs: vec![dogfood_ref("remote-authority")?],
+        },
+    )?;
+    let gate_ref = canonical_hash(&remote.gate_receipt_value)?;
+    push_step_checkpoint(input.checkpoints, StepCheckpointInput {
+        name: "publish-remote-assertion",
+        request_ref: Some(&remote.delivery_log.log_ref),
+        receipt_ref: Some(&gate_ref),
+        result_ref: Some(&gate_ref),
+        decision: "pass",
+        replay_status: "recorded",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&remote.delivery_log.log_ref),
+        diagnostics: &[],
+        state_root_ref: input.state_root_ref,
+    })?;
+    Ok(RemoteStep { run: remote, gate_ref })
+}
+
+struct JobStepInput<'a> {
+    state_root: &'a Path,
+    source: &'a Path,
+    target: &'a Path,
+    state_root_ref: &'a str,
+    policy_refs: &'a [String],
+    capability_refs: &'a [String],
+    resource_refs: &'a [String],
+    checkpoints: &'a mut StepCheckpointBuffers,
+}
+
+fn record_job_step(input: JobStepInput<'_>) -> Result<JobDogfoodRun> {
+    let job = run_job_stack(JobStackInput {
+        state_root: input.state_root,
+        source: input.source,
+        target: input.target,
+        policy_refs: input.policy_refs,
+        capability_refs: input.capability_refs,
+        resource_refs: input.resource_refs,
+    })?;
+    push_step_checkpoint(input.checkpoints, StepCheckpointInput {
+        name: "run-job-dag",
+        request_ref: Some(&job.execution_request_ref),
+        receipt_ref: Some(&job.execution_receipt_ref),
+        result_ref: Some(&job.execution_receipt_ref),
+        decision: &job.decision,
+        replay_status: "recorded",
+        mandatory: true,
+        artifact_refs: &job.artifact_refs,
+        diagnostics: &job.diagnostics,
+        state_root_ref: input.state_root_ref,
+    })?;
+    Ok(job)
+}
+
+struct CatalogStepInput<'a> {
+    ledger_root: &'a Path,
+    registry_root: &'a Path,
+    state_root_ref: &'a str,
+    installed: &'a artifacts::ArtifactInstall,
+    remote_gate_value: &'a IOValue,
+    checkpoints: &'a mut StepCheckpointBuffers,
+}
+
+fn record_catalog_step(input: CatalogStepInput<'_>) -> Result<String> {
+    ledger::import_artifact(input.ledger_root, &input.installed.artifact.value)?;
+    ledger::import_artifact(input.ledger_root, input.remote_gate_value)?;
+    let mcp_request =
+        catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string("operator-artifact")])])?;
+    let mcp_call = catalog_mcp::call(input.registry_root, Some(input.ledger_root), &mcp_request)?;
+    let mcp_receipt_ref = canonical_hash(&mcp_call.receipt_value)?;
+    push_step_checkpoint(input.checkpoints, StepCheckpointInput {
+        name: "query-catalog-mcp",
+        request_ref: Some(&mcp_call.request.request_ref),
+        receipt_ref: Some(&mcp_receipt_ref),
+        result_ref: Some(&mcp_call.response_ref),
+        decision: &mcp_call.decision,
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: std::slice::from_ref(&mcp_call.response_ref),
+        diagnostics: &[],
+        state_root_ref: input.state_root_ref,
+    })?;
+    Ok(mcp_receipt_ref)
+}
+
+struct ReproStepInput<'a> {
+    state_root_ref: &'a str,
+    remote_gate_ref: &'a str,
+    checkpoints: &'a mut StepCheckpointBuffers,
+}
+
+fn record_repro_steps(input: ReproStepInput<'_>) -> Result<DogfoodRepro> {
+    let repro = build_dogfood_repro()?;
+    push_step_checkpoint(input.checkpoints, StepCheckpointInput {
+        name: "export-redacted-repro",
+        request_ref: Some(&repro.report_ref),
+        receipt_ref: Some(&repro.verify_ref),
+        result_ref: Some(&repro.bundle_ref),
+        decision: "pass",
+        replay_status: "recorded",
+        mandatory: true,
+        artifact_refs: &[repro.gate_ref.clone(), repro.bundle_ref.clone()],
+        diagnostics: &[],
+        state_root_ref: input.state_root_ref,
+    })?;
+    push_step_checkpoint(input.checkpoints, StepCheckpointInput {
+        name: "gate-evidence",
+        request_ref: Some(&repro.report_ref),
+        receipt_ref: Some(&repro.gate_ref),
+        result_ref: Some(&repro.gate_ref),
+        decision: "pass",
+        replay_status: "deterministic",
+        mandatory: true,
+        artifact_refs: &[input.remote_gate_ref.to_string()],
+        diagnostics: &[],
+        state_root_ref: input.state_root_ref,
+    })?;
+    Ok(repro)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
