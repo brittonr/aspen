@@ -10257,6 +10257,66 @@ mod tests {
 
     #[test]
     fn node_control_live_workflow_bundle_reconcile_binds_receiver_evidence() {
+        let case = reconcile_case();
+        let reconciled = assert_reconcile_pass(&case);
+        let denials = assert_reconcile_denials(&case);
+        let ack = assert_ack_pass(&case, &reconciled, &denials.wrong_envelope);
+        assert_ack_denials(&case, &denials, &ack);
+    }
+
+    struct ReconcileSeed {
+        root: PathBuf,
+        policy_refs: Vec<String>,
+        resource_refs: Vec<String>,
+        peer_bootstrap_refs: Vec<String>,
+        authority_refs: Vec<String>,
+    }
+
+    struct ReconcileDelivery {
+        root: PathBuf,
+        request: node_runtime::NodeControlRequest,
+        envelope: NodeControlIngressEnvelope,
+        delivered: NodeControlIngressDeliver,
+        queue_value: IOValue,
+        control_value: IOValue,
+        control_receipt_ref: String,
+        policy_refs: Vec<String>,
+        operations: Vec<String>,
+    }
+
+    struct ReconcileCase {
+        delivery: ReconcileDelivery,
+        exported: NodeControlLiveWorkflowBundleExport,
+        gated: NodeControlLiveWorkflowBundleGate,
+        apply_receipt_value: IOValue,
+    }
+
+    struct ReconcileDenials {
+        missing_receiver: NodeControlLiveWorkflowBundleReconcile,
+        denied_control: IOValue,
+        denied_reconcile: NodeControlLiveWorkflowBundleReconcile,
+        wrong_envelope: String,
+    }
+
+    struct AckPass {
+        import_root: PathBuf,
+    }
+
+    fn reconcile_expected<'a>(operations: &'a [String]) -> LiveWorkflowBundleExpectedInput<'a> {
+        LiveWorkflowBundleExpectedInput {
+            expected_node: Some("node:reconcile"),
+            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+            expected_endpoint: None,
+            expected_peer: Some("peer:reconcile"),
+            expected_operations: operations,
+            expected_target_scope: Some("*"),
+            expected_resource_scope: Some("*"),
+            as_of_sequence: 1,
+            as_of_epoch: 1,
+        }
+    }
+
+    fn reconcile_seed() -> ReconcileSeed {
         let root = temp_dir("node-control-live-workflow-reconcile");
         init_local_node(&NodeDaemonInitInput {
             state_root: &root,
@@ -10272,37 +10332,54 @@ mod tests {
         let authority_refs =
             test_live_authority_refs(&root, "peer:reconcile", "node:reconcile", "status", &policy_refs)
                 .expect("authority refs");
+        ReconcileSeed {
+            root,
+            policy_refs,
+            resource_refs,
+            peer_bootstrap_refs,
+            authority_refs,
+        }
+    }
+
+    fn reconcile_request(seed: &ReconcileSeed) -> (IOValue, node_runtime::NodeControlRequest) {
         let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "status",
             target_ref: None,
             payload_ref: None,
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
+            authority_refs: &seed.authority_refs,
+            policy_refs: &seed.policy_refs,
+            resource_refs: &seed.resource_refs,
             evidence_refs: &[],
         })
         .expect("status request");
         let request = node_runtime::parse_node_control_request(&request_value).expect("request");
+        (request_value, request)
+    }
+
+    fn deliver_reconcile_envelope(
+        seed: &ReconcileSeed,
+        request_value: &IOValue,
+    ) -> (NodeControlIngressEnvelope, NodeControlIngressDeliver) {
         let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
-            request_value: &request_value,
+            request_value,
             from_peer: "peer:reconcile",
             to_node: "node:reconcile",
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             sequence: 1,
-            peer_bootstrap_refs: &peer_bootstrap_refs,
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
+            peer_bootstrap_refs: &seed.peer_bootstrap_refs,
+            authority_refs: &seed.authority_refs,
+            policy_refs: &seed.policy_refs,
+            resource_refs: &seed.resource_refs,
             evidence_refs: &[],
         })
         .expect("live envelope");
         publish_node_control_ingress(&NodeControlIngressPublishInput {
-            state_root: &root,
+            state_root: &seed.root,
             envelope_value: &envelope.value,
         })
         .expect("publish envelope");
         let delivered = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
-            state_root: &root,
+            state_root: &seed.root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             envelope_ref: &envelope.envelope_ref,
         })
@@ -10312,56 +10389,69 @@ mod tests {
             "{}",
             to_text(&delivered.ingress_receipt_value).expect("ingress receipt text")
         );
+        (envelope, delivered)
+    }
+
+    fn dispatched_reconcile(seed: &ReconcileSeed, delivered: &NodeControlIngressDeliver) -> (IOValue, IOValue, String) {
         run_control_loop(&NodeControlLoopInput {
-            state_root: &root,
+            state_root: &seed.root,
             max_requests: 1,
         })
         .expect("dispatch request");
-        let queue_value = read_preserves(&queue_receipt_path(&root, &delivered.request_ref)).expect("queue receipt");
+        let queue_value =
+            read_preserves(&queue_receipt_path(&seed.root, &delivered.request_ref)).expect("queue receipt");
         let control_value =
-            read_preserves(&control_outbox_receipt_path(&root, &delivered.request_ref)).expect("control receipt");
+            read_preserves(&control_outbox_receipt_path(&seed.root, &delivered.request_ref)).expect("control receipt");
         let control = node_runtime::parse_node_control_receipt(&control_value).expect("parse control");
         assert_eq!(control.decision, "pass");
-        let imported_refs = Vec::new();
-        let diagnostics = Vec::new();
-        let expected_operations = vec!["status".to_string()];
-        let expected = LiveWorkflowBundleExpectedInput {
-            expected_node: Some("node:reconcile"),
-            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: None,
-            expected_peer: Some("peer:reconcile"),
-            expected_operations: &expected_operations,
-            expected_target_scope: Some("*"),
-            expected_resource_scope: Some("*"),
-            as_of_sequence: 1,
-            as_of_epoch: 1,
-        };
+        (queue_value, control_value, control.receipt_ref)
+    }
+
+    fn reconcile_delivery() -> ReconcileDelivery {
+        let seed = reconcile_seed();
+        let (request_value, request) = reconcile_request(&seed);
+        let (envelope, delivered) = deliver_reconcile_envelope(&seed, &request_value);
+        let (queue_value, control_value, control_receipt_ref) = dispatched_reconcile(&seed, &delivered);
+        ReconcileDelivery {
+            root: seed.root,
+            request,
+            envelope,
+            delivered,
+            queue_value,
+            control_value,
+            control_receipt_ref,
+            policy_refs: seed.policy_refs,
+            operations: vec!["status".to_string()],
+        }
+    }
+
+    fn export_reconcile_bundle(delivery: &ReconcileDelivery) -> NodeControlLiveWorkflowBundleExport {
         let ticket = export_node_control_live_ticket(&NodeControlLiveTicketExportInput {
-            state_root: &root,
+            state_root: &delivery.root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            policy_refs: &policy_refs,
+            policy_refs: &delivery.policy_refs,
             evidence_refs: &[],
         })
         .expect("export reconcile ticket");
         let admission = admit_node_control_live_peer(&NodeControlLivePeerAdmitInput {
-            state_root: &root,
+            state_root: &delivery.root,
             ticket_value: &ticket.value,
             peer_id: "peer:reconcile",
             sequence: 1,
             expires_at: None,
-            policy_refs: &policy_refs,
+            policy_refs: &delivery.policy_refs,
             evidence_refs: &[],
         })
         .expect("admit reconcile peer");
         let authority_value = node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
             peer_id: "peer:reconcile",
             node_id: "node:reconcile",
-            operations: &expected_operations,
+            operations: &delivery.operations,
             target_scope: "*",
             resource_scope: "*",
             epoch: 1,
             expires_at: None,
-            policy_refs: &policy_refs,
+            policy_refs: &delivery.policy_refs,
             revocation_refs: &[],
             evidence_refs: &[],
         })
@@ -10375,6 +10465,13 @@ mod tests {
         })
         .expect("export reconcile workflow bundle");
         assert_eq!(exported.decision, "pass");
+        exported
+    }
+
+    fn gate_reconcile_bundle(
+        exported: &NodeControlLiveWorkflowBundleExport,
+        expected: &LiveWorkflowBundleExpectedInput<'_>,
+    ) -> (NodeControlLiveWorkflowBundleVerify, NodeControlLiveWorkflowBundleGate) {
         let verified = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
             bundle_value: &exported.bundle.bundle_value,
             expected_node: expected.expected_node,
@@ -10405,34 +10502,61 @@ mod tests {
         })
         .expect("gate reconcile workflow bundle");
         assert_eq!(gated.decision, "pass");
-        let bundle_ref = exported.bundle.bundle_ref.clone();
-        let verify_ref = verified.receipt_ref.clone();
-        let gate_ref = gated.receipt_ref.clone();
-        let apply_receipt_value = live_workflow_bundle_apply_receipt_value(&LiveWorkflowBundleApplyReceiptValueInput {
+        (verified, gated)
+    }
+
+    fn apply_reconcile_value(
+        delivery: &ReconcileDelivery,
+        exported: &NodeControlLiveWorkflowBundleExport,
+        verified: &NodeControlLiveWorkflowBundleVerify,
+        gated: &NodeControlLiveWorkflowBundleGate,
+        expected: &LiveWorkflowBundleExpectedInput<'_>,
+    ) -> IOValue {
+        let imported_refs = Vec::new();
+        let diagnostics = Vec::new();
+        live_workflow_bundle_apply_receipt_value(&LiveWorkflowBundleApplyReceiptValueInput {
             decision: "pass",
-            state_root: &root,
-            bundle_ref: &bundle_ref,
-            gate_receipt_ref: Some(&gate_ref),
-            recomputed_verify_receipt_ref: &verify_ref,
+            state_root: &delivery.root,
+            bundle_ref: &exported.bundle.bundle_ref,
+            gate_receipt_ref: Some(&gated.receipt_ref),
+            recomputed_verify_receipt_ref: &verified.receipt_ref,
             import_receipt_ref: None,
             imported_refs: &imported_refs,
             mode: "dry-run",
-            envelope_ref: Some(&envelope.envelope_ref),
-            operation_ref: Some(&envelope.operation_ref),
+            envelope_ref: Some(&delivery.envelope.envelope_ref),
+            operation_ref: Some(&delivery.envelope.operation_ref),
             send_receipt_ref: None,
-            expected: &expected,
+            expected,
             diagnostics: &diagnostics,
         })
-        .expect("apply receipt");
+        .expect("apply receipt")
+    }
+
+    fn reconcile_case() -> ReconcileCase {
+        let delivery = reconcile_delivery();
+        let expected = reconcile_expected(&delivery.operations);
+        let exported = export_reconcile_bundle(&delivery);
+        let (verified, gated) = gate_reconcile_bundle(&exported, &expected);
+        let apply_receipt_value = apply_reconcile_value(&delivery, &exported, &verified, &gated, &expected);
+        ReconcileCase {
+            delivery,
+            exported,
+            gated,
+            apply_receipt_value,
+        }
+    }
+
+    fn assert_reconcile_pass(case: &ReconcileCase) -> NodeControlLiveWorkflowBundleReconcile {
+        let delivery = &case.delivery;
         let reconciled = reconcile_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleReconcileInput {
-            apply_receipt_value: &apply_receipt_value,
+            apply_receipt_value: &case.apply_receipt_value,
             send_receipt_value: None,
-            ingress_receipt_value: Some(&delivered.ingress_receipt_value),
-            queue_receipt_value: Some(&queue_value),
-            control_receipt_value: Some(&control_value),
-            expected_envelope_ref: Some(&envelope.envelope_ref),
-            expected_operation_ref: Some(&envelope.operation_ref),
-            expected_request_ref: Some(&delivered.request_ref),
+            ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
+            queue_receipt_value: Some(&delivery.queue_value),
+            control_receipt_value: Some(&delivery.control_value),
+            expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
+            expected_operation_ref: Some(&delivery.envelope.operation_ref),
+            expected_request_ref: Some(&delivery.delivered.request_ref),
         })
         .expect("reconcile");
         assert_eq!(reconciled.decision, "pass");
@@ -10440,60 +10564,62 @@ mod tests {
             ledger::artifact_kind(&reconciled.receipt_value),
             "node-control-live-workflow-bundle-reconcile-receipt"
         );
-        assert_eq!(reconciled.ingress_receipt_ref.as_deref(), Some(delivered.ingress_receipt_ref.as_str()));
-        assert_eq!(reconciled.control_receipt_ref.as_deref(), Some(control.receipt_ref.as_str()));
+        assert_eq!(reconciled.ingress_receipt_ref.as_deref(), Some(delivery.delivered.ingress_receipt_ref.as_str()));
+        assert_eq!(reconciled.control_receipt_ref.as_deref(), Some(delivery.control_receipt_ref.as_str()));
         assert!(parse_node_control_authority_grant(&reconciled.receipt_value).is_err());
         assert!(
             to_text(&reconciled.receipt_value)
                 .expect("reconcile text")
                 .contains("reconcile-receipt-is-not-authority")
         );
-        import_node_artifact(&root, &reconciled.receipt_value).expect("import reconcile receipt");
-        let reconcile_authority_refs = vec![reconciled.receipt_ref.clone()];
-        let reconcile_authority_request_value =
-            node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-                operation: "status",
-                target_ref: None,
-                payload_ref: None,
-                authority_refs: &reconcile_authority_refs,
-                policy_refs: &[],
-                resource_refs: &[],
-                evidence_refs: &[],
-            })
-            .expect("reconcile authority request");
-        let reconcile_authority_envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
-            request_value: &reconcile_authority_request_value,
+        import_node_artifact(&delivery.root, &reconciled.receipt_value).expect("import reconcile receipt");
+        assert_reconcile_not_authority(case, &reconciled);
+        reconciled
+    }
+
+    fn assert_reconcile_not_authority(case: &ReconcileCase, reconciled: &NodeControlLiveWorkflowBundleReconcile) {
+        let refs = vec![reconciled.receipt_ref.clone()];
+        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "status",
+            target_ref: None,
+            payload_ref: None,
+            authority_refs: &refs,
+            policy_refs: &[],
+            resource_refs: &[],
+            evidence_refs: &[],
+        })
+        .expect("reconcile authority request");
+        let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: &request_value,
             from_peer: "peer:reconcile",
             to_node: "node:reconcile",
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
             sequence: 2,
             peer_bootstrap_refs: &[],
-            authority_refs: &reconcile_authority_refs,
+            authority_refs: &refs,
             policy_refs: &[],
             resource_refs: &[],
             evidence_refs: &[],
         })
         .expect("reconcile authority envelope");
-        let reconcile_authority_diagnostics =
-            live_send_authority_grant_diagnostics(&root, &reconcile_authority_envelope)
-                .expect("reconcile authority diagnostics");
-        assert!(reconcile_authority_diagnostics.iter().any(|value| value.contains("is not a grant")));
-        assert!(
-            reconcile_authority_diagnostics
-                .iter()
-                .any(|value| value.contains("authority delegation missing admitted grant"))
-        );
+        let diagnostics = live_send_authority_grant_diagnostics(&case.delivery.root, &envelope)
+            .expect("reconcile authority diagnostics");
+        assert!(diagnostics.iter().any(|value| value.contains("is not a grant")));
+        assert!(diagnostics.iter().any(|value| value.contains("authority delegation missing admitted grant")));
+    }
 
+    fn assert_reconcile_denials(case: &ReconcileCase) -> ReconcileDenials {
+        let delivery = &case.delivery;
         let missing_receiver =
             reconcile_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleReconcileInput {
-                apply_receipt_value: &apply_receipt_value,
+                apply_receipt_value: &case.apply_receipt_value,
                 send_receipt_value: None,
                 ingress_receipt_value: None,
                 queue_receipt_value: None,
                 control_receipt_value: None,
-                expected_envelope_ref: Some(&envelope.envelope_ref),
-                expected_operation_ref: Some(&envelope.operation_ref),
-                expected_request_ref: Some(&delivered.request_ref),
+                expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
+                expected_operation_ref: Some(&delivery.envelope.operation_ref),
+                expected_request_ref: Some(&delivery.delivered.request_ref),
             })
             .expect("missing receiver reconcile");
         assert_eq!(missing_receiver.decision, "deny");
@@ -10507,35 +10633,35 @@ mod tests {
         let wrong_envelope = local_ref("node-control-envelope", "wrong-reconcile").expect("wrong envelope");
         let wrong_reconcile =
             reconcile_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleReconcileInput {
-                apply_receipt_value: &apply_receipt_value,
+                apply_receipt_value: &case.apply_receipt_value,
                 send_receipt_value: None,
-                ingress_receipt_value: Some(&delivered.ingress_receipt_value),
-                queue_receipt_value: Some(&queue_value),
-                control_receipt_value: Some(&control_value),
+                ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
+                queue_receipt_value: Some(&delivery.queue_value),
+                control_receipt_value: Some(&delivery.control_value),
                 expected_envelope_ref: Some(&wrong_envelope),
-                expected_operation_ref: Some(&envelope.operation_ref),
-                expected_request_ref: Some(&delivered.request_ref),
+                expected_operation_ref: Some(&delivery.envelope.operation_ref),
+                expected_request_ref: Some(&delivery.delivered.request_ref),
             })
             .expect("wrong envelope reconcile");
         assert_eq!(wrong_reconcile.decision, "deny");
         assert!(wrong_reconcile.diagnostics.iter().any(|diagnostic| diagnostic.contains("does not match expected")));
 
         let denied_control = node_runtime::node_control_deny_receipt_value(
-            &request,
+            &delivery.request,
             &local_ref("node-startup", "reconcile-deny").expect("startup ref"),
             "receiver denial propagated",
         )
         .expect("denied control");
         let denied_reconcile =
             reconcile_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleReconcileInput {
-                apply_receipt_value: &apply_receipt_value,
+                apply_receipt_value: &case.apply_receipt_value,
                 send_receipt_value: None,
-                ingress_receipt_value: Some(&delivered.ingress_receipt_value),
-                queue_receipt_value: Some(&queue_value),
+                ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
+                queue_receipt_value: Some(&delivery.queue_value),
                 control_receipt_value: Some(&denied_control),
-                expected_envelope_ref: Some(&envelope.envelope_ref),
-                expected_operation_ref: Some(&envelope.operation_ref),
-                expected_request_ref: Some(&delivered.request_ref),
+                expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
+                expected_operation_ref: Some(&delivery.envelope.operation_ref),
+                expected_request_ref: Some(&delivery.delivered.request_ref),
             })
             .expect("denied reconcile");
         assert_eq!(denied_reconcile.decision, "deny");
@@ -10546,12 +10672,26 @@ mod tests {
                 .any(|diagnostic| diagnostic.contains("receiver denial propagated"))
         );
 
+        ReconcileDenials {
+            missing_receiver,
+            denied_control,
+            denied_reconcile,
+            wrong_envelope,
+        }
+    }
+
+    fn assert_ack_pass(
+        case: &ReconcileCase,
+        reconciled: &NodeControlLiveWorkflowBundleReconcile,
+        wrong_envelope: &str,
+    ) -> AckPass {
+        let delivery = &case.delivery;
         let ack_export = export_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckExportInput {
-            apply_receipt_value: &apply_receipt_value,
+            apply_receipt_value: &case.apply_receipt_value,
             send_receipt_value: None,
-            ingress_receipt_value: Some(&delivered.ingress_receipt_value),
-            queue_receipt_value: Some(&queue_value),
-            control_receipt_value: Some(&control_value),
+            ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
+            queue_receipt_value: Some(&delivery.queue_value),
+            control_receipt_value: Some(&delivery.control_value),
             reconcile_receipt_value: &reconciled.receipt_value,
         })
         .expect("ack export");
@@ -10564,19 +10704,19 @@ mod tests {
         );
         assert!(parse_node_control_authority_grant(&ack_export.ack.ack_value).is_err());
         assert!(to_text(&ack_export.ack.ack_value).expect("ack text").contains("ack-bundle-is-not-authority"));
-        let ack_import_root = temp_dir("node-control-live-workflow-ack-import");
+        let import_root = temp_dir("node-control-live-workflow-ack-import");
         init_local_node(&NodeDaemonInitInput {
-            state_root: &ack_import_root,
+            state_root: &import_root,
             node_id: "node:ack-import",
         })
         .expect("init ack import root");
         let ack_import = import_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckImportInput {
-            state_root: &ack_import_root,
+            state_root: &import_root,
             ack_value: &ack_export.ack.ack_value,
-            expected_bundle_ref: Some(&bundle_ref),
-            expected_envelope_ref: Some(&envelope.envelope_ref),
-            expected_operation_ref: Some(&envelope.operation_ref),
-            expected_request_ref: Some(&delivered.request_ref),
+            expected_bundle_ref: Some(&case.exported.bundle.bundle_ref),
+            expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
+            expected_operation_ref: Some(&delivery.envelope.operation_ref),
+            expected_request_ref: Some(&delivery.delivered.request_ref),
         })
         .expect("ack import");
         assert_eq!(ack_import.decision, "pass");
@@ -10586,17 +10726,39 @@ mod tests {
             "node-control-live-workflow-bundle-ack-import-receipt"
         );
         assert!(to_text(&ack_import.receipt_value).expect("ack import text").contains("ack-import-is-not-authority"));
-        read_node_ledger_artifact(&ack_import_root, &ack_export.ack.ack_ref).expect("ack imported");
-        read_node_ledger_artifact(&ack_import_root, &reconciled.receipt_ref).expect("reconcile imported");
+        read_node_ledger_artifact(&import_root, &ack_export.ack.ack_ref).expect("ack imported");
+        read_node_ledger_artifact(&import_root, &reconciled.receipt_ref).expect("reconcile imported");
+        assert_protocol_pass(case, reconciled, &ack_export.ack.ack_value);
+        let wrong_ack_import =
+            import_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckImportInput {
+                state_root: &import_root,
+                ack_value: &ack_export.ack.ack_value,
+                expected_bundle_ref: Some(&case.exported.bundle.bundle_ref),
+                expected_envelope_ref: Some(wrong_envelope),
+                expected_operation_ref: Some(&delivery.envelope.operation_ref),
+                expected_request_ref: Some(&delivery.delivered.request_ref),
+            })
+            .expect("wrong ack import");
+        assert_eq!(wrong_ack_import.decision, "deny");
+        assert!(wrong_ack_import.diagnostics.iter().any(|value| value.contains("does not match expected")));
+        AckPass { import_root }
+    }
+
+    fn assert_protocol_pass(
+        case: &ReconcileCase,
+        reconciled: &NodeControlLiveWorkflowBundleReconcile,
+        ack_value: &IOValue,
+    ) {
+        let delivery = &case.delivery;
         let protocol_gate = gate_node_control_live_workflow_protocol(&NodeControlLiveWorkflowProtocolGateInput {
-            bundle_value: &exported.bundle.bundle_value,
-            gate_receipt_value: &gated.receipt_value,
-            apply_receipt_value: &apply_receipt_value,
+            bundle_value: &case.exported.bundle.bundle_value,
+            gate_receipt_value: &case.gated.receipt_value,
+            apply_receipt_value: &case.apply_receipt_value,
             reconcile_receipt_value: &reconciled.receipt_value,
-            ack_value: &ack_export.ack.ack_value,
-            expected_envelope_ref: Some(&envelope.envelope_ref),
-            expected_operation_ref: Some(&envelope.operation_ref),
-            expected_request_ref: Some(&delivered.request_ref),
+            ack_value,
+            expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
+            expected_operation_ref: Some(&delivery.envelope.operation_ref),
+            expected_request_ref: Some(&delivery.delivered.request_ref),
         })
         .expect("workflow protocol gate");
         assert_eq!(protocol_gate.decision, "pass");
@@ -10604,27 +10766,18 @@ mod tests {
         assert_eq!(protocol_gate.message_count, 3);
         assert_eq!(ledger::artifact_kind(&protocol_gate.receipt_value), "protocol-session-gate-receipt");
         assert!(parse_node_control_authority_grant(&protocol_gate.receipt_value).is_err());
-        let wrong_ack_import =
-            import_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckImportInput {
-                state_root: &ack_import_root,
-                ack_value: &ack_export.ack.ack_value,
-                expected_bundle_ref: Some(&bundle_ref),
-                expected_envelope_ref: Some(&wrong_envelope),
-                expected_operation_ref: Some(&envelope.operation_ref),
-                expected_request_ref: Some(&delivered.request_ref),
-            })
-            .expect("wrong ack import");
-        assert_eq!(wrong_ack_import.decision, "deny");
-        assert!(wrong_ack_import.diagnostics.iter().any(|value| value.contains("does not match expected")));
+    }
 
+    fn assert_ack_denials(case: &ReconcileCase, denials: &ReconcileDenials, ack: &AckPass) {
+        let delivery = &case.delivery;
         let missing_ack_export =
             export_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckExportInput {
-                apply_receipt_value: &apply_receipt_value,
+                apply_receipt_value: &case.apply_receipt_value,
                 send_receipt_value: None,
                 ingress_receipt_value: None,
                 queue_receipt_value: None,
                 control_receipt_value: None,
-                reconcile_receipt_value: &missing_receiver.receipt_value,
+                reconcile_receipt_value: &denials.missing_receiver.receipt_value,
             })
             .expect("missing ack export");
         assert_eq!(missing_ack_export.decision, "deny");
@@ -10637,12 +10790,12 @@ mod tests {
 
         let denied_ack_export =
             export_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckExportInput {
-                apply_receipt_value: &apply_receipt_value,
+                apply_receipt_value: &case.apply_receipt_value,
                 send_receipt_value: None,
-                ingress_receipt_value: Some(&delivered.ingress_receipt_value),
-                queue_receipt_value: Some(&queue_value),
-                control_receipt_value: Some(&denied_control),
-                reconcile_receipt_value: &denied_reconcile.receipt_value,
+                ingress_receipt_value: Some(&delivery.delivered.ingress_receipt_value),
+                queue_receipt_value: Some(&delivery.queue_value),
+                control_receipt_value: Some(&denials.denied_control),
+                reconcile_receipt_value: &denials.denied_reconcile.receipt_value,
             })
             .expect("denied ack export");
         assert_eq!(denied_ack_export.decision, "pass");
@@ -10656,26 +10809,26 @@ mod tests {
         );
         let denied_ack_import =
             import_node_control_live_workflow_bundle_ack(&NodeControlLiveWorkflowBundleAckImportInput {
-                state_root: &ack_import_root,
+                state_root: &ack.import_root,
                 ack_value: &denied_ack_export.ack.ack_value,
-                expected_bundle_ref: Some(&bundle_ref),
-                expected_envelope_ref: Some(&envelope.envelope_ref),
-                expected_operation_ref: Some(&envelope.operation_ref),
-                expected_request_ref: Some(&delivered.request_ref),
+                expected_bundle_ref: Some(&case.exported.bundle.bundle_ref),
+                expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
+                expected_operation_ref: Some(&delivery.envelope.operation_ref),
+                expected_request_ref: Some(&delivery.delivered.request_ref),
             })
             .expect("denied ack import");
         assert_eq!(denied_ack_import.decision, "pass");
         assert_eq!(denied_ack_import.receiver_decision, "deny");
         let denied_protocol_gate =
             gate_node_control_live_workflow_protocol(&NodeControlLiveWorkflowProtocolGateInput {
-                bundle_value: &exported.bundle.bundle_value,
-                gate_receipt_value: &gated.receipt_value,
-                apply_receipt_value: &apply_receipt_value,
-                reconcile_receipt_value: &denied_reconcile.receipt_value,
+                bundle_value: &case.exported.bundle.bundle_value,
+                gate_receipt_value: &case.gated.receipt_value,
+                apply_receipt_value: &case.apply_receipt_value,
+                reconcile_receipt_value: &denials.denied_reconcile.receipt_value,
                 ack_value: &denied_ack_export.ack.ack_value,
-                expected_envelope_ref: Some(&envelope.envelope_ref),
-                expected_operation_ref: Some(&envelope.operation_ref),
-                expected_request_ref: Some(&delivered.request_ref),
+                expected_envelope_ref: Some(&delivery.envelope.envelope_ref),
+                expected_operation_ref: Some(&delivery.envelope.operation_ref),
+                expected_request_ref: Some(&delivery.delivered.request_ref),
             })
             .expect("denied workflow protocol gate");
         assert_eq!(denied_protocol_gate.decision, "deny");
