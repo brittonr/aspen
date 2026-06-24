@@ -2886,6 +2886,17 @@ fn live_workflow_bundle_reconcile_send_diagnostics(artifacts: &ReconcileArtifact
     diagnostics
 }
 
+fn receiver_ref_note(kind: &str, actual: &str, expected: Option<&str>, source: &str) -> Option<String> {
+    let expected = expected?;
+    if actual == expected {
+        None
+    } else {
+        Some(format!(
+            "node control live workflow bundle reconcile receiver {kind} {actual} does not match {source} {expected}"
+        ))
+    }
+}
+
 fn live_workflow_bundle_reconcile_ingress_diagnostics(
     input: &NodeControlLiveWorkflowBundleReconcileInput<'_>,
     artifacts: &ReconcileArtifacts<'_>,
@@ -2905,53 +2916,31 @@ fn live_workflow_bundle_reconcile_ingress_diagnostics(
         ));
         diagnostics.extend(ingress.diagnostics.clone());
     }
-    if let Some(expected) = input.expected_envelope_ref
-        && ingress.envelope_ref != expected
-    {
-        diagnostics.push(format!(
-            "node control live workflow bundle reconcile receiver envelope {} does not match expected {}",
-            ingress.envelope_ref, expected
-        ));
+    if let Some(note) = receiver_ref_note("envelope", &ingress.envelope_ref, input.expected_envelope_ref, "expected") {
+        diagnostics.push(note);
     }
-    if let Some(expected) = artifacts.apply.envelope_ref.as_ref()
-        && ingress.envelope_ref != *expected
+    if let Some(note) =
+        receiver_ref_note("envelope", &ingress.envelope_ref, artifacts.apply.envelope_ref.as_deref(), "apply")
     {
-        diagnostics.push(format!(
-            "node control live workflow bundle reconcile receiver envelope {} does not match apply {}",
-            ingress.envelope_ref, expected
-        ));
+        diagnostics.push(note);
     }
     if let Some(send) = artifacts.send
-        && ingress.envelope_ref != send.envelope_ref
+        && let Some(note) =
+            receiver_ref_note("envelope", &ingress.envelope_ref, Some(send.envelope_ref.as_str()), "send")
     {
-        diagnostics.push(format!(
-            "node control live workflow bundle reconcile receiver envelope {} does not match send {}",
-            ingress.envelope_ref, send.envelope_ref
-        ));
+        diagnostics.push(note);
     }
-    if let Some(expected) = input.expected_operation_ref
-        && ingress.operation_ref != expected
+    if let Some(note) = receiver_ref_note("operation", &ingress.operation_ref, input.expected_operation_ref, "expected")
     {
-        diagnostics.push(format!(
-            "node control live workflow bundle reconcile receiver operation {} does not match expected {}",
-            ingress.operation_ref, expected
-        ));
+        diagnostics.push(note);
     }
-    if let Some(expected) = artifacts.apply.operation_ref.as_ref()
-        && ingress.operation_ref != *expected
+    if let Some(note) =
+        receiver_ref_note("operation", &ingress.operation_ref, artifacts.apply.operation_ref.as_deref(), "apply")
     {
-        diagnostics.push(format!(
-            "node control live workflow bundle reconcile receiver operation {} does not match apply {}",
-            ingress.operation_ref, expected
-        ));
+        diagnostics.push(note);
     }
-    if let Some(expected) = input.expected_request_ref
-        && ingress.request_ref != expected
-    {
-        diagnostics.push(format!(
-            "node control live workflow bundle reconcile receiver request {} does not match expected {}",
-            ingress.request_ref, expected
-        ));
+    if let Some(note) = receiver_ref_note("request", &ingress.request_ref, input.expected_request_ref, "expected") {
+        diagnostics.push(note);
     }
     if ingress.decision == "pass" && ingress.queue_receipt_ref.is_none() {
         diagnostics.push(

@@ -229,6 +229,8 @@
 
 ## Patterns That Work
 
+- 2026-06-24 Octet node daemon receiver-reference split: extracting repeated reconcile ingress mismatch diagnostics into neutral same-file `receiver_ref_note` lowered the no-disabled probe from 7032 to 7030 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_live_workflow_bundle_reconcile_binds_receiver_evidence`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-receiver-ref-note-0`.
+
 - 2026-06-23 Octet retention admission-set split: extracting `src/retention/mod.rs::admit_destructive_retention_evidence` evidence-admission collection/flags/output merging into neutral same-file `AdmitSet`/`AdmitFlags` helpers lowered the no-disabled probe from 7040 to 7038 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-admit-set-0`.
 
 - 2026-06-23 Octet retention execution-gate split: extracting `src/retention/mod.rs::store_retention_gc_execution_gate` apply readback/diagnostic collection into neutral same-file `ExecutionGateParts`/`execution_gate_parts` lowered the no-disabled probe from 7043 to 7041 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-execution-gate-parts-0`.
