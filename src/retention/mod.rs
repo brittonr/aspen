@@ -2416,6 +2416,12 @@ struct RetentionBundleArtifactGroupInput<'a> {
     read: fn(&Path, &str) -> Result<IOValue>,
 }
 
+struct GroupSpec<'a> {
+    dir_name: &'static str,
+    refs: &'a [String],
+    read: fn(&Path, &str) -> Result<IOValue>,
+}
+
 struct RetentionCandidateBundleVerifyValueInput<'a> {
     bundle: &'a RetentionCandidateBundle,
     decision: &'a str,
@@ -5242,78 +5248,7 @@ pub fn export_retention_candidate_bundle(
     let artifact_dir = input.out.join("artifacts");
     fs::create_dir_all(&artifact_dir).map_err(MoltenError::from)?;
     write_store_value(&input.out.join("explain.preserves"), &explain.value)?;
-    let mut artifact_refs = Vec::new();
-    let mut diagnostics = Vec::new();
-    export_retention_bundle_artifact_group(
-        RetentionBundleArtifactGroupInput {
-            root: input.root,
-            bundle_dir: &artifact_dir,
-            dir_name: "gc-plans",
-            refs: &explain.gc_plan_refs,
-            read: read_retention_gc_plan_value,
-        },
-        &mut artifact_refs,
-        &mut diagnostics,
-    )?;
-    export_retention_bundle_artifact_group(
-        RetentionBundleArtifactGroupInput {
-            root: input.root,
-            bundle_dir: &artifact_dir,
-            dir_name: "gc-applies",
-            refs: &explain.gc_apply_refs,
-            read: read_retention_gc_apply_value,
-        },
-        &mut artifact_refs,
-        &mut diagnostics,
-    )?;
-    export_retention_bundle_artifact_group(
-        RetentionBundleArtifactGroupInput {
-            root: input.root,
-            bundle_dir: &artifact_dir,
-            dir_name: "gc-executes",
-            refs: &explain.gc_execution_refs,
-            read: read_retention_gc_execution_value,
-        },
-        &mut artifact_refs,
-        &mut diagnostics,
-    )?;
-    export_retention_bundle_artifact_group(
-        RetentionBundleArtifactGroupInput {
-            root: input.root,
-            bundle_dir: &artifact_dir,
-            dir_name: "gc-audits",
-            refs: &explain.gc_audit_refs,
-            read: read_retention_gc_audit_value,
-        },
-        &mut artifact_refs,
-        &mut diagnostics,
-    )?;
-    export_retention_bundle_artifact_group(
-        RetentionBundleArtifactGroupInput {
-            root: input.root,
-            bundle_dir: &artifact_dir,
-            dir_name: "receipts",
-            refs: &explain.retention_receipt_refs,
-            read: read_retention_receipt_value,
-        },
-        &mut artifact_refs,
-        &mut diagnostics,
-    )?;
-    export_retention_bundle_artifact_group(
-        RetentionBundleArtifactGroupInput {
-            root: input.root,
-            bundle_dir: &artifact_dir,
-            dir_name: "tombstones",
-            refs: &explain.tombstone_refs,
-            read: read_retention_tombstone_value,
-        },
-        &mut artifact_refs,
-        &mut diagnostics,
-    )?;
-    artifact_refs.sort();
-    artifact_refs.dedup();
-    diagnostics.sort();
-    diagnostics.dedup();
+    let (artifact_refs, diagnostics) = export_groups(input.root, &artifact_dir, &explain)?;
     let value = retention_candidate_bundle_value(&RetentionCandidateBundleValueInput {
         explain: &explain,
         artifact_refs: &artifact_refs,
@@ -5327,6 +5262,65 @@ pub fn export_retention_candidate_bundle(
         write_retention_candidate_bundle_redacted_view(input.out, &bundle)?;
     }
     Ok(bundle)
+}
+
+fn export_groups(
+    root: &Path,
+    artifact_dir: &Path,
+    explain: &RetentionCandidateExplain,
+) -> Result<(Vec<String>, Vec<String>)> {
+    let groups = [
+        GroupSpec {
+            dir_name: "gc-plans",
+            refs: &explain.gc_plan_refs,
+            read: read_retention_gc_plan_value,
+        },
+        GroupSpec {
+            dir_name: "gc-applies",
+            refs: &explain.gc_apply_refs,
+            read: read_retention_gc_apply_value,
+        },
+        GroupSpec {
+            dir_name: "gc-executes",
+            refs: &explain.gc_execution_refs,
+            read: read_retention_gc_execution_value,
+        },
+        GroupSpec {
+            dir_name: "gc-audits",
+            refs: &explain.gc_audit_refs,
+            read: read_retention_gc_audit_value,
+        },
+        GroupSpec {
+            dir_name: "receipts",
+            refs: &explain.retention_receipt_refs,
+            read: read_retention_receipt_value,
+        },
+        GroupSpec {
+            dir_name: "tombstones",
+            refs: &explain.tombstone_refs,
+            read: read_retention_tombstone_value,
+        },
+    ];
+    let mut artifact_refs = Vec::new();
+    let mut diagnostics = Vec::new();
+    for group in groups {
+        export_retention_bundle_artifact_group(
+            RetentionBundleArtifactGroupInput {
+                root,
+                bundle_dir: artifact_dir,
+                dir_name: group.dir_name,
+                refs: group.refs,
+                read: group.read,
+            },
+            &mut artifact_refs,
+            &mut diagnostics,
+        )?;
+    }
+    artifact_refs.sort();
+    artifact_refs.dedup();
+    diagnostics.sort();
+    diagnostics.dedup();
+    Ok((artifact_refs, diagnostics))
 }
 
 fn export_retention_bundle_artifact_group(
