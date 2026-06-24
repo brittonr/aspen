@@ -6352,18 +6352,20 @@ pub async fn node_control_live_serve_listener_loopback(
     })
 }
 
-async fn serve_node_control_live_listener_with_topic(
+struct EventScan {
+    diagnostics: Vec<String>,
+    transport_receipt_refs: Vec<String>,
+    neighbor_events: Vec<String>,
+    observed_events: u64,
+}
+
+async fn scan_events(
     input: &NodeControlLiveServeInput<'_>,
     receiver: &mut iroh_gossip::api::GossipTopic,
     node_id: &str,
-    logical_endpoint_id: &str,
-    bound_endpoint_id: &str,
-) -> Result<NodeControlLiveServe> {
-    validate_listener_event_limit(input.max_events)?;
-    validate_loop_request_limit(input.max_requests_per_tick)?;
+) -> Result<EventScan> {
     let event_capacity = usize::try_from(input.max_events)
         .map_err(|_| MoltenError::invalid_harness("node control live listener max events exceeds usize capacity"))?;
-    let startup = current_startup_receipt(input.state_root)?;
     let mut diagnostics = Vec::with_capacity(event_capacity.saturating_add(2));
     let mut transport_receipt_refs = Vec::with_capacity(event_capacity);
     let mut neighbor_events = Vec::with_capacity(event_capacity);
@@ -6400,6 +6402,25 @@ async fn serve_node_control_live_listener_with_topic(
             break;
         }
     }
+    Ok(EventScan {
+        diagnostics,
+        transport_receipt_refs,
+        neighbor_events,
+        observed_events,
+    })
+}
+
+async fn serve_node_control_live_listener_with_topic(
+    input: &NodeControlLiveServeInput<'_>,
+    receiver: &mut iroh_gossip::api::GossipTopic,
+    node_id: &str,
+    logical_endpoint_id: &str,
+    bound_endpoint_id: &str,
+) -> Result<NodeControlLiveServe> {
+    validate_listener_event_limit(input.max_events)?;
+    validate_loop_request_limit(input.max_requests_per_tick)?;
+    let startup = current_startup_receipt(input.state_root)?;
+    let mut scan = scan_events(input, receiver, node_id).await?;
     let service = serve_node_control(&NodeControlServeInput {
         state_root: input.state_root,
         topic: input.topic,
@@ -6408,9 +6429,10 @@ async fn serve_node_control_live_listener_with_topic(
         supervisor_policy_value: input.supervisor_policy_value,
     })?;
     if service.decision != "pass" {
-        diagnostics.push(format!("node control live listener service drain decision {}", service.decision));
+        scan.diagnostics
+            .push(format!("node control live listener service drain decision {}", service.decision));
     }
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let decision = if scan.diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = live_listener_receipt_value(&ListenerReceiptValueInput {
         decision,
         startup_receipt_ref: &startup.receipt_ref,
@@ -6419,11 +6441,11 @@ async fn serve_node_control_live_listener_with_topic(
         bound_endpoint_id,
         topic: input.topic,
         max_events: input.max_events,
-        observed_events,
-        transport_receipt_refs: &transport_receipt_refs,
-        neighbor_events: &neighbor_events,
+        observed_events: scan.observed_events,
+        transport_receipt_refs: &scan.transport_receipt_refs,
+        neighbor_events: &scan.neighbor_events,
         service_receipt_ref: &service.service_receipt_ref,
-        diagnostics: &diagnostics,
+        diagnostics: &scan.diagnostics,
     })?;
     let listener_receipt_ref = canonical_hash(&receipt_value)?;
     write_preserves(&control_live_listener_receipt_path(input.state_root, &listener_receipt_ref), &receipt_value)?;
@@ -6432,9 +6454,9 @@ async fn serve_node_control_live_listener_with_topic(
         listener_receipt_ref,
         listener_receipt_value: receipt_value,
         service,
-        transport_receipt_refs,
-        neighbor_events,
-        observed_events,
+        transport_receipt_refs: scan.transport_receipt_refs,
+        neighbor_events: scan.neighbor_events,
+        observed_events: scan.observed_events,
         bound_endpoint_id: bound_endpoint_id.to_string(),
         live_ticket_ref: None,
         live_ticket_value: None,
