@@ -6746,6 +6746,63 @@ pub fn publish_node_control_ingress(input: &NodeControlIngressPublishInput<'_>) 
     })
 }
 
+#[derive(Debug, Default)]
+struct EnqueueOutcome {
+    idempotency_receipt_ref: Option<String>,
+    queue_receipt_ref: Option<String>,
+    has_enqueued: bool,
+    diagnostics: Vec<String>,
+}
+
+fn apply_ingress_enqueue(state_root: &Path, envelope: &NodeControlIngressEnvelope) -> Result<EnqueueOutcome> {
+    let idempotency_evidence_refs = ingress_idempotency_evidence_refs(envelope);
+    let scope_ref = delivery_idempotency::remote_topic_scope_ref(&envelope.topic, &envelope.to_node)?;
+    let delivery = delivery_idempotency::check_delivery(delivery_idempotency::DeliveryCheckInput {
+        root: &state_root.join(CONTROL_IDEMPOTENCY_DIR),
+        scope_profile: delivery_idempotency::SCOPE_REMOTE_TOPIC,
+        scope_ref: &scope_ref,
+        producer: &envelope.from_peer,
+        consumer: &envelope.to_node,
+        sequence: envelope.sequence,
+        intent: "node-control-ingress",
+        payload_ref: &envelope.request.request_ref,
+        policy_refs: &envelope.policy_refs,
+        evidence_refs: &idempotency_evidence_refs,
+        semantic_result_ref: Some(&envelope.request.request_ref),
+        gap_policy: delivery_idempotency::GapPolicy::Deny,
+    })?;
+    let idempotency_receipt_ref = Some(delivery.receipt.receipt_ref.clone());
+    import_node_artifact(state_root, &delivery.receipt.value)?;
+    if delivery.should_commit_side_effect {
+        let submitted = submit_control_request(&NodeControlSubmitInput {
+            state_root,
+            request_value: &envelope.request.value,
+        })?;
+        return Ok(EnqueueOutcome {
+            idempotency_receipt_ref,
+            queue_receipt_ref: Some(submitted.queue_receipt_ref),
+            has_enqueued: true,
+            diagnostics: Vec::new(),
+        });
+    }
+    if delivery.receipt.decision == "duplicate" {
+        return Ok(EnqueueOutcome {
+            idempotency_receipt_ref,
+            queue_receipt_ref: prior_queue_receipt_ref(state_root, &envelope.request.request_ref).ok(),
+            has_enqueued: false,
+            diagnostics: Vec::new(),
+        });
+    }
+    let mut diagnostics = delivery.receipt.diagnostics.clone();
+    diagnostics.push(format!("node control ingress idempotency decision {}", delivery.receipt.decision));
+    Ok(EnqueueOutcome {
+        idempotency_receipt_ref,
+        queue_receipt_ref: None,
+        has_enqueued: false,
+        diagnostics,
+    })
+}
+
 pub fn deliver_node_control_ingress(input: &NodeControlIngressDeliverInput<'_>) -> Result<NodeControlIngressDeliver> {
     validate_state_root(input.state_root)?;
     validate_node_id(input.topic)?;
@@ -6761,50 +6818,23 @@ pub fn deliver_node_control_ingress(input: &NodeControlIngressDeliverInput<'_>) 
         )));
     }
     let mut diagnostics = ingress_pre_enqueue_diagnostics(input.state_root, input.topic, &envelope)?;
-    let mut idempotency_receipt_ref = None;
-    let mut queue_receipt_ref = None;
-    let mut has_enqueued = false;
+    let mut enqueue = EnqueueOutcome::default();
     if diagnostics.is_empty() {
-        let idempotency_evidence_refs = ingress_idempotency_evidence_refs(&envelope);
-        let scope_ref = delivery_idempotency::remote_topic_scope_ref(&envelope.topic, &envelope.to_node)?;
-        let delivery = delivery_idempotency::check_delivery(delivery_idempotency::DeliveryCheckInput {
-            root: &input.state_root.join(CONTROL_IDEMPOTENCY_DIR),
-            scope_profile: delivery_idempotency::SCOPE_REMOTE_TOPIC,
-            scope_ref: &scope_ref,
-            producer: &envelope.from_peer,
-            consumer: &envelope.to_node,
-            sequence: envelope.sequence,
-            intent: "node-control-ingress",
-            payload_ref: &envelope.request.request_ref,
-            policy_refs: &envelope.policy_refs,
-            evidence_refs: &idempotency_evidence_refs,
-            semantic_result_ref: Some(&envelope.request.request_ref),
-            gap_policy: delivery_idempotency::GapPolicy::Deny,
-        })?;
-        idempotency_receipt_ref = Some(delivery.receipt.receipt_ref.clone());
-        import_node_artifact(input.state_root, &delivery.receipt.value)?;
-        if delivery.should_commit_side_effect {
-            let submitted = submit_control_request(&NodeControlSubmitInput {
-                state_root: input.state_root,
-                request_value: &envelope.request.value,
-            })?;
-            queue_receipt_ref = Some(submitted.queue_receipt_ref);
-            has_enqueued = true;
-        } else if delivery.receipt.decision == "duplicate" {
-            queue_receipt_ref = prior_queue_receipt_ref(input.state_root, &envelope.request.request_ref).ok();
-        } else {
-            diagnostics.extend(delivery.receipt.diagnostics.iter().cloned());
-            diagnostics.push(format!("node control ingress idempotency decision {}", delivery.receipt.decision));
-        }
+        enqueue = apply_ingress_enqueue(input.state_root, &envelope)?;
+        diagnostics.append(&mut enqueue.diagnostics);
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = ingress_receipt_value(&IngressReceiptValueInput {
         decision,
-        phase: if has_enqueued { "deliver" } else { "duplicate-or-deny" },
+        phase: if enqueue.has_enqueued {
+            "deliver"
+        } else {
+            "duplicate-or-deny"
+        },
         transport: &envelope.transport,
         envelope: &envelope,
-        idempotency_receipt_ref: idempotency_receipt_ref.as_deref(),
-        queue_receipt_ref: queue_receipt_ref.as_deref(),
+        idempotency_receipt_ref: enqueue.idempotency_receipt_ref.as_deref(),
+        queue_receipt_ref: enqueue.queue_receipt_ref.as_deref(),
         diagnostics: &diagnostics,
     })?;
     let ingress_receipt_ref = canonical_hash(&receipt_value)?;
@@ -6818,9 +6848,9 @@ pub fn deliver_node_control_ingress(input: &NodeControlIngressDeliverInput<'_>) 
         request_ref: envelope.request.request_ref,
         ingress_receipt_ref,
         ingress_receipt_value: receipt_value,
-        idempotency_receipt_ref,
-        queue_receipt_ref,
-        has_enqueued,
+        idempotency_receipt_ref: enqueue.idempotency_receipt_ref,
+        queue_receipt_ref: enqueue.queue_receipt_ref,
+        has_enqueued: enqueue.has_enqueued,
     })
 }
 

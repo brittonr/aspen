@@ -973,42 +973,28 @@ fn known_classifications(value: &IOValue) -> Vec<String> {
     known_classifications_result(value).unwrap_or_default()
 }
 
+type ClassificationProbe = fn(&IOValue) -> Result<Option<Vec<String>>>;
+
+const CLASSIFICATION_PROBES: &[ClassificationProbe] = &[
+    direct_labels,
+    release_labels,
+    retention_core_labels,
+    retention_plan_apply_labels,
+    retention_execute_audit_labels,
+    retention_candidate_labels,
+    retention_tail_labels,
+    lifecycle_labels,
+    provenance_labels,
+    octet_evidence_labels,
+    octet_baseline_labels,
+    octet_gate_labels,
+];
+
 fn known_classifications_result(value: &IOValue) -> Result<Vec<String>> {
-    if let Some(classifications) = direct_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = release_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = retention_core_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = retention_plan_apply_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = retention_execute_audit_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = retention_candidate_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = retention_tail_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = lifecycle_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = provenance_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = octet_evidence_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = octet_baseline_labels(value)? {
-        return Ok(classifications);
-    }
-    if let Some(classifications) = octet_gate_labels(value)? {
-        return Ok(classifications);
+    for probe in CLASSIFICATION_PROBES {
+        if let Some(classifications) = (*probe)(value)? {
+            return Ok(classifications);
+        }
     }
     Ok(Vec::new())
 }
