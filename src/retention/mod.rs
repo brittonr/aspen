@@ -2323,7 +2323,7 @@ pub struct RetentionGcPlanValueInput<'a> {
     diagnostics: &'a [String],
 }
 
-struct RetentionGcApplyValueInput<'a> {
+struct ApplyValueInput<'a> {
     decision: &'a str,
     subsystem: &'a str,
     action: &'a str,
@@ -4047,7 +4047,7 @@ pub fn apply_retention_gc_plan(input: RetentionGcApplyFromPlanInput<'_>) -> Resu
     let mut admission_refs = admission.admitted_refs;
     admission_refs.sort();
     admission_refs.dedup();
-    let value = retention_gc_apply_value(&RetentionGcApplyValueInput {
+    let value = apply_value(&ApplyValueInput {
         decision,
         subsystem: &original.subsystem,
         action: &original.action,
@@ -4158,7 +4158,7 @@ fn apply_success_outcome(
     })
 }
 
-fn retention_gc_apply_value(input: &RetentionGcApplyValueInput<'_>) -> Result<IOValue> {
+fn apply_value(input: &ApplyValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     validate_name(input.subsystem, "retention GC apply subsystem")?;
     validate_action(input.action)?;
@@ -5426,7 +5426,7 @@ fn export_groups(
         GroupSpec {
             dir_name: "gc-applies",
             refs: &explain.gc_apply_refs,
-            read: read_retention_gc_apply_value,
+            read: read_apply_value,
         },
         GroupSpec {
             dir_name: "gc-executes",
@@ -6598,7 +6598,7 @@ fn read_retention_gc_plan_value(root: &Path, reference: &str) -> Result<IOValue>
     Ok(read_retention_gc_plan(root, reference)?.value)
 }
 
-fn read_retention_gc_apply_value(root: &Path, reference: &str) -> Result<IOValue> {
+fn read_apply_value(root: &Path, reference: &str) -> Result<IOValue> {
     Ok(read_retention_gc_apply(root, reference)?.value)
 }
 
