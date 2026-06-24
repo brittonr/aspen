@@ -231,6 +231,8 @@
 
 ## Patterns That Work
 
+- 2026-06-24 Octet node live workflow receipt split: extracting `src/node/daemon.rs::node_control_live_workflow_receipt` binding/ref/import work into neutral same-file `FlowChecks`/`FlowRefs`/`import_flow_values` lowered the no-disabled probe from 7017 to 7015 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test send_reaches_bounded_listener -- --nocapture`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `git diff --check`, and probe `target/octet-burndown/probe-flow-checks-0`.
+
 - 2026-06-24 Octet node daemon ingress enqueue split: extracting `src/node/daemon.rs::deliver_node_control_ingress` idempotency/queue side effects into neutral same-file `EnqueueOutcome`/`apply_ingress_enqueue` lowered the no-disabled probe from 7019 to 7017 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_ingress`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-ingress-enqueue-0`.
 
 - 2026-06-24 Octet catalog classification probe table: replacing `src/catalog/mod.rs::known_classifications_result`'s repeated same-shaped early-return checks with a neutral same-file function-pointer table (`ClassificationProbe`/`CLASSIFICATION_PROBES`) lowered the no-disabled probe from 7022 to 7019 by clearing three `function_length` findings while import/path/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test catalog`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, `git diff --check`, and probe `target/octet-burndown/probe-classification-probes-0`.

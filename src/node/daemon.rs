@@ -6039,6 +6039,117 @@ pub fn parse_node_control_live_send_receipt(value: &IOValue) -> Result<NodeContr
     })
 }
 
+struct FlowChecks<'a> {
+    ticket: &'a NodeControlLiveTicket,
+    admission: &'a NodeControlLivePeerAdmission,
+    authority: &'a NodeControlAuthorityGrant,
+    send: &'a NodeControlLiveSendReceipt,
+    service_receipt_ref: &'a str,
+}
+
+struct FlowRefs {
+    receive_receipt_refs: Vec<String>,
+    listener_receipt_ref: Option<String>,
+}
+
+impl FlowChecks<'_> {
+    fn note_bindings(&self, diagnostics: &mut impl VecSink<String>) {
+        if self.admission.ticket_ref != self.ticket.ticket_ref {
+            diagnostics.push_item("node control live workflow admission does not bind receiver ticket".to_string());
+        }
+        if self.admission.decision != "pass" {
+            diagnostics.push_item(format!("node control live workflow admission decision {}", self.admission.decision));
+        }
+        if self.authority.peer_id != self.admission.peer_id {
+            diagnostics
+                .push_item("node control live workflow authority grant peer does not match admission".to_string());
+        }
+        if self.authority.node_id != self.ticket.node_id {
+            diagnostics.push_item("node control live workflow authority grant node does not match ticket".to_string());
+        }
+        if self.send.receiver_ticket_ref != self.ticket.ticket_ref {
+            diagnostics.push_item("node control live workflow send receipt does not bind receiver ticket".to_string());
+        }
+        if self.send.from_peer != self.admission.peer_id {
+            diagnostics.push_item("node control live workflow send peer does not match admission".to_string());
+        }
+        if self.send.to_node != self.ticket.node_id || self.send.topic != self.ticket.topic {
+            diagnostics.push_item("node control live workflow send destination does not match ticket".to_string());
+        }
+        if self.send.decision != "pass" {
+            diagnostics.push_item(format!("node control live workflow send decision {}", self.send.decision));
+        }
+    }
+
+    fn collect_refs(
+        &self,
+        input: &NodeControlLiveWorkflowInput<'_>,
+        diagnostics: &mut impl VecSink<String>,
+    ) -> Result<FlowRefs> {
+        let mut receive_receipt_refs = Vec::with_capacity(input.receive_receipt_values.len());
+        for receive_value in input.receive_receipt_values {
+            let (receipt_ref, operation, envelope_ref) = live_transport_receipt_ref(receive_value)?;
+            if operation != "receive" {
+                diagnostics.push_item(format!(
+                    "node control live workflow transport receipt operation {operation} is not receive"
+                ));
+            }
+            if envelope_ref != self.send.envelope_ref {
+                diagnostics
+                    .push_item("node control live workflow receive envelope does not match send envelope".to_string());
+            }
+            receive_receipt_refs.push(receipt_ref);
+        }
+        if receive_receipt_refs.is_empty() {
+            diagnostics.push_item("node control live workflow missing receive receipt".to_string());
+        }
+        let listener_receipt_ref = if let Some(listener_value) = input.listener_receipt_value {
+            let (listener_ref, listener_transport_refs, listener_service_ref) =
+                live_listener_receipt_refs(listener_value)?;
+            for receive_ref in &receive_receipt_refs {
+                if !listener_transport_refs.iter().any(|reference| reference == receive_ref) {
+                    diagnostics
+                        .push_item("node control live workflow listener does not bind receive receipt".to_string());
+                }
+            }
+            if listener_service_ref != self.service_receipt_ref {
+                diagnostics.push_item(
+                    "node control live workflow listener service run does not match service receipt".to_string(),
+                );
+            }
+            Some(listener_ref)
+        } else {
+            None
+        };
+        Ok(FlowRefs {
+            receive_receipt_refs,
+            listener_receipt_ref,
+        })
+    }
+}
+
+fn import_flow_values(
+    state_root: &Path,
+    input: &NodeControlLiveWorkflowInput<'_>,
+    receipt_ref: &str,
+    receipt_value: &IOValue,
+) -> Result<()> {
+    import_node_artifact(state_root, input.receiver_ticket_value)?;
+    import_node_artifact(state_root, input.peer_admission_value)?;
+    import_node_artifact(state_root, input.authority_grant_value)?;
+    import_node_artifact(state_root, input.send_receipt_value)?;
+    for receive_value in input.receive_receipt_values {
+        import_node_artifact(state_root, receive_value)?;
+    }
+    if let Some(listener_value) = input.listener_receipt_value {
+        import_node_artifact(state_root, listener_value)?;
+    }
+    import_node_artifact(state_root, input.service_receipt_value)?;
+    write_preserves(&control_live_workflow_receipt_path(state_root, receipt_ref), receipt_value)?;
+    import_node_artifact(state_root, receipt_value)?;
+    Ok(())
+}
+
 pub fn node_control_live_workflow_receipt(
     input: &NodeControlLiveWorkflowInput<'_>,
 ) -> Result<NodeControlLiveWorkflowReceipt> {
@@ -6051,61 +6162,16 @@ pub fn node_control_live_workflow_receipt(
     let authority = parse_node_control_authority_grant(input.authority_grant_value)?;
     let send = parse_node_control_live_send_receipt(input.send_receipt_value)?;
     let service_receipt_ref = service_run_receipt_ref(input.service_receipt_value)?;
-    let mut diagnostics = Vec::with_capacity(input.receive_receipt_values.len().saturating_add(8));
-    if admission.ticket_ref != ticket.ticket_ref {
-        diagnostics.push("node control live workflow admission does not bind receiver ticket".to_string());
-    }
-    if admission.decision != "pass" {
-        diagnostics.push(format!("node control live workflow admission decision {}", admission.decision));
-    }
-    if authority.peer_id != admission.peer_id {
-        diagnostics.push("node control live workflow authority grant peer does not match admission".to_string());
-    }
-    if authority.node_id != ticket.node_id {
-        diagnostics.push("node control live workflow authority grant node does not match ticket".to_string());
-    }
-    if send.receiver_ticket_ref != ticket.ticket_ref {
-        diagnostics.push("node control live workflow send receipt does not bind receiver ticket".to_string());
-    }
-    if send.from_peer != admission.peer_id {
-        diagnostics.push("node control live workflow send peer does not match admission".to_string());
-    }
-    if send.to_node != ticket.node_id || send.topic != ticket.topic {
-        diagnostics.push("node control live workflow send destination does not match ticket".to_string());
-    }
-    if send.decision != "pass" {
-        diagnostics.push(format!("node control live workflow send decision {}", send.decision));
-    }
-    let mut receive_receipt_refs = Vec::with_capacity(input.receive_receipt_values.len());
-    for receive_value in input.receive_receipt_values {
-        let (receipt_ref, operation, envelope_ref) = live_transport_receipt_ref(receive_value)?;
-        if operation != "receive" {
-            diagnostics
-                .push(format!("node control live workflow transport receipt operation {operation} is not receive"));
-        }
-        if envelope_ref != send.envelope_ref {
-            diagnostics.push("node control live workflow receive envelope does not match send envelope".to_string());
-        }
-        receive_receipt_refs.push(receipt_ref);
-    }
-    if receive_receipt_refs.is_empty() {
-        diagnostics.push("node control live workflow missing receive receipt".to_string());
-    }
-    let listener_receipt_ref = if let Some(listener_value) = input.listener_receipt_value {
-        let (listener_ref, listener_transport_refs, listener_service_ref) = live_listener_receipt_refs(listener_value)?;
-        for receive_ref in &receive_receipt_refs {
-            if !listener_transport_refs.iter().any(|reference| reference == receive_ref) {
-                diagnostics.push("node control live workflow listener does not bind receive receipt".to_string());
-            }
-        }
-        if listener_service_ref != service_receipt_ref {
-            diagnostics
-                .push("node control live workflow listener service run does not match service receipt".to_string());
-        }
-        Some(listener_ref)
-    } else {
-        None
+    let checks = FlowChecks {
+        ticket: &ticket,
+        admission: &admission,
+        authority: &authority,
+        send: &send,
+        service_receipt_ref: &service_receipt_ref,
     };
+    let mut diagnostics = Vec::with_capacity(input.receive_receipt_values.len().saturating_add(8));
+    checks.note_bindings(&mut diagnostics);
+    let refs = checks.collect_refs(input, &mut diagnostics)?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = live_workflow_receipt_value(&LiveWorkflowReceiptValueInput {
         decision,
@@ -6113,26 +6179,14 @@ pub fn node_control_live_workflow_receipt(
         admission: &admission,
         authority: &authority,
         send: &send,
-        receive_receipt_refs: &receive_receipt_refs,
-        listener_receipt_ref: listener_receipt_ref.as_deref(),
+        receive_receipt_refs: &refs.receive_receipt_refs,
+        listener_receipt_ref: refs.listener_receipt_ref.as_deref(),
         service_receipt_ref: &service_receipt_ref,
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = canonical_hash(&receipt_value)?;
     if let Some(state_root) = input.state_root {
-        import_node_artifact(state_root, input.receiver_ticket_value)?;
-        import_node_artifact(state_root, input.peer_admission_value)?;
-        import_node_artifact(state_root, input.authority_grant_value)?;
-        import_node_artifact(state_root, input.send_receipt_value)?;
-        for receive_value in input.receive_receipt_values {
-            import_node_artifact(state_root, receive_value)?;
-        }
-        if let Some(listener_value) = input.listener_receipt_value {
-            import_node_artifact(state_root, listener_value)?;
-        }
-        import_node_artifact(state_root, input.service_receipt_value)?;
-        write_preserves(&control_live_workflow_receipt_path(state_root, &receipt_ref), &receipt_value)?;
-        import_node_artifact(state_root, &receipt_value)?;
+        import_flow_values(state_root, input, &receipt_ref, &receipt_value)?;
     }
     Ok(NodeControlLiveWorkflowReceipt {
         receipt_ref,
