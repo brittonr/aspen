@@ -11417,61 +11417,111 @@ mod tests {
         assert_grant_imports(&case);
     }
 
-    #[test]
-    fn node_control_live_workflow_bundle_import_export_gates_bindings() {
-        let receiver = temp_dir("node-control-live-workflow-bundle-receiver");
-        let staging_sender = temp_dir("node-control-live-workflow-bundle-staging");
-        let bundle_sender = temp_dir("node-control-live-workflow-bundle-sender");
+    struct FlowSeed {
+        bundle_sender: PathBuf,
+        operations: Vec<String>,
+        ticket: NodeControlLiveTicket,
+        admission: NodeControlLivePeerAdmission,
+        authority_value: IOValue,
+        receipt_values: Vec<IOValue>,
+        authority_import_ref: String,
+    }
+
+    struct FlowCase {
+        bundle_sender: PathBuf,
+        operations: Vec<String>,
+        ticket: NodeControlLiveTicket,
+        admission: NodeControlLivePeerAdmission,
+        authority_import_ref: String,
+        exported: NodeControlLiveWorkflowBundleExport,
+        verified: NodeControlLiveWorkflowBundleVerify,
+        gated: NodeControlLiveWorkflowBundleGate,
+    }
+
+    struct FlowImports {
+        receipt_values: Vec<IOValue>,
+        authority_import_ref: String,
+    }
+
+    struct FlowApplyInput<'a> {
+        state_root: &'a Path,
+        gate_receipt_value: Option<&'a IOValue>,
+        request_value: Option<&'a IOValue>,
+        is_send_requested: bool,
+        sequence: u64,
+        expect_message: &'a str,
+    }
+
+    fn init_flow_root(label: &str, node_id: &str) -> PathBuf {
+        let root = temp_dir(label);
         init_local_node(&NodeDaemonInitInput {
-            state_root: &receiver,
-            node_id: "node:live-bundle",
+            state_root: &root,
+            node_id,
         })
-        .expect("init receiver");
+        .expect("init flow root");
+        root
+    }
+
+    fn flow_roots() -> (PathBuf, PathBuf, PathBuf) {
+        let receiver = init_flow_root("node-control-live-workflow-bundle-receiver", "node:live-bundle");
         run_local_node(&NodeDaemonRunInput { state_root: &receiver }).expect("run receiver");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &staging_sender,
-            node_id: "node:live-bundle-staging",
-        })
-        .expect("init staging sender");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &bundle_sender,
-            node_id: "node:live-bundle-sender",
-        })
-        .expect("init bundle sender");
-        let policy_refs = vec![local_ref("node-control-policy", "live-bundle").expect("policy ref")];
-        let ticket = export_node_control_live_ticket(&NodeControlLiveTicketExportInput {
-            state_root: &receiver,
+        let staging = init_flow_root("node-control-live-workflow-bundle-staging", "node:live-bundle-staging");
+        let sender = init_flow_root("node-control-live-workflow-bundle-sender", "node:live-bundle-sender");
+        (receiver, staging, sender)
+    }
+
+    fn flow_ticket(root: &Path, policy_refs: &[String]) -> NodeControlLiveTicket {
+        export_node_control_live_ticket(&NodeControlLiveTicketExportInput {
+            state_root: root,
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            policy_refs: &policy_refs,
+            policy_refs,
             evidence_refs: &[],
         })
-        .expect("export ticket");
-        let admission = admit_node_control_live_peer(&NodeControlLivePeerAdmitInput {
-            state_root: &receiver,
+        .expect("export ticket")
+    }
+
+    fn flow_admission(
+        root: &Path,
+        ticket: &NodeControlLiveTicket,
+        policy_refs: &[String],
+    ) -> NodeControlLivePeerAdmission {
+        admit_node_control_live_peer(&NodeControlLivePeerAdmitInput {
+            state_root: root,
             ticket_value: &ticket.value,
             peer_id: "peer:live-bundle",
             sequence: 1,
             expires_at: Some(8),
-            policy_refs: &policy_refs,
+            policy_refs,
             evidence_refs: &[],
         })
-        .expect("admit peer");
-        let operations = vec!["status".to_string()];
-        let authority_value = node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
+        .expect("admit peer")
+    }
+
+    fn flow_authority_value(policy_refs: &[String], operations: &[String]) -> IOValue {
+        node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
             peer_id: "peer:live-bundle",
             node_id: "node:live-bundle",
-            operations: &operations,
+            operations,
             target_scope: "*",
             resource_scope: "*",
             epoch: 1,
             expires_at: Some(8),
-            policy_refs: &policy_refs,
+            policy_refs,
             revocation_refs: &[],
             evidence_refs: &[],
         })
-        .expect("authority grant value");
+        .expect("authority grant value")
+    }
+
+    fn flow_imports(
+        staging: &Path,
+        ticket: &NodeControlLiveTicket,
+        admission: &NodeControlLivePeerAdmission,
+        authority_value: &IOValue,
+        operations: &[String],
+    ) -> FlowImports {
         let ticket_import = import_node_control_live_ticket(&NodeControlLiveTicketImportInput {
-            state_root: &staging_sender,
+            state_root: staging,
             ticket_value: &ticket.value,
             peer_admission_value: Some(&admission.value),
             expected_node: Some("node:live-bundle"),
@@ -11482,40 +11532,100 @@ mod tests {
         })
         .expect("ticket import");
         let authority_import = import_node_control_authority_grant_checked(&NodeControlAuthorityGrantImportInput {
-            state_root: &staging_sender,
-            grant_value: &authority_value,
+            state_root: staging,
+            grant_value: authority_value,
             expected_peer: Some("peer:live-bundle"),
             expected_node: Some("node:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_epoch: 2,
         })
         .expect("authority import");
-        let receipt_values = vec![&ticket_import.receipt_value, &authority_import.receipt_value];
-        let exported = export_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleExportInput {
-            receiver_ticket_value: &ticket.value,
-            peer_admission_value: &admission.value,
-            authority_grant_value: &authority_value,
+        FlowImports {
+            receipt_values: vec![ticket_import.receipt_value, authority_import.receipt_value],
+            authority_import_ref: authority_import.grant_ref,
+        }
+    }
+
+    fn flow_seed() -> FlowSeed {
+        let (receiver, staging, bundle_sender) = flow_roots();
+        let policy_refs = vec![local_ref("node-control-policy", "live-bundle").expect("policy ref")];
+        let operations = vec!["status".to_string()];
+        let ticket = flow_ticket(&receiver, &policy_refs);
+        let admission = flow_admission(&receiver, &ticket, &policy_refs);
+        let authority_value = flow_authority_value(&policy_refs, &operations);
+        let imports = flow_imports(&staging, &ticket, &admission, &authority_value, &operations);
+        FlowSeed {
+            bundle_sender,
+            operations,
+            ticket,
+            admission,
+            authority_value,
+            receipt_values: imports.receipt_values,
+            authority_import_ref: imports.authority_import_ref,
+        }
+    }
+
+    fn export_flow(seed: &FlowSeed) -> NodeControlLiveWorkflowBundleExport {
+        let receipt_values = seed.receipt_values.iter().collect::<Vec<_>>();
+        export_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleExportInput {
+            receiver_ticket_value: &seed.ticket.value,
+            peer_admission_value: &seed.admission.value,
+            authority_grant_value: &seed.authority_value,
             receipt_values: &receipt_values,
         })
-        .expect("export bundle");
-        assert_eq!(exported.decision, "pass");
-        assert_eq!(ledger::artifact_kind(&exported.bundle.bundle_value), "node-control-live-workflow-bundle");
-        assert!(parse_node_control_authority_grant(&exported.bundle.bundle_value).is_err());
-        let verified = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
+        .expect("export bundle")
+    }
+
+    fn verify_flow(
+        seed: &FlowSeed,
+        exported: &NodeControlLiveWorkflowBundleExport,
+    ) -> NodeControlLiveWorkflowBundleVerify {
+        verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
             bundle_value: &exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&seed.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &seed.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
             as_of_epoch: 2,
         })
-        .expect("verify bundle");
+        .expect("verify bundle")
+    }
+
+    fn gate_flow(
+        seed: &FlowSeed,
+        exported: &NodeControlLiveWorkflowBundleExport,
+        verified: &NodeControlLiveWorkflowBundleVerify,
+    ) -> NodeControlLiveWorkflowBundleGate {
+        gate_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleGateInput {
+            bundle_value: &exported.bundle.bundle_value,
+            verify_receipt_value: Some(&verified.receipt_value),
+            require_verify_receipt: true,
+            expected_node: Some("node:live-bundle"),
+            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+            expected_endpoint: Some(&seed.ticket.live_endpoint_id),
+            expected_peer: Some("peer:live-bundle"),
+            expected_operations: &seed.operations,
+            expected_target_scope: Some("*"),
+            expected_resource_scope: Some("*"),
+            as_of_sequence: 2,
+            as_of_epoch: 2,
+        })
+        .expect("gate bundle")
+    }
+
+    fn flow_case() -> FlowCase {
+        let seed = flow_seed();
+        let exported = export_flow(&seed);
+        assert_eq!(exported.decision, "pass");
+        assert_eq!(ledger::artifact_kind(&exported.bundle.bundle_value), "node-control-live-workflow-bundle");
+        assert!(parse_node_control_authority_grant(&exported.bundle.bundle_value).is_err());
+        let verified = verify_flow(&seed, &exported);
         assert_eq!(verified.decision, "pass");
         assert_eq!(ledger::artifact_kind(&verified.receipt_value), "node-control-live-workflow-bundle-verify-receipt");
         assert!(parse_node_control_authority_grant(&verified.receipt_value).is_err());
@@ -11524,35 +11634,34 @@ mod tests {
                 .expect("verify receipt text")
                 .contains("verify-receipt-is-not-authority")
         );
-        let gated = gate_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleGateInput {
-            bundle_value: &exported.bundle.bundle_value,
-            verify_receipt_value: Some(&verified.receipt_value),
-            require_verify_receipt: true,
-            expected_node: Some("node:live-bundle"),
-            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
-            expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
-            expected_target_scope: Some("*"),
-            expected_resource_scope: Some("*"),
-            as_of_sequence: 2,
-            as_of_epoch: 2,
-        })
-        .expect("gate bundle");
+        let gated = gate_flow(&seed, &exported, &verified);
         assert_eq!(gated.decision, "pass");
         assert_eq!(ledger::artifact_kind(&gated.receipt_value), "node-control-live-workflow-bundle-gate-receipt");
         assert_eq!(gated.verify_receipt_ref.as_deref(), Some(verified.receipt_ref.as_str()));
         assert!(parse_node_control_authority_grant(&gated.receipt_value).is_err());
         assert!(to_text(&gated.receipt_value).expect("gate receipt text").contains("gate-receipt-is-not-authority"));
+        FlowCase {
+            bundle_sender: seed.bundle_sender,
+            operations: seed.operations,
+            ticket: seed.ticket,
+            admission: seed.admission,
+            authority_import_ref: seed.authority_import_ref,
+            exported,
+            verified,
+            gated,
+        }
+    }
+
+    fn assert_flow_gate_denials(case: &FlowCase) {
         let missing_verify_gate = gate_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleGateInput {
-            bundle_value: &exported.bundle.bundle_value,
+            bundle_value: &case.exported.bundle.bundle_value,
             verify_receipt_value: None,
             require_verify_receipt: true,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
@@ -11567,14 +11676,14 @@ mod tests {
                 .any(|value| value.contains("requires a current verify receipt"))
         );
         let malformed_verify_gate = gate_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleGateInput {
-            bundle_value: &exported.bundle.bundle_value,
-            verify_receipt_value: Some(&exported.bundle.bundle_value),
+            bundle_value: &case.exported.bundle.bundle_value,
+            verify_receipt_value: Some(&case.exported.bundle.bundle_value),
             require_verify_receipt: true,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
@@ -11583,23 +11692,29 @@ mod tests {
         .expect("malformed verify gate receipt");
         assert_eq!(malformed_verify_gate.decision, "deny");
         assert!(malformed_verify_gate.diagnostics.iter().any(|value| value.contains("verify receipt parse failed")));
-        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("apply runtime");
-        let applied = runtime
+    }
+
+    fn run_flow_apply(
+        runtime: &tokio::runtime::Runtime,
+        case: &FlowCase,
+        input: FlowApplyInput<'_>,
+    ) -> NodeControlLiveWorkflowBundleApply {
+        runtime
             .block_on(apply_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleApplyInput {
-                state_root: &bundle_sender,
-                bundle_value: &exported.bundle.bundle_value,
-                gate_receipt_value: Some(&gated.receipt_value),
+                state_root: input.state_root,
+                bundle_value: &case.exported.bundle.bundle_value,
+                gate_receipt_value: input.gate_receipt_value,
                 is_gate_receipt_required: true,
-                request_value: None,
-                should_send: false,
+                request_value: input.request_value,
+                should_send: input.is_send_requested,
                 from_peer: None,
-                sequence: 1,
+                sequence: input.sequence,
                 expected_operation_ref: None,
                 expected_node: Some("node:live-bundle"),
                 expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-                expected_endpoint: Some(&ticket.live_endpoint_id),
+                expected_endpoint: Some(&case.ticket.live_endpoint_id),
                 expected_peer: Some("peer:live-bundle"),
-                expected_operations: &operations,
+                expected_operations: &case.operations,
                 expected_target_scope: Some("*"),
                 expected_resource_scope: Some("*"),
                 as_of_sequence: 2,
@@ -11612,116 +11727,92 @@ mod tests {
                 max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
                 join_timeout_ms: 10_000,
             }))
-            .expect("apply bundle");
+            .expect(input.expect_message)
+    }
+
+    fn assert_flow_apply_pass(
+        case: &FlowCase,
+        runtime: &tokio::runtime::Runtime,
+    ) -> NodeControlLiveWorkflowBundleApply {
+        let applied = run_flow_apply(runtime, case, FlowApplyInput {
+            state_root: &case.bundle_sender,
+            gate_receipt_value: Some(&case.gated.receipt_value),
+            request_value: None,
+            is_send_requested: false,
+            sequence: 1,
+            expect_message: "apply bundle",
+        });
         assert_eq!(applied.decision, "pass");
         assert_eq!(ledger::artifact_kind(&applied.receipt_value), "node-control-live-workflow-bundle-apply-receipt");
         assert!(applied.import_receipt_ref.is_some());
-        assert!(applied.imported_refs.iter().any(|reference| reference == &exported.bundle.bundle_ref));
+        assert!(applied.imported_refs.iter().any(|reference| reference == &case.exported.bundle.bundle_ref));
         assert!(parse_node_control_authority_grant(&applied.receipt_value).is_err());
         assert!(
             to_text(&applied.receipt_value)
                 .expect("apply receipt text")
                 .contains("apply-receipt-is-not-authority")
         );
-        read_node_ledger_artifact(&bundle_sender, &exported.bundle.bundle_ref).expect("apply imported bundle");
-        let missing_gate_apply_root = temp_dir("node-control-live-workflow-bundle-apply-missing-gate");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &missing_gate_apply_root,
-            node_id: "node:live-bundle-apply-missing-gate",
-        })
-        .expect("init missing gate apply root");
-        let missing_gate_apply = runtime
-            .block_on(apply_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleApplyInput {
-                state_root: &missing_gate_apply_root,
-                bundle_value: &exported.bundle.bundle_value,
-                gate_receipt_value: None,
-                is_gate_receipt_required: true,
-                request_value: None,
-                should_send: false,
-                from_peer: None,
-                sequence: 1,
-                expected_operation_ref: None,
-                expected_node: Some("node:live-bundle"),
-                expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-                expected_endpoint: Some(&ticket.live_endpoint_id),
-                expected_peer: Some("peer:live-bundle"),
-                expected_operations: &operations,
-                expected_target_scope: Some("*"),
-                expected_resource_scope: Some("*"),
-                as_of_sequence: 2,
-                as_of_epoch: 2,
-                peer_bootstrap_refs: &[],
-                authority_refs: &[],
-                policy_refs: &[],
-                resource_refs: &[],
-                evidence_refs: &[],
-                max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
-                join_timeout_ms: 10_000,
-            }))
-            .expect("missing gate apply receipt");
-        assert_eq!(missing_gate_apply.decision, "deny");
-        assert!(missing_gate_apply.imported_refs.is_empty());
-        assert!(missing_gate_apply.diagnostics.iter().any(|value| value.contains("requires a current gate receipt")));
-        assert!(read_node_ledger_artifact(&missing_gate_apply_root, &exported.bundle.bundle_ref).is_err());
-        let apply_send_root = temp_dir("node-control-live-workflow-bundle-apply-send");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &apply_send_root,
-            node_id: "node:live-bundle-apply-send",
-        })
-        .expect("init apply send root");
-        let apply_request_authority_refs = vec![exported.bundle.authority_grant_ref.clone()];
-        let apply_request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+        read_node_ledger_artifact(&case.bundle_sender, &case.exported.bundle.bundle_ref)
+            .expect("apply imported bundle");
+        applied
+    }
+
+    fn assert_flow_missing_gate(case: &FlowCase, runtime: &tokio::runtime::Runtime) {
+        let root = init_flow_root(
+            "node-control-live-workflow-bundle-apply-missing-gate",
+            "node:live-bundle-apply-missing-gate",
+        );
+        let receipt = run_flow_apply(runtime, case, FlowApplyInput {
+            state_root: &root,
+            gate_receipt_value: None,
+            request_value: None,
+            is_send_requested: false,
+            sequence: 1,
+            expect_message: "missing gate apply receipt",
+        });
+        assert_eq!(receipt.decision, "deny");
+        assert!(receipt.imported_refs.is_empty());
+        assert!(receipt.diagnostics.iter().any(|value| value.contains("requires a current gate receipt")));
+        assert!(read_node_ledger_artifact(&root, &case.exported.bundle.bundle_ref).is_err());
+    }
+
+    fn assert_flow_send_denial(case: &FlowCase, runtime: &tokio::runtime::Runtime) {
+        let root = init_flow_root("node-control-live-workflow-bundle-apply-send", "node:live-bundle-apply-send");
+        let authority_refs = vec![case.exported.bundle.authority_grant_ref.clone()];
+        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "status",
             target_ref: None,
             payload_ref: None,
-            authority_refs: &apply_request_authority_refs,
+            authority_refs: &authority_refs,
             policy_refs: &[],
             resource_refs: &[],
             evidence_refs: &[],
         })
         .expect("apply send request");
-        let apply_send = runtime
-            .block_on(apply_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleApplyInput {
-                state_root: &apply_send_root,
-                bundle_value: &exported.bundle.bundle_value,
-                gate_receipt_value: Some(&gated.receipt_value),
-                is_gate_receipt_required: true,
-                request_value: Some(&apply_request_value),
-                should_send: true,
-                from_peer: None,
-                sequence: 7,
-                expected_operation_ref: None,
-                expected_node: Some("node:live-bundle"),
-                expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-                expected_endpoint: Some(&ticket.live_endpoint_id),
-                expected_peer: Some("peer:live-bundle"),
-                expected_operations: &operations,
-                expected_target_scope: Some("*"),
-                expected_resource_scope: Some("*"),
-                as_of_sequence: 2,
-                as_of_epoch: 2,
-                peer_bootstrap_refs: &[],
-                authority_refs: &[],
-                policy_refs: &[],
-                resource_refs: &[],
-                evidence_refs: &[],
-                max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
-                join_timeout_ms: 10_000,
-            }))
-            .expect("apply send receipt");
-        assert_eq!(apply_send.decision, "deny");
-        assert!(apply_send.import_receipt_ref.is_some());
-        assert!(apply_send.send_receipt_ref.is_some());
-        assert!(apply_send.diagnostics.iter().any(|value| value.contains("no endpoint addresses")));
-        assert!(apply_send.send_receipt_value.is_some());
+        let receipt = run_flow_apply(runtime, case, FlowApplyInput {
+            state_root: &root,
+            gate_receipt_value: Some(&case.gated.receipt_value),
+            request_value: Some(&request_value),
+            is_send_requested: true,
+            sequence: 7,
+            expect_message: "apply send receipt",
+        });
+        assert_eq!(receipt.decision, "deny");
+        assert!(receipt.import_receipt_ref.is_some());
+        assert!(receipt.send_receipt_ref.is_some());
+        assert!(receipt.diagnostics.iter().any(|value| value.contains("no endpoint addresses")));
+        assert!(receipt.send_receipt_value.is_some());
+    }
+
+    fn assert_flow_import_pass(case: &FlowCase) {
         let imported = import_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleImportInput {
-            state_root: &bundle_sender,
-            bundle_value: &exported.bundle.bundle_value,
+            state_root: &case.bundle_sender,
+            bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
@@ -11729,31 +11820,29 @@ mod tests {
         })
         .expect("import bundle");
         assert_eq!(imported.decision, "pass");
-        assert!(imported.imported_refs.iter().any(|reference| reference == &exported.bundle.bundle_ref));
-        read_node_ledger_artifact(&bundle_sender, &ticket.ticket_ref).expect("bundle imported ticket");
-        read_node_ledger_artifact(&bundle_sender, &admission.admission_ref).expect("bundle imported admission");
-        read_node_ledger_artifact(&bundle_sender, &authority_import.grant_ref).expect("bundle imported authority");
+        assert!(imported.imported_refs.iter().any(|reference| reference == &case.exported.bundle.bundle_ref));
+        read_node_ledger_artifact(&case.bundle_sender, &case.ticket.ticket_ref).expect("bundle imported ticket");
+        read_node_ledger_artifact(&case.bundle_sender, &case.admission.admission_ref)
+            .expect("bundle imported admission");
+        read_node_ledger_artifact(&case.bundle_sender, &case.authority_import_ref).expect("bundle imported authority");
         assert!(parse_node_control_authority_grant(&imported.receipt_value).is_err());
         assert!(
             to_text(&imported.receipt_value)
                 .expect("import receipt text")
                 .contains("bundle-import-is-not-authority")
         );
+    }
 
-        let wrong_topic_root = temp_dir("node-control-live-workflow-bundle-wrong-topic");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &wrong_topic_root,
-            node_id: "node:live-bundle-wrong-topic",
-        })
-        .expect("init wrong topic root");
+    fn assert_flow_wrong_topic(case: &FlowCase) -> NodeControlLiveWorkflowBundleGate {
+        let root = init_flow_root("node-control-live-workflow-bundle-wrong-topic", "node:live-bundle-wrong-topic");
         let wrong_topic = import_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleImportInput {
-            state_root: &wrong_topic_root,
-            bundle_value: &exported.bundle.bundle_value,
+            state_root: &root,
+            bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some("wrong-topic"),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
@@ -11763,93 +11852,73 @@ mod tests {
         assert_eq!(wrong_topic.decision, "deny");
         assert!(wrong_topic.imported_refs.is_empty());
         assert!(wrong_topic.diagnostics.iter().any(|value| value.contains("wrong-topic")));
-        assert!(read_node_ledger_artifact(&wrong_topic_root, &exported.bundle.bundle_ref).is_err());
-        let wrong_topic_verify = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
-            bundle_value: &exported.bundle.bundle_value,
+        assert!(read_node_ledger_artifact(&root, &case.exported.bundle.bundle_ref).is_err());
+        let wrong_verify = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
+            bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some("wrong-topic"),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
             as_of_epoch: 2,
         })
         .expect("wrong topic verify receipt");
-        assert_eq!(wrong_topic_verify.decision, "deny");
-        assert!(wrong_topic_verify.diagnostics.iter().any(|value| value.contains("wrong-topic")));
-        let stale_verify_gate = gate_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleGateInput {
-            bundle_value: &exported.bundle.bundle_value,
-            verify_receipt_value: Some(&wrong_topic_verify.receipt_value),
+        assert_eq!(wrong_verify.decision, "deny");
+        assert!(wrong_verify.diagnostics.iter().any(|value| value.contains("wrong-topic")));
+        let stale_gate = gate_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleGateInput {
+            bundle_value: &case.exported.bundle.bundle_value,
+            verify_receipt_value: Some(&wrong_verify.receipt_value),
             require_verify_receipt: true,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
             as_of_epoch: 2,
         })
         .expect("stale verify gate receipt");
-        assert_eq!(stale_verify_gate.decision, "deny");
-        assert!(stale_verify_gate.diagnostics.iter().any(|value| value.contains("does not match recomputed")));
-        let stale_gate_apply_root = temp_dir("node-control-live-workflow-bundle-apply-stale-gate");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &stale_gate_apply_root,
-            node_id: "node:live-bundle-apply-stale-gate",
-        })
-        .expect("init stale gate apply root");
-        let stale_gate_apply = runtime
-            .block_on(apply_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleApplyInput {
-                state_root: &stale_gate_apply_root,
-                bundle_value: &exported.bundle.bundle_value,
-                gate_receipt_value: Some(&stale_verify_gate.receipt_value),
-                is_gate_receipt_required: true,
-                request_value: None,
-                should_send: false,
-                from_peer: None,
-                sequence: 1,
-                expected_operation_ref: None,
-                expected_node: Some("node:live-bundle"),
-                expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-                expected_endpoint: Some(&ticket.live_endpoint_id),
-                expected_peer: Some("peer:live-bundle"),
-                expected_operations: &operations,
-                expected_target_scope: Some("*"),
-                expected_resource_scope: Some("*"),
-                as_of_sequence: 2,
-                as_of_epoch: 2,
-                peer_bootstrap_refs: &[],
-                authority_refs: &[],
-                policy_refs: &[],
-                resource_refs: &[],
-                evidence_refs: &[],
-                max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
-                join_timeout_ms: 10_000,
-            }))
-            .expect("stale gate apply receipt");
-        assert_eq!(stale_gate_apply.decision, "deny");
-        assert!(stale_gate_apply.imported_refs.is_empty());
-        assert!(stale_gate_apply.diagnostics.iter().any(|value| value.contains("decision deny")));
-        assert!(read_node_ledger_artifact(&stale_gate_apply_root, &exported.bundle.bundle_ref).is_err());
+        assert_eq!(stale_gate.decision, "deny");
+        assert!(stale_gate.diagnostics.iter().any(|value| value.contains("does not match recomputed")));
+        stale_gate
+    }
 
-        let wrong_peer_root = temp_dir("node-control-live-workflow-bundle-wrong-peer");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &wrong_peer_root,
-            node_id: "node:live-bundle-wrong-peer",
-        })
-        .expect("init wrong peer root");
+    fn assert_flow_stale_gate(
+        case: &FlowCase,
+        runtime: &tokio::runtime::Runtime,
+        stale_gate: &NodeControlLiveWorkflowBundleGate,
+    ) {
+        let root =
+            init_flow_root("node-control-live-workflow-bundle-apply-stale-gate", "node:live-bundle-apply-stale-gate");
+        let receipt = run_flow_apply(runtime, case, FlowApplyInput {
+            state_root: &root,
+            gate_receipt_value: Some(&stale_gate.receipt_value),
+            request_value: None,
+            is_send_requested: false,
+            sequence: 1,
+            expect_message: "stale gate apply receipt",
+        });
+        assert_eq!(receipt.decision, "deny");
+        assert!(receipt.imported_refs.is_empty());
+        assert!(receipt.diagnostics.iter().any(|value| value.contains("decision deny")));
+        assert!(read_node_ledger_artifact(&root, &case.exported.bundle.bundle_ref).is_err());
+    }
+
+    fn assert_flow_wrong_peer(case: &FlowCase) {
+        let root = init_flow_root("node-control-live-workflow-bundle-wrong-peer", "node:live-bundle-wrong-peer");
         let wrong_peer = import_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleImportInput {
-            state_root: &wrong_peer_root,
-            bundle_value: &exported.bundle.bundle_value,
+            state_root: &root,
+            bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:other-live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
@@ -11859,35 +11928,33 @@ mod tests {
         assert_eq!(wrong_peer.decision, "deny");
         assert!(wrong_peer.imported_refs.is_empty());
         assert!(wrong_peer.diagnostics.iter().any(|value| value.contains("peer:other-live-bundle")));
-        let wrong_peer_verify = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
-            bundle_value: &exported.bundle.bundle_value,
+        let wrong_verify = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
+            bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:other-live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
             as_of_epoch: 2,
         })
         .expect("wrong peer verify receipt");
-        assert_eq!(wrong_peer_verify.decision, "deny");
-        assert!(wrong_peer_verify.diagnostics.iter().any(|value| value.contains("peer:other-live-bundle")));
+        assert_eq!(wrong_verify.decision, "deny");
+        assert!(wrong_verify.diagnostics.iter().any(|value| value.contains("peer:other-live-bundle")));
+    }
 
-        let wrong_operation_root = temp_dir("node-control-live-workflow-bundle-wrong-operation");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &wrong_operation_root,
-            node_id: "node:live-bundle-wrong-operation",
-        })
-        .expect("init wrong operation root");
+    fn assert_flow_wrong_operation(case: &FlowCase) {
+        let root =
+            init_flow_root("node-control-live-workflow-bundle-wrong-operation", "node:live-bundle-wrong-operation");
         let wrong_operations = vec!["shutdown".to_string()];
         let wrong_operation = import_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleImportInput {
-            state_root: &wrong_operation_root,
-            bundle_value: &exported.bundle.bundle_value,
+            state_root: &root,
+            bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
             expected_operations: &wrong_operations,
             expected_target_scope: Some("*"),
@@ -11899,174 +11966,105 @@ mod tests {
         assert_eq!(wrong_operation.decision, "deny");
         assert!(wrong_operation.imported_refs.is_empty());
         assert!(wrong_operation.diagnostics.iter().any(|value| value.contains("operation shutdown")));
-        let wrong_operation_verify =
-            verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
-                bundle_value: &exported.bundle.bundle_value,
-                expected_node: Some("node:live-bundle"),
-                expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-                expected_endpoint: Some(&ticket.live_endpoint_id),
-                expected_peer: Some("peer:live-bundle"),
-                expected_operations: &wrong_operations,
-                expected_target_scope: Some("*"),
-                expected_resource_scope: Some("*"),
-                as_of_sequence: 2,
-                as_of_epoch: 2,
-            })
-            .expect("wrong operation verify receipt");
-        assert_eq!(wrong_operation_verify.decision, "deny");
-        assert!(wrong_operation_verify.diagnostics.iter().any(|value| value.contains("operation shutdown")));
-
-        let wrong_grant_ref = local_ref("authority-grant", "wrong-live-bundle").expect("wrong grant ref");
-        let wrong_grant_bundle = record("node-control-live-workflow-bundle-v1", vec![
-            string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA),
-            record("ticket", vec![exported.bundle.ticket_value.clone()]),
-            record("peer-admission", vec![exported.bundle.peer_admission_value.clone()]),
-            record("authority-grant", vec![exported.bundle.authority_grant_value.clone()]),
-            record("receipts", vec![sequence(exported.bundle.receipt_values.clone())]),
-            record("ticket-ref", vec![string(&exported.bundle.ticket_ref)]),
-            record("peer-admission-ref", vec![string(&exported.bundle.peer_admission_ref)]),
-            record("authority-grant-ref", vec![string(&wrong_grant_ref)]),
-            record("receipt-refs", vec![sequence(exported.bundle.receipt_refs.iter().map(string).collect())]),
-            record("checks", vec![sequence(Vec::<IOValue>::new())]),
-        ]);
-        let wrong_grant_verify = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
-            bundle_value: &wrong_grant_bundle,
+        let wrong_verify = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
+            bundle_value: &case.exported.bundle.bundle_value,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &wrong_operations,
+            expected_target_scope: Some("*"),
+            expected_resource_scope: Some("*"),
+            as_of_sequence: 2,
+            as_of_epoch: 2,
+        })
+        .expect("wrong operation verify receipt");
+        assert_eq!(wrong_verify.decision, "deny");
+        assert!(wrong_verify.diagnostics.iter().any(|value| value.contains("operation shutdown")));
+    }
+
+    fn assert_flow_wrong_grant(case: &FlowCase) {
+        let wrong_grant_ref = local_ref("authority-grant", "wrong-live-bundle").expect("wrong grant ref");
+        let wrong_bundle = record("node-control-live-workflow-bundle-v1", vec![
+            string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA),
+            record("ticket", vec![case.exported.bundle.ticket_value.clone()]),
+            record("peer-admission", vec![case.exported.bundle.peer_admission_value.clone()]),
+            record("authority-grant", vec![case.exported.bundle.authority_grant_value.clone()]),
+            record("receipts", vec![sequence(case.exported.bundle.receipt_values.clone())]),
+            record("ticket-ref", vec![string(&case.exported.bundle.ticket_ref)]),
+            record("peer-admission-ref", vec![string(&case.exported.bundle.peer_admission_ref)]),
+            record("authority-grant-ref", vec![string(&wrong_grant_ref)]),
+            record("receipt-refs", vec![sequence(case.exported.bundle.receipt_refs.iter().map(string).collect())]),
+            record("checks", vec![sequence(Vec::<IOValue>::new())]),
+        ]);
+        let wrong_verify = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
+            bundle_value: &wrong_bundle,
+            expected_node: Some("node:live-bundle"),
+            expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
+            expected_peer: Some("peer:live-bundle"),
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
             as_of_epoch: 2,
         })
         .expect("wrong grant verify receipt");
-        assert_eq!(wrong_grant_verify.decision, "deny");
-        assert!(wrong_grant_verify.diagnostics.iter().any(|value| value.contains("authority grant ref mismatch")));
+        assert_eq!(wrong_verify.decision, "deny");
+        assert!(wrong_verify.diagnostics.iter().any(|value| value.contains("authority grant ref mismatch")));
+    }
 
-        import_node_artifact(&bundle_sender, &verified.receipt_value).expect("import verify receipt");
-        let verify_authority_refs = vec![verified.receipt_ref.clone()];
-        let verify_authority_request_value =
-            node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-                operation: "status",
-                target_ref: None,
-                payload_ref: None,
-                authority_refs: &verify_authority_refs,
-                policy_refs: &[],
-                resource_refs: &[],
-                evidence_refs: &[],
-            })
-            .expect("verify authority request");
-        let verify_authority_envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
-            request_value: &verify_authority_request_value,
-            from_peer: "peer:live-bundle",
-            to_node: "node:live-bundle",
-            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            sequence: 3,
-            peer_bootstrap_refs: &[],
-            authority_refs: &verify_authority_refs,
+    fn assert_ref_not_grant(root: &Path, authority_ref: &str, sequence: u64) {
+        let authority_refs = vec![authority_ref.to_string()];
+        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "status",
+            target_ref: None,
+            payload_ref: None,
+            authority_refs: &authority_refs,
             policy_refs: &[],
             resource_refs: &[],
             evidence_refs: &[],
         })
-        .expect("verify authority envelope");
-        let verify_authority_diagnostics =
-            live_send_authority_grant_diagnostics(&bundle_sender, &verify_authority_envelope)
-                .expect("verify authority diagnostics");
-        assert!(verify_authority_diagnostics.iter().any(|value| value.contains("is not a grant")));
-        assert!(
-            verify_authority_diagnostics
-                .iter()
-                .any(|value| value.contains("authority delegation missing admitted grant"))
-        );
-        import_node_artifact(&bundle_sender, &gated.receipt_value).expect("import gate receipt");
-        let gate_authority_refs = vec![gated.receipt_ref.clone()];
-        let gate_authority_request_value =
-            node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-                operation: "status",
-                target_ref: None,
-                payload_ref: None,
-                authority_refs: &gate_authority_refs,
-                policy_refs: &[],
-                resource_refs: &[],
-                evidence_refs: &[],
-            })
-            .expect("gate authority request");
-        let gate_authority_envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
-            request_value: &gate_authority_request_value,
+        .expect("authority request");
+        let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: &request_value,
             from_peer: "peer:live-bundle",
             to_node: "node:live-bundle",
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            sequence: 4,
+            sequence,
             peer_bootstrap_refs: &[],
-            authority_refs: &gate_authority_refs,
+            authority_refs: &authority_refs,
             policy_refs: &[],
             resource_refs: &[],
             evidence_refs: &[],
         })
-        .expect("gate authority envelope");
-        let gate_authority_diagnostics =
-            live_send_authority_grant_diagnostics(&bundle_sender, &gate_authority_envelope)
-                .expect("gate authority diagnostics");
-        assert!(gate_authority_diagnostics.iter().any(|value| value.contains("is not a grant")));
-        assert!(
-            gate_authority_diagnostics
-                .iter()
-                .any(|value| value.contains("authority delegation missing admitted grant"))
-        );
-        let apply_authority_refs = vec![applied.receipt_ref.clone()];
-        let apply_authority_request_value =
-            node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-                operation: "status",
-                target_ref: None,
-                payload_ref: None,
-                authority_refs: &apply_authority_refs,
-                policy_refs: &[],
-                resource_refs: &[],
-                evidence_refs: &[],
-            })
-            .expect("apply authority request");
-        let apply_authority_envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
-            request_value: &apply_authority_request_value,
-            from_peer: "peer:live-bundle",
-            to_node: "node:live-bundle",
-            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            sequence: 5,
-            peer_bootstrap_refs: &[],
-            authority_refs: &apply_authority_refs,
-            policy_refs: &[],
-            resource_refs: &[],
-            evidence_refs: &[],
-        })
-        .expect("apply authority envelope");
-        let apply_authority_diagnostics =
-            live_send_authority_grant_diagnostics(&bundle_sender, &apply_authority_envelope)
-                .expect("apply authority diagnostics");
-        assert!(apply_authority_diagnostics.iter().any(|value| value.contains("is not a grant")));
-        assert!(
-            apply_authority_diagnostics
-                .iter()
-                .any(|value| value.contains("authority delegation missing admitted grant"))
-        );
+        .expect("authority envelope");
+        let diagnostics = live_send_authority_grant_diagnostics(root, &envelope).expect("authority diagnostics");
+        assert!(diagnostics.iter().any(|value| value.contains("is not a grant")));
+        assert!(diagnostics.iter().any(|value| value.contains("authority delegation missing admitted grant")));
+    }
 
-        let malformed_root = temp_dir("node-control-live-workflow-bundle-malformed");
-        init_local_node(&NodeDaemonInitInput {
-            state_root: &malformed_root,
-            node_id: "node:live-bundle-malformed",
-        })
-        .expect("init malformed root");
+    fn assert_flow_receipts_not_grants(case: &FlowCase, applied: &NodeControlLiveWorkflowBundleApply) {
+        import_node_artifact(&case.bundle_sender, &case.verified.receipt_value).expect("import verify receipt");
+        assert_ref_not_grant(&case.bundle_sender, &case.verified.receipt_ref, 3);
+        import_node_artifact(&case.bundle_sender, &case.gated.receipt_value).expect("import gate receipt");
+        assert_ref_not_grant(&case.bundle_sender, &case.gated.receipt_ref, 4);
+        assert_ref_not_grant(&case.bundle_sender, &applied.receipt_ref, 5);
+    }
+
+    fn assert_flow_malformed(case: &FlowCase) {
+        let root = init_flow_root("node-control-live-workflow-bundle-malformed", "node:live-bundle-malformed");
         let malformed =
             record("node-control-live-workflow-bundle-v1", vec![string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA)]);
         assert!(
             import_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleImportInput {
-                state_root: &malformed_root,
+                state_root: &root,
                 bundle_value: &malformed,
                 expected_node: Some("node:live-bundle"),
                 expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-                expected_endpoint: Some(&ticket.live_endpoint_id),
+                expected_endpoint: Some(&case.ticket.live_endpoint_id),
                 expected_peer: Some("peer:live-bundle"),
-                expected_operations: &operations,
+                expected_operations: &case.operations,
                 expected_target_scope: Some("*"),
                 expected_resource_scope: Some("*"),
                 as_of_sequence: 2,
@@ -12078,9 +12076,9 @@ mod tests {
             bundle_value: &malformed,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
@@ -12095,9 +12093,9 @@ mod tests {
             require_verify_receipt: true,
             expected_node: Some("node:live-bundle"),
             expected_topic: Some(DEFAULT_CONTROL_INGRESS_TOPIC),
-            expected_endpoint: Some(&ticket.live_endpoint_id),
+            expected_endpoint: Some(&case.ticket.live_endpoint_id),
             expected_peer: Some("peer:live-bundle"),
-            expected_operations: &operations,
+            expected_operations: &case.operations,
             expected_target_scope: Some("*"),
             expected_resource_scope: Some("*"),
             as_of_sequence: 2,
@@ -12106,6 +12104,24 @@ mod tests {
         .expect("malformed gate receipt");
         assert_eq!(malformed_gate.decision, "deny");
         assert!(malformed_gate.diagnostics.iter().any(|value| value.contains("parse failed")));
+    }
+
+    #[test]
+    fn node_control_live_workflow_bundle_import_export_gates_bindings() {
+        let case = flow_case();
+        assert_flow_gate_denials(&case);
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("apply runtime");
+        let applied = assert_flow_apply_pass(&case, &runtime);
+        assert_flow_missing_gate(&case, &runtime);
+        assert_flow_send_denial(&case, &runtime);
+        assert_flow_import_pass(&case);
+        let stale_gate = assert_flow_wrong_topic(&case);
+        assert_flow_stale_gate(&case, &runtime, &stale_gate);
+        assert_flow_wrong_peer(&case);
+        assert_flow_wrong_operation(&case);
+        assert_flow_wrong_grant(&case);
+        assert_flow_receipts_not_grants(&case, &applied);
+        assert_flow_malformed(&case);
     }
 
     fn assert_sent(sent: &NodeControlLiveSend) {
