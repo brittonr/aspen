@@ -5687,6 +5687,83 @@ pub fn preflight_node_control_live_send(input: &NodeControlLiveSendInput<'_>) ->
 }
 
 pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>) -> Result<NodeControlLiveSend> {
+    validate_send_input(input)?;
+    let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
+    let envelope = send_envelope(input, &ticket)?;
+    if let Some(operation_ref) = input.expected_operation_ref
+        && operation_ref != envelope.operation_ref
+    {
+        let diagnostics = vec![format!(
+            "node control live send operation-id {operation_ref} does not match derived {}",
+            envelope.operation_ref
+        )];
+        return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
+            input,
+            ticket: &ticket,
+            envelope,
+            diagnostics,
+            retry_receipt_refs: Vec::new(),
+            retry_receipt_values: Vec::new(),
+        });
+    }
+    let receiver_addr = match send_receiver_addr(input, &ticket, &envelope)? {
+        Ok(addr) => addr,
+        Err(diagnostics) => {
+            return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
+                input,
+                ticket: &ticket,
+                envelope,
+                diagnostics,
+                retry_receipt_refs: Vec::new(),
+                retry_receipt_values: Vec::new(),
+            });
+        }
+    };
+    if let Some(state_root) = input.state_root
+        && let Some(duplicate) = duplicate_node_control_live_send(input, state_root, &ticket, &envelope)?
+    {
+        return Ok(duplicate);
+    }
+    let retries = publish_with_retries(input, &receiver_addr, &ticket, &envelope).await?;
+    let Some(published) = retries.published else {
+        return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
+            input,
+            ticket: &ticket,
+            envelope,
+            diagnostics: retries.diagnostics,
+            retry_receipt_refs: retries.retry_receipt_refs,
+            retry_receipt_values: retries.retry_receipt_values,
+        });
+    };
+    finish_send(FinishSendInput {
+        input,
+        ticket: &ticket,
+        envelope,
+        published,
+        retry_receipt_refs: retries.retry_receipt_refs,
+        retry_receipt_values: retries.retry_receipt_values,
+    })
+}
+
+#[derive(Debug)]
+struct SendRetryOutcome {
+    published: Option<NodeControlLiveIngressPublish>,
+    retry_receipt_refs: Vec<String>,
+    retry_receipt_values: Vec<IOValue>,
+    diagnostics: Vec<String>,
+}
+
+#[derive(Debug)]
+struct FinishSendInput<'a> {
+    input: &'a NodeControlLiveSendInput<'a>,
+    ticket: &'a NodeControlLiveTicket,
+    envelope: NodeControlIngressEnvelope,
+    published: NodeControlLiveIngressPublish,
+    retry_receipt_refs: Vec<String>,
+    retry_receipt_values: Vec<IOValue>,
+}
+
+fn validate_send_input(input: &NodeControlLiveSendInput<'_>) -> Result<()> {
     if let Some(state_root) = input.state_root {
         validate_state_root(state_root)?;
         ensure_state_layout(state_root)?;
@@ -5706,8 +5783,14 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
     if let Some(endpoint) = input.expected_endpoint {
         validate_node_id(endpoint)?;
     }
-    let ticket = parse_node_control_live_ticket(input.receiver_ticket_value)?;
-    let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+    Ok(())
+}
+
+fn send_envelope(
+    input: &NodeControlLiveSendInput<'_>,
+    ticket: &NodeControlLiveTicket,
+) -> Result<NodeControlIngressEnvelope> {
+    node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
         request_value: input.request_value,
         from_peer: input.from_peer,
         to_node: &ticket.node_id,
@@ -5718,62 +5801,43 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
         policy_refs: input.policy_refs,
         resource_refs: input.resource_refs,
         evidence_refs: input.evidence_refs,
-    })?;
-    if let Some(operation_ref) = input.expected_operation_ref
-        && operation_ref != envelope.operation_ref
-    {
-        let diagnostics = vec![format!(
-            "node control live send operation-id {operation_ref} does not match derived {}",
-            envelope.operation_ref
-        )];
-        return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
-            input,
-            ticket: &ticket,
-            envelope,
-            diagnostics,
-            retry_receipt_refs: Vec::new(),
-            retry_receipt_values: Vec::new(),
-        });
-    }
-    let mut preflight_diagnostics = live_send_ticket_diagnostics(input, &ticket);
+    })
+}
+
+fn send_receiver_addr(
+    input: &NodeControlLiveSendInput<'_>,
+    ticket: &NodeControlLiveTicket,
+    envelope: &NodeControlIngressEnvelope,
+) -> Result<std::result::Result<iroh::EndpointAddr, Vec<String>>> {
+    let mut diagnostics = live_send_ticket_diagnostics(input, ticket);
     if let Some(state_root) = input.state_root {
-        preflight_diagnostics.extend(live_send_state_root_evidence_diagnostics(state_root, input, &envelope)?);
+        diagnostics.extend(live_send_state_root_evidence_diagnostics(state_root, input, envelope)?);
     }
-    let receiver_addr = if ticket.address_refs.is_empty() {
-        preflight_diagnostics.push(
+    if ticket.address_refs.is_empty() {
+        diagnostics.push(
             "node control live send ticket has no endpoint addresses; import a bound live ticket with live-ticket-import or use serve --live-ticket-out"
                 .to_string(),
         );
-        None
-    } else {
-        match live_ticket_endpoint_addr(&ticket) {
-            Ok(addr) => Some(addr),
-            Err(error) => {
-                preflight_diagnostics.push(format!(
-                    "node control live send ticket address unsupported or malformed: {error}; import a fresh live ticket with live-ticket-import"
-                ));
-                None
-            }
+        return Ok(Err(diagnostics));
+    }
+    match live_ticket_endpoint_addr(ticket) {
+        Ok(addr) if diagnostics.is_empty() => Ok(Ok(addr)),
+        Ok(_) => Ok(Err(diagnostics)),
+        Err(error) => {
+            diagnostics.push(format!(
+                "node control live send ticket address unsupported or malformed: {error}; import a fresh live ticket with live-ticket-import"
+            ));
+            Ok(Err(diagnostics))
         }
-    };
-    if !preflight_diagnostics.is_empty() {
-        return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
-            input,
-            ticket: &ticket,
-            envelope,
-            diagnostics: preflight_diagnostics,
-            retry_receipt_refs: Vec::new(),
-            retry_receipt_values: Vec::new(),
-        });
     }
-    let receiver_addr = receiver_addr.ok_or_else(|| {
-        MoltenError::invalid_harness("node control live send receiver address missing after preflight")
-    })?;
-    if let Some(state_root) = input.state_root
-        && let Some(duplicate) = duplicate_node_control_live_send(input, state_root, &ticket, &envelope)?
-    {
-        return Ok(duplicate);
-    }
+}
+
+async fn publish_with_retries(
+    input: &NodeControlLiveSendInput<'_>,
+    receiver_addr: &iroh::EndpointAddr,
+    ticket: &NodeControlLiveTicket,
+    envelope: &NodeControlIngressEnvelope,
+) -> Result<SendRetryOutcome> {
     let attempt_capacity = usize::try_from(input.max_attempts)
         .map_err(|_| MoltenError::invalid_harness("node control live send attempts exceed usize capacity"))?;
     let mut retry_receipt_refs = Vec::with_capacity(attempt_capacity);
@@ -5781,7 +5845,7 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
     let mut diagnostics = Vec::with_capacity(attempt_capacity);
     let mut published = None;
     for attempt in 1..=input.max_attempts {
-        match attempt_node_control_live_send(input, &receiver_addr, &envelope).await? {
+        match attempt_node_control_live_send(input, receiver_addr, envelope).await? {
             Ok(receipt) => {
                 published = Some(receipt);
                 break;
@@ -5797,8 +5861,8 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
                     attempt,
                     max_attempts: input.max_attempts,
                     from_peer: input.from_peer,
-                    ticket: &ticket,
-                    envelope: &envelope,
+                    ticket,
+                    envelope,
                     diagnostics: &attempt_diagnostics,
                 })?;
                 let retry_ref = canonical_hash(&retry_value)?;
@@ -5811,47 +5875,46 @@ pub async fn send_node_control_live_ingress(input: &NodeControlLiveSendInput<'_>
             }
         }
     }
-    let Some(published) = published else {
-        return denied_node_control_live_send_with_diagnostics(DeniedLiveSendInput {
-            input,
-            ticket: &ticket,
-            envelope,
-            diagnostics,
-            retry_receipt_refs,
-            retry_receipt_values,
-        });
-    };
+    Ok(SendRetryOutcome {
+        published,
+        retry_receipt_refs,
+        retry_receipt_values,
+        diagnostics,
+    })
+}
+
+fn finish_send(input: FinishSendInput<'_>) -> Result<NodeControlLiveSend> {
     let send_receipt_value = live_send_receipt_value(&LiveSendReceiptValueInput {
         decision: "pass",
-        from_peer: input.from_peer,
-        ticket: &ticket,
-        envelope: &envelope,
-        transport_receipt_ref: Some(&published.transport_receipt_ref),
+        from_peer: input.input.from_peer,
+        ticket: input.ticket,
+        envelope: &input.envelope,
+        transport_receipt_ref: Some(&input.published.transport_receipt_ref),
         diagnostics: &[],
     })?;
     let send_receipt_ref = canonical_hash(&send_receipt_value)?;
-    if let Some(state_root) = input.state_root {
-        import_node_artifact(state_root, input.receiver_ticket_value)?;
-        write_ingress_envelope_and_verify(state_root, &ticket.topic, &envelope)?;
-        import_node_artifact(state_root, &envelope.value)?;
+    if let Some(state_root) = input.input.state_root {
+        import_node_artifact(state_root, input.input.receiver_ticket_value)?;
+        write_ingress_envelope_and_verify(state_root, &input.ticket.topic, &input.envelope)?;
+        import_node_artifact(state_root, &input.envelope.value)?;
         write_preserves(
-            &control_live_transport_receipt_path(state_root, &envelope.envelope_ref, "send"),
-            &published.transport_receipt_value,
+            &control_live_transport_receipt_path(state_root, &input.envelope.envelope_ref, "send"),
+            &input.published.transport_receipt_value,
         )?;
-        import_node_artifact(state_root, &published.transport_receipt_value)?;
+        import_node_artifact(state_root, &input.published.transport_receipt_value)?;
         write_preserves(&control_live_send_receipt_path(state_root, &send_receipt_ref), &send_receipt_value)?;
         import_node_artifact(state_root, &send_receipt_value)?;
     }
     Ok(NodeControlLiveSend {
-        envelope_ref: envelope.envelope_ref,
-        envelope_value: envelope.value,
-        operation_ref: envelope.operation_ref,
-        receiver_ticket_ref: ticket.ticket_ref,
-        receiver_endpoint_id: ticket.live_endpoint_id,
-        transport_receipt_ref: Some(published.transport_receipt_ref),
-        transport_receipt_value: Some(published.transport_receipt_value),
-        retry_receipt_refs,
-        retry_receipt_values,
+        envelope_ref: input.envelope.envelope_ref,
+        envelope_value: input.envelope.value,
+        operation_ref: input.envelope.operation_ref,
+        receiver_ticket_ref: input.ticket.ticket_ref.clone(),
+        receiver_endpoint_id: input.ticket.live_endpoint_id.clone(),
+        transport_receipt_ref: Some(input.published.transport_receipt_ref),
+        transport_receipt_value: Some(input.published.transport_receipt_value),
+        retry_receipt_refs: input.retry_receipt_refs,
+        retry_receipt_values: input.retry_receipt_values,
         duplicate_receipt_ref: None,
         duplicate_receipt_value: None,
         send_receipt_ref,
