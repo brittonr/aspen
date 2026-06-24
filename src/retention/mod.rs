@@ -3101,6 +3101,130 @@ fn parse_destructive_retention_evidence_summary_to_evidence(value: &IOValue) -> 
     Ok(evidence)
 }
 
+struct AdmissionCheck {
+    is_admitted: bool,
+    scope_mismatches: usize,
+}
+
+fn push_admission_diagnostic<S>(diagnostics: &mut S, diagnostic: String) -> Result<()>
+where S: VecSink<String> {
+    push_bounded(diagnostics, diagnostic, MAX_RETENTION_DIAGNOSTICS, "retention admission diagnostics")
+}
+
+fn check_admission_basics<S>(
+    input: &AdmissionRefsInput<'_>,
+    reference: &str,
+    admission: &RetentionEvidenceAdmission,
+    diagnostics: &mut S,
+) -> Result<bool>
+where
+    S: VecSink<String>,
+{
+    let mut is_admitted = true;
+    if admission.admission_ref != reference {
+        is_admitted = false;
+        push_admission_diagnostic(
+            diagnostics,
+            format!("{}-admission-ref-mismatch:{}", input.expected_kind, reference),
+        )?;
+    }
+    if admission.kind != input.expected_kind {
+        is_admitted = false;
+        push_admission_diagnostic(
+            diagnostics,
+            format!("{}-admission-kind-mismatch:{}", input.expected_kind, reference),
+        )?;
+    }
+    if admission.decision != "pass" {
+        is_admitted = false;
+        push_admission_diagnostic(diagnostics, format!("{}-admission-not-pass:{}", input.expected_kind, reference))?;
+    }
+    if !admission.is_current {
+        is_admitted = false;
+        push_admission_diagnostic(diagnostics, format!("{}-admission-stale:{}", input.expected_kind, reference))?;
+    }
+    if !admission.revoked_refs.is_empty() {
+        is_admitted = false;
+        push_admission_diagnostic(diagnostics, format!("{}-admission-revoked:{}", input.expected_kind, reference))?;
+    }
+    if admission.bound_refs.is_empty() {
+        is_admitted = false;
+        push_admission_diagnostic(
+            diagnostics,
+            format!("{}-admission-empty-bound-refs:{}", input.expected_kind, reference),
+        )?;
+    }
+    Ok(is_admitted)
+}
+
+fn admission_scope_mismatch_count(scope: &AdmissionScope<'_>, admission: &RetentionEvidenceAdmission) -> usize {
+    let mut count = 0usize;
+    if scope.requester_ref != Some(admission.requester_ref.as_str()) {
+        count += 1;
+    }
+    if admission.object_ref != scope.object_ref || admission.object_kind != scope.object_kind {
+        count += 1;
+    }
+    if admission.retention_class != scope.retention_class {
+        count += 1;
+    }
+    if admission.action != scope.action {
+        count += 1;
+    }
+    count
+}
+
+fn check_admission_required_refs<S>(
+    input: &AdmissionRefsInput<'_>,
+    reference: &str,
+    admission: &RetentionEvidenceAdmission,
+    diagnostics: &mut S,
+) -> Result<bool>
+where
+    S: VecSink<String>,
+{
+    let mut is_admitted = true;
+    if input.expected_kind == ADMISSION_KIND_REFERENCE_INDEX && !admission.is_reference_index_complete {
+        is_admitted = false;
+        push_admission_diagnostic(diagnostics, format!("reference-index-admission-incomplete:{}", reference))?;
+    }
+    if input.expected_kind == ADMISSION_KIND_REMOTE_GC {
+        for required in input.required_remote_refs {
+            if !admission.remote_refs.iter().any(|remote| remote == required) {
+                is_admitted = false;
+                push_admission_diagnostic(
+                    diagnostics,
+                    format!("remote-gc-admission-missing-remote:{}:{}", reference, required),
+                )?;
+            }
+        }
+    }
+    Ok(is_admitted)
+}
+
+fn check_admission_ref<S>(
+    input: &AdmissionRefsInput<'_>,
+    reference: &str,
+    admission: &RetentionEvidenceAdmission,
+    diagnostics: &mut S,
+) -> Result<AdmissionCheck>
+where
+    S: VecSink<String>,
+{
+    let mut is_admitted = check_admission_basics(input, reference, admission, diagnostics)?;
+    let scope_mismatches = admission_scope_mismatch_count(input.scope, admission);
+    if scope_mismatches > 0 {
+        is_admitted = false;
+    }
+    if !check_admission_required_refs(input, reference, admission, diagnostics)? {
+        is_admitted = false;
+    }
+    Ok(AdmissionCheck {
+        is_admitted,
+        scope_mismatches,
+    })
+}
+
 fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsResult> {
     let mut diagnostics = Vec::new();
     let mut admitted_refs = Vec::new();
@@ -3110,109 +3234,16 @@ fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsRes
         let admission = match read_retention_evidence_admission(input.root, reference) {
             Ok(admission) => admission,
             Err(error) => {
-                push_bounded(
+                push_admission_diagnostic(
                     &mut diagnostics,
                     format!("{}-admission-unreadable:{}:{}", input.expected_kind, reference, error),
-                    MAX_RETENTION_DIAGNOSTICS,
-                    "retention admission diagnostics",
                 )?;
                 continue;
             }
         };
-        let mut is_admitted = true;
-        if admission.admission_ref != *reference {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("{}-admission-ref-mismatch:{}", input.expected_kind, reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention admission diagnostics",
-            )?;
-        }
-        if admission.kind != input.expected_kind {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("{}-admission-kind-mismatch:{}", input.expected_kind, reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention admission diagnostics",
-            )?;
-        }
-        if admission.decision != "pass" {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("{}-admission-not-pass:{}", input.expected_kind, reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention admission diagnostics",
-            )?;
-        }
-        if !admission.is_current {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("{}-admission-stale:{}", input.expected_kind, reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention admission diagnostics",
-            )?;
-        }
-        if !admission.revoked_refs.is_empty() {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("{}-admission-revoked:{}", input.expected_kind, reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention admission diagnostics",
-            )?;
-        }
-        if admission.bound_refs.is_empty() {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("{}-admission-empty-bound-refs:{}", input.expected_kind, reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention admission diagnostics",
-            )?;
-        }
-        if input.scope.requester_ref != Some(admission.requester_ref.as_str()) {
-            is_admitted = false;
-            scope_mismatches += 1;
-        }
-        if admission.object_ref != input.scope.object_ref || admission.object_kind != input.scope.object_kind {
-            is_admitted = false;
-            scope_mismatches += 1;
-        }
-        if admission.retention_class != input.scope.retention_class {
-            is_admitted = false;
-            scope_mismatches += 1;
-        }
-        if admission.action != input.scope.action {
-            is_admitted = false;
-            scope_mismatches += 1;
-        }
-        if input.expected_kind == ADMISSION_KIND_REFERENCE_INDEX && !admission.is_reference_index_complete {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("reference-index-admission-incomplete:{}", reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention admission diagnostics",
-            )?;
-        }
-        if input.expected_kind == ADMISSION_KIND_REMOTE_GC {
-            for required in input.required_remote_refs {
-                if !admission.remote_refs.iter().any(|remote| remote == required) {
-                    is_admitted = false;
-                    push_bounded(
-                        &mut diagnostics,
-                        format!("remote-gc-admission-missing-remote:{}:{}", reference, required),
-                        MAX_RETENTION_DIAGNOSTICS,
-                        "retention admission diagnostics",
-                    )?;
-                }
-            }
-        }
-        if is_admitted {
+        let check = check_admission_ref(&input, reference, &admission, &mut diagnostics)?;
+        scope_mismatches += check.scope_mismatches;
+        if check.is_admitted {
             push_bounded(&mut admitted_refs, admission.admission_ref, MAX_RETENTION_REFS, "retention admitted refs")?;
             for remote_ref in admission.remote_refs {
                 push_bounded(&mut remote_refs, remote_ref, MAX_RETENTION_REFS, "retention admitted remote refs")?;
@@ -3220,12 +3251,7 @@ fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsRes
         }
     }
     if !input.refs.is_empty() && admitted_refs.is_empty() && scope_mismatches > 0 {
-        push_bounded(
-            &mut diagnostics,
-            format!("{}-admission-scope-mismatch", input.expected_kind),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention admission diagnostics",
-        )?;
+        push_admission_diagnostic(&mut diagnostics, format!("{}-admission-scope-mismatch", input.expected_kind))?;
     }
     Ok(AdmissionRefsResult {
         diagnostics,
