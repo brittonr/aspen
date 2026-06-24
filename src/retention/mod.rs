@@ -5682,18 +5682,61 @@ fn write_retention_candidate_bundle_redacted_view(bundle_dir: &Path, bundle: &Re
     Ok(())
 }
 
+enum RedactionFrame {
+    Visit { value: IOValue, path: String },
+    BuildRecord { label: IOValue, child_count: usize },
+    BuildSequence { child_count: usize },
+}
+
+struct RedactionResults {
+    values: Vec<IOValue>,
+}
+
+impl RedactionResults {
+    fn new() -> Self {
+        Self { values: Vec::new() }
+    }
+
+    fn push(&mut self, value: IOValue) -> Result<()> {
+        push_bounded(&mut self.values, value, MAX_RETENTION_REFS, "retention bundle redacted values")
+    }
+
+    fn build_record(&mut self, label: IOValue, child_count: usize) -> Result<()> {
+        let start = self
+            .values
+            .len()
+            .checked_sub(child_count)
+            .ok_or_else(|| MoltenError::invalid_harness("retention bundle redaction record stack underflow"))?;
+        let fields = self.values.split_off(start);
+        self.push(IOValue::record(label, fields))
+    }
+
+    fn build_sequence(&mut self, child_count: usize) -> Result<()> {
+        let start = self
+            .values
+            .len()
+            .checked_sub(child_count)
+            .ok_or_else(|| MoltenError::invalid_harness("retention bundle redaction sequence stack underflow"))?;
+        let values = self.values.split_off(start);
+        self.push(sequence(values))
+    }
+
+    fn finish(mut self) -> Result<IOValue> {
+        if self.values.len() != 1 {
+            return Err(MoltenError::invalid_harness("retention bundle redaction result stack mismatch"));
+        }
+        self.values
+            .pop()
+            .ok_or_else(|| MoltenError::invalid_harness("retention bundle redaction produced no result"))
+    }
+}
+
 fn redacted_retention_bundle_value(
     value: &IOValue,
     path: &str,
     bundle_ref: &str,
     marker_refs: &mut impl VecSink<String>,
 ) -> Result<IOValue> {
-    enum RedactionFrame {
-        Visit { value: IOValue, path: String },
-        BuildRecord { label: IOValue, child_count: usize },
-        BuildSequence { child_count: usize },
-    }
-
     let mut frames = Vec::new();
     push_bounded(
         &mut frames,
@@ -5704,64 +5747,22 @@ fn redacted_retention_bundle_value(
         MAX_RETENTION_REFS,
         "retention bundle redaction stack",
     )?;
-    let mut results = Vec::new();
+    let mut results = RedactionResults::new();
     while let Some(frame) = frames.pop() {
         match frame {
             RedactionFrame::Visit {
                 value: current,
                 path: current_path,
             } => {
-                if let Some(label) = record_label_string(&current)
-                    && is_sensitive_retention_bundle_token(&label)
-                {
-                    let marker_ref = retention_bundle_marker_ref(bundle_ref, &current_path, &label)?;
-                    push_bounded(
-                        marker_refs,
-                        marker_ref.clone(),
-                        MAX_RETENTION_REFS,
-                        "retention bundle profile markers",
-                    )?;
-                    push_bounded(
-                        &mut results,
-                        record("retention-bundle-redaction-marker", vec![string(&marker_ref)]),
-                        MAX_RETENTION_REFS,
-                        "retention bundle redacted values",
-                    )?;
-                    continue;
-                }
-                if let Some(text) = current.as_string()
-                    && is_sensitive_retention_bundle_token(&text)
-                {
-                    let marker_ref = retention_bundle_marker_ref(bundle_ref, &current_path, &text)?;
-                    push_bounded(
-                        marker_refs,
-                        marker_ref.clone(),
-                        MAX_RETENTION_REFS,
-                        "retention bundle profile markers",
-                    )?;
-                    push_bounded(
-                        &mut results,
-                        record("retention-bundle-redaction-marker", vec![string(&marker_ref)]),
-                        MAX_RETENTION_REFS,
-                        "retention bundle redacted values",
-                    )?;
+                if let Some(marker) = sensitive_marker(&current, &current_path, bundle_ref, marker_refs)? {
+                    results.push(marker)?;
                     continue;
                 }
                 match current.value_class() {
-                    ValueClass::Atomic(_) | ValueClass::Embedded => {
-                        push_bounded(&mut results, current, MAX_RETENTION_REFS, "retention bundle redacted values")?
-                    }
+                    ValueClass::Atomic(_) | ValueClass::Embedded => results.push(current)?,
                     ValueClass::Compound(CompoundClass::Record) => {
                         let label = value_to_iovalue(&current.label());
-                        let mut children = Vec::new();
-                        for (index, child) in current.iter().enumerate() {
-                            push_bounded(
-                                &mut children,
-                                (index, value_to_iovalue(&child)),
-                                MAX_RETENTION_REFS,
-                                "retention bundle redaction children",
-                            )?;
-                        }
+                        let children = redaction_children(&current)?;
                         let child_count = children.len();
                         push_bounded(
                             &mut frames,
@@ -5769,28 +5770,10 @@ fn redacted_retention_bundle_value(
                             MAX_RETENTION_REFS,
                             "retention bundle redaction stack",
                         )?;
-                        for (index, child) in children.into_iter().rev() {
-                            push_bounded(
-                                &mut frames,
-                                RedactionFrame::Visit {
-                                    value: child,
-                                    path: format!("{current_path}/{index}"),
-                                },
-                                MAX_RETENTION_REFS,
-                                "retention bundle redaction stack",
-                            )?;
-                        }
+                        push_visit_frames(&mut frames, children, &current_path)?;
                     }
                     ValueClass::Compound(CompoundClass::Sequence) => {
-                        let mut children = Vec::new();
-                        for (index, child) in current.iter().enumerate() {
-                            push_bounded(
-                                &mut children,
-                                (index, value_to_iovalue(&child)),
-                                MAX_RETENTION_REFS,
-                                "retention bundle redaction children",
-                            )?;
-                        }
+                        let children = redaction_children(&current)?;
                         let child_count = children.len();
                         push_bounded(
                             &mut frames,
@@ -5798,51 +5781,75 @@ fn redacted_retention_bundle_value(
                             MAX_RETENTION_REFS,
                             "retention bundle redaction stack",
                         )?;
-                        for (index, child) in children.into_iter().rev() {
-                            push_bounded(
-                                &mut frames,
-                                RedactionFrame::Visit {
-                                    value: child,
-                                    path: format!("{current_path}/{index}"),
-                                },
-                                MAX_RETENTION_REFS,
-                                "retention bundle redaction stack",
-                            )?;
-                        }
+                        push_visit_frames(&mut frames, children, &current_path)?;
                     }
                     ValueClass::Compound(CompoundClass::Set) | ValueClass::Compound(CompoundClass::Dictionary) => {
-                        push_bounded(&mut results, current, MAX_RETENTION_REFS, "retention bundle redacted values")?;
+                        results.push(current)?;
                     }
                 }
             }
-            RedactionFrame::BuildRecord { label, child_count } => {
-                let start = results
-                    .len()
-                    .checked_sub(child_count)
-                    .ok_or_else(|| MoltenError::invalid_harness("retention bundle redaction record stack underflow"))?;
-                let fields = results.split_off(start);
-                push_bounded(
-                    &mut results,
-                    IOValue::record(label, fields),
-                    MAX_RETENTION_REFS,
-                    "retention bundle redacted values",
-                )?;
-            }
-            RedactionFrame::BuildSequence { child_count } => {
-                let start = results.len().checked_sub(child_count).ok_or_else(|| {
-                    MoltenError::invalid_harness("retention bundle redaction sequence stack underflow")
-                })?;
-                let values = results.split_off(start);
-                push_bounded(&mut results, sequence(values), MAX_RETENTION_REFS, "retention bundle redacted values")?;
-            }
+            RedactionFrame::BuildRecord { label, child_count } => results.build_record(label, child_count)?,
+            RedactionFrame::BuildSequence { child_count } => results.build_sequence(child_count)?,
         }
     }
-    if results.len() != 1 {
-        return Err(MoltenError::invalid_harness("retention bundle redaction result stack mismatch"));
+    results.finish()
+}
+
+fn sensitive_marker(
+    value: &IOValue,
+    path: &str,
+    bundle_ref: &str,
+    marker_refs: &mut impl VecSink<String>,
+) -> Result<Option<IOValue>> {
+    if let Some(label) = record_label_string(value)
+        && is_sensitive_retention_bundle_token(&label)
+    {
+        return marker_result(bundle_ref, path, &label, marker_refs).map(Some);
     }
-    results
-        .pop()
-        .ok_or_else(|| MoltenError::invalid_harness("retention bundle redaction produced no result"))
+    if let Some(text) = value.as_string()
+        && is_sensitive_retention_bundle_token(&text)
+    {
+        return marker_result(bundle_ref, path, &text, marker_refs).map(Some);
+    }
+    Ok(None)
+}
+
+fn marker_result(bundle_ref: &str, path: &str, token: &str, marker_refs: &mut impl VecSink<String>) -> Result<IOValue> {
+    let marker_ref = retention_bundle_marker_ref(bundle_ref, path, token)?;
+    push_bounded(marker_refs, marker_ref.clone(), MAX_RETENTION_REFS, "retention bundle profile markers")?;
+    Ok(record("retention-bundle-redaction-marker", vec![string(&marker_ref)]))
+}
+
+fn redaction_children(value: &IOValue) -> Result<Vec<(usize, IOValue)>> {
+    let mut children = Vec::new();
+    for (index, child) in value.iter().enumerate() {
+        push_bounded(
+            &mut children,
+            (index, value_to_iovalue(&child)),
+            MAX_RETENTION_REFS,
+            "retention bundle redaction children",
+        )?;
+    }
+    Ok(children)
+}
+
+fn push_visit_frames(
+    frames: &mut impl VecSink<RedactionFrame>,
+    children: Vec<(usize, IOValue)>,
+    current_path: &str,
+) -> Result<()> {
+    for (index, child) in children.into_iter().rev() {
+        push_bounded(
+            frames,
+            RedactionFrame::Visit {
+                value: child,
+                path: format!("{current_path}/{index}"),
+            },
+            MAX_RETENTION_REFS,
+            "retention bundle redaction stack",
+        )?;
+    }
+    Ok(())
 }
 
 fn retention_bundle_marker_ref(bundle_ref: &str, path: &str, token: &str) -> Result<String> {
