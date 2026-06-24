@@ -746,6 +746,13 @@ struct LiveWorkflowBundleAckImportReceiptValueInput<'a> {
     diagnostics: &'a [String],
 }
 
+#[derive(Debug)]
+struct ImportParts {
+    imported_refs: Vec<String>,
+    ticket_import_ref: Option<String>,
+    authority_import_ref: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct ReconcileArtifacts<'a> {
     apply: &'a NodeControlLiveWorkflowBundleApplyReceipt,
@@ -3698,69 +3705,87 @@ pub fn import_node_control_live_workflow_bundle(
     let admission = parse_node_control_live_peer_admission(&bundle.peer_admission_value)?;
     let authority = parse_node_control_authority_grant(&bundle.authority_grant_value)?;
     let mut diagnostics = live_workflow_bundle_import_diagnostics(input, &ticket, &admission, &authority);
-    let mut imported_refs = Vec::with_capacity(bundle.receipt_values.len().saturating_add(5));
-    let mut ticket_import_ref = None;
-    let mut authority_import_ref = None;
+    let mut parts = ImportParts {
+        imported_refs: Vec::with_capacity(bundle.receipt_values.len().saturating_add(5)),
+        ticket_import_ref: None,
+        authority_import_ref: None,
+    };
     if diagnostics.is_empty() {
-        let ticket_import = import_node_control_live_ticket(&NodeControlLiveTicketImportInput {
-            state_root: input.state_root,
-            ticket_value: &bundle.ticket_value,
-            peer_admission_value: Some(&bundle.peer_admission_value),
-            expected_node: input.expected_node,
-            expected_topic: input.expected_topic,
-            expected_endpoint: input.expected_endpoint,
-            expected_peer: input.expected_peer,
-            as_of_sequence: input.as_of_sequence,
-        })?;
-        let authority_import = import_node_control_authority_grant_checked(&NodeControlAuthorityGrantImportInput {
-            state_root: input.state_root,
-            grant_value: &bundle.authority_grant_value,
-            expected_peer: input.expected_peer,
-            expected_node: input.expected_node,
-            expected_operations: input.expected_operations,
-            expected_target_scope: input.expected_target_scope,
-            expected_resource_scope: input.expected_resource_scope,
-            as_of_epoch: input.as_of_epoch,
-        })?;
-        ticket_import_ref = Some(ticket_import.receipt_ref.clone());
-        authority_import_ref = Some(authority_import.receipt_ref.clone());
-        if ticket_import.decision != "pass" {
-            diagnostics.extend(ticket_import.diagnostics);
-        }
-        if authority_import.decision != "pass" {
-            diagnostics.extend(authority_import.diagnostics);
-        }
-        if diagnostics.is_empty() {
-            imported_refs.extend(ticket_import.imported_refs);
-            imported_refs.extend(authority_import.imported_refs);
-            imported_refs.push(import_node_artifact(input.state_root, input.bundle_value)?);
-            for receipt_value in &bundle.receipt_values {
-                imported_refs.push(import_node_artifact(input.state_root, receipt_value)?);
-            }
-        }
+        let (imported, import_diagnostics) = import_parts(input, &bundle)?;
+        parts = imported;
+        diagnostics.extend(import_diagnostics);
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let receipt_value = live_workflow_bundle_import_receipt_value(&LiveWorkflowBundleImportReceiptValueInput {
         decision,
         state_root: input.state_root,
         bundle: &bundle,
-        ticket_import_ref: ticket_import_ref.as_deref(),
-        authority_import_ref: authority_import_ref.as_deref(),
-        imported_refs: &imported_refs,
+        ticket_import_ref: parts.ticket_import_ref.as_deref(),
+        authority_import_ref: parts.authority_import_ref.as_deref(),
+        imported_refs: &parts.imported_refs,
         diagnostics: &diagnostics,
     })?;
     let receipt_ref = canonical_hash(&receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleImport {
         bundle_ref: bundle.bundle_ref,
-        ticket_import_ref,
-        authority_import_ref,
-        imported_refs,
+        ticket_import_ref: parts.ticket_import_ref,
+        authority_import_ref: parts.authority_import_ref,
+        imported_refs: parts.imported_refs,
         diagnostics,
         receipt_ref,
         receipt_value,
         decision: decision.to_string(),
     })
+}
+
+fn import_parts(
+    input: &NodeControlLiveWorkflowBundleImportInput<'_>,
+    bundle: &NodeControlLiveWorkflowBundle,
+) -> Result<(ImportParts, Vec<String>)> {
+    let mut diagnostics = Vec::new();
+    let mut parts = ImportParts {
+        imported_refs: Vec::with_capacity(bundle.receipt_values.len().saturating_add(5)),
+        ticket_import_ref: None,
+        authority_import_ref: None,
+    };
+    let ticket_import = import_node_control_live_ticket(&NodeControlLiveTicketImportInput {
+        state_root: input.state_root,
+        ticket_value: &bundle.ticket_value,
+        peer_admission_value: Some(&bundle.peer_admission_value),
+        expected_node: input.expected_node,
+        expected_topic: input.expected_topic,
+        expected_endpoint: input.expected_endpoint,
+        expected_peer: input.expected_peer,
+        as_of_sequence: input.as_of_sequence,
+    })?;
+    let authority_import = import_node_control_authority_grant_checked(&NodeControlAuthorityGrantImportInput {
+        state_root: input.state_root,
+        grant_value: &bundle.authority_grant_value,
+        expected_peer: input.expected_peer,
+        expected_node: input.expected_node,
+        expected_operations: input.expected_operations,
+        expected_target_scope: input.expected_target_scope,
+        expected_resource_scope: input.expected_resource_scope,
+        as_of_epoch: input.as_of_epoch,
+    })?;
+    parts.ticket_import_ref = Some(ticket_import.receipt_ref.clone());
+    parts.authority_import_ref = Some(authority_import.receipt_ref.clone());
+    if ticket_import.decision != "pass" {
+        diagnostics.extend(ticket_import.diagnostics.iter().cloned());
+    }
+    if authority_import.decision != "pass" {
+        diagnostics.extend(authority_import.diagnostics.iter().cloned());
+    }
+    if diagnostics.is_empty() {
+        parts.imported_refs.extend(ticket_import.imported_refs);
+        parts.imported_refs.extend(authority_import.imported_refs);
+        parts.imported_refs.push(import_node_artifact(input.state_root, input.bundle_value)?);
+        for receipt_value in &bundle.receipt_values {
+            parts.imported_refs.push(import_node_artifact(input.state_root, receipt_value)?);
+        }
+    }
+    Ok((parts, diagnostics))
 }
 
 fn validate_live_workflow_bundle_verify_input(input: &NodeControlLiveWorkflowBundleVerifyInput<'_>) -> Result<()> {

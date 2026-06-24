@@ -230,6 +230,8 @@
 
 ## Patterns That Work
 
+- 2026-06-24 Octet node daemon import-parts split: extracting the successful import leg of `src/node/daemon.rs::import_node_control_live_workflow_bundle` into neutral same-file `ImportParts`/`import_parts` lowered the no-disabled probe from 7026 to 7024 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_live_workflow_bundle_import_export_gates_bindings`, and probe `target/octet-burndown/probe-import-parts-0`.
+
 - 2026-06-24 Octet node daemon protocol evidence split: extracting `src/node/daemon.rs::live_workflow_protocol_evidence` parsing and receipt diagnostics into neutral same-file `parsed_or_note`/`ReceiptRefs`/`ExpectedRefs`/`note_*_part` helpers lowered the no-disabled probe from 7028 to 7026 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_live_workflow_bundle_reconcile_binds_receiver_evidence`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-flow-parts-0`.
 
 - 2026-06-24 Octet node daemon ack parser split: extracting `parse_node_control_live_workflow_bundle_ack` validation into neutral same-file `AckParts`/`validate_ack_members`/`validate_ack_reconcile` lowered the no-disabled probe from 7030 to 7028 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_live_workflow_bundle_reconcile_binds_receiver_evidence`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-ack-parts-0`.
