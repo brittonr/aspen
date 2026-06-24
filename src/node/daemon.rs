@@ -11397,200 +11397,220 @@ mod tests {
         });
     }
 
+    struct DenyCase<'a> {
+        name: &'a str,
+        grant_peer: Option<&'a str>,
+        grant_node: &'a str,
+        grant_operations: &'a [&'a str],
+        target_ref: Option<&'a str>,
+        target_scope: &'a str,
+        resource_scope: &'a str,
+        epoch: u64,
+        expires_at: Option<u64>,
+        is_revoked: bool,
+        sequence: u64,
+        expected: &'a str,
+    }
+
+    struct DenyCaseRefs {
+        policy_refs: Vec<String>,
+        resource_refs: Vec<String>,
+        peer_bootstrap_refs: Vec<String>,
+        authority_refs: Vec<String>,
+    }
+
+    const DENY_CASES: &[DenyCase<'static>] = &[
+        DenyCase {
+            name: "unknown-grant",
+            grant_peer: None,
+            grant_node: "node:live-authority",
+            grant_operations: &["status"],
+            target_ref: None,
+            target_scope: "*",
+            resource_scope: "*",
+            epoch: 1,
+            expires_at: None,
+            is_revoked: false,
+            sequence: 1,
+            expected: "not found",
+        },
+        DenyCase {
+            name: "wrong-peer",
+            grant_peer: Some("peer:other"),
+            grant_node: "node:live-authority",
+            grant_operations: &["status"],
+            target_ref: None,
+            target_scope: "*",
+            resource_scope: "*",
+            epoch: 1,
+            expires_at: None,
+            is_revoked: false,
+            sequence: 1,
+            expected: "does not match peer:case",
+        },
+        DenyCase {
+            name: "wrong-op",
+            grant_peer: Some("peer:case"),
+            grant_node: "node:live-authority",
+            grant_operations: &["shutdown"],
+            target_ref: None,
+            target_scope: "*",
+            resource_scope: "*",
+            epoch: 1,
+            expires_at: None,
+            is_revoked: false,
+            sequence: 1,
+            expected: "does not allow operation status",
+        },
+        DenyCase {
+            name: "wrong-target",
+            grant_peer: Some("peer:case"),
+            grant_node: "node:live-authority",
+            grant_operations: &["status"],
+            target_ref: Some("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+            target_scope: "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            resource_scope: "*",
+            epoch: 1,
+            expires_at: None,
+            is_revoked: false,
+            sequence: 1,
+            expected: "target scope",
+        },
+        DenyCase {
+            name: "wrong-resource",
+            grant_peer: Some("peer:case"),
+            grant_node: "node:live-authority",
+            grant_operations: &["status"],
+            target_ref: None,
+            target_scope: "*",
+            resource_scope: "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            epoch: 1,
+            expires_at: None,
+            is_revoked: false,
+            sequence: 1,
+            expected: "resource scope",
+        },
+        DenyCase {
+            name: "expired",
+            grant_peer: Some("peer:case"),
+            grant_node: "node:live-authority",
+            grant_operations: &["status"],
+            target_ref: None,
+            target_scope: "*",
+            resource_scope: "*",
+            epoch: 1,
+            expires_at: Some(1),
+            is_revoked: false,
+            sequence: 2,
+            expected: "expired at epoch 1",
+        },
+        DenyCase {
+            name: "revoked",
+            grant_peer: Some("peer:case"),
+            grant_node: "node:live-authority",
+            grant_operations: &["status"],
+            target_ref: None,
+            target_scope: "*",
+            resource_scope: "*",
+            epoch: 1,
+            expires_at: None,
+            is_revoked: true,
+            sequence: 1,
+            expected: "has revocation refs",
+        },
+    ];
+
+    fn denied_case_refs(root: &Path, case: &DenyCase<'_>) -> DenyCaseRefs {
+        let policy_refs = vec![local_ref("node-control-policy", case.name).expect("policy ref")];
+        let resource_refs = vec![local_ref("node-control-resource", case.name).expect("resource ref")];
+        let peer_bootstrap_refs =
+            test_live_peer_bootstrap_refs(root, "peer:case", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
+                .expect("peer admission ref");
+        let authority_refs = if let Some(grant_peer) = case.grant_peer {
+            let operations = case.grant_operations.iter().map(|operation| (*operation).to_string()).collect::<Vec<_>>();
+            let revocation_refs = if case.is_revoked {
+                vec![local_ref("node-control-revocation", case.name).expect("revocation ref")]
+            } else {
+                Vec::new()
+            };
+            let grant_value = node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
+                peer_id: grant_peer,
+                node_id: case.grant_node,
+                operations: &operations,
+                target_scope: case.target_scope,
+                resource_scope: case.resource_scope,
+                epoch: case.epoch,
+                expires_at: case.expires_at,
+                policy_refs: &policy_refs,
+                revocation_refs: &revocation_refs,
+                evidence_refs: &[],
+            })
+            .expect("authority grant value");
+            vec![import_node_control_authority_grant(root, &grant_value).expect("import authority grant").grant_ref]
+        } else {
+            vec![local_ref("node-control-authority", case.name).expect("authority ref")]
+        };
+        DenyCaseRefs {
+            policy_refs,
+            resource_refs,
+            peer_bootstrap_refs,
+            authority_refs,
+        }
+    }
+
+    fn assert_denied_case(case: &DenyCase<'_>) {
+        let root = temp_dir(&format!("node-control-live-authority-{}", case.name));
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:live-authority",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let refs = denied_case_refs(&root, case);
+        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "status",
+            target_ref: case.target_ref,
+            payload_ref: None,
+            authority_refs: &refs.authority_refs,
+            policy_refs: &refs.policy_refs,
+            resource_refs: &refs.resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("status request");
+        let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: &request_value,
+            from_peer: "peer:case",
+            to_node: "node:live-authority",
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            sequence: case.sequence,
+            peer_bootstrap_refs: &refs.peer_bootstrap_refs,
+            authority_refs: &refs.authority_refs,
+            policy_refs: &refs.policy_refs,
+            resource_refs: &refs.resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("live envelope");
+        publish_node_control_ingress(&NodeControlIngressPublishInput {
+            state_root: &root,
+            envelope_value: &envelope.value,
+        })
+        .expect("publish live envelope");
+        let delivered = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
+            state_root: &root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            envelope_ref: &envelope.envelope_ref,
+        })
+        .expect("deliver live envelope");
+        assert!(!delivered.has_enqueued, "{} enqueued", case.name);
+        let receipt_text = to_text(&delivered.ingress_receipt_value).expect("receipt text");
+        assert!(receipt_text.contains(case.expected), "{} receipt: {receipt_text}", case.name);
+        assert!(next_pending_control_request(&root).expect("pending request scan").is_none());
+    }
+
     #[test]
     fn node_control_live_authority_delegation_fails_closed() {
-        struct Case<'a> {
-            name: &'a str,
-            grant_peer: Option<&'a str>,
-            grant_node: &'a str,
-            grant_operations: &'a [&'a str],
-            target_ref: Option<&'a str>,
-            target_scope: &'a str,
-            resource_scope: &'a str,
-            epoch: u64,
-            expires_at: Option<u64>,
-            revoked: bool,
-            sequence: u64,
-            expected: &'a str,
-        }
-        let cases = [
-            Case {
-                name: "unknown-grant",
-                grant_peer: None,
-                grant_node: "node:live-authority",
-                grant_operations: &["status"],
-                target_ref: None,
-                target_scope: "*",
-                resource_scope: "*",
-                epoch: 1,
-                expires_at: None,
-                revoked: false,
-                sequence: 1,
-                expected: "not found",
-            },
-            Case {
-                name: "wrong-peer",
-                grant_peer: Some("peer:other"),
-                grant_node: "node:live-authority",
-                grant_operations: &["status"],
-                target_ref: None,
-                target_scope: "*",
-                resource_scope: "*",
-                epoch: 1,
-                expires_at: None,
-                revoked: false,
-                sequence: 1,
-                expected: "does not match peer:case",
-            },
-            Case {
-                name: "wrong-op",
-                grant_peer: Some("peer:case"),
-                grant_node: "node:live-authority",
-                grant_operations: &["shutdown"],
-                target_ref: None,
-                target_scope: "*",
-                resource_scope: "*",
-                epoch: 1,
-                expires_at: None,
-                revoked: false,
-                sequence: 1,
-                expected: "does not allow operation status",
-            },
-            Case {
-                name: "wrong-target",
-                grant_peer: Some("peer:case"),
-                grant_node: "node:live-authority",
-                grant_operations: &["status"],
-                target_ref: Some("blake3:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
-                target_scope: "blake3:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                resource_scope: "*",
-                epoch: 1,
-                expires_at: None,
-                revoked: false,
-                sequence: 1,
-                expected: "target scope",
-            },
-            Case {
-                name: "wrong-resource",
-                grant_peer: Some("peer:case"),
-                grant_node: "node:live-authority",
-                grant_operations: &["status"],
-                target_ref: None,
-                target_scope: "*",
-                resource_scope: "blake3:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-                epoch: 1,
-                expires_at: None,
-                revoked: false,
-                sequence: 1,
-                expected: "resource scope",
-            },
-            Case {
-                name: "expired",
-                grant_peer: Some("peer:case"),
-                grant_node: "node:live-authority",
-                grant_operations: &["status"],
-                target_ref: None,
-                target_scope: "*",
-                resource_scope: "*",
-                epoch: 1,
-                expires_at: Some(1),
-                revoked: false,
-                sequence: 2,
-                expected: "expired at epoch 1",
-            },
-            Case {
-                name: "revoked",
-                grant_peer: Some("peer:case"),
-                grant_node: "node:live-authority",
-                grant_operations: &["status"],
-                target_ref: None,
-                target_scope: "*",
-                resource_scope: "*",
-                epoch: 1,
-                expires_at: None,
-                revoked: true,
-                sequence: 1,
-                expected: "has revocation refs",
-            },
-        ];
-        for case in cases {
-            let root = temp_dir(&format!("node-control-live-authority-{}", case.name));
-            init_local_node(&NodeDaemonInitInput {
-                state_root: &root,
-                node_id: "node:live-authority",
-            })
-            .expect("init node");
-            run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-            let policy_refs = vec![local_ref("node-control-policy", case.name).expect("policy ref")];
-            let resource_refs = vec![local_ref("node-control-resource", case.name).expect("resource ref")];
-            let peer_bootstrap_refs =
-                test_live_peer_bootstrap_refs(&root, "peer:case", DEFAULT_CONTROL_INGRESS_TOPIC, &policy_refs)
-                    .expect("peer admission ref");
-            let authority_refs = if let Some(grant_peer) = case.grant_peer {
-                let operations =
-                    case.grant_operations.iter().map(|operation| (*operation).to_string()).collect::<Vec<_>>();
-                let revocation_refs = if case.revoked {
-                    vec![local_ref("node-control-revocation", case.name).expect("revocation ref")]
-                } else {
-                    Vec::new()
-                };
-                let grant_value = node_control_authority_grant_value(&NodeControlAuthorityGrantInput {
-                    peer_id: grant_peer,
-                    node_id: case.grant_node,
-                    operations: &operations,
-                    target_scope: case.target_scope,
-                    resource_scope: case.resource_scope,
-                    epoch: case.epoch,
-                    expires_at: case.expires_at,
-                    policy_refs: &policy_refs,
-                    revocation_refs: &revocation_refs,
-                    evidence_refs: &[],
-                })
-                .expect("authority grant value");
-                vec![
-                    import_node_control_authority_grant(&root, &grant_value).expect("import authority grant").grant_ref,
-                ]
-            } else {
-                vec![local_ref("node-control-authority", case.name).expect("authority ref")]
-            };
-            let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-                operation: "status",
-                target_ref: case.target_ref,
-                payload_ref: None,
-                authority_refs: &authority_refs,
-                policy_refs: &policy_refs,
-                resource_refs: &resource_refs,
-                evidence_refs: &[],
-            })
-            .expect("status request");
-            let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
-                request_value: &request_value,
-                from_peer: "peer:case",
-                to_node: "node:live-authority",
-                topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-                sequence: case.sequence,
-                peer_bootstrap_refs: &peer_bootstrap_refs,
-                authority_refs: &authority_refs,
-                policy_refs: &policy_refs,
-                resource_refs: &resource_refs,
-                evidence_refs: &[],
-            })
-            .expect("live envelope");
-            publish_node_control_ingress(&NodeControlIngressPublishInput {
-                state_root: &root,
-                envelope_value: &envelope.value,
-            })
-            .expect("publish live envelope");
-            let delivered = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
-                state_root: &root,
-                topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-                envelope_ref: &envelope.envelope_ref,
-            })
-            .expect("deliver live envelope");
-            assert!(!delivered.has_enqueued, "{} enqueued", case.name);
-            let receipt_text = to_text(&delivered.ingress_receipt_value).expect("receipt text");
-            assert!(receipt_text.contains(case.expected), "{} receipt: {receipt_text}", case.name);
-            assert!(next_pending_control_request(&root).expect("pending request scan").is_none());
+        for case in DENY_CASES {
+            assert_denied_case(case);
         }
     }
 
