@@ -10234,6 +10234,51 @@ mod tests {
         assert!(next_pending_control_request(&root).expect("pending request scan").is_none());
     }
 
+    struct PeerDelivery<'a> {
+        root: &'a Path,
+        request_value: &'a IOValue,
+        from_peer: &'a str,
+        to_node: &'a str,
+        peer_bootstrap_refs: &'a [String],
+        authority_refs: &'a [String],
+        policy_refs: &'a [String],
+        resource_refs: &'a [String],
+        is_expected_enqueued: bool,
+        expected_note: Option<&'a str>,
+    }
+
+    fn assert_peer_delivery(input: PeerDelivery<'_>) {
+        let envelope = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value: input.request_value,
+            from_peer: input.from_peer,
+            to_node: input.to_node,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            sequence: 1,
+            peer_bootstrap_refs: input.peer_bootstrap_refs,
+            authority_refs: input.authority_refs,
+            policy_refs: input.policy_refs,
+            resource_refs: input.resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("live envelope");
+        publish_node_control_ingress(&NodeControlIngressPublishInput {
+            state_root: input.root,
+            envelope_value: &envelope.value,
+        })
+        .expect("publish envelope");
+        let delivered = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
+            state_root: input.root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            envelope_ref: &envelope.envelope_ref,
+        })
+        .expect("deliver envelope");
+        assert_eq!(delivered.has_enqueued, input.is_expected_enqueued);
+        if let Some(expected_note) = input.expected_note {
+            let receipt_text = to_text(&delivered.ingress_receipt_value).expect("receipt text");
+            assert!(receipt_text.contains(expected_note));
+        }
+    }
+
     #[test]
     fn node_control_live_peer_ticket_admission_gates_bootstrap() {
         let root = temp_dir("node-control-live-peer-ticket");
@@ -10260,59 +10305,30 @@ mod tests {
             evidence_refs: &[],
         })
         .expect("status request");
-        let admitted = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+        assert_peer_delivery(PeerDelivery {
+            root: &root,
             request_value: &request_value,
             from_peer: "peer:ticket",
             to_node: "node:live-ticket",
-            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            sequence: 1,
             peer_bootstrap_refs: &peer_bootstrap_refs,
             authority_refs: &authority_refs,
             policy_refs: &policy_refs,
             resource_refs: &resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("admitted envelope");
-        publish_node_control_ingress(&NodeControlIngressPublishInput {
-            state_root: &root,
-            envelope_value: &admitted.value,
-        })
-        .expect("publish admitted");
-        let delivered = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
-            state_root: &root,
-            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            envelope_ref: &admitted.envelope_ref,
-        })
-        .expect("deliver admitted");
-        assert!(delivered.has_enqueued);
-
-        let denied = node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            is_expected_enqueued: true,
+            expected_note: None,
+        });
+        assert_peer_delivery(PeerDelivery {
+            root: &root,
             request_value: &request_value,
             from_peer: "peer:other-ticket",
             to_node: "node:live-ticket",
-            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            sequence: 1,
             peer_bootstrap_refs: &peer_bootstrap_refs,
             authority_refs: &authority_refs,
             policy_refs: &policy_refs,
             resource_refs: &resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("denied envelope");
-        publish_node_control_ingress(&NodeControlIngressPublishInput {
-            state_root: &root,
-            envelope_value: &denied.value,
-        })
-        .expect("publish denied");
-        let denied_delivery = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
-            state_root: &root,
-            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            envelope_ref: &denied.envelope_ref,
-        })
-        .expect("deliver denied");
-        assert!(!denied_delivery.has_enqueued);
-        let receipt_text = to_text(&denied_delivery.ingress_receipt_value).expect("receipt text");
-        assert!(receipt_text.contains("peer peer:ticket does not match peer:other-ticket"));
+            is_expected_enqueued: false,
+            expected_note: Some("peer peer:ticket does not match peer:other-ticket"),
+        });
     }
 
     struct ImportCase {
