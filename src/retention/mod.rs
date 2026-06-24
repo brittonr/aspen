@@ -2467,6 +2467,36 @@ struct GcAuditScope<'a> {
     retention: RetentionAuditScope<'a>,
 }
 
+struct AuditFacts {
+    apply_decision: String,
+    plan_ref: Option<String>,
+    plan_decision: String,
+    retention_receipt_decision: String,
+    tombstone_status: String,
+    diagnostics: Vec<String>,
+}
+
+struct ApplyStatus {
+    decision: String,
+    plan_ref: Option<String>,
+    diagnostics: Vec<String>,
+}
+
+struct PlanStatus {
+    decision: String,
+    diagnostics: Vec<String>,
+}
+
+struct ReceiptStatus {
+    decision: String,
+    diagnostics: Vec<String>,
+}
+
+struct TombstoneStatus {
+    status: String,
+    diagnostics: Vec<String>,
+}
+
 struct GateAdmissions {
     policy: AdmissionRefsResult,
     authority: AdmissionRefsResult,
@@ -4603,14 +4633,71 @@ pub fn audit_retention_gc_execution(input: RetentionGcAuditInput<'_>) -> Result<
         &execution.object_kind,
         &execution.retention_class,
     );
+    let facts = audit_facts(input.root, &execution, &execution_scope)?;
+    let decision = if facts.diagnostics.is_empty() { "pass" } else { "deny" };
+    let value = retention_gc_audit_value(&RetentionGcAuditValueInput {
+        decision,
+        subsystem: &execution.subsystem,
+        action: &execution.action,
+        object_ref: &execution.object_ref,
+        object_kind: &execution.object_kind,
+        retention_class: &execution.retention_class,
+        plan_ref: facts.plan_ref.as_deref(),
+        plan_decision: &facts.plan_decision,
+        apply_ref: execution.apply_ref.as_deref(),
+        apply_decision: &facts.apply_decision,
+        execution_ref: &execution.execution_ref,
+        execution_decision: &execution.decision,
+        retention_receipt_ref: execution.retention_receipt_ref.as_deref(),
+        retention_receipt_decision: &facts.retention_receipt_decision,
+        tombstone_ref: execution.tombstone_ref.as_deref(),
+        tombstone_status: &facts.tombstone_status,
+        diagnostics: &facts.diagnostics,
+    })?;
+    let audit = parse_retention_gc_audit(&value)?;
+    write_store_value(&gc_audit_path(input.root, &audit.audit_ref)?, &audit.value)?;
+    Ok(audit)
+}
+
+fn audit_facts(root: &Path, execution: &RetentionGcExecutionGate, scope: &GcAuditScope<'_>) -> Result<AuditFacts> {
+    let mut diagnostics = execution_notes(execution)?;
+    let ApplyStatus {
+        decision: apply_decision,
+        plan_ref,
+        diagnostics: apply_diagnostics,
+    } = apply_status(root, execution, scope)?;
+    extend_diag(&mut diagnostics, apply_diagnostics)?;
+    let PlanStatus {
+        decision: plan_decision,
+        diagnostics: plan_diagnostics,
+    } = plan_status(root, plan_ref.as_deref(), scope)?;
+    extend_diag(&mut diagnostics, plan_diagnostics)?;
+    let ReceiptStatus {
+        decision: retention_receipt_decision,
+        diagnostics: receipt_diagnostics,
+    } = receipt_status(root, execution, scope)?;
+    extend_diag(&mut diagnostics, receipt_diagnostics)?;
+    let TombstoneStatus {
+        status: tombstone_status,
+        diagnostics: tombstone_diagnostics,
+    } = tombstone_status(root, execution, scope)?;
+    extend_diag(&mut diagnostics, tombstone_diagnostics)?;
+    diagnostics.sort();
+    diagnostics.dedup();
+    Ok(AuditFacts {
+        apply_decision,
+        plan_ref,
+        plan_decision,
+        retention_receipt_decision,
+        tombstone_status,
+        diagnostics,
+    })
+}
+
+fn execution_notes(execution: &RetentionGcExecutionGate) -> Result<Vec<String>> {
     let mut diagnostics = Vec::new();
     if execution.decision != "pass" {
-        push_bounded(
-            &mut diagnostics,
-            "retention-gc-audit-execution-not-pass".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC audit diagnostics",
-        )?;
+        push_diag(&mut diagnostics, "retention-gc-audit-execution-not-pass")?;
         extend_bounded(
             &mut diagnostics,
             execution.diagnostics.iter().cloned(),
@@ -4618,23 +4705,21 @@ pub fn audit_retention_gc_execution(input: RetentionGcAuditInput<'_>) -> Result<
             "retention GC audit diagnostics",
         )?;
     }
+    Ok(diagnostics)
+}
 
-    let mut apply_decision = "missing".to_string();
+fn apply_status(root: &Path, execution: &RetentionGcExecutionGate, scope: &GcAuditScope<'_>) -> Result<ApplyStatus> {
+    let mut diagnostics = Vec::new();
+    let mut decision = "missing".to_string();
     let mut plan_ref = execution.plan_ref.clone();
-    let mut plan_decision = "missing".to_string();
     if let Some(apply_ref) = execution.apply_ref.as_ref() {
-        let apply = read_retention_gc_apply(input.root, apply_ref)?;
-        apply_decision.clone_from(&apply.decision);
+        let apply = read_retention_gc_apply(root, apply_ref)?;
+        decision.clone_from(&apply.decision);
         if apply.decision != "pass" {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-audit-apply-not-pass".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC audit diagnostics",
-            )?;
+            push_diag(&mut diagnostics, "retention-gc-audit-apply-not-pass")?;
         }
         if !same_gc_scope(
-            &execution_scope,
+            scope,
             &gc_audit_scope(
                 &apply.subsystem,
                 &apply.action,
@@ -4643,100 +4728,72 @@ pub fn audit_retention_gc_execution(input: RetentionGcAuditInput<'_>) -> Result<
                 &apply.retention_class,
             ),
         ) {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-audit-apply-scope-mismatch".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC audit diagnostics",
-            )?;
+            push_diag(&mut diagnostics, "retention-gc-audit-apply-scope-mismatch")?;
         }
         if execution.plan_ref.as_deref().is_some_and(|reference| reference != apply.plan_ref) {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-audit-execution-apply-plan-mismatch".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC audit diagnostics",
-            )?;
+            push_diag(&mut diagnostics, "retention-gc-audit-execution-apply-plan-mismatch")?;
         }
         if execution
             .retention_receipt_ref
             .as_deref()
             .is_some_and(|reference| apply.retention_receipt_ref.as_deref() != Some(reference))
         {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-audit-execution-apply-receipt-mismatch".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC audit diagnostics",
-            )?;
+            push_diag(&mut diagnostics, "retention-gc-audit-execution-apply-receipt-mismatch")?;
         }
         if execution
             .tombstone_ref
             .as_deref()
             .is_some_and(|reference| apply.tombstone_ref.as_deref() != Some(reference))
         {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-audit-execution-apply-tombstone-mismatch".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC audit diagnostics",
-            )?;
+            push_diag(&mut diagnostics, "retention-gc-audit-execution-apply-tombstone-mismatch")?;
         }
         plan_ref.get_or_insert(apply.plan_ref.clone());
     } else {
-        push_bounded(
-            &mut diagnostics,
-            "retention-gc-audit-apply-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC audit diagnostics",
-        )?;
+        push_diag(&mut diagnostics, "retention-gc-audit-apply-missing")?;
     }
+    Ok(ApplyStatus {
+        decision,
+        plan_ref,
+        diagnostics,
+    })
+}
 
-    if let Some(reference) = plan_ref.as_ref() {
-        let plan = read_retention_gc_plan(input.root, reference)?;
-        plan_decision.clone_from(&plan.decision);
+fn plan_status(root: &Path, plan_ref: Option<&str>, scope: &GcAuditScope<'_>) -> Result<PlanStatus> {
+    let mut diagnostics = Vec::new();
+    let mut decision = "missing".to_string();
+    if let Some(reference) = plan_ref {
+        let plan = read_retention_gc_plan(root, reference)?;
+        decision.clone_from(&plan.decision);
         if plan.decision != "pass" {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-audit-plan-not-pass".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC audit diagnostics",
-            )?;
+            push_diag(&mut diagnostics, "retention-gc-audit-plan-not-pass")?;
         }
         if !same_gc_scope(
-            &execution_scope,
+            scope,
             &gc_audit_scope(&plan.subsystem, &plan.action, &plan.object_ref, &plan.object_kind, &plan.retention_class),
         ) {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-audit-plan-scope-mismatch".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC audit diagnostics",
-            )?;
+            push_diag(&mut diagnostics, "retention-gc-audit-plan-scope-mismatch")?;
         }
     } else {
-        push_bounded(
-            &mut diagnostics,
-            "retention-gc-audit-plan-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC audit diagnostics",
-        )?;
+        push_diag(&mut diagnostics, "retention-gc-audit-plan-missing")?;
     }
+    Ok(PlanStatus { decision, diagnostics })
+}
 
-    let mut retention_receipt_decision = "missing".to_string();
+fn receipt_status(
+    root: &Path,
+    execution: &RetentionGcExecutionGate,
+    scope: &GcAuditScope<'_>,
+) -> Result<ReceiptStatus> {
+    let mut diagnostics = Vec::new();
+    let mut decision = "missing".to_string();
     if let Some(receipt_ref) = execution.retention_receipt_ref.as_ref() {
-        let receipt = read_retention_receipt(input.root, receipt_ref)?;
-        retention_receipt_decision.clone_from(&receipt.decision);
+        let receipt = read_retention_receipt(root, receipt_ref)?;
+        decision.clone_from(&receipt.decision);
         if receipt.decision != "pass" {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-audit-retention-receipt-not-pass".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC audit diagnostics",
-            )?;
+            push_diag(&mut diagnostics, "retention-gc-audit-retention-receipt-not-pass")?;
         }
         if !same_retention_scope(
-            &execution_scope.retention,
+            &scope.retention,
             &retention_audit_scope(
                 &receipt.action,
                 &receipt.object_ref,
@@ -4744,28 +4801,26 @@ pub fn audit_retention_gc_execution(input: RetentionGcAuditInput<'_>) -> Result<
                 &receipt.retention_class,
             ),
         ) {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-audit-retention-receipt-scope-mismatch".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC audit diagnostics",
-            )?;
+            push_diag(&mut diagnostics, "retention-gc-audit-retention-receipt-scope-mismatch")?;
         }
     } else {
-        push_bounded(
-            &mut diagnostics,
-            "retention-gc-audit-retention-receipt-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC audit diagnostics",
-        )?;
+        push_diag(&mut diagnostics, "retention-gc-audit-retention-receipt-missing")?;
     }
+    Ok(ReceiptStatus { decision, diagnostics })
+}
 
-    let mut tombstone_status = "missing".to_string();
+fn tombstone_status(
+    root: &Path,
+    execution: &RetentionGcExecutionGate,
+    scope: &GcAuditScope<'_>,
+) -> Result<TombstoneStatus> {
+    let mut diagnostics = Vec::new();
+    let mut status = "missing".to_string();
     if let Some(tombstone_ref) = execution.tombstone_ref.as_ref() {
-        let tombstone = read_retention_tombstone(input.root, tombstone_ref)?;
-        tombstone_status = "present".to_string();
+        let tombstone = read_retention_tombstone(root, tombstone_ref)?;
+        status = "present".to_string();
         if !same_retention_scope(
-            &execution_scope.retention,
+            &scope.retention,
             &retention_audit_scope(
                 &tombstone.action,
                 &tombstone.object_ref,
@@ -4773,60 +4828,28 @@ pub fn audit_retention_gc_execution(input: RetentionGcAuditInput<'_>) -> Result<
                 &tombstone.retention_class,
             ),
         ) {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-audit-tombstone-scope-mismatch".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC audit diagnostics",
-            )?;
+            push_diag(&mut diagnostics, "retention-gc-audit-tombstone-scope-mismatch")?;
         }
         if let Some(receipt_ref) = execution.retention_receipt_ref.as_ref() {
             let pending_receipt_ref = synthetic_ref("pending-retention-receipt")?;
             if tombstone.receipt_ref != *receipt_ref && tombstone.receipt_ref != pending_receipt_ref {
-                push_bounded(
-                    &mut diagnostics,
-                    "retention-gc-audit-tombstone-receipt-mismatch".to_string(),
-                    MAX_RETENTION_DIAGNOSTICS,
-                    "retention GC audit diagnostics",
-                )?;
+                push_diag(&mut diagnostics, "retention-gc-audit-tombstone-receipt-mismatch")?;
             }
         }
     } else if is_destructive_action(&execution.action) {
-        push_bounded(
-            &mut diagnostics,
-            "retention-gc-audit-tombstone-missing".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC audit diagnostics",
-        )?;
+        push_diag(&mut diagnostics, "retention-gc-audit-tombstone-missing")?;
     } else {
-        tombstone_status = "not-required".to_string();
+        status = "not-required".to_string();
     }
+    Ok(TombstoneStatus { status, diagnostics })
+}
 
-    diagnostics.sort();
-    diagnostics.dedup();
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = retention_gc_audit_value(&RetentionGcAuditValueInput {
-        decision,
-        subsystem: &execution.subsystem,
-        action: &execution.action,
-        object_ref: &execution.object_ref,
-        object_kind: &execution.object_kind,
-        retention_class: &execution.retention_class,
-        plan_ref: plan_ref.as_deref(),
-        plan_decision: &plan_decision,
-        apply_ref: execution.apply_ref.as_deref(),
-        apply_decision: &apply_decision,
-        execution_ref: &execution.execution_ref,
-        execution_decision: &execution.decision,
-        retention_receipt_ref: execution.retention_receipt_ref.as_deref(),
-        retention_receipt_decision: &retention_receipt_decision,
-        tombstone_ref: execution.tombstone_ref.as_deref(),
-        tombstone_status: &tombstone_status,
-        diagnostics: &diagnostics,
-    })?;
-    let audit = parse_retention_gc_audit(&value)?;
-    write_store_value(&gc_audit_path(input.root, &audit.audit_ref)?, &audit.value)?;
-    Ok(audit)
+fn push_diag(diagnostics: &mut impl VecSink<String>, note: &str) -> Result<()> {
+    push_bounded(diagnostics, note.to_string(), MAX_RETENTION_DIAGNOSTICS, "retention GC audit diagnostics")
+}
+
+fn extend_diag(diagnostics: &mut impl VecSink<String>, incoming: Vec<String>) -> Result<()> {
+    extend_bounded(diagnostics, incoming, MAX_RETENTION_DIAGNOSTICS, "retention GC audit diagnostics")
 }
 
 fn gc_audit_scope<'a>(
