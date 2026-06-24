@@ -3334,6 +3334,133 @@ fn admit_evidence_refs(input: AdmissionRefsInput<'_>) -> Result<AdmissionRefsRes
     })
 }
 
+struct Check {
+    is_admitted: bool,
+    scope_mismatches: usize,
+}
+
+fn push_clear_note<S>(diagnostics: &mut S, message: String) -> Result<()>
+where S: VecSink<String> {
+    push_bounded(diagnostics, message, MAX_RETENTION_DIAGNOSTICS, "retention remote clearance diagnostics")
+}
+
+fn check_state<S>(reference: &str, clearance: &RetentionRemoteGcClearance, diagnostics: &mut S) -> Result<bool>
+where S: VecSink<String> {
+    let mut is_admitted = true;
+    if clearance.clearance_ref != *reference {
+        is_admitted = false;
+        push_clear_note(diagnostics, format!("remote-clearance-ref-mismatch:{}", reference))?;
+    }
+    if clearance.decision != "pass" {
+        is_admitted = false;
+        push_clear_note(diagnostics, format!("remote-clearance-not-pass:{}", reference))?;
+    }
+    if !clearance.is_current {
+        is_admitted = false;
+        push_clear_note(diagnostics, format!("remote-clearance-stale:{}", reference))?;
+    }
+    if !clearance.revoked_refs.is_empty() {
+        is_admitted = false;
+        push_clear_note(diagnostics, format!("remote-clearance-revoked:{}", reference))?;
+    }
+    if !clearance.retained_refs.is_empty() {
+        is_admitted = false;
+        push_clear_note(diagnostics, format!("remote-clearance-retained:{}", clearance.remote_ref))?;
+    }
+    Ok(is_admitted)
+}
+
+fn check_scope(input: &RemoteClearanceRefsInput<'_>, clearance: &RetentionRemoteGcClearance) -> Check {
+    let mut scope_mismatches = 0usize;
+    if input.scope.requester_ref != Some(clearance.requester_ref.as_str()) {
+        scope_mismatches += 1;
+    }
+    if clearance.object_ref != input.scope.object_ref || clearance.object_kind != input.scope.object_kind {
+        scope_mismatches += 1;
+    }
+    if clearance.retention_class != input.scope.retention_class {
+        scope_mismatches += 1;
+    }
+    if clearance.action != input.scope.action {
+        scope_mismatches += 1;
+    }
+    Check {
+        is_admitted: scope_mismatches == 0,
+        scope_mismatches,
+    }
+}
+
+fn check_bindings<S>(
+    input: &RemoteClearanceRefsInput<'_>,
+    clearance: &RetentionRemoteGcClearance,
+    diagnostics: &mut S,
+) -> Result<bool>
+where
+    S: VecSink<String>,
+{
+    let mut is_admitted = true;
+    if !input.policy_refs.iter().any(|policy_ref| policy_ref == &clearance.policy_ref) {
+        is_admitted = false;
+        push_clear_note(diagnostics, format!("remote-clearance-policy-mismatch:{}", clearance.remote_ref))?;
+    }
+    if !input.authority_refs.iter().any(|authority_ref| authority_ref == &clearance.authority_ref) {
+        is_admitted = false;
+        push_clear_note(diagnostics, format!("remote-clearance-authority-mismatch:{}", clearance.remote_ref))?;
+    }
+    Ok(is_admitted)
+}
+
+fn check_clear_ref<S>(
+    input: &RemoteClearanceRefsInput<'_>,
+    reference: &str,
+    clearance: &RetentionRemoteGcClearance,
+    diagnostics: &mut S,
+) -> Result<Check>
+where
+    S: VecSink<String>,
+{
+    let is_state_admitted = check_state(reference, clearance, diagnostics)?;
+    let scope = check_scope(input, clearance);
+    let is_binding_admitted = check_bindings(input, clearance, diagnostics)?;
+    Ok(Check {
+        is_admitted: is_state_admitted && scope.is_admitted && is_binding_admitted,
+        scope_mismatches: scope.scope_mismatches,
+    })
+}
+
+fn collect_clear_refs(
+    admitted_refs: &mut impl VecSink<String>,
+    remote_refs: &mut impl VecSink<String>,
+    peer_refs: &mut impl VecSink<String>,
+    clearance: RetentionRemoteGcClearance,
+) -> Result<()> {
+    push_bounded(admitted_refs, clearance.clearance_ref, MAX_RETENTION_REFS, "retention remote clearance refs")?;
+    push_bounded(remote_refs, clearance.remote_ref, MAX_RETENTION_REFS, "retention remote clearance remote refs")?;
+    push_bounded(peer_refs, clearance.peer_ref, MAX_RETENTION_REFS, "retention remote clearance peer refs")
+}
+
+fn push_missing_clear_refs<S>(
+    input: &RemoteClearanceRefsInput<'_>,
+    remote_refs: &[String],
+    peer_refs: &[String],
+    diagnostics: &mut S,
+) -> Result<()>
+where
+    S: VecSink<String>,
+{
+    for required in input.required_remote_refs {
+        if !remote_refs.iter().any(|remote| remote == required) {
+            push_clear_note(diagnostics, format!("remote-clearance-missing-remote:{}", required))?;
+        }
+    }
+    for required in input.required_peer_refs {
+        if !peer_refs.iter().any(|peer| peer == required) {
+            push_clear_note(diagnostics, format!("remote-clearance-missing-peer:{}", required))?;
+        }
+    }
+    Ok(())
+}
+
 fn admit_remote_clearance_refs(input: RemoteClearanceRefsInput<'_>) -> Result<RemoteClearanceRefsResult> {
     let mut diagnostics = Vec::new();
     let mut admitted_refs = Vec::new();
@@ -3344,144 +3471,20 @@ fn admit_remote_clearance_refs(input: RemoteClearanceRefsInput<'_>) -> Result<Re
         let clearance = match read_retention_remote_gc_clearance(input.root, reference) {
             Ok(clearance) => clearance,
             Err(error) => {
-                push_bounded(
-                    &mut diagnostics,
-                    format!("remote-clearance-unreadable:{}:{}", reference, error),
-                    MAX_RETENTION_DIAGNOSTICS,
-                    "retention remote clearance diagnostics",
-                )?;
+                push_clear_note(&mut diagnostics, format!("remote-clearance-unreadable:{}:{}", reference, error))?;
                 continue;
             }
         };
-        let mut is_admitted = true;
-        if clearance.clearance_ref != *reference {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("remote-clearance-ref-mismatch:{}", reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention remote clearance diagnostics",
-            )?;
-        }
-        if clearance.decision != "pass" {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("remote-clearance-not-pass:{}", reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention remote clearance diagnostics",
-            )?;
-        }
-        if !clearance.is_current {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("remote-clearance-stale:{}", reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention remote clearance diagnostics",
-            )?;
-        }
-        if !clearance.revoked_refs.is_empty() {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("remote-clearance-revoked:{}", reference),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention remote clearance diagnostics",
-            )?;
-        }
-        if !clearance.retained_refs.is_empty() {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("remote-clearance-retained:{}", clearance.remote_ref),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention remote clearance diagnostics",
-            )?;
-        }
-        if input.scope.requester_ref != Some(clearance.requester_ref.as_str()) {
-            is_admitted = false;
-            scope_mismatches += 1;
-        }
-        if clearance.object_ref != input.scope.object_ref || clearance.object_kind != input.scope.object_kind {
-            is_admitted = false;
-            scope_mismatches += 1;
-        }
-        if clearance.retention_class != input.scope.retention_class {
-            is_admitted = false;
-            scope_mismatches += 1;
-        }
-        if clearance.action != input.scope.action {
-            is_admitted = false;
-            scope_mismatches += 1;
-        }
-        if !input.policy_refs.iter().any(|policy_ref| policy_ref == &clearance.policy_ref) {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("remote-clearance-policy-mismatch:{}", clearance.remote_ref),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention remote clearance diagnostics",
-            )?;
-        }
-        if !input.authority_refs.iter().any(|authority_ref| authority_ref == &clearance.authority_ref) {
-            is_admitted = false;
-            push_bounded(
-                &mut diagnostics,
-                format!("remote-clearance-authority-mismatch:{}", clearance.remote_ref),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention remote clearance diagnostics",
-            )?;
-        }
-        if is_admitted {
-            push_bounded(
-                &mut admitted_refs,
-                clearance.clearance_ref,
-                MAX_RETENTION_REFS,
-                "retention remote clearance refs",
-            )?;
-            push_bounded(
-                &mut remote_refs,
-                clearance.remote_ref,
-                MAX_RETENTION_REFS,
-                "retention remote clearance remote refs",
-            )?;
-            push_bounded(
-                &mut peer_refs,
-                clearance.peer_ref,
-                MAX_RETENTION_REFS,
-                "retention remote clearance peer refs",
-            )?;
+        let check = check_clear_ref(&input, reference, &clearance, &mut diagnostics)?;
+        scope_mismatches += check.scope_mismatches;
+        if check.is_admitted {
+            collect_clear_refs(&mut admitted_refs, &mut remote_refs, &mut peer_refs, clearance)?;
         }
     }
     if !input.refs.is_empty() && admitted_refs.is_empty() && scope_mismatches > 0 {
-        push_bounded(
-            &mut diagnostics,
-            "remote-clearance-scope-mismatch".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention remote clearance diagnostics",
-        )?;
+        push_clear_note(&mut diagnostics, "remote-clearance-scope-mismatch".to_string())?;
     }
-    for required in input.required_remote_refs {
-        if !remote_refs.iter().any(|remote| remote == required) {
-            push_bounded(
-                &mut diagnostics,
-                format!("remote-clearance-missing-remote:{}", required),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention remote clearance diagnostics",
-            )?;
-        }
-    }
-    for required in input.required_peer_refs {
-        if !peer_refs.iter().any(|peer| peer == required) {
-            push_bounded(
-                &mut diagnostics,
-                format!("remote-clearance-missing-peer:{}", required),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention remote clearance diagnostics",
-            )?;
-        }
-    }
+    push_missing_clear_refs(&input, &remote_refs, &peer_refs, &mut diagnostics)?;
     Ok(RemoteClearanceRefsResult {
         diagnostics,
         admitted_refs,
