@@ -1669,35 +1669,11 @@ pub async fn run_retention_remote_gc_clearance_live_loopback(
         authority_ref: input.authority_ref,
         evidence_refs: input.retention_evidence_refs,
     })?;
-    let request_control_evidence = refs_with_extra(
-        input.request_transport_evidence_refs,
-        std::slice::from_ref(&request.request_ref),
-        "retention live request transport evidence ref",
-    )?;
-    let request_control_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-        operation: "gate",
-        target_ref: Some(&request.request_ref),
-        payload_ref: None,
-        authority_refs: input.request_authority_refs,
-        policy_refs: input.request_policy_refs,
-        resource_refs: input.request_resource_refs,
-        evidence_refs: &request_control_evidence,
-    })?;
-    let request_control_ref = canonical_hash(&request_control_value)?;
-    let request_live = node_daemon::node_control_live_iroh_loopback(&node_daemon::NodeControlLiveLoopbackInput {
-        state_root: input.peer_node_root,
-        request_value: &request_control_value,
-        from_peer: input.requester_node_id,
-        to_node: input.peer_node_id,
-        topic: input.topic,
-        sequence: input.request_sequence,
-        peer_bootstrap_refs: input.request_peer_bootstrap_refs,
-        authority_refs: input.request_authority_refs,
-        policy_refs: input.request_policy_refs,
-        resource_refs: input.request_resource_refs,
-        evidence_refs: &request_control_evidence,
-    })
-    .await?;
+    let request_control_evidence = request_evidence(&input, &request.request_ref)?;
+    let (request_control_ref, request_control_value) =
+        request_control(&input, &request.request_ref, &request_control_evidence)?;
+    let request_live = request_leg(&input, &request_control_value, &request_control_evidence).await?;
+
     let response = store_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceResponseInput {
         root: input.root,
         request_value: &request.value,
@@ -1707,35 +1683,11 @@ pub async fn run_retention_remote_gc_clearance_live_loopback(
         revoked_refs: input.revoked_refs,
         diagnostics: input.response_diagnostics,
     })?;
-    let response_control_evidence = refs_with_extra(
-        input.response_transport_evidence_refs,
-        &[request.request_ref.clone(), response.response_ref.clone()],
-        "retention live response transport evidence ref",
-    )?;
-    let response_control_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-        operation: "gate",
-        target_ref: Some(&response.response_ref),
-        payload_ref: Some(&request.request_ref),
-        authority_refs: input.response_authority_refs,
-        policy_refs: input.response_policy_refs,
-        resource_refs: input.response_resource_refs,
-        evidence_refs: &response_control_evidence,
-    })?;
-    let response_control_ref = canonical_hash(&response_control_value)?;
-    let response_live = node_daemon::node_control_live_iroh_loopback(&node_daemon::NodeControlLiveLoopbackInput {
-        state_root: input.requester_node_root,
-        request_value: &response_control_value,
-        from_peer: input.peer_node_id,
-        to_node: input.requester_node_id,
-        topic: input.topic,
-        sequence: input.response_sequence,
-        peer_bootstrap_refs: input.response_peer_bootstrap_refs,
-        authority_refs: input.response_authority_refs,
-        policy_refs: input.response_policy_refs,
-        resource_refs: input.response_resource_refs,
-        evidence_refs: &response_control_evidence,
-    })
-    .await?;
+    let response_control_evidence = response_evidence(&input, &request.request_ref, &response.response_ref)?;
+    let (response_control_ref, response_control_value) =
+        response_control(&input, &request.request_ref, &response.response_ref, &response_control_evidence)?;
+    let response_live = response_leg(&input, &response_control_value, &response_control_evidence).await?;
+
     let import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
         root: input.root,
         request_value: &request.value,
@@ -1743,46 +1695,17 @@ pub async fn run_retention_remote_gc_clearance_live_loopback(
         expected_peer_ref: Some(input.peer_ref),
         expected_remote_ref: Some(input.remote_ref),
     })?;
-    let mut transport_diagnostics = Vec::new();
-    extend_bounded(
-        &mut transport_diagnostics,
-        node_live_transport_diagnostics("request-publish", &request_live.publish_receipt_value)?,
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    extend_bounded(
-        &mut transport_diagnostics,
-        node_live_transport_diagnostics("request-receive", &request_live.receive_receipt_value)?,
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    extend_bounded(
-        &mut transport_diagnostics,
-        node_live_transport_diagnostics("response-publish", &response_live.publish_receipt_value)?,
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    extend_bounded(
-        &mut transport_diagnostics,
-        node_live_transport_diagnostics("response-receive", &response_live.receive_receipt_value)?,
-        MAX_RETENTION_DIAGNOSTICS,
-        "retention live workflow diagnostics",
-    )?;
-    let workflow_value =
-        retention_remote_gc_clearance_live_workflow_value(&RetentionRemoteGcClearanceLiveWorkflowValueInput {
-            request_value: &request.value,
-            response_value: &response.value,
-            import_value: &import.value,
-            request_control_ref: &request_control_ref,
-            request_publish_ref: &request_live.publish_receipt_ref,
-            request_receive_ref: &request_live.receive_receipt_ref,
-            request_ingress_ref: &request_live.ingress_receipt_ref,
-            response_control_ref: &response_control_ref,
-            response_publish_ref: &response_live.publish_receipt_ref,
-            response_receive_ref: &response_live.receive_receipt_ref,
-            response_ingress_ref: &response_live.ingress_receipt_ref,
-            transport_diagnostics: &transport_diagnostics,
-        })?;
+    let transport_diagnostics = transport_notes(&request_live, &response_live)?;
+    let workflow_value = loopback_value(&LoopbackValueInput {
+        request_value: &request.value,
+        response_value: &response.value,
+        import_value: &import.value,
+        request_control_ref: &request_control_ref,
+        response_control_ref: &response_control_ref,
+        request_live: &request_live,
+        response_live: &response_live,
+        transport_diagnostics: &transport_diagnostics,
+    })?;
     let workflow = store_retention_remote_gc_clearance_live_workflow(input.root, &workflow_value)?;
     Ok(RetentionRemoteGcClearanceLiveLoopback {
         request,
@@ -2599,6 +2522,157 @@ fn remote_clearance_live_control_request_value(input: &LiveControlRequestInput<'
     })?;
     let reference = canonical_hash(&value)?;
     Ok((reference, value))
+}
+
+struct LoopbackValueInput<'a> {
+    request_value: &'a IOValue,
+    response_value: &'a IOValue,
+    import_value: &'a IOValue,
+    request_control_ref: &'a str,
+    response_control_ref: &'a str,
+    request_live: &'a node_daemon::NodeControlLiveLoopback,
+    response_live: &'a node_daemon::NodeControlLiveLoopback,
+    transport_diagnostics: &'a [String],
+}
+
+fn request_evidence(input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>, request_ref: &str) -> Result<Vec<String>> {
+    let extra_refs = [request_ref.to_string()];
+    refs_with_extra(input.request_transport_evidence_refs, &extra_refs, "retention live request transport evidence ref")
+}
+
+fn response_evidence(
+    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
+    request_ref: &str,
+    response_ref: &str,
+) -> Result<Vec<String>> {
+    let extra_refs = [request_ref.to_string(), response_ref.to_string()];
+    refs_with_extra(
+        input.response_transport_evidence_refs,
+        &extra_refs,
+        "retention live response transport evidence ref",
+    )
+}
+
+fn request_control(
+    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
+    request_ref: &str,
+    evidence_refs: &[String],
+) -> Result<(String, IOValue)> {
+    remote_clearance_live_control_request_value(&LiveControlRequestInput {
+        target_ref: request_ref,
+        payload_ref: None,
+        authority_refs: input.request_authority_refs,
+        policy_refs: input.request_policy_refs,
+        resource_refs: input.request_resource_refs,
+        evidence_refs,
+    })
+}
+
+fn response_control(
+    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
+    request_ref: &str,
+    response_ref: &str,
+    evidence_refs: &[String],
+) -> Result<(String, IOValue)> {
+    remote_clearance_live_control_request_value(&LiveControlRequestInput {
+        target_ref: response_ref,
+        payload_ref: Some(request_ref),
+        authority_refs: input.response_authority_refs,
+        policy_refs: input.response_policy_refs,
+        resource_refs: input.response_resource_refs,
+        evidence_refs,
+    })
+}
+
+async fn request_leg(
+    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
+    control_value: &IOValue,
+    evidence_refs: &[String],
+) -> Result<node_daemon::NodeControlLiveLoopback> {
+    node_daemon::node_control_live_iroh_loopback(&node_daemon::NodeControlLiveLoopbackInput {
+        state_root: input.peer_node_root,
+        request_value: control_value,
+        from_peer: input.requester_node_id,
+        to_node: input.peer_node_id,
+        topic: input.topic,
+        sequence: input.request_sequence,
+        peer_bootstrap_refs: input.request_peer_bootstrap_refs,
+        authority_refs: input.request_authority_refs,
+        policy_refs: input.request_policy_refs,
+        resource_refs: input.request_resource_refs,
+        evidence_refs,
+    })
+    .await
+}
+
+async fn response_leg(
+    input: &RetentionRemoteGcClearanceLiveLoopbackInput<'_>,
+    control_value: &IOValue,
+    evidence_refs: &[String],
+) -> Result<node_daemon::NodeControlLiveLoopback> {
+    node_daemon::node_control_live_iroh_loopback(&node_daemon::NodeControlLiveLoopbackInput {
+        state_root: input.requester_node_root,
+        request_value: control_value,
+        from_peer: input.peer_node_id,
+        to_node: input.requester_node_id,
+        topic: input.topic,
+        sequence: input.response_sequence,
+        peer_bootstrap_refs: input.response_peer_bootstrap_refs,
+        authority_refs: input.response_authority_refs,
+        policy_refs: input.response_policy_refs,
+        resource_refs: input.response_resource_refs,
+        evidence_refs,
+    })
+    .await
+}
+
+fn transport_notes(
+    request_live: &node_daemon::NodeControlLiveLoopback,
+    response_live: &node_daemon::NodeControlLiveLoopback,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    extend_bounded(
+        &mut diagnostics,
+        node_live_transport_diagnostics("request-publish", &request_live.publish_receipt_value)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_transport_diagnostics("request-receive", &request_live.receive_receipt_value)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_transport_diagnostics("response-publish", &response_live.publish_receipt_value)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    extend_bounded(
+        &mut diagnostics,
+        node_live_transport_diagnostics("response-receive", &response_live.receive_receipt_value)?,
+        MAX_RETENTION_DIAGNOSTICS,
+        "retention live workflow diagnostics",
+    )?;
+    Ok(diagnostics)
+}
+
+fn loopback_value(input: &LoopbackValueInput<'_>) -> Result<IOValue> {
+    retention_remote_gc_clearance_live_workflow_value(&RetentionRemoteGcClearanceLiveWorkflowValueInput {
+        request_value: input.request_value,
+        response_value: input.response_value,
+        import_value: input.import_value,
+        request_control_ref: input.request_control_ref,
+        request_publish_ref: &input.request_live.publish_receipt_ref,
+        request_receive_ref: &input.request_live.receive_receipt_ref,
+        request_ingress_ref: &input.request_live.ingress_receipt_ref,
+        response_control_ref: input.response_control_ref,
+        response_publish_ref: &input.response_live.publish_receipt_ref,
+        response_receive_ref: &input.response_live.receive_receipt_ref,
+        response_ingress_ref: &input.response_live.ingress_receipt_ref,
+        transport_diagnostics: input.transport_diagnostics,
+    })
 }
 
 fn gate_scope<'a>(input: &'a RetentionGcPlanInput<'a>) -> AdmissionScope<'a> {
