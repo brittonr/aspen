@@ -2354,7 +2354,7 @@ struct ExecutionGateValueInput<'a> {
     diagnostics: &'a [String],
 }
 
-struct RetentionGcAuditValueInput<'a> {
+struct AuditValueInput<'a> {
     decision: &'a str,
     subsystem: &'a str,
     action: &'a str,
@@ -4648,7 +4648,7 @@ pub fn audit_retention_gc_execution(input: RetentionGcAuditInput<'_>) -> Result<
     );
     let facts = audit_facts(input.root, &execution, &execution_scope)?;
     let decision = if facts.diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = retention_gc_audit_value(&RetentionGcAuditValueInput {
+    let value = audit_value(&AuditValueInput {
         decision,
         subsystem: &execution.subsystem,
         action: &execution.action,
@@ -4903,7 +4903,7 @@ fn same_retention_scope(left: &RetentionAuditScope<'_>, right: &RetentionAuditSc
         && left.retention_class == right.retention_class
 }
 
-fn retention_gc_audit_value(input: &RetentionGcAuditValueInput<'_>) -> Result<IOValue> {
+fn audit_value(input: &AuditValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     validate_name(input.subsystem, "retention GC audit subsystem")?;
     validate_action(input.action)?;
