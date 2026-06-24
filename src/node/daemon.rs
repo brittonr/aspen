@@ -5539,12 +5539,8 @@ pub fn receive_node_control_live_ingress_bytes(
     })
 }
 
-pub async fn node_control_live_iroh_loopback(
-    input: &NodeControlLiveLoopbackInput<'_>,
-) -> Result<NodeControlLiveLoopback> {
-    validate_state_root(input.state_root)?;
-    ensure_state_layout(input.state_root)?;
-    let envelope_input = NodeControlIngressEnvelopeInput {
+fn envelope_for_loopback(input: &NodeControlLiveLoopbackInput<'_>) -> Result<NodeControlIngressEnvelope> {
+    node_control_live_ingress_envelope(&NodeControlIngressEnvelopeInput {
         request_value: input.request_value,
         from_peer: input.from_peer,
         to_node: input.to_node,
@@ -5555,8 +5551,15 @@ pub async fn node_control_live_iroh_loopback(
         policy_refs: input.policy_refs,
         resource_refs: input.resource_refs,
         evidence_refs: input.evidence_refs,
-    };
-    let envelope = node_control_live_ingress_envelope(&envelope_input)?;
+    })
+}
+
+pub async fn node_control_live_iroh_loopback(
+    input: &NodeControlLiveLoopbackInput<'_>,
+) -> Result<NodeControlLiveLoopback> {
+    validate_state_root(input.state_root)?;
+    ensure_state_layout(input.state_root)?;
+    let envelope = envelope_for_loopback(input)?;
     let topic_id = node_control_live_topic_id(input.topic);
     let lookup = iroh::address_lookup::memory::MemoryLookup::new();
     let receiver_endpoint = live_gossip_endpoint(&lookup, None).await?;
