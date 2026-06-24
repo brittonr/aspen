@@ -7309,6 +7309,108 @@ fn evaluate_node_control_provenance(
     Ok(evaluation)
 }
 
+struct InstallRefs {
+    schema_refs: Vec<String>,
+    evidence_refs: Vec<String>,
+}
+
+struct InstallFinishInput<'a> {
+    state_root: &'a Path,
+    request: &'a node_runtime::NodeControlRequest,
+    startup_receipt_ref: &'a str,
+    payload_ref: &'a str,
+    payload_value: IOValue,
+    provenance: provenance::ProvenanceEvaluation,
+    diagnostics: Vec<String>,
+}
+
+fn finish_install_dispatch(
+    state_root: &Path,
+    request: &node_runtime::NodeControlRequest,
+    startup_receipt_ref: &str,
+    subreceipt_refs: &[String],
+    diagnostics: &[String],
+) -> Result<NodeControlDispatch> {
+    finalize_operation_dispatch(&OperationFinalizeInput {
+        state_root,
+        request,
+        startup_receipt_ref,
+        subreceipt_refs,
+        diagnostics,
+    })
+}
+
+fn install_refs(
+    request: &node_runtime::NodeControlRequest,
+    payload_ref: &str,
+    provenance_receipt_ref: &str,
+) -> Result<InstallRefs> {
+    let schema_refs = match request.target_ref.as_ref() {
+        Some(target_ref) => vec![target_ref.clone()],
+        None => vec![local_ref("node-control-install-schema", &request.request_ref)?],
+    };
+    let extra_evidence_refs = if request.target_ref.is_some() { 3 } else { 2 };
+    let mut evidence_refs =
+        Vec::with_capacity(request.resource_refs.len() + request.evidence_refs.len() + extra_evidence_refs);
+    evidence_refs.extend(request.resource_refs.iter().cloned());
+    evidence_refs.extend(request.evidence_refs.iter().cloned());
+    evidence_refs.push(provenance_receipt_ref.to_string());
+    evidence_refs.push(payload_ref.to_string());
+    if let Some(target_ref) = request.target_ref.as_ref() {
+        evidence_refs.push(target_ref.clone());
+    }
+    Ok(InstallRefs {
+        schema_refs,
+        evidence_refs,
+    })
+}
+
+fn finish_install(input: InstallFinishInput<'_>) -> Result<NodeControlDispatch> {
+    let mut diagnostics = input.diagnostics;
+    let provenance_receipt_refs = [input.provenance.receipt_ref.clone()];
+    let refs = install_refs(input.request, input.payload_ref, &provenance_receipt_refs[0])?;
+    let install =
+        match artifacts::install_artifact(&input.state_root.join("registry"), &artifacts::ArtifactInstallInput {
+            kind: "node-control-artifact".to_string(),
+            payload: input.payload_value,
+            schema_refs: refs.schema_refs,
+            dependency_refs: Vec::new(),
+            effect_manifest_ref: None,
+            policy_refs: input.request.policy_refs.clone(),
+            evidence_refs: refs.evidence_refs,
+            installer_ref: input.request.request_ref.clone(),
+            capability_refs: input.request.authority_refs.clone(),
+        }) {
+            Ok(install) => install,
+            Err(error) => {
+                diagnostics.push(format!("node control artifact install failed: {error}"));
+                return finish_install_dispatch(
+                    input.state_root,
+                    input.request,
+                    input.startup_receipt_ref,
+                    &provenance_receipt_refs,
+                    &diagnostics,
+                );
+            }
+        };
+    let install_receipt_ref = canonical_hash(&install.receipt_value)?;
+    write_preserves(
+        &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "artifact-install"),
+        &install.receipt_value,
+    )?;
+    import_node_artifact(input.state_root, &install.receipt_value)?;
+    if install.decision == "pass" {
+        import_node_artifact(input.state_root, &install.artifact.value)?;
+    } else if install.missing_dependencies.is_empty() {
+        diagnostics.push("node control artifact install denied".to_string());
+    } else {
+        diagnostics
+            .extend(install.missing_dependencies.iter().map(|reference| format!("missing dependency {reference}")));
+    }
+    let subreceipt_refs = [provenance_receipt_refs[0].clone(), install_receipt_ref];
+    finish_install_dispatch(input.state_root, input.request, input.startup_receipt_ref, &subreceipt_refs, &diagnostics)
+}
+
 fn dispatch_install_request(
     state_root: &Path,
     request: &node_runtime::NodeControlRequest,
@@ -7317,34 +7419,16 @@ fn dispatch_install_request(
     let mut diagnostics = side_effect_preflight_diagnostics(request);
     let Some(payload_ref) = request.payload_ref.as_deref() else {
         diagnostics.push("node control install requires payload ref".to_string());
-        return finalize_operation_dispatch(&OperationFinalizeInput {
-            state_root,
-            request,
-            startup_receipt_ref: &startup.receipt_ref,
-            subreceipt_refs: &[],
-            diagnostics: &diagnostics,
-        });
+        return finish_install_dispatch(state_root, request, &startup.receipt_ref, &[], &diagnostics);
     };
     if !diagnostics.is_empty() {
-        return finalize_operation_dispatch(&OperationFinalizeInput {
-            state_root,
-            request,
-            startup_receipt_ref: &startup.receipt_ref,
-            subreceipt_refs: &[],
-            diagnostics: &diagnostics,
-        });
+        return finish_install_dispatch(state_root, request, &startup.receipt_ref, &[], &diagnostics);
     }
     let payload_value = match read_node_ledger_artifact(state_root, payload_ref) {
         Ok(value) => value,
         Err(error) => {
             diagnostics.push(format!("node control install payload not found in node ledger: {error}"));
-            return finalize_operation_dispatch(&OperationFinalizeInput {
-                state_root,
-                request,
-                startup_receipt_ref: &startup.receipt_ref,
-                subreceipt_refs: &[],
-                diagnostics: &diagnostics,
-            });
+            return finish_install_dispatch(state_root, request, &startup.receipt_ref, &[], &diagnostics);
         }
     };
     let provenance = evaluate_node_control_provenance(&NodeControlProvenanceInput {
@@ -7357,71 +7441,22 @@ fn dispatch_install_request(
     let provenance_receipt_refs = [provenance.receipt_ref.clone()];
     diagnostics.extend(provenance.diagnostics.iter().cloned());
     if provenance.decision != "pass" {
-        return finalize_operation_dispatch(&OperationFinalizeInput {
+        return finish_install_dispatch(
             state_root,
             request,
-            startup_receipt_ref: &startup.receipt_ref,
-            subreceipt_refs: &provenance_receipt_refs,
-            diagnostics: &diagnostics,
-        });
+            &startup.receipt_ref,
+            &provenance_receipt_refs,
+            &diagnostics,
+        );
     }
-    let schema_refs = match request.target_ref.as_ref() {
-        Some(target_ref) => vec![target_ref.clone()],
-        None => vec![local_ref("node-control-install-schema", &request.request_ref)?],
-    };
-    let extra_evidence_refs = if request.target_ref.is_some() { 3 } else { 2 };
-    let mut evidence_refs =
-        Vec::with_capacity(request.resource_refs.len() + request.evidence_refs.len() + extra_evidence_refs);
-    evidence_refs.extend(request.resource_refs.iter().cloned());
-    evidence_refs.extend(request.evidence_refs.iter().cloned());
-    evidence_refs.push(provenance_receipt_refs[0].clone());
-    evidence_refs.push(payload_ref.to_string());
-    if let Some(target_ref) = request.target_ref.as_ref() {
-        evidence_refs.push(target_ref.clone());
-    }
-    let install = match artifacts::install_artifact(&state_root.join("registry"), &artifacts::ArtifactInstallInput {
-        kind: "node-control-artifact".to_string(),
-        payload: payload_value,
-        schema_refs,
-        dependency_refs: Vec::new(),
-        effect_manifest_ref: None,
-        policy_refs: request.policy_refs.clone(),
-        evidence_refs,
-        installer_ref: request.request_ref.clone(),
-        capability_refs: request.authority_refs.clone(),
-    }) {
-        Ok(install) => install,
-        Err(error) => {
-            diagnostics.push(format!("node control artifact install failed: {error}"));
-            return finalize_operation_dispatch(&OperationFinalizeInput {
-                state_root,
-                request,
-                startup_receipt_ref: &startup.receipt_ref,
-                subreceipt_refs: &provenance_receipt_refs,
-                diagnostics: &diagnostics,
-            });
-        }
-    };
-    let install_receipt_ref = canonical_hash(&install.receipt_value)?;
-    write_preserves(
-        &control_operation_subreceipt_path(state_root, &request.request_ref, "artifact-install"),
-        &install.receipt_value,
-    )?;
-    import_node_artifact(state_root, &install.receipt_value)?;
-    if install.decision == "pass" {
-        import_node_artifact(state_root, &install.artifact.value)?;
-    } else if install.missing_dependencies.is_empty() {
-        diagnostics.push("node control artifact install denied".to_string());
-    } else {
-        diagnostics
-            .extend(install.missing_dependencies.iter().map(|reference| format!("missing dependency {reference}")));
-    }
-    finalize_operation_dispatch(&OperationFinalizeInput {
+    finish_install(InstallFinishInput {
         state_root,
         request,
         startup_receipt_ref: &startup.receipt_ref,
-        subreceipt_refs: &[provenance.receipt_ref, install_receipt_ref],
-        diagnostics: &diagnostics,
+        payload_ref,
+        payload_value,
+        provenance,
+        diagnostics,
     })
 }
 
