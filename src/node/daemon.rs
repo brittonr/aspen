@@ -6289,34 +6289,17 @@ pub async fn node_control_live_serve_listener_loopback(
         evidence_refs: input.evidence_refs,
     };
     let envelope = node_control_live_ingress_envelope(&envelope_input)?;
-    let identity = node_identity::parse_node_identity(&read_preserves(&input.state_root.join(IDENTITY_FILE))?)?;
-    let lookup = iroh::address_lookup::memory::MemoryLookup::new();
-    let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
-    let sender_endpoint = live_gossip_endpoint(&lookup, None).await?;
-    let live_ticket =
-        live_ticket_for_bound_endpoint(input.state_root, &identity, input.topic, &receiver_endpoint.addr())?;
-    lookup.add_endpoint_info(receiver_endpoint.addr());
-    lookup.add_endpoint_info(sender_endpoint.addr());
-    let receiver_id = receiver_endpoint.id();
-    let sender_id = sender_endpoint.id();
-    let bound_endpoint_id = format!("iroh:{receiver_id}");
-    let receiver_gossip = iroh_gossip::Gossip::builder().spawn(receiver_endpoint.clone());
-    let sender_gossip = iroh_gossip::Gossip::builder().spawn(sender_endpoint.clone());
-    let receiver_router = iroh::protocol::Router::builder(receiver_endpoint)
-        .accept(iroh_gossip::ALPN, receiver_gossip.clone())
-        .spawn();
-    let sender_router = iroh::protocol::Router::builder(sender_endpoint)
-        .accept(iroh_gossip::ALPN, sender_gossip.clone())
-        .spawn();
-    let topic_id = node_control_live_topic_id(input.topic);
-    let mut receiver_topic = receiver_gossip.subscribe(topic_id, vec![sender_id]).await.map_err(|error| {
-        MoltenError::invalid_harness(format!("live Iroh listener receiver subscribe failed: {error}"))
-    })?;
-    let sender_topic = sender_gossip
-        .subscribe_and_join(topic_id, vec![receiver_id])
-        .await
-        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh listener sender join failed: {error}")))?;
-    let (sender, _unused_receiver) = sender_topic.split();
+    let LoopbackPair {
+        ticket_ref,
+        ticket_value,
+        bound_endpoint_id,
+        mut receiver_topic,
+        sender,
+        receiver_router,
+        sender_router,
+        node_id,
+        endpoint_id,
+    } = loopback_pair(input.state_root, input.topic).await?;
     let published = publish_node_control_live_ingress(&NodeControlLiveIngressPublishInput {
         sender: &sender,
         envelope_value: &envelope.value,
@@ -6334,13 +6317,13 @@ pub async fn node_control_live_serve_listener_loopback(
     let mut listener = serve_node_control_live_listener_with_topic(
         &listener_input,
         &mut receiver_topic,
-        &identity.node_id,
-        &identity.endpoint_id,
+        &node_id,
+        &endpoint_id,
         &bound_endpoint_id,
     )
     .await?;
-    listener.live_ticket_ref = Some(live_ticket.ticket_ref);
-    listener.live_ticket_value = Some(live_ticket.value);
+    listener.live_ticket_ref = Some(ticket_ref);
+    listener.live_ticket_value = Some(ticket_value);
     receiver_router.shutdown().await.map_err(|error| {
         MoltenError::invalid_harness(format!("live Iroh listener receiver shutdown failed: {error}"))
     })?;
@@ -6352,6 +6335,59 @@ pub async fn node_control_live_serve_listener_loopback(
         envelope_ref: envelope.envelope_ref,
         publish_receipt_ref: published.transport_receipt_ref,
         listener,
+    })
+}
+
+struct LoopbackPair {
+    ticket_ref: String,
+    ticket_value: IOValue,
+    bound_endpoint_id: String,
+    receiver_topic: iroh_gossip::api::GossipTopic,
+    sender: iroh_gossip::api::GossipSender,
+    receiver_router: iroh::protocol::Router,
+    sender_router: iroh::protocol::Router,
+    node_id: String,
+    endpoint_id: String,
+}
+
+async fn loopback_pair(state_root: &Path, topic: &str) -> Result<LoopbackPair> {
+    let identity = node_identity::parse_node_identity(&read_preserves(&state_root.join(IDENTITY_FILE))?)?;
+    let lookup = iroh::address_lookup::memory::MemoryLookup::new();
+    let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity))).await?;
+    let sender_endpoint = live_gossip_endpoint(&lookup, None).await?;
+    let ticket = live_ticket_for_bound_endpoint(state_root, &identity, topic, &receiver_endpoint.addr())?;
+    lookup.add_endpoint_info(receiver_endpoint.addr());
+    lookup.add_endpoint_info(sender_endpoint.addr());
+    let receiver_id = receiver_endpoint.id();
+    let sender_id = sender_endpoint.id();
+    let bound_endpoint_id = format!("iroh:{receiver_id}");
+    let receiver_gossip = iroh_gossip::Gossip::builder().spawn(receiver_endpoint.clone());
+    let sender_gossip = iroh_gossip::Gossip::builder().spawn(sender_endpoint.clone());
+    let receiver_router = iroh::protocol::Router::builder(receiver_endpoint)
+        .accept(iroh_gossip::ALPN, receiver_gossip.clone())
+        .spawn();
+    let sender_router = iroh::protocol::Router::builder(sender_endpoint)
+        .accept(iroh_gossip::ALPN, sender_gossip.clone())
+        .spawn();
+    let topic_id = node_control_live_topic_id(topic);
+    let receiver_topic = receiver_gossip.subscribe(topic_id, vec![sender_id]).await.map_err(|error| {
+        MoltenError::invalid_harness(format!("live Iroh listener receiver subscribe failed: {error}"))
+    })?;
+    let sender_topic = sender_gossip
+        .subscribe_and_join(topic_id, vec![receiver_id])
+        .await
+        .map_err(|error| MoltenError::invalid_harness(format!("live Iroh listener sender join failed: {error}")))?;
+    let (sender, _unused_receiver) = sender_topic.split();
+    Ok(LoopbackPair {
+        ticket_ref: ticket.ticket_ref,
+        ticket_value: ticket.value,
+        bound_endpoint_id,
+        receiver_topic,
+        sender,
+        receiver_router,
+        sender_router,
+        node_id: identity.node_id.clone(),
+        endpoint_id: identity.endpoint_id.clone(),
     })
 }
 

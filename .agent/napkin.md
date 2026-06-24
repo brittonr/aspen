@@ -232,6 +232,8 @@
 
 ## Patterns That Work
 
+- 2026-06-24 Octet live listener loopback pair split: extracting `src/node/daemon.rs::node_control_live_serve_listener_loopback` endpoint/topic/router setup into neutral same-file `LoopbackPair`/`loopback_pair` lowered the no-disabled probe from 7008 to 7006 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_live_serve_listener_loopback_dispatches_through_service --lib -- --nocapture`, `cargo fmt --check`, and probe `target/octet-burndown/probe-loopback-pair-0`.
+
 - 2026-06-24 Octet live Iroh loopback envelope split: extracting `src/node/daemon.rs::node_control_live_iroh_loopback` envelope construction into neutral same-file `envelope_for_loopback` lowered the no-disabled probe from 7010 to 7008 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_live_iroh_loopback_delivers_to_durable_inbox --lib`, and probe `target/octet-burndown/probe-loopback-envelope-0`.
 
 - 2026-06-24 Octet node control install dispatch split: extracting `src/node/daemon.rs::dispatch_install_request` install ref construction/finalization into neutral same-file `InstallRefs`/`InstallFinishInput` helpers lowered the no-disabled probe from 7015 to 7013 by clearing two `function_length` findings while non-trait/path/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test control_operation_dispatch_installs_runs_and_gates_with_receipts -- --nocapture`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `git diff --check`, and probe `target/octet-burndown/probe-install-dispatch-0`.
