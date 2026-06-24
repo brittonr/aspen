@@ -227,6 +227,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet retention plan gate split: extracting `src/retention/mod.rs::retention_plan_gates` repeated gate pushes into neutral same-file `push_access_gates`/`push_index_gates`/`push_external_gates` lowered the no-disabled probe from 7061 to 7057 by clearing two `function_length` and two `path_segment_repetition` findings while validation passed `cargo fmt`, focused `cargo test retention`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-retention-gates-0`.
+
 - 2026-06-23 Octet job DAG admission split: extracting `src/job/dag.rs::admission_plan_value` target scan/topology/finish assembly into neutral same-file `Readiness`/`StageScanInput`/record helpers lowered the no-disabled probe from 7065 to 7063 by clearing two `function_length` findings while path/import counts stayed flat. Keep receipt decisions as `pass/deny` and check statuses as `pass/fail`. Validation passed `cargo fmt`, focused `cargo test job_dag`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-admission-scan-v2-0`.
 
 - 2026-06-23 Octet catalog classification split: extracting `src/catalog/mod.rs::known_classifications_result` branches into neutral same-file `*_labels` helpers lowered the no-disabled probe from 7069 to 7067 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test catalog`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `git diff --check`, and probe `target/octet-burndown/probe-known-labels-split-0`.

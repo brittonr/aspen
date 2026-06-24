@@ -2715,14 +2715,21 @@ fn retention_plan_gates(
     index: &RetentionReferenceIndex,
 ) -> Result<Vec<RetentionPlanGate>> {
     let mut gates = Vec::new();
+    push_access_gates(&mut gates, input)?;
+    push_index_gates(&mut gates, input, index)?;
+    push_external_gates(&mut gates, input)?;
+    Ok(gates)
+}
+
+fn push_access_gates(gates: &mut impl VecSink<RetentionPlanGate>, input: &RetentionGateInputs<'_>) -> Result<()> {
     push_bounded(
-        &mut gates,
+        gates,
         requester_gate(input.input.evidence.requester_ref.as_deref())?,
         MAX_RETENTION_REFS,
         "retention GC plan gates",
     )?;
     push_bounded(
-        &mut gates,
+        gates,
         retention_plan_gate(PlanGateBuildInput {
             name: "policy",
             is_required: true,
@@ -2738,7 +2745,7 @@ fn retention_plan_gates(
         "retention GC plan gates",
     )?;
     push_bounded(
-        &mut gates,
+        gates,
         retention_plan_gate(PlanGateBuildInput {
             name: "authority",
             is_required: is_destructive_action(input.input.action),
@@ -2754,7 +2761,7 @@ fn retention_plan_gates(
         "retention GC plan gates",
     )?;
     push_bounded(
-        &mut gates,
+        gates,
         retention_plan_gate(PlanGateBuildInput {
             name: "supporting-evidence",
             is_required: is_destructive_action(input.input.action),
@@ -2769,8 +2776,16 @@ fn retention_plan_gates(
         MAX_RETENTION_REFS,
         "retention GC plan gates",
     )?;
+    Ok(())
+}
+
+fn push_index_gates(
+    gates: &mut impl VecSink<RetentionPlanGate>,
+    input: &RetentionGateInputs<'_>,
+    index: &RetentionReferenceIndex,
+) -> Result<()> {
     push_bounded(
-        &mut gates,
+        gates,
         retention_plan_gate(PlanGateBuildInput {
             name: "reference-index",
             is_required: input.input.evidence.is_reference_index_complete,
@@ -2782,7 +2797,7 @@ fn retention_plan_gates(
         "retention GC plan gates",
     )?;
     push_bounded(
-        &mut gates,
+        gates,
         local_retention_gate(LocalRetentionGateInput {
             input: input.input,
             index,
@@ -2792,8 +2807,12 @@ fn retention_plan_gates(
         MAX_RETENTION_REFS,
         "retention GC plan gates",
     )?;
+    Ok(())
+}
+
+fn push_external_gates(gates: &mut impl VecSink<RetentionPlanGate>, input: &RetentionGateInputs<'_>) -> Result<()> {
     push_bounded(
-        &mut gates,
+        gates,
         retention_plan_gate(PlanGateBuildInput {
             name: "remote-gc",
             is_required: is_destructive_action(input.input.action) && !input.input.evidence.remote_refs.is_empty(),
@@ -2811,7 +2830,7 @@ fn retention_plan_gates(
         "retention GC plan gates",
     )?;
     push_bounded(
-        &mut gates,
+        gates,
         retention_plan_gate(PlanGateBuildInput {
             name: "remote-clearance",
             is_required: is_destructive_action(input.input.action)
@@ -2833,7 +2852,7 @@ fn retention_plan_gates(
     )?;
     let empty_refs = Vec::new();
     push_bounded(
-        &mut gates,
+        gates,
         retention_plan_gate(PlanGateBuildInput {
             name: "evidence-only-boundary",
             is_required: false,
@@ -2844,7 +2863,7 @@ fn retention_plan_gates(
         MAX_RETENTION_REFS,
         "retention GC plan gates",
     )?;
-    Ok(gates)
+    Ok(())
 }
 
 fn requester_gate(requester_ref: Option<&str>) -> Result<RetentionPlanGate> {
