@@ -4415,7 +4415,7 @@ mod tests {
     }
 
     #[test]
-    fn chunk_lineage_chains_bind_manifest_publication_fetch_and_scope() {
+    fn lineage_chains_bind_manifest_publication_fetch_and_scope() {
         let source = temp_dir("chunk-lineage-source");
         let dest = temp_dir("chunk-lineage-dest");
         let iroh = temp_dir("chunk-lineage-iroh");
