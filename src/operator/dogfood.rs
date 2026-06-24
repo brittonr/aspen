@@ -2564,7 +2564,7 @@ impl<'a> LocalRunState<'a> {
         Ok(remote)
     }
 
-    fn record_job(&mut self) -> Result<JobDogfoodRun> {
+    fn record_job(&mut self) -> Result<JobRun> {
         record_job_step(JobStepInput {
             state_root: self.state_root,
             source: &self.job_source_root,
@@ -2577,7 +2577,7 @@ impl<'a> LocalRunState<'a> {
         })
     }
 
-    fn record_gc(&mut self) -> Result<RetentionDogfoodRun> {
+    fn record_gc(&mut self) -> Result<GcRun> {
         let retention_gc = record_gc_steps(GcStepInput {
             root: &self.retention_root,
             bundle_dir: &self.retention_bundle_root,
@@ -2626,8 +2626,8 @@ impl<'a> LocalRunState<'a> {
         self,
         start: &StartSteps,
         installed: &artifacts::ArtifactInstall,
-        job: &JobDogfoodRun,
-        retention_gc: &RetentionDogfoodRun,
+        job: &JobRun,
+        retention_gc: &GcRun,
     ) -> Result<LocalNodeDogfoodRun> {
         let Self {
             state_root_ref,
@@ -2979,7 +2979,7 @@ struct JobStackInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct JobDogfoodRun {
+struct JobRun {
     execution_request_ref: String,
     execution_receipt_ref: String,
     decision: String,
@@ -2988,7 +2988,7 @@ struct JobDogfoodRun {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct RetentionDogfoodInput<'a> {
+struct GcWorkflowInput<'a> {
     root: &'a Path,
     bundle_dir: &'a Path,
     ledger_root: &'a Path,
@@ -2996,7 +2996,7 @@ struct RetentionDogfoodInput<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct RetentionDogfoodRun {
+struct GcRun {
     object_ref: String,
     plan_ref: String,
     plan_decision: String,
@@ -3032,7 +3032,7 @@ struct GcStepInput<'a> {
     checkpoints: &'a mut StepCheckpointBuffers,
 }
 
-fn record_gc_steps(input: GcStepInput<'_>) -> Result<RetentionDogfoodRun> {
+fn record_gc_steps(input: GcStepInput<'_>) -> Result<GcRun> {
     let GcStepInput {
         root,
         bundle_dir,
@@ -3041,7 +3041,7 @@ fn record_gc_steps(input: GcStepInput<'_>) -> Result<RetentionDogfoodRun> {
         state_root_ref,
         checkpoints,
     } = input;
-    let retention_gc = run_retention_gc_workflow(RetentionDogfoodInput {
+    let retention_gc = run_retention_gc_workflow(GcWorkflowInput {
         root,
         bundle_dir,
         ledger_root,
@@ -3055,7 +3055,7 @@ fn record_gc_steps(input: GcStepInput<'_>) -> Result<RetentionDogfoodRun> {
 fn record_gc_plan_steps(
     checkpoints: &mut StepCheckpointBuffers,
     state_root_ref: &str,
-    retention_gc: &RetentionDogfoodRun,
+    retention_gc: &GcRun,
 ) -> Result<()> {
     push_step_checkpoint(checkpoints, StepCheckpointInput {
         name: "plan-retention-gc",
@@ -3098,7 +3098,7 @@ fn record_gc_plan_steps(
 fn record_gc_review_steps(
     checkpoints: &mut StepCheckpointBuffers,
     state_root_ref: &str,
-    retention_gc: &RetentionDogfoodRun,
+    retention_gc: &GcRun,
 ) -> Result<()> {
     push_step_checkpoint(checkpoints, StepCheckpointInput {
         name: "audit-retention-gc",
@@ -3148,8 +3148,8 @@ struct FinishInput<'a> {
     startup_ref: &'a str,
     node_started: &'a node_runtime::NodeRuntimeStart,
     installed: &'a artifacts::ArtifactInstall,
-    job: &'a JobDogfoodRun,
-    retention_gc: &'a RetentionDogfoodRun,
+    job: &'a JobRun,
+    retention_gc: &'a GcRun,
     step_checkpoints: StepCheckpointBuffers,
     policy_refs: &'a [String],
     capability_refs: &'a [String],
@@ -3167,7 +3167,7 @@ struct ReplayShutdownInput<'a> {
     startup_ref: &'a str,
     node_started: &'a node_runtime::NodeRuntimeStart,
     installed: &'a artifacts::ArtifactInstall,
-    job: &'a JobDogfoodRun,
+    job: &'a JobRun,
     step_checkpoints: StepCheckpointBuffers,
     replay_index_refs: Vec<String>,
 }
@@ -3192,7 +3192,7 @@ struct ShutdownStepInput<'a> {
     startup_ref: &'a str,
     node_started: &'a node_runtime::NodeRuntimeStart,
     installed: &'a artifacts::ArtifactInstall,
-    job: &'a JobDogfoodRun,
+    job: &'a JobRun,
     checkpoints: &'a mut StepCheckpointBuffers,
 }
 
@@ -3363,7 +3363,7 @@ struct ReleaseValueInput<'a> {
     catalog_query_refs: &'a [String],
     repro_verify_refs: &'a [String],
     replay_index_refs: &'a [String],
-    retention_gc: &'a RetentionDogfoodRun,
+    retention_gc: &'a GcRun,
 }
 
 fn build_release_value(input: ReleaseValueInput<'_>) -> Result<Option<IOValue>> {
@@ -3692,7 +3692,7 @@ struct JobStepInput<'a> {
     checkpoints: &'a mut StepCheckpointBuffers,
 }
 
-fn record_job_step(input: JobStepInput<'_>) -> Result<JobDogfoodRun> {
+fn record_job_step(input: JobStepInput<'_>) -> Result<JobRun> {
     let job = run_job_stack(JobStackInput {
         state_root: input.state_root,
         source: input.source,
@@ -3847,7 +3847,7 @@ struct JobExecutionInput<'a> {
     resource_refs: &'a [String],
 }
 
-fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
+fn run_job_stack(input: JobStackInput<'_>) -> Result<JobRun> {
     let JobStackInput {
         state_root,
         source,
@@ -3888,7 +3888,7 @@ fn run_job_stack(input: JobStackInput<'_>) -> Result<JobDogfoodRun> {
         execution.request_ref.clone(),
     ];
     artifact_refs.extend(execution.output_refs);
-    Ok(JobDogfoodRun {
+    Ok(JobRun {
         execution_request_ref: execution.request_ref,
         execution_receipt_ref: execution.receipt_ref,
         decision: execution.decision,
@@ -4090,7 +4090,7 @@ fn execute_job_stack(input: JobExecutionInput<'_>) -> Result<JobExecutionParts> 
     })
 }
 
-fn run_retention_gc_workflow(input: RetentionDogfoodInput<'_>) -> Result<RetentionDogfoodRun> {
+fn run_retention_gc_workflow(input: GcWorkflowInput<'_>) -> Result<GcRun> {
     let object_ref = dogfood_ref("retention-object")?;
     let requester_ref = dogfood_ref("retention-requester")?;
     let peer_ref = dogfood_ref("retention-peer")?;
@@ -4235,7 +4235,7 @@ fn gc_admissions(seed: GcSeed<'_>) -> Result<GcAdmissions> {
 }
 
 fn gc_flow(
-    input: RetentionDogfoodInput<'_>,
+    input: GcWorkflowInput<'_>,
     seed: GcSeed<'_>,
     evidence: &retention::DestructiveRetentionEvidence,
 ) -> Result<GcFlow> {
@@ -4375,7 +4375,7 @@ fn gc_artifact_refs(
     refs
 }
 
-fn finish_gc_run(input: GcFinishInput) -> RetentionDogfoodRun {
+fn finish_gc_run(input: GcFinishInput) -> GcRun {
     let GcFinishInput {
         object_ref,
         flow,
@@ -4394,7 +4394,7 @@ fn finish_gc_run(input: GcFinishInput) -> RetentionDogfoodRun {
         profile,
         verify,
     } = flow;
-    RetentionDogfoodRun {
+    GcRun {
         object_ref,
         plan_ref: plan.plan_ref,
         plan_decision: plan.decision,
