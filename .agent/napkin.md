@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-24 Octet catalog MCP neutral helper rename: renaming private `src/catalog/mcp.rs` helpers `McpResponseValueInput`/`McpReceiptValueInput` and `mcp_response_value`/`mcp_receipt_value` to neutral `ResponseValueInput`/`ReceiptValueInput` and `response_value`/`receipt_value` lowered the no-disabled probe from 6972 to 6964 by reducing `path_segment_repetition` from 2971 to 2963. Validation passed `cargo fmt`, focused `cargo test mcp --lib`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-catalog-mcp-neutral-0`.
+
 - 2026-06-24 Octet retention audit value rename: renaming private `src/retention/mod.rs` helpers from `RetentionGcAuditValueInput`/`retention_gc_audit_value` to neutral `AuditValueInput`/`audit_value` lowered the no-disabled probe from 6976 to 6972 by reducing `path_segment_repetition` from 2975 to 2971 without changing function/file counts. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo fmt --check`, and probe `target/octet-burndown/probe-audit-value-neutral-0`.
 
 - 2026-06-24 Octet retention execution value rename: renaming private `src/retention/mod.rs` helpers from `RetentionGcExecutionGateValueInput`/`retention_gc_execution_gate_value` to neutral `ExecutionGateValueInput`/`execution_gate_value` lowered the no-disabled probe from 6993 to 6989 by reducing `path_segment_repetition` from 2992 to 2988 without changing function/file counts. Validation passed `cargo fmt`, `cargo test retention`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-execution-value-0`.

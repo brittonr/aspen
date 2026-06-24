@@ -95,7 +95,7 @@ struct BuildCallInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-struct McpResponseValueInput<'a> {
+struct ResponseValueInput<'a> {
     tool: &'a str,
     decision: &'a str,
     request_ref: &'a str,
@@ -106,7 +106,7 @@ struct McpResponseValueInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-struct McpReceiptValueInput<'a> {
+struct ReceiptValueInput<'a> {
     tool: &'a str,
     decision: &'a str,
     request_ref: &'a str,
@@ -519,7 +519,7 @@ fn search_result(
 fn build_call(input: BuildCallInput<'_>) -> Result<CatalogMcpCall> {
     validate_decision(input.decision)?;
     let catalog_receipt_ref = input.catalog_receipt_value.map(canonical_hash).transpose()?;
-    let response_value = mcp_response_value(&McpResponseValueInput {
+    let response_value = response_value(&ResponseValueInput {
         tool: &input.request.tool,
         decision: input.decision,
         request_ref: &input.request.request_ref,
@@ -539,7 +539,7 @@ fn build_call(input: BuildCallInput<'_>) -> Result<CatalogMcpCall> {
     if let Some(catalog_receipt_ref) = catalog_receipt_ref.as_ref() {
         push_bounded(&mut refs, catalog_receipt_ref.clone(), MAX_CATALOG_MCP_REFS, "catalog MCP call refs")?;
     }
-    let receipt_value = mcp_receipt_value(&McpReceiptValueInput {
+    let receipt_value = receipt_value(&ReceiptValueInput {
         tool: &input.request.tool,
         decision: input.decision,
         request_ref: &input.request.request_ref,
@@ -559,7 +559,7 @@ fn build_call(input: BuildCallInput<'_>) -> Result<CatalogMcpCall> {
     })
 }
 
-fn mcp_response_value(input: &McpResponseValueInput<'_>) -> Result<IOValue> {
+fn response_value(input: &ResponseValueInput<'_>) -> Result<IOValue> {
     validate_non_empty(input.tool, "catalog MCP response tool")?;
     validate_decision(input.decision)?;
     validate_ref(input.request_ref, "catalog MCP response request ref")?;
@@ -582,7 +582,7 @@ fn mcp_response_value(input: &McpResponseValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-fn mcp_receipt_value(input: &McpReceiptValueInput<'_>) -> Result<IOValue> {
+fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IOValue> {
     validate_non_empty(input.tool, "catalog MCP receipt tool")?;
     validate_decision(input.decision)?;
     validate_ref(input.request_ref, "catalog MCP receipt request ref")?;
