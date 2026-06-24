@@ -11535,20 +11535,162 @@ mod tests {
         assert!(malformed_gate.diagnostics.iter().any(|value| value.contains("parse failed")));
     }
 
+    fn assert_sent(sent: &NodeControlLiveSend) {
+        assert_eq!(ledger::artifact_kind(&sent.send_receipt_value), "node-control-live-send-receipt");
+        assert!(sent.transport_receipt_ref.is_some());
+        assert_eq!(
+            sent.operation_ref,
+            parse_node_control_ingress_envelope(&sent.envelope_value).expect("envelope").operation_ref
+        );
+    }
+
+    fn assert_duplicate(first: &NodeControlLiveSend, duplicate: &NodeControlLiveSend) {
+        assert_eq!(duplicate.send_receipt_ref, first.send_receipt_ref);
+        assert!(duplicate.duplicate_receipt_ref.is_some());
+        assert_eq!(
+            ledger::artifact_kind(duplicate.duplicate_receipt_value.as_ref().expect("duplicate receipt")),
+            "node-control-live-send-duplicate-receipt"
+        );
+    }
+
+    struct ServedCase<'a> {
+        root: &'a std::path::Path,
+        authority_ref: &'a str,
+        ticket_value: &'a IOValue,
+        admission_value: &'a IOValue,
+        send_receipt_value: &'a IOValue,
+        listener: &'a NodeControlLiveServe,
+    }
+
+    fn assert_served_case(case: ServedCase<'_>) {
+        assert_eq!(case.listener.service.decision, "pass");
+        assert_eq!(case.listener.service.processed_request_refs.len(), 1);
+        assert_eq!(case.listener.transport_receipt_refs.len(), 1);
+        assert!(case.listener.observed_events > 0);
+        let authority_value = read_node_ledger_artifact(case.root, case.authority_ref).expect("authority value");
+        let receive_values = case
+            .listener
+            .transport_receipt_refs
+            .iter()
+            .map(|reference| read_node_ledger_artifact(case.root, reference).expect("receive receipt value"))
+            .collect::<Vec<_>>();
+        let receive_value_refs = receive_values.iter().collect::<Vec<_>>();
+        let workflow = node_control_live_workflow_receipt(&NodeControlLiveWorkflowInput {
+            state_root: Some(case.root),
+            receiver_ticket_value: case.ticket_value,
+            peer_admission_value: case.admission_value,
+            authority_grant_value: &authority_value,
+            send_receipt_value: case.send_receipt_value,
+            receive_receipt_values: &receive_value_refs,
+            listener_receipt_value: Some(&case.listener.listener_receipt_value),
+            service_receipt_value: &case.listener.service.service_receipt_value,
+        })
+        .expect("workflow receipt");
+        assert_eq!(workflow.decision, "pass");
+        assert_eq!(ledger::artifact_kind(&workflow.receipt_value), "node-control-live-workflow-receipt");
+    }
+
+    struct SendMaterial {
+        policy_refs: Vec<String>,
+        resource_refs: Vec<String>,
+        peer_bootstrap_refs: Vec<String>,
+        authority_refs: Vec<String>,
+        admission: NodeControlLivePeerAdmission,
+        request_value: IOValue,
+    }
+
+    fn init_send_case() -> (std::path::PathBuf, node_identity::NodeIdentity) {
+        let root = temp_dir("node-control-live-send");
+        init_local_node(&NodeDaemonInitInput {
+            state_root: &root,
+            node_id: "node:live-send",
+        })
+        .expect("init node");
+        run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
+        let identity =
+            node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
+                .expect("parse identity");
+        (root, identity)
+    }
+
+    fn send_material(root: &std::path::Path, ticket: &NodeControlLiveTicket) -> SendMaterial {
+        let policy_refs = vec![local_ref("node-control-policy", "live-send").expect("policy ref")];
+        let resource_refs = vec![local_ref("node-control-resource", "live-send").expect("resource ref")];
+        let admission = admit_node_control_live_peer(&NodeControlLivePeerAdmitInput {
+            state_root: root,
+            ticket_value: &ticket.value,
+            peer_id: "peer:external-send",
+            sequence: 1,
+            expires_at: None,
+            policy_refs: &policy_refs,
+            evidence_refs: &[],
+        })
+        .expect("peer admission");
+        let peer_bootstrap_refs = vec![admission.admission_ref.clone()];
+        let authority_refs =
+            test_live_authority_refs(root, "peer:external-send", "node:live-send", "status", &policy_refs)
+                .expect("authority grant ref");
+        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+            operation: "status",
+            target_ref: None,
+            payload_ref: None,
+            authority_refs: &authority_refs,
+            policy_refs: &policy_refs,
+            resource_refs: &resource_refs,
+            evidence_refs: &[],
+        })
+        .expect("status request");
+        SendMaterial {
+            policy_refs,
+            resource_refs,
+            peer_bootstrap_refs,
+            authority_refs,
+            admission,
+            request_value,
+        }
+    }
+
+    fn build_send_input<'a>(
+        root: &'a std::path::Path,
+        ticket: &'a NodeControlLiveTicket,
+        material: &'a SendMaterial,
+    ) -> NodeControlLiveSendInput<'a> {
+        NodeControlLiveSendInput {
+            state_root: Some(root),
+            request_value: &material.request_value,
+            receiver_ticket_value: &ticket.value,
+            from_peer: "peer:external-send",
+            sequence: 1,
+            expected_operation_ref: None,
+            expected_receiver_node: None,
+            expected_topic: None,
+            expected_endpoint: None,
+            max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
+            peer_bootstrap_refs: &material.peer_bootstrap_refs,
+            authority_refs: &material.authority_refs,
+            policy_refs: &material.policy_refs,
+            resource_refs: &material.resource_refs,
+            evidence_refs: &[],
+            join_timeout_ms: 10_000,
+        }
+    }
+
+    fn build_listener_input(root: &std::path::Path) -> NodeControlLiveServeInput<'_> {
+        NodeControlLiveServeInput {
+            state_root: root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            max_events: 8,
+            event_timeout_ms: 1_000,
+            max_requests_per_tick: 1,
+            supervisor_policy_value: None,
+        }
+    }
+
     #[test]
-    fn node_control_live_send_reaches_bounded_listener() {
+    fn send_reaches_bounded_listener() {
         let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("runtime");
         runtime.block_on(async {
-            let root = temp_dir("node-control-live-send");
-            init_local_node(&NodeDaemonInitInput {
-                state_root: &root,
-                node_id: "node:live-send",
-            })
-            .expect("init node");
-            run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-            let identity =
-                node_identity::parse_node_identity(&read_preserves(&root.join(IDENTITY_FILE)).expect("identity"))
-                    .expect("parse identity");
+            let (root, identity) = init_send_case();
             let lookup = iroh::address_lookup::memory::MemoryLookup::new();
             let receiver_endpoint = live_gossip_endpoint(&lookup, Some(stable_live_endpoint_secret(&identity)))
                 .await
@@ -11566,72 +11708,13 @@ mod tests {
                 .subscribe(node_control_live_topic_id(DEFAULT_CONTROL_INGRESS_TOPIC), Vec::new())
                 .await
                 .expect("receiver subscribe");
-            let policy_refs = vec![local_ref("node-control-policy", "live-send").expect("policy ref")];
-            let resource_refs = vec![local_ref("node-control-resource", "live-send").expect("resource ref")];
-            let admission = admit_node_control_live_peer(&NodeControlLivePeerAdmitInput {
-                state_root: &root,
-                ticket_value: &live_ticket.value,
-                peer_id: "peer:external-send",
-                sequence: 1,
-                expires_at: None,
-                policy_refs: &policy_refs,
-                evidence_refs: &[],
-            })
-            .expect("peer admission");
-            let peer_bootstrap_refs = vec![admission.admission_ref.clone()];
-            let authority_refs =
-                test_live_authority_refs(&root, "peer:external-send", "node:live-send", "status", &policy_refs)
-                    .expect("authority grant ref");
-            let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
-                operation: "status",
-                target_ref: None,
-                payload_ref: None,
-                authority_refs: &authority_refs,
-                policy_refs: &policy_refs,
-                resource_refs: &resource_refs,
-                evidence_refs: &[],
-            })
-            .expect("status request");
-            let send_input = NodeControlLiveSendInput {
-                state_root: Some(&root),
-                request_value: &request_value,
-                receiver_ticket_value: &live_ticket.value,
-                from_peer: "peer:external-send",
-                sequence: 1,
-                expected_operation_ref: None,
-                expected_receiver_node: None,
-                expected_topic: None,
-                expected_endpoint: None,
-                max_attempts: DEFAULT_CONTROL_LIVE_SEND_ATTEMPTS,
-                peer_bootstrap_refs: &peer_bootstrap_refs,
-                authority_refs: &authority_refs,
-                policy_refs: &policy_refs,
-                resource_refs: &resource_refs,
-                evidence_refs: &[],
-                join_timeout_ms: 10_000,
-            };
+            let material = send_material(&root, &live_ticket);
+            let send_input = build_send_input(&root, &live_ticket, &material);
             let sent = send_node_control_live_ingress(&send_input).await.expect("live send");
-            assert_eq!(ledger::artifact_kind(&sent.send_receipt_value), "node-control-live-send-receipt");
-            assert!(sent.transport_receipt_ref.is_some());
-            assert_eq!(
-                sent.operation_ref,
-                parse_node_control_ingress_envelope(&sent.envelope_value).expect("envelope").operation_ref
-            );
+            assert_sent(&sent);
             let duplicate = send_node_control_live_ingress(&send_input).await.expect("duplicate live send");
-            assert_eq!(duplicate.send_receipt_ref, sent.send_receipt_ref);
-            assert!(duplicate.duplicate_receipt_ref.is_some());
-            assert_eq!(
-                ledger::artifact_kind(duplicate.duplicate_receipt_value.as_ref().expect("duplicate receipt")),
-                "node-control-live-send-duplicate-receipt"
-            );
-            let listener_input = NodeControlLiveServeInput {
-                state_root: &root,
-                topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-                max_events: 8,
-                event_timeout_ms: 1_000,
-                max_requests_per_tick: 1,
-                supervisor_policy_value: None,
-            };
+            assert_duplicate(&sent, &duplicate);
+            let listener_input = build_listener_input(&root);
             let listener = serve_node_control_live_listener_with_topic(
                 &listener_input,
                 &mut receiver_topic,
@@ -11642,30 +11725,14 @@ mod tests {
             .await
             .expect("listener drain");
             receiver_router.shutdown().await.expect("receiver shutdown");
-            assert_eq!(listener.service.decision, "pass");
-            assert_eq!(listener.service.processed_request_refs.len(), 1);
-            assert_eq!(listener.transport_receipt_refs.len(), 1);
-            assert!(listener.observed_events > 0);
-            let authority_value = read_node_ledger_artifact(&root, &authority_refs[0]).expect("authority value");
-            let receive_values = listener
-                .transport_receipt_refs
-                .iter()
-                .map(|reference| read_node_ledger_artifact(&root, reference).expect("receive receipt value"))
-                .collect::<Vec<_>>();
-            let receive_value_refs = receive_values.iter().collect::<Vec<_>>();
-            let workflow = node_control_live_workflow_receipt(&NodeControlLiveWorkflowInput {
-                state_root: Some(&root),
-                receiver_ticket_value: &live_ticket.value,
-                peer_admission_value: &admission.value,
-                authority_grant_value: &authority_value,
+            assert_served_case(ServedCase {
+                root: &root,
+                authority_ref: &material.authority_refs[0],
+                ticket_value: &live_ticket.value,
+                admission_value: &material.admission.value,
                 send_receipt_value: &sent.send_receipt_value,
-                receive_receipt_values: &receive_value_refs,
-                listener_receipt_value: Some(&listener.listener_receipt_value),
-                service_receipt_value: &listener.service.service_receipt_value,
-            })
-            .expect("workflow receipt");
-            assert_eq!(workflow.decision, "pass");
-            assert_eq!(ledger::artifact_kind(&workflow.receipt_value), "node-control-live-workflow-receipt");
+                listener: &listener,
+            });
         });
     }
 
