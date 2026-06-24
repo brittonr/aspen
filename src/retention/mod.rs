@@ -104,6 +104,7 @@ const BUNDLE_REDACTED_DIR: &str = "redacted";
 const MAX_RETENTION_REFS: usize = 4096;
 const MAX_RETENTION_DIAGNOSTICS: usize = 128;
 const MAX_RETENTION_TEXT_LEN: usize = 1024;
+const APPLY_DIAGNOSTICS: &str = "retention GC apply diagnostics";
 const MAX_REF_FILE_NAME: usize = 128;
 const _: () = assert!(MAX_RETENTION_REFS <= 100_000);
 const _: () = assert!(MAX_RETENTION_DIAGNOSTICS <= 10_000);
@@ -298,6 +299,12 @@ pub struct RetentionGcApply {
     pub admission_refs: Vec<String>,
     pub diagnostics: Vec<String>,
     pub value: IOValue,
+}
+
+struct ApplyOutcome {
+    retention_receipt_ref: Option<String>,
+    tombstone_ref: Option<String>,
+    diagnostics: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -3946,99 +3953,8 @@ pub fn apply_retention_gc_plan(input: RetentionGcApplyFromPlanInput<'_>) -> Resu
         retention_class: &original.retention_class,
         action: &original.action,
     })?;
-    let mut diagnostics = Vec::new();
-    if original.decision != "pass" {
-        push_bounded(
-            &mut diagnostics,
-            "retention-gc-apply-plan-not-pass".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC apply diagnostics",
-        )?;
-        extend_bounded(
-            &mut diagnostics,
-            original.diagnostics.iter().cloned(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC apply diagnostics",
-        )?;
-    }
-    if recomputed.plan_ref != original.plan_ref {
-        push_bounded(
-            &mut diagnostics,
-            "retention-gc-apply-plan-drift".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC apply diagnostics",
-        )?;
-    }
-    if recomputed.decision != "pass" {
-        push_bounded(
-            &mut diagnostics,
-            "retention-gc-apply-recomputed-plan-not-pass".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC apply diagnostics",
-        )?;
-        extend_bounded(
-            &mut diagnostics,
-            recomputed.diagnostics.iter().cloned(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC apply diagnostics",
-        )?;
-    }
-    if admission.decision != "pass" {
-        push_bounded(
-            &mut diagnostics,
-            "retention-gc-apply-admission-not-pass".to_string(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC apply diagnostics",
-        )?;
-        extend_bounded(
-            &mut diagnostics,
-            admission.diagnostics.iter().cloned(),
-            MAX_RETENTION_DIAGNOSTICS,
-            "retention GC apply diagnostics",
-        )?;
-    }
-    diagnostics.sort();
-    diagnostics.dedup();
-    let mut retention_receipt_ref = None;
-    let mut tombstone_ref = None;
-    if diagnostics.is_empty() {
-        let requester_ref =
-            destructive_retention_requester_ref(&original.evidence, "retention-gc-apply-missing-requester")?;
-        let evaluation = evaluate_retention(RetentionEvaluationInput {
-            root: input.root,
-            object_ref: &original.object_ref,
-            object_kind: &original.object_kind,
-            retention_class: &original.retention_class,
-            action: &original.action,
-            requester_ref: &requester_ref,
-            is_reference_index_complete: original.evidence.is_reference_index_complete,
-            retained_refs: &original.evidence.retained_refs,
-            remote_refs: &original.evidence.remote_refs,
-            policy_refs: &original.evidence.policy_refs,
-            evidence_refs: &original.evidence.evidence_refs,
-            has_delete_authority: admission.has_delete_authority,
-            has_remote_gc_clearance: admission.has_remote_gc_clearance,
-        })?;
-        retention_receipt_ref = Some(evaluation.receipt.receipt_ref.clone());
-        tombstone_ref = evaluation.tombstone.as_ref().map(|created| created.tombstone_ref.clone());
-        if evaluation.receipt.decision != "pass" {
-            push_bounded(
-                &mut diagnostics,
-                "retention-gc-apply-retention-receipt-not-pass".to_string(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC apply diagnostics",
-            )?;
-            extend_bounded(
-                &mut diagnostics,
-                evaluation.receipt.diagnostics.iter().cloned(),
-                MAX_RETENTION_DIAGNOSTICS,
-                "retention GC apply diagnostics",
-            )?;
-        }
-    }
-    diagnostics.sort();
-    diagnostics.dedup();
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
+    let outcome = apply_outcome(input.root, &original, &recomputed, &admission)?;
+    let decision = if outcome.diagnostics.is_empty() { "pass" } else { "deny" };
     let mut admission_refs = admission.admitted_refs;
     admission_refs.sort();
     admission_refs.dedup();
@@ -4052,14 +3968,105 @@ pub fn apply_retention_gc_plan(input: RetentionGcApplyFromPlanInput<'_>) -> Resu
         requester_ref: original.requester_ref.as_deref(),
         plan_ref: &original.plan_ref,
         recomputed_plan_ref: &recomputed.plan_ref,
-        retention_receipt_ref: retention_receipt_ref.as_deref(),
-        tombstone_ref: tombstone_ref.as_deref(),
+        retention_receipt_ref: outcome.retention_receipt_ref.as_deref(),
+        tombstone_ref: outcome.tombstone_ref.as_deref(),
         admission_refs: &admission_refs,
-        diagnostics: &diagnostics,
+        diagnostics: &outcome.diagnostics,
     })?;
     let apply = parse_retention_gc_apply(&value)?;
     write_store_value(&gc_apply_path(input.root, &apply.apply_ref)?, &apply.value)?;
     Ok(apply)
+}
+
+fn apply_outcome(
+    root: &Path,
+    original: &RetentionGcPlan,
+    recomputed: &RetentionGcPlan,
+    admission: &DestructiveRetentionAdmission,
+) -> Result<ApplyOutcome> {
+    let diagnostics = apply_diagnostics(original, recomputed, admission)?;
+    if diagnostics.is_empty() {
+        apply_success_outcome(root, original, admission)
+    } else {
+        Ok(ApplyOutcome {
+            retention_receipt_ref: None,
+            tombstone_ref: None,
+            diagnostics,
+        })
+    }
+}
+
+fn push_apply_diagnostic(diagnostics: &mut impl VecSink<String>, diagnostic: &str, details: &[String]) -> Result<()> {
+    push_bounded(diagnostics, diagnostic.to_string(), MAX_RETENTION_DIAGNOSTICS, APPLY_DIAGNOSTICS)?;
+    extend_bounded(diagnostics, details.iter().cloned(), MAX_RETENTION_DIAGNOSTICS, APPLY_DIAGNOSTICS)
+}
+
+fn apply_diagnostics(
+    original: &RetentionGcPlan,
+    recomputed: &RetentionGcPlan,
+    admission: &DestructiveRetentionAdmission,
+) -> Result<Vec<String>> {
+    let mut diagnostics = Vec::new();
+    if original.decision != "pass" {
+        push_apply_diagnostic(&mut diagnostics, "retention-gc-apply-plan-not-pass", &original.diagnostics)?;
+    }
+    if recomputed.plan_ref != original.plan_ref {
+        push_apply_diagnostic(&mut diagnostics, "retention-gc-apply-plan-drift", &[])?;
+    }
+    if recomputed.decision != "pass" {
+        push_apply_diagnostic(
+            &mut diagnostics,
+            "retention-gc-apply-recomputed-plan-not-pass",
+            &recomputed.diagnostics,
+        )?;
+    }
+    if admission.decision != "pass" {
+        push_apply_diagnostic(&mut diagnostics, "retention-gc-apply-admission-not-pass", &admission.diagnostics)?;
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    Ok(diagnostics)
+}
+
+fn apply_success_outcome(
+    root: &Path,
+    original: &RetentionGcPlan,
+    admission: &DestructiveRetentionAdmission,
+) -> Result<ApplyOutcome> {
+    let requester_ref =
+        destructive_retention_requester_ref(&original.evidence, "retention-gc-apply-missing-requester")?;
+    let evaluation = evaluate_retention(RetentionEvaluationInput {
+        root,
+        object_ref: &original.object_ref,
+        object_kind: &original.object_kind,
+        retention_class: &original.retention_class,
+        action: &original.action,
+        requester_ref: &requester_ref,
+        is_reference_index_complete: original.evidence.is_reference_index_complete,
+        retained_refs: &original.evidence.retained_refs,
+        remote_refs: &original.evidence.remote_refs,
+        policy_refs: &original.evidence.policy_refs,
+        evidence_refs: &original.evidence.evidence_refs,
+        has_delete_authority: admission.has_delete_authority,
+        has_remote_gc_clearance: admission.has_remote_gc_clearance,
+    })?;
+    let retention_receipt_ref = Some(evaluation.receipt.receipt_ref.clone());
+    let tombstone_ref = evaluation.tombstone.as_ref().map(|created| created.tombstone_ref.clone());
+    let mut diagnostics = Vec::new();
+    if evaluation.receipt.decision != "pass" {
+        push_apply_diagnostic(
+            &mut diagnostics,
+            "retention-gc-apply-retention-receipt-not-pass",
+            &evaluation.receipt.diagnostics,
+        )?;
+    }
+    diagnostics.sort();
+    diagnostics.dedup();
+    Ok(ApplyOutcome {
+        retention_receipt_ref,
+        tombstone_ref,
+        diagnostics,
+    })
 }
 
 fn retention_gc_apply_value(input: &RetentionGcApplyValueInput<'_>) -> Result<IOValue> {
