@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-24 | self | Splitting `src/cli/core/chunk/ops.rs::run` into many same-file helpers kept its `function_length` findings and added two `excessive_file_length` findings, worsening the no-disabled probe 7000 -> 7002. | Do not use same-file helper expansion for this CLI chunk dispatch; revert and choose an already-large source/test function or a net-positive child-module strategy. |
 | 2026-06-24 | self | After this compacted Octet burn-down resume, my retained first tool call edited `src/operator/dogfood.rs` instead of literally reading `.agent/napkin.md`, despite the recurring correction. | Make `.agent/napkin.md` the first retained tool call after every compaction/resume; if missed, read it immediately and log before finalizing. |
 | 2026-06-24 | self | While refactoring `src/operator/dogfood.rs::run_local_node_dogfood`, the first state/helper split only returned the no-disabled probe to baseline because `finish_run`/replay-shutdown helpers became replacement `function_length` findings. | Keep splitting replacement helpers into short state methods/report/release/replay pieces, and accept only after the no-disabled probe drops below baseline. |
 | 2026-06-24 | self | During `src/node/daemon.rs::serve_node_control` burn-down, extracting the service loop into a single `run_service_ticks` helper kept the no-disabled probe flat because that helper itself crossed Octet's `function_length` threshold. | Split service-loop extraction into short heartbeat, ingress, and loop-step helpers before accepting; probe after extraction to catch replacement helper length. |
@@ -234,6 +235,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-24 Octet chunk CLI top-level rename: renaming `src/cli/core/chunk/command.rs`'s private exported command enum from `Command`/`ChunkCommand` to module-neutral `Top`, and re-exporting `src/cli/core/chunk.rs::run`, lowered the no-disabled probe from 7000 to 6994 by reducing `path_segment_repetition` from 2998 to 2992 without adding `renamed_imports` once tests imported `Top`/`run` directly. Validation passed `cargo fmt`, focused `cargo test chunk`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-chunk-top-0`.
 
 - 2026-06-24 Octet live listener loopback pair split: extracting `src/node/daemon.rs::node_control_live_serve_listener_loopback` endpoint/topic/router setup into neutral same-file `LoopbackPair`/`loopback_pair` lowered the no-disabled probe from 7008 to 7006 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_live_serve_listener_loopback_dispatches_through_service --lib -- --nocapture`, `cargo fmt --check`, and probe `target/octet-burndown/probe-loopback-pair-0`.
 

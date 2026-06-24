@@ -1,9 +1,9 @@
 type FilePath = std::path::PathBuf;
 type Outcome<T> = molten::error::Result<T>;
 
-pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
+pub(super) fn run(command: super::Top) -> Outcome<()> {
     match command {
-        super::ChunkCommand::Put {
+        super::Top::Put {
             input,
             store,
             kind,
@@ -26,7 +26,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             );
             Ok(())
         }
-        super::ChunkCommand::Verify {
+        super::Top::Verify {
             manifest_ref,
             store,
             receipt_out,
@@ -41,7 +41,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             );
             Ok(())
         }
-        super::ChunkCommand::Read {
+        super::Top::Read {
             manifest_ref,
             store,
             out,
@@ -53,7 +53,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             println!("chunk read ok manifest={} bytes={} out={}", read.manifest_ref, read.bytes.len(), out.display());
             Ok(())
         }
-        super::ChunkCommand::Range {
+        super::Top::Range {
             manifest_ref,
             store,
             offset,
@@ -73,7 +73,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             );
             Ok(())
         }
-        super::ChunkCommand::Sync {
+        super::Top::Sync {
             manifest_ref,
             from,
             store,
@@ -89,7 +89,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             );
             Ok(())
         }
-        super::ChunkCommand::IrohPublish {
+        super::Top::IrohPublish {
             manifest_ref,
             store,
             iroh_store,
@@ -107,7 +107,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             );
             Ok(())
         }
-        super::ChunkCommand::IrohFetch {
+        super::Top::IrohFetch {
             ticket,
             iroh_store,
             store,
@@ -132,7 +132,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             );
             Ok(())
         }
-        super::ChunkCommand::Pin {
+        super::Top::Pin {
             manifest_ref,
             store,
             receipt_out,
@@ -142,7 +142,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             println!("chunk pin ok manifest={} store={}", manifest_ref, store.display());
             Ok(())
         }
-        super::ChunkCommand::Unpin {
+        super::Top::Unpin {
             manifest_ref,
             store,
             receipt_out,
@@ -152,7 +152,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             println!("chunk unpin ok manifest={} store={}", manifest_ref, store.display());
             Ok(())
         }
-        super::ChunkCommand::PinChunk {
+        super::Top::PinChunk {
             chunk_ref,
             store,
             receipt_out,
@@ -162,7 +162,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             println!("chunk pin-chunk ok chunk={} store={}", chunk_ref, store.display());
             Ok(())
         }
-        super::ChunkCommand::UnpinChunk {
+        super::Top::UnpinChunk {
             chunk_ref,
             store,
             receipt_out,
@@ -172,7 +172,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             println!("chunk unpin-chunk ok chunk={} store={}", chunk_ref, store.display());
             Ok(())
         }
-        super::ChunkCommand::IndexStatus { store } => {
+        super::Top::IndexStatus { store } => {
             let status = molten::chunk_store::index_status(&store)?;
             println!(
                 "chunk index status manifests={} chunks={} available={} missing={} manifest_pins={} chunk_pins={} partial_fetches={} receipts={} store={}",
@@ -188,7 +188,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             );
             Ok(())
         }
-        super::ChunkCommand::IndexRebuild { store, receipt_out } => {
+        super::Top::IndexRebuild { store, receipt_out } => {
             let rebuild = molten::chunk_store::rebuild_index(&store)?;
             emit_named_receipt(receipt_out.as_ref(), "chunk store receipt", &rebuild.receipt_value)?;
             println!(
@@ -202,7 +202,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             );
             Ok(())
         }
-        super::ChunkCommand::ReceiptList { store } => {
+        super::Top::ReceiptList { store } => {
             let refs = molten::chunk_store::list_receipt_refs(&store)?;
             for receipt_ref in &refs {
                 println!("{receipt_ref}");
@@ -210,7 +210,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             println!("chunk receipt-list ok receipts={} store={}", refs.len(), store.display());
             Ok(())
         }
-        super::ChunkCommand::ReceiptShow { receipt_ref, store } => {
+        super::Top::ReceiptShow { receipt_ref, store } => {
             let receipt = molten::chunk_store::read_receipt(&store, &receipt_ref)?;
             println!("{}", molten::preserves_rail::to_text(&receipt.value)?);
             eprintln!(
@@ -223,7 +223,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             );
             Ok(())
         }
-        super::ChunkCommand::Lineage {
+        super::Top::Lineage {
             manifest_ref,
             store,
             lineage_out,
@@ -240,7 +240,7 @@ pub(super) fn run(command: super::ChunkCommand) -> Outcome<()> {
             );
             Ok(())
         }
-        super::ChunkCommand::Gc {
+        super::Top::Gc {
             store,
             dry_run,
             apply_refs,

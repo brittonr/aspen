@@ -77,7 +77,7 @@ pub(crate) enum Test {
     },
     Chunk {
         #[command(subcommand)]
-        command: crate::cli_chunk::ChunkCommand,
+        command: crate::cli_chunk::Top,
     },
     Storage {
         #[command(subcommand)]

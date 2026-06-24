@@ -19,7 +19,7 @@
         let store = dir.join("chunk-store");
         let manifest = dir.join("manifest.preserves");
         fs::write(&input, b"aaaabbbbcccc").expect("write input");
-        run_chunk_command(ChunkCommand::Put {
+        run(Top::Put {
             input,
             store: store.clone(),
             kind: "artifact".to_string(),
@@ -30,7 +30,7 @@
         .expect("chunk put");
         let manifest_value = read_preserves_file(&manifest).expect("read manifest");
         let manifest_ref = molten::preserves_rail::canonical_hash(&manifest_value).expect("manifest ref");
-        run_chunk_command(ChunkCommand::Verify {
+        run(Top::Verify {
             manifest_ref: manifest_ref.clone(),
             store: store.clone(),
             receipt_out: Some(dir.join("verify-receipt.preserves")),
@@ -42,7 +42,7 @@
     fn read_chunk_ranges(dir: &Path, fixture: &ChunkFixture) {
         let full = dir.join("full.bin");
         let range = dir.join("range.bin");
-        run_chunk_command(ChunkCommand::Read {
+        run(Top::Read {
             manifest_ref: fixture.manifest_ref.clone(),
             store: fixture.store.clone(),
             out: full.clone(),
@@ -50,7 +50,7 @@
         })
         .expect("chunk read");
         assert_eq!(fs::read(&full).expect("read full"), b"aaaabbbbcccc");
-        run_chunk_command(ChunkCommand::Range {
+        run(Top::Range {
             manifest_ref: fixture.manifest_ref.clone(),
             store: fixture.store.clone(),
             offset: 2,
@@ -64,14 +64,14 @@
 
     fn mirror_chunk_store(dir: &Path, fixture: &ChunkFixture) {
         let mirror = dir.join("chunk-store-mirror");
-        run_chunk_command(ChunkCommand::Sync {
+        run(Top::Sync {
             manifest_ref: fixture.manifest_ref.clone(),
             from: fixture.store.clone(),
             store: mirror.clone(),
             receipt_out: Some(dir.join("sync-receipt.preserves")),
         })
         .expect("chunk sync");
-        run_chunk_command(ChunkCommand::Read {
+        run(Top::Read {
             manifest_ref: fixture.manifest_ref.clone(),
             store: mirror,
             out: dir.join("mirror-full.bin"),
@@ -82,7 +82,7 @@
 
     fn exchange_chunks_locally(dir: &Path, fixture: &ChunkFixture) {
         let iroh_store = dir.join("chunk-iroh-store");
-        run_chunk_command(ChunkCommand::IrohPublish {
+        run(Top::IrohPublish {
             manifest_ref: fixture.manifest_ref.clone(),
             store: fixture.store.clone(),
             iroh_store: iroh_store.clone(),
@@ -91,7 +91,7 @@
         })
         .expect("chunk iroh publish");
         let iroh_dest = dir.join("chunk-iroh-dest");
-        run_chunk_command(ChunkCommand::IrohFetch {
+        run(Top::IrohFetch {
             ticket: format!("iroh-local-chunk:{}", fixture.manifest_ref),
             iroh_store,
             store: iroh_dest.clone(),
@@ -100,7 +100,7 @@
             receipt_out: Some(dir.join("iroh-fetch-receipt.preserves")),
         })
         .expect("chunk iroh fetch");
-        run_chunk_command(ChunkCommand::Read {
+        run(Top::Read {
             manifest_ref: fixture.manifest_ref.clone(),
             store: iroh_dest,
             out: dir.join("iroh-full.bin"),
@@ -110,16 +110,16 @@
     }
 
     fn inspect_chunk_index(dir: &Path, fixture: &ChunkFixture) {
-        run_chunk_command(ChunkCommand::IndexStatus {
+        run(Top::IndexStatus {
             store: fixture.store.clone(),
         })
         .expect("chunk index status");
-        run_chunk_command(ChunkCommand::IndexRebuild {
+        run(Top::IndexRebuild {
             store: fixture.store.clone(),
             receipt_out: Some(dir.join("index-rebuild-receipt.preserves")),
         })
         .expect("chunk index rebuild");
-        run_chunk_command(ChunkCommand::ReceiptList {
+        run(Top::ReceiptList {
             store: fixture.store.clone(),
         })
         .expect("chunk receipt list");
@@ -128,13 +128,13 @@
             .into_iter()
             .next()
             .expect("receipt ref");
-        run_chunk_command(ChunkCommand::ReceiptShow {
+        run(Top::ReceiptShow {
             receipt_ref,
             store: fixture.store.clone(),
         })
         .expect("chunk receipt show");
         let lineage_out = dir.join("chunk-lineage.preserves");
-        run_chunk_command(ChunkCommand::Lineage {
+        run(Top::Lineage {
             manifest_ref: fixture.manifest_ref.clone(),
             store: fixture.store.clone(),
             lineage_out: Some(lineage_out.clone()),
@@ -144,19 +144,19 @@
     }
 
     fn pin_and_collect_chunks(dir: &Path, fixture: ChunkFixture) {
-        run_chunk_command(ChunkCommand::Pin {
+        run(Top::Pin {
             manifest_ref: fixture.manifest_ref.clone(),
             store: fixture.store.clone(),
             receipt_out: Some(dir.join("pin-receipt.preserves")),
         })
         .expect("chunk pin");
-        run_chunk_command(ChunkCommand::Unpin {
+        run(Top::Unpin {
             manifest_ref: fixture.manifest_ref,
             store: fixture.store.clone(),
             receipt_out: Some(dir.join("unpin-receipt.preserves")),
         })
         .expect("chunk unpin");
-        run_chunk_command(ChunkCommand::Gc {
+        run(Top::Gc {
             store: fixture.store,
             dry_run: false,
             apply_refs: Vec::new(),

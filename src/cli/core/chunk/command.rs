@@ -1,5 +1,5 @@
 #[derive(Debug, clap::Subcommand)]
-pub(crate) enum Command {
+pub(crate) enum Top {
     Put {
         input: std::path::PathBuf,
         #[arg(long)]

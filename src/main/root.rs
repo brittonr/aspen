@@ -91,7 +91,7 @@ pub(crate) fn run_test_command(command: command::Test) -> molten::error::Result<
         command::Test::Receipt { command } => crate::cli_receipts::run_receipt_command(command),
         command::Test::Ledger { command } => crate::cli_ledger::run_ledger_command(command),
         command::Test::Chain { command } => crate::cli_ledger::run_chain_command(command),
-        command::Test::Chunk { command } => crate::cli_chunk::run_chunk_command(command),
+        command::Test::Chunk { command } => crate::cli_chunk::run(command),
         command::Test::Storage { command } => crate::cli_storage::run_storage_command(command),
         command::Test::Artifact { command } => crate::cli_artifact::run_artifact_command(command),
         command::Test::Schema { command } => crate::cli_schema::run_schema_command(command),
