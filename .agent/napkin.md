@@ -227,6 +227,8 @@
 
 ## Patterns That Work
 
+- 2026-06-23 Octet node-control operation test split: extracting `src/node/daemon.rs::control_operation_dispatch_installs_runs_and_gates_with_receipts` into neutral same-file `OpCase` plus `assert_install`/`assert_gate`/`assert_run`/`assert_ledger` lowered the no-disabled probe from 7057 to 7056 by clearing one `function_length` finding while lint-family counts stayed otherwise flat. Validation passed `cargo fmt`, focused `cargo test control_operation_dispatch_installs_runs_and_gates_with_receipts`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-node-control-ops-test-split-0`.
+
 - 2026-06-23 Octet retention plan gate split: extracting `src/retention/mod.rs::retention_plan_gates` repeated gate pushes into neutral same-file `push_access_gates`/`push_index_gates`/`push_external_gates` lowered the no-disabled probe from 7061 to 7057 by clearing two `function_length` and two `path_segment_repetition` findings while validation passed `cargo fmt`, focused `cargo test retention`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-retention-gates-0`.
 
 - 2026-06-23 Octet job DAG admission split: extracting `src/job/dag.rs::admission_plan_value` target scan/topology/finish assembly into neutral same-file `Readiness`/`StageScanInput`/record helpers lowered the no-disabled probe from 7065 to 7063 by clearing two `function_length` findings while path/import counts stayed flat. Keep receipt decisions as `pass/deny` and check statuses as `pass/fail`. Validation passed `cargo fmt`, focused `cargo test job_dag`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-admission-scan-v2-0`.

@@ -11848,6 +11848,21 @@ mod tests {
 
     #[test]
     fn control_operation_dispatch_installs_runs_and_gates_with_receipts() {
+        let case = op_case();
+        assert_install(&case);
+        assert_gate(&case);
+        assert_run(&case);
+        assert_ledger(&case.root);
+    }
+
+    struct OpCase {
+        root: PathBuf,
+        authority_refs: Vec<String>,
+        policy_refs: Vec<String>,
+        resource_refs: Vec<String>,
+    }
+
+    fn op_case() -> OpCase {
         let root = temp_dir("node-control-operations");
         init_local_node(&NodeDaemonInitInput {
             state_root: &root,
@@ -11855,69 +11870,68 @@ mod tests {
         })
         .expect("init node");
         run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-        let authority_refs = vec![local_ref("node-control-authority", "ops").expect("authority ref")];
-        let policy_refs = vec![local_ref("node-control-policy", "ops").expect("policy ref")];
-        let resource_refs = vec![local_ref("node-control-resource", "ops").expect("resource ref")];
+        OpCase {
+            root,
+            authority_refs: vec![local_ref("node-control-authority", "ops").expect("authority ref")],
+            policy_refs: vec![local_ref("node-control-policy", "ops").expect("policy ref")],
+            resource_refs: vec![local_ref("node-control-resource", "ops").expect("resource ref")],
+        }
+    }
 
+    fn dispatch_value(case: &OpCase, value: &IOValue) -> node_runtime::NodeControlReceipt {
+        let submitted = submit_control_request(&NodeControlSubmitInput {
+            state_root: &case.root,
+            request_value: value,
+        })
+        .expect("submit request");
+        let dispatched = dispatch_control_request(&NodeControlDispatchInput {
+            state_root: &case.root,
+            request_path: Some(&submitted.inbox_path),
+        })
+        .expect("dispatch request");
+        node_runtime::parse_node_control_receipt(&dispatched.control_receipt_value).expect("control receipt")
+    }
+
+    fn assert_install(case: &OpCase) {
         let payload_value = record("node-control-install-payload", vec![string("payload")]);
-        let payload_ref = import_node_artifact(&root, &payload_value).expect("import payload");
+        let payload_ref = import_node_artifact(&case.root, &payload_value).expect("import payload");
         let payload_provenance =
             provenance::synthetic_reviewed_provenance_record(&payload_ref).expect("payload provenance");
         let payload_provenance_ref =
-            import_node_artifact(&root, &payload_provenance).expect("import payload provenance");
+            import_node_artifact(&case.root, &payload_provenance).expect("import payload provenance");
         let install_evidence_refs = vec![payload_provenance_ref];
         let install_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
             payload_ref: Some(&payload_ref),
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
+            authority_refs: &case.authority_refs,
+            policy_refs: &case.policy_refs,
+            resource_refs: &case.resource_refs,
             evidence_refs: &install_evidence_refs,
         })
         .expect("install request");
-        let install_submitted = submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
-            request_value: &install_value,
-        })
-        .expect("submit install");
-        let install_dispatch = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
-            request_path: Some(&install_submitted.inbox_path),
-        })
-        .expect("dispatch install");
-        let install_receipt =
-            node_runtime::parse_node_control_receipt(&install_dispatch.control_receipt_value).expect("install receipt");
+        let install_receipt = dispatch_value(case, &install_value);
         assert_eq!(install_receipt.decision, "pass");
-        let installed = artifacts::list_artifacts(&root.join("registry"), Some("node-control-artifact"))
+        let installed = artifacts::list_artifacts(&case.root.join("registry"), Some("node-control-artifact"))
             .expect("list installed artifacts");
         assert_eq!(installed.len(), 1);
+    }
 
+    fn assert_gate(case: &OpCase) {
         let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("gate receipt");
-        let gate_ref = import_node_artifact(&root, &gate_value).expect("import gate");
+        let gate_ref = import_node_artifact(&case.root, &gate_value).expect("import gate");
         let gate_target = local_ref("node-control-gate-target", "ops").expect("gate target");
         let gate_request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "gate",
             target_ref: Some(&gate_target),
             payload_ref: Some(&gate_ref),
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
+            authority_refs: &case.authority_refs,
+            policy_refs: &case.policy_refs,
+            resource_refs: &case.resource_refs,
             evidence_refs: &[],
         })
         .expect("gate request");
-        let gate_submitted = submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
-            request_value: &gate_request,
-        })
-        .expect("submit gate");
-        let gate_dispatch = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
-            request_path: Some(&gate_submitted.inbox_path),
-        })
-        .expect("dispatch gate");
-        let gate_receipt =
-            node_runtime::parse_node_control_receipt(&gate_dispatch.control_receipt_value).expect("gate receipt");
+        let gate_receipt = dispatch_value(case, &gate_request);
         assert_eq!(gate_receipt.decision, "pass");
         assert!(
             gate_receipt
@@ -11925,40 +11939,33 @@ mod tests {
                 .iter()
                 .any(|reference| crate::preserves_rail::validate_content_ref(reference).is_ok())
         );
+    }
 
-        let job_fixture = install_node_job_fixture(&root);
+    fn assert_run(case: &OpCase) {
+        let job_fixture = install_node_job_fixture(&case.root);
         let execution_request_ref =
-            import_node_artifact(&root, &job_fixture.execution_request).expect("import execution request");
+            import_node_artifact(&case.root, &job_fixture.execution_request).expect("import execution request");
         let admission_ref =
-            import_node_artifact(&root, &job_fixture.admission_receipt).expect("import admission receipt");
+            import_node_artifact(&case.root, &job_fixture.admission_receipt).expect("import admission receipt");
         let job_provenance =
             provenance::synthetic_reviewed_provenance_record(&job_fixture.job_ref).expect("job provenance");
-        let job_provenance_ref = import_node_artifact(&root, &job_provenance).expect("import job provenance");
+        let job_provenance_ref = import_node_artifact(&case.root, &job_provenance).expect("import job provenance");
         let run_evidence_refs = vec![job_provenance_ref];
         let run_request = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "run",
             target_ref: Some(&admission_ref),
             payload_ref: Some(&execution_request_ref),
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
+            authority_refs: &case.authority_refs,
+            policy_refs: &case.policy_refs,
+            resource_refs: &case.resource_refs,
             evidence_refs: &run_evidence_refs,
         })
         .expect("run request");
-        let run_submitted = submit_control_request(&NodeControlSubmitInput {
-            state_root: &root,
-            request_value: &run_request,
-        })
-        .expect("submit run");
-        let run_dispatch = dispatch_control_request(&NodeControlDispatchInput {
-            state_root: &root,
-            request_path: Some(&run_submitted.inbox_path),
-        })
-        .expect("dispatch run");
-        let run_receipt =
-            node_runtime::parse_node_control_receipt(&run_dispatch.control_receipt_value).expect("run receipt");
+        let run_receipt = dispatch_value(case, &run_request);
         assert_eq!(run_receipt.decision, "pass");
+    }
 
+    fn assert_ledger(root: &Path) {
         let kinds = ledger::list_artifacts(&root.join("ledger"))
             .expect("list operation ledger")
             .into_iter()
