@@ -2339,7 +2339,7 @@ struct RetentionGcApplyValueInput<'a> {
     diagnostics: &'a [String],
 }
 
-struct RetentionGcExecutionGateValueInput<'a> {
+struct ExecutionGateValueInput<'a> {
     decision: &'a str,
     subsystem: &'a str,
     action: &'a str,
@@ -4363,7 +4363,7 @@ pub fn store_retention_gc_execution_gate(input: RetentionGcExecutionGateInput<'_
     parts.diagnostics.sort();
     parts.diagnostics.dedup();
     let decision = if parts.diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = retention_gc_execution_gate_value(&RetentionGcExecutionGateValueInput {
+    let value = execution_gate_value(&ExecutionGateValueInput {
         decision,
         subsystem: input.subsystem,
         action: input.action,
@@ -4535,7 +4535,7 @@ fn execution_gate_tombstone_diagnostics(
     Ok(diagnostics)
 }
 
-fn retention_gc_execution_gate_value(input: &RetentionGcExecutionGateValueInput<'_>) -> Result<IOValue> {
+fn execution_gate_value(input: &ExecutionGateValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     validate_name(input.subsystem, "retention GC execution subsystem")?;
     validate_action(input.action)?;

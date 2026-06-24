@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-24 Octet retention execution value rename: renaming private `src/retention/mod.rs` helpers from `RetentionGcExecutionGateValueInput`/`retention_gc_execution_gate_value` to neutral `ExecutionGateValueInput`/`execution_gate_value` lowered the no-disabled probe from 6993 to 6989 by reducing `path_segment_repetition` from 2992 to 2988 without changing function/file counts. Validation passed `cargo fmt`, `cargo test retention`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-execution-value-0`.
+
 - 2026-06-24 Octet chunk CLI top-level rename: renaming `src/cli/core/chunk/command.rs`'s private exported command enum from `Command`/`ChunkCommand` to module-neutral `Top`, and re-exporting `src/cli/core/chunk.rs::run`, lowered the no-disabled probe from 7000 to 6994 by reducing `path_segment_repetition` from 2998 to 2992 without adding `renamed_imports` once tests imported `Top`/`run` directly. Validation passed `cargo fmt`, focused `cargo test chunk`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-chunk-top-0`.
 
 - 2026-06-24 Octet live listener loopback pair split: extracting `src/node/daemon.rs::node_control_live_serve_listener_loopback` endpoint/topic/router setup into neutral same-file `LoopbackPair`/`loopback_pair` lowered the no-disabled probe from 7008 to 7006 by clearing two `function_length` findings while path/import/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test node_control_live_serve_listener_loopback_dispatches_through_service --lib -- --nocapture`, `cargo fmt --check`, and probe `target/octet-burndown/probe-loopback-pair-0`.
