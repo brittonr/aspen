@@ -6,7 +6,6 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::EVIDENCE_LEDGER_EXPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::EVIDENCE_LEDGER_GC_RECEIPT_SCHEMA;
 use crate::preserves_rail::EVIDENCE_LEDGER_IMPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
@@ -94,7 +93,7 @@ pub fn export_artifact(root: &Path, artifact_ref: &str, out: &Path) -> Result<Le
     }
     fs::write(out, crate::preserves_rail::to_text(&artifact)?).map_err(MoltenError::from)?;
     let receipt_value = record("ledger-export-receipt-v1", vec![
-        string(EVIDENCE_LEDGER_EXPORT_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::EVIDENCE_LEDGER_EXPORT_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("artifact-kind", vec![string(&artifact_kind)]),
         record("artifact", vec![string(artifact_ref)]),
