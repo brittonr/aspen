@@ -8,7 +8,6 @@ use serde::Deserialize;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::OCTET_REMEDIATION_PLAN_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::record;
@@ -680,7 +679,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
 
 fn remediation_plan_value(input: &PlanValueInput<'_>) -> IOValue {
     record("octet-remediation-plan-v1", vec![
-        string(OCTET_REMEDIATION_PLAN_SCHEMA),
+        string(crate::preserves_rail::OCTET_REMEDIATION_PLAN_SCHEMA),
         record("workspace", vec![run_metrics_value(input.workspace)]),
         record("lib", vec![optional_run_metrics_value(input.lib_metrics)]),
         record("focused-object-corpus", vec![optional_object_corpus_value(input.focused_object_corpus)]),
