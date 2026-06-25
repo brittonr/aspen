@@ -27,7 +27,6 @@ use crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_LINK_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_PREDICATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
-use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -1320,7 +1319,11 @@ pub fn verify_signed_chain_receipt(value: &IOValue, trust_root: &str, key: &str)
 }
 
 pub fn signed_receipt_payload(signed_receipt_ref: impl Into<String>) -> ChainPayload {
-    ChainPayload::new("signed-receipt", signed_receipt_ref.into(), EVIDENCE_SIGNED_RECEIPT_SCHEMA)
+    ChainPayload::new(
+        "signed-receipt",
+        signed_receipt_ref.into(),
+        crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA,
+    )
 }
 
 pub fn parse_chain_link(value: &IOValue) -> Result<ChainLink> {
