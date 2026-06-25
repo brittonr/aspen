@@ -2523,7 +2523,6 @@ mod tests {
 
     use super::*;
     use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::u64_value;
 
     #[test]
     fn summaries_include_registry_names_dependencies_and_ledger_classification() {
@@ -3073,21 +3072,21 @@ mod tests {
                     string("no_unwrap"),
                     string("molten"),
                     string("src/main.rs:1"),
-                    u64_value(1),
+                    count_value(1),
                 ]),
                 record("finding-key", vec![
                     string("b3:finding-b"),
                     string("bool_naming"),
                     string("molten"),
                     string("src/lib.rs:1"),
-                    u64_value(1),
+                    count_value(1),
                 ]),
             ])]),
             record("critical-finding-keys", vec![sequence(vec![string("b3:finding-a")])]),
             record("allowed-profiles", vec![sequence(vec![string("quarantine-ci")])]),
             record("burn-down", vec![
-                record("total", vec![u64_value(2)]),
-                record("target-next", vec![u64_value(1)]),
+                record("total", vec![count_value(2)]),
+                record("target-next", vec![count_value(1)]),
                 record("deadline", vec![string("2026-06-30T00:00:00Z")]),
             ]),
             record("review-refs", vec![sequence(vec![string(&review_ref)])]),
@@ -3322,6 +3321,10 @@ mod tests {
 
     fn test_ref(label: &str) -> String {
         canonical_hash(&record("catalog-test-ref", vec![string(label)])).expect("test ref")
+    }
+
+    fn count_value(value: u64) -> IOValue {
+        crate::preserves_rail::u64_value(value)
     }
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
