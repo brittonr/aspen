@@ -5,7 +5,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::AUTHORITY_CONTEXT_SCHEMA;
 use crate::preserves_rail::AUTHORITY_IDENTITY_SCHEMA;
-use crate::preserves_rail::AUTHORITY_RECEIPT_SCHEMA;
 use crate::preserves_rail::AUTHORITY_REVOCATION_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -445,7 +444,7 @@ pub fn replay_verify_authority_receipt(receipt: &AuthorityReceipt, context_value
 
 pub fn authority_receipt_value(input: ReceiptValueInput<'_>) -> IOValue {
     record("authority-receipt-v1", vec![
-        string(AUTHORITY_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::AUTHORITY_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
         record("authority-context", vec![optional_ref_value(input.authority_context_ref)]),
