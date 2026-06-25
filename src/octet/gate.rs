@@ -12,7 +12,6 @@ use crate::error::Result;
 use crate::ledger;
 use crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
-use crate::preserves_rail::OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA;
 use crate::preserves_rail::OCTET_SOURCE_GATE_VALIDATION_SCHEMA;
 use crate::preserves_rail::OCTET_STATUS_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_SUMMARY_ARTIFACT_SCHEMA;
@@ -1265,7 +1264,7 @@ fn octet_source_gate_requirement_value(
     checks: &[GateCheck],
 ) -> IOValue {
     record("octet-source-gate-requirement-v1", vec![
-        string(OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA),
+        string(crate::preserves_rail::OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA),
         record("consumer", vec![string(consumer)]),
         record("subject", vec![string(subject_ref)]),
         record("required-profile", vec![string(STRICT_PROFILE)]),
