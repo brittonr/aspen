@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet provenance Hegel import qualification: in `src/provenance/mod.rs` test module, removing test-local `TestCase`/`generators` imports and qualifying the two Hegel uses lowered the no-disabled probe from 6832 to 6830 while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test provenance --lib`, and probe `target/octet-burndown/probe-provenance-hegel-imports-0`.
+
 - 2026-06-25 Octet catalog test import qualification: in `src/catalog/mod.rs` test module, removing test-local `PathBuf`/`TestCase`/`generators` imports and qualifying the three use sites lowered the no-disabled probe from 6868 to 6838 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test catalog --lib`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-catalog-test-imports-qualify-0`.
 
 - 2026-06-25 Octet rewrite diff schema qualification: in `src/rewrites/mod.rs`, removing the single-use file-level `REWRITE_DIFF_SCHEMA` import and qualifying the one use as `crate::preserves_rail::REWRITE_DIFF_SCHEMA` lowered the no-disabled probe from 6853 to 6851 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test rewrite`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-rewrite-diff-schema-0`.

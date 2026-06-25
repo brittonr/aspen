@@ -893,9 +893,6 @@ fn synthetic_ref(kind: &str, label: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
 
     #[test]
@@ -1208,8 +1205,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_provenance_hash_only_denied_and_trust_monotonicity(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(1).max_value(1_000_000));
+    fn hegel_provenance_hash_only_denied_and_trust_monotonicity(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(1_000_000));
         let artifact_ref = synthetic_ref("artifact", &format!("hegel-{salt}")).expect("artifact ref");
         let hash_only = evaluate_provenance(&ProvenanceEvaluationInput {
             operation: "install",
