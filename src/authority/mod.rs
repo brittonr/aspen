@@ -644,9 +644,6 @@ fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
 
     #[test]
@@ -868,8 +865,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_attenuation_monotonicity_identity_no_authority_and_cleanup(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+    fn hegel_attenuation_monotonicity_identity_no_authority_and_cleanup(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let subject = ref_for(&format!("principal-{salt}"));
         let identity_id = format!("p-{salt}");
         let identity_value = authority_identity_value(IdentityValueInput {
