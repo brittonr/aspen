@@ -11,7 +11,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
 use crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::OCTET_OBJECT_CORPUS_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
 use crate::preserves_rail::OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA;
 use crate::preserves_rail::OCTET_SOURCE_GATE_VALIDATION_SCHEMA;
@@ -806,7 +805,7 @@ fn raw_values(files: &InputFiles) -> Vec<IOValue> {
     if let Some(object_corpus) = files.object_corpus.as_ref() {
         values.push(octet_raw_artifact_value(
             "octet-object-corpus-artifact-v1",
-            OCTET_OBJECT_CORPUS_ARTIFACT_SCHEMA,
+            crate::preserves_rail::OCTET_OBJECT_CORPUS_ARTIFACT_SCHEMA,
             OBJECT_CORPUS_RECEIPT_NAME,
             object_corpus,
         ));

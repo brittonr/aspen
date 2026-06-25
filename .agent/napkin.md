@@ -237,6 +237,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet object-corpus schema qualification: in `src/octet/gate.rs`, removing the single-use `OCTET_OBJECT_CORPUS_ARTIFACT_SCHEMA` import and qualifying the raw artifact builder use lowered the no-disabled probe from 6747 to `target/octet-burndown/probe-octet-object-schema-0` 6745 with path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test octet --lib`, no-disabled probe, and `cargo fmt --check`.
+
 - 2026-06-25 Octet ledger canonical-bytes qualification: in `src/ledger/mod.rs`, removing the `canonical_bytes` import and qualifying its two uses lowered the no-disabled probe from `probe-86` 6749 to `target/octet-burndown/probe-ledger-canonical-bytes-0-0` 6747. Validation passed `cargo fmt`, focused `cargo test ledger --lib`, no-disabled probe, and `cargo fmt --check`.
 
 - 2026-06-25 Octet job-dag neutral test helper names: in `src/job/dag.rs`, renaming private test helpers from `pipeline_dag`/`fixture_dag` to `pipeline_value`/`fixture_value` removed two `path_segment_repetition` findings without touching behavior; no-disabled probe `target/octet-burndown/probe-job-dag-names-0` went 6751 -> 6749. Validation passed `cargo fmt`, focused `cargo test -p molten dag_identity_is_stable_and_ignores_names`, and the no-disabled probe.
