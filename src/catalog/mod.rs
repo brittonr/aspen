@@ -2518,8 +2518,6 @@ fn push_optional_classification(
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use super::*;
     use crate::preserves_rail::parse_text;
 
@@ -3054,7 +3052,7 @@ mod tests {
         let dir = temp_dir("catalog-octet-baseline");
         let registry = dir.join("registry");
         let ledger_root = dir.join("ledger");
-        fs::create_dir_all(&registry).expect("create registry");
+        std::fs::create_dir_all(&registry).expect("create registry");
         let review_ref = test_ref("octet-review");
         let baseline = record("octet-warning-baseline-v1", vec![
             string(crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA),
@@ -3332,9 +3330,9 @@ mod tests {
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+            std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
         }
-        fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 }
