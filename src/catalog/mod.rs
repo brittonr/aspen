@@ -2526,7 +2526,6 @@ mod tests {
     use hegel::generators;
 
     use super::*;
-    use crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA;
     use crate::preserves_rail::parse_text;
     use crate::preserves_rail::u64_value;
 
@@ -3064,7 +3063,7 @@ mod tests {
         fs::create_dir_all(&registry).expect("create registry");
         let review_ref = test_ref("octet-review");
         let baseline = record("octet-warning-baseline-v1", vec![
-            string(OCTET_WARNING_BASELINE_SCHEMA),
+            string(crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA),
             record("scope", vec![string("workspace")]),
             record("created-at", vec![string("2026-05-31T00:00:00Z")]),
             record("expires-at", vec![string("2026-06-30T00:00:00Z")]),
