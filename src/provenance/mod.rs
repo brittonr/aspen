@@ -3,7 +3,6 @@ use preserves::IOValue;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA;
-use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECORD_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -527,7 +526,7 @@ pub fn provenance_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Some(fields) = value.collect_simple_record("provenance-receipt-v1", Some(10)) {
-        require_schema(&fields[0], PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
+        require_schema(&fields[0], crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
         return Ok(format!(
             "provenance receipt decision={} operation={} artifact={}",
             record_string(&fields[1], "decision")?,
@@ -536,7 +535,7 @@ pub fn provenance_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Some(fields) = value.collect_simple_record("provenance-receipt-v1", Some(9)) {
-        require_schema(&fields[0], PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
+        require_schema(&fields[0], crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
         return Ok(format!(
             "provenance receipt decision={} operation={} artifact={}",
             record_string(&fields[1], "decision")?,
@@ -563,7 +562,7 @@ fn provenance_receipt_value(input: &ProvenanceReceiptValueInput<'_>) -> Result<I
         "pass"
     };
     Ok(record("provenance-receipt-v1", vec![
-        string(PROVENANCE_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("operation", vec![string(input.operation)]),
         record("profile", vec![string(input.profile)]),
