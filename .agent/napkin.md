@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet authority content-ref import qualification: in `src/authority/mod.rs`, removing the file-level `validate_content_ref` import and qualifying the single `require_ref` use as `crate::preserves_rail::validate_content_ref` lowered the no-disabled probe from 6906 to 6904 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test authority`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-authority-content-ref-0`.
+
 - 2026-06-25 Octet authority single-use schema import qualification: in `src/authority/mod.rs`, removing the file-level `AUTHORITY_RECEIPT_SCHEMA` import and qualifying the one receipt builder use as `crate::preserves_rail::AUTHORITY_RECEIPT_SCHEMA` lowered the no-disabled probe from 6908 to 6906 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test authority`, `cargo fmt --check`, and probe `target/octet-burndown/probe-authority-receipt-schema-0`.
 
 - 2026-06-25 Octet PathBuf import qualification: in `src/artifacts/mod.rs`, removing the file-level `PathBuf` import and qualifying three return types as `std::path::PathBuf` lowered the no-disabled probe from 6910 to 6908 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test artifact --lib`, and probe `target/octet-burndown/probe-artifacts-pathbuf-qualify-0`.
