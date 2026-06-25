@@ -18,7 +18,6 @@ use crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
 use crate::preserves_rail::OCTET_SOURCE_GATE_REQUIREMENT_SCHEMA;
 use crate::preserves_rail::OCTET_SOURCE_GATE_VALIDATION_SCHEMA;
 use crate::preserves_rail::OCTET_STATUS_ARTIFACT_SCHEMA;
-use crate::preserves_rail::OCTET_STRUCTURED_FINDINGS_SCHEMA;
 use crate::preserves_rail::OCTET_SUMMARY_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA;
 use crate::preserves_rail::bool_value;
@@ -2188,7 +2187,7 @@ fn octet_structured_findings_value(
     let critical_count = findings.values().filter(|finding| is_critical_lint(&finding.lint)).count() as u64;
     let keyed_status = if unkeyed_findings == 0 { "pass" } else { "fail" };
     let value = record("octet-structured-findings-v1", vec![
-        string(OCTET_STRUCTURED_FINDINGS_SCHEMA),
+        string(crate::preserves_rail::OCTET_STRUCTURED_FINDINGS_SCHEMA),
         record("status", vec![string(&status_file.artifact_ref)]),
         record("summary", vec![string(&summary.artifact_ref)]),
         record("metadata", vec![
