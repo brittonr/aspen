@@ -11,7 +11,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::CATALOG_MCP_RECEIPT_SCHEMA;
 use crate::preserves_rail::CATALOG_MCP_REQUEST_SCHEMA;
-use crate::preserves_rail::CATALOG_MCP_RESPONSE_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -570,7 +569,7 @@ fn response_value(input: &ResponseValueInput<'_>) -> Result<IOValue> {
         validate_ref(catalog_receipt_ref, "catalog MCP response catalog receipt ref")?;
     }
     Ok(record("catalog-mcp-response-v1", vec![
-        string(CATALOG_MCP_RESPONSE_SCHEMA),
+        string(crate::preserves_rail::CATALOG_MCP_RESPONSE_SCHEMA),
         record("tool", vec![string(input.tool)]),
         record("decision", vec![string(input.decision)]),
         record("request", vec![string(input.request_ref)]),
