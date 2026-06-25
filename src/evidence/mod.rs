@@ -9,7 +9,6 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const SIGNATURE_ALGORITHM: &str = "blake3-local-fixture-v1";
@@ -158,7 +157,10 @@ pub fn signed_receipt_key_value(input: &SignedReceiptKeyInput<'_>) -> Result<IOV
         string(EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA),
         record("identity", vec![string(input.key_id), string(input.signer), string(input.trust_root)]),
         record("verification-key", vec![string(SIGNATURE_ALGORITHM), string(input.key)]),
-        record("status", vec![string(SIGNED_RECEIPT_KEY_STATUS_CURRENT), u64_value(input.generation)]),
+        record("status", vec![
+            string(SIGNED_RECEIPT_KEY_STATUS_CURRENT),
+            crate::preserves_rail::u64_value(input.generation),
+        ]),
         record("predecessor", vec![optional_ref_value(input.predecessor_ref)]),
         record("checks", vec![sequence(vec![
             record("check", vec![string("key-id-bound"), string("pass")]),
