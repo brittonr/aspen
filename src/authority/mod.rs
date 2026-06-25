@@ -3,7 +3,6 @@ use preserves::Value;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::AUTHORITY_CONTEXT_SCHEMA;
 use crate::preserves_rail::AUTHORITY_REVOCATION_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -190,7 +189,7 @@ pub fn authority_context_value(input: ContextValueInput<'_>) -> Result<IOValue> 
     validate_refs(input.policy_refs, "authority context policy ref")?;
     validate_refs(input.evidence_refs, "authority context evidence ref")?;
     Ok(record("authority-context-v1", vec![
-        string(AUTHORITY_CONTEXT_SCHEMA),
+        string(crate::preserves_rail::AUTHORITY_CONTEXT_SCHEMA),
         record("subject", vec![string(input.subject_ref)]),
         record("capabilities", vec![sequence(input.capabilities.iter().map(capability_value).collect())]),
         record("delegations", vec![sequence(input.delegation_refs.iter().map(string).collect())]),
@@ -214,7 +213,7 @@ pub fn parse_authority_context(value: &IOValue) -> Result<AuthorityContext> {
     let fields = value
         .collect_simple_record("authority-context-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <authority-context-v1 ...>"))?;
-    require_schema(&fields[0], AUTHORITY_CONTEXT_SCHEMA, "authority context schema")?;
+    require_schema(&fields[0], crate::preserves_rail::AUTHORITY_CONTEXT_SCHEMA, "authority context schema")?;
     let validity = value_to_iovalue(&fields[4]);
     let validity_fields = validity
         .collect_simple_record("validity", Some(2))
