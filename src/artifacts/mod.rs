@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use preserves::IOValue;
-use preserves::Value;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 use redb::TableDefinition;
@@ -16,6 +15,8 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::value_to_iovalue;
+
+type RailValue = preserves::Value<IOValue>;
 
 pub const INLINE_PAYLOAD_LIMIT: usize = 4096;
 
@@ -980,7 +981,7 @@ fn payload_value(payload: &ArtifactPayloadRef) -> Result<IOValue> {
     }]))
 }
 
-fn parse_payload_ref(value: &Value<IOValue>) -> Result<ArtifactPayloadRef> {
+fn parse_payload_ref(value: &RailValue) -> Result<ArtifactPayloadRef> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, "payload", 1)?;
     let payload = value_to_iovalue(&fields[0]);
@@ -1162,7 +1163,7 @@ fn optional_string_value(value: Option<&str>) -> IOValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &RailValue) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1172,7 +1173,7 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_string_value(value: &RailValue) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -1182,37 +1183,37 @@ fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>>
     required_string(value, "optional string").map(Some)
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &RailValue, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &RailValue, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &RailValue, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
-fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_string(value: &RailValue, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_string_value(&record[0])
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &RailValue, label: &str) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&record[0], label)
 }
 
-fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_value(value: &RailValue, label: &str) -> Result<Vec<String>> {
     let items = required_sequence(value, label)?;
     ensure_count_at_most(items.len(), MAX_ARTIFACT_REF_LIST, label)?;
     let mut refs = Vec::with_capacity(items.len());
@@ -1232,7 +1233,7 @@ fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &RailValue) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
@@ -1259,7 +1260,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &RailValue, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -1272,33 +1273,33 @@ fn simple_record<'a>(
     value: &'a IOValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, preserves::Record<RailValue>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a RailValue, field: &str) -> Result<std::borrow::Cow<'a, Vec<RailValue>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &RailValue, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &RailValue, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &RailValue, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
