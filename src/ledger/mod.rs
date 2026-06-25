@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::Path;
-use std::path::PathBuf;
 
 use preserves::IOValue;
 
@@ -806,11 +805,11 @@ fn ensure_dirs(root: &Path) -> Result<()> {
     fs::create_dir_all(root.join("pins")).map_err(MoltenError::from)
 }
 
-fn content_path(root: &Path, artifact_ref: &str) -> Result<PathBuf> {
+fn content_path(root: &Path, artifact_ref: &str) -> Result<std::path::PathBuf> {
     Ok(root.join("content").join(filename_for_ref(artifact_ref)?))
 }
 
-fn pin_path(root: &Path, artifact_ref: &str) -> Result<PathBuf> {
+fn pin_path(root: &Path, artifact_ref: &str) -> Result<std::path::PathBuf> {
     Ok(root.join("pins").join(filename_for_ref(artifact_ref)?))
 }
 
@@ -1416,7 +1415,7 @@ mod tests {
         canonical_hash(&record("ledger-test-ref", vec![string(kind), string(label)])).expect("ledger test ref")
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
+    fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
