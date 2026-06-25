@@ -10,7 +10,6 @@ use crate::artifacts::ArtifactPayloadRef;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::CATALOG_RECEIPT_SCHEMA;
 use crate::preserves_rail::CATALOG_RESULT_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
@@ -656,7 +655,7 @@ pub fn parse_catalog_receipt(value: &IOValue) -> Result<CatalogReceipt> {
     let fields = value
         .collect_simple_record("catalog-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-receipt-v1 ...>"))?;
-    require_schema(&fields[0], CATALOG_RECEIPT_SCHEMA, "catalog receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::CATALOG_RECEIPT_SCHEMA, "catalog receipt")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-receipt", "catalog receipt")?;
     Ok(CatalogReceipt {
@@ -2024,7 +2023,7 @@ fn build_receipt_value(input: &ReceiptValueInput<'_>) -> Result<IOValue> {
         push_bounded(&mut all_checks, *check, MAX_CATALOG_CHECKS, "catalog receipt checks")?;
     }
     Ok(record("catalog-receipt-v1", vec![
-        string(CATALOG_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::CATALOG_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
         record("query", vec![string(input.query_ref)]),

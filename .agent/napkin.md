@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet catalog receipt schema import qualification: in `src/catalog/mod.rs`, removing the file-level `CATALOG_RECEIPT_SCHEMA` import and qualifying its two uses as `crate::preserves_rail::CATALOG_RECEIPT_SCHEMA` lowered the no-disabled probe from 6868 to 6864 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test catalog --lib`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-catalog-receipt-schema-0`.
+
 - 2026-06-25 Octet catalog deterministic first-divergence schema qualification: in `src/catalog/mod.rs`, removing the file-level `DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA` import and qualifying its single parser use as `crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA` lowered the no-disabled probe from 6868 to 6866 by reducing `non_trait_imports`; validation passed `cargo fmt`, focused `cargo test catalog`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-catalog-first-divergence-schema-0`.
 
 - 2026-06-25 Octet catalog deterministic replay index schema qualification: in `src/catalog/mod.rs`, removing the file-level `DETERMINISTIC_REPLAY_INDEX_SCHEMA` import and qualifying its single use as `crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA` lowered the no-disabled probe from 6870 to 6868 by reducing `non_trait_imports`; validation passed `cargo fmt`, focused `cargo test catalog`, `cargo fmt --check`, and probe `target/octet-burndown/probe-catalog-index-schema-0`.
