@@ -13,7 +13,6 @@ use redb::TableDefinition;
 use crate::chunk_store;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::ARTIFACT_CLOSURE_SCHEMA;
 use crate::preserves_rail::ARTIFACT_NAME_POINTER_SCHEMA;
 use crate::preserves_rail::ARTIFACT_RECEIPT_SCHEMA;
 use crate::preserves_rail::ARTIFACT_SCHEMA;
@@ -969,7 +968,7 @@ fn closure_value(roots: &[String], closure_refs: &[String], missing_refs: &[Stri
     validate_refs(closure_refs, "artifact closure ref")?;
     validate_refs(missing_refs, "artifact closure missing ref")?;
     Ok(record("artifact-closure-v1", vec![
-        string(ARTIFACT_CLOSURE_SCHEMA),
+        string(crate::preserves_rail::ARTIFACT_CLOSURE_SCHEMA),
         refs_record("roots", &sorted_unique(roots)),
         refs_record("closure", closure_refs),
         refs_record("missing", missing_refs),
