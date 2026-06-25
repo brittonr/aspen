@@ -5,7 +5,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::AUTHORITY_CONTEXT_SCHEMA;
 use crate::preserves_rail::AUTHORITY_IDENTITY_SCHEMA;
-use crate::preserves_rail::AUTHORITY_LIVE_REF_SCHEMA;
 use crate::preserves_rail::AUTHORITY_RECEIPT_SCHEMA;
 use crate::preserves_rail::AUTHORITY_REVOCATION_SCHEMA;
 use crate::preserves_rail::canonical_hash;
@@ -371,7 +370,7 @@ pub fn gatekeeper_resolve_live_ref(
     let expires_at = context.expires_at;
     let evidence_refs = vec![admission.receipt.receipt_ref];
     let value = record("authority-live-ref-v1", vec![
-        string(AUTHORITY_LIVE_REF_SCHEMA),
+        string(crate::preserves_rail::AUTHORITY_LIVE_REF_SCHEMA),
         record("authority-context", vec![string(&context.context_ref)]),
         record("scope", vec![string(scope)]),
         record("capability", vec![string(requested_capability)]),
