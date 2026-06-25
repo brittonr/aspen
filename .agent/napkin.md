@@ -237,6 +237,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet ledger canonical-bytes qualification: in `src/ledger/mod.rs`, removing the `canonical_bytes` import and qualifying its two uses lowered the no-disabled probe from `probe-86` 6749 to `target/octet-burndown/probe-ledger-canonical-bytes-0-0` 6747. Validation passed `cargo fmt`, focused `cargo test ledger --lib`, no-disabled probe, and `cargo fmt --check`.
+
 - 2026-06-25 Octet job-dag neutral test helper names: in `src/job/dag.rs`, renaming private test helpers from `pipeline_dag`/`fixture_dag` to `pipeline_value`/`fixture_value` removed two `path_segment_repetition` findings without touching behavior; no-disabled probe `target/octet-burndown/probe-job-dag-names-0` went 6751 -> 6749. Validation passed `cargo fmt`, focused `cargo test -p molten dag_identity_is_stable_and_ignores_names`, and the no-disabled probe.
 
 - 2026-06-25 Octet ledger test atomic qualification: in `src/ledger/mod.rs`, removing test-local `AtomicU64`/`Ordering` imports and qualifying the temp-dir counter lowered the no-disabled probe from `probe-84` 6753 to `target/octet-burndown/probe-ledger-atomic-qualify-0` 6751. Validation passed `cargo fmt`, focused `cargo test ledger --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.

@@ -5,7 +5,6 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
@@ -57,7 +56,7 @@ pub fn import_artifact(root: &Path, artifact: &IOValue) -> Result<LedgerImport> 
     ensure_dirs(root)?;
     let artifact_ref = canonical_hash(artifact)?;
     let artifact_kind = artifact_kind(artifact).to_string();
-    let bytes = canonical_bytes(artifact)?;
+    let bytes = crate::preserves_rail::canonical_bytes(artifact)?;
     let path = content_path(root, &artifact_ref)?;
     if path.exists() {
         let existing = fs::read(&path).map_err(MoltenError::from)?;
@@ -915,7 +914,7 @@ mod tests {
         let tampered = parse_text("<example \"tampered\">").expect("parse tampered");
         fs::write(
             content_path(&root, &imported.artifact_ref).expect("content path"),
-            canonical_bytes(&tampered).expect("tampered canonical bytes"),
+            crate::preserves_rail::canonical_bytes(&tampered).expect("tampered canonical bytes"),
         )
         .expect("tamper ledger bytes");
         let error = read_artifact(&root, &imported.artifact_ref).expect_err("tampered bytes denied");
