@@ -1018,7 +1018,7 @@ pub fn pin_object(root: &Path, input: RetentionPinInput) -> Result<PinOperation>
         vec!["pin-authority-missing".to_string()]
     };
     let decision = if input.has_authority { "pass" } else { "deny" };
-    let receipt = retention_receipt(RetentionReceiptBuildInput {
+    let receipt = build_receipt(ReceiptBuildInput {
         decision,
         action: ACTION_PIN,
         object_ref: &pin.object_ref,
@@ -1066,7 +1066,7 @@ pub fn unpin_object(input: UnpinObjectInput<'_>) -> Result<RetentionReceipt> {
         remote_refs: &[],
         is_complete: true,
     })?;
-    let receipt = retention_receipt(RetentionReceiptBuildInput {
+    let receipt = build_receipt(ReceiptBuildInput {
         decision,
         action: ACTION_UNPIN,
         object_ref: &object_ref,
@@ -1174,7 +1174,7 @@ pub fn evaluate_retention(input: RetentionEvaluationInput<'_>) -> Result<Retenti
     let mut tombstone = None;
     let mut tombstone_ref = None;
     if decision == "pass" && is_destructive_action(input.action) {
-        let created = retention_tombstone(RetentionTombstoneBuildInput {
+        let created = build_tombstone(TombstoneBuildInput {
             object_ref: input.object_ref,
             object_kind: input.object_kind,
             retention_class: input.retention_class,
@@ -1186,7 +1186,7 @@ pub fn evaluate_retention(input: RetentionEvaluationInput<'_>) -> Result<Retenti
         tombstone_ref = Some(created.tombstone_ref.clone());
         tombstone = Some(created);
     }
-    let receipt = retention_receipt(RetentionReceiptBuildInput {
+    let receipt = build_receipt(ReceiptBuildInput {
         decision,
         action: input.action,
         object_ref: input.object_ref,
@@ -7310,7 +7310,7 @@ fn output_values(parts: OutputValues) -> Result<Vec<(String, IOValue)>> {
     Ok(artifacts)
 }
 
-struct RetentionReceiptBuildInput<'a> {
+struct ReceiptBuildInput<'a> {
     decision: &'a str,
     action: &'a str,
     object_ref: &'a str,
@@ -7327,7 +7327,7 @@ struct RetentionReceiptBuildInput<'a> {
     diagnostics: &'a [String],
 }
 
-fn retention_receipt(input: RetentionReceiptBuildInput<'_>) -> Result<RetentionReceipt> {
+fn build_receipt(input: ReceiptBuildInput<'_>) -> Result<RetentionReceipt> {
     validate_receipt_build_input(&input)?;
     let value = record("retention-receipt-v1", vec![
         string(RETENTION_RECEIPT_SCHEMA),
@@ -7354,7 +7354,7 @@ fn retention_receipt(input: RetentionReceiptBuildInput<'_>) -> Result<RetentionR
     parse_retention_receipt(&value)
 }
 
-struct RetentionTombstoneBuildInput<'a> {
+struct TombstoneBuildInput<'a> {
     object_ref: &'a str,
     object_kind: &'a str,
     retention_class: &'a str,
@@ -7364,7 +7364,7 @@ struct RetentionTombstoneBuildInput<'a> {
     evidence_refs: &'a [String],
 }
 
-fn retention_tombstone(input: RetentionTombstoneBuildInput<'_>) -> Result<RetentionTombstone> {
+fn build_tombstone(input: TombstoneBuildInput<'_>) -> Result<RetentionTombstone> {
     let receipt_ref = if input.receipt_ref == "pending" {
         synthetic_ref("pending-retention-receipt")?
     } else {
@@ -7494,7 +7494,7 @@ fn validate_reference_index_input(input: &RetentionReferenceIndexInput) -> Resul
     Ok(())
 }
 
-fn validate_receipt_build_input(input: &RetentionReceiptBuildInput<'_>) -> Result<()> {
+fn validate_receipt_build_input(input: &ReceiptBuildInput<'_>) -> Result<()> {
     if input.decision != "pass" && input.decision != "deny" {
         return Err(MoltenError::invalid_harness("retention receipt decision must be pass or deny"));
     }

@@ -4482,7 +4482,7 @@ mod tests {
         let unpinned = put_bytes(&root, "artifact", b"dddd", 4).expect("put unpinned");
         pin_manifest(&root, &pinned.manifest_ref).expect("pin manifest");
         let retention_evidence = retention_evidence(&root, "gc-remove");
-        let apply_refs = chunk_gc_apply_refs(
+        let apply_refs = gc_apply_refs(
             &root,
             std::slice::from_ref(&unpinned.manifest_ref),
             &unpinned.chunk_refs,
@@ -4607,7 +4607,7 @@ mod tests {
         unpin_manifest(&root, &put.manifest_ref).expect("unpin");
         let retention_evidence = retention_evidence(&root, "receipt-index");
         let apply_refs =
-            chunk_gc_apply_refs(&root, std::slice::from_ref(&put.manifest_ref), &put.chunk_refs, &retention_evidence);
+            gc_apply_refs(&root, std::slice::from_ref(&put.manifest_ref), &put.chunk_refs, &retention_evidence);
         gc(&root, ChunkStoreGcInput {
             dry_run: false,
             retention_evidence: &retention_evidence,
@@ -4806,7 +4806,7 @@ mod tests {
         assert_eq!(parsed.chunks.len(), 2);
     }
 
-    fn chunk_gc_apply_refs(
+    fn gc_apply_refs(
         root: &std::path::Path,
         manifest_refs: &[String],
         chunk_refs: &[String],
