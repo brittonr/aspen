@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet test-only import qualification: in `src/artifacts/mod.rs`, removing test-local `AtomicU64`/`Ordering` imports and qualifying the two `std::sync::atomic` uses lowered the no-disabled probe from 6919 to 6917 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test artifact --lib`, and probe `target/octet-burndown/probe-artifacts-atomic-qualify-0`.
+
 - 2026-06-25 Octet single-use constant import removal: in an already excessive file, removing `use crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE` from `src/artifacts/mod.rs` and qualifying the one call as `chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE` lowered the no-disabled probe from 6935 to 6933 by reducing `non_trait_imports` without increasing path/function/file counts. Validation passed `cargo fmt`, focused `cargo test large_payloads_use_chunk_refs_and_cleanup_diagnostics_see_pointers`, and probe `target/octet-burndown/probe-artifact-chunk-size-0`.
 
 - 2026-06-24 Octet catalog MCP neutral helper rename: renaming private `src/catalog/mcp.rs` helpers `McpResponseValueInput`/`McpReceiptValueInput` and `mcp_response_value`/`mcp_receipt_value` to neutral `ResponseValueInput`/`ReceiptValueInput` and `response_value`/`receipt_value` lowered the no-disabled probe from 6972 to 6964 by reducing `path_segment_repetition` from 2971 to 2963. Validation passed `cargo fmt`, focused `cargo test mcp --lib`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-catalog-mcp-neutral-0`.
