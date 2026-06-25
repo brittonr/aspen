@@ -4,7 +4,6 @@ use preserves::Value;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::AUTHORITY_CONTEXT_SCHEMA;
-use crate::preserves_rail::AUTHORITY_IDENTITY_SCHEMA;
 use crate::preserves_rail::AUTHORITY_REVOCATION_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -141,7 +140,7 @@ pub fn authority_identity_value(input: IdentityValueInput<'_>) -> Result<IOValue
     validate_refs(input.parent_refs, "authority identity parent ref")?;
     validate_refs(input.metadata_refs, "authority identity metadata ref")?;
     Ok(record("authority-identity-v1", vec![
-        string(AUTHORITY_IDENTITY_SCHEMA),
+        string(crate::preserves_rail::AUTHORITY_IDENTITY_SCHEMA),
         record("identity", vec![
             record("type", vec![string(input.identity_type)]),
             record("id", vec![string(input.id)]),
@@ -161,7 +160,7 @@ pub fn parse_authority_identity(value: &IOValue) -> Result<AuthorityIdentity> {
     let fields = value
         .collect_simple_record("authority-identity-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <authority-identity-v1 ...>"))?;
-    require_schema(&fields[0], AUTHORITY_IDENTITY_SCHEMA, "authority identity schema")?;
+    require_schema(&fields[0], crate::preserves_rail::AUTHORITY_IDENTITY_SCHEMA, "authority identity schema")?;
     let identity = value_to_iovalue(&fields[1]);
     let identity_fields = identity
         .collect_simple_record("identity", Some(3))
