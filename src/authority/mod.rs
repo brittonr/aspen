@@ -644,7 +644,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn identity_records_do_not_grant_authority_without_context() {
+    fn identity_records_do_not_grant_without_context() {
         let identity_value = authority_identity_value(IdentityValueInput {
             identity_type: "principal",
             id: "alice",
