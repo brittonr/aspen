@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet provenance record schema qualification: in `src/provenance/mod.rs`, removing the `PROVENANCE_RECORD_SCHEMA` import and qualifying its three builder/parser uses kept path/function/file counts flat and the no-disabled probe at `target/octet-burndown/probe-provenance-record-schema-0` reported 6802 findings versus the latest recorded `probe-33` 6868. Validation passed `cargo fmt`, focused `cargo test provenance --lib`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and the no-disabled probe.
+
 - 2026-06-25 Octet evidence-chain anchor schema qualification: in `src/evidence/chain.rs`, removing the `EVIDENCE_CHAIN_ANCHOR_SCHEMA` import and qualifying its two builder/parser uses lowered the no-disabled probe from 6806 to 6804 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test evidence_chain`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-chain-anchor-schema-0-0`.
 
 - 2026-06-25 Octet evidence-chain append schema qualification: in `src/evidence/chain.rs`, removing the single-use `EVIDENCE_CHAIN_APPEND_RECEIPT_SCHEMA` import and qualifying its one `chain_append_receipt_value` use lowered the no-disabled probe from 6808 to 6806 while keeping path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test evidence_chain`, and probe `target/octet-burndown/probe-evidence-append-schema-0`.

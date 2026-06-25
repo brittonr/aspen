@@ -3,7 +3,6 @@ use preserves::IOValue;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA;
-use crate::preserves_rail::PROVENANCE_RECORD_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -196,7 +195,7 @@ pub fn provenance_record_value(input: &ProvenanceRecordInput<'_>) -> Result<IOVa
     validate_refs(input.policy_refs, "provenance policy ref")?;
     validate_refs(input.build_record_refs, "provenance build record ref")?;
     Ok(record("provenance-record-v1", vec![
-        string(PROVENANCE_RECORD_SCHEMA),
+        string(crate::preserves_rail::PROVENANCE_RECORD_SCHEMA),
         record("artifact", vec![string(input.artifact_ref)]),
         record("trust-state", vec![string(input.trust_state)]),
         record("source", vec![refs_sequence(input.source_refs)]),
@@ -420,7 +419,7 @@ fn trust_status<'a>(record: Option<&'a ProvenanceRecord>, profile: &str) -> (&'a
 
 pub fn parse_provenance_record(value: &IOValue) -> Result<ProvenanceRecord> {
     if let Some(fields) = value.collect_simple_record("provenance-record-v1", Some(12)) {
-        require_schema(&fields[0], PROVENANCE_RECORD_SCHEMA, "provenance record")?;
+        require_schema(&fields[0], crate::preserves_rail::PROVENANCE_RECORD_SCHEMA, "provenance record")?;
         let trust_state = record_string(&fields[2], "trust-state")?;
         validate_trust_state(&trust_state)?;
         return Ok(ProvenanceRecord {
@@ -442,7 +441,7 @@ pub fn parse_provenance_record(value: &IOValue) -> Result<ProvenanceRecord> {
     let fields = value
         .collect_simple_record("provenance-record-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <provenance-record-v1 ...>"))?;
-    require_schema(&fields[0], PROVENANCE_RECORD_SCHEMA, "provenance record")?;
+    require_schema(&fields[0], crate::preserves_rail::PROVENANCE_RECORD_SCHEMA, "provenance record")?;
     let trust_state = record_string(&fields[2], "trust-state")?;
     validate_trust_state(&trust_state)?;
     Ok(ProvenanceRecord {
