@@ -2520,10 +2520,6 @@ fn push_optional_classification(
 #[cfg(test)]
 mod tests {
     use std::fs;
-    use std::path::PathBuf;
-
-    use hegel::TestCase;
-    use hegel::generators;
 
     use super::*;
     use crate::preserves_rail::parse_text;
@@ -3116,8 +3112,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 12)]
-    fn hegel_catalog_identity_short_ids_and_visibility_are_stable(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+    fn hegel_catalog_identity_short_ids_and_visibility_are_stable(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let dir = temp_dir("catalog-hegel");
         let registry = dir.join("registry");
         let payload = record("doc", vec![string(format!("payload-{salt}"))]);
@@ -3328,7 +3324,7 @@ mod tests {
         canonical_hash(&record("catalog-test-ref", vec![string(label)])).expect("test ref")
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
+    fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
