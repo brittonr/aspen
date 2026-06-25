@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use preserves::IOValue;
 use preserves::Value;
-use redb::Database;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 use redb::TableDefinition;
@@ -1116,9 +1115,9 @@ fn ensure_dirs(root: &Path) -> Result<()> {
     std::fs::create_dir_all(chunk_root(root)).map_err(MoltenError::from)
 }
 
-fn ensure_index_tables(root: &Path) -> Result<Database> {
+fn ensure_index_tables(root: &Path) -> Result<redb::Database> {
     ensure_dirs(root)?;
-    let db = Database::create(index_path(root)).map_err(index_error)?;
+    let db = redb::Database::create(index_path(root)).map_err(index_error)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     {
         write_txn.open_table(INDEX_ARTIFACTS).map_err(index_error)?;
