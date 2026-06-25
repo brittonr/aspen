@@ -939,11 +939,7 @@ fn sorted_unique(refs: &[String]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
     use std::path::Path;
-
-    use hegel::TestCase;
-    use hegel::generators;
 
     use super::*;
     use crate::artifacts;
@@ -1170,8 +1166,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 10)]
-    fn hegel_mcp_calls_are_deterministic_and_readonly(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+    fn hegel_mcp_calls_are_deterministic_and_readonly(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let registry = temp_dir("catalog-mcp-hegel");
         let label = format!("payload-{salt}");
         install_fixture(&registry, "doc", record("doc", vec![string(&label)]), &[], &[]);
@@ -1472,9 +1468,9 @@ mod tests {
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+            std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
         }
-        fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 }
