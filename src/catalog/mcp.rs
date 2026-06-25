@@ -945,8 +945,6 @@ fn sorted_unique(refs: &[String]) -> Vec<String> {
 mod tests {
     use std::fs;
     use std::path::Path;
-    use std::path::PathBuf;
-    use std::sync::atomic::AtomicU64;
 
     use hegel::TestCase;
     use hegel::generators;
@@ -1472,9 +1470,9 @@ mod tests {
         canonical_hash(&record("catalog-mcp-test-ref", vec![string(label)])).expect("test ref")
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
+    fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
+        static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
