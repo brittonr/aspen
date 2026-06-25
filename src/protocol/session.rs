@@ -3,7 +3,6 @@ use preserves::Value;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::PROTOCOL_ENDPOINT_SCHEMA;
 use crate::preserves_rail::PROTOCOL_INSTALL_RECEIPT_SCHEMA;
 use crate::preserves_rail::PROTOCOL_LOCAL_STATE_SCHEMA;
 use crate::preserves_rail::PROTOCOL_MANIFEST_SCHEMA;
@@ -1800,7 +1799,7 @@ fn protocol_endpoint(
 ) -> Result<ProtocolEndpoint> {
     let local_value = protocol_local_state_value(&local_state)?;
     let endpoint_value = record("protocol-endpoint-v1", vec![
-        string(PROTOCOL_ENDPOINT_SCHEMA),
+        string(crate::preserves_rail::PROTOCOL_ENDPOINT_SCHEMA),
         record("protocol", vec![string(&manifest.manifest_ref)]),
         record("role", vec![string(&role.name)]),
         record("role-id", vec![u64_value(u64::from(role.id))]),
@@ -1814,7 +1813,7 @@ fn parse_protocol_endpoint(value: &IOValue) -> Result<ProtocolEndpoint> {
     let fields = value
         .collect_simple_record("protocol-endpoint-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-endpoint-v1 ...>"))?;
-    require_schema(&fields[0], PROTOCOL_ENDPOINT_SCHEMA, "protocol endpoint schema")?;
+    require_schema(&fields[0], crate::preserves_rail::PROTOCOL_ENDPOINT_SCHEMA, "protocol endpoint schema")?;
     let protocol_ref = record_ref(&fields[1], "protocol")?;
     let role = record_string(&fields[2], "role")?;
     let role_id = u32::try_from(record_u64(&fields[3], "role-id")?)
