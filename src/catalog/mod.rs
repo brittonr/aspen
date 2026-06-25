@@ -14,7 +14,6 @@ use crate::preserves_rail::CATALOG_QUERY_SCHEMA;
 use crate::preserves_rail::CATALOG_RECEIPT_SCHEMA;
 use crate::preserves_rail::CATALOG_RESULT_SCHEMA;
 use crate::preserves_rail::CATALOG_SHORT_ID_SCHEMA;
-use crate::preserves_rail::CATALOG_VIEW_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA;
@@ -1943,7 +1942,7 @@ fn catalog_view_value(
     redacted: bool,
 ) -> Result<IOValue> {
     Ok(record("catalog-view-v1", vec![
-        string(CATALOG_VIEW_SCHEMA),
+        string(crate::preserves_rail::CATALOG_VIEW_SCHEMA),
         record("artifact", vec![string(&summary.artifact_ref), string(&summary.artifact_kind)]),
         record("summary", vec![summary_value.clone()]),
         record("content", vec![payload_or_value.clone()]),
