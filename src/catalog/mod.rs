@@ -10,7 +10,6 @@ use crate::artifacts::ArtifactPayloadRef;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::content_ref_has_prefix;
@@ -1595,7 +1594,11 @@ fn deterministic_replay_index_classifications(fields: &Record<Value<IOValue>>) -
 }
 
 fn deterministic_replay_verify_gate_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
-    require_schema(&fields[0], DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "deterministic replay verify")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA,
+        "deterministic replay verify",
+    )?;
     let decision = required_string(&fields[1], "deterministic replay decision")?;
     let expected_report_ref = record_string(&fields[2], "expected-report-ref")?;
     let actual_report_ref = record_string(&fields[3], "actual-report-ref")?;
@@ -1613,7 +1616,11 @@ fn deterministic_replay_verify_gate_classifications(fields: &Record<Value<IOValu
 }
 
 fn deterministic_replay_verify_fixture_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
-    require_schema(&fields[0], DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "deterministic replay verify")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA,
+        "deterministic replay verify",
+    )?;
     let decision = required_string(&fields[1], "deterministic replay decision")?;
     let expected_identity_ref = record_string(&fields[2], "expected-identity-ref")?;
     let actual_identity_ref = record_string(&fields[3], "actual-identity-ref")?;
