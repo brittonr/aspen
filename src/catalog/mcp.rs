@@ -13,7 +13,6 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
-use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const READ_ONLY_TOOLS: &[&str] = &[
@@ -891,7 +890,7 @@ fn validate_decision(decision: &str) -> Result<()> {
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
-    validate_content_ref(value_ref).map_err(|error| {
+    crate::preserves_rail::validate_content_ref(value_ref).map_err(|error| {
         MoltenError::invalid_harness(format!("{field} must be a canonical content ref, got {value_ref}: {error}"))
     })
 }
