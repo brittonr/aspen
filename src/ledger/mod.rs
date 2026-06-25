@@ -12,7 +12,6 @@ use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
-use crate::preserves_rail::validate_content_ref;
 use crate::retention;
 
 const MAX_LEDGER_SCAN_ENTRIES: usize = 100_000;
@@ -849,7 +848,7 @@ fn pinned_refs(root: &Path) -> Result<Vec<String>> {
         let entry = entry.map_err(MoltenError::from)?;
         if entry.file_type().map_err(MoltenError::from)?.is_file() {
             let reference = fs::read_to_string(entry.path()).map_err(MoltenError::from)?;
-            validate_content_ref(&reference).map_err(|error| {
+            crate::preserves_rail::validate_content_ref(&reference).map_err(|error| {
                 MoltenError::invalid_harness(format!(
                     "ledger pin file contains invalid content ref {reference}: {error}"
                 ))
