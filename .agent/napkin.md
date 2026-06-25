@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet evidence content-ref qualification: in `src/evidence/mod.rs`, removing the single-use `content_ref_from_bytes` import and qualifying the one `signature_for` use lowered the no-disabled probe from 6783 to `target/octet-burndown/probe-evidence-content-ref-0` 6781 without changing function/path/file debt. Validation passed `cargo fmt`, focused `cargo test signed_receipt`, and `cargo fmt --check`.
+
 - 2026-06-25 Octet evidence test fixture helper: in `src/evidence/mod.rs`, replacing the test-local `parse_text` import with a tiny `receipt_value()` helper removed one `non_trait_imports` finding without adding path/function/file debt; no-disabled probe `target/octet-burndown/probe-evidence-receipt-value-0` went 6784 -> 6783. Validation passed `cargo fmt` and focused `cargo test signed_receipt`.
 
 - 2026-06-25 Octet lifecycle schema qualification: in `src/lifecycle/mod.rs`, removing seven single-use `LIFECYCLE_*_SCHEMA` imports and qualifying the seven builder uses lowered the no-disabled probe from `probe-66` 6800 to `target/octet-burndown/probe-lifecycle-schema-qualify-0` 6786 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test lifecycle --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.

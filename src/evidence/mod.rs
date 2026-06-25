@@ -7,7 +7,6 @@ use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA;
 use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -677,7 +676,7 @@ fn signature_for(receipt: &IOValue, signer: &str, purpose: &str, trust_root: &st
     material.extend_from_slice(trust_root.as_bytes());
     material.push(0);
     material.extend_from_slice(key.as_bytes());
-    Ok(content_ref_from_bytes(&material))
+    Ok(crate::preserves_rail::content_ref_from_bytes(&material))
 }
 
 fn required_record_string(value: &preserves::Value<IOValue>, label: &str, field: &str) -> Result<String> {
