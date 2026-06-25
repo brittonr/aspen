@@ -14,7 +14,6 @@ use crate::preserves_rail::CATALOG_RECEIPT_SCHEMA;
 use crate::preserves_rail::CATALOG_RESULT_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
@@ -1528,7 +1527,11 @@ fn octet_gate_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
 }
 
 fn deterministic_replay_rollup_classifications(fields: &Record<Value<IOValue>>) -> Result<Vec<String>> {
-    require_schema(&fields[0], DETERMINISTIC_REPLAY_ROLLUP_SCHEMA, "deterministic replay rollup")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA,
+        "deterministic replay rollup",
+    )?;
     let decision = record_string(&fields[1], "decision")?;
     let total_count = record_u64(&fields[2], "total-count")?;
     let pass_count = record_u64(&fields[3], "pass-count")?;
