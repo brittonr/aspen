@@ -2,7 +2,6 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::LIFECYCLE_MONITOR_RECEIPT_SCHEMA;
 use crate::preserves_rail::LIFECYCLE_SCOPE_CLEANUP_SCHEMA;
 use crate::preserves_rail::LIFECYCLE_SERVICE_ASSERTION_SCHEMA;
 use crate::preserves_rail::LIFECYCLE_SUPERVISOR_DECISION_SCHEMA;
@@ -468,7 +467,7 @@ pub fn lifecycle_monitor_receipt(input: &LifecycleMonitorInput<'_>) -> Result<Li
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = record("lifecycle-monitor-receipt-v1", vec![
-        string(LIFECYCLE_MONITOR_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::LIFECYCLE_MONITOR_RECEIPT_SCHEMA),
         record("observer", vec![string(input.observer_id)]),
         record("child", vec![string(input.child_id)]),
         record("child-failure-ref", vec![string(input.child_failure_ref)]),
