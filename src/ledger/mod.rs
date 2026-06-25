@@ -8,7 +8,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -829,7 +828,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
 }
 
 fn filename_for_ref(artifact_ref: &str) -> Result<String> {
-    let hex = content_ref_hex(artifact_ref).map_err(|error| {
+    let hex = crate::preserves_rail::content_ref_hex(artifact_ref).map_err(|error| {
         MoltenError::invalid_harness(format!("unsupported ledger artifact ref {artifact_ref}: {error}"))
     })?;
     Ok(format!("blake3_{hex}.bin"))
