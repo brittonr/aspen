@@ -10,7 +10,6 @@ use serde::Deserialize;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::OCTET_ARTIFACT_LEDGER_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_BASELINE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_COMMAND_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_FINGERPRINT_EVIDENCE_SCHEMA;
@@ -1518,7 +1517,7 @@ fn octet_artifact_ledger_receipt_value(
     checks: &[GateCheck],
 ) -> IOValue {
     record("octet-artifact-ledger-receipt-v1", vec![
-        string(OCTET_ARTIFACT_LEDGER_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::OCTET_ARTIFACT_LEDGER_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
         record("artifacts-dir", vec![string(artifacts_dir)]),
         record("imported", vec![sequence(imported_refs.iter().map(string).collect())]),
