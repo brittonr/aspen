@@ -1,5 +1,4 @@
 use std::collections::BTreeSet;
-use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -1113,8 +1112,8 @@ fn str_table_keys(table: &redb::Table<'_, &str, &str>) -> Result<Vec<String>> {
 }
 
 fn ensure_dirs(root: &Path) -> Result<()> {
-    fs::create_dir_all(root).map_err(MoltenError::from)?;
-    fs::create_dir_all(chunk_root(root)).map_err(MoltenError::from)
+    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(chunk_root(root)).map_err(MoltenError::from)
 }
 
 fn ensure_index_tables(root: &Path) -> Result<Database> {
@@ -1663,9 +1662,9 @@ mod tests {
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+            std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
         }
-        fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 }
