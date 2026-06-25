@@ -6,8 +6,6 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::EVIDENCE_LEDGER_GC_RECEIPT_SCHEMA;
-use crate::preserves_rail::EVIDENCE_LEDGER_IMPORT_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::content_ref_from_hex;
@@ -366,7 +364,7 @@ struct OutcomeInput<'a> {
 
 fn outcome_value(input: OutcomeInput<'_>) -> IOValue {
     record("ledger-gc-receipt-v1", vec![
-        string(EVIDENCE_LEDGER_GC_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::EVIDENCE_LEDGER_GC_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("mode", vec![string(mode_for(input.is_dry_run))]),
         record("removed", vec![sequence(input.removed_refs.iter().map(string).collect())]),
@@ -464,7 +462,7 @@ fn ledger_retention_class(artifact_kind: &str) -> &'static str {
 
 pub fn ledger_import_receipt_value(artifact_ref: &str, artifact_kind: &str) -> IOValue {
     record("ledger-import-receipt-v1", vec![
-        string(EVIDENCE_LEDGER_IMPORT_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::EVIDENCE_LEDGER_IMPORT_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("artifact-kind", vec![string(artifact_kind)]),
         record("artifact", vec![string(artifact_ref)]),
