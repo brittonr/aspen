@@ -12,7 +12,6 @@ use crate::error::Result;
 use crate::ledger;
 use crate::preserves_rail::CATALOG_RECEIPT_SCHEMA;
 use crate::preserves_rail::CATALOG_RESULT_SCHEMA;
-use crate::preserves_rail::CATALOG_SHORT_ID_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA;
@@ -2045,7 +2044,7 @@ fn short_id_resolution_value(
     validate_refs(candidates, "catalog short id candidate ref")?;
     validate_decision(decision)?;
     Ok(record("short-id-resolution-v1", vec![
-        string(CATALOG_SHORT_ID_SCHEMA),
+        string(crate::preserves_rail::CATALOG_SHORT_ID_SCHEMA),
         record("prefix", vec![string(prefix)]),
         record("full-ref", vec![optional_ref_value(full_ref)]),
         record("candidates", vec![refs_sequence(candidates)]),
