@@ -237,6 +237,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet ledger test atomic qualification: in `src/ledger/mod.rs`, removing test-local `AtomicU64`/`Ordering` imports and qualifying the temp-dir counter lowered the no-disabled probe from `probe-84` 6753 to `target/octet-burndown/probe-ledger-atomic-qualify-0` 6751. Validation passed `cargo fmt`, focused `cargo test ledger --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
+
 - 2026-06-25 Octet ledger validate-content-ref qualification: in `src/ledger/mod.rs`, removing the single-use `validate_content_ref` import and qualifying `pinned_refs` lowered the no-disabled probe from `probe-79` 6763 to `target/octet-burndown/probe-ledger-validate-ref-qualify-0` 6761 with path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test ledger --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
 
 - 2026-06-25 Octet ledger content-ref hex qualification: in `src/ledger/mod.rs`, removing the single-use `content_ref_hex` import and qualifying the filename writer use lowered the no-disabled probe from `probe-78` 6765 to `target/octet-burndown/probe-ledger-content-hex-qualify-0` 6763 with path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test ledger`, no-disabled probe, and `cargo fmt --check`.
