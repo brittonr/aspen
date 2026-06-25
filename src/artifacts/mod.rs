@@ -1416,9 +1416,6 @@ mod tests {
     use std::sync::atomic::AtomicU64;
     use std::sync::atomic::Ordering;
 
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
 
     #[test]
@@ -1607,8 +1604,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_artifact_closure_reverse_edges_and_no_name_identity(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+    fn hegel_artifact_closure_reverse_edges_and_no_name_identity(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let root = temp_dir("artifact-hegel");
         let base = install_artifact(&root, &test_input("schema", &format!("base-{salt}"), &[])).expect("base");
         let middle = install_artifact(
