@@ -12,7 +12,6 @@ use crate::error::Result;
 use crate::ledger;
 use crate::preserves_rail::CATALOG_RECEIPT_SCHEMA;
 use crate::preserves_rail::CATALOG_RESULT_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
@@ -1015,7 +1014,11 @@ fn direct_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
         return deterministic_replay_verify_fixture_classifications(&fields).map(Some);
     }
     if let Some(fields) = value.collect_simple_record("deterministic-first-divergence-v1", Some(9)) {
-        require_schema(&fields[0], DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA, "deterministic first divergence")?;
+        require_schema(
+            &fields[0],
+            crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA,
+            "deterministic first divergence",
+        )?;
         let kind = record_string(&fields[1], "kind")?;
         let actor_id = record_string(&fields[3], "actor-id")?;
         let handler_profile_ref = record_string(&fields[5], "handler-profile-ref")?;
