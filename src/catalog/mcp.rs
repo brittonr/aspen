@@ -9,8 +9,6 @@ use crate::catalog::CatalogFilter;
 use crate::catalog::CatalogVisibilityInput;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::CATALOG_MCP_RECEIPT_SCHEMA;
-use crate::preserves_rail::CATALOG_MCP_REQUEST_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -120,7 +118,7 @@ pub fn mcp_request_value(tool: &str, args: Vec<IOValue>) -> Result<IOValue> {
     validate_non_empty(tool, "catalog MCP tool")?;
     ensure_count_at_most(args.len(), MAX_CATALOG_MCP_ARGS, "catalog MCP args")?;
     Ok(record("catalog-mcp-request-v1", vec![
-        string(CATALOG_MCP_REQUEST_SCHEMA),
+        string(crate::preserves_rail::CATALOG_MCP_REQUEST_SCHEMA),
         record("tool", vec![string(tool)]),
         record("args", vec![sequence(args)]),
         checks_value(&["read-only-surface", "no-registry-path-identity", "redacted-default"]),
@@ -193,7 +191,7 @@ pub fn parse_mcp_request(value: &IOValue) -> Result<CatalogMcpRequest> {
     let fields = value
         .collect_simple_record("catalog-mcp-request-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-mcp-request-v1 ...>"))?;
-    require_schema(&fields[0], CATALOG_MCP_REQUEST_SCHEMA, "catalog MCP request")?;
+    require_schema(&fields[0], crate::preserves_rail::CATALOG_MCP_REQUEST_SCHEMA, "catalog MCP request")?;
     let checks = parse_checks(&fields[3])?;
     require_check(&checks, "read-only-surface", "catalog MCP request")?;
     let args = record_sequence(&fields[2], "args")?;
@@ -211,7 +209,7 @@ pub fn parse_mcp_receipt(value: &IOValue) -> Result<CatalogMcpReceipt> {
     let fields = value
         .collect_simple_record("catalog-mcp-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-mcp-receipt-v1 ...>"))?;
-    require_schema(&fields[0], CATALOG_MCP_RECEIPT_SCHEMA, "catalog MCP receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::CATALOG_MCP_RECEIPT_SCHEMA, "catalog MCP receipt")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "canonical-receipt", "catalog MCP receipt")?;
     Ok(CatalogMcpReceipt {
@@ -603,7 +601,7 @@ fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IOValue> {
         push_bounded(&mut all_checks, *check, MAX_CATALOG_MCP_CHECKS, "catalog MCP receipt checks")?;
     }
     Ok(record("catalog-mcp-receipt-v1", vec![
-        string(CATALOG_MCP_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::CATALOG_MCP_RECEIPT_SCHEMA),
         record("tool", vec![string(input.tool)]),
         record("decision", vec![string(input.decision)]),
         record("request", vec![string(input.request_ref)]),
