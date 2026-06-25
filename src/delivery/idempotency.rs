@@ -23,7 +23,6 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const SCOPE_ACTOR_TURN: &str = "actor-turn";
@@ -855,7 +854,7 @@ fn validate_refs(refs: &[String], label: &str) -> Result<()> {
 }
 
 fn require_ref(reference: &str, label: &str) -> Result<()> {
-    validate_content_ref(reference).map_err(|error| {
+    crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
         MoltenError::invalid_harness(format!(
             "unsupported {label} {reference}; expected canonical content ref: {error}"
         ))
