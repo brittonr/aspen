@@ -6103,12 +6103,12 @@ mod tests {
 
     #[test]
     fn dag_identity_is_stable_and_ignores_names() {
-        let dag = fixture_dag("identity");
+        let dag = fixture_value("identity");
         let parsed = parse_job_dag_value(&dag).expect("parse dag");
         let reparsed =
             parse_job_dag_value(&parse_text(&to_text(&dag).expect("text")).expect("text parse")).expect("reparse");
         assert_eq!(parsed.job_ref, reparsed.job_ref);
-        let changed = fixture_dag("count");
+        let changed = fixture_value("count");
         let changed = parse_job_dag_value(&changed).expect("changed parse");
         assert_ne!(parsed.job_ref, changed.job_ref);
     }
@@ -6121,7 +6121,7 @@ mod tests {
         let cache = root.join("cache");
         let chunks = root.join("chunks");
         let ledger = root.join("ledger");
-        let dag_value = pipeline_dag().expect("dag");
+        let dag_value = pipeline_value().expect("dag");
         let install = install_job_dag(&registry, &dag_value).expect("install");
         assert_eq!(install.decision, "pass");
         let dag = read_job_dag(&registry, &install.job_ref).expect("read dag");
@@ -7267,7 +7267,7 @@ mod tests {
     fn remote_admission_denies_missing_targets_and_non_artifact_stages() {
         let root = temp_dir("job-admit-deny");
         let registry = root.join("registry");
-        let dag_value = pipeline_dag().expect("dag");
+        let dag_value = pipeline_value().expect("dag");
         let installed = install_job_dag(&registry, &dag_value).expect("install dag");
         let sync_ref = test_ref("sync-receipt");
         let request = job_admission_request_value(AdmissionRequestValueInput {
@@ -7298,7 +7298,7 @@ mod tests {
     #[test]
     fn planning_profile_and_fusion_preview_are_canonical_and_conservative() {
         let root = temp_dir("job-planning");
-        let dag_value = pipeline_dag().expect("dag");
+        let dag_value = pipeline_value().expect("dag");
         let dag = parse_job_dag_value(&dag_value).expect("parse dag");
         let plan = plan_job_dag(&dag, None).expect("plan");
         assert_eq!(plan.stage_order.first(), Some(&"source".to_string()));
@@ -7375,7 +7375,7 @@ mod tests {
     #[hegel::test(test_cases = 10)]
     fn hegel_dag_hash_and_memo_key_are_stable(tc: TestCase) {
         let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
-        let dag = fixture_dag(if salt.is_multiple_of(2) { "identity" } else { "count" });
+        let dag = fixture_value(if salt.is_multiple_of(2) { "identity" } else { "count" });
         let first = parse_job_dag_value(&dag).expect("first");
         let second =
             parse_job_dag_value(&parse_text(&to_text(&dag).expect("text")).expect("parse text")).expect("second");
@@ -7386,7 +7386,7 @@ mod tests {
         );
     }
 
-    fn pipeline_dag() -> Result<IOValue> {
+    fn pipeline_value() -> Result<IOValue> {
         let source = test_node_value(
             "source",
             "source",
@@ -7425,7 +7425,7 @@ mod tests {
         test_dag_value(vec![source, filter, map, materialize], vec![e1, e2, e3], &["out".to_string()])
     }
 
-    fn fixture_dag(operation: &str) -> IOValue {
+    fn fixture_value(operation: &str) -> IOValue {
         let source = test_node_value(
             "source",
             "source",
