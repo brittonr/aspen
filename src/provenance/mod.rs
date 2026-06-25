@@ -2,7 +2,6 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -486,7 +485,11 @@ pub fn parse_provenance_build_verification_receipt(value: &IOValue) -> Result<Pr
     let fields = value
         .collect_simple_record("provenance-build-verify-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <provenance-build-verify-receipt-v1 ...>"))?;
-    require_schema(&fields[0], PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA, "provenance build verification receipt")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA,
+        "provenance build verification receipt",
+    )?;
     let decision = record_string(&fields[1], "decision")?;
     if !matches!(decision.as_str(), "pass" | "deny") {
         return Err(MoltenError::invalid_harness(format!(
@@ -543,7 +546,11 @@ pub fn provenance_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Some(fields) = value.collect_simple_record("provenance-build-verify-receipt-v1", Some(8)) {
-        require_schema(&fields[0], PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA, "provenance build verify receipt")?;
+        require_schema(
+            &fields[0],
+            crate::preserves_rail::PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA,
+            "provenance build verify receipt",
+        )?;
         return Ok(format!(
             "provenance build verify receipt decision={} expected={} actual={}",
             record_string(&fields[1], "decision")?,
@@ -582,7 +589,7 @@ fn provenance_receipt_value(input: &ProvenanceReceiptValueInput<'_>) -> Result<I
 
 fn build_verify_receipt_value(input: &BuildVerifyReceiptValueInput<'_>) -> Result<IOValue> {
     Ok(record("provenance-build-verify-receipt-v1", vec![
-        string(PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("expected-artifact", vec![string(input.expected_artifact_ref)]),
         record("actual-artifact", vec![string(input.actual_artifact_ref)]),
