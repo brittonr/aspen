@@ -23,7 +23,6 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const INLINE_PAYLOAD_LIMIT: usize = 4096;
@@ -1361,7 +1360,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
-    validate_content_ref(value_ref).map_err(|error| {
+    crate::preserves_rail::validate_content_ref(value_ref).map_err(|error| {
         MoltenError::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
     })
 }
