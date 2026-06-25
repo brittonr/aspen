@@ -5,7 +5,6 @@ use crate::error::Result;
 use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA;
 use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA;
 use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -668,7 +667,7 @@ fn key_id_suffix(key_id: Option<&str>) -> String {
 }
 
 fn signature_for(receipt: &IOValue, signer: &str, purpose: &str, trust_root: &str, key: &str) -> Result<String> {
-    let mut material = canonical_bytes(receipt)?;
+    let mut material = crate::preserves_rail::canonical_bytes(receipt)?;
     material.extend_from_slice(signer.as_bytes());
     material.push(0);
     material.extend_from_slice(purpose.as_bytes());
