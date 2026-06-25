@@ -10,7 +10,6 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
-use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const TRUST_STATE_REVIEWED: &str = "reviewed";
@@ -884,7 +883,7 @@ fn ensure_ref_bound(len: usize, max: usize, context: &str) -> Result<()> {
 }
 
 fn validate_ref(value: &str, context: &str) -> Result<()> {
-    validate_content_ref(value).map_err(|error| {
+    crate::preserves_rail::validate_content_ref(value).map_err(|error| {
         MoltenError::invalid_harness(format!("invalid {context}: expected canonical content ref: {error}"))
     })
 }
