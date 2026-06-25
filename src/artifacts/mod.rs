@@ -1,6 +1,5 @@
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::path::PathBuf;
 
 use preserves::IOValue;
 use preserves::Value;
@@ -1135,11 +1134,11 @@ fn ensure_index_tables(root: &Path) -> Result<redb::Database> {
     Ok(db)
 }
 
-fn index_path(root: &Path) -> PathBuf {
+fn index_path(root: &Path) -> std::path::PathBuf {
     root.join(INDEX_FILE)
 }
 
-fn chunk_root(root: &Path) -> PathBuf {
+fn chunk_root(root: &Path) -> std::path::PathBuf {
     root.join("chunks")
 }
 
@@ -1651,7 +1650,7 @@ mod tests {
         canonical_hash(&record("artifact-test-ref", vec![string(label)])).expect("test ref")
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
+    fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
