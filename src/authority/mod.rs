@@ -3,7 +3,6 @@ use preserves::Value;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::AUTHORITY_REVOCATION_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -242,7 +241,7 @@ pub fn revocation_value(input: RevocationValueInput<'_>) -> Result<IOValue> {
     require_ref(input.issuer_ref, "authority revocation issuer ref")?;
     validate_refs(input.evidence_refs, "authority revocation evidence ref")?;
     Ok(record("authority-revocation-v1", vec![
-        string(AUTHORITY_REVOCATION_SCHEMA),
+        string(crate::preserves_rail::AUTHORITY_REVOCATION_SCHEMA),
         record("target", vec![
             record("kind", vec![string(input.target_kind)]),
             record("ref", vec![string(input.target_ref)]),
@@ -262,7 +261,7 @@ pub fn parse_revocation(value: &IOValue) -> Result<AuthorityRevocation> {
     let fields = value
         .collect_simple_record("authority-revocation-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <authority-revocation-v1 ...>"))?;
-    require_schema(&fields[0], AUTHORITY_REVOCATION_SCHEMA, "authority revocation schema")?;
+    require_schema(&fields[0], crate::preserves_rail::AUTHORITY_REVOCATION_SCHEMA, "authority revocation schema")?;
     let target = value_to_iovalue(&fields[1]);
     let target_fields = target
         .collect_simple_record("target", Some(2))
