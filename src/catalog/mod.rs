@@ -12,7 +12,6 @@ use crate::error::Result;
 use crate::ledger;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_has_prefix;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -1778,7 +1777,7 @@ fn resolve_reference(
         }
         return Ok(reference.to_string());
     }
-    if content_ref_has_prefix(reference) {
+    if crate::preserves_rail::content_ref_has_prefix(reference) {
         let error = validate_content_ref(reference).expect_err("invalid content ref after failed full-ref check");
         return Err(MoltenError::invalid_harness(format!("malformed full content ref: {error}")));
     }
@@ -2244,7 +2243,7 @@ fn classify_short_id_prefix(prefix: &str) -> ShortIdPrefix<'_> {
     if validate_content_ref(prefix).is_ok() {
         return ShortIdPrefix::FullRef;
     }
-    if content_ref_has_prefix(prefix) {
+    if crate::preserves_rail::content_ref_has_prefix(prefix) {
         let error = validate_content_ref(prefix).expect_err("invalid content ref after failed validation");
         return ShortIdPrefix::Deny(format!("malformed full content ref: {error}"));
     }
