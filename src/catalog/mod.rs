@@ -13,7 +13,6 @@ use crate::ledger;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::content_ref_has_prefix;
-use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -2256,7 +2255,7 @@ fn classify_short_id_prefix(prefix: &str) -> ShortIdPrefix<'_> {
 }
 
 fn canonical_ref_matches_prefix(candidate: &str, normalized_prefix: &str) -> bool {
-    content_ref_hex(candidate).is_ok_and(|hex| hex.starts_with(normalized_prefix))
+    crate::preserves_rail::content_ref_hex(candidate).is_ok_and(|hex| hex.starts_with(normalized_prefix))
 }
 
 fn refs_sequence(refs: &[String]) -> IOValue {
