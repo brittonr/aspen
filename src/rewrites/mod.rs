@@ -11,7 +11,6 @@ use preserves::ValueImpl;
 use crate::artifacts;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::REWRITE_DIFF_SCHEMA;
 use crate::preserves_rail::REWRITE_MATCH_SCHEMA;
 use crate::preserves_rail::REWRITE_PLAN_SCHEMA;
 use crate::preserves_rail::REWRITE_QUERY_SCHEMA;
@@ -655,7 +654,7 @@ fn rewrite_diff_value(input: &RewriteDiffValueInput<'_>) -> Result<IOValue> {
     validate_ref(input.old_payload_ref, "rewrite diff old payload ref")?;
     validate_ref(input.new_payload_ref, "rewrite diff new payload ref")?;
     Ok(record("rewrite-diff-v1", vec![
-        string(REWRITE_DIFF_SCHEMA),
+        string(crate::preserves_rail::REWRITE_DIFF_SCHEMA),
         record("artifact", vec![string(input.artifact_ref), string(input.kind)]),
         record("payload", vec![string(input.old_payload_ref), string(input.new_payload_ref)]),
         record("paths", vec![sequence(input.paths.iter().map(string).collect())]),
