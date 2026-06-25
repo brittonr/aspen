@@ -710,11 +710,14 @@ fn required_string(value: &preserves::Value<IOValue>, field: &str) -> Result<Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::preserves_rail::parse_text;
+
+    fn receipt_value() -> IOValue {
+        crate::preserves_rail::parse_text("<gate-receipt-placeholder \"ok\">").expect("parse receipt")
+    }
 
     #[test]
     fn signed_receipt_verification_rejects_wrong_purpose_and_key() {
-        let receipt = parse_text("<gate-receipt-placeholder \"ok\">").expect("parse receipt");
+        let receipt = receipt_value();
         let signed = sign_receipt(&SignReceiptInput {
             receipt: &receipt,
             signer: "local",
@@ -752,7 +755,7 @@ mod tests {
 
     #[test]
     fn signed_receipt_keyring_enforces_current_unrevoked_keys() {
-        let receipt = parse_text("<gate-receipt-placeholder \"ok\">").expect("parse receipt");
+        let receipt = receipt_value();
         let signed = sign_receipt(&SignReceiptInput {
             receipt: &receipt,
             signer: "release-signer",
