@@ -20,7 +20,6 @@ use crate::evidence::SignedReceipt;
 use crate::evidence::sign_receipt;
 use crate::evidence::verify_signed_receipt;
 use crate::ledger;
-use crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_LINK_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_PREDICATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
@@ -1278,7 +1277,7 @@ pub fn parse_chain_predicate_receipt(value: &IOValue) -> Result<ChainPredicateRe
 
 pub fn chain_fork_evidence_value(input: &ChainForkEvidenceValueInput<'_>) -> IOValue {
     record("chain-fork-evidence-v1", vec![
-        string(EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA),
+        string(crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA),
         chain_record(input.chain),
         record("parent", vec![optional_ref_value(input.parent_ref)]),
         record("children", vec![ref_sequence_value(input.child_refs)]),
@@ -1352,7 +1351,7 @@ pub fn parse_chain_fork_evidence(value: &IOValue) -> Result<ChainForkEvidence> {
     let fork = value
         .collect_simple_record("chain-fork-evidence-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-fork-evidence-v1 ...>"))?;
-    require_schema(&fork[0], EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA, "chain fork evidence schema")?;
+    require_schema(&fork[0], crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA, "chain fork evidence schema")?;
     let parsed = ChainForkEvidence {
         evidence_ref: canonical_hash(value)?,
         chain: parse_chain(&fork[1])?,
