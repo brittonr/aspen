@@ -10,7 +10,6 @@ use serde::Deserialize;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::OCTET_BASELINE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_COMMAND_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_FINGERPRINT_EVIDENCE_SCHEMA;
 use crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
@@ -2109,7 +2108,7 @@ fn octet_warning_baseline_value(input: &OctetWarningBaselineValueInput<'_>) -> I
 
 fn octet_baseline_receipt_value(input: OctetBaselineReceiptInput<'_>) -> IOValue {
     record("octet-baseline-receipt-v1", vec![
-        string(OCTET_BASELINE_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::OCTET_BASELINE_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("baseline", vec![string(input.baseline_ref)]),
         record("run-status", vec![string(input.status_ref)]),

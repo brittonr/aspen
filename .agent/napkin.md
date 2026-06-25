@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet baseline receipt schema qualification: in `src/octet/gate.rs`, removing the single-use `OCTET_BASELINE_RECEIPT_SCHEMA` import and qualifying its one use as `crate::preserves_rail::OCTET_BASELINE_RECEIPT_SCHEMA` lowered the no-disabled probe from 6824 to 6822 while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test octet --lib`, and probe `target/octet-burndown/probe-octet-baseline-receipt-schema-0`.
+
 - 2026-06-25 Octet gate policy schema qualification: in `src/octet/gate.rs`, removing the single-use `OCTET_GATE_POLICY_SCHEMA` import and qualifying the one use as `crate::preserves_rail::OCTET_GATE_POLICY_SCHEMA` lowered the no-disabled probe from 6828 to 6826 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test source_gate_validation --lib`, and probe `target/octet-burndown/probe-octet-gate-policy-schema-0`.
 
 - 2026-06-25 Octet gate single-use std import qualification: in `src/octet/gate.rs`, removing the one-use `std::env` import and qualifying `std::env::current_dir` lowered the no-disabled probe from 6830 to 6828 while keeping the change small in an already file-length-debt file. Validation passed `cargo fmt`, focused `cargo test source_gate_validation`, and probe `target/octet-burndown/probe-octet-gate-env-qualify-0`.
