@@ -20,7 +20,6 @@ use crate::evidence::SignedReceipt;
 use crate::evidence::sign_receipt;
 use crate::evidence::verify_signed_receipt;
 use crate::ledger;
-use crate::preserves_rail::EVIDENCE_CHAIN_CHECKPOINT_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_LINK_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_PREDICATE_RECEIPT_SCHEMA;
@@ -901,7 +900,7 @@ pub fn publish_chain_anchor(
 
 pub fn chain_checkpoint_value(input: &ChainCheckpointInput) -> IOValue {
     record("chain-checkpoint-v1", vec![
-        string(EVIDENCE_CHAIN_CHECKPOINT_SCHEMA),
+        string(crate::preserves_rail::EVIDENCE_CHAIN_CHECKPOINT_SCHEMA),
         chain_record(&input.chain),
         record("prior-checkpoint", vec![optional_ref_value(input.prior_checkpoint_ref.as_deref())]),
         record("range", vec![
@@ -1389,7 +1388,7 @@ pub fn parse_chain_checkpoint(value: &IOValue) -> Result<ChainCheckpoint> {
     let checkpoint = value
         .collect_simple_record("chain-checkpoint-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-checkpoint-v1 ...>"))?;
-    require_schema(&checkpoint[0], EVIDENCE_CHAIN_CHECKPOINT_SCHEMA, "chain checkpoint schema")?;
+    require_schema(&checkpoint[0], crate::preserves_rail::EVIDENCE_CHAIN_CHECKPOINT_SCHEMA, "chain checkpoint schema")?;
     let range = parse_checkpoint_range(&checkpoint[3])?;
     let parsed = ChainCheckpoint {
         checkpoint_ref: canonical_hash(value)?,
