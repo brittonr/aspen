@@ -10,7 +10,6 @@ use crate::artifacts::ArtifactPayloadRef;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::CATALOG_RESULT_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
@@ -681,7 +680,7 @@ pub fn catalog_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Some(fields) = value.collect_simple_record("catalog-result-v1", Some(6)) {
-        require_schema(&fields[0], CATALOG_RESULT_SCHEMA, "catalog result")?;
+        require_schema(&fields[0], crate::preserves_rail::CATALOG_RESULT_SCHEMA, "catalog result")?;
         let items_value = value_to_iovalue(&fields[3]);
         let items = simple_record(&items_value, "results", 1)?;
         let count = required_sequence(&items[0], "catalog result items")?.len();
@@ -1999,7 +1998,7 @@ fn catalog_result_value(
     validate_ref(query_ref, "catalog result query ref")?;
     validate_decision(decision)?;
     Ok(record("catalog-result-v1", vec![
-        string(CATALOG_RESULT_SCHEMA),
+        string(crate::preserves_rail::CATALOG_RESULT_SCHEMA),
         record("query", vec![string(query_ref)]),
         record("decision", vec![string(decision)]),
         record("results", vec![sequence(items.to_vec())]),
