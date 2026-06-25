@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet evidence-chain append schema qualification: in `src/evidence/chain.rs`, removing the single-use `EVIDENCE_CHAIN_APPEND_RECEIPT_SCHEMA` import and qualifying its one `chain_append_receipt_value` use lowered the no-disabled probe from 6808 to 6806 while keeping path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test evidence_chain`, and probe `target/octet-burndown/probe-evidence-append-schema-0`.
+
 - 2026-06-25 Octet baseline receipt schema qualification: in `src/octet/gate.rs`, removing the single-use `OCTET_BASELINE_RECEIPT_SCHEMA` import and qualifying its one use as `crate::preserves_rail::OCTET_BASELINE_RECEIPT_SCHEMA` lowered the no-disabled probe from 6824 to 6822 while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test octet --lib`, and probe `target/octet-burndown/probe-octet-baseline-receipt-schema-0`.
 
 - 2026-06-25 Octet gate policy schema qualification: in `src/octet/gate.rs`, removing the single-use `OCTET_GATE_POLICY_SCHEMA` import and qualifying the one use as `crate::preserves_rail::OCTET_GATE_POLICY_SCHEMA` lowered the no-disabled probe from 6828 to 6826 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test source_gate_validation --lib`, and probe `target/octet-burndown/probe-octet-gate-policy-schema-0`.

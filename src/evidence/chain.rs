@@ -21,7 +21,6 @@ use crate::evidence::sign_receipt;
 use crate::evidence::verify_signed_receipt;
 use crate::ledger;
 use crate::preserves_rail::EVIDENCE_CHAIN_ANCHOR_SCHEMA;
-use crate::preserves_rail::EVIDENCE_CHAIN_APPEND_RECEIPT_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_CHECKPOINT_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_LINK_SCHEMA;
@@ -847,7 +846,7 @@ pub fn chain_append_receipt_value(link: &ChainLink, head_before: Option<&str>, p
     }
 
     record("chain-append-receipt-v1", vec![
-        string(EVIDENCE_CHAIN_APPEND_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::EVIDENCE_CHAIN_APPEND_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         chain_record(&link.chain),
         record("link", vec![string(&link.link_ref)]),
