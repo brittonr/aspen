@@ -939,8 +939,6 @@ fn sorted_unique(refs: &[String]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use super::*;
     use crate::artifacts;
     use crate::ledger;
