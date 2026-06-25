@@ -10,7 +10,6 @@ use serde::Deserialize;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::OCTET_COMMAND_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_FINGERPRINT_EVIDENCE_SCHEMA;
 use crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_OBJECT_CORPUS_ARTIFACT_SCHEMA;
@@ -784,7 +783,7 @@ fn raw_values(files: &InputFiles) -> Vec<IOValue> {
     if let Some(command) = files.command.as_ref() {
         values.push(octet_raw_artifact_value(
             "octet-command-artifact-v1",
-            OCTET_COMMAND_ARTIFACT_SCHEMA,
+            crate::preserves_rail::OCTET_COMMAND_ARTIFACT_SCHEMA,
             COMMAND_NAME,
             command,
         ));
