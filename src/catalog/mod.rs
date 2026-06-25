@@ -14,7 +14,6 @@ use crate::preserves_rail::CATALOG_QUERY_SCHEMA;
 use crate::preserves_rail::CATALOG_RECEIPT_SCHEMA;
 use crate::preserves_rail::CATALOG_RESULT_SCHEMA;
 use crate::preserves_rail::CATALOG_SHORT_ID_SCHEMA;
-use crate::preserves_rail::CATALOG_SUMMARY_SCHEMA;
 use crate::preserves_rail::CATALOG_VIEW_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA;
@@ -1909,7 +1908,7 @@ fn build_summary_value(input: &SummaryValueInput<'_>) -> Result<IOValue> {
     validate_refs(input.policy_refs, "catalog policy ref")?;
     validate_refs(input.evidence_refs, "catalog evidence ref")?;
     Ok(record("catalog-summary-v1", vec![
-        string(CATALOG_SUMMARY_SCHEMA),
+        string(crate::preserves_rail::CATALOG_SUMMARY_SCHEMA),
         record("artifact", vec![
             string(input.artifact_ref),
             string(input.artifact_kind),
