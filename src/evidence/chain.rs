@@ -24,7 +24,6 @@ use crate::preserves_rail::EVIDENCE_CHAIN_CHECKPOINT_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_LINK_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_PREDICATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -1234,7 +1233,7 @@ pub fn chain_verify_receipt_value_with_policy(input: &ChainVerifyReceiptPolicyVa
         diagnostic_check("expected-head", receipt.diagnostics, &["missing-head", "head-chain-mismatch", "stale-head"]),
     ];
     record("chain-verify-receipt-v1", vec![
-        string(EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA),
         record("decision", vec![string(receipt.decision)]),
         chain_record(receipt.chain),
         record("anchor", vec![optional_ref_value(receipt.anchor_ref)]),
@@ -1538,7 +1537,11 @@ fn validate_checkpoint_verify_receipt(input: CheckpointVerifyReceiptValidationIn
     let anchor_link_ref = input.anchor_link_ref;
     let head_ref = input.head_ref;
     let range_predicate_ref = input.range_predicate_ref;
-    require_schema(&receipt[0], EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA, "chain verify receipt schema")?;
+    require_schema(
+        &receipt[0],
+        crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA,
+        "chain verify receipt schema",
+    )?;
     let decision = record_string(&receipt[1], "decision", "chain verify decision")?;
     if decision != "pass" {
         return Err(MoltenError::invalid_harness(format!(
