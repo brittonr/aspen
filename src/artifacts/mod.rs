@@ -10,9 +10,6 @@ use redb::TableDefinition;
 use crate::chunk_store;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::ARTIFACT_NAME_POINTER_SCHEMA;
-use crate::preserves_rail::ARTIFACT_RECEIPT_SCHEMA;
-use crate::preserves_rail::ARTIFACT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::parse_canonical_bytes;
@@ -333,7 +330,7 @@ pub fn artifact_value(input: ArtifactValueInput<'_>) -> Result<IOValue> {
     validate_refs(input.policy_refs, "artifact policy ref")?;
     validate_refs(input.evidence_refs, "artifact evidence ref")?;
     Ok(record("artifact-v1", vec![
-        string(ARTIFACT_SCHEMA),
+        string(crate::preserves_rail::ARTIFACT_SCHEMA),
         record("kind", vec![string(input.kind)]),
         record("domain", vec![string(domain_for_kind(input.kind))]),
         payload_value(input.payload)?,
@@ -356,7 +353,7 @@ pub fn parse_artifact_value(value: &IOValue) -> Result<ArtifactRecord> {
     let fields = value
         .collect_simple_record("artifact-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-v1 ...>"))?;
-    require_schema(&fields[0], ARTIFACT_SCHEMA, "artifact")?;
+    require_schema(&fields[0], crate::preserves_rail::ARTIFACT_SCHEMA, "artifact")?;
     let kind = record_string(&fields[1], "kind")?;
     let domain = record_string(&fields[2], "domain")?;
     if domain != domain_for_kind(&kind) {
@@ -713,7 +710,7 @@ pub fn parse_artifact_receipt(value: &IOValue) -> Result<ArtifactReceipt> {
     let fields = value
         .collect_simple_record("artifact-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-receipt-v1 ...>"))?;
-    require_schema(&fields[0], ARTIFACT_RECEIPT_SCHEMA, "artifact receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::ARTIFACT_RECEIPT_SCHEMA, "artifact receipt")?;
     let checks = parse_checks(&fields[7])?;
     if checks.is_empty() {
         return Err(MoltenError::invalid_harness("artifact receipt missing checks"));
@@ -886,7 +883,7 @@ fn artifact_receipt_value(input: &ArtifactReceiptValueInput<'_>) -> Result<IOVal
     validate_ref(input.subject_ref, "artifact receipt subject ref")?;
     validate_refs(input.refs, "artifact receipt ref")?;
     Ok(record("artifact-receipt-v1", vec![
-        string(ARTIFACT_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::ARTIFACT_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
         record("subject", vec![string(input.subject_ref)]),
@@ -907,7 +904,7 @@ fn name_pointer_value(input: &NamePointerValueInput<'_>) -> Result<IOValue> {
     validate_refs(input.policy_refs, "artifact pointer policy ref")?;
     validate_ref(input.receipt_ref, "artifact pointer receipt ref")?;
     Ok(record("artifact-name-pointer-v1", vec![
-        string(ARTIFACT_NAME_POINTER_SCHEMA),
+        string(crate::preserves_rail::ARTIFACT_NAME_POINTER_SCHEMA),
         record("kind", vec![string(input.pointer_kind)]),
         record("name", vec![string(input.name)]),
         record("artifact", vec![string(input.artifact_ref)]),
@@ -922,7 +919,7 @@ fn parse_name_pointer_value(value: &IOValue) -> Result<ArtifactNamePointer> {
     let fields = value
         .collect_simple_record("artifact-name-pointer-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-name-pointer-v1 ...>"))?;
-    require_schema(&fields[0], ARTIFACT_NAME_POINTER_SCHEMA, "artifact name pointer")?;
+    require_schema(&fields[0], crate::preserves_rail::ARTIFACT_NAME_POINTER_SCHEMA, "artifact name pointer")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "names-are-metadata", "artifact name pointer")?;
     Ok(ArtifactNamePointer {
