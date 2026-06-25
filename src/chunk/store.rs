@@ -41,7 +41,6 @@ use crate::evidence_chain::parse_chain_predicate_receipt;
 use crate::preserves_rail::CHUNK_LINEAGE_SCHEMA;
 use crate::preserves_rail::CHUNK_MANIFEST_SCHEMA;
 use crate::preserves_rail::CHUNK_REF_SCHEMA;
-use crate::preserves_rail::CHUNK_ROOT_SCHEMA;
 use crate::preserves_rail::CHUNK_STORE_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
@@ -3432,7 +3431,7 @@ fn unsupported_transform_message(manifest: &ChunkManifest) -> Option<String> {
 
 fn chunk_root_ref(chunks: &[ChunkRef]) -> Result<String> {
     canonical_hash(&record("chunk-root-v1", vec![
-        string(CHUNK_ROOT_SCHEMA),
+        string(crate::preserves_rail::CHUNK_ROOT_SCHEMA),
         record("chunker", vec![string(FIXED_V1_CHUNKER)]),
         record("chunks", vec![sequence(
             chunks
