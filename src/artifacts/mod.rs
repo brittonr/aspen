@@ -12,7 +12,6 @@ use redb::ReadableTable;
 use redb::TableDefinition;
 
 use crate::chunk_store;
-use crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::ARTIFACT_CLOSURE_SCHEMA;
@@ -206,8 +205,12 @@ fn prepare_install_payload(root: &Path, payload: &IOValue) -> Result<InstallPayl
             None,
         )
     } else {
-        let put =
-            chunk_store::put_bytes(&chunk_root(root), "artifact-payload", &payload_bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
+        let put = chunk_store::put_bytes(
+            &chunk_root(root),
+            "artifact-payload",
+            &payload_bytes,
+            chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
+        )?;
         (
             ArtifactPayloadRef::ContentRef {
                 manifest_ref: put.manifest_ref,

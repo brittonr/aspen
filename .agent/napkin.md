@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet single-use constant import removal: in an already excessive file, removing `use crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE` from `src/artifacts/mod.rs` and qualifying the one call as `chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE` lowered the no-disabled probe from 6935 to 6933 by reducing `non_trait_imports` without increasing path/function/file counts. Validation passed `cargo fmt`, focused `cargo test large_payloads_use_chunk_refs_and_cleanup_diagnostics_see_pointers`, and probe `target/octet-burndown/probe-artifact-chunk-size-0`.
+
 - 2026-06-24 Octet catalog MCP neutral helper rename: renaming private `src/catalog/mcp.rs` helpers `McpResponseValueInput`/`McpReceiptValueInput` and `mcp_response_value`/`mcp_receipt_value` to neutral `ResponseValueInput`/`ReceiptValueInput` and `response_value`/`receipt_value` lowered the no-disabled probe from 6972 to 6964 by reducing `path_segment_repetition` from 2971 to 2963. Validation passed `cargo fmt`, focused `cargo test mcp --lib`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and probe `target/octet-burndown/probe-catalog-mcp-neutral-0`.
 
 - 2026-06-24 Octet retention audit value rename: renaming private `src/retention/mod.rs` helpers from `RetentionGcAuditValueInput`/`retention_gc_audit_value` to neutral `AuditValueInput`/`audit_value` lowered the no-disabled probe from 6976 to 6972 by reducing `path_segment_repetition` from 2975 to 2971 without changing function/file counts. Validation passed `cargo fmt`, focused `cargo test retention`, `cargo fmt --check`, and probe `target/octet-burndown/probe-audit-value-neutral-0`.
