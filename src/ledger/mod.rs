@@ -8,7 +8,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_hex;
 use crate::preserves_rail::content_ref_hex;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
@@ -838,7 +837,7 @@ fn filename_for_ref(artifact_ref: &str) -> Result<String> {
 
 fn ref_from_filename(filename: &str) -> Option<String> {
     let hex = filename.strip_prefix("blake3_").and_then(|value| value.strip_suffix(".bin"))?;
-    content_ref_from_hex(hex).ok()
+    crate::preserves_rail::content_ref_from_hex(hex).ok()
 }
 
 fn pinned_refs(root: &Path) -> Result<Vec<String>> {

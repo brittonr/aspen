@@ -237,6 +237,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet ledger content-ref qualification: in `src/ledger/mod.rs`, removing the single-use `content_ref_from_hex` import and qualifying the one filename parse use lowered the no-disabled probe from `probe-77` 6767 to `target/octet-burndown/probe-ledger-content-from-hex-0` 6765 with path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test ledger`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
+
 - 2026-06-25 Octet evidence content-ref qualification: in `src/evidence/mod.rs`, removing the single-use `content_ref_from_bytes` import and qualifying the one `signature_for` use lowered the no-disabled probe from 6783 to `target/octet-burndown/probe-evidence-content-ref-0` 6781 without changing function/path/file debt. Validation passed `cargo fmt`, focused `cargo test signed_receipt`, and `cargo fmt --check`.
 
 - 2026-06-25 Octet evidence test fixture helper: in `src/evidence/mod.rs`, replacing the test-local `parse_text` import with a tiny `receipt_value()` helper removed one `non_trait_imports` finding without adding path/function/file debt; no-disabled probe `target/octet-burndown/probe-evidence-receipt-value-0` went 6784 -> 6783. Validation passed `cargo fmt` and focused `cargo test signed_receipt`.
