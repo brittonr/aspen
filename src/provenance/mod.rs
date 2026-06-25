@@ -2,7 +2,6 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::PROVENANCE_BUILD_RECORD_SCHEMA;
 use crate::preserves_rail::PROVENANCE_BUILD_VERIFY_RECEIPT_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::PROVENANCE_RECORD_SCHEMA;
@@ -248,7 +247,7 @@ pub fn provenance_build_record_value(input: &ProvenanceBuildRecordInput<'_>) -> 
     validate_refs(input.policy_refs, "provenance build policy ref")?;
     validate_refs(input.evidence_refs, "provenance build evidence ref")?;
     Ok(record("provenance-build-record-v1", vec![
-        string(PROVENANCE_BUILD_RECORD_SCHEMA),
+        string(crate::preserves_rail::PROVENANCE_BUILD_RECORD_SCHEMA),
         record("expected-artifact", vec![string(input.expected_artifact_ref)]),
         record("source", vec![refs_sequence(input.source_refs)]),
         record("dependency-closure", vec![string(input.dependency_closure_ref)]),
@@ -468,7 +467,7 @@ pub fn parse_provenance_build_record(value: &IOValue) -> Result<ProvenanceBuildR
     let fields = value
         .collect_simple_record("provenance-build-record-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <provenance-build-record-v1 ...>"))?;
-    require_schema(&fields[0], PROVENANCE_BUILD_RECORD_SCHEMA, "provenance build record")?;
+    require_schema(&fields[0], crate::preserves_rail::PROVENANCE_BUILD_RECORD_SCHEMA, "provenance build record")?;
     let build_params = record_build_params_sequence(&fields[5], "build-params")?;
     Ok(ProvenanceBuildRecord {
         record_ref: canonical_hash(value)?,
