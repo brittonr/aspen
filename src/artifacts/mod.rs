@@ -23,7 +23,6 @@ use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
 use crate::preserves_rail::u64_value;
 use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
@@ -1029,7 +1028,7 @@ fn sorted_unique(refs: &[String]) -> Vec<String> {
 
 fn registry_text_contains_ref(root: &Path, target_ref: &str) -> Result<bool> {
     for receipt in receipt_values(root)? {
-        if to_text(&receipt)?.contains(target_ref) {
+        if crate::preserves_rail::to_text(&receipt)?.contains(target_ref) {
             return Ok(true);
         }
     }
