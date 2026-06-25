@@ -236,6 +236,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet catalog query schema import qualification: in `src/catalog/mod.rs`, removing the file-level `CATALOG_QUERY_SCHEMA` import and qualifying its single use as `crate::preserves_rail::CATALOG_QUERY_SCHEMA` lowered the no-disabled probe from 6876 to 6874 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test catalog`, `cargo fmt --check`, and probe `target/octet-burndown/probe-catalog-query-schema-0`.
+
 - 2026-06-25 Octet authority context schema import qualification: in `src/authority/mod.rs`, removing the file-level `AUTHORITY_CONTEXT_SCHEMA` import and qualifying its two uses as `crate::preserves_rail::AUTHORITY_CONTEXT_SCHEMA` lowered the no-disabled probe from 6900 to 6898 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test authority`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-authority-context-schema-0`.
 
 - 2026-06-25 Octet authority content-ref import qualification: in `src/authority/mod.rs`, removing the file-level `validate_content_ref` import and qualifying the single `require_ref` use as `crate::preserves_rail::validate_content_ref` lowered the no-disabled probe from 6906 to 6904 by reducing `non_trait_imports` while path/function/file counts stayed flat. Validation passed `cargo fmt`, focused `cargo test authority`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and probe `target/octet-burndown/probe-authority-content-ref-0`.

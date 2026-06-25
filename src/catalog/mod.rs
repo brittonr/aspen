@@ -10,7 +10,6 @@ use crate::artifacts::ArtifactPayloadRef;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::CATALOG_QUERY_SCHEMA;
 use crate::preserves_rail::CATALOG_RECEIPT_SCHEMA;
 use crate::preserves_rail::CATALOG_RESULT_SCHEMA;
 use crate::preserves_rail::CATALOG_SHORT_ID_SCHEMA;
@@ -1961,7 +1960,7 @@ fn build_query_value(input: &QueryValueInput<'_>) -> Result<IOValue> {
     validate_filters(input.filters)?;
     validate_visibility(input.visibility)?;
     Ok(record("catalog-query-v1", vec![
-        string(CATALOG_QUERY_SCHEMA),
+        string(crate::preserves_rail::CATALOG_QUERY_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("scope", vec![
             refs_sequence(input.root_refs),
