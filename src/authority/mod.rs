@@ -15,10 +15,10 @@ use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
 use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
-#[cfg(test)]
-use crate::runtime::RuntimeValue;
 
 type RuntimeAssertion = crate::runtime::RuntimeAssertion;
+#[cfg(test)]
+type RuntimeValue = crate::runtime::RuntimeValue;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthorityIdentity {
