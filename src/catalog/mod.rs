@@ -11,7 +11,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
-use crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::content_ref_has_prefix;
@@ -1335,7 +1334,7 @@ fn provenance_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
         ]));
     }
     if let Some(fields) = value.collect_simple_record("provenance-receipt-v1", Some(10)) {
-        require_schema(&fields[0], PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
+        require_schema(&fields[0], crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
         let decision = record_string(&fields[1], "decision")?;
         let operation = record_string(&fields[2], "operation")?;
         let profile = record_string(&fields[3], "profile")?;
@@ -1353,7 +1352,7 @@ fn provenance_labels(value: &IOValue) -> Result<Option<Vec<String>>> {
         ]));
     }
     if let Some(fields) = value.collect_simple_record("provenance-receipt-v1", Some(9)) {
-        require_schema(&fields[0], PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
+        require_schema(&fields[0], crate::preserves_rail::PROVENANCE_RECEIPT_SCHEMA, "provenance receipt")?;
         let decision = record_string(&fields[1], "decision")?;
         let operation = record_string(&fields[2], "operation")?;
         let profile = record_string(&fields[3], "profile")?;
