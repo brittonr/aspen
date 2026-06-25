@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::env;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -1833,7 +1832,7 @@ fn validate_metadata_binding(
 }
 
 fn expected_metadata_for_command(command: &str) -> std::result::Result<ExpectedMetadata, String> {
-    let workspace_root = env::current_dir().map_err(|error| format!("current_dir: {error}"))?;
+    let workspace_root = std::env::current_dir().map_err(|error| format!("current_dir: {error}"))?;
     let workspace_config = load_workspace_octet_config(&workspace_root)?;
     let effective = parse_effective_command(command, &workspace_config)?;
     let config_hash = current_config_hash(&workspace_root, &effective.scope_args, &effective.cargo_check_args);
