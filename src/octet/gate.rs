@@ -14,7 +14,6 @@ use crate::preserves_rail::OCTET_ARTIFACT_LEDGER_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_BASELINE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_COMMAND_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_FINGERPRINT_EVIDENCE_SCHEMA;
-use crate::preserves_rail::OCTET_GATE_POLICY_SCHEMA;
 use crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_OBJECT_CORPUS_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
@@ -1309,7 +1308,7 @@ pub fn default_source_scope(consumer: &str) -> Result<Vec<String>> {
 
 pub fn octet_gate_policy_value(input: &OctetGateInput) -> IOValue {
     record("octet-gate-policy-v1", vec![
-        string(OCTET_GATE_POLICY_SCHEMA),
+        string(crate::preserves_rail::OCTET_GATE_POLICY_SCHEMA),
         record("profile", vec![string(&input.profile)]),
         record("command", vec![sequence(vec![
             string("cargo"),
