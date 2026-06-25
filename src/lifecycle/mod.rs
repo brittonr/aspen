@@ -2,13 +2,6 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::LIFECYCLE_SCOPE_CLEANUP_SCHEMA;
-use crate::preserves_rail::LIFECYCLE_SERVICE_ASSERTION_SCHEMA;
-use crate::preserves_rail::LIFECYCLE_SUPERVISOR_DECISION_SCHEMA;
-use crate::preserves_rail::LIFECYCLE_TRACE_EVENT_SCHEMA;
-use crate::preserves_rail::LIFECYCLE_TRANSITION_RECEIPT_SCHEMA;
-use crate::preserves_rail::LIFECYCLE_TRANSITION_SCHEMA;
-use crate::preserves_rail::LIFECYCLE_TURN_FAILURE_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -312,7 +305,7 @@ impl ServiceLifecycleAssertionKind {
 pub fn lifecycle_transition_value(input: &LifecycleTransitionInput) -> Result<IOValue> {
     validate_transition_input(input)?;
     Ok(record("lifecycle-transition-v1", vec![
-        string(LIFECYCLE_TRANSITION_SCHEMA),
+        string(crate::preserves_rail::LIFECYCLE_TRANSITION_SCHEMA),
         record("entity", vec![string(input.entity_kind.as_str()), string(&input.entity_id)]),
         record("state", vec![
             record("from", vec![string(input.from_state.as_str())]),
@@ -340,7 +333,7 @@ pub fn lifecycle_transition_receipt(input: &LifecycleTransitionInput) -> Result<
     let diagnostics = transition_diagnostics(input);
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = record("lifecycle-transition-receipt-v1", vec![
-        string(LIFECYCLE_TRANSITION_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::LIFECYCLE_TRANSITION_RECEIPT_SCHEMA),
         record("transition", vec![string(&transition.transition_ref)]),
         record("decision", vec![string(decision)]),
         record("diagnostics", vec![strings_sequence(&diagnostics)]),
@@ -359,7 +352,7 @@ pub fn lifecycle_transition_receipt(input: &LifecycleTransitionInput) -> Result<
 pub fn lifecycle_trace_event(input: &LifecycleTransitionInput) -> Result<LifecycleTraceEvent> {
     let transition = lifecycle_transition_record(input)?;
     let value = record("lifecycle-trace-event-v1", vec![
-        string(LIFECYCLE_TRACE_EVENT_SCHEMA),
+        string(crate::preserves_rail::LIFECYCLE_TRACE_EVENT_SCHEMA),
         record("transition", vec![string(&transition.transition_ref)]),
         record("entity", vec![string(input.entity_kind.as_str()), string(&input.entity_id)]),
         record("action", vec![string(input.action.as_str())]),
@@ -394,7 +387,7 @@ pub fn turn_failure_receipt(input: &TurnFailureInput<'_>) -> Result<TurnFailureR
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = record("lifecycle-turn-failure-v1", vec![
-        string(LIFECYCLE_TURN_FAILURE_SCHEMA),
+        string(crate::preserves_rail::LIFECYCLE_TURN_FAILURE_SCHEMA),
         record("entity", vec![string(input.entity_kind.as_str()), string(input.entity_id)]),
         record("failure-kind", vec![string(input.failure_kind.as_str())]),
         record("cause", vec![string(input.cause)]),
@@ -434,7 +427,7 @@ pub fn scope_cleanup_receipt(input: &ScopeCleanupInput<'_>) -> Result<ScopeClean
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     let value = record("lifecycle-scope-cleanup-v1", vec![
-        string(LIFECYCLE_SCOPE_CLEANUP_SCHEMA),
+        string(crate::preserves_rail::LIFECYCLE_SCOPE_CLEANUP_SCHEMA),
         record("entity", vec![string(input.entity_kind.as_str()), string(input.entity_id)]),
         record("cause", vec![string(input.cause)]),
         record("before-state-ref", vec![string(&before_ref)]),
@@ -507,7 +500,7 @@ pub fn supervisor_decision_receipt(input: &SupervisorDecisionInput<'_>) -> Resul
     }
     let decision = if diagnostics.is_empty() { "restart" } else { "deny" };
     let value = record("lifecycle-supervisor-decision-v1", vec![
-        string(LIFECYCLE_SUPERVISOR_DECISION_SCHEMA),
+        string(crate::preserves_rail::LIFECYCLE_SUPERVISOR_DECISION_SCHEMA),
         record("supervisor", vec![string(&input.policy.supervisor_id)]),
         record("child", vec![string(input.child_id)]),
         record("strategy", vec![string(input.policy.strategy.as_str())]),
@@ -544,7 +537,7 @@ pub fn service_lifecycle_assertion(
     }
     validate_refs("evidence", evidence_refs)?;
     RuntimeValue::new(record("lifecycle-service-assertion-v1", vec![
-        string(LIFECYCLE_SERVICE_ASSERTION_SCHEMA),
+        string(crate::preserves_rail::LIFECYCLE_SERVICE_ASSERTION_SCHEMA),
         record("service", vec![string(service_id)]),
         record("kind", vec![string(kind.as_str())]),
         record("target", vec![optional_ref_value(target_ref)]),
