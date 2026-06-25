@@ -20,7 +20,6 @@ use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
 use crate::preserves_rail::value_to_iovalue;
 
 pub const INLINE_PAYLOAD_LIMIT: usize = 4096;
@@ -977,11 +976,11 @@ fn payload_value(payload: &ArtifactPayloadRef) -> Result<IOValue> {
     Ok(record("payload", vec![match payload {
         ArtifactPayloadRef::Inline { value_ref, length } => {
             validate_ref(value_ref, "inline payload value ref")?;
-            record("inline", vec![string(value_ref), u64_value(*length)])
+            record("inline", vec![string(value_ref), crate::preserves_rail::u64_value(*length)])
         }
         ArtifactPayloadRef::ContentRef { manifest_ref, length } => {
             validate_ref(manifest_ref, "content payload manifest ref")?;
-            record("content-ref", vec![string(manifest_ref), u64_value(*length)])
+            record("content-ref", vec![string(manifest_ref), crate::preserves_rail::u64_value(*length)])
         }
     }]))
 }
