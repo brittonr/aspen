@@ -4282,7 +4282,6 @@ fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
     use std::sync::atomic::AtomicU64;
     use std::sync::atomic::Ordering;
 
