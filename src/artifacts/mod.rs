@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::path::Path;
 
 use preserves::IOValue;
@@ -578,7 +577,7 @@ pub fn impact(root: &Path, seeds: &[String]) -> Result<ArtifactImpact> {
 pub fn impact_refs(root: &Path, seeds: &[String]) -> Result<Vec<String>> {
     validate_refs(seeds, "artifact impact seed ref")?;
     let db = ensure_index_tables(root)?;
-    let mut impacted: BTreeSet<String> = seeds.iter().cloned().collect();
+    let mut impacted: std::collections::BTreeSet<String> = seeds.iter().cloned().collect();
     let mut frontier: Vec<String> = seeds.to_vec();
     while let Some(current) = frontier.pop() {
         let dependents = {
@@ -821,8 +820,8 @@ fn missing_dependencies(root: &Path, dependency_refs: &[String]) -> Result<Vec<S
 fn compute_closure_refs(root: &Path, roots: &[String]) -> Result<(Vec<String>, Vec<String>)> {
     validate_refs(roots, "artifact closure root ref")?;
     let db = ensure_index_tables(root)?;
-    let mut closure = BTreeSet::new();
-    let mut missing = BTreeSet::new();
+    let mut closure = std::collections::BTreeSet::new();
+    let mut missing = std::collections::BTreeSet::new();
     ensure_count_at_most(roots.len(), MAX_ARTIFACT_REF_LIST, "artifact closure roots")?;
     let mut stack = roots.to_vec();
     while let Some(current) = stack.pop() {
@@ -1014,7 +1013,7 @@ fn refs_record(label: &'static str, refs: &[String]) -> IOValue {
 }
 
 fn sorted_unique(refs: &[String]) -> Vec<String> {
-    refs.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect()
+    refs.iter().cloned().collect::<std::collections::BTreeSet<_>>().into_iter().collect()
 }
 
 fn registry_text_contains_ref(root: &Path, target_ref: &str) -> Result<bool> {
