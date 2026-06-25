@@ -20,7 +20,6 @@ use crate::evidence::SignedReceipt;
 use crate::evidence::sign_receipt;
 use crate::evidence::verify_signed_receipt;
 use crate::ledger;
-use crate::preserves_rail::EVIDENCE_CHAIN_ANCHOR_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_CHECKPOINT_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_LINK_SCHEMA;
@@ -865,7 +864,7 @@ pub fn chain_anchor_value(
     producer: &ChainProducer,
 ) -> IOValue {
     record("chain-anchor-v1", vec![
-        string(EVIDENCE_CHAIN_ANCHOR_SCHEMA),
+        string(crate::preserves_rail::EVIDENCE_CHAIN_ANCHOR_SCHEMA),
         chain_record(chain),
         record("anchor", vec![string(link_ref)]),
         record("policy", vec![ref_sequence_value(policy_refs)]),
@@ -1374,7 +1373,7 @@ pub fn parse_chain_anchor(value: &IOValue) -> Result<ChainAnchor> {
     let anchor = value
         .collect_simple_record("chain-anchor-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-anchor-v1 ...>"))?;
-    require_schema(&anchor[0], EVIDENCE_CHAIN_ANCHOR_SCHEMA, "chain anchor schema")?;
+    require_schema(&anchor[0], crate::preserves_rail::EVIDENCE_CHAIN_ANCHOR_SCHEMA, "chain anchor schema")?;
     let parsed = ChainAnchor {
         anchor_ref: canonical_hash(value)?,
         chain: parse_chain(&anchor[1])?,
