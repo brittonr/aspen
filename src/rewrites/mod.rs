@@ -11,7 +11,6 @@ use preserves::ValueImpl;
 use crate::artifacts;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::REWRITE_MATCH_SCHEMA;
 use crate::preserves_rail::REWRITE_PLAN_SCHEMA;
 use crate::preserves_rail::REWRITE_QUERY_SCHEMA;
 use crate::preserves_rail::REWRITE_RECEIPT_SCHEMA;
@@ -611,7 +610,7 @@ fn rewrite_match_value(
     validate_ref(payload_ref, "rewrite match payload ref")?;
     validate_non_empty(kind, "rewrite match kind")?;
     Ok(record("rewrite-match-v1", vec![
-        string(REWRITE_MATCH_SCHEMA),
+        string(crate::preserves_rail::REWRITE_MATCH_SCHEMA),
         record("artifact", vec![string(artifact_ref), string(kind), string(payload_ref)]),
         record("paths", vec![sequence(bindings.iter().map(|binding| string(&binding.path)).collect())]),
         record("bindings", vec![sequence(
