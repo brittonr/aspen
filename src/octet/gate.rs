@@ -10,7 +10,6 @@ use serde::Deserialize;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::OCTET_FINGERPRINT_EVIDENCE_SCHEMA;
 use crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_OBJECT_CORPUS_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
@@ -1737,7 +1736,7 @@ fn octet_fingerprint_evidence_value(object_corpus: &GateFile, receipt: &OctetObj
     let mut sorted_paths = source_paths.clone();
     sorted_paths.sort();
     Ok(record("octet-fingerprint-evidence-v1", vec![
-        string(OCTET_FINGERPRINT_EVIDENCE_SCHEMA),
+        string(crate::preserves_rail::OCTET_FINGERPRINT_EVIDENCE_SCHEMA),
         record("object-corpus", vec![string(&object_corpus.artifact_ref)]),
         record("object-set-hash", vec![string(object_set_hash)]),
         record("source-paths", vec![sequence(sorted_paths.iter().map(string).collect())]),
