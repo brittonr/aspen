@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-25 | self | During the transcript schema burn-down, I initially treated the max numeric `probe-91` as latest even though mtime showed newer `probe-2` at 6734. | When asked for the latest probe, list summaries by mtime before choosing a baseline; max numeric is not always latest. |
 | 2026-06-25 | self | During the artifacts `Value` import cleanup, I trusted a truncated grep result and qualified only one use; focused `cargo test artifact --lib` then failed on remaining `Value<IOValue>` signatures. | Before removing a shared type import, search with a high enough limit or use a neutral private alias for every remaining type signature in the same candidate. |
 | 2026-06-25 | self | After `cargo fmt --check`, I wrote a Steel git-status wrapper that called `Ok->value` on an already unwrapped numeric wait status, causing a wrapper failure after printing the real git status. | In Steel process wrappers, unwrap `(wait child)` exactly once; if the binding already holds a number, pass it directly to `number->string`. |
 | 2026-06-24 | self | Splitting `src/cli/core/chunk/ops.rs::run` into many same-file helpers kept its `function_length` findings and added two `excessive_file_length` findings, worsening the no-disabled probe 7000 -> 7002. | Do not use same-file helper expansion for this CLI chunk dispatch; revert and choose an already-large source/test function or a net-positive child-module strategy. |
@@ -237,6 +238,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-25 Octet transcript stanza outcome schema qualification: in `src/transcripts/mod.rs`, removing the single-use `TRANSCRIPT_STANZA_OUTCOME_SCHEMA` import and qualifying the one builder use lowered the no-disabled probe from latest mtime `probe-2` 6734 to `target/octet-burndown/probe-transcript-stanza-outcome-schema-0` 6732 with path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test transcript --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
 
 - 2026-06-25 Octet object-corpus schema qualification: in `src/octet/gate.rs`, removing the single-use `OCTET_OBJECT_CORPUS_ARTIFACT_SCHEMA` import and qualifying the raw artifact builder use lowered the no-disabled probe from 6747 to `target/octet-burndown/probe-octet-object-schema-0` 6745 with path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test octet --lib`, no-disabled probe, and `cargo fmt --check`.
 

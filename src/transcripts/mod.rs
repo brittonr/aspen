@@ -15,7 +15,6 @@ use crate::eval_cache;
 use crate::harness;
 use crate::preserves_rail::TRANSCRIPT_ARTIFACT_SCHEMA;
 use crate::preserves_rail::TRANSCRIPT_RUN_RECEIPT_SCHEMA;
-use crate::preserves_rail::TRANSCRIPT_STANZA_OUTCOME_SCHEMA;
 use crate::preserves_rail::TRANSCRIPT_STANZA_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::parse_text;
@@ -930,7 +929,7 @@ fn stanza_outcome(
     validate_decision(decision)?;
     let output_ref = output.as_ref().map(canonical_hash).transpose()?;
     let value = record("transcript-stanza-outcome-v1", vec![
-        string(TRANSCRIPT_STANZA_OUTCOME_SCHEMA),
+        string(crate::preserves_rail::TRANSCRIPT_STANZA_OUTCOME_SCHEMA),
         record("index", vec![u64_value(stanza.index)]),
         record("kind", vec![string(&stanza.kind)]),
         record("stanza", vec![string(&stanza.stanza_ref)]),
