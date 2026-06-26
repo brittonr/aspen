@@ -12,7 +12,6 @@ use redb::ReadableTable;
 use crate::chunk_store;
 use crate::effects::ADAPTER_KIND_STORAGE;
 use crate::effects::EffectScope;
-use crate::effects::HandlerBindingInput;
 use crate::effects::effect_handle_value;
 use crate::effects::handler_binding_value;
 use crate::effects::validate_handle_for_request;
@@ -1346,7 +1345,7 @@ fn scope_parts(input: &StorageEffectEvidenceInput<'_>) -> Result<ScopeParts> {
 fn binding(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts) -> Result<IOValue> {
     let adapter_ref =
         canonical_hash(&record("typed-storage-redb-adapter", vec![string(input.namespace), string(input.schema_ref)]))?;
-    handler_binding_value(&HandlerBindingInput {
+    handler_binding_value(&crate::effects::HandlerBindingInput {
         profile: "typed-storage-redb".to_string(),
         scope: parts.scope.clone(),
         adapter_kind: ADAPTER_KIND_STORAGE.to_string(),
