@@ -20,7 +20,6 @@ use crate::preserves_rail::PLUGIN_INSTALL_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_MANIFEST_SCHEMA;
 use crate::preserves_rail::PLUGIN_PERMISSION_RECEIPT_SCHEMA;
-use crate::preserves_rail::PLUGIN_REMOVAL_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -663,7 +662,7 @@ pub fn plugin_removal_receipt_value(input: &RemovalReceiptInput<'_>) -> Result<I
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     Ok(record("plugin-removal-receipt-v1", vec![
-        string(PLUGIN_REMOVAL_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::PLUGIN_REMOVAL_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
         record("plugin", vec![string(&manifest.plugin_ref)]),
         record("manifest", vec![string(&manifest.manifest_ref)]),
@@ -686,7 +685,7 @@ pub fn plugin_removal_receipt_value(input: &RemovalReceiptInput<'_>) -> Result<I
 
 pub fn parse_plugin_removal_receipt(value: &IOValue) -> Result<PluginRemovalReceipt> {
     let fields = simple_record(value, "plugin-removal-receipt-v1", 11)?;
-    require_schema(&fields[0], PLUGIN_REMOVAL_RECEIPT_SCHEMA, "plugin removal receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::PLUGIN_REMOVAL_RECEIPT_SCHEMA, "plugin removal receipt")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "complete-cleanup", "plugin removal receipt")?;
     Ok(PluginRemovalReceipt {
