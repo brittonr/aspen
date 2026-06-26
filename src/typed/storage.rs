@@ -31,7 +31,6 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 use crate::schema_identity;
 
@@ -1688,7 +1687,7 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 }
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
-    validate_content_ref(reference).map_err(|error| {
+    crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
         MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
     })
 }
