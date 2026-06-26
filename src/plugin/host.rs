@@ -15,7 +15,6 @@ use crate::bounded::VecSink;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::PLUGIN_INSTALL_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_MANIFEST_SCHEMA;
 use crate::preserves_rail::PLUGIN_PERMISSION_RECEIPT_SCHEMA;
@@ -317,7 +316,7 @@ pub fn install_plugin(registry_root: &Path, manifest_value: &IOValue) -> Result<
     }
     let decision = if has_artifact { "pass" } else { "deny" };
     let value = record("plugin-install-receipt-v1", vec![
-        string(PLUGIN_INSTALL_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::PLUGIN_INSTALL_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
         record("plugin", vec![string(&manifest.plugin_ref)]),
         record("manifest", vec![string(&manifest.manifest_ref)]),
@@ -336,7 +335,7 @@ pub fn install_plugin(registry_root: &Path, manifest_value: &IOValue) -> Result<
 
 pub fn parse_plugin_install_receipt(value: &IOValue) -> Result<PluginInstallReceipt> {
     let fields = simple_record(value, "plugin-install-receipt-v1", 7)?;
-    require_schema(&fields[0], PLUGIN_INSTALL_RECEIPT_SCHEMA, "plugin install receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::PLUGIN_INSTALL_RECEIPT_SCHEMA, "plugin install receipt")?;
     let diagnostics = record_string_sequence(&fields[5], "diagnostics")?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "canonical-install", "plugin install receipt")?;
