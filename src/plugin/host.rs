@@ -4,7 +4,6 @@
 //! not grant runtime authority, activation requires separate permission and
 //! executor evidence, and hostcalls are admitted only through declared refs.
 
-use std::collections::BTreeSet;
 use std::path::Path;
 
 use preserves::IOValue;
@@ -1268,7 +1267,7 @@ fn validate_lifecycle_callbacks(values: &[String]) -> Result<()> {
     if values.is_empty() {
         return Err(MoltenError::invalid_harness("plugin lifecycle callbacks must not be empty"));
     }
-    let mut seen = BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for value in values {
         validate_lifecycle_operation(value)?;
         if !seen.insert(value.clone()) {
