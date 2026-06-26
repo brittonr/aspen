@@ -3,7 +3,6 @@ use std::path::Path;
 use preserves::IOValue;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
-use redb::TableDefinition;
 
 use crate::chunk_store;
 use crate::error::MoltenError;
@@ -16,6 +15,7 @@ use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::value_to_iovalue;
 
+type TableDef<'a, K, V> = redb::TableDefinition<'a, K, V>;
 type RailValue = preserves::Value<IOValue>;
 
 pub const INLINE_PAYLOAD_LIMIT: usize = 4096;
@@ -36,17 +36,17 @@ const _: () = assert!(MAX_ARTIFACT_DIAGNOSTICS <= 10_000);
 const _: () = assert!(MAX_ARTIFACT_CHECKS <= 1_000);
 
 const INDEX_FILE: &str = "artifact-registry.redb";
-const INDEX_ARTIFACTS: TableDefinition<&str, &[u8]> = TableDefinition::new("artifact_registry_artifacts_v1");
-const INDEX_PAYLOADS: TableDefinition<&str, &[u8]> = TableDefinition::new("artifact_registry_payloads_v1");
-const INDEX_NAMES: TableDefinition<&str, &[u8]> = TableDefinition::new("artifact_registry_names_v1");
-const INDEX_DEPS: TableDefinition<&str, &[u8]> = TableDefinition::new("artifact_registry_dependencies_v1");
-const INDEX_REVERSE: TableDefinition<&str, &[u8]> = TableDefinition::new("artifact_registry_reverse_dependencies_v1");
-const INDEX_KIND: TableDefinition<&str, &str> = TableDefinition::new("artifact_registry_kind_v1");
-const INDEX_SCHEMA: TableDefinition<&str, &str> = TableDefinition::new("artifact_registry_schema_v1");
-const INDEX_EFFECT: TableDefinition<&str, &str> = TableDefinition::new("artifact_registry_effect_v1");
-const INDEX_POLICY: TableDefinition<&str, &str> = TableDefinition::new("artifact_registry_policy_v1");
-const INDEX_EVIDENCE: TableDefinition<&str, &str> = TableDefinition::new("artifact_registry_evidence_v1");
-const INDEX_RECEIPTS: TableDefinition<&str, &[u8]> = TableDefinition::new("artifact_registry_receipts_v1");
+const INDEX_ARTIFACTS: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_artifacts_v1");
+const INDEX_PAYLOADS: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_payloads_v1");
+const INDEX_NAMES: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_names_v1");
+const INDEX_DEPS: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_dependencies_v1");
+const INDEX_REVERSE: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_reverse_dependencies_v1");
+const INDEX_KIND: TableDef<&str, &str> = TableDef::new("artifact_registry_kind_v1");
+const INDEX_SCHEMA: TableDef<&str, &str> = TableDef::new("artifact_registry_schema_v1");
+const INDEX_EFFECT: TableDef<&str, &str> = TableDef::new("artifact_registry_effect_v1");
+const INDEX_POLICY: TableDef<&str, &str> = TableDef::new("artifact_registry_policy_v1");
+const INDEX_EVIDENCE: TableDef<&str, &str> = TableDef::new("artifact_registry_evidence_v1");
+const INDEX_RECEIPTS: TableDef<&str, &[u8]> = TableDef::new("artifact_registry_receipts_v1");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArtifactPayloadRef {
@@ -790,7 +790,7 @@ fn store_derived_indexes_in_tx(write_txn: &redb::WriteTransaction, artifact: &Ar
 
 fn insert_str_index(
     write_txn: &redb::WriteTransaction,
-    table_definition: TableDefinition<&str, &str>,
+    table_definition: TableDef<&str, &str>,
     index_name: &str,
     indexed_ref: &str,
     artifact_ref: &str,
@@ -1069,7 +1069,7 @@ fn clear_derived_index_tables_in_tx(write_txn: &redb::WriteTransaction) -> Resul
     clear_str_table(write_txn, INDEX_EVIDENCE)
 }
 
-fn clear_bytes_table(write_txn: &redb::WriteTransaction, table_definition: TableDefinition<&str, &[u8]>) -> Result<()> {
+fn clear_bytes_table(write_txn: &redb::WriteTransaction, table_definition: TableDef<&str, &[u8]>) -> Result<()> {
     let mut table = write_txn.open_table(table_definition).map_err(index_error)?;
     let keys = bytes_table_keys(&table)?;
     for key in keys {
@@ -1078,7 +1078,7 @@ fn clear_bytes_table(write_txn: &redb::WriteTransaction, table_definition: Table
     Ok(())
 }
 
-fn clear_str_table(write_txn: &redb::WriteTransaction, table_definition: TableDefinition<&str, &str>) -> Result<()> {
+fn clear_str_table(write_txn: &redb::WriteTransaction, table_definition: TableDef<&str, &str>) -> Result<()> {
     let mut table = write_txn.open_table(table_definition).map_err(index_error)?;
     let keys = str_table_keys(&table)?;
     for key in keys {
