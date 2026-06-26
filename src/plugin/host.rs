@@ -15,7 +15,6 @@ use crate::bounded::VecSink;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_INSTALL_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_MANIFEST_SCHEMA;
@@ -549,7 +548,7 @@ pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     Ok(record("plugin-hostcall-receipt-v1", vec![
-        string(PLUGIN_HOSTCALL_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
         record("plugin", vec![string(&manifest.plugin_ref)]),
         record("operation", vec![string(input.operation)]),
@@ -572,7 +571,7 @@ pub fn plugin_hostcall_receipt_value(input: &HostcallReceiptInput<'_>) -> Result
 
 pub fn parse_plugin_hostcall_receipt(value: &IOValue) -> Result<PluginHostcallReceipt> {
     let fields = simple_record(value, "plugin-hostcall-receipt-v1", 11)?;
-    require_schema(&fields[0], PLUGIN_HOSTCALL_RECEIPT_SCHEMA, "plugin hostcall receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_SCHEMA, "plugin hostcall receipt")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "declared-hostcall", "plugin hostcall receipt")?;
     require_check(&checks, "effect-handle-boundary", "plugin hostcall receipt")?;
