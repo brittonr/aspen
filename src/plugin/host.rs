@@ -15,8 +15,6 @@ use crate::bounded::VecSink;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA;
-use crate::preserves_rail::PLUGIN_PERMISSION_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -382,7 +380,7 @@ pub fn plugin_permission_receipt_value(input: &PermissionReviewInput<'_>) -> Res
     let has_current_supply_chain = contains_all(input.supply_chain_refs, &manifest.supply_chain_refs);
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     Ok(record("plugin-permission-receipt-v1", vec![
-        string(PLUGIN_PERMISSION_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::PLUGIN_PERMISSION_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
         record("plugin", vec![string(&manifest.plugin_ref)]),
         record("manifest", vec![string(&manifest.manifest_ref)]),
@@ -406,7 +404,7 @@ pub fn plugin_permission_receipt_value(input: &PermissionReviewInput<'_>) -> Res
 
 pub fn parse_plugin_permission_receipt(value: &IOValue) -> Result<PluginPermissionReceipt> {
     let fields = simple_record(value, "plugin-permission-receipt-v1", 11)?;
-    require_schema(&fields[0], PLUGIN_PERMISSION_RECEIPT_SCHEMA, "plugin permission receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::PLUGIN_PERMISSION_RECEIPT_SCHEMA, "plugin permission receipt")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "install-not-authority", "plugin permission receipt")?;
     require_check(&checks, "effect-handle-boundary", "plugin permission receipt")?;
@@ -464,7 +462,7 @@ pub fn plugin_lifecycle_receipt_value(input: &LifecycleReceiptInput<'_>) -> Resu
     let has_effects = !input.effect_receipt_refs.is_empty();
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     Ok(record("plugin-lifecycle-receipt-v1", vec![
-        string(PLUGIN_LIFECYCLE_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(decision)]),
         record("plugin", vec![string(&manifest.plugin_ref)]),
@@ -488,7 +486,7 @@ pub fn plugin_lifecycle_receipt_value(input: &LifecycleReceiptInput<'_>) -> Resu
 
 pub fn parse_plugin_lifecycle_receipt(value: &IOValue) -> Result<PluginLifecycleReceipt> {
     let fields = simple_record(value, "plugin-lifecycle-receipt-v1", 11)?;
-    require_schema(&fields[0], PLUGIN_LIFECYCLE_RECEIPT_SCHEMA, "plugin lifecycle receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA, "plugin lifecycle receipt")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "canonical-lifecycle", "plugin lifecycle receipt")?;
     require_check(&checks, "executor-boundary", "plugin lifecycle receipt")?;
