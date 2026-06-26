@@ -7,7 +7,6 @@
 use std::path::Path;
 
 use preserves::IOValue;
-use preserves::Record;
 use preserves::Value;
 
 use crate::artifacts;
@@ -1360,7 +1359,7 @@ fn simple_record<'a>(
     value: &'a IOValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, preserves::Record<Value<IOValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
