@@ -240,6 +240,8 @@
 
 ## Patterns That Work
 
+- 2026-06-26 Octet typed-storage PathBuf qualification: in file-length-debt `src/typed/storage.rs`, removing the `std::path::PathBuf` import and qualifying the three return types lowered latest mtime `probe-3` 6673 to `target/octet-burndown/probe-typed-storage-pathbuf-0` 6671. Validation passed `cargo fmt`, focused `cargo test typed_storage --lib`, no-disabled probe, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `git diff --check`.
+
 - 2026-06-26 Octet typed-storage ref schema qualification: in file-length-debt `src/typed/storage.rs`, removing the `TYPED_STORAGE_REF_SCHEMA` import and qualifying its parser/builder uses lowered latest mtime `probe-1` 6677 to `target/octet-burndown/probe-typed-storage-ref-schema-0` 6675. Validation passed `cargo fmt`, focused `cargo test typed_storage --lib`, no-disabled probe, and `cargo fmt --check`.
 
 - 2026-06-26 Octet typed-storage schema-artifact qualification: in file-length-debt `src/typed/storage.rs`, removing the single-use `TYPED_STORAGE_SCHEMA_ARTIFACT_SCHEMA` import and qualifying the lone `inferred_schema_value` use lowered latest mtime `probe-0` 6679 to `target/octet-burndown/probe-typed-storage-schema-artifact-0` 6677. Validation passed `cargo fmt`, focused `cargo test typed_storage --lib`, no-disabled probe, and `cargo fmt --check`.

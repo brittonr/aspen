@@ -1,6 +1,5 @@
 use std::fs;
 use std::path::Path;
-use std::path::PathBuf;
 
 use preserves::CompoundClass;
 use preserves::IOValue;
@@ -1547,7 +1546,7 @@ fn storage_key_ref(namespace: &str, key: &str) -> Result<String> {
     canonical_hash(&record("typed-storage-key-v1", vec![string(namespace), string(key)]))
 }
 
-fn chunk_root(root: &Path) -> PathBuf {
+fn chunk_root(root: &Path) -> std::path::PathBuf {
     root.join("chunks")
 }
 
@@ -1585,7 +1584,7 @@ fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IOVal
     Ok(())
 }
 
-fn index_path(root: &Path) -> PathBuf {
+fn index_path(root: &Path) -> std::path::PathBuf {
     root.join(INDEX_FILE)
 }
 
@@ -2339,7 +2338,7 @@ mod tests {
         canonical_hash(&record("typed-storage-test-ref", vec![string(label)])).expect("test ref")
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
+    fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
