@@ -28,7 +28,6 @@ use crate::error::Result;
 use crate::preserves_rail::TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA;
 use crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA;
 use crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA;
-use crate::preserves_rail::TYPED_STORAGE_SCHEMA_ARTIFACT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::content_ref_from_bytes;
@@ -1066,7 +1065,7 @@ pub fn inferred_schema_value(value: &IOValue) -> IOValue {
         ValueClass::Compound(CompoundClass::Dictionary) => "dictionary",
     };
     record("storage-schema-artifact-v1", vec![
-        string(TYPED_STORAGE_SCHEMA_ARTIFACT_SCHEMA),
+        string(crate::preserves_rail::TYPED_STORAGE_SCHEMA_ARTIFACT_SCHEMA),
         record("inference", vec![string("preserves-value-class")]),
         record("class", vec![string(class)]),
         record("checks", vec![sequence(vec![
