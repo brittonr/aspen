@@ -1449,9 +1449,6 @@ fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
     use crate::catalog;
     use crate::catalog::CatalogListInput;
@@ -1681,8 +1678,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_plugin_lifecycle_refs_are_deterministic_and_authority_gated(tc: TestCase) {
-        let callback_count = tc.draw(generators::integers::<u64>().min_value(1).max_value(4));
+    fn hegel_plugin_lifecycle_refs_are_deterministic_and_authority_gated(tc: hegel::TestCase) {
+        let callback_count = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(4));
         let callback_count = usize::try_from(callback_count).expect("bounded callback count");
         let callbacks = ["init", "start", "health", "stop"]
             .iter()
