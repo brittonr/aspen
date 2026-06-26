@@ -240,6 +240,8 @@
 
 ## Patterns That Work
 
+- 2026-06-26 Octet typed-storage neutral private ref-value rename: in file-length-debt `src/typed/storage.rs`, renaming private `TypedRefValueInput`/`typed_ref_value` to `RefValueInput`/`ref_value` removed four `path_segment_repetition` findings; latest mtime `probe-13` 6653 -> `target/octet-burndown/probe-ref-value-0` 6649. Validation passed `cargo fmt`, focused `cargo test typed_storage --lib`, and the no-disabled probe.
+
 - 2026-06-26 Octet typed-storage Record qualification: in file-length-debt `src/typed/storage.rs`, removing the single-use `preserves::Record` import and qualifying the one `simple_record` return type lowered latest mtime `probe-10` 6659 to `target/octet-burndown/probe-typed-storage-record-0` 6657. Validation passed `cargo fmt`, focused `cargo test typed_storage --lib`, no-disabled probe, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `git diff --check`.
 
 - 2026-06-26 Octet typed-storage chunk-size qualification: in file-length-debt `src/typed/storage.rs`, removing the `DEFAULT_FIXED_V1_CHUNK_SIZE` import and qualifying the two `chunk_store::put_bytes` calls lowered latest mtime `probe-5` 6669 to `target/octet-burndown/probe-typed-storage-chunk-size-0` 6667. Validation passed `cargo fmt`, focused `cargo test typed_storage --lib`, no-disabled probe, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `git diff --check`.

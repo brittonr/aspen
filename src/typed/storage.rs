@@ -377,7 +377,7 @@ pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStora
 }
 
 fn entry_value(input: EntryInput<'_>) -> IOValue {
-    typed_ref_value(TypedRefValueInput {
+    ref_value(RefValueInput {
         namespace: &input.input.namespace,
         key: &input.input.key,
         schema_ref: input.schema_ref,
@@ -961,7 +961,7 @@ fn entry_refs(typed_ref: &TypedStorageRef, recipe: &StorageMigrationRecipe) -> E
 }
 
 fn next_value(input: NextInput<'_>) -> IOValue {
-    typed_ref_value(TypedRefValueInput {
+    ref_value(RefValueInput {
         namespace: input.namespace,
         key: input.key,
         schema_ref: &input.recipe.target_schema_ref,
@@ -1226,7 +1226,7 @@ pub fn parse_receipt_value(value: &IOValue, expected_receipt_ref: Option<&str>) 
     })
 }
 
-struct TypedRefValueInput<'a> {
+struct RefValueInput<'a> {
     namespace: &'a str,
     key: &'a str,
     schema_ref: &'a str,
@@ -1241,7 +1241,7 @@ struct TypedRefValueInput<'a> {
     effect_handle_ref: &'a str,
 }
 
-fn typed_ref_value(input: TypedRefValueInput<'_>) -> IOValue {
+fn ref_value(input: RefValueInput<'_>) -> IOValue {
     record("typed-storage-ref-v1", vec![
         string(crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA),
         record("namespace", vec![string(input.namespace)]),
