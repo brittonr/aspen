@@ -8,7 +8,6 @@ use preserves::ValueImpl;
 use crate::artifacts;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::SCHEMA_ALIAS_SCHEMA;
 use crate::preserves_rail::SCHEMA_COMPATIBILITY_RECEIPT_SCHEMA;
 use crate::preserves_rail::SCHEMA_COMPATIBILITY_SCHEMA;
 use crate::preserves_rail::canonical_hash;
@@ -226,7 +225,7 @@ pub fn schema_alias_value(input: &SchemaAliasInput) -> Result<IOValue> {
     validate_refs(&input.policy_refs, "schema alias policy ref")?;
     validate_refs(&input.evidence_refs, "schema alias evidence ref")?;
     Ok(record("schema-alias-v1", vec![
-        string(SCHEMA_ALIAS_SCHEMA),
+        string(crate::preserves_rail::SCHEMA_ALIAS_SCHEMA),
         record("from", vec![string(&input.from_schema_ref)]),
         record("to", vec![string(&input.to_schema_ref)]),
         record("scope", vec![string(&input.scope)]),
@@ -240,7 +239,7 @@ pub fn parse_schema_alias(value: &IOValue) -> Result<SchemaAlias> {
     let fields = value
         .collect_simple_record("schema-alias-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-alias-v1 ...>"))?;
-    require_schema(&fields[0], SCHEMA_ALIAS_SCHEMA, "schema alias")?;
+    require_schema(&fields[0], crate::preserves_rail::SCHEMA_ALIAS_SCHEMA, "schema alias")?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "alias-is-not-name", "schema alias")?;
     let scope = record_string(&fields[3], "scope")?;
