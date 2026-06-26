@@ -15,7 +15,6 @@ use crate::effects::EffectHandleInput;
 use crate::effects::EffectHandleRequest;
 use crate::effects::EffectScope;
 use crate::effects::HandlerBindingInput;
-use crate::effects::TRANSFER_LOCAL_ONLY;
 use crate::effects::effect_handle_value;
 use crate::effects::handler_binding_value;
 use crate::effects::validate_handle_for_request;
@@ -1376,7 +1375,7 @@ fn handle(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts, handler_bi
         not_before: Some(0),
         expires_at: None,
         revocation_refs: Vec::new(),
-        transfer: TRANSFER_LOCAL_ONLY.to_string(),
+        transfer: crate::effects::TRANSFER_LOCAL_ONLY.to_string(),
         parent_handle_ref: None,
         evidence_refs: parts.evidence.clone(),
     })
