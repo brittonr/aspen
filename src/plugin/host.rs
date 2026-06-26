@@ -4,8 +4,6 @@
 //! not grant runtime authority, activation requires separate permission and
 //! executor evidence, and hostcalls are admitted only through declared refs.
 
-use std::path::Path;
-
 use preserves::IOValue;
 use preserves::Value;
 
@@ -299,7 +297,7 @@ pub fn parse_plugin_manifest(value: &IOValue) -> Result<PluginManifest> {
     })
 }
 
-pub fn install_plugin(registry_root: &Path, manifest_value: &IOValue) -> Result<PluginInstallReceipt> {
+pub fn install_plugin(registry_root: &std::path::Path, manifest_value: &IOValue) -> Result<PluginInstallReceipt> {
     let manifest = parse_plugin_manifest(manifest_value)?;
     let mut diagnostics = Vec::new();
     let has_artifact = artifacts::read_artifact(registry_root, &manifest.artifact_ref).is_ok();
@@ -785,7 +783,7 @@ pub fn plugin_host_abi_result_value(input: &HostAbiResultInput<'_>) -> Result<IO
     ]))
 }
 
-pub fn minimal_plugin_fixture(root: &Path) -> Result<PluginFixtureRun> {
+pub fn minimal_plugin_fixture(root: &std::path::Path) -> Result<PluginFixtureRun> {
     let registry = root.join("registry");
     let ledger_root = root.join("ledger");
     let seed = seed_refs()?;
@@ -888,7 +886,7 @@ fn seed_refs() -> Result<SeedRefs> {
     })
 }
 
-fn executor_manifest(registry: &Path, seed: &SeedRefs, payload: &str) -> Result<IOValue> {
+fn executor_manifest(registry: &std::path::Path, seed: &SeedRefs, payload: &str) -> Result<IOValue> {
     let installed = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
         kind: "plugin-executor".to_string(),
         payload: record("reviewed-plugin-executor", vec![string(payload)]),

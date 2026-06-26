@@ -240,6 +240,8 @@
 
 ## Patterns That Work
 
+- 2026-06-26 Octet plugin path qualification: in file-length-debt `src/plugin/host.rs`, removing the `std::path::Path` import and qualifying the three signatures lowered the no-disabled probe from latest mtime `probe-11` 6699 to `target/octet-burndown/probe-plugin-path-0` 6697. Validation passed `cargo fmt`, focused `cargo test plugin --lib`, no-disabled probe, and `cargo fmt --check`.
+
 - 2026-06-26 Octet dogfood test atomic qualification: in file-length-debt `src/operator/dogfood.rs`, removing test-local `AtomicU64`/`Ordering` imports and qualifying the temp-dir counter uses lowered the no-disabled probe from latest mtime `probe-10` 6701 to `target/octet-burndown/probe-dogfood-atomic-qualify-0` 6699. Validation passed `cargo fmt`, focused `cargo test dogfood --lib`, no-disabled probe, and `cargo fmt --check`.
 
 - 2026-06-25 Octet plugin manifest schema qualification: in file-length-debt `src/plugin/host.rs`, removing the `PLUGIN_MANIFEST_SCHEMA` import and qualifying its two builder/parser uses lowered latest mtime `probe-5` 6712 to `target/octet-burndown/probe-plugin-manifest-schema-0` 6710 with path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test plugin --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
