@@ -241,6 +241,8 @@
 
 ## Patterns That Work
 
+- 2026-06-26 Octet typed-storage value-class qualification: in file-length-debt `src/typed/storage.rs`, removing the `preserves::ValueClass`/`CompoundClass` imports and qualifying the `inferred_schema_value` match lowered the latest mtime probe from `probe-17` 6643 to `target/octet-burndown/probe-typed-storage-value-class-0` 6639. Validation passed `cargo fmt`, focused `cargo test hegel_typed_ref_hashes_schema_and_revision_are_stable --lib`, and the no-disabled probe.
+
 - 2026-06-26 Octet status artifact schema qualification: in file-length-debt `src/octet/gate.rs`, removing the single-use `OCTET_STATUS_ARTIFACT_SCHEMA` import and qualifying the one raw-artifact builder use lowered the latest mtime probe from `probe-16` 6645 to `target/octet-burndown/probe-octet-status-schema-0` 6643. Validation passed `cargo fmt`, focused `cargo test octet --lib`, and the no-disabled probe.
 
 - 2026-06-26 Octet typed-storage neutral private ref-value rename: in file-length-debt `src/typed/storage.rs`, renaming private `TypedRefValueInput`/`typed_ref_value` to `RefValueInput`/`ref_value` removed four `path_segment_repetition` findings; latest mtime `probe-13` 6653 -> `target/octet-burndown/probe-ref-value-0` 6649. Validation passed `cargo fmt`, focused `cargo test typed_storage --lib`, and the no-disabled probe.

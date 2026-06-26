@@ -1,10 +1,8 @@
 use std::fs;
 use std::path::Path;
 
-use preserves::CompoundClass;
 use preserves::IOValue;
 use preserves::Value;
-use preserves::ValueClass;
 use redb::Database;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
@@ -1049,12 +1047,12 @@ pub fn inferred_schema_ref(value: &IOValue) -> Result<String> {
 
 pub fn inferred_schema_value(value: &IOValue) -> IOValue {
     let class = match value.value_class() {
-        ValueClass::Atomic(_) => "atomic",
-        ValueClass::Embedded => "embedded",
-        ValueClass::Compound(CompoundClass::Record) => "record",
-        ValueClass::Compound(CompoundClass::Sequence) => "sequence",
-        ValueClass::Compound(CompoundClass::Set) => "set",
-        ValueClass::Compound(CompoundClass::Dictionary) => "dictionary",
+        preserves::ValueClass::Atomic(_) => "atomic",
+        preserves::ValueClass::Embedded => "embedded",
+        preserves::ValueClass::Compound(preserves::CompoundClass::Record) => "record",
+        preserves::ValueClass::Compound(preserves::CompoundClass::Sequence) => "sequence",
+        preserves::ValueClass::Compound(preserves::CompoundClass::Set) => "set",
+        preserves::ValueClass::Compound(preserves::CompoundClass::Dictionary) => "dictionary",
     };
     record("storage-schema-artifact-v1", vec![
         string(crate::preserves_rail::TYPED_STORAGE_SCHEMA_ARTIFACT_SCHEMA),
