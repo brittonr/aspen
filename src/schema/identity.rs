@@ -8,8 +8,6 @@ use preserves::ValueImpl;
 use crate::artifacts;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::SCHEMA_COMPATIBILITY_RECEIPT_SCHEMA;
-use crate::preserves_rail::SCHEMA_COMPATIBILITY_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -263,7 +261,7 @@ pub fn compatibility_decision_value(input: &SchemaCompatibilityInput) -> Result<
     }
     let decision = compatibility_decision(input)?;
     Ok(record("schema-compatibility-v1", vec![
-        string(SCHEMA_COMPATIBILITY_SCHEMA),
+        string(crate::preserves_rail::SCHEMA_COMPATIBILITY_SCHEMA),
         record("decision", vec![string(&decision)]),
         compatibility_identity_record("expected", &input.expected),
         compatibility_identity_record("actual", &input.actual),
@@ -286,7 +284,7 @@ pub fn parse_schema_compatibility(value: &IOValue) -> Result<SchemaCompatibility
     let fields = value
         .collect_simple_record("schema-compatibility-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-compatibility-v1 ...>"))?;
-    require_schema(&fields[0], SCHEMA_COMPATIBILITY_SCHEMA, "schema compatibility")?;
+    require_schema(&fields[0], crate::preserves_rail::SCHEMA_COMPATIBILITY_SCHEMA, "schema compatibility")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "unique-not-structural-by-default", "schema compatibility")?;
     let expected = parse_compatibility_identity(&fields[2], "expected")?;
@@ -372,7 +370,7 @@ pub fn compatibility_receipt_value(operation: &str, compatibility_value: &IOValu
         "deny"
     };
     Ok(record("schema-compatibility-receipt-v1", vec![
-        string(SCHEMA_COMPATIBILITY_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::SCHEMA_COMPATIBILITY_RECEIPT_SCHEMA),
         record("operation", vec![string(operation)]),
         record("decision", vec![string(decision)]),
         record("compatibility", vec![string(&compatibility.compatibility_ref)]),
@@ -386,7 +384,11 @@ pub fn parse_compatibility_receipt(value: &IOValue) -> Result<SchemaCompatibilit
     let fields = value
         .collect_simple_record("schema-compatibility-receipt-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-compatibility-receipt-v1 ...>"))?;
-    require_schema(&fields[0], SCHEMA_COMPATIBILITY_RECEIPT_SCHEMA, "schema compatibility receipt")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::SCHEMA_COMPATIBILITY_RECEIPT_SCHEMA,
+        "schema compatibility receipt",
+    )?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "schema-compatibility-recorded", "schema compatibility receipt")?;
     Ok(SchemaCompatibilityReceipt {
