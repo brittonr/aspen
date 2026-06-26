@@ -12,7 +12,6 @@ use redb::ReadableTable;
 use redb::TableDefinition;
 
 use crate::chunk_store;
-use crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 use crate::effects::ADAPTER_KIND_STORAGE;
 use crate::effects::EffectHandleInput;
 use crate::effects::EffectHandleRequest;
@@ -458,8 +457,12 @@ fn payload_parts(root: &Path, value_bytes: &[u8]) -> Result<PayloadParts> {
             details: vec![record("payload", vec![string("inline"), u64_value(value_len)])],
         });
     }
-    let put =
-        chunk_store::put_bytes(&chunk_root(root), "typed-storage-value", value_bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
+    let put = chunk_store::put_bytes(
+        &chunk_root(root),
+        "typed-storage-value",
+        value_bytes,
+        chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
+    )?;
     Ok(PayloadParts {
         value: record("content-ref", vec![string(&put.manifest_ref), u64_value(value_len)]),
         details: vec![
@@ -1389,8 +1392,12 @@ fn store_payload(root: &Path, value_bytes: &[u8]) -> Result<(IOValue, Vec<IOValu
             u64_value(value_bytes.len() as u64),
         ])]))
     } else {
-        let put =
-            chunk_store::put_bytes(&chunk_root(root), "typed-storage-value", value_bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
+        let put = chunk_store::put_bytes(
+            &chunk_root(root),
+            "typed-storage-value",
+            value_bytes,
+            chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
+        )?;
         Ok((record("content-ref", vec![string(&put.manifest_ref), u64_value(value_bytes.len() as u64)]), vec![
             record("payload", vec![string("content-ref"), string(&put.manifest_ref)]),
             record("chunk-store-receipt", vec![string(canonical_hash(&put.receipt_value)?)]),
