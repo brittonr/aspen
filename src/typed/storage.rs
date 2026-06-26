@@ -22,7 +22,6 @@ use crate::effects::handler_binding_value;
 use crate::effects::validate_handle_for_request;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::parse_canonical_bytes;
@@ -1196,7 +1195,7 @@ pub fn parse_typed_ref_value(value: &IOValue) -> Result<TypedStorageRef> {
 
 pub fn parse_receipt_value(value: &IOValue, expected_receipt_ref: Option<&str>) -> Result<TypedStorageReceipt> {
     let fields = simple_record(value, "typed-storage-receipt-v1", 9)?;
-    require_schema(&fields[0], TYPED_STORAGE_RECEIPT_SCHEMA, "typed storage receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA, "typed storage receipt")?;
     let operation = record_string(&fields[1], "operation")?;
     let decision = record_string(&fields[2], "decision")?;
     if decision != "pass" && decision != "deny" {
@@ -1470,7 +1469,7 @@ fn next_revision(root: &Path, storage_key: &str) -> Result<u64> {
 
 fn receipt_value(input: ReceiptValueInput<'_>) -> IOValue {
     record("typed-storage-receipt-v1", vec![
-        string(TYPED_STORAGE_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
         record("storage-ref", vec![optional_ref_value(input.storage_ref)]),
