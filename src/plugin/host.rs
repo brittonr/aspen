@@ -15,7 +15,6 @@ use crate::bounded::VecSink;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::PLUGIN_HEALTH_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_INSTALL_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA;
@@ -610,7 +609,7 @@ pub fn plugin_health_receipt_value(input: &HealthReceiptInput<'_>) -> Result<IOV
         "deny"
     };
     Ok(record("plugin-health-receipt-v1", vec![
-        string(PLUGIN_HEALTH_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::PLUGIN_HEALTH_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
         record("plugin", vec![string(&manifest.plugin_ref)]),
         record("manifest", vec![string(&manifest.manifest_ref)]),
@@ -629,7 +628,7 @@ pub fn plugin_health_receipt_value(input: &HealthReceiptInput<'_>) -> Result<IOV
 
 pub fn parse_plugin_health_receipt(value: &IOValue) -> Result<PluginHealthReceipt> {
     let fields = simple_record(value, "plugin-health-receipt-v1", 9)?;
-    require_schema(&fields[0], PLUGIN_HEALTH_RECEIPT_SCHEMA, "plugin health receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::PLUGIN_HEALTH_RECEIPT_SCHEMA, "plugin health receipt")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "canonical-health", "plugin health receipt")?;
     require_check(&checks, "failed-health-isolated", "plugin health receipt")?;
