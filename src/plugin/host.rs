@@ -16,7 +16,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
 use crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA;
-use crate::preserves_rail::PLUGIN_MANIFEST_SCHEMA;
 use crate::preserves_rail::PLUGIN_PERMISSION_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -235,7 +234,7 @@ pub fn plugin_manifest_value(input: &PluginManifestInput<'_>) -> Result<IOValue>
     require_non_empty_refs(input.resource_refs, "plugin resource refs")?;
     require_non_empty_refs(input.supply_chain_refs, "plugin supply-chain refs")?;
     Ok(record("plugin-manifest-v1", vec![
-        string(PLUGIN_MANIFEST_SCHEMA),
+        string(crate::preserves_rail::PLUGIN_MANIFEST_SCHEMA),
         record("plugin-id", vec![string(input.plugin_id)]),
         record("artifact", vec![string(input.artifact_ref)]),
         record("abi", vec![string(input.abi)]),
@@ -262,7 +261,7 @@ pub fn plugin_manifest_value(input: &PluginManifestInput<'_>) -> Result<IOValue>
 
 pub fn parse_plugin_manifest(value: &IOValue) -> Result<PluginManifest> {
     let fields = simple_record(value, "plugin-manifest-v1", 12)?;
-    require_schema(&fields[0], PLUGIN_MANIFEST_SCHEMA, "plugin manifest")?;
+    require_schema(&fields[0], crate::preserves_rail::PLUGIN_MANIFEST_SCHEMA, "plugin manifest")?;
     let plugin_id = record_string(&fields[1], "plugin-id")?;
     let artifact_ref = record_ref(&fields[2], "artifact")?;
     let abi = record_string(&fields[3], "abi")?;

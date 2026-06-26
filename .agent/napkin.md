@@ -239,6 +239,8 @@
 
 ## Patterns That Work
 
+- 2026-06-25 Octet plugin manifest schema qualification: in file-length-debt `src/plugin/host.rs`, removing the `PLUGIN_MANIFEST_SCHEMA` import and qualifying its two builder/parser uses lowered latest mtime `probe-5` 6712 to `target/octet-burndown/probe-plugin-manifest-schema-0` 6710 with path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test plugin --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
+
 - 2026-06-25 Octet plugin host ABI schema qualification: in file-length-debt `src/plugin/host.rs`, removing the single-use `PLUGIN_HOST_ABI_SCHEMA` import and qualifying its one builder use lowered the no-disabled probe from latest mtime `probe-4` 6730 to `target/octet-burndown/probe-plugin-host-abi-schema-0` 6728 with path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test plugin --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
 
 - 2026-06-25 Octet plugin host ABI result schema qualification: in file-length-debt `src/plugin/host.rs`, removing the single-use `PLUGIN_HOST_ABI_RESULT_SCHEMA` import and qualifying its one builder use lowered latest mtime `probe-5` 6728 to `target/octet-burndown/probe-plugin-host-abi-result-schema-0` 6726. Validation passed `cargo fmt`, focused `cargo test plugin --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
