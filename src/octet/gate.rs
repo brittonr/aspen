@@ -13,7 +13,6 @@ use crate::ledger;
 use crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
 use crate::preserves_rail::OCTET_SOURCE_GATE_VALIDATION_SCHEMA;
-use crate::preserves_rail::OCTET_STATUS_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_SUMMARY_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA;
 use crate::preserves_rail::bool_value;
@@ -788,7 +787,7 @@ fn raw_values(files: &InputFiles) -> Vec<IOValue> {
     if let Some(status_file) = files.status_file.as_ref() {
         values.push(octet_raw_artifact_value(
             "octet-status-artifact-v1",
-            OCTET_STATUS_ARTIFACT_SCHEMA,
+            crate::preserves_rail::OCTET_STATUS_ARTIFACT_SCHEMA,
             STATUS_NAME,
             status_file,
         ));

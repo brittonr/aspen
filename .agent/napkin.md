@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-26 | self | During an Octet burn-down, I read stale `latest-summaries.txt`/`probe-33` before listing probe summaries by mtime; the true latest pre-change baseline was `probe-16` at 6645. | Always list `target/octet-burndown/*/summary.txt` by mtime before selecting a baseline; do not trust `latest-summaries.txt` or max numeric/stale summaries. |
 | 2026-06-26 | self | Removing the single-use `VecSink` import in `src/plugin/host.rs` and qualifying the trait bound kept the no-disabled probe flat at 6701. | Do not keep tiny trait-import qualification changes unless the probe drops; revert flat candidates and prefer imports whose use-site qualification has already proven net-positive. |
 | 2026-06-25 | self | During the transcript schema burn-down, I initially treated the max numeric `probe-91` as latest even though mtime showed newer `probe-2` at 6734. | When asked for the latest probe, list summaries by mtime before choosing a baseline; max numeric is not always latest. |
 | 2026-06-25 | self | During the artifacts `Value` import cleanup, I trusted a truncated grep result and qualified only one use; focused `cargo test artifact --lib` then failed on remaining `Value<IOValue>` signatures. | Before removing a shared type import, search with a high enough limit or use a neutral private alias for every remaining type signature in the same candidate. |
@@ -239,6 +240,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-26 Octet status artifact schema qualification: in file-length-debt `src/octet/gate.rs`, removing the single-use `OCTET_STATUS_ARTIFACT_SCHEMA` import and qualifying the one raw-artifact builder use lowered the latest mtime probe from `probe-16` 6645 to `target/octet-burndown/probe-octet-status-schema-0` 6643. Validation passed `cargo fmt`, focused `cargo test octet --lib`, and the no-disabled probe.
 
 - 2026-06-26 Octet typed-storage neutral private ref-value rename: in file-length-debt `src/typed/storage.rs`, renaming private `TypedRefValueInput`/`typed_ref_value` to `RefValueInput`/`ref_value` removed four `path_segment_repetition` findings; latest mtime `probe-13` 6653 -> `target/octet-burndown/probe-ref-value-0` 6649. Validation passed `cargo fmt`, focused `cargo test typed_storage --lib`, and the no-disabled probe.
 
