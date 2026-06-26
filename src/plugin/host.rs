@@ -17,7 +17,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
 use crate::preserves_rail::PLUGIN_HEALTH_RECEIPT_SCHEMA;
-use crate::preserves_rail::PLUGIN_HOST_ABI_RESULT_SCHEMA;
 use crate::preserves_rail::PLUGIN_HOSTCALL_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_INSTALL_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA;
@@ -785,7 +784,7 @@ pub fn plugin_host_abi_result_value(input: &HostAbiResultInput<'_>) -> Result<IO
         return Err(MoltenError::invalid_harness("error plugin ABI result requires an error message"));
     }
     Ok(record("plugin-host-abi-result-v1", vec![
-        string(PLUGIN_HOST_ABI_RESULT_SCHEMA),
+        string(crate::preserves_rail::PLUGIN_HOST_ABI_RESULT_SCHEMA),
         record("abi", vec![string(crate::preserves_rail::PLUGIN_HOST_ABI_SCHEMA)]),
         record("status", vec![string(input.status)]),
         record("payload", vec![optional_ref_value(input.payload_ref)]),
