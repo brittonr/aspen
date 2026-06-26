@@ -11,7 +11,6 @@ use redb::ReadableTable;
 
 use crate::chunk_store;
 use crate::effects::ADAPTER_KIND_STORAGE;
-use crate::effects::EffectHandleInput;
 use crate::effects::EffectHandleRequest;
 use crate::effects::EffectScope;
 use crate::effects::HandlerBindingInput;
@@ -1364,7 +1363,7 @@ fn binding(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts) -> Result
 }
 
 fn handle(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts, handler_binding_ref: &str) -> Result<IOValue> {
-    effect_handle_value(&EffectHandleInput {
+    effect_handle_value(&crate::effects::EffectHandleInput {
         kind: ADAPTER_KIND_STORAGE.to_string(),
         scope: parts.scope.clone(),
         handler_binding_ref: handler_binding_ref.to_string(),
