@@ -24,7 +24,6 @@ use crate::effects::handler_binding_value;
 use crate::effects::validate_handle_for_request;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA;
 use crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
@@ -1105,7 +1104,7 @@ pub fn migration_recipe_value(input: &StorageMigrationRecipeInput) -> Result<IOV
     validate_refs(&input.policy_refs, "migration policy ref")?;
     validate_refs(&input.evidence_refs, "migration evidence ref")?;
     Ok(record("storage-migration-recipe-v1", vec![
-        string(TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA),
+        string(crate::preserves_rail::TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA),
         record("source-schema-ref", vec![string(&input.source_schema_ref)]),
         record("target-schema-ref", vec![string(&input.target_schema_ref)]),
         record("transformer", vec![string(&input.transformer_ref), string(&input.transformer_kind)]),
@@ -1125,7 +1124,11 @@ pub fn migration_recipe_value(input: &StorageMigrationRecipeInput) -> Result<IOV
 
 pub fn parse_migration_recipe_value(value: &IOValue) -> Result<StorageMigrationRecipe> {
     let recipe = simple_record(value, "storage-migration-recipe-v1", 8)?;
-    require_schema(&recipe[0], TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA, "storage migration recipe")?;
+    require_schema(
+        &recipe[0],
+        crate::preserves_rail::TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA,
+        "storage migration recipe",
+    )?;
     let transformer = value_to_iovalue(&recipe[3]);
     let transformer = simple_record(&transformer, "transformer", 2)?;
     let transformer_kind = required_string(&transformer[1], "migration transformer kind")?;
@@ -2052,7 +2055,7 @@ mod tests {
         assert!(error.to_string().contains("source schema"), "{error}");
 
         let unsupported_transformer = record("storage-migration-recipe-v1", vec![
-            string(TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA),
+            string(crate::preserves_rail::TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA),
             record("source-schema-ref", vec![string(&put.schema_ref)]),
             record("target-schema-ref", vec![string(test_ref("target"))]),
             record("transformer", vec![string(test_ref("transformer")), string("ambient-script")]),
