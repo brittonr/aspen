@@ -25,7 +25,6 @@ use crate::effects::handler_binding_value;
 use crate::effects::validate_handle_for_request;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::TYPED_STORAGE_EFFECT_MANIFEST_SCHEMA;
 use crate::preserves_rail::TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA;
 use crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA;
 use crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA;
@@ -1088,7 +1087,7 @@ pub fn effect_manifest_value(
     require_ref(schema_ref, "storage effect manifest schema ref")?;
     validate_operations(operations)?;
     Ok(record("storage-effect-manifest-v1", vec![
-        string(TYPED_STORAGE_EFFECT_MANIFEST_SCHEMA),
+        string(crate::preserves_rail::TYPED_STORAGE_EFFECT_MANIFEST_SCHEMA),
         record("producer", vec![string(producer_ref)]),
         record("namespace", vec![string(namespace)]),
         record("schema-ref", vec![string(schema_ref)]),
