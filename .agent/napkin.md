@@ -3,6 +3,7 @@
 ## Corrections
 | Date | Source | What Went Wrong | What To Do Instead |
 |------|--------|----------------|-------------------|
+| 2026-06-26 | self | Removing the single-use `VecSink` import in `src/plugin/host.rs` and qualifying the trait bound kept the no-disabled probe flat at 6701. | Do not keep tiny trait-import qualification changes unless the probe drops; revert flat candidates and prefer imports whose use-site qualification has already proven net-positive. |
 | 2026-06-25 | self | During the transcript schema burn-down, I initially treated the max numeric `probe-91` as latest even though mtime showed newer `probe-2` at 6734. | When asked for the latest probe, list summaries by mtime before choosing a baseline; max numeric is not always latest. |
 | 2026-06-25 | self | During the artifacts `Value` import cleanup, I trusted a truncated grep result and qualified only one use; focused `cargo test artifact --lib` then failed on remaining `Value<IOValue>` signatures. | Before removing a shared type import, search with a high enough limit or use a neutral private alias for every remaining type signature in the same candidate. |
 | 2026-06-25 | self | After `cargo fmt --check`, I wrote a Steel git-status wrapper that called `Ok->value` on an already unwrapped numeric wait status, causing a wrapper failure after printing the real git status. | In Steel process wrappers, unwrap `(wait child)` exactly once; if the binding already holds a number, pass it directly to `number->string`. |
@@ -238,6 +239,8 @@
 - For the Octet disabled-lint burn-down, prefer a faster inner loop: targeted refactor, `cargo fmt`, focused tests/checks, a no-disabled Octet probe, and immediate `dylint.toml` restore; defer full workspace/lib Octet evidence, Cairn gates, docs refresh, Nix/dogfood, and larger validation until larger accepted batches or explicit checkpoint requests.
 
 ## Patterns That Work
+
+- 2026-06-26 Octet dogfood test atomic qualification: in file-length-debt `src/operator/dogfood.rs`, removing test-local `AtomicU64`/`Ordering` imports and qualifying the temp-dir counter uses lowered the no-disabled probe from latest mtime `probe-10` 6701 to `target/octet-burndown/probe-dogfood-atomic-qualify-0` 6699. Validation passed `cargo fmt`, focused `cargo test dogfood --lib`, no-disabled probe, and `cargo fmt --check`.
 
 - 2026-06-25 Octet plugin manifest schema qualification: in file-length-debt `src/plugin/host.rs`, removing the `PLUGIN_MANIFEST_SCHEMA` import and qualifying its two builder/parser uses lowered latest mtime `probe-5` 6712 to `target/octet-burndown/probe-plugin-manifest-schema-0` 6710 with path/function/file counts flat. Validation passed `cargo fmt`, focused `cargo test plugin --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
 

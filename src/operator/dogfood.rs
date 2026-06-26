@@ -4906,8 +4906,6 @@ fn usize_to_u64(value: usize, field: &str) -> Result<u64> {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
 
     use super::*;
     use crate::evidence::SignReceiptInput;
@@ -5512,8 +5510,8 @@ mod tests {
 
     fn temp_dir(label: &str) -> PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{label}-{}-{nonce}", std::process::id()));
         if dir.exists() {
             fs::remove_dir_all(&dir).expect("remove stale temp dir");
