@@ -22,7 +22,6 @@ use crate::preserves_rail::PLUGIN_LIFECYCLE_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_MANIFEST_SCHEMA;
 use crate::preserves_rail::PLUGIN_PERMISSION_RECEIPT_SCHEMA;
 use crate::preserves_rail::PLUGIN_REMOVAL_RECEIPT_SCHEMA;
-use crate::preserves_rail::PLUGIN_UPGRADE_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -740,7 +739,7 @@ pub fn plugin_upgrade_receipt_value(input: &UpgradeReceiptInput<'_>) -> Result<I
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
     Ok(record("plugin-upgrade-receipt-v1", vec![
-        string(PLUGIN_UPGRADE_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::PLUGIN_UPGRADE_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
         record("old-manifest", vec![string(&old_manifest.manifest_ref)]),
         record("new-manifest", vec![string(&new_manifest.manifest_ref)]),
@@ -759,7 +758,7 @@ pub fn plugin_upgrade_receipt_value(input: &UpgradeReceiptInput<'_>) -> Result<I
 
 pub fn parse_plugin_upgrade_receipt(value: &IOValue) -> Result<PluginUpgradeReceipt> {
     let fields = simple_record(value, "plugin-upgrade-receipt-v1", 8)?;
-    require_schema(&fields[0], PLUGIN_UPGRADE_RECEIPT_SCHEMA, "plugin upgrade receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::PLUGIN_UPGRADE_RECEIPT_SCHEMA, "plugin upgrade receipt")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-upgrade", "plugin upgrade receipt")?;
     Ok(PluginUpgradeReceipt {
