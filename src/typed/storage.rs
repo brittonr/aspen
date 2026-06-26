@@ -1,4 +1,3 @@
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -1631,7 +1630,7 @@ fn validate_operations(operations: &[String]) -> Result<()> {
     if operations.is_empty() {
         return Err(MoltenError::invalid_harness("storage effect manifest operations must not be empty"));
     }
-    let mut seen = BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for operation in operations {
         validate_operation(operation)?;
         if !seen.insert(operation.as_str()) {

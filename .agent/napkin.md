@@ -240,6 +240,8 @@
 
 ## Patterns That Work
 
+- 2026-06-26 Octet typed-storage BTreeSet qualification: in file-length-debt `src/typed/storage.rs`, removing the single-use `std::collections::BTreeSet` import and qualifying `validate_operations` lowered latest mtime `probe-17` 6685 to `target/octet-burndown/probe-typed-storage-btreeset-0` 6683. Validation passed `cargo fmt`, focused `cargo test typed_storage --lib`, and the no-disabled probe.
+
 - 2026-06-26 Octet schema-alias qualification: in file-length-debt `src/schema/identity.rs`, removing the `SCHEMA_ALIAS_SCHEMA` import and qualifying its builder/parser uses lowered the latest no-disabled probe from `probe-14` 6693 to `target/octet-burndown/probe-schema-alias-schema-0` 6691. Validation passed `cargo fmt`, focused `cargo test schema --lib`, no-disabled probe, `cargo fmt --check`, and `cargo clippy --all-targets -- -D warnings`.
 
 - 2026-06-26 Octet plugin path qualification: in file-length-debt `src/plugin/host.rs`, removing the `std::path::Path` import and qualifying the three signatures lowered the no-disabled probe from latest mtime `probe-11` 6699 to `target/octet-burndown/probe-plugin-path-0` 6697. Validation passed `cargo fmt`, focused `cargo test plugin --lib`, no-disabled probe, and `cargo fmt --check`.
