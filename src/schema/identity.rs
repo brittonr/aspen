@@ -12,7 +12,6 @@ use crate::preserves_rail::SCHEMA_ALIAS_SCHEMA;
 use crate::preserves_rail::SCHEMA_COMPATIBILITY_RECEIPT_SCHEMA;
 use crate::preserves_rail::SCHEMA_COMPATIBILITY_SCHEMA;
 use crate::preserves_rail::SCHEMA_IDENTITY_SCHEMA;
-use crate::preserves_rail::SCHEMA_STRUCTURAL_FINGERPRINT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -142,7 +141,7 @@ pub fn structural_fingerprint(shape: &IOValue) -> Result<(IOValue, String, Strin
     let normalized = normalize_shape(shape)?;
     let normalized_shape_ref = canonical_hash(&normalized)?;
     let fingerprint = canonical_hash(&record("schema-structural-fingerprint-v1", vec![
-        string(SCHEMA_STRUCTURAL_FINGERPRINT_SCHEMA),
+        string(crate::preserves_rail::SCHEMA_STRUCTURAL_FINGERPRINT_SCHEMA),
         normalized.clone(),
     ]))?;
     Ok((normalized, normalized_shape_ref, fingerprint))
