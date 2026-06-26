@@ -9,7 +9,6 @@ use preserves::ValueClass;
 use redb::Database;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
-use redb::TableDefinition;
 
 use crate::chunk_store;
 use crate::effects::ADAPTER_KIND_STORAGE;
@@ -40,10 +39,11 @@ const MAX_TYPED_STORAGE_RECEIPTS: usize = 100_000;
 const _: () = assert!(MAX_TYPED_STORAGE_RECEIPTS > 0);
 
 const INDEX_FILE: &str = "typed-storage.redb";
-const INDEX_RECORDS: TableDefinition<&str, &[u8]> = TableDefinition::new("typed_storage_records_v1");
-const INDEX_REFS: TableDefinition<&str, &[u8]> = TableDefinition::new("typed_storage_refs_v1");
-const INDEX_INLINE_VALUES: TableDefinition<&str, &[u8]> = TableDefinition::new("typed_storage_inline_values_v1");
-const INDEX_RECEIPTS: TableDefinition<&str, &[u8]> = TableDefinition::new("typed_storage_receipts_v1");
+const INDEX_RECORDS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("typed_storage_records_v1");
+const INDEX_REFS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("typed_storage_refs_v1");
+const INDEX_INLINE_VALUES: redb::TableDefinition<&str, &[u8]> =
+    redb::TableDefinition::new("typed_storage_inline_values_v1");
+const INDEX_RECEIPTS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("typed_storage_receipts_v1");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedStorageAdmission {
