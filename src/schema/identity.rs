@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use preserves::IOValue;
 use preserves::Record;
 use preserves::Value;
@@ -400,7 +398,10 @@ pub fn parse_compatibility_receipt(value: &IOValue) -> Result<SchemaCompatibilit
     })
 }
 
-pub fn search_registry_by_fingerprint(registry_root: &Path, fingerprint: &str) -> Result<Vec<SchemaIdentity>> {
+pub fn search_registry_by_fingerprint(
+    registry_root: &std::path::Path,
+    fingerprint: &str,
+) -> Result<Vec<SchemaIdentity>> {
     validate_ref(fingerprint, "schema structural fingerprint")?;
     let mut matches = Vec::new();
     for artifact in artifacts::list_artifacts(registry_root, Some("schema-identity"))? {
