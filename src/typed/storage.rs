@@ -27,7 +27,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::TYPED_STORAGE_MIGRATION_RECIPE_SCHEMA;
 use crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA;
-use crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::content_ref_from_bytes;
@@ -1154,7 +1153,7 @@ pub fn parse_migration_recipe_value(value: &IOValue) -> Result<StorageMigrationR
 
 pub fn parse_typed_ref_value(value: &IOValue) -> Result<TypedStorageRef> {
     let fields = simple_record(value, "typed-storage-ref-v1", 12)?;
-    require_schema(&fields[0], TYPED_STORAGE_REF_SCHEMA, "typed storage ref")?;
+    require_schema(&fields[0], crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA, "typed storage ref")?;
     let namespace = record_string(&fields[1], "namespace")?;
     let key = record_string(&fields[2], "key")?;
     let schema_ref = record_ref(&fields[3], "schema-ref")?;
@@ -1245,7 +1244,7 @@ struct TypedRefValueInput<'a> {
 
 fn typed_ref_value(input: TypedRefValueInput<'_>) -> IOValue {
     record("typed-storage-ref-v1", vec![
-        string(TYPED_STORAGE_REF_SCHEMA),
+        string(crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA),
         record("namespace", vec![string(input.namespace)]),
         record("key", vec![string(input.key)]),
         record("schema-ref", vec![string(input.schema_ref)]),
