@@ -13,7 +13,6 @@ use crate::ledger;
 use crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
 use crate::preserves_rail::OCTET_SOURCE_GATE_VALIDATION_SCHEMA;
-use crate::preserves_rail::OCTET_SUMMARY_ARTIFACT_SCHEMA;
 use crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
@@ -795,7 +794,7 @@ fn raw_values(files: &InputFiles) -> Vec<IOValue> {
     if let Some(summary) = files.summary.as_ref() {
         values.push(octet_raw_artifact_value(
             "octet-summary-artifact-v1",
-            OCTET_SUMMARY_ARTIFACT_SCHEMA,
+            crate::preserves_rail::OCTET_SUMMARY_ARTIFACT_SCHEMA,
             SUMMARY_NAME,
             summary,
         ));
