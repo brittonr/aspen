@@ -11,7 +11,6 @@ use crate::error::Result;
 use crate::preserves_rail::SCHEMA_ALIAS_SCHEMA;
 use crate::preserves_rail::SCHEMA_COMPATIBILITY_RECEIPT_SCHEMA;
 use crate::preserves_rail::SCHEMA_COMPATIBILITY_SCHEMA;
-use crate::preserves_rail::SCHEMA_IDENTITY_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -164,7 +163,7 @@ pub fn schema_identity_value(input: &SchemaIdentityInput) -> Result<IOValue> {
     }
     let (normalized_shape, normalized_shape_ref, fingerprint) = structural_fingerprint(&input.shape)?;
     Ok(record("schema-identity-v1", vec![
-        string(SCHEMA_IDENTITY_SCHEMA),
+        string(crate::preserves_rail::SCHEMA_IDENTITY_SCHEMA),
         record("mode", vec![string(&input.mode)]),
         record("schema", vec![string(&input.schema_ref)]),
         record("shape", vec![string(&normalized_shape_ref), string(&fingerprint), normalized_shape]),
@@ -185,7 +184,7 @@ pub fn parse_schema_identity(value: &IOValue) -> Result<SchemaIdentity> {
     let fields = value
         .collect_simple_record("schema-identity-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <schema-identity-v1 ...>"))?;
-    require_schema(&fields[0], SCHEMA_IDENTITY_SCHEMA, "schema identity")?;
+    require_schema(&fields[0], crate::preserves_rail::SCHEMA_IDENTITY_SCHEMA, "schema identity")?;
     let mode = record_string(&fields[1], "mode")?;
     validate_mode(&mode)?;
     let shape_record = value_to_iovalue(&fields[3]);
