@@ -12,7 +12,6 @@ use crate::error::Result;
 use crate::ledger;
 use crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
 use crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
-use crate::preserves_rail::OCTET_SOURCE_GATE_VALIDATION_SCHEMA;
 use crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
@@ -1375,7 +1374,7 @@ struct OctetSourceGateValidationValueInput<'a> {
 
 fn octet_source_gate_validation_value(input: OctetSourceGateValidationValueInput<'_>) -> IOValue {
     record("octet-source-gate-validation-v1", vec![
-        string(OCTET_SOURCE_GATE_VALIDATION_SCHEMA),
+        string(crate::preserves_rail::OCTET_SOURCE_GATE_VALIDATION_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("requirement", vec![string(input.requirement_ref)]),
         record("gate-receipt", vec![optional_ref(input.gate_receipt_ref)]),
