@@ -11,7 +11,6 @@ use redb::ReadableTable;
 
 use crate::chunk_store;
 use crate::effects::ADAPTER_KIND_STORAGE;
-use crate::effects::EffectHandleRequest;
 use crate::effects::EffectScope;
 use crate::effects::HandlerBindingInput;
 use crate::effects::effect_handle_value;
@@ -1285,7 +1284,7 @@ fn storage_effect_evidence(input: StorageEffectEvidenceInput<'_>) -> Result<Stor
     let handler_binding_ref = canonical_hash(&handler)?;
     let handle = handle(&input, &parts, &handler_binding_ref)?;
     let handle_ref = canonical_hash(&handle)?;
-    let validation = validate_handle_for_request(&handler, &handle, &EffectHandleRequest {
+    let validation = validate_handle_for_request(&handler, &handle, &crate::effects::EffectHandleRequest {
         kind: ADAPTER_KIND_STORAGE,
         operation: input.operation,
         run_ref: &parts.run,
