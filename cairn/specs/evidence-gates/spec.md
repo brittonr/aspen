@@ -1295,3 +1295,45 @@ r[molten.octet_burndown.safety_polish_finish] Molten MUST treat remaining no-dis
 - GIVEN a safety-polish finding cannot be safely removed in the current slice
 - WHEN remediation evidence is reported
 - THEN Molten records the finding as an active caveat with rationale instead of hiding it behind configuration-clean source-gate evidence.
+
+### Requirement: Remaining Octet import-hygiene warnings are reduced without semantic churn
+r[molten.octet_burndown.import_hygiene_finish] Molten MUST burn down remaining no-disabled `non_trait_imports` warnings with behavior-preserving namespace cleanup, and MUST keep command syntax, receipt schemas, canonical output values, and fail-closed behavior stable.
+
+#### Scenario: Import cleanup preserves receipt behavior
+- GIVEN a module is refactored to reduce concrete non-trait imports
+- WHEN focused validation and no-disabled Octet evidence run
+- THEN public behavior and canonical receipt output remain stable
+- AND before/after import-hygiene counts are recorded for the touched domain.
+
+#### Scenario: Import caveat remains visible until clean
+- GIVEN `non_trait_imports` remains warning-only in no-disabled evidence
+- WHEN remediation evidence is reported
+- THEN Molten labels import hygiene as active burn-down work rather than source-remediated zero.
+
+### Requirement: Remaining Octet path-shape warnings are reduced without public rename churn
+r[molten.octet_burndown.path_shape_finish] Molten MUST burn down remaining no-disabled `path_segment_repetition` warnings through private path-shape cleanup while preserving public Rust paths, CLI syntax, receipt schemas, canonical labels, and fail-closed behavior unless a separate compatibility change admits a public rename.
+
+#### Scenario: Private path-shape cleanup preserves public behavior
+- GIVEN a path-repetition hotspot is refactored with private aliases, helper renames, or module ownership changes
+- WHEN focused validation and no-disabled Octet evidence run
+- THEN public command syntax, receipt labels, and canonical Preserves values remain stable
+- AND before/after path-shape counts are recorded.
+
+#### Scenario: Public repetition is documented instead of hidden
+- GIVEN a repeated path segment is part of a public command, schema, receipt label, or compatibility boundary
+- WHEN remediation evidence is reported
+- THEN Molten documents the preserved repetition as an active or explicitly scoped caveat instead of hiding it with a suppression.
+
+### Requirement: Remaining Octet size-shape warnings are reduced by functional decomposition
+r[molten.octet_burndown.size_shape_finish] Molten MUST burn down remaining no-disabled file-length and function-length warnings through behavior-preserving decomposition, using pure deterministic cores for non-trivial logic and keeping public command and receipt behavior stable.
+
+#### Scenario: Size-shape split preserves behavior
+- GIVEN a long file or function is split to reduce size-shape warnings
+- WHEN focused validation and no-disabled Octet evidence are produced
+- THEN public command syntax, receipt labels, canonical Preserves values, and denial behavior remain stable
+- AND the evidence records before/after movement for the touched size-shape warnings.
+
+#### Scenario: Extracted logic is tested
+- GIVEN a size-shape split extracts deterministic core logic
+- WHEN the split is counted as burn-down progress
+- THEN positive and negative tests cover the extracted logic without requiring external services or filesystem side effects.
