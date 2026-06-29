@@ -65,7 +65,7 @@ pub(crate) enum Test {
     },
     Gateway {
         #[command(subcommand)]
-        command: crate::cli_gateway::GatewayCommand,
+        command: crate::cli_gateway::Command,
     },
     Receipt {
         #[command(subcommand)]

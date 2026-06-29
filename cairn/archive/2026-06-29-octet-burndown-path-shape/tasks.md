@@ -1,0 +1,8 @@
+## Tasks
+
+- [x] [serial] r[molten.octet_burndown.path_shape] Capture the latest no-disabled Octet probe and identify the highest-value `path_segment_repetition` hotspots before the first category slice.
+- [x] [serial] r[molten.octet_burndown.path_shape] Refactor one path-shape hotspot per accepted slice by renaming private helpers, regrouping implementation modules, or introducing local aliases without public semantic drift.
+- [x] [serial] r[molten.octet_burndown.path_shape] Run focused Rust validation plus a no-disabled Octet probe after each accepted slice and record before/after `path_segment_repetition` counts.
+- [x] [serial] r[molten.octet_burndown.path_shape] Remove or narrow the `path_segment_repetition` disabled-lint caveat only after refreshed evidence proves the family is clean or explicitly scoped.
+
+Evidence: the latest pre-slice no-disabled probe was `target/octet-burndown/import-hygiene-runner-0/summary.txt` with `path_segment_repetition` 2963. The highest-count hotspots are public/domain-heavy retention, node, and job modules, so this accepted slice used the safe crate-private gateway CLI command path: `GatewayCommand`/`run_gateway_command` became module-local `Command`/`run_command` while preserving CLI syntax. Baseline `cargo test gateway` passed before the rename. Validation passed with `cargo fmt --check`, `cargo test gateway`, `cargo clippy --all-targets -- -D warnings`, and no-disabled probe `target/octet-burndown/path-shape-gateway-0/summary.txt`, reducing `path_segment_repetition` to 2959 and total findings to 6814. The path-shape caveat remains active because the family is not yet clean.

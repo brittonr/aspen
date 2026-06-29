@@ -8,7 +8,7 @@ const GATEWAY_MEMBER_SIZE: u64 = 7;
 const FIRST_GATEWAY_FIXTURE_ID: u64 = 1;
 
 #[derive(Debug, clap::Subcommand)]
-pub(crate) enum GatewayCommand {
+pub(crate) enum Command {
     RangeFixture {
         #[arg(long)]
         root: std::path::PathBuf,
@@ -21,10 +21,10 @@ pub(crate) enum GatewayCommand {
     },
 }
 
-pub(crate) fn run_gateway_command(command: GatewayCommand) -> Outcome<()> {
+pub(crate) fn run_command(command: Command) -> Outcome<()> {
     match command {
-        GatewayCommand::RangeFixture { root, out } => range_fixture(root, out),
-        GatewayCommand::IndexFixture { out } => index_fixture(out),
+        Command::RangeFixture { root, out } => range_fixture(root, out),
+        Command::IndexFixture { out } => index_fixture(out),
     }
 }
 

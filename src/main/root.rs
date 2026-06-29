@@ -88,7 +88,7 @@ pub(crate) fn run_test_command(command: command::Test) -> molten::error::Result<
         command::Test::ReplayFixture { command } => crate::cli_replay_fixture::run_replay_fixture_command(command),
         command::Test::Report { command } => crate::cli_report::run_report_command(command),
         command::Test::Gate { command } => crate::cli_gate::run_gate_command(command),
-        command::Test::Gateway { command } => crate::cli_gateway::run_gateway_command(command),
+        command::Test::Gateway { command } => crate::cli_gateway::run_command(command),
         command::Test::Receipt { command } => crate::cli_receipts::run_receipt_command(command),
         command::Test::Ledger { command } => crate::cli_ledger::run_ledger_command(command),
         command::Test::Chain { command } => crate::cli_ledger::run_chain_command(command),
