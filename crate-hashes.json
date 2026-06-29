@@ -1,6 +1,6 @@
 {
-  "https://github.com/hegeldev/hegel-rust#hegeltest-macros@0.14.12": "sha256-Gc1hzhosqxs4Z1LYgj9I8J/BIALEbRbIRa/L9ocmFag=",
-  "https://github.com/hegeldev/hegel-rust#hegeltest@0.14.12": "sha256-Gc1hzhosqxs4Z1LYgj9I8J/BIALEbRbIRa/L9ocmFag=",
+  "https://github.com/hegeldev/hegel-rust#hegeltest-macros@0.14.12": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI=",
+  "https://github.com/hegeldev/hegel-rust#hegeltest@0.14.12": "sha256-WG4R0ahvNcPQ/uOlGnAJf9QFcZ6SYPsfI+Y9rBzorrI=",
   "ssh://git@github.com/OnixResearch/basalt.git#basalt@0.1.0": "0mlbypy88c2849kimgx6abqj38h2sgph6qyl5h0vjb5zdhykv9yv",
   "ssh://git@github.com/OnixResearch/cairn.git#cairn-core@0.1.0": "1j0z1rzv6aps6xlmgasrr4l3l41gbpv31np9ijcm32nb4gnr9rbc",
   "ssh://git@github.com/OnixResearch/octet.git#valence-core@0.1.0": "1d4hzxpv9izqicygrszc5zsn31hc6vmjpk7j3ybmfp16hy40dnjp",

@@ -118,12 +118,13 @@
             rustc = unit2nixRust;
           };
         mkUnit2nixWorkspace = { enableKache ? false, cacheDir ? kacheCacheDir, keySalt ? kacheKeySalt }:
-          unit2nix.lib.${system}.buildFromUnitGraphAuto {
+          unit2nix.lib.${system}.buildFromUnitGraph {
             pkgs = unit2nixPkgs;
             inherit rustToolchain;
             src = ./.;
-            workspace = true;
-            noLocked = true;
+            # Keep the unit graph checked in so package evaluation does not
+            # depend on unit2nix IFD.
+            resolvedJson = ./build-plan.json;
             clippyArgs = [ "-D" "warnings" ];
             buildRustCrateForPkgs = mkBuildRustCrateForPkgs { inherit enableKache cacheDir keySalt; };
             extraCrateOverrides = {
