@@ -1,56 +1,15 @@
-use preserves::IOValue;
-
-use super::core::AdmissionRequest;
-use super::core::RuntimeState;
-use super::executor::ensure_supported_actor_executors;
-use super::schema::BudgetUsage;
-use super::schema::EffectLogEntry;
-use super::schema::HarnessSuite;
-use super::schema::HostcallEvidenceContext;
-use super::schema::ReportValueInput;
-use super::schema::actor_ids_for_step;
-use super::schema::actor_input_value;
-use super::schema::actor_output_value;
-use super::schema::admission_authority_evidence;
-use super::schema::admission_decision_event_value_with_authority;
-use super::schema::append_effect_entries_from_events;
-use super::schema::budget_gate_value;
-use super::schema::budget_limits_value;
-use super::schema::capabilities_value;
-use super::schema::capability_gate_value;
-use super::schema::effect_request_sequence;
-use super::schema::effect_response_sequence_and_value;
-use super::schema::event_boundary;
-use super::schema::event_value;
-use super::schema::hostcall_decision_value;
-use super::schema::hostcall_request_value;
-use super::schema::observation_value;
-use super::schema::parse_suite;
-use super::schema::policy_gate_value;
-use super::schema::policy_value;
-use super::schema::snapshot_value;
-use super::schema::step_value;
-use super::schema::suite_ref;
-use super::schema::validate_executor_preflight_inputs;
-use super::steel_executor::execute_steel_actor_step;
-use super::wasm_executor::WasmActorStepInput;
-use super::wasm_executor::execute_wasm_actor_step;
-use crate::error::HarnessDivergence;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::runtime::RuntimeObserver;
-use crate::runtime::evaluate_assertion_visibility;
-use crate::runtime::evaluate_observe_initial_delivery;
+use super::core;
+use super::executor;
+use super::schema;
+use super::steel_executor;
+use super::wasm_executor;
+use crate::error;
+use crate::preserves_rail;
+use crate::runtime;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessRun {
-    pub report_value: IOValue,
+    pub report_value: preserves::IOValue,
     pub report_ref: String,
     pub suite_ref: String,
     pub initial_state_hash: String,
@@ -58,23 +17,29 @@ pub struct HarnessRun {
     pub status: String,
 }
 
-pub fn run_suite_value(value: &IOValue) -> Result<HarnessRun> {
-    run_suite(&parse_suite(value)?)
+pub fn run_suite_value(value: &preserves::IOValue) -> error::Result<HarnessRun> {
+    run_suite(&schema::parse_suite(value)?)
 }
 
-pub fn run_suite(suite: &HarnessSuite) -> Result<HarnessRun> {
+pub fn run_suite(suite: &schema::HarnessSuite) -> error::Result<HarnessRun> {
     run_suite_inner(suite, None)
 }
 
-pub fn run_suite_with_effect_log(suite: &HarnessSuite, effect_log: &[EffectLogEntry]) -> Result<HarnessRun> {
+pub fn run_suite_with_effect_log(
+    suite: &schema::HarnessSuite,
+    effect_log: &[schema::EffectLogEntry],
+) -> error::Result<HarnessRun> {
     run_suite_inner(suite, Some(effect_log))
 }
 
-fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEntry]>) -> Result<HarnessRun> {
+fn run_suite_inner(
+    suite: &schema::HarnessSuite,
+    replay_effect_log: Option<&[schema::EffectLogEntry]>,
+) -> error::Result<HarnessRun> {
     let material = prepare_suite_run(suite)?;
     let trace = collect_trace(suite, replay_effect_log, &material)?;
     let report_value = build_report_value(suite, &material, &trace)?;
-    let report_ref = canonical_hash(&report_value)?;
+    let report_ref = preserves_rail::canonical_hash(&report_value)?;
     Ok(HarnessRun {
         report_value,
         report_ref,
@@ -87,30 +52,30 @@ fn run_suite_inner(suite: &HarnessSuite, replay_effect_log: Option<&[EffectLogEn
 
 struct SuiteRunMaterial {
     suite_ref: String,
-    policy_gate: IOValue,
-    capability_gate: IOValue,
-    budget_gate: IOValue,
+    policy_gate: preserves::IOValue,
+    capability_gate: preserves::IOValue,
+    budget_gate: preserves::IOValue,
     policy_ref: String,
     capability_ref: String,
     budget_ref: String,
-    budget: super::schema::HarnessBudget,
+    budget: schema::HarnessBudget,
 }
 
-fn prepare_suite_run(suite: &HarnessSuite) -> Result<SuiteRunMaterial> {
+fn prepare_suite_run(suite: &schema::HarnessSuite) -> error::Result<SuiteRunMaterial> {
     if !suite.actors_explicit {
-        return Err(MoltenError::invalid_harness(
+        return Err(error::MoltenError::invalid_harness(
             "missing explicit actor registry fixture; inferred actors cannot execute evidence-bearing suites",
         ));
     }
     validate_actor_registry(suite)?;
-    validate_executor_preflight_inputs(suite)?;
+    schema::validate_executor_preflight_inputs(suite)?;
     if !suite.capabilities_explicit {
-        return Err(MoltenError::invalid_harness(
+        return Err(error::MoltenError::invalid_harness(
             "missing explicit capability fixture; implicit authority cannot execute evidence-bearing suites",
         ));
     }
     if !suite.budget_explicit {
-        return Err(MoltenError::invalid_harness(
+        return Err(error::MoltenError::invalid_harness(
             "missing explicit budget fixture; default resource policy cannot execute evidence-bearing suites",
         ));
     }
@@ -125,13 +90,13 @@ fn prepare_suite_run(suite: &HarnessSuite) -> Result<SuiteRunMaterial> {
         ));
     }
     Ok(SuiteRunMaterial {
-        suite_ref: suite_ref(suite)?,
-        policy_gate: policy_gate_value(&suite.policy)?,
-        capability_gate: capability_gate_value(&suite.capabilities)?,
-        budget_gate: budget_gate_value(&suite.budget)?,
-        policy_ref: canonical_hash(&policy_value(&suite.policy))?,
-        capability_ref: canonical_hash(&capabilities_value(&suite.capabilities))?,
-        budget_ref: canonical_hash(&budget_limits_value(&suite.budget))?,
+        suite_ref: schema::suite_ref(suite)?,
+        policy_gate: schema::policy_gate_value(&suite.policy)?,
+        capability_gate: schema::capability_gate_value(&suite.capabilities)?,
+        budget_gate: schema::budget_gate_value(&suite.budget)?,
+        policy_ref: preserves_rail::canonical_hash(&schema::policy_value(&suite.policy))?,
+        capability_ref: preserves_rail::canonical_hash(&schema::capabilities_value(&suite.capabilities))?,
+        budget_ref: preserves_rail::canonical_hash(&schema::budget_limits_value(&suite.budget))?,
         budget,
     })
 }
@@ -139,18 +104,18 @@ fn prepare_suite_run(suite: &HarnessSuite) -> Result<SuiteRunMaterial> {
 struct RunTrace {
     initial_state_hash: String,
     final_state_hash: String,
-    observations: Vec<IOValue>,
-    effect_log: Vec<EffectLogEntry>,
+    observations: Vec<preserves::IOValue>,
+    effect_log: Vec<schema::EffectLogEntry>,
     total_events: u64,
 }
 
 fn collect_trace(
-    suite: &HarnessSuite,
-    replay_effect_log: Option<&[EffectLogEntry]>,
+    suite: &schema::HarnessSuite,
+    replay_effect_log: Option<&[schema::EffectLogEntry]>,
     material: &SuiteRunMaterial,
-) -> Result<RunTrace> {
-    let mut state = RuntimeState::new(suite.seed);
-    let initial_state_hash = canonical_hash(&snapshot_value(&state.snapshot()))?;
+) -> error::Result<RunTrace> {
+    let mut state = core::RuntimeState::new(suite.seed);
+    let initial_state_hash = preserves_rail::canonical_hash(&schema::snapshot_value(&state.snapshot()))?;
     let mut observations = Vec::with_capacity(suite.steps.len());
     let mut effect_log = Vec::new();
     let mut total_events = 0u64;
@@ -168,9 +133,9 @@ fn collect_trace(
         })?;
         total_events += outcome.events.len() as u64;
         check_event_budget(index as u64, total_events, &material.budget)?;
-        append_effect_entries_from_events(&outcome.events, &mut effect_log)?;
+        schema::append_effect_entries_from_events(&outcome.events, &mut effect_log)?;
         check_effect_budget(index as u64, effect_log.len() as u64, &material.budget)?;
-        observations.push(observation_value(
+        observations.push(schema::observation_value(
             index as u64,
             outcome.step_ref,
             outcome.before_state_hash,
@@ -181,7 +146,7 @@ fn collect_trace(
     check_replay_consumed(replay_effect_log, replay_effect_index)?;
     Ok(RunTrace {
         initial_state_hash,
-        final_state_hash: canonical_hash(&snapshot_value(&state.snapshot()))?,
+        final_state_hash: preserves_rail::canonical_hash(&schema::snapshot_value(&state.snapshot()))?,
         observations,
         effect_log,
         total_events,
@@ -189,12 +154,12 @@ fn collect_trace(
 }
 
 struct StepRunInput<'a> {
-    state: &'a mut RuntimeState,
-    suite: &'a HarnessSuite,
-    step: &'a super::core::CoreStep,
+    state: &'a mut core::RuntimeState,
+    suite: &'a schema::HarnessSuite,
+    step: &'a core::CoreStep,
     material: &'a SuiteRunMaterial,
     step_index: u64,
-    replay_effect_log: Option<&'a [EffectLogEntry]>,
+    replay_effect_log: Option<&'a [schema::EffectLogEntry]>,
     replay_effect_index: &'a mut usize,
 }
 
@@ -202,12 +167,12 @@ struct StepOutcome {
     step_ref: String,
     before_state_hash: String,
     after_state_hash: String,
-    events: Vec<IOValue>,
+    events: Vec<preserves::IOValue>,
 }
 
-fn run_step(input: StepRunInput<'_>) -> Result<StepOutcome> {
-    let before_state_hash = canonical_hash(&snapshot_value(&input.state.snapshot()))?;
-    let step_ref = canonical_hash(&step_value(input.step))?;
+fn run_step(input: StepRunInput<'_>) -> error::Result<StepOutcome> {
+    let before_state_hash = preserves_rail::canonical_hash(&schema::snapshot_value(&input.state.snapshot()))?;
+    let step_ref = preserves_rail::canonical_hash(&schema::step_value(input.step))?;
     let admission = admission_step(input.suite, input.step, input.material, input.step_index, &step_ref)?;
     let execution = actor_execution_events(ActorExecutionInput {
         suite: input.suite,
@@ -230,8 +195,13 @@ fn run_step(input: StepRunInput<'_>) -> Result<StepOutcome> {
     let boundary_runtime_events = boundary_events(execution, runtime_events);
     let mut events = admission.events;
     events.extend(boundary_runtime_events.clone());
-    events.push(actor_output_value(input.step, admission.context, &admission.decision, &boundary_runtime_events)?);
-    let after_state_hash = canonical_hash(&snapshot_value(&input.state.snapshot()))?;
+    events.push(schema::actor_output_value(
+        input.step,
+        admission.context,
+        &admission.decision,
+        &boundary_runtime_events,
+    )?);
+    let after_state_hash = preserves_rail::canonical_hash(&schema::snapshot_value(&input.state.snapshot()))?;
     events.push(turn_journal_value(TurnJournalInput {
         index: input.step_index,
         step_ref: &step_ref,
@@ -252,25 +222,25 @@ fn run_step(input: StepRunInput<'_>) -> Result<StepOutcome> {
 
 struct AdmissionStep<'a> {
     decision: crate::runtime::AdmissionDecision,
-    context: HostcallEvidenceContext<'a>,
-    actor_input: IOValue,
-    hostcall_request: IOValue,
-    hostcall_decision: IOValue,
-    events: Vec<IOValue>,
+    context: schema::HostcallEvidenceContext<'a>,
+    actor_input: preserves::IOValue,
+    hostcall_request: preserves::IOValue,
+    hostcall_decision: preserves::IOValue,
+    events: Vec<preserves::IOValue>,
 }
 
 fn admission_step<'a>(
-    suite: &'a HarnessSuite,
-    step: &'a super::core::CoreStep,
+    suite: &'a schema::HarnessSuite,
+    step: &'a core::CoreStep,
     material: &'a SuiteRunMaterial,
     step_index: u64,
     step_ref: &'a str,
-) -> Result<AdmissionStep<'a>> {
-    let request = AdmissionRequest::from_step(step);
-    let authority = admission_authority_evidence(&suite.capabilities, &request)?;
+) -> error::Result<AdmissionStep<'a>> {
+    let request = core::AdmissionRequest::from_step(step);
+    let authority = schema::admission_authority_evidence(&suite.capabilities, &request)?;
     let decision = suite.policy.decide_with_capabilities(&suite.capabilities, &request);
-    let event = admission_decision_event_value_with_authority(&request, &authority, &decision);
-    let context = HostcallEvidenceContext {
+    let event = schema::admission_decision_event_value_with_authority(&request, &authority, &decision);
+    let context = schema::HostcallEvidenceContext {
         sequence: step_index,
         suite_ref: &material.suite_ref,
         step_ref,
@@ -278,9 +248,9 @@ fn admission_step<'a>(
         capability_ref: &material.capability_ref,
         budget_ref: &material.budget_ref,
     };
-    let actor_input = actor_input_value(suite, step, context)?;
-    let hostcall_request = hostcall_request_value(suite, step, context, &decision)?;
-    let hostcall_decision = hostcall_decision_value(context, &event, &authority, &decision)?;
+    let actor_input = schema::actor_input_value(suite, step, context)?;
+    let hostcall_request = schema::hostcall_request_value(suite, step, context, &decision)?;
+    let hostcall_decision = schema::hostcall_decision_value(context, &event, &authority, &decision)?;
     Ok(AdmissionStep {
         decision,
         context,
@@ -297,22 +267,22 @@ fn admission_step<'a>(
 }
 
 struct ActorExecutionInput<'a> {
-    suite: &'a HarnessSuite,
-    step: &'a super::core::CoreStep,
+    suite: &'a schema::HarnessSuite,
+    step: &'a core::CoreStep,
     step_index: u64,
     step_ref: &'a str,
-    actor_input: &'a IOValue,
-    hostcall_request: &'a IOValue,
-    hostcall_decision: &'a IOValue,
+    actor_input: &'a preserves::IOValue,
+    hostcall_request: &'a preserves::IOValue,
+    hostcall_decision: &'a preserves::IOValue,
     admission_decision: &'a crate::runtime::AdmissionDecision,
 }
 
 struct ActorExecutionEvents {
-    steel: Option<IOValue>,
-    wasm: Option<IOValue>,
+    steel: Option<preserves::IOValue>,
+    wasm: Option<preserves::IOValue>,
 }
 
-fn actor_execution_events(input: ActorExecutionInput<'_>) -> Result<ActorExecutionEvents> {
+fn actor_execution_events(input: ActorExecutionInput<'_>) -> error::Result<ActorExecutionEvents> {
     if !input.admission_decision.is_allowed() {
         return Ok(ActorExecutionEvents {
             steel: None,
@@ -320,8 +290,13 @@ fn actor_execution_events(input: ActorExecutionInput<'_>) -> Result<ActorExecuti
         });
     }
     Ok(ActorExecutionEvents {
-        steel: execute_steel_actor_step(input.suite, input.step, input.actor_input, input.hostcall_request)?,
-        wasm: execute_wasm_actor_step(&WasmActorStepInput {
+        steel: steel_executor::execute_steel_actor_step(
+            input.suite,
+            input.step,
+            input.actor_input,
+            input.hostcall_request,
+        )?,
+        wasm: wasm_executor::execute_wasm_actor_step(&wasm_executor::WasmActorStepInput {
             suite: input.suite,
             step: input.step,
             sequence: input.step_index,
@@ -333,7 +308,10 @@ fn actor_execution_events(input: ActorExecutionInput<'_>) -> Result<ActorExecuti
     })
 }
 
-fn boundary_events(execution: ActorExecutionEvents, runtime_events: Vec<IOValue>) -> Vec<IOValue> {
+fn boundary_events(
+    execution: ActorExecutionEvents,
+    runtime_events: Vec<preserves::IOValue>,
+) -> Vec<preserves::IOValue> {
     let mut events = Vec::with_capacity(
         runtime_events.len() + usize::from(execution.steel.is_some()) + usize::from(execution.wasm.is_some()),
     );
@@ -347,7 +325,7 @@ fn boundary_events(execution: ActorExecutionEvents, runtime_events: Vec<IOValue>
     events
 }
 
-fn check_event_budget(step_index: u64, total_events: u64, budget: &super::schema::HarnessBudget) -> Result<()> {
+fn check_event_budget(step_index: u64, total_events: u64, budget: &schema::HarnessBudget) -> error::Result<()> {
     if total_events > budget.max_events {
         return Err(divergence(
             "resource",
@@ -360,7 +338,7 @@ fn check_event_budget(step_index: u64, total_events: u64, budget: &super::schema
     Ok(())
 }
 
-fn check_effect_budget(step_index: u64, effects: u64, budget: &super::schema::HarnessBudget) -> Result<()> {
+fn check_effect_budget(step_index: u64, effects: u64, budget: &schema::HarnessBudget) -> error::Result<()> {
     if effects > budget.max_effects {
         return Err(divergence(
             "resource",
@@ -373,7 +351,10 @@ fn check_effect_budget(step_index: u64, effects: u64, budget: &super::schema::Ha
     Ok(())
 }
 
-fn check_replay_consumed(replay_effect_log: Option<&[EffectLogEntry]>, replay_effect_index: usize) -> Result<()> {
+fn check_replay_consumed(
+    replay_effect_log: Option<&[schema::EffectLogEntry]>,
+    replay_effect_index: usize,
+) -> error::Result<()> {
     if let Some(replay_effect_log) = replay_effect_log
         && replay_effect_index != replay_effect_log.len()
     {
@@ -388,8 +369,12 @@ fn check_replay_consumed(replay_effect_log: Option<&[EffectLogEntry]>, replay_ef
     Ok(())
 }
 
-fn build_report_value(suite: &HarnessSuite, material: &SuiteRunMaterial, trace: &RunTrace) -> Result<IOValue> {
-    let mut usage = BudgetUsage {
+fn build_report_value(
+    suite: &schema::HarnessSuite,
+    material: &SuiteRunMaterial,
+    trace: &RunTrace,
+) -> error::Result<preserves::IOValue> {
+    let mut usage = schema::BudgetUsage {
         steps: suite.steps.len() as u64,
         effects: trace.effect_log.len() as u64,
         events: trace.total_events,
@@ -397,14 +382,14 @@ fn build_report_value(suite: &HarnessSuite, material: &SuiteRunMaterial, trace: 
     };
     let mut report_value = report_value_with_usage(suite, material, trace, &usage);
     for _ in 0..4 {
-        let report_bytes = canonical_bytes(&report_value)?.len() as u64;
+        let report_bytes = preserves_rail::canonical_bytes(&report_value)?.len() as u64;
         if report_bytes == usage.report_bytes {
             break;
         }
         usage.report_bytes = report_bytes;
         report_value = report_value_with_usage(suite, material, trace, &usage);
     }
-    usage.report_bytes = canonical_bytes(&report_value)?.len() as u64;
+    usage.report_bytes = preserves_rail::canonical_bytes(&report_value)?.len() as u64;
     if usage.report_bytes > material.budget.max_report_bytes {
         return Err(divergence(
             "resource",
@@ -418,12 +403,12 @@ fn build_report_value(suite: &HarnessSuite, material: &SuiteRunMaterial, trace: 
 }
 
 fn report_value_with_usage(
-    suite: &HarnessSuite,
+    suite: &schema::HarnessSuite,
     material: &SuiteRunMaterial,
     trace: &RunTrace,
-    usage: &BudgetUsage,
-) -> IOValue {
-    super::schema::report_value(ReportValueInput {
+    usage: &schema::BudgetUsage,
+) -> preserves::IOValue {
+    schema::report_value(schema::ReportValueInput {
         suite,
         suite_ref: material.suite_ref.clone(),
         initial_state_hash: trace.initial_state_hash.clone(),
@@ -438,16 +423,16 @@ fn report_value_with_usage(
     })
 }
 
-fn validate_actor_registry(suite: &HarnessSuite) -> Result<()> {
+fn validate_actor_registry(suite: &schema::HarnessSuite) -> error::Result<()> {
     let mut ids = std::collections::BTreeSet::new();
-    ensure_supported_actor_executors(&suite.actors)?;
+    executor::ensure_supported_actor_executors(&suite.actors)?;
     for actor in &suite.actors {
         ids.insert(actor.id.as_str());
     }
     for step in &suite.steps {
-        for actor in actor_ids_for_step(step) {
+        for actor in schema::actor_ids_for_step(step) {
             if !ids.contains(actor) {
-                return Err(MoltenError::invalid_harness(format!("unknown actor {actor} in harness step")));
+                return Err(error::MoltenError::invalid_harness(format!("unknown actor {actor} in harness step")));
             }
         }
     }
@@ -462,59 +447,68 @@ struct TurnJournalInput<'a> {
     policy_ref: &'a str,
     capability_ref: &'a str,
     budget_ref: &'a str,
-    events: &'a [IOValue],
+    events: &'a [preserves::IOValue],
 }
 
-fn turn_journal_value(input: TurnJournalInput<'_>) -> Result<IOValue> {
+fn turn_journal_value(input: TurnJournalInput<'_>) -> error::Result<preserves::IOValue> {
     let mut event_refs = Vec::with_capacity(input.events.len());
     let mut effect_refs = Vec::with_capacity(input.events.len());
     let mut receipt_refs = Vec::with_capacity(input.events.len());
     for event in input.events {
-        let event_ref = canonical_hash(event)?;
-        match event_boundary(event) {
-            super::schema::EventBoundary::EffectRequest | super::schema::EventBoundary::EffectResponse => {
+        let event_ref = preserves_rail::canonical_hash(event)?;
+        match schema::event_boundary(event) {
+            schema::EventBoundary::EffectRequest | schema::EventBoundary::EffectResponse => {
                 effect_refs.push(event_ref.clone());
             }
-            super::schema::EventBoundary::RuntimePredicate
-            | super::schema::EventBoundary::HostcallDecision
-            | super::schema::EventBoundary::SteelExecution
-            | super::schema::EventBoundary::WasmExecution => {
+            schema::EventBoundary::RuntimePredicate
+            | schema::EventBoundary::HostcallDecision
+            | schema::EventBoundary::SteelExecution
+            | schema::EventBoundary::WasmExecution => {
                 receipt_refs.push(event_ref.clone());
             }
-            super::schema::EventBoundary::PolicyDecision
-            | super::schema::EventBoundary::ActorInput
-            | super::schema::EventBoundary::HostcallRequest
-            | super::schema::EventBoundary::ActorOutput
-            | super::schema::EventBoundary::Trace => {}
+            schema::EventBoundary::PolicyDecision
+            | schema::EventBoundary::ActorInput
+            | schema::EventBoundary::HostcallRequest
+            | schema::EventBoundary::ActorOutput
+            | schema::EventBoundary::Trace => {}
         }
         event_refs.push(event_ref);
     }
-    Ok(record("turn-journal-v1", vec![
-        string("molten.harness.turn-journal.v1"),
-        u64_value(input.index),
-        record("scheduler-key", vec![string(format!("logical:0:priority:0:queue:{}", input.index))]),
-        record("step-ref", vec![string(input.step_ref)]),
-        record("before-state-ref", vec![string(input.before_state_hash)]),
-        record("after-state-ref", vec![string(input.after_state_hash)]),
-        record("policy-ref", vec![string(input.policy_ref)]),
-        record("capability-ref", vec![string(input.capability_ref)]),
-        record("budget-ref", vec![string(input.budget_ref)]),
-        record("event-refs", vec![sequence(event_refs.iter().map(string).collect())]),
-        record("effect-refs", vec![sequence(effect_refs.iter().map(string).collect())]),
-        record("receipt-refs", vec![sequence(receipt_refs.iter().map(string).collect())]),
+    Ok(preserves_rail::record("turn-journal-v1", vec![
+        preserves_rail::string("molten.harness.turn-journal.v1"),
+        preserves_rail::u64_value(input.index),
+        preserves_rail::record("scheduler-key", vec![preserves_rail::string(format!(
+            "logical:0:priority:0:queue:{}",
+            input.index
+        ))]),
+        preserves_rail::record("step-ref", vec![preserves_rail::string(input.step_ref)]),
+        preserves_rail::record("before-state-ref", vec![preserves_rail::string(input.before_state_hash)]),
+        preserves_rail::record("after-state-ref", vec![preserves_rail::string(input.after_state_hash)]),
+        preserves_rail::record("policy-ref", vec![preserves_rail::string(input.policy_ref)]),
+        preserves_rail::record("capability-ref", vec![preserves_rail::string(input.capability_ref)]),
+        preserves_rail::record("budget-ref", vec![preserves_rail::string(input.budget_ref)]),
+        preserves_rail::record("event-refs", vec![preserves_rail::sequence(
+            event_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("effect-refs", vec![preserves_rail::sequence(
+            effect_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("receipt-refs", vec![preserves_rail::sequence(
+            receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
     ]))
 }
 
 struct RuntimeStepInput<'a> {
-    state: &'a mut RuntimeState,
-    step: &'a super::core::CoreStep,
+    state: &'a mut core::RuntimeState,
+    step: &'a core::CoreStep,
     admission_decision: &'a crate::runtime::AdmissionDecision,
     step_index: u64,
-    replay_effect_log: Option<&'a [EffectLogEntry]>,
+    replay_effect_log: Option<&'a [schema::EffectLogEntry]>,
     replay_effect_index: &'a mut usize,
 }
 
-fn runtime_events_for_step(input: RuntimeStepInput<'_>) -> Result<Vec<IOValue>> {
+fn runtime_events_for_step(input: RuntimeStepInput<'_>) -> error::Result<Vec<preserves::IOValue>> {
     let RuntimeStepInput {
         state,
         step,
@@ -534,14 +528,14 @@ fn runtime_events_for_step(input: RuntimeStepInput<'_>) -> Result<Vec<IOValue>> 
         )?;
         let after = state.snapshot();
         let mut events = vec![receipt.value];
-        events.extend(runtime_events.iter().map(event_value));
+        events.extend(runtime_events.iter().map(schema::event_value));
         events.extend(step_predicate_receipts(step, &before, &after)?);
         return Ok(events);
     }
 
     let Some(replay_effect_log) = replay_effect_log else {
         if !is_dataspace_turn(step) {
-            let events = state.apply_step(step).iter().map(event_value).collect();
+            let events = state.apply_step(step).iter().map(schema::event_value).collect();
             return with_time_random_handler_receipt(step, step_index, events);
         }
         let before = state.snapshot();
@@ -549,7 +543,7 @@ fn runtime_events_for_step(input: RuntimeStepInput<'_>) -> Result<Vec<IOValue>> 
         let (runtime_events, receipt) = state.commit_turn_with_predicate_receipt(turn)?;
         let after = state.snapshot();
         let mut events = vec![receipt.value];
-        events.extend(runtime_events.iter().map(event_value));
+        events.extend(runtime_events.iter().map(schema::event_value));
         events.extend(step_predicate_receipts(step, &before, &after)?);
         return with_time_random_handler_receipt(step, step_index, events);
     };
@@ -557,58 +551,56 @@ fn runtime_events_for_step(input: RuntimeStepInput<'_>) -> Result<Vec<IOValue>> 
     replay_effect_events(state, step, step_index, replay_effect_log, replay_effect_index)
 }
 
-fn is_dataspace_turn(step: &super::core::CoreStep) -> bool {
+fn is_dataspace_turn(step: &core::CoreStep) -> bool {
     matches!(
         step,
-        super::core::CoreStep::Send { .. }
-            | super::core::CoreStep::Observe { .. }
-            | super::core::CoreStep::Assert { .. }
-            | super::core::CoreStep::Retract { .. }
+        core::CoreStep::Send { .. }
+            | core::CoreStep::Observe { .. }
+            | core::CoreStep::Assert { .. }
+            | core::CoreStep::Retract { .. }
     )
 }
 
 fn step_predicate_receipts(
-    step: &super::core::CoreStep,
+    step: &core::CoreStep,
     before: &crate::runtime::RuntimeSnapshot,
     after: &crate::runtime::RuntimeSnapshot,
-) -> Result<Vec<IOValue>> {
+) -> error::Result<Vec<preserves::IOValue>> {
     match step {
-        super::core::CoreStep::Observe { actor, pattern } => {
-            let observer = RuntimeObserver {
+        core::CoreStep::Observe { actor, pattern } => {
+            let observer = runtime::RuntimeObserver {
                 actor: actor.clone(),
                 pattern: pattern.clone(),
             };
-            let receipt = evaluate_observe_initial_delivery(before, &observer)?.receipt;
+            let receipt = runtime::evaluate_observe_initial_delivery(before, &observer)?.receipt;
             Ok(vec![receipt.value])
         }
-        super::core::CoreStep::Assert { value, .. } | super::core::CoreStep::Retract { value, .. } => {
+        core::CoreStep::Assert { value, .. } | core::CoreStep::Retract { value, .. } => {
             let live_owners = after.assertions.iter().map(|assertion| assertion.actor.clone()).collect();
-            let receipt = evaluate_assertion_visibility(after, value, &live_owners)?.receipt;
+            let receipt = runtime::evaluate_assertion_visibility(after, value, &live_owners)?.receipt;
             Ok(vec![receipt.value])
         }
-        super::core::CoreStep::Send { .. }
-        | super::core::CoreStep::Clock { .. }
-        | super::core::CoreStep::Random { .. } => Ok(Vec::new()),
+        core::CoreStep::Send { .. } | core::CoreStep::Clock { .. } | core::CoreStep::Random { .. } => Ok(Vec::new()),
     }
 }
 
 fn replay_effect_events(
-    state: &mut RuntimeState,
-    step: &super::core::CoreStep,
+    state: &mut core::RuntimeState,
+    step: &core::CoreStep,
     step_index: u64,
-    replay_effect_log: &[EffectLogEntry],
+    replay_effect_log: &[schema::EffectLogEntry],
     replay_effect_index: &mut usize,
-) -> Result<Vec<IOValue>> {
+) -> error::Result<Vec<preserves::IOValue>> {
     let Some(request) = state.begin_effect_for_step(step) else {
         if !is_dataspace_turn(step) {
-            return Ok(state.apply_step(step).iter().map(event_value).collect());
+            return Ok(state.apply_step(step).iter().map(schema::event_value).collect());
         }
         let before = state.snapshot();
         let turn = state.begin_turn(step);
         let (runtime_events, receipt) = state.commit_turn_with_predicate_receipt(turn)?;
         let after = state.snapshot();
         let mut events = vec![receipt.value];
-        events.extend(runtime_events.iter().map(event_value));
+        events.extend(runtime_events.iter().map(schema::event_value));
         events.extend(step_predicate_receipts(step, &before, &after)?);
         return Ok(events);
     };
@@ -622,9 +614,9 @@ fn replay_effect_events(
             "recorded effect log ended before effect request",
         ));
     };
-    let request_value = event_value(&request);
-    let request_hash = canonical_hash(&request_value)?;
-    let recorded_request_hash = canonical_hash(&entry.request)?;
+    let request_value = schema::event_value(&request);
+    let request_hash = preserves_rail::canonical_hash(&request_value)?;
+    let recorded_request_hash = preserves_rail::canonical_hash(&entry.request)?;
     if request_hash != recorded_request_hash {
         return Err(divergence(
             "effect-request",
@@ -635,8 +627,8 @@ fn replay_effect_events(
         ));
     }
 
-    let (response_sequence, response_value) = effect_response_sequence_and_value(&entry.response)?;
-    let request_sequence = effect_request_sequence(&entry.request)?;
+    let (response_sequence, response_value) = schema::effect_response_sequence_and_value(&entry.response)?;
+    let request_sequence = schema::effect_request_sequence(&entry.request)?;
     if response_sequence != request_sequence {
         return Err(divergence(
             "effect-log",
@@ -648,9 +640,9 @@ fn replay_effect_events(
     }
 
     let response = state.apply_recorded_effect_response(&request, response_value)?;
-    let response_value = event_value(&response);
-    let response_hash = canonical_hash(&response_value)?;
-    let recorded_response_hash = canonical_hash(&entry.response)?;
+    let response_value = schema::event_value(&response);
+    let response_hash = preserves_rail::canonical_hash(&response_value)?;
+    let recorded_response_hash = preserves_rail::canonical_hash(&entry.response)?;
     if response_hash != recorded_response_hash {
         return Err(divergence(
             "effect-response",
@@ -666,44 +658,44 @@ fn replay_effect_events(
 }
 
 fn with_time_random_handler_receipt(
-    step: &super::core::CoreStep,
+    step: &core::CoreStep,
     step_index: u64,
-    events: Vec<IOValue>,
-) -> Result<Vec<IOValue>> {
+    events: Vec<preserves::IOValue>,
+) -> error::Result<Vec<preserves::IOValue>> {
     let (effect, actor) = match step {
-        super::core::CoreStep::Clock { actor } => ("clock", actor.as_str()),
-        super::core::CoreStep::Random { actor, .. } => ("random", actor.as_str()),
-        super::core::CoreStep::Send { .. }
-        | super::core::CoreStep::Observe { .. }
-        | super::core::CoreStep::Assert { .. }
-        | super::core::CoreStep::Retract { .. } => return Ok(events),
+        core::CoreStep::Clock { actor } => ("clock", actor.as_str()),
+        core::CoreStep::Random { actor, .. } => ("random", actor.as_str()),
+        core::CoreStep::Send { .. }
+        | core::CoreStep::Observe { .. }
+        | core::CoreStep::Assert { .. }
+        | core::CoreStep::Retract { .. } => return Ok(events),
     };
     if events.len() != 2 {
-        return Err(MoltenError::invalid_harness(format!(
+        return Err(error::MoltenError::invalid_harness(format!(
             "deterministic {effect} handler expected request and response events at step {step_index}"
         )));
     }
-    let request_ref = canonical_hash(&events[0])?;
-    let response_ref = canonical_hash(&events[1])?;
-    let handler_binding = record("time-random-handler-binding-v1", vec![
-        string("local-deterministic"),
-        string(effect),
-        string(actor),
-        u64_value(step_index),
+    let request_ref = preserves_rail::canonical_hash(&events[0])?;
+    let response_ref = preserves_rail::canonical_hash(&events[1])?;
+    let handler_binding = preserves_rail::record("time-random-handler-binding-v1", vec![
+        preserves_rail::string("local-deterministic"),
+        preserves_rail::string(effect),
+        preserves_rail::string(actor),
+        preserves_rail::u64_value(step_index),
     ]);
-    let handler_binding_ref = canonical_hash(&handler_binding)?;
-    let receipt = record("time-random-handler-receipt-v1", vec![
-        string("molten.effects.time-random-handler.v1"),
-        record("profile", vec![string("local-deterministic")]),
-        record("effect", vec![string(effect)]),
-        record("actor", vec![string(actor)]),
-        record("request-ref", vec![string(&request_ref)]),
-        record("handler-binding-ref", vec![string(&handler_binding_ref)]),
-        record("response-ref", vec![string(&response_ref)]),
-        record("decision", vec![string("pass")]),
-        record("checks", vec![record("check", vec![
-            string("deny-by-default-bypassed-only-by-local-test-handler"),
-            string("pass"),
+    let handler_binding_ref = preserves_rail::canonical_hash(&handler_binding)?;
+    let receipt = preserves_rail::record("time-random-handler-receipt-v1", vec![
+        preserves_rail::string("molten.effects.time-random-handler.v1"),
+        preserves_rail::record("profile", vec![preserves_rail::string("local-deterministic")]),
+        preserves_rail::record("effect", vec![preserves_rail::string(effect)]),
+        preserves_rail::record("actor", vec![preserves_rail::string(actor)]),
+        preserves_rail::record("request-ref", vec![preserves_rail::string(&request_ref)]),
+        preserves_rail::record("handler-binding-ref", vec![preserves_rail::string(&handler_binding_ref)]),
+        preserves_rail::record("response-ref", vec![preserves_rail::string(&response_ref)]),
+        preserves_rail::record("decision", vec![preserves_rail::string("pass")]),
+        preserves_rail::record("checks", vec![preserves_rail::record("check", vec![
+            preserves_rail::string("deny-by-default-bypassed-only-by-local-test-handler"),
+            preserves_rail::string("pass"),
         ])]),
     ]);
     Ok(vec![events[0].clone(), receipt, events[1].clone()])
@@ -715,6 +707,6 @@ fn divergence(
     expected: impl Into<String>,
     actual: impl Into<String>,
     detail: impl Into<String>,
-) -> MoltenError {
-    MoltenError::harness_divergence(HarnessDivergence::new(kind, step, expected, actual, detail))
+) -> error::MoltenError {
+    error::MoltenError::harness_divergence(error::HarnessDivergence::new(kind, step, expected, actual, detail))
 }
