@@ -23,6 +23,23 @@ const MAX_INDEX_FINDINGS: usize = 50_000;
 const MAX_METRIC_ROWS: usize = 128;
 const MAX_TOP_FILES: usize = 24;
 const MAX_DIAGNOSTICS: usize = 64;
+const MAX_SOURCE_SCOPE_CLASSIFICATIONS: usize = 512;
+const MAX_SOURCE_INVENTORY_PATHS: usize = 20_000;
+const WORKSPACE_PATH_PREFIX: &str = "<WORKSPACE>/";
+const SOURCE_PATH_PREFIX: &str = "src/";
+const TEST_PATH_PREFIX: &str = "tests/";
+const CARGO_REGISTRY_MARKER: &str = "/.cargo/registry/";
+const RUSTC_SOURCE_PREFIX: &str = "/rustc/";
+const MODULE_FILE_COUNT_LINT: &str = "module_file_count";
+const UNDERSCORE_MODULE_LINT: &str = "underscore_in_module_filename";
+const CLASS_MOLTEN_OWNED_SOURCE: &str = "molten-owned-source";
+const CLASS_INTEGRATION_TEST_SOURCE: &str = "integration-test-source";
+const CLASS_GENERATED_REMAP_SOURCE: &str = "generated-remapped-dependency-source";
+const CLASS_REGISTRY_RUSTLIB_SOURCE: &str = "registry-rustlib-source";
+const CLASS_UNKNOWN_SOURCE: &str = "unknown";
+const DECISION_ACTIONABLE: &str = "actionable";
+const DECISION_IGNORE_EXTERNAL: &str = "ignored-as-external";
+const DECISION_BLOCKED: &str = "blocked-pending-tooling";
 
 const _: () = assert!(MAX_SUMMARY_LINES > 0);
 const _: () = assert!(MAX_INDEX_FINDINGS >= MAX_SUMMARY_LINES);
@@ -118,8 +135,21 @@ struct PlanValueInput<'a> {
     lib_metrics: Option<&'a RunMetrics>,
     focused_object_corpus: Option<&'a ObjectCorpusMetrics>,
     critical_surfaces: &'a [IOValue],
+    source_scope_classifications: &'a [SourceScopeClassification],
     diagnostics: &'a [String],
     checks: &'a [(&'static str, &'static str)],
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SourceScopeClassification {
+    lint: String,
+    crate_name: String,
+    location: String,
+    file: String,
+    count: u64,
+    classification: &'static str,
+    decision: &'static str,
+    evidence: String,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
@@ -154,7 +184,7 @@ struct OctetObjectCorpusReceipt {
 
 pub fn build_octet_remediation_plan(input: &OctetRemediationPlanInput) -> Result<OctetRemediationPlan> {
     let mut diagnostics = Vec::new();
-    let workspace = read_run_artifacts("workspace", &input.artifacts_dir, true)?;
+    let workspace = read_run_artifacts("workspace", &input.artifacts_dir, input.focused_object_corpus.is_none())?;
     let workspace_metrics = run_metrics(&workspace, &mut diagnostics)?;
     let lib_metrics = match input.lib_artifacts_dir.as_ref() {
         Some(path) => Some(run_metrics(&read_run_artifacts("lib-only", path, false)?, &mut diagnostics)?),
@@ -162,12 +192,20 @@ pub fn build_octet_remediation_plan(input: &OctetRemediationPlanInput) -> Result
     };
     let focused_object_corpus = read_focused_object_corpus(input, &workspace, &mut diagnostics)?;
     let critical_surfaces = surface_inventory_values(&workspace_metrics);
-    let checks = plan_checks(&workspace_metrics, lib_metrics.as_ref(), focused_object_corpus.as_ref());
+    let source_scope_classifications =
+        classify_source_scope_findings(&workspace_metrics, focused_object_corpus.as_ref())?;
+    let checks = plan_checks(
+        &workspace_metrics,
+        lib_metrics.as_ref(),
+        focused_object_corpus.as_ref(),
+        &source_scope_classifications,
+    );
     let value = remediation_plan_value(&PlanValueInput {
         workspace: &workspace_metrics,
         lib_metrics: lib_metrics.as_ref(),
         focused_object_corpus: focused_object_corpus.as_ref(),
         critical_surfaces: &critical_surfaces,
+        source_scope_classifications: &source_scope_classifications,
         diagnostics: &diagnostics,
         checks: &checks,
     });
@@ -394,6 +432,128 @@ fn location_file(location: &str) -> String {
         return file.to_string();
     }
     location.to_string()
+}
+
+fn classify_source_scope_findings(
+    metrics: &RunMetrics,
+    focused_object_corpus: Option<&ObjectCorpusMetrics>,
+) -> Result<Vec<SourceScopeClassification>> {
+    let source_inventory = source_path_inventory(focused_object_corpus)?;
+    let mut classifications = Vec::new();
+    for finding in &metrics.findings {
+        if !is_source_scope_lint(&finding.lint) {
+            continue;
+        }
+        push_bounded(
+            &mut classifications,
+            classify_source_scope_finding(finding, &source_inventory),
+            MAX_SOURCE_SCOPE_CLASSIFICATIONS,
+            "source-scope classifications",
+        )?;
+    }
+    Ok(classifications)
+}
+
+fn source_path_inventory(
+    focused_object_corpus: Option<&ObjectCorpusMetrics>,
+) -> Result<std::collections::BTreeSet<String>> {
+    let mut inventory = std::collections::BTreeSet::new();
+    if let Some(corpus) = focused_object_corpus {
+        for path in &corpus.source_paths {
+            insert_source_path_bounded(&mut inventory, path.clone())?;
+        }
+    }
+    Ok(inventory)
+}
+
+fn classify_source_scope_finding(
+    finding: &FindingIndexEntry,
+    source_inventory: &std::collections::BTreeSet<String>,
+) -> SourceScopeClassification {
+    let normalized_file = workspace_relative_path(&finding.file);
+    let (classification, decision, evidence) = source_scope_decision(&finding.file, normalized_file, source_inventory);
+    SourceScopeClassification {
+        lint: finding.lint.clone(),
+        crate_name: finding.crate_name.clone(),
+        location: finding.location.clone(),
+        file: finding.file.clone(),
+        count: finding.count,
+        classification,
+        decision,
+        evidence,
+    }
+}
+
+fn is_source_scope_lint(lint: &str) -> bool {
+    lint == MODULE_FILE_COUNT_LINT || lint == UNDERSCORE_MODULE_LINT
+}
+
+fn workspace_relative_path(file: &str) -> Option<&str> {
+    file.strip_prefix(WORKSPACE_PATH_PREFIX)
+}
+
+fn source_scope_decision(
+    file: &str,
+    normalized_file: Option<&str>,
+    source_inventory: &std::collections::BTreeSet<String>,
+) -> (&'static str, &'static str, String) {
+    if inventory_contains(source_inventory, file, normalized_file) {
+        return (
+            CLASS_MOLTEN_OWNED_SOURCE,
+            DECISION_ACTIONABLE,
+            "reported path is present in the focused Molten source inventory".to_string(),
+        );
+    }
+    if is_integration_test_path(file, normalized_file) {
+        return (
+            CLASS_INTEGRATION_TEST_SOURCE,
+            DECISION_ACTIONABLE,
+            "reported path is an integration-test source path".to_string(),
+        );
+    }
+    if is_registry_or_rustlib_path(file) {
+        return (
+            CLASS_REGISTRY_RUSTLIB_SOURCE,
+            DECISION_IGNORE_EXTERNAL,
+            "reported path is under a registry or rustlib source root".to_string(),
+        );
+    }
+    if normalized_file.is_some_and(|path| path.starts_with(SOURCE_PATH_PREFIX)) {
+        return (
+            CLASS_GENERATED_REMAP_SOURCE,
+            DECISION_IGNORE_EXTERNAL,
+            "reported <WORKSPACE>/src path is absent from the focused Molten source inventory".to_string(),
+        );
+    }
+    (
+        CLASS_UNKNOWN_SOURCE,
+        DECISION_BLOCKED,
+        "reported path is not in the focused inventory and does not match an external source pattern".to_string(),
+    )
+}
+
+fn inventory_contains(
+    source_inventory: &std::collections::BTreeSet<String>,
+    file: &str,
+    normalized_file: Option<&str>,
+) -> bool {
+    source_inventory.contains(file) || normalized_file.is_some_and(|path| source_inventory.contains(path))
+}
+
+fn is_integration_test_path(file: &str, normalized_file: Option<&str>) -> bool {
+    file.starts_with(TEST_PATH_PREFIX) || normalized_file.is_some_and(|path| path.starts_with(TEST_PATH_PREFIX))
+}
+
+fn is_registry_or_rustlib_path(file: &str) -> bool {
+    file.contains(CARGO_REGISTRY_MARKER) || file.starts_with(RUSTC_SOURCE_PREFIX)
+}
+
+fn insert_source_path_bounded(values: &mut std::collections::BTreeSet<String>, value: String) -> Result<()> {
+    if !values.contains(&value) && values.len() >= MAX_SOURCE_INVENTORY_PATHS {
+        return Err(MoltenError::invalid_harness("source inventory exceeds path bound"));
+    }
+    values.insert(value);
+    Ok(())
 }
 
 fn surface_inventory_values(metrics: &RunMetrics) -> Vec<IOValue> {
@@ -684,6 +844,7 @@ fn remediation_plan_value(input: &PlanValueInput<'_>) -> IOValue {
         record("lib", vec![optional_run_metrics_value(input.lib_metrics)]),
         record("focused-object-corpus", vec![optional_object_corpus_value(input.focused_object_corpus)]),
         record("critical-surfaces", vec![sequence(input.critical_surfaces.to_vec())]),
+        record("source-scope", vec![source_scope_value(input.source_scope_classifications)]),
         record("priority-order", vec![sequence(priority_order_values())]),
         record("no-suppression-policy", vec![no_suppression_policy_value()]),
         record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
@@ -770,6 +931,25 @@ fn optional_string_value(value: Option<&str>) -> IOValue {
     }
 }
 
+fn source_scope_value(classifications: &[SourceScopeClassification]) -> IOValue {
+    record("source-scope-classification-v1", vec![record("classifications", vec![sequence(
+        classifications.iter().map(source_scope_classification_value).collect(),
+    )])])
+}
+
+fn source_scope_classification_value(classification: &SourceScopeClassification) -> IOValue {
+    record("classification", vec![
+        record("lint", vec![string(&classification.lint)]),
+        record("crate", vec![string(&classification.crate_name)]),
+        record("location", vec![string(&classification.location)]),
+        record("file", vec![string(&classification.file)]),
+        record("count", vec![u64_value(classification.count)]),
+        record("class", vec![string(classification.classification)]),
+        record("decision", vec![string(classification.decision)]),
+        record("evidence", vec![string(&classification.evidence)]),
+    ])
+}
+
 fn priority_order_values() -> Vec<IOValue> {
     vec![
         priority_value(
@@ -821,6 +1001,7 @@ fn plan_checks(
     workspace: &RunMetrics,
     lib_metrics: Option<&RunMetrics>,
     focused_object_corpus: Option<&ObjectCorpusMetrics>,
+    source_scope_classifications: &[SourceScopeClassification],
 ) -> Vec<(&'static str, &'static str)> {
     vec![
         ("workspace-status-bound", pass_fail(!workspace.status_ref.is_empty())),
@@ -828,10 +1009,37 @@ fn plan_checks(
         ("workspace-metrics-captured", pass_fail(metrics_present_or_clean(workspace))),
         ("lib-metrics-captured", pass_fail(lib_metrics.is_some_and(metrics_present_or_clean))),
         ("focused-object-corpus-bound", pass_fail(focused_object_corpus.is_some())),
+        (
+            "source-scope-classified",
+            pass_fail(source_scope_is_classified(workspace, focused_object_corpus, source_scope_classifications)),
+        ),
+        (
+            "unknown-source-scope-blocked",
+            pass_fail(unknown_source_scope_is_blocked(source_scope_classifications)),
+        ),
         ("critical-surface-inventory", "pass"),
         ("priority-order-defined", "pass"),
         ("no-suppression-policy", "pass"),
     ]
+}
+
+fn source_scope_is_classified(
+    workspace: &RunMetrics,
+    focused_object_corpus: Option<&ObjectCorpusMetrics>,
+    source_scope_classifications: &[SourceScopeClassification],
+) -> bool {
+    let source_scope_finding_count =
+        workspace.findings.iter().filter(|finding| is_source_scope_lint(&finding.lint)).count();
+    if source_scope_finding_count == 0 {
+        return true;
+    }
+    focused_object_corpus.is_some() && source_scope_finding_count == source_scope_classifications.len()
+}
+
+fn unknown_source_scope_is_blocked(source_scope_classifications: &[SourceScopeClassification]) -> bool {
+    source_scope_classifications.iter().all(|classification| {
+        classification.classification != CLASS_UNKNOWN_SOURCE || classification.decision == DECISION_BLOCKED
+    })
 }
 
 fn pass_fail(pass: bool) -> &'static str {
@@ -873,6 +1081,14 @@ fn insert_count_bounded(
 fn increment_count(counts: &mut BTreeMap<String, u64>, name: &str, count: u64) {
     let current = counts.entry(name.to_string()).or_insert(0);
     *current = current.saturating_add(count);
+}
+
+fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, limit: usize, label: &str) -> Result<()> {
+    if values.item_count() >= limit {
+        return Err(MoltenError::invalid_harness(format!("{label} exceeds item bound")));
+    }
+    values.push_item(value);
+    Ok(())
 }
 
 fn critical_count(by_lint: &BTreeMap<String, u64>) -> u64 {
@@ -933,6 +1149,39 @@ mod tests {
         assert!(to_text(&plan.value).expect("render plan").contains("focused-object-corpus-bound"));
     }
 
+    #[test]
+    fn source_scope_classifies_inventory_path_as_actionable() {
+        let inventory = source_inventory("src/main.rs");
+        let finding = source_finding(MODULE_FILE_COUNT_LINT, "src/main.rs:1");
+
+        let classification = classify_source_scope_finding(&finding, &inventory);
+
+        assert_eq!(classification.classification, CLASS_MOLTEN_OWNED_SOURCE);
+        assert_eq!(classification.decision, DECISION_ACTIONABLE);
+    }
+
+    #[test]
+    fn source_scope_classifies_absent_workspace_source_as_external() {
+        let inventory = source_inventory("src/main.rs");
+        let finding = source_finding(UNDERSCORE_MODULE_LINT, "<WORKSPACE>/src/address_lookup.rs:1");
+
+        let classification = classify_source_scope_finding(&finding, &inventory);
+
+        assert_eq!(classification.classification, CLASS_GENERATED_REMAP_SOURCE);
+        assert_eq!(classification.decision, DECISION_IGNORE_EXTERNAL);
+    }
+
+    #[test]
+    fn source_scope_blocks_unknown_uninventoried_paths() {
+        let inventory = source_inventory("src/main.rs");
+        let finding = source_finding(MODULE_FILE_COUNT_LINT, "generated/address_lookup.rs:1");
+
+        let classification = classify_source_scope_finding(&finding, &inventory);
+
+        assert_eq!(classification.classification, CLASS_UNKNOWN_SOURCE);
+        assert_eq!(classification.decision, DECISION_BLOCKED);
+    }
+
     fn temp_dir(name: &str) -> PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         let path = std::env::temp_dir().join(format!("molten-octet-remediation-{name}-{}", std::process::id()));
@@ -957,6 +1206,20 @@ mod tests {
         format!(
             r#"{{"status":"warning-only","exit_code":0,"output_format":"human","metadata":{{"tool_name":"cargo-octet","tool_version":"0.1.0","rustc_version":"rustc test","toolchain":"nightly-test","profile_name":"workspace-metadata","profile_hash":"b3:profile","config_hash":"b3:config"}},"total_findings":{total_findings},"warning_findings":{total_findings},"error_findings":0,"autofixable_findings":0}}"#
         )
+    }
+
+    fn source_inventory(path: &str) -> std::collections::BTreeSet<String> {
+        std::collections::BTreeSet::from([path.to_string()])
+    }
+
+    fn source_finding(lint: &str, location: &str) -> FindingIndexEntry {
+        FindingIndexEntry {
+            lint: lint.to_string(),
+            crate_name: "molten".to_string(),
+            location: location.to_string(),
+            file: location_file(location),
+            count: 1,
+        }
     }
 
     fn summary_text() -> &'static str {

@@ -1,0 +1,8 @@
+## Tasks
+
+- [x] [serial] r[molten.octet_burndown.source_scope_tooling] Capture the latest no-disabled Octet probe and classify every `module_file_count` and `underscore_in_module_filename` finding as Molten-owned, integration-test, generated/remapped dependency, registry/rustlib, or unknown.
+- [x] [serial] r[molten.octet_burndown.source_scope_tooling] Implement deterministic source-scope classification or Octet tooling support that remains fail-closed for Molten-owned source and unknown findings.
+- [x] [serial] r[molten.octet_burndown.source_scope_tooling] Validate that Molten-owned source findings still report while external/remapped findings are explicitly classified rather than silently hidden.
+- [x] [serial] r[molten.octet_burndown.source_scope_tooling] Update docs and Octet evidence with the source-scope decision before any `module_file_count` or underscore-filename caveat is removed or narrowed.
+
+Evidence: `target/octet-burndown/source-scope-classification-v2-0/summary.txt` is `warning-only` with 6898 findings. The focused source inventory `target/octet-burndown/source-scope-object-corpus-v3.json` and plan receipt `target/octet-burndown/source-scope-classification-v2-plan.preserves` (`blake3:8972dc03c2a9efba218afeba49333a7cb5cae13bb03d36286695c1ce67b5d4fa`) classify 29 source-scope rows: 2 Molten-owned/actionable (`src/cli/ops/dogfood.rs`, `src/cli/ops/node/authority.rs`), 27 generated/remapped external rows, and 0 unknown/blocked rows. Validation passed with `cargo fmt --check`, `cargo test octet_remediation`, `cargo clippy --all-targets -- -D warnings`, the source-scope remediation-plan command, and the fresh no-disabled probe.
