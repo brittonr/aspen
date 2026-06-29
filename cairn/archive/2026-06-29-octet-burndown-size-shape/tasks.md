@@ -1,0 +1,9 @@
+## Tasks
+
+- [x] [serial] r[molten.octet_burndown.size_shape] Capture the latest no-disabled Octet probe and identify the highest-value `excessive_file_length` and `function_length` hotspots before the first category slice.
+- [x] [serial] r[molten.octet_burndown.size_shape] Split one file-length or function-length hotspot per accepted slice while preserving public APIs, command syntax, receipt values, and fail-closed behavior.
+- [x] [serial] r[molten.octet_burndown.size_shape] Add or preserve positive and negative tests whenever extracted logic changes core behavior rather than only shell layout.
+- [x] [serial] r[molten.octet_burndown.size_shape] Run focused Rust validation plus a no-disabled Octet probe after each accepted slice and record before/after size-shape counts.
+- [x] [serial] r[molten.octet_burndown.size_shape] Remove or narrow the size-shape disabled-lint caveats only after refreshed evidence proves the families are clean or explicitly scoped.
+
+Evidence: baseline `cargo test prod_soak` passed before the slice. The latest pre-slice no-disabled probe was `target/octet-burndown/path-shape-gateway-0/summary.txt` with `excessive_file_length` 113 and `function_length` 10. The slice moved the long prodsoak readiness dispatcher into focused `readiness` child modules without changing command syntax, receipt labels, canonical values, or core logic; existing positive/negative prod readiness tests were preserved because this is shell layout extraction. Validation passed with `cargo fmt --check`, `cargo test prod_soak`, `cargo clippy --all-targets -- -D warnings`, and no-disabled probe `target/octet-burndown/size-shape-prodsoak-v2-0/summary.txt`, reducing `excessive_file_length` to 111, `function_length` to 8, and total findings to 6810. Size-shape caveats remain active because the families are not yet clean.
