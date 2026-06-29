@@ -1,0 +1,35 @@
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+
+default_stages:
+  - pre-commit
+
+repos:
+  - repo: local
+    hooks:
+      - id: git-diff-check
+        name: git diff whitespace check
+        entry: git diff --check
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+
+      - id: cargo-fmt-check
+        name: cargo fmt --check
+        entry: cargo fmt --check
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+
+      - id: cairn-validate
+        name: cairn validate
+        entry: nix run path:/home/brittonr/git/cairn#cairn -- validate --root . --policy /home/brittonr/git/cairn/cairn-policy/generated/cairn-policy.json
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-push
