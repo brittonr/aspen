@@ -31,3 +31,13 @@ r[molten.octet_source_remediated_zero.disabled_lint_burndown] Molten MUST keep d
 - GIVEN a broad Octet lint family remains disabled in `dylint.toml`
 - WHEN remediation evidence is reported
 - THEN Molten labels the result as configuration-clean with a remaining burn-down item rather than source-remediated zero for that family.
+
+### Requirement: Remaining Octet burn-down is delegated by category
+r[molten.octet_source_remediated_zero.categorized_followups] Molten SHOULD split unfinished no-disabled Octet burn-down work into focused Cairn follow-up packages so completed source-shape foundation work can sync and archive without claiming source-remediated zero for unfinished lint families.
+
+#### Scenario: Categorized follow-ups preserve caveats
+- GIVEN the foundation Octet source-shape change has completed its scoped refactors
+- AND no-disabled Octet evidence still reports warning-only categories
+- WHEN the foundation change is prepared for archive
+- THEN active follow-up Cairn packages track import hygiene, path shape, size shape, source-scope/tooling, and safety polish separately
+- AND remediation docs continue to label the overall state as configuration-clean rather than source-remediated zero.

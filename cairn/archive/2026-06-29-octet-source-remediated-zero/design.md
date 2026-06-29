@@ -104,6 +104,18 @@ The module may duplicate tiny shell helpers (`read_preserves_file`, `write_file`
 
 Each slice should run focused Rust validation first, then refresh Octet evidence when the source scope changes materially. Module relocation slices must also update source-path inventories in the Octet remediation plan, source-gate docs, and object-corpus command list. Until disabled lint families are removed or narrowed, docs must continue describing the state as configuration-clean rather than source-remediated zero.
 
+### Categorized follow-up packages
+
+The remaining no-disabled warning work is no longer tracked as one broad blocking task in this foundation change. It is delegated to focused active Cairn packages:
+
+- `octet-burndown-import-hygiene` for `non_trait_imports`;
+- `octet-burndown-path-shape` for `path_segment_repetition`;
+- `octet-burndown-size-shape` for `excessive_file_length` and `function_length`;
+- `octet-burndown-source-scope` for external/remapped source-scope and tooling classification;
+- `octet-burndown-safety-polish` for lower-count correctness and clarity warning families.
+
+Those packages keep unfinished categories active while this foundation package can sync/archive without claiming that source-remediated zero is complete.
+
 ## Non-goals
 
 - Do not change Octet gate policy semantics.
