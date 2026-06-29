@@ -1,6 +1,7 @@
 type Outcome<T> = molten::error::Result<T>;
 
 const GATEWAY_CHUNK_SIZE: u64 = 4;
+const GATEWAY_CHUNK_SIZE_USIZE: usize = 4;
 const GATEWAY_RANGE_OFFSET: u64 = 1;
 const GATEWAY_RANGE_LENGTH: u64 = 6;
 const GATEWAY_MEMBER_SIZE: u64 = 7;
@@ -28,16 +29,11 @@ pub(crate) fn run_gateway_command(command: GatewayCommand) -> Outcome<()> {
 }
 
 fn range_fixture(root: std::path::PathBuf, out: Option<std::path::PathBuf>) -> Outcome<()> {
-    let _ = std::fs::remove_dir_all(&root);
+    reset_fixture_root(&root)?;
     let body = b"operator gateway fixture";
     let put = molten::chunk_store::put_bytes(&root, "operator-gateway-artifact", body, GATEWAY_CHUNK_SIZE)?;
     let manifest = molten::chunk_store::parse_manifest_value(&put.manifest_value, Some(&put.manifest_ref))?;
-    let mut chunk_bytes = std::collections::BTreeMap::new();
-    for (index, chunk) in manifest.chunks.iter().enumerate() {
-        let start = index * GATEWAY_CHUNK_SIZE as usize;
-        let end = (start + GATEWAY_CHUNK_SIZE as usize).min(body.len());
-        chunk_bytes.insert(chunk.chunk_ref.clone(), body[start..end].to_vec());
-    }
+    let chunk_bytes = collect_fixture_chunks(body, &manifest)?;
     let verification =
         molten::operator_gateway::verify_gateway_range(&molten::operator_gateway::GatewayRangeVerificationInput {
             read: molten::operator_gateway::GatewayReadInput {
@@ -54,6 +50,47 @@ fn range_fixture(root: std::path::PathBuf, out: Option<std::path::PathBuf>) -> O
             chunk_bytes,
         })?;
     emit(out.as_ref(), "operator-gateway-range-fixture", &verification.receipt_value)
+}
+
+fn reset_fixture_root(root: &std::path::Path) -> Outcome<()> {
+    match std::fs::remove_dir_all(root) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(molten::error::MoltenError::from(error)),
+    }
+}
+
+fn collect_fixture_chunks(
+    body: &[u8],
+    manifest: &molten::chunk_store::ChunkManifest,
+) -> Outcome<std::collections::BTreeMap<String, Vec<u8>>> {
+    ensure_fixture_chunk_count(body, manifest.chunks.len())?;
+    let chunk_bytes = manifest
+        .chunks
+        .iter()
+        .enumerate()
+        .map(|(index, chunk)| {
+            let start = index * GATEWAY_CHUNK_SIZE_USIZE;
+            let end = (start + GATEWAY_CHUNK_SIZE_USIZE).min(body.len());
+            (chunk.chunk_ref.clone(), body[start..end].to_vec())
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    if chunk_bytes.len() != manifest.chunks.len() {
+        return Err(molten::error::MoltenError::invalid_harness(
+            "gateway fixture manifest contains duplicate chunk refs",
+        ));
+    }
+    Ok(chunk_bytes)
+}
+
+fn ensure_fixture_chunk_count(body: &[u8], chunk_count: usize) -> Outcome<()> {
+    let expected_chunks = body.len().div_ceil(GATEWAY_CHUNK_SIZE_USIZE);
+    if chunk_count > expected_chunks {
+        return Err(molten::error::MoltenError::invalid_harness(format!(
+            "gateway fixture chunk count {chunk_count} exceeds expected bound {expected_chunks}"
+        )));
+    }
+    Ok(())
 }
 
 fn index_fixture(out: Option<std::path::PathBuf>) -> Outcome<()> {
@@ -118,4 +155,31 @@ fn emit(out: Option<&std::path::PathBuf>, label: &str, value: &preserves::IOValu
 fn fixture_ref(label: &str) -> String {
     let scoped = format!("{label}-{FIRST_GATEWAY_FIXTURE_ID}");
     molten::preserves_rail::content_ref_from_bytes(scoped.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BODY: &[u8] = b"operator gateway fixture";
+
+    #[test]
+    fn chunk_count_allows_exact_fixture_bound() {
+        let expected_chunks = BODY.len().div_ceil(GATEWAY_CHUNK_SIZE_USIZE);
+
+        let result = ensure_fixture_chunk_count(BODY, expected_chunks);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn chunk_count_rejects_over_bound() {
+        let expected_chunks = BODY.len().div_ceil(GATEWAY_CHUNK_SIZE_USIZE);
+        let too_many_chunks = expected_chunks + 1;
+
+        let error =
+            ensure_fixture_chunk_count(BODY, too_many_chunks).expect_err("chunk count should reject over-bound input");
+
+        assert!(error.to_string().contains("exceeds expected bound"), "{error}");
+    }
 }
