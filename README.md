@@ -717,6 +717,7 @@ nix flake check
 
 ## References
 
+- [`onix-core` kache Nix Rust helpers](/home/brittonr/git/onix-core/lib/kache-nix-rust.nix) — reference implementation for opt-in Nix-owned kache wrappers around sandboxed Rust builds.
 - [`n0-computer/iroh-examples`](https://github.com/n0-computer/iroh-examples) — reference patterns for dynamic Iroh protocol routing, framed bidirectional streams, and read-only blob gateway UX.
 - [`n0-computer/irpc`](https://github.com/n0-computer/irpc) — reference patterns for local/remote request-response and streaming service sessions over Iroh-style transports.
 - [`n0-computer/iroh-doctor`](https://github.com/n0-computer/iroh-doctor) — reference patterns for NAT, UDP, relay latency, connect/accept, port-map, and network diagnostic reports.

@@ -3,8 +3,8 @@
     "basalt-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1779889584,
-        "narHash": "sha256-iPO/pHizXy1FiOj9WlejWCjSSINayuGNa7/m6arMdA0=",
+        "lastModified": 1782770665,
+        "narHash": "sha256-UE9ts/G8xP9jKoVxPBnxCmUmkg8Wm5HXJMGHVWwimqQ=",
         "path": "/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/005e149",
         "type": "path"
       },
@@ -16,8 +16,8 @@
     "cairn-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1780444658,
-        "narHash": "sha256-wGSzdK8tqUP3frJw8ve4qJFFJB6sc6Z9/I93pdGzdUU=",
+        "lastModified": 1782770665,
+        "narHash": "sha256-5vbLLYY2LLtzGpuS2Lccx2Tw6SO+4tTdvEG13DgHh9I=",
         "path": "/home/brittonr/.cargo/git/checkouts/cairn-d7a4d31a0615cac1/3b4c280",
         "type": "path"
       },
@@ -84,13 +84,39 @@
     "octet-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1779883592,
-        "narHash": "sha256-Rl5Oo74mHXqkTfJ2WK3Tas+T1gGG+J8hQWGKfs9NrzQ=",
+        "lastModified": 1782770665,
+        "narHash": "sha256-/Xxx52KB13K0q1e2K45EYNlyA0Krrf1cEEtJCvfF1tU=",
         "path": "/home/brittonr/.cargo/git/checkouts/octet-d771f362f4abe884/9b6a206",
         "type": "path"
       },
       "original": {
         "path": "/home/brittonr/.cargo/git/checkouts/octet-d771f362f4abe884/9b6a206",
+        "type": "path"
+      }
+    },
+    "onix-kache-lib": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1782761033,
+        "narHash": "sha256-qX4qraEwAPpf1+V5wC+8poo9C1DltSmV37X/ARzSshc=",
+        "path": "/home/brittonr/git/onix-core/lib",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/brittonr/git/onix-core/lib",
+        "type": "path"
+      }
+    },
+    "onix-kache-package-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1781896678,
+        "narHash": "sha256-bXlYzTwB4V+4wAMLm3v1fl6LCFCDsES6NeXRY+YCSkw=",
+        "path": "/home/brittonr/git/onix-core/pkgs/kache",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/brittonr/git/onix-core/pkgs/kache",
         "type": "path"
       }
     },
@@ -101,6 +127,8 @@
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
         "octet-src": "octet-src",
+        "onix-kache-lib": "onix-kache-lib",
+        "onix-kache-package-src": "onix-kache-package-src",
         "rust-overlay": "rust-overlay",
         "trellis-src": "trellis-src",
         "ucan-src": "ucan-src",
@@ -145,8 +173,8 @@
     "trellis-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1779884854,
-        "narHash": "sha256-FShRF7LFzN9meqi0noPX06idqmDnyxnrNASGEtQIvds=",
+        "lastModified": 1782770665,
+        "narHash": "sha256-DVTKwtlYQ7bi+oNZqx+3BcC5n/u8hrSmB6G2Y3giDBY=",
         "path": "/home/brittonr/.cargo/git/checkouts/trellis-71b30c19277df8df/68ac582",
         "type": "path"
       },
@@ -158,8 +186,8 @@
     "ucan-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1779889586,
-        "narHash": "sha256-rxm5AA4eNiWVdk0GyowoXGghLYb7OO9eiFSqvQi8WJk=",
+        "lastModified": 1782770665,
+        "narHash": "sha256-OH/02hIxaUj/WO0j6Mr9814VUKyGDQtgq+PC6RA/bbI=",
         "path": "/home/brittonr/.cargo/git/checkouts/ucan-9abe9593165792e6/ad61b53",
         "type": "path"
       },

@@ -11,6 +11,14 @@
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    onix-kache-lib = {
+      url = "path:/home/brittonr/git/onix-core/lib";
+      flake = false;
+    };
+    onix-kache-package-src = {
+      url = "path:/home/brittonr/git/onix-core/pkgs/kache";
+      flake = false;
+    };
     basalt-src = {
       url = "path:/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/005e149";
       flake = false;
@@ -34,7 +42,7 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { nixpkgs, unit2nix, rust-overlay, flake-utils, basalt-src, cairn-src, octet-src, trellis-src, ucan-src, ... }:
+  outputs = { nixpkgs, unit2nix, rust-overlay, flake-utils, onix-kache-lib, onix-kache-package-src, basalt-src, cairn-src, octet-src, trellis-src, ucan-src, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgsBase = import nixpkgs {
@@ -85,26 +93,52 @@
           rustc = rustToolchainCompat;
         });
 
-        ws = unit2nix.lib.${system}.buildFromUnitGraphAuto {
-          pkgs = unit2nixPkgs;
-          inherit rustToolchain;
-          src = ./.;
-          workspace = true;
-          noLocked = true;
-          clippyArgs = [ "-D" "warnings" ];
-          buildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
-            cargo = rustToolchain;
-            rustc = rustToolchain;
-          };
-          extraCrateOverrides = {
-            # nickel-lang-core declares links="nix", but the Nix FFI is behind
-            # the disabled nix-experimental feature in this workspace.
-            nickel-lang-core = attrs: { };
-            # verus_prettyplease declares links="prettyplease-verus02" but
-            # vendors its implementation; no native libraries are required.
-            verus_prettyplease = attrs: { };
-          };
+        kacheCacheDir = "/var/cache/kache-nix";
+        kacheKeySalt = "molten-unit2nix-kache-v1";
+        kachePackage = pkgs.callPackage onix-kache-package-src { };
+        kacheLib = import (onix-kache-lib + "/kache-nix-rust.nix") {
+          lib = pkgs.lib;
+          inherit pkgs kachePackage;
         };
+        mkUnit2nixRust = { enableKache ? false, cacheDir ? kacheCacheDir, keySalt ? kacheKeySalt }:
+          if enableKache then
+            kacheLib.mkWrappedRustPackage {
+              name = "molten-kache-rust";
+              rust = rustToolchain;
+              inherit cacheDir keySalt;
+            }
+          else
+            rustToolchain;
+        mkBuildRustCrateForPkgs = { enableKache ? false, cacheDir ? kacheCacheDir, keySalt ? kacheKeySalt }: pkgs:
+          let
+            unit2nixRust = mkUnit2nixRust { inherit enableKache cacheDir keySalt; };
+          in
+          pkgs.buildRustCrate.override {
+            cargo = unit2nixRust;
+            rustc = unit2nixRust;
+          };
+        mkUnit2nixWorkspace = { enableKache ? false, cacheDir ? kacheCacheDir, keySalt ? kacheKeySalt }:
+          unit2nix.lib.${system}.buildFromUnitGraphAuto {
+            pkgs = unit2nixPkgs;
+            inherit rustToolchain;
+            src = ./.;
+            workspace = true;
+            noLocked = true;
+            clippyArgs = [ "-D" "warnings" ];
+            buildRustCrateForPkgs = mkBuildRustCrateForPkgs { inherit enableKache cacheDir keySalt; };
+            extraCrateOverrides = {
+              # nickel-lang-core declares links="nix", but the Nix FFI is behind
+              # the disabled nix-experimental feature in this workspace.
+              nickel-lang-core = attrs: { };
+              # verus_prettyplease declares links="prettyplease-verus02" but
+              # vendors its implementation; no native libraries are required.
+              verus_prettyplease = attrs: { };
+            };
+          };
+
+        ws = mkUnit2nixWorkspace { enableKache = false; };
+        kacheWs = mkUnit2nixWorkspace { enableKache = true; };
+        kacheWrappedRust = mkUnit2nixRust { enableKache = true; };
 
         moltenPkg = ws.workspaceMembers."molten".build;
         moltenTestBinaries = (ws.test.workspaceMembers."molten".build).override { buildTests = true; };
@@ -185,6 +219,8 @@
         packages = {
           default = moltenPkg;
           molten = moltenPkg;
+          molten-kache = kacheWs.workspaceMembers."molten".build;
+          molten-kache-rust = kacheWrappedRust;
           all = ws.allWorkspaceMembers;
         };
 
@@ -193,6 +229,101 @@
           # using CARGO_BIN_EXE_molten; the raw unit2nix libtest runner does not.
           molten = nextest;
           clippy = ws.clippy.allWorkspaceMembers;
+
+          kache-nix-rust-wrapper-contract =
+            let
+              missingCacheDiagnostic = "cache directory is not writable";
+              fakeKache = pkgs.writeShellApplication {
+                name = "kache";
+                text = ''
+                  if [ -n "''${KACHE_NIX_TRACE:-}" ]; then
+                    {
+                      printf 'fake_kache_invoked=true\n'
+                      printf 'argv=%s\n' "$*"
+                      printf 'KACHE_KEY_SALT=%s\n' "''${KACHE_KEY_SALT:-}"
+                      printf 'KACHE_CACHE_DIR=%s\n' "''${KACHE_CACHE_DIR:-}"
+                    } >> "$KACHE_NIX_TRACE"
+                  fi
+                  exec "$@"
+                '';
+              };
+              checkedKacheLib = import (onix-kache-lib + "/kache-nix-rust.nix") {
+                lib = pkgs.lib;
+                inherit pkgs;
+                kachePackage = fakeKache;
+              };
+              checkedWrappedRust = checkedKacheLib.mkWrappedRustPackage {
+                name = "molten-checked-kache-rust";
+                rust = rustToolchain;
+                cacheDir = kacheCacheDir;
+                keySalt = kacheKeySalt;
+              };
+              disabledRust = mkUnit2nixRust { enableKache = false; };
+            in
+            pkgs.runCommand "molten-kache-nix-rust-wrapper-contract" { } ''
+              set -eu
+
+              if [ ${pkgs.lib.escapeShellArg (toString disabledRust)} != ${pkgs.lib.escapeShellArg (toString rustToolchain)} ]; then
+                echo "negative: disabled unit2nix path must use the unwrapped Rust toolchain" >&2
+                exit 1
+              fi
+              if [ ${pkgs.lib.escapeShellArg (toString checkedWrappedRust)} = ${pkgs.lib.escapeShellArg (toString rustToolchain)} ]; then
+                echo "positive: enabled unit2nix path must use a wrapped Rust toolchain" >&2
+                exit 1
+              fi
+
+              wrapper=${checkedWrappedRust}/bin/rustc
+              cache_dir="$PWD/cache"
+              trace="$PWD/kache.trace"
+
+              KACHE_NIX_DISABLED=1 KACHE_NIX_TRACE="$PWD/disabled.trace" "$wrapper" -vV > "$PWD/disabled-rustc-version.txt"
+              if [ -s "$PWD/disabled.trace" ]; then
+                echo "negative: disabled mode should not invoke kache" >&2
+                exit 1
+              fi
+
+              if KACHE_NIX_CACHE_DIR="$PWD/missing-cache" "$wrapper" -vV > "$PWD/missing-cache.stdout" 2> "$PWD/missing-cache.stderr"; then
+                echo "negative: missing cache directory unexpectedly succeeded" >&2
+                exit 1
+              fi
+              if ! ${pkgs.gnugrep}/bin/grep -Fq ${pkgs.lib.escapeShellArg missingCacheDiagnostic} "$PWD/missing-cache.stderr"; then
+                echo "negative: missing cache directory did not produce the expected diagnostic" >&2
+                cat "$PWD/missing-cache.stderr" >&2
+                exit 1
+              fi
+
+              mkdir -p "$cache_dir"
+              KACHE_NIX_CACHE_DIR="$cache_dir" KACHE_NIX_TRACE="$trace" "$wrapper" -vV > "$PWD/wrapped-rustc-version.txt"
+              if ! ${pkgs.gnugrep}/bin/grep -Fq 'fake_kache_invoked=true' "$trace"; then
+                echo "positive: wrapper did not invoke kache" >&2
+                cat "$trace" >&2
+                exit 1
+              fi
+              if ! ${pkgs.gnugrep}/bin/grep -Fq "KACHE_CACHE_DIR=$cache_dir" "$trace"; then
+                echo "positive: wrapper did not export the runtime cache directory" >&2
+                cat "$trace" >&2
+                exit 1
+              fi
+              if ! ${pkgs.gnugrep}/bin/grep -Fq 'operator=${kacheKeySalt}' "$trace"; then
+                echo "positive: wrapper did not include the operator key salt" >&2
+                cat "$trace" >&2
+                exit 1
+              fi
+              if ! [ -x ${checkedWrappedRust}/bin/rustdoc ]; then
+                echo "positive: wrapped rust package must preserve rustdoc compatibility" >&2
+                exit 1
+              fi
+              if ${pkgs.gnugrep}/bin/grep -R -Fq '/home/brittonr/.cache/kache' ${checkedWrappedRust}; then
+                echo "negative: wrapper must not reference the user-level kache cache" >&2
+                exit 1
+              fi
+              if ${pkgs.gnugrep}/bin/grep -R -Fq '/home/brittonr/.cargo/config.toml' ${checkedWrappedRust}; then
+                echo "negative: wrapper must not read user-level Cargo config" >&2
+                exit 1
+              fi
+
+              touch "$out"
+            '';
 
           nextest = pkgs.runCommand "molten-nextest"
             {
