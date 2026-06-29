@@ -16,3 +16,15 @@ Cargo.lock.bak
 # Agent/editor state
 .pi/
 .pirs/
+
+# Generated/local artifacts
+tests/*.tmp
+vendor/
+.agent/
+.claude/
+.dogfood-runs/
+.pre-commit-cache/
+mutants.out/
+*.orig
+crates/**/tests/ui/**/Cargo.lock
+docs/simulations/*.json
