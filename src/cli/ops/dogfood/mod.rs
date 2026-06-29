@@ -1,12 +1,12 @@
-#[path = "dogfood/archive.rs"]
+#[path = "archive.rs"]
 mod archive;
-#[path = "dogfood/command.rs"]
+#[path = "command.rs"]
 mod command;
-#[path = "dogfood/io.rs"]
+#[path = "io.rs"]
 mod io;
-#[path = "dogfood/ops.rs"]
+#[path = "ops/mod.rs"]
 mod ops;
-#[path = "dogfood/signed.rs"]
+#[path = "signed.rs"]
 mod signed;
 
 pub(crate) type DogfoodCommand = command::Command;

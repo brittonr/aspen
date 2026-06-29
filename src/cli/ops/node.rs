@@ -1,7 +1,7 @@
 #[path = "node/command.rs"]
 pub(crate) mod command;
 
-#[path = "node/authority.rs"]
+#[path = "node/authority/mod.rs"]
 mod authority;
 #[path = "node/control.rs"]
 mod control;

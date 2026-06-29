@@ -10,7 +10,7 @@ mod cli_chunk;
 mod cli_coordination;
 #[path = "cli/workflow/delivery.rs"]
 mod cli_delivery;
-#[path = "cli/ops/dogfood.rs"]
+#[path = "cli/ops/dogfood/mod.rs"]
 mod cli_dogfood;
 #[path = "cli/evidence/gate.rs"]
 mod cli_gate;
