@@ -19,7 +19,7 @@ Molten is a policy-gated distributed runtime built around a canonical Preserves 
 - Basalt/UCAN, Nickel contracts, reviewed Steel predicates, Trellis predicates, Cairn receipts, and Octet/Valence evidence gate side effects.
 - Iroh bridges envelopes, blobs, and docs across peers; Wasmtime actors run behind deny-by-default hostcalls; Redb stores local durable metadata and indexes.
 
-Cairn roadmap status: `cairn/changes/` is currently empty. Accepted requirements live under `cairn/specs/`, and completed roadmap slices are archived under `cairn/archive/`. The drained/archived roadmap includes:
+Cairn roadmap status: active production-readiness changes currently live under `cairn/changes/`; accepted requirements live under `cairn/specs/`, and completed roadmap slices are archived under `cairn/archive/`. The drained/archived roadmap includes:
 
 - `runtime-spine`
 - `synit-sam-runtime`
@@ -532,6 +532,12 @@ molten test coordination show target/coordination-apply/report.preserves
 ```
 
 `apply` writes `coordination-apply-report-v1` plus indexed request/receipt/state/assertion evidence. Duplicate operation ids replay the prior receipt instead of advancing state twice. Coordination receipts and reports are evidence only; they do not grant authority, policy, resource, transport, provenance, or source-gate trust.
+
+## Production readiness receipts
+
+The production readiness runbooks live in [`docs/production-operator-runbooks.md`](docs/production-operator-runbooks.md), with a typed Nickel deployment profile at [`docs/production-node-profile.ncl`](docs/production-node-profile.ncl).
+
+`molten test prod-soak` now also emits canonical production readiness receipts for deployment profiles, backup/restore drills, upgrade/rollback drills, observability/SLO snapshots, runbook checks, security threat models, security drills, redaction audits, supply-chain reviews, boundary negative suites, incident response drills, security readiness reports, pilot decisions, and release-candidate gates. These receipts bind review evidence only; they do not grant authority, policy, provenance, retention, transport, source-gate, or destructive-operation trust. A release candidate with only configuration-clean Octet evidence must carry a source-gate caveat and can only support an explicitly scoped pilot decision.
 
 ## Development
 

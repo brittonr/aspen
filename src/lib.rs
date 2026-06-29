@@ -47,6 +47,8 @@ pub mod peer_bootstrap;
 pub mod plugin_host;
 #[path = "preserves/rail.rs"]
 pub mod preserves_rail;
+#[path = "prod/readiness.rs"]
+pub mod prod_readiness;
 #[path = "prod/soak.rs"]
 pub mod prod_soak;
 #[path = "protocol/session.rs"]

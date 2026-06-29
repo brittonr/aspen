@@ -151,6 +151,336 @@ pub(crate) enum Command {
         #[arg(long)]
         out: Option<std::path::PathBuf>,
     },
+    DeploymentProfile {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        profile_name: String,
+        #[arg(long = "state-layout-ref")]
+        state_layout_refs: Vec<String>,
+        #[arg(long = "required-adapter-ref")]
+        required_adapter_refs: Vec<String>,
+        #[arg(long = "source-gate-ref")]
+        source_gate_refs: Vec<String>,
+        #[arg(long = "resource-limit-ref")]
+        resource_limit_refs: Vec<String>,
+        #[arg(long = "redaction-setting-ref")]
+        redaction_setting_refs: Vec<String>,
+        #[arg(long = "live-transport-ref")]
+        live_transport_refs: Vec<String>,
+        #[arg(long = "startup-expectation-ref")]
+        startup_expectation_refs: Vec<String>,
+        #[arg(long = "shutdown-expectation-ref")]
+        shutdown_expectation_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    BackupRestoreDrill {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        drill_name: String,
+        #[arg(long = "ledger-ref")]
+        ledger_refs: Vec<String>,
+        #[arg(long = "redb-ref")]
+        redb_refs: Vec<String>,
+        #[arg(long = "chunk-ref")]
+        chunk_refs: Vec<String>,
+        #[arg(long = "identity-ref")]
+        identity_refs: Vec<String>,
+        #[arg(long = "retention-pin-ref")]
+        retention_pin_refs: Vec<String>,
+        #[arg(long = "source-gate-ref")]
+        source_gate_refs: Vec<String>,
+        #[arg(long = "restore-verification-ref")]
+        restore_verification_refs: Vec<String>,
+        #[arg(long = "tamper-denial-ref")]
+        tamper_denial_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    UpgradeRollbackDrill {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        plan_name: String,
+        #[arg(long = "migration-ref")]
+        migration_refs: Vec<String>,
+        #[arg(long = "smoke-ref")]
+        smoke_refs: Vec<String>,
+        #[arg(long = "rollback-eligibility-ref")]
+        rollback_eligibility_refs: Vec<String>,
+        #[arg(long = "irreversible-exclusion-ref")]
+        irreversible_exclusion_refs: Vec<String>,
+        #[arg(long = "post-rollback-ref")]
+        post_rollback_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    ObservabilitySlo {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        snapshot_name: String,
+        #[arg(long = "adapter-health-ref")]
+        adapter_health_refs: Vec<String>,
+        #[arg(long)]
+        queue_depth: u64,
+        #[arg(long)]
+        max_queue_depth: u64,
+        #[arg(long = "control-loop-ref")]
+        control_loop_refs: Vec<String>,
+        #[arg(long = "resource-pressure-ref")]
+        resource_pressure_refs: Vec<String>,
+        #[arg(long = "retention-drift-ref")]
+        retention_drift_refs: Vec<String>,
+        #[arg(long = "source-gate-freshness-ref")]
+        source_gate_freshness_refs: Vec<String>,
+        #[arg(long = "live-transport-ref")]
+        live_transport_refs: Vec<String>,
+        #[arg(long = "import-export-failure-ref")]
+        import_export_failure_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    RunbookCheck {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        runbook_name: String,
+        #[arg(long)]
+        operation: String,
+        #[arg(long = "canonical-artifact-ref")]
+        canonical_artifact_refs: Vec<String>,
+        #[arg(long = "denial-fixture-ref")]
+        denial_fixture_refs: Vec<String>,
+        #[arg(long = "auxiliary-log-ref")]
+        auxiliary_log_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    ThreatModel {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        model_name: String,
+        #[arg(long = "threat")]
+        threat_entries: Vec<String>,
+        #[arg(long = "mapped-gate-ref")]
+        mapped_gate_refs: Vec<String>,
+        #[arg(long = "drill-ref")]
+        drill_refs: Vec<String>,
+        #[arg(long = "negative-suite-ref")]
+        negative_suite_refs: Vec<String>,
+        #[arg(long = "unresolved-risk-ref")]
+        unresolved_risk_refs: Vec<String>,
+        #[arg(long = "pilot-consequence-ref")]
+        pilot_consequence_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    SecurityDrill {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        drill_kind: String,
+        #[arg(long)]
+        scenario: String,
+        #[arg(long = "pass-evidence-ref")]
+        pass_evidence_refs: Vec<String>,
+        #[arg(long = "denial-ref")]
+        denial_refs: Vec<String>,
+        #[arg(long = "cleanup-ref")]
+        cleanup_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    RedactionAudit {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        audit_name: String,
+        #[arg(long = "surface-ref")]
+        surface_refs: Vec<String>,
+        #[arg(long = "redaction-ref")]
+        redaction_refs: Vec<String>,
+        #[arg(long = "reveal-gate-ref")]
+        reveal_gate_refs: Vec<String>,
+        #[arg(long = "plaintext-denial-ref")]
+        plaintext_denial_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    SupplyChainReview {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        review_name: String,
+        #[arg(long = "release-ref")]
+        release_refs: Vec<String>,
+        #[arg(long = "source-gate-ref")]
+        source_gate_refs: Vec<String>,
+        #[arg(long = "provenance-ref")]
+        provenance_refs: Vec<String>,
+        #[arg(long = "build-verify-ref")]
+        build_verify_refs: Vec<String>,
+        #[arg(long = "signed-keyring-ref")]
+        signed_keyring_refs: Vec<String>,
+        #[arg(long = "sensitive-artifact-ref")]
+        sensitive_artifact_refs: Vec<String>,
+        #[arg(long = "mismatch-denial-ref")]
+        mismatch_denial_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    BoundaryNegativeSuite {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        suite_name: String,
+        #[arg(long = "preserves-parser-ref")]
+        preserves_parser_refs: Vec<String>,
+        #[arg(long = "receipt-validator-ref")]
+        receipt_validator_refs: Vec<String>,
+        #[arg(long = "source-gate-ref")]
+        source_gate_refs: Vec<String>,
+        #[arg(long = "repro-bundle-ref")]
+        repro_bundle_refs: Vec<String>,
+        #[arg(long = "node-ingress-ref")]
+        node_ingress_refs: Vec<String>,
+        #[arg(long = "provenance-ref")]
+        provenance_refs: Vec<String>,
+        #[arg(long = "plugin-hostcall-ref")]
+        plugin_hostcall_refs: Vec<String>,
+        #[arg(long = "malformed-denial-ref")]
+        malformed_denial_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    IncidentResponseDrill {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        incident_kind: String,
+        #[arg(long)]
+        scenario: String,
+        #[arg(long = "detection-ref")]
+        detection_refs: Vec<String>,
+        #[arg(long = "containment-ref")]
+        containment_refs: Vec<String>,
+        #[arg(long = "recovery-ref")]
+        recovery_refs: Vec<String>,
+        #[arg(long = "next-step-ref")]
+        next_step_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    SecurityReadinessReport {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        report_name: String,
+        #[arg(long = "threat-model-ref")]
+        threat_model_refs: Vec<String>,
+        #[arg(long = "supply-chain-ref")]
+        supply_chain_refs: Vec<String>,
+        #[arg(long = "drill-ref")]
+        drill_refs: Vec<String>,
+        #[arg(long = "redaction-audit-ref")]
+        redaction_audit_refs: Vec<String>,
+        #[arg(long = "boundary-suite-ref")]
+        boundary_suite_refs: Vec<String>,
+        #[arg(long = "incident-response-ref")]
+        incident_response_refs: Vec<String>,
+        #[arg(long = "unresolved-risk-ref")]
+        unresolved_risk_refs: Vec<String>,
+        #[arg(long)]
+        pilot_recommendation: String,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    PilotDecision {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        scope: String,
+        #[arg(long = "allowed-workload")]
+        allowed_workloads: Vec<String>,
+        #[arg(long = "denied-workload")]
+        denied_workloads: Vec<String>,
+        #[arg(long = "rollback-trigger")]
+        rollback_triggers: Vec<String>,
+        #[arg(long = "stop-condition")]
+        stop_conditions: Vec<String>,
+        #[arg(long = "operator-review-ref")]
+        operator_review_refs: Vec<String>,
+        #[arg(long = "caveat")]
+        caveats: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
+    ReleaseCandidateGate {
+        #[arg(long, default_value = "pass")]
+        decision: String,
+        #[arg(long)]
+        candidate: String,
+        #[arg(long)]
+        source_ref: String,
+        #[arg(long = "rust-validation-ref")]
+        rust_validation_refs: Vec<String>,
+        #[arg(long = "nextest-ref")]
+        nextest_refs: Vec<String>,
+        #[arg(long = "nix-check-ref")]
+        nix_check_refs: Vec<String>,
+        #[arg(long = "cairn-validation-ref")]
+        cairn_validation_refs: Vec<String>,
+        #[arg(long = "octet-ref")]
+        octet_refs: Vec<String>,
+        #[arg(long = "dogfood-ref")]
+        dogfood_refs: Vec<String>,
+        #[arg(long = "bundle-verify-ref")]
+        bundle_verify_refs: Vec<String>,
+        #[arg(long = "promotion-ref")]
+        promotion_refs: Vec<String>,
+        #[arg(long = "export-verify-ref")]
+        export_verify_refs: Vec<String>,
+        #[arg(long, default_value = "source-remediated-zero")]
+        source_gate_status: String,
+        #[arg(long = "source-gate-caveat")]
+        source_gate_caveats: Vec<String>,
+        #[arg(long = "pilot-decision-ref")]
+        pilot_decision_refs: Vec<String>,
+        #[arg(long = "diagnostic")]
+        diagnostics: Vec<String>,
+        #[arg(long)]
+        out: Option<std::path::PathBuf>,
+    },
     Show {
         artifact: std::path::PathBuf,
     },
@@ -164,6 +494,20 @@ pub(super) fn artifact_kind(text: &str) -> &'static str {
         ("prod-soak-resource-envelope-v1", "resource-envelope"),
         ("prod-soak-fault-matrix-v1", "fault-matrix"),
         ("prod-soak-run-v1", "run"),
+        ("prod-ops-deployment-profile-v1", "deployment-profile"),
+        ("prod-ops-backup-restore-drill-v1", "backup-restore-drill"),
+        ("prod-ops-upgrade-rollback-drill-v1", "upgrade-rollback-drill"),
+        ("prod-ops-observability-slo-v1", "observability-slo"),
+        ("prod-ops-runbook-check-v1", "runbook-check"),
+        ("prod-security-threat-model-v1", "threat-model"),
+        ("prod-security-drill-v1", "security-drill"),
+        ("prod-security-redaction-audit-v1", "redaction-audit"),
+        ("prod-security-supply-chain-review-v1", "supply-chain-review"),
+        ("prod-security-boundary-negative-suite-v1", "boundary-negative-suite"),
+        ("prod-security-incident-response-drill-v1", "incident-response-drill"),
+        ("prod-security-readiness-report-v1", "security-readiness-report"),
+        ("prod-release-pilot-decision-v1", "pilot-decision"),
+        ("prod-release-candidate-gate-v1", "release-candidate-gate"),
     ] {
         if text.contains(needle) {
             return kind;
