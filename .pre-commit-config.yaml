@@ -26,6 +26,15 @@ repos:
           - pre-commit
           - pre-push
 
+      - id: cargo-octet-check
+        name: cargo octet check
+        entry: cargo octet check --artifact-dir target/octet-precommit
+        language: system
+        pass_filenames: false
+        stages:
+          - pre-commit
+          - pre-push
+
       - id: cairn-validate
         name: cairn validate
         entry: nix run path:/home/brittonr/git/cairn#cairn -- validate --root . --policy /home/brittonr/git/cairn/cairn-policy/generated/cairn-policy.json
