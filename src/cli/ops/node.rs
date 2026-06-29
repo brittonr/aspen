@@ -9,6 +9,8 @@ mod control;
 mod core;
 #[path = "node/health.rs"]
 mod health;
+#[path = "node/iroh.rs"]
+mod iroh;
 #[path = "node/lifecycle.rs"]
 mod lifecycle;
 #[path = "node/workflow.rs"]
@@ -52,6 +54,12 @@ pub(crate) fn run(command: Command) -> molten::error::Result<()> {
         command::Top::ControlIngressPublish(input) => control::ingress::publish(input),
         command::Top::ControlIngressDeliver(input) => control::ingress::deliver(input),
         command::Top::ControlDeny(input) => control::deny(input),
+        command::Top::IrohRouterFixture(input) => iroh::router_fixture(input),
+        command::Top::IrohFrameFixture(input) => iroh::frame_fixture(input),
+        command::Top::NetworkDiagnosticsFixture(input) => iroh::diagnostics_fixture(input),
+        command::Top::MetricsSnapshotFixture(input) => iroh::metrics_fixture(input),
+        command::Top::PortMappingFixture(input) => iroh::port_mapping_fixture(input),
+        command::Top::ExternalDiagnosticsBridgeFixture(input) => iroh::external_bridge_fixture(input),
         command::Top::Shutdown(input) => health::shutdown(input),
         command::Top::Health(input) => health::restart(input),
     }

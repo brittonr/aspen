@@ -33,6 +33,8 @@ pub mod nixos_vm;
 pub mod node_daemon;
 #[path = "node/identity.rs"]
 pub mod node_identity;
+#[path = "node/iroh.rs"]
+pub mod node_iroh;
 #[path = "node/runtime.rs"]
 pub mod node_runtime;
 #[path = "octet/gate.rs"]
@@ -41,6 +43,8 @@ pub mod octet_gate;
 pub mod octet_remediation;
 #[path = "operator/dogfood.rs"]
 pub mod operator_dogfood;
+#[path = "operator/gateway.rs"]
+pub mod operator_gateway;
 #[path = "peer/bootstrap.rs"]
 pub mod peer_bootstrap;
 #[path = "plugin/host.rs"]

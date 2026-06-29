@@ -14,6 +14,8 @@ mod cli_delivery;
 mod cli_dogfood;
 #[path = "cli/evidence/gate.rs"]
 mod cli_gate;
+#[path = "cli/ops/gateway.rs"]
+mod cli_gateway;
 #[path = "cli/test/harness.rs"]
 mod cli_harness;
 #[path = "cli/workflow/job.rs"]

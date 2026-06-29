@@ -714,3 +714,13 @@ cargo run -- test gate check target/molten-reports/bad.failure.preserves --failu
 nix build
 nix flake check
 ```
+
+## References
+
+- [`n0-computer/iroh-examples`](https://github.com/n0-computer/iroh-examples) — reference patterns for dynamic Iroh protocol routing, framed bidirectional streams, and read-only blob gateway UX.
+- [`n0-computer/irpc`](https://github.com/n0-computer/irpc) — reference patterns for local/remote request-response and streaming service sessions over Iroh-style transports.
+- [`n0-computer/iroh-doctor`](https://github.com/n0-computer/iroh-doctor) — reference patterns for NAT, UDP, relay latency, connect/accept, port-map, and network diagnostic reports.
+- [`n0-computer/net-tools`](https://github.com/n0-computer/net-tools) — reference patterns for route/interface watching and opt-in port mapping via UPnP, PCP, and NAT-PMP.
+- [`n0-computer/iroh-metrics`](https://github.com/n0-computer/iroh-metrics) — reference patterns for bounded counters, gauges, histograms, and OpenMetrics export.
+- [`n0-computer/iroh-services`](https://github.com/n0-computer/iroh-services) — reference patterns for optional external metrics/diagnostics service integration and remote diagnostics capabilities.
+- [`n0-computer/n0-watcher`](https://github.com/n0-computer/n0-watcher) — reference patterns for latest-state watchers without unbounded intermediate-value buffering.

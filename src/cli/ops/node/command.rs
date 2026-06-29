@@ -6,6 +6,8 @@ pub(crate) mod base;
 pub(crate) mod control;
 #[path = "command/health.rs"]
 pub(crate) mod health;
+#[path = "command/iroh.rs"]
+pub(crate) mod iroh;
 #[path = "command/live.rs"]
 pub(crate) mod live;
 
@@ -46,6 +48,12 @@ pub(crate) enum Top {
     ControlIngressPublish(control::IngressPublish),
     ControlIngressDeliver(control::IngressDeliver),
     ControlDeny(control::Deny),
+    IrohRouterFixture(iroh::RouterFixture),
+    IrohFrameFixture(iroh::FrameFixture),
+    NetworkDiagnosticsFixture(iroh::DiagnosticsFixture),
+    MetricsSnapshotFixture(iroh::MetricsFixture),
+    PortMappingFixture(iroh::PortMappingFixture),
+    ExternalDiagnosticsBridgeFixture(iroh::ExternalBridgeFixture),
     Shutdown(health::Shutdown),
     Health(health::Restart),
 }

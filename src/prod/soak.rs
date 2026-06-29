@@ -589,6 +589,45 @@ mod tests {
     }
 
     #[test]
+    fn run_receipt_binds_network_diagnostics_and_metrics_refs() {
+        let node_evidence = vec![local_ref("node-a"), local_ref("node-b")];
+        let peer_ticket = vec![local_ref("ticket")];
+        let node_control = vec![local_ref("framed-stream")];
+        let remote_service = vec![local_ref("remote-service")];
+        let job = vec![local_ref("job-worker")];
+        let coordination = vec![local_ref("coordination")];
+        let evidence_export = vec![local_ref("export-a")];
+        let network_diagnostic = local_ref("network-diagnostics");
+        let metrics_snapshot = local_ref("metrics-snapshot");
+        let resource_refs = vec![network_diagnostic.clone(), metrics_snapshot.clone()];
+        let value = run_value(&ProdSoakRunInput {
+            decision: "pass",
+            scenario: "phase1-network-diagnostics",
+            topology_ref: &local_ref("topology"),
+            fault_profile: "none",
+            node_evidence_refs: &node_evidence,
+            peer_ticket_refs: &peer_ticket,
+            node_control_refs: &node_control,
+            remote_service_refs: &remote_service,
+            job_refs: &job,
+            coordination_refs: &coordination,
+            evidence_export_refs: &evidence_export,
+            fault_refs: &[],
+            durability_refs: &[],
+            resource_refs: &resource_refs,
+            replay_status: "non-replayable-live-observations",
+            diagnostics: &["network diagnostics are observability evidence only".to_string()],
+            log_refs: &[local_ref("log")],
+            caveats: &["network diagnostics do not grant side-effect authority".to_string()],
+        })
+        .expect("soak run");
+        let text = to_text(&value).expect("text");
+        assert!(text.contains(&network_diagnostic));
+        assert!(text.contains(&metrics_snapshot));
+        assert!(text.contains("soak-evidence-does-not-grant-authority"));
+    }
+
+    #[test]
     fn passing_run_requires_all_phase_one_categories() {
         let error = run_value(&ProdSoakRunInput {
             decision: "pass",

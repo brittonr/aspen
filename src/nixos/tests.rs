@@ -51,3 +51,39 @@ fn vm_test_run_receipts_bind_topology_and_nodes() {
     assert!(text.contains("nixos-vm-test-run-v1"));
     assert!(text.contains("terminal-output-diagnostic-only"));
 }
+
+#[test]
+fn vm_test_run_binds_framed_stream_and_network_diagnostic_child_refs() {
+    let topology = topology_value(&NixosVmTopologyInput {
+        nodes: &["node_a".to_string(), "node_b".to_string()],
+        package_ref: "store:/nix/store/example-molten",
+        package_path: "/nix/store/example-molten",
+        network: "nixos-test-private",
+        nix_inputs: &["self:locked".to_string()],
+        caveats: &["vm evidence is platform evidence only".to_string()],
+    })
+    .expect("topology");
+    let topology_ref = canonical_hash(&topology).expect("topology ref");
+    let node_ref = local_ref("node-evidence");
+    let framed_ref = local_ref("iroh-framed-envelope-receipt");
+    let diagnostics_ref = local_ref("network-diagnostics-report");
+    let metrics_ref = local_ref("metrics-snapshot");
+    let run = test_run_value(&NixosVmTestRunInput {
+        decision: "pass",
+        topology_ref: &topology_ref,
+        scenario: "phase1-framed-stream-diagnostics",
+        fault_profile: "none",
+        node_evidence_refs: &[node_ref],
+        child_workflow_refs: &[framed_ref.clone(), diagnostics_ref.clone(), metrics_ref.clone()],
+        replay_status: "non-replayable-vm-observations",
+        diagnostics: &["live stream observations are diagnostic unless separately recorded".to_string()],
+        log_refs: &[],
+        caveats: &["does-not-grant-authority".to_string()],
+    })
+    .expect("test run");
+    let text = to_text(&run).expect("render");
+    assert!(text.contains(&framed_ref));
+    assert!(text.contains(&diagnostics_ref));
+    assert!(text.contains(&metrics_ref));
+    assert!(text.contains("vm-evidence-does-not-grant-authority"));
+}

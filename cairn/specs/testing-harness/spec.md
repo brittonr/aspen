@@ -1226,3 +1226,33 @@ r[molten.prod_soak.performance_resource_envelope] Molten SHOULD track production
 - GIVEN a soak run exceeds a configured queue-depth or store-growth threshold
 - WHEN the final soak receipt is emitted
 - THEN it records degraded or deny status with the relevant resource measurements and child receipt refs.
+
+### Requirement: Multi-node VM framed stream coverage
+r[molten.testing.nixos_vm_multinode.framed_stream] Molten SHOULD extend the NixOS multi-node VM test to exercise at least one admitted framed Iroh bidirectional stream between VM nodes and bind the framed-stream receipts into the VM test-run evidence.
+
+#### Scenario: VM test binds framed stream child receipt
+- GIVEN two VM nodes with admitted peer, authority, policy, resource, and router registration evidence
+- WHEN a canonical Preserves envelope crosses a framed Iroh stream between the nodes
+- THEN the VM test-run receipt includes child refs for router admission, stream session, framed-envelope pass receipt, and downstream node-control or protocol-session admission
+- AND the receipt states that live stream observations are non-replayable unless separately recorded.
+
+#### Scenario: VM denial covers unsupported ALPN or malformed frame
+- GIVEN a VM test attempts an unsupported ALPN connection or sends a malformed framed envelope
+- WHEN the framed stream path evaluates the attempt
+- THEN Molten emits deny evidence before state mutation
+- AND the VM test binds the denial as diagnostic coverage rather than transport-derived authority.
+
+### Requirement: Multi-node VM network diagnostics evidence
+r[molten.testing.nixos_vm_multinode.network_diagnostics] Molten SHOULD bind local network diagnostics reports, connectivity probe receipts, route/interface watcher snapshots, and metrics snapshot refs into the NixOS multi-node VM test-run evidence when the host environment can execute those checks.
+
+#### Scenario: VM run binds diagnostics child refs
+- GIVEN a multi-node VM test completes network diagnostics and metrics snapshots for each node
+- WHEN the VM test-run receipt is emitted
+- THEN it includes child refs for diagnostics reports, connectivity probes, watcher snapshots, and metrics snapshots
+- AND raw terminal logs remain diagnostic refs rather than authoritative pass evidence.
+
+#### Scenario: Missing host support does not mint diagnostic pass evidence
+- GIVEN the host cannot perform a required VM network diagnostic or port-map probe
+- WHEN the VM check requests that diagnostic
+- THEN Molten records unavailable or degraded diagnostics
+- AND the VM check does not convert the unavailable diagnostic into pass evidence.
