@@ -289,8 +289,8 @@ pub fn empty_protocol_registry() -> ProtocolRegistry {
 
 pub fn evaluate_router_operation(registry: &ProtocolRegistry, input: &RouterOperationInput) -> Result<RouterDecision> {
     let mut diagnostics = Vec::new();
-    let alpn_valid = collect_alpn_diagnostic(&input.alpn, &mut diagnostics).is_ok();
-    let handler_valid = collect_handler_diagnostic(&input.handler_kind, &mut diagnostics).is_ok();
+    let is_alpn_valid = collect_alpn_diagnostic(&input.alpn, &mut diagnostics).is_ok();
+    let is_handler_valid = collect_handler_diagnostic(&input.handler_kind, &mut diagnostics).is_ok();
     collect_ref_diagnostics(&input.authority_refs, "authority", &mut diagnostics)?;
     collect_ref_diagnostics(&input.policy_refs, "policy", &mut diagnostics)?;
     collect_ref_diagnostics(&input.resource_refs, "resource", &mut diagnostics)?;
@@ -313,7 +313,7 @@ pub fn evaluate_router_operation(registry: &ProtocolRegistry, input: &RouterOper
     let mut previous_generation = None;
     let existing = registry.handlers.get(&input.alpn);
 
-    if alpn_valid && handler_valid && diagnostics.is_empty() {
+    if is_alpn_valid && is_handler_valid && diagnostics.is_empty() {
         match input.operation.as_str() {
             "install" => match existing {
                 None => {
@@ -330,22 +330,7 @@ pub fn evaluate_router_operation(registry: &ProtocolRegistry, input: &RouterOper
             "replace" => match existing {
                 Some(current) => {
                     previous_generation = Some(current.generation);
-                    let expected = Some(current.generation);
-                    if input.prior_generation != expected {
-                        push_diagnostic(
-                            &mut diagnostics,
-                            "stale-generation: replacement prior generation does not match registry",
-                        )?;
-                    } else if input.generation <= current.generation {
-                        push_diagnostic(&mut diagnostics, "replacement generation must advance")?;
-                    } else if input.shutdown_evidence_ref.as_deref().is_none() {
-                        push_diagnostic(
-                            &mut diagnostics,
-                            "replacement requires shutdown evidence for previous handler",
-                        )?;
-                    } else {
-                        validate_optional_ref(input.shutdown_evidence_ref.as_deref(), "shutdown evidence")?;
-                        let descriptor = descriptor_from_input(input)?;
+                    if let Some(descriptor) = replacement_descriptor(input, current, &mut diagnostics)? {
                         generation = Some(descriptor.generation);
                         next.handlers.insert(input.alpn.clone(), descriptor);
                         outcome = "replaced".to_string();
@@ -657,8 +642,8 @@ pub fn port_mapping_receipt(input: &PortMappingInput) -> Result<DiagnosticDecisi
     let mut diagnostics = Vec::new();
     validate_status(&input.mode, &["probe", "mutate"], "port mapping mode")?;
     validate_bounded_value_count(input.available_protocols.len(), MAX_NETWORK_OBSERVATIONS, "available protocol")?;
-    let protocol_available = input.available_protocols.iter().any(|protocol| protocol == &input.protocol);
-    if !protocol_available {
+    let is_protocol_available = input.available_protocols.iter().any(|protocol| protocol == &input.protocol);
+    if !is_protocol_available {
         push_diagnostic(&mut diagnostics, "requested port mapping protocol unavailable")?;
     }
     if input.mode == "mutate" {
@@ -724,7 +709,9 @@ pub fn watcher_snapshot_value(input: &NetworkWatcherInput) -> Result<DiagnosticD
     if input.retained_event_count > input.observed_event_count {
         push_diagnostic(&mut diagnostics, "retained watcher event count exceeds observed event count")?;
     }
-    if input.retained_event_count as usize > MAX_WATCHER_ITEMS {
+    let retained_event_count = usize::try_from(input.retained_event_count)
+        .map_err(|error| MoltenError::invalid_harness(format!("retained watcher event count unsupported: {error}")))?;
+    if retained_event_count > MAX_WATCHER_ITEMS {
         push_diagnostic(&mut diagnostics, "retained watcher events exceed latest-state bound")?;
     }
     collect_ref_diagnostics(&input.evidence_refs, "watcher evidence", &mut diagnostics)?;
@@ -744,7 +731,7 @@ pub fn watcher_snapshot_value(input: &NetworkWatcherInput) -> Result<DiagnosticD
         record("diagnostics", vec![strings_value(&diagnostics)?]),
         checks_value(&[
             ("latest-state-only", "pass"),
-            ("bounded-event-buffer", pass_fail(input.retained_event_count as usize <= MAX_WATCHER_ITEMS)),
+            ("bounded-event-buffer", pass_fail(retained_event_count <= MAX_WATCHER_ITEMS)),
             ("watcher-diagnostic-only", "pass"),
         ]),
     ]);
@@ -964,6 +951,28 @@ fn service_session_receipt_value(
             ("postcard-not-canonical-boundary", "pass"),
         ]),
     ]))
+}
+
+fn replacement_descriptor(
+    input: &RouterOperationInput,
+    current: &ProtocolHandlerDescriptor,
+    diagnostics: &mut Vec<String>,
+) -> Result<Option<ProtocolHandlerDescriptor>> {
+    let expected = Some(current.generation);
+    if input.prior_generation != expected {
+        push_diagnostic(diagnostics, "stale-generation: replacement prior generation does not match registry")?;
+        return Ok(None);
+    }
+    if input.generation <= current.generation {
+        push_diagnostic(diagnostics, "replacement generation must advance")?;
+        return Ok(None);
+    }
+    let Some(shutdown_ref) = input.shutdown_evidence_ref.as_deref() else {
+        push_diagnostic(diagnostics, "replacement requires shutdown evidence for previous handler")?;
+        return Ok(None);
+    };
+    validate_optional_ref(Some(shutdown_ref), "shutdown evidence")?;
+    descriptor_from_input(input).map(Some)
 }
 
 fn descriptor_from_input(input: &RouterOperationInput) -> Result<ProtocolHandlerDescriptor> {

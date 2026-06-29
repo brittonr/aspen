@@ -248,7 +248,8 @@ pub fn decide_index(input: &GatewayIndexInput) -> Result<GatewayIndexDecision> {
     collect_visibility_diagnostics(&input.visibility, &mut diagnostics)?;
     validate_count(input.members.len(), MAX_GATEWAY_MEMBERS, "gateway index member")?;
     let hidden = input.visibility.hidden_refs.iter().collect::<BTreeSet<_>>();
-    let mut entries = Vec::new();
+    let entry_capacity = input.members.len().min(MAX_GATEWAY_MEMBERS);
+    let mut entries = Vec::with_capacity(entry_capacity);
     for member in &input.members {
         validate_member(member, &mut diagnostics)?;
         if !member.visible || hidden.contains(&member.object_ref) {
@@ -347,9 +348,12 @@ fn required_chunks_for_range(
         .map_err(|error| MoltenError::invalid_harness(format!("gateway range offset unsupported: {error}")))?;
     let end = usize::try_from(range.offset + range.length)
         .map_err(|error| MoltenError::invalid_harness(format!("gateway range end unsupported: {error}")))?;
-    let first = offset / chunk_size;
+    let first = offset
+        .checked_div(chunk_size)
+        .ok_or_else(|| MoltenError::invalid_harness("gateway chunk size must be non-zero"))?;
     let last_exclusive = end.div_ceil(chunk_size);
-    let mut refs = Vec::new();
+    let chunk_count = last_exclusive.saturating_sub(first);
+    let mut refs = Vec::with_capacity(chunk_count);
     for index in first..last_exclusive {
         let Some(chunk) = manifest.chunks.get(index) else {
             push_diagnostic(diagnostics, "range maps to missing manifest chunk")?;
@@ -375,7 +379,9 @@ fn reconstruct_verified_range(
     if range.length == EMPTY_RANGE_LENGTH {
         return Ok(output);
     }
-    let first = offset / chunk_size;
+    let first = offset
+        .checked_div(chunk_size)
+        .ok_or_else(|| MoltenError::invalid_harness("gateway chunk size must be non-zero"))?;
     let last_exclusive = end.div_ceil(chunk_size);
     for index in first..last_exclusive {
         let Some(chunk) = manifest.chunks.get(index) else {
@@ -655,7 +661,11 @@ mod tests {
     fn temp_root(label: &str) -> PathBuf {
         let id = NEXT_TEMP_ROOT_ID.fetch_add(FIRST_TEMP_ROOT_ID, Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!("molten-gateway-{label}-{}-{id}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
+        match std::fs::remove_dir_all(&root) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => panic!("remove stale gateway temp root {}: {error}", root.display()),
+        }
         root
     }
 
@@ -677,12 +687,17 @@ mod tests {
         let put = chunk_store::put_bytes(&root, "artifact", body, CHUNK_SIZE).expect("put");
         let manifest =
             chunk_store::parse_manifest_value(&put.manifest_value, Some(&put.manifest_ref)).expect("manifest");
-        let mut chunks = BTreeMap::new();
-        for (index, chunk) in manifest.chunks.iter().enumerate() {
-            let start = index * CHUNK_SIZE as usize;
-            let end = (start + CHUNK_SIZE as usize).min(body.len());
-            chunks.insert(chunk.chunk_ref.clone(), body[start..end].to_vec());
-        }
+        let chunk_size = usize::try_from(CHUNK_SIZE).expect("fixture chunk size fits usize");
+        let chunks = manifest
+            .chunks
+            .iter()
+            .enumerate()
+            .map(|(index, chunk)| {
+                let start = index * chunk_size;
+                let end = (start + chunk_size).min(body.len());
+                (chunk.chunk_ref.clone(), body[start..end].to_vec())
+            })
+            .collect::<BTreeMap<_, _>>();
         (root, manifest, chunks)
     }
 
