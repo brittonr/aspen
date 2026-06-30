@@ -1,12 +1,8 @@
-use std::fs;
-use std::path::Path;
-use std::sync::Once;
-
-static CLEAN_STALE_TEMP_DIRS: Once = Once::new();
+static CLEAN_STALE_TEMP_DIRS: std::sync::Once = std::sync::Once::new();
 
 pub(crate) fn cleanup_stale_molten_temp_dirs() {
     CLEAN_STALE_TEMP_DIRS.call_once(|| {
-        let Ok(entries) = fs::read_dir(std::env::temp_dir()) else {
+        let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else {
             return;
         };
         for entry_result in entries {
@@ -22,7 +18,7 @@ pub(crate) fn cleanup_stale_molten_temp_dirs() {
                     continue;
                 };
                 if is_stale_molten_temp_dir(name) {
-                    let remove_result = fs::remove_dir_all(entry.path());
+                    let remove_result = std::fs::remove_dir_all(entry.path());
                     if remove_result.is_err() {
                         continue;
                     }
@@ -48,5 +44,5 @@ fn process_is_alive(pid: u64) -> bool {
     if pid == 0 {
         return false;
     }
-    Path::new("/proc").join(pid.to_string()).exists()
+    std::path::Path::new("/proc").join(pid.to_string()).exists()
 }
