@@ -436,9 +436,6 @@ impl RuntimeState {
 mod tests {
     use super::LocalDataspaceAdapter;
     use super::RuntimeState;
-    use crate::preserves_rail::canonical_hash;
-    use crate::preserves_rail::content_ref_from_bytes;
-    use crate::preserves_rail::validate_content_ref;
     use crate::runtime::ActorId;
     use crate::runtime::Capability;
     use crate::runtime::ContentRef;
@@ -457,9 +454,13 @@ mod tests {
             sender: ActorId::parse("actor:producer").expect("sender"),
             subject: subject.clone(),
             body: RuntimeValue::string("ready").expect("body"),
-            blob_refs: vec![ContentRef::parse(content_ref_from_bytes(b"payload")).expect("blob")],
+            blob_refs: vec![
+                ContentRef::parse(crate::preserves_rail::content_ref_from_bytes(b"payload")).expect("blob"),
+            ],
             capabilities: vec![Capability::parse("send:service.ready").expect("capability")],
-            evidence_refs: vec![EvidenceRef::parse(content_ref_from_bytes(b"route-evidence")).expect("evidence")],
+            evidence_refs: vec![
+                EvidenceRef::parse(crate::preserves_rail::content_ref_from_bytes(b"route-evidence")).expect("evidence"),
+            ],
         })
         .expect("envelope");
         let mut adapter = LocalDataspaceAdapter::new();
@@ -476,15 +477,19 @@ mod tests {
     #[test]
     fn runtime_values_and_events_expose_stable_content_refs() {
         let value = RuntimeValue::string("service.ready").expect("runtime value");
-        validate_content_ref(value.value_ref()).expect("value ref shape");
-        assert_eq!(value.value_ref(), canonical_hash(value.as_iovalue()).expect("canonical value ref"));
+        crate::preserves_rail::validate_content_ref(value.value_ref()).expect("value ref shape");
+        assert_eq!(
+            value.value_ref(),
+            crate::preserves_rail::canonical_hash(value.as_iovalue()).expect("canonical value ref")
+        );
 
         let message = RuntimeMessage {
             from: "producer".to_string(),
             to: "consumer".to_string(),
             body: value.clone(),
         };
-        validate_content_ref(&message.message_ref().expect("message ref")).expect("message ref shape");
+        crate::preserves_rail::validate_content_ref(&message.message_ref().expect("message ref"))
+            .expect("message ref shape");
         let mut state = RuntimeState::new(7);
         state.apply_step(&RuntimeStep::Send {
             from: "producer".to_string(),
@@ -492,7 +497,7 @@ mod tests {
             body: value.clone(),
         });
         let snapshot_ref = state.snapshot().snapshot_ref().expect("snapshot ref");
-        validate_content_ref(&snapshot_ref).expect("snapshot ref shape");
+        crate::preserves_rail::validate_content_ref(&snapshot_ref).expect("snapshot ref shape");
 
         let event = RuntimeEvent::MessageDelivered {
             from: "producer".to_string(),
@@ -500,7 +505,7 @@ mod tests {
             body: value,
         };
         let event_ref = event.event_ref().expect("event ref");
-        validate_content_ref(&event_ref).expect("event ref shape");
+        crate::preserves_rail::validate_content_ref(&event_ref).expect("event ref shape");
         assert_eq!(event_ref, event.event_ref().expect("event ref stable"));
     }
 
@@ -535,7 +540,8 @@ mod tests {
         assert_eq!(snapshot.messages.len(), 1);
         assert_eq!(snapshot.assertions.len(), 1);
         assert_eq!(snapshot.observers.len(), 1);
-        validate_content_ref(&snapshot.snapshot_ref().expect("snapshot ref")).expect("snapshot ref shape");
+        crate::preserves_rail::validate_content_ref(&snapshot.snapshot_ref().expect("snapshot ref"))
+            .expect("snapshot ref shape");
     }
 
     #[test]
