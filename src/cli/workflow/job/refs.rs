@@ -1,9 +1,8 @@
 use molten::error::Result;
 
-use super::command::refs;
 use super::io;
 
-pub(crate) fn submit(args: refs::Submit) -> Result<()> {
+pub(crate) fn submit(args: super::command::refs::Submit) -> Result<()> {
     let executable = io::content_arg(&args.executable, "executable")?;
     let inputs = args.inputs.iter().map(|input| io::content_arg(input, "input")).collect::<Result<Vec<_>>>()?;
     let value = molten::job_dag::job_ref_submission_value(molten::job_dag::BlobRefJobSubmissionValueInput {
@@ -32,7 +31,7 @@ pub(crate) fn submit(args: refs::Submit) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn execute(args: refs::Execute) -> Result<()> {
+pub(crate) fn execute(args: super::command::refs::Execute) -> Result<()> {
     let submission_value = io::read_preserves_file(&args.submission)?;
     let executed = molten::job_dag::execute_blob_ref_job(molten::job_dag::BlobRefJobExecuteInput {
         chunk_root: &args.chunks,
@@ -57,7 +56,7 @@ pub(crate) fn execute(args: refs::Execute) -> Result<()> {
     }
 }
 
-pub(crate) fn status(args: refs::Status) -> Result<()> {
+pub(crate) fn status(args: super::command::refs::Status) -> Result<()> {
     for entry in molten::ledger::list_artifacts(&args.ledger)? {
         let value = match entry.artifact_kind.as_str() {
             "job-dag-receipt" | "job-ref-receipt" | "job-worker-receipt" | "job-worker-schedule-receipt" => {
@@ -76,7 +75,7 @@ pub(crate) fn status(args: refs::Status) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn receipt_show(args: refs::ReceiptShow) -> Result<()> {
+pub(crate) fn receipt_show(args: super::command::refs::ReceiptShow) -> Result<()> {
     let value = molten::ledger::read_artifact(&args.ledger, &args.receipt_ref)?;
     println!("{}", molten::job_dag::receipt_summary(&value)?);
     println!("{}", molten::preserves_rail::to_text(&value)?);
