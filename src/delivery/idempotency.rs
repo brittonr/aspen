@@ -1,6 +1,5 @@
 use preserves::IOValue;
 use preserves::Value;
-use redb::Database;
 use redb::ReadableDatabase;
 
 use crate::error::MoltenError;
@@ -452,7 +451,7 @@ pub fn delivery_summary(value: &IOValue) -> Result<String> {
 
 fn first_decision(
     input: DeliveryCheckInput<'_>,
-    db: &Database,
+    db: &redb::Database,
     operation: OperationId,
     window: DeliveryWindow,
     dedup_key: String,
@@ -505,7 +504,7 @@ fn first_decision(
 
 fn duplicate_or_conflict_decision(
     input: DeliveryCheckInput<'_>,
-    db: &Database,
+    db: &redb::Database,
     operation: OperationId,
     window: DeliveryWindow,
     entry: DedupEntry,
@@ -554,7 +553,7 @@ fn duplicate_or_conflict_decision(
 
 fn stale_decision(
     input: DeliveryCheckInput<'_>,
-    db: &Database,
+    db: &redb::Database,
     operation: OperationId,
     window: DeliveryWindow,
 ) -> Result<DeliveryDecision> {
@@ -567,7 +566,7 @@ fn stale_decision(
 
 fn gap_or_retry_decision(
     input: DeliveryCheckInput<'_>,
-    db: &Database,
+    db: &redb::Database,
     operation: OperationId,
     window: DeliveryWindow,
 ) -> Result<DeliveryDecision> {
@@ -589,7 +588,7 @@ fn gap_or_retry_decision(
 }
 
 fn suppressed_decision(
-    db: &Database,
+    db: &redb::Database,
     operation: OperationId,
     window: DeliveryWindow,
     decision: &str,
@@ -623,7 +622,7 @@ fn suppressed_decision(
 }
 
 fn read_or_create_window(
-    db: &Database,
+    db: &redb::Database,
     scope_profile: &str,
     scope_ref: &str,
     retention_refs: &[String],
@@ -648,7 +647,7 @@ fn read_or_create_window(
     Ok(window)
 }
 
-fn read_entry_from_store(db: &Database, dedup_key: &str) -> Result<Option<DedupEntry>> {
+fn read_entry_from_store(db: &redb::Database, dedup_key: &str) -> Result<Option<DedupEntry>> {
     let read_txn = db.begin_read().map_err(store_error)?;
     let entries = read_txn.open_table(STORE_ENTRIES).map_err(store_error)?;
     let Some(bytes) = entries.get(dedup_key).map_err(store_error)? else {
@@ -659,7 +658,7 @@ fn read_entry_from_store(db: &Database, dedup_key: &str) -> Result<Option<DedupE
 }
 
 fn store_first_decision(
-    db: &Database,
+    db: &redb::Database,
     window: &DeliveryWindow,
     entry: &DedupEntry,
     receipt: &IdempotencyReceipt,
@@ -688,11 +687,11 @@ fn store_first_decision(
     write_txn.commit().map_err(store_error)
 }
 
-fn store_receipt(db: &Database, receipt: &IdempotencyReceipt) -> Result<()> {
+fn store_receipt(db: &redb::Database, receipt: &IdempotencyReceipt) -> Result<()> {
     store_raw_receipt(db, &receipt.receipt_ref, &receipt.value)
 }
 
-fn store_raw_receipt(db: &Database, receipt_ref: &str, receipt_value: &IOValue) -> Result<()> {
+fn store_raw_receipt(db: &redb::Database, receipt_ref: &str, receipt_value: &IOValue) -> Result<()> {
     let write_txn = db.begin_write().map_err(store_error)?;
     {
         let mut receipts = write_txn.open_table(STORE_RECEIPTS).map_err(store_error)?;
@@ -867,9 +866,9 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     }
 }
 
-fn ensure_store_tables(root: &std::path::Path) -> Result<Database> {
+fn ensure_store_tables(root: &std::path::Path) -> Result<redb::Database> {
     std::fs::create_dir_all(root).map_err(MoltenError::from)?;
-    let db = Database::create(store_path(root)).map_err(store_error)?;
+    let db = redb::Database::create(store_path(root)).map_err(store_error)?;
     let write_txn = db.begin_write().map_err(store_error)?;
     {
         write_txn.open_table(STORE_WINDOWS).map_err(store_error)?;
