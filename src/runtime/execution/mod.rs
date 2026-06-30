@@ -1,11 +1,4 @@
-use serde::Deserialize;
-use serde::Serialize;
-
-use super::Capability;
-use super::Envelope;
-use super::RuntimeBoundaryError;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RuntimeHostcall {
     Send,
@@ -25,14 +18,14 @@ impl RuntimeHostcall {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct HostcallAdmission {
     pub hostcall: RuntimeHostcall,
     pub envelope_ref: String,
     pub capability: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct WasiCapabilityProfile {
     pub filesystem: bool,
     pub clock: bool,
@@ -55,14 +48,14 @@ impl WasiCapabilityProfile {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ComponentInspection {
     pub imports: Vec<String>,
     pub admitted: bool,
     pub diagnostics: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SteelOrchestrationRecord {
     pub script_ref: String,
     pub operation: String,
@@ -70,13 +63,13 @@ pub struct SteelOrchestrationRecord {
 }
 
 pub fn admit_hostcall(
-    envelope: &Envelope,
+    envelope: &super::Envelope,
     hostcall: RuntimeHostcall,
-) -> std::result::Result<HostcallAdmission, RuntimeBoundaryError> {
+) -> std::result::Result<HostcallAdmission, super::RuntimeBoundaryError> {
     let required = hostcall.capability_name();
     let has_capability = envelope.capabilities.iter().any(|capability| capability.as_str() == required);
     if !has_capability {
-        return Err(RuntimeBoundaryError::denied_operation(
+        return Err(super::RuntimeBoundaryError::denied_operation(
             "wasmtime-hostcall",
             format!("missing capability {required}"),
         ));
@@ -85,7 +78,7 @@ pub fn admit_hostcall(
         hostcall,
         envelope_ref: envelope
             .canonical_hash()
-            .map_err(|error| RuntimeBoundaryError::invalid_input("wasmtime-hostcall", error.to_string()))?,
+            .map_err(|error| super::RuntimeBoundaryError::invalid_input("wasmtime-hostcall", error.to_string()))?,
         capability: required.to_string(),
     })
 }
@@ -108,31 +101,26 @@ pub fn inspect_component_imports(imports: &[String], allowed: &[RuntimeHostcall]
 pub fn steel_orchestration_record(
     script_ref: impl Into<String>,
     operation: impl Into<String>,
-    envelope: &Envelope,
-) -> std::result::Result<SteelOrchestrationRecord, RuntimeBoundaryError> {
+    envelope: &super::Envelope,
+) -> std::result::Result<SteelOrchestrationRecord, super::RuntimeBoundaryError> {
     Ok(SteelOrchestrationRecord {
         script_ref: script_ref.into(),
         operation: operation.into(),
         envelope_ref: envelope
             .canonical_hash()
-            .map_err(|error| RuntimeBoundaryError::invalid_input("steel-orchestration", error.to_string()))?,
+            .map_err(|error| super::RuntimeBoundaryError::invalid_input("steel-orchestration", error.to_string()))?,
     })
 }
 
-pub fn hostcall_capability(value: RuntimeHostcall) -> std::result::Result<Capability, RuntimeBoundaryError> {
-    Capability::parse(value.capability_name())
-        .map_err(|error| RuntimeBoundaryError::invalid_input("hostcall-capability", error.to_string()))
+pub fn hostcall_capability(
+    value: RuntimeHostcall,
+) -> std::result::Result<super::Capability, super::RuntimeBoundaryError> {
+    super::Capability::parse(value.capability_name())
+        .map_err(|error| super::RuntimeBoundaryError::invalid_input("hostcall-capability", error.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::RuntimeHostcall;
-    use super::WasiCapabilityProfile;
-    use super::admit_hostcall;
-    use super::hostcall_capability;
-    use super::inspect_component_imports;
-    use super::steel_orchestration_record;
-    use crate::preserves_rail::content_ref_from_bytes;
     use crate::runtime::ActorId;
     use crate::runtime::ContentRef;
     use crate::runtime::Envelope;
@@ -141,47 +129,56 @@ mod tests {
     use crate::runtime::RuntimeErrorCategory;
     use crate::runtime::RuntimeValue;
 
-    fn envelope_with_caps(caps: Vec<super::Capability>) -> Envelope {
+    fn envelope_with_caps(caps: Vec<crate::runtime::Capability>) -> Envelope {
         Envelope::new(EnvelopeInput {
             sender: ActorId::parse("actor:wasm").expect("sender"),
             subject: RuntimeValue::string("service.ready").expect("subject"),
             body: RuntimeValue::string("ready").expect("body"),
-            blob_refs: vec![ContentRef::parse(content_ref_from_bytes(b"blob")).expect("blob")],
+            blob_refs: vec![ContentRef::parse(crate::preserves_rail::content_ref_from_bytes(b"blob")).expect("blob")],
             capabilities: caps,
-            evidence_refs: vec![EvidenceRef::parse(content_ref_from_bytes(b"evidence")).expect("evidence")],
+            evidence_refs: vec![
+                EvidenceRef::parse(crate::preserves_rail::content_ref_from_bytes(b"evidence")).expect("evidence"),
+            ],
         })
         .expect("envelope")
     }
 
     #[test]
     fn wasmtime_hostcall_requires_matching_capability() {
-        let envelope = envelope_with_caps(vec![hostcall_capability(RuntimeHostcall::Send).expect("hostcall cap")]);
-        let admission = admit_hostcall(&envelope, RuntimeHostcall::Send).expect("send admitted");
+        let envelope =
+            envelope_with_caps(vec![super::hostcall_capability(super::RuntimeHostcall::Send).expect("hostcall cap")]);
+        let admission = super::admit_hostcall(&envelope, super::RuntimeHostcall::Send).expect("send admitted");
         assert_eq!(admission.capability, "hostcall:send");
 
-        let error = admit_hostcall(&envelope, RuntimeHostcall::BlobGet).expect_err("blob get denied");
+        let error = super::admit_hostcall(&envelope, super::RuntimeHostcall::BlobGet).expect_err("blob get denied");
         assert_eq!(error.category(), RuntimeErrorCategory::DeniedOperation);
     }
 
     #[test]
     fn wasi_profile_denies_ambient_access_by_default() {
-        let profile = WasiCapabilityProfile::deny_all();
+        let profile = super::WasiCapabilityProfile::deny_all();
         assert!(profile.admits_no_ambient_access());
     }
 
     #[test]
     fn component_inspection_rejects_unadmitted_import() {
         let imports = vec!["hostcall:send".to_string(), "hostcall:socket".to_string()];
-        let inspection = inspect_component_imports(&imports, &[RuntimeHostcall::Send]);
+        let inspection = super::inspect_component_imports(&imports, &[super::RuntimeHostcall::Send]);
         assert!(!inspection.admitted);
         assert!(inspection.diagnostics[0].contains("hostcall:socket"));
     }
 
     #[test]
     fn steel_orchestration_binds_script_operation_and_envelope() {
-        let envelope = envelope_with_caps(vec![hostcall_capability(RuntimeHostcall::Subscribe).expect("hostcall cap")]);
-        let record = steel_orchestration_record(content_ref_from_bytes(b"script"), "spawn-inspect", &envelope)
-            .expect("steel record");
+        let envelope = envelope_with_caps(vec![
+            super::hostcall_capability(super::RuntimeHostcall::Subscribe).expect("hostcall cap"),
+        ]);
+        let record = super::steel_orchestration_record(
+            crate::preserves_rail::content_ref_from_bytes(b"script"),
+            "spawn-inspect",
+            &envelope,
+        )
+        .expect("steel record");
         assert_eq!(record.operation, "spawn-inspect");
         assert_eq!(record.envelope_ref, envelope.canonical_hash().expect("envelope ref"));
     }
