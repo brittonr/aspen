@@ -287,114 +287,243 @@ pub fn empty_protocol_registry() -> ProtocolRegistry {
     ProtocolRegistry::default()
 }
 
-pub fn evaluate_router_operation(registry: &ProtocolRegistry, input: &RouterOperationInput) -> Result<RouterDecision> {
-    let mut diagnostics = Vec::new();
-    let is_alpn_valid = collect_alpn_diagnostic(&input.alpn, &mut diagnostics).is_ok();
-    let is_handler_valid = collect_handler_diagnostic(&input.handler_kind, &mut diagnostics).is_ok();
-    collect_ref_diagnostics(&input.authority_refs, "authority", &mut diagnostics)?;
-    collect_ref_diagnostics(&input.policy_refs, "policy", &mut diagnostics)?;
-    collect_ref_diagnostics(&input.resource_refs, "resource", &mut diagnostics)?;
-    collect_ref_diagnostics(&input.evidence_refs, "evidence", &mut diagnostics)?;
-    if input.generation < MIN_GENERATION || input.generation > MAX_GENERATION {
-        push_diagnostic(&mut diagnostics, format!("generation {} outside supported range", input.generation))?;
-    }
+struct RouterMutation {
+    registry: ProtocolRegistry,
+    outcome: String,
+    generation: Option<u64>,
+    previous_generation: Option<u64>,
+}
 
-    let has_admission = !input.authority_refs.is_empty()
-        && !input.policy_refs.is_empty()
-        && !input.resource_refs.is_empty()
-        && !input.evidence_refs.is_empty();
-    if !has_admission && input.operation != "unsupported-alpn" {
-        push_diagnostic(&mut diagnostics, "router operation requires authority, policy, resource, and evidence refs")?;
-    }
+struct RouterEvaluation {
+    mutation: RouterMutation,
+    diagnostics: Vec<String>,
+}
 
-    let mut next = registry.clone();
-    let mut outcome = "denied".to_string();
-    let mut generation = None;
-    let mut previous_generation = None;
-    let existing = registry.handlers.get(&input.alpn);
+struct RouterEvaluator<'a> {
+    registry: &'a ProtocolRegistry,
+    input: &'a RouterOperationInput,
+    diagnostics: Vec<String>,
+}
 
-    if is_alpn_valid && is_handler_valid && diagnostics.is_empty() {
-        match input.operation.as_str() {
-            "install" => match existing {
-                None => {
-                    let descriptor = descriptor_from_input(input)?;
-                    generation = Some(descriptor.generation);
-                    next.handlers.insert(input.alpn.clone(), descriptor);
-                    outcome = "inserted".to_string();
-                }
-                Some(current) => {
-                    previous_generation = Some(current.generation);
-                    push_diagnostic(&mut diagnostics, "ALPN already registered; use replace with current generation")?;
-                }
-            },
-            "replace" => match existing {
-                Some(current) => {
-                    previous_generation = Some(current.generation);
-                    if let Some(descriptor) = replacement_descriptor(input, current, &mut diagnostics)? {
-                        generation = Some(descriptor.generation);
-                        next.handlers.insert(input.alpn.clone(), descriptor);
-                        outcome = "replaced".to_string();
-                    }
-                }
-                None => push_diagnostic(&mut diagnostics, "cannot replace unknown ALPN")?,
-            },
-            "remove" => match existing {
-                Some(current) => {
-                    previous_generation = Some(current.generation);
-                    let expected = Some(current.generation);
-                    if input.prior_generation != expected {
-                        push_diagnostic(
-                            &mut diagnostics,
-                            "stale-generation: remove prior generation does not match registry",
-                        )?;
-                    } else if input.shutdown_evidence_ref.as_deref().is_none() {
-                        push_diagnostic(&mut diagnostics, "remove requires shutdown evidence for previous handler")?;
-                    } else {
-                        validate_optional_ref(input.shutdown_evidence_ref.as_deref(), "shutdown evidence")?;
-                        next.handlers.remove(&input.alpn);
-                        generation = Some(current.generation);
-                        outcome = "removed".to_string();
-                    }
-                }
-                None => push_diagnostic(&mut diagnostics, "cannot remove unknown ALPN")?,
-            },
-            "unsupported-alpn" => {
-                if existing.is_none() {
-                    outcome = "unsupported-alpn".to_string();
-                    push_diagnostic(&mut diagnostics, "unsupported ALPN denied before frame delivery")?;
-                } else {
-                    push_diagnostic(&mut diagnostics, "ALPN is registered; unsupported-alpn denial is not applicable")?;
-                }
-            }
-            other => push_diagnostic(&mut diagnostics, format!("unsupported router operation {other}"))?,
+impl<'a> RouterEvaluator<'a> {
+    fn new(registry: &'a ProtocolRegistry, input: &'a RouterOperationInput) -> Self {
+        Self {
+            registry,
+            input,
+            diagnostics: Vec::new(),
         }
     }
 
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
+    fn evaluate(mut self) -> Result<RouterEvaluation> {
+        let is_dispatchable = self.collect_admission_diagnostics()?;
+        let mutation = if is_dispatchable {
+            self.dispatch_operation()?
+        } else {
+            self.denied(None)
+        };
+        Ok(RouterEvaluation {
+            mutation,
+            diagnostics: self.diagnostics,
+        })
+    }
+
+    fn collect_admission_diagnostics(&mut self) -> Result<bool> {
+        let is_alpn_valid = collect_alpn_diagnostic(&self.input.alpn, &mut self.diagnostics).is_ok();
+        let is_handler_valid = collect_handler_diagnostic(&self.input.handler_kind, &mut self.diagnostics).is_ok();
+        collect_ref_diagnostics(&self.input.authority_refs, "authority", &mut self.diagnostics)?;
+        collect_ref_diagnostics(&self.input.policy_refs, "policy", &mut self.diagnostics)?;
+        collect_ref_diagnostics(&self.input.resource_refs, "resource", &mut self.diagnostics)?;
+        collect_ref_diagnostics(&self.input.evidence_refs, "evidence", &mut self.diagnostics)?;
+        if self.input.generation < MIN_GENERATION || self.input.generation > MAX_GENERATION {
+            push_diagnostic(
+                &mut self.diagnostics,
+                format!("generation {} outside supported range", self.input.generation),
+            )?;
+        }
+        if !self.has_admission() && self.input.operation != "unsupported-alpn" {
+            push_diagnostic(
+                &mut self.diagnostics,
+                "router operation requires authority, policy, resource, and evidence refs",
+            )?;
+        }
+        Ok(is_alpn_valid && is_handler_valid && self.diagnostics.is_empty())
+    }
+
+    fn has_admission(&self) -> bool {
+        !self.input.authority_refs.is_empty()
+            && !self.input.policy_refs.is_empty()
+            && !self.input.resource_refs.is_empty()
+            && !self.input.evidence_refs.is_empty()
+    }
+
+    fn dispatch_operation(&mut self) -> Result<RouterMutation> {
+        match self.input.operation.as_str() {
+            "install" => self.install_operation(),
+            "replace" => self.replace_operation(),
+            "remove" => self.remove_operation(),
+            "unsupported-alpn" => self.unsupported_alpn_operation(),
+            other => {
+                push_diagnostic(&mut self.diagnostics, format!("unsupported router operation {other}"))?;
+                Ok(self.denied(None))
+            }
+        }
+    }
+
+    fn install_operation(&mut self) -> Result<RouterMutation> {
+        if let Some(current_generation) = self.current_generation() {
+            push_diagnostic(&mut self.diagnostics, "ALPN already registered; use replace with current generation")?;
+            return Ok(self.denied(Some(current_generation)));
+        }
+        let descriptor = descriptor_from_input(self.input)?;
+        let generation = Some(descriptor.generation);
+        let mut registry = self.registry.clone();
+        registry.handlers.insert(self.input.alpn.clone(), descriptor);
+        Ok(RouterMutation {
+            registry,
+            outcome: "inserted".to_string(),
+            generation,
+            previous_generation: None,
+        })
+    }
+
+    fn replace_operation(&mut self) -> Result<RouterMutation> {
+        let Some(current_generation) = self.current_generation() else {
+            push_diagnostic(&mut self.diagnostics, "cannot replace unknown ALPN")?;
+            return Ok(self.denied(None));
+        };
+        let previous_generation = Some(current_generation);
+        if !self.is_replacement_admitted(current_generation)? {
+            return Ok(self.denied(previous_generation));
+        }
+        let descriptor = descriptor_from_input(self.input)?;
+        let generation = Some(descriptor.generation);
+        let mut registry = self.registry.clone();
+        registry.handlers.insert(self.input.alpn.clone(), descriptor);
+        Ok(RouterMutation {
+            registry,
+            outcome: "replaced".to_string(),
+            generation,
+            previous_generation,
+        })
+    }
+
+    fn remove_operation(&mut self) -> Result<RouterMutation> {
+        let Some(current_generation) = self.current_generation() else {
+            push_diagnostic(&mut self.diagnostics, "cannot remove unknown ALPN")?;
+            return Ok(self.denied(None));
+        };
+        let previous_generation = Some(current_generation);
+        if !self.is_remove_admitted(current_generation)? {
+            return Ok(self.denied(previous_generation));
+        }
+        let mut registry = self.registry.clone();
+        registry.handlers.remove(&self.input.alpn);
+        Ok(RouterMutation {
+            registry,
+            outcome: "removed".to_string(),
+            generation: Some(current_generation),
+            previous_generation,
+        })
+    }
+
+    fn unsupported_alpn_operation(&mut self) -> Result<RouterMutation> {
+        if self.current_generation().is_some() {
+            push_diagnostic(&mut self.diagnostics, "ALPN is registered; unsupported-alpn denial is not applicable")?;
+            return Ok(self.denied(None));
+        }
+        push_diagnostic(&mut self.diagnostics, "unsupported ALPN denied before frame delivery")?;
+        Ok(RouterMutation {
+            registry: self.registry.clone(),
+            outcome: "unsupported-alpn".to_string(),
+            generation: None,
+            previous_generation: None,
+        })
+    }
+
+    fn current_generation(&self) -> Option<u64> {
+        self.registry.handlers.get(&self.input.alpn).map(|handler| handler.generation)
+    }
+
+    fn is_replacement_admitted(&mut self, current_generation: u64) -> Result<bool> {
+        let expected_generation = Some(current_generation);
+        if self.input.prior_generation != expected_generation {
+            push_diagnostic(
+                &mut self.diagnostics,
+                "stale-generation: replacement prior generation does not match registry",
+            )?;
+            return Ok(false);
+        }
+        if self.input.generation <= current_generation {
+            push_diagnostic(&mut self.diagnostics, "replacement generation must advance")?;
+            return Ok(false);
+        }
+        let Some(shutdown_ref) = self.input.shutdown_evidence_ref.as_deref() else {
+            push_diagnostic(&mut self.diagnostics, "replacement requires shutdown evidence for previous handler")?;
+            return Ok(false);
+        };
+        validate_optional_ref(Some(shutdown_ref), "shutdown evidence")?;
+        Ok(true)
+    }
+
+    fn is_remove_admitted(&mut self, current_generation: u64) -> Result<bool> {
+        let expected_generation = Some(current_generation);
+        if self.input.prior_generation != expected_generation {
+            push_diagnostic(
+                &mut self.diagnostics,
+                "stale-generation: remove prior generation does not match registry",
+            )?;
+            return Ok(false);
+        }
+        let Some(shutdown_ref) = self.input.shutdown_evidence_ref.as_deref() else {
+            push_diagnostic(&mut self.diagnostics, "remove requires shutdown evidence for previous handler")?;
+            return Ok(false);
+        };
+        validate_optional_ref(Some(shutdown_ref), "shutdown evidence")?;
+        Ok(true)
+    }
+
+    fn denied(&self, previous_generation: Option<u64>) -> RouterMutation {
+        RouterMutation {
+            registry: self.registry.clone(),
+            outcome: "denied".to_string(),
+            generation: None,
+            previous_generation,
+        }
+    }
+}
+
+pub fn evaluate_router_operation(registry: &ProtocolRegistry, input: &RouterOperationInput) -> Result<RouterDecision> {
+    let evaluation = RouterEvaluator::new(registry, input).evaluate()?;
+    let decision = if evaluation.diagnostics.is_empty() {
+        "pass"
+    } else {
+        "deny"
+    }
+    .to_string();
     let receipt_value = router_receipt_value(RouterReceiptInput {
         decision: &decision,
         operation: &input.operation,
-        outcome: &outcome,
+        outcome: &evaluation.mutation.outcome,
         alpn: &input.alpn,
         handler_kind: &input.handler_kind,
-        generation,
-        previous_generation,
+        generation: evaluation.mutation.generation,
+        previous_generation: evaluation.mutation.previous_generation,
         authority_refs: &input.authority_refs,
         policy_refs: &input.policy_refs,
         resource_refs: &input.resource_refs,
         evidence_refs: &input.evidence_refs,
         shutdown_evidence_ref: input.shutdown_evidence_ref.as_deref(),
-        diagnostics: &diagnostics,
+        diagnostics: &evaluation.diagnostics,
     })?;
     Ok(RouterDecision {
         decision,
         operation: input.operation.clone(),
         alpn: input.alpn.clone(),
-        outcome,
-        generation,
-        previous_generation,
-        diagnostics,
-        registry: next,
+        outcome: evaluation.mutation.outcome,
+        generation: evaluation.mutation.generation,
+        previous_generation: evaluation.mutation.previous_generation,
+        diagnostics: evaluation.diagnostics,
+        registry: evaluation.mutation.registry,
         receipt_value,
     })
 }
@@ -951,28 +1080,6 @@ fn service_session_receipt_value(
             ("postcard-not-canonical-boundary", "pass"),
         ]),
     ]))
-}
-
-fn replacement_descriptor(
-    input: &RouterOperationInput,
-    current: &ProtocolHandlerDescriptor,
-    diagnostics: &mut Vec<String>,
-) -> Result<Option<ProtocolHandlerDescriptor>> {
-    let expected = Some(current.generation);
-    if input.prior_generation != expected {
-        push_diagnostic(diagnostics, "stale-generation: replacement prior generation does not match registry")?;
-        return Ok(None);
-    }
-    if input.generation <= current.generation {
-        push_diagnostic(diagnostics, "replacement generation must advance")?;
-        return Ok(None);
-    }
-    let Some(shutdown_ref) = input.shutdown_evidence_ref.as_deref() else {
-        push_diagnostic(diagnostics, "replacement requires shutdown evidence for previous handler")?;
-        return Ok(None);
-    };
-    validate_optional_ref(Some(shutdown_ref), "shutdown evidence")?;
-    descriptor_from_input(input).map(Some)
 }
 
 fn descriptor_from_input(input: &RouterOperationInput) -> Result<ProtocolHandlerDescriptor> {
