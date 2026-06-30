@@ -7,7 +7,6 @@ use crate::error::Result;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
 
 pub const SCOPE_ACTOR_TURN: &str = "actor-turn";
 pub const SCOPE_SERVICE_LIFECYCLE: &str = "service-lifecycle";
@@ -172,7 +171,7 @@ pub fn operation_id_value(input: &OperationIdInput) -> Result<IOValue> {
         record("scope", vec![string(&input.scope_ref)]),
         record("producer", vec![string(&input.producer)]),
         record("consumer", vec![string(&input.consumer)]),
-        record("sequence", vec![u64_value(input.sequence)]),
+        record("sequence", vec![crate::preserves_rail::u64_value(input.sequence)]),
         record("intent", vec![string(&input.intent)]),
         record("payload", vec![string(&input.payload_ref)]),
         record("policy", vec![strings_sequence(&input.policy_refs)]),
@@ -235,8 +234,8 @@ pub fn delivery_window_value(
         string(crate::preserves_rail::DELIVERY_WINDOW_SCHEMA),
         record("scope", vec![string(scope_ref)]),
         record("profile", vec![string(scope_profile)]),
-        record("next-sequence", vec![u64_value(next_sequence)]),
-        record("lowest-retained", vec![u64_value(lowest_retained)]),
+        record("next-sequence", vec![crate::preserves_rail::u64_value(next_sequence)]),
+        record("lowest-retained", vec![crate::preserves_rail::u64_value(lowest_retained)]),
         record("retention", vec![strings_sequence(retention_refs)]),
         checks_value(&[("dedup-window-scoped", "pass"), ("retention-pinned", "pass")]),
     ]))
@@ -323,7 +322,7 @@ pub fn retry_receipt_value(
         record("operation", vec![string(&operation.operation_ref)]),
         record("scope", vec![string(&operation.scope_ref)]),
         record("window", vec![string(&window.window_ref)]),
-        record("retry-after-sequence", vec![u64_value(window.next_sequence)]),
+        record("retry-after-sequence", vec![crate::preserves_rail::u64_value(window.next_sequence)]),
         record("diagnostics", vec![strings_sequence(diagnostics)]),
         checks_value(&[("retry-before-side-effects", "pass"), ("sequence-window-bound", "pass")]),
     ]))
@@ -710,7 +709,7 @@ fn dedup_entry_value(input: DedupEntryValueInput<'_>) -> Result<IOValue> {
         record("scope", vec![string(&input.operation.scope_ref)]),
         record("producer", vec![string(&input.operation.producer)]),
         record("consumer", vec![string(&input.operation.consumer)]),
-        record("sequence", vec![u64_value(input.operation.sequence)]),
+        record("sequence", vec![crate::preserves_rail::u64_value(input.operation.sequence)]),
         record("intent", vec![string(&input.operation.intent)]),
         record("payload", vec![string(&input.operation.payload_ref)]),
         record("semantic-result", vec![optional_ref_value(input.semantic_result_ref)]),
@@ -782,7 +781,7 @@ fn dedup_key_ref(operation: &OperationId) -> Result<String> {
         record("scope", vec![string(&operation.scope_ref)]),
         record("producer", vec![string(&operation.producer)]),
         record("consumer", vec![string(&operation.consumer)]),
-        record("sequence", vec![u64_value(operation.sequence)]),
+        record("sequence", vec![crate::preserves_rail::u64_value(operation.sequence)]),
         record("intent", vec![string(&operation.intent)]),
     ]))
 }
