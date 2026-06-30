@@ -528,68 +528,135 @@ pub fn evaluate_router_operation(registry: &ProtocolRegistry, input: &RouterOper
     })
 }
 
-pub fn evaluate_framed_envelope(
-    registry: &ProtocolRegistry,
-    input: &FramedEnvelopeInput,
-) -> Result<FramedEnvelopeDecision> {
-    let mut diagnostics = Vec::new();
-    collect_alpn_diagnostic(&input.alpn, &mut diagnostics).ok();
-    validate_text(&input.peer, "frame peer", &mut diagnostics)?;
-    validate_text(&input.node, "frame node", &mut diagnostics)?;
-    validate_text(&input.stream_id, "frame stream", &mut diagnostics)?;
-    collect_ref_diagnostics(std::slice::from_ref(&input.limit_profile_ref), "limit profile", &mut diagnostics)?;
-    collect_ref_diagnostics(std::slice::from_ref(&input.declared_envelope_ref), "declared envelope", &mut diagnostics)?;
-    collect_ref_diagnostics(&input.authority_refs, "authority", &mut diagnostics)?;
-    collect_ref_diagnostics(&input.policy_refs, "policy", &mut diagnostics)?;
-    collect_ref_diagnostics(&input.resource_refs, "resource", &mut diagnostics)?;
-    collect_ref_diagnostics(&input.evidence_refs, "evidence", &mut diagnostics)?;
-    if !registry.handlers.contains_key(&input.alpn) {
-        push_diagnostic(&mut diagnostics, "unsupported ALPN denied before payload delivery")?;
-    }
-    if input.declared_length > input.limits.max_frame_bytes {
-        push_diagnostic(&mut diagnostics, "oversized frame denied before parsing payload")?;
-    }
-    if input.sequence >= input.limits.max_frames_per_session {
-        push_diagnostic(&mut diagnostics, "frame sequence exceeds per-session limit")?;
-    }
-    if input.limits.max_frame_bytes < MIN_FRAME_BYTES || input.limits.max_frame_bytes > MAX_FRAME_BYTES {
-        push_diagnostic(&mut diagnostics, "frame byte limit is outside supported bounds")?;
-    }
-    if input.limits.max_frames_per_session == 0 || input.limits.max_frames_per_session > MAX_SESSION_FRAMES {
-        push_diagnostic(&mut diagnostics, "frame count limit is outside supported bounds")?;
+struct FrameEvaluation {
+    actual_ref: Option<String>,
+    diagnostics: Vec<String>,
+}
+
+struct FrameEvaluator<'a> {
+    registry: &'a ProtocolRegistry,
+    input: &'a FramedEnvelopeInput,
+    diagnostics: Vec<String>,
+}
+
+impl<'a> FrameEvaluator<'a> {
+    fn new(registry: &'a ProtocolRegistry, input: &'a FramedEnvelopeInput) -> Self {
+        Self {
+            registry,
+            input,
+            diagnostics: Vec::new(),
+        }
     }
 
-    let mut actual_ref = None;
-    if !diagnostics.iter().any(|diagnostic| diagnostic.contains("oversized frame")) {
-        let byte_len = input.envelope_bytes.len() as u64;
-        if byte_len != input.declared_length {
+    fn evaluate(mut self) -> Result<FrameEvaluation> {
+        self.collect_admission_diagnostics()?;
+        let actual_ref = if self.should_parse_payload() {
+            Some(self.evaluate_payload()?)
+        } else {
+            None
+        };
+        Ok(FrameEvaluation {
+            actual_ref,
+            diagnostics: self.diagnostics,
+        })
+    }
+
+    fn collect_admission_diagnostics(&mut self) -> Result<()> {
+        collect_alpn_diagnostic(&self.input.alpn, &mut self.diagnostics).ok();
+        validate_text(&self.input.peer, "frame peer", &mut self.diagnostics)?;
+        validate_text(&self.input.node, "frame node", &mut self.diagnostics)?;
+        validate_text(&self.input.stream_id, "frame stream", &mut self.diagnostics)?;
+        collect_ref_diagnostics(
+            std::slice::from_ref(&self.input.limit_profile_ref),
+            "limit profile",
+            &mut self.diagnostics,
+        )?;
+        collect_ref_diagnostics(
+            std::slice::from_ref(&self.input.declared_envelope_ref),
+            "declared envelope",
+            &mut self.diagnostics,
+        )?;
+        collect_ref_diagnostics(&self.input.authority_refs, "authority", &mut self.diagnostics)?;
+        collect_ref_diagnostics(&self.input.policy_refs, "policy", &mut self.diagnostics)?;
+        collect_ref_diagnostics(&self.input.resource_refs, "resource", &mut self.diagnostics)?;
+        collect_ref_diagnostics(&self.input.evidence_refs, "evidence", &mut self.diagnostics)?;
+        self.collect_registry_diagnostics()?;
+        self.collect_limit_diagnostics()
+    }
+
+    fn collect_registry_diagnostics(&mut self) -> Result<()> {
+        if !self.registry.handlers.contains_key(&self.input.alpn) {
+            push_diagnostic(&mut self.diagnostics, "unsupported ALPN denied before payload delivery")?;
+        }
+        Ok(())
+    }
+
+    fn collect_limit_diagnostics(&mut self) -> Result<()> {
+        if self.input.declared_length > self.input.limits.max_frame_bytes {
+            push_diagnostic(&mut self.diagnostics, "oversized frame denied before parsing payload")?;
+        }
+        if self.input.sequence >= self.input.limits.max_frames_per_session {
+            push_diagnostic(&mut self.diagnostics, "frame sequence exceeds per-session limit")?;
+        }
+        if self.input.limits.max_frame_bytes < MIN_FRAME_BYTES || self.input.limits.max_frame_bytes > MAX_FRAME_BYTES {
+            push_diagnostic(&mut self.diagnostics, "frame byte limit is outside supported bounds")?;
+        }
+        if self.input.limits.max_frames_per_session == 0
+            || self.input.limits.max_frames_per_session > MAX_SESSION_FRAMES
+        {
+            push_diagnostic(&mut self.diagnostics, "frame count limit is outside supported bounds")?;
+        }
+        Ok(())
+    }
+
+    fn should_parse_payload(&self) -> bool {
+        !self.diagnostics.iter().any(|diagnostic| diagnostic.contains("oversized frame"))
+    }
+
+    fn evaluate_payload(&mut self) -> Result<String> {
+        let byte_len = self.input.envelope_bytes.len() as u64;
+        if byte_len != self.input.declared_length {
             push_diagnostic(
-                &mut diagnostics,
-                format!("declared frame length {} does not match bytes {byte_len}", input.declared_length),
+                &mut self.diagnostics,
+                format!("declared frame length {} does not match bytes {byte_len}", self.input.declared_length),
             )?;
         }
-        let parsed = match parse_canonical_bytes(&input.envelope_bytes) {
+        let parsed = match parse_canonical_bytes(&self.input.envelope_bytes) {
             Ok(value) => value,
             Err(error) => {
-                push_diagnostic(&mut diagnostics, format!("malformed Preserves frame: {error}"))?;
+                push_diagnostic(&mut self.diagnostics, format!("malformed Preserves frame: {error}"))?;
                 record("invalid-frame", Vec::new())
             }
         };
         let encoded = canonical_bytes(&parsed).unwrap_or_default();
-        if encoded != input.envelope_bytes && !input.envelope_bytes.is_empty() {
-            push_diagnostic(&mut diagnostics, "frame payload is not canonical Preserves bytes")?;
+        if encoded != self.input.envelope_bytes && !self.input.envelope_bytes.is_empty() {
+            push_diagnostic(&mut self.diagnostics, "frame payload is not canonical Preserves bytes")?;
         }
-        let computed = content_ref_from_bytes(&input.envelope_bytes);
-        if computed != input.declared_envelope_ref {
+        let computed = content_ref_from_bytes(&self.input.envelope_bytes);
+        if computed != self.input.declared_envelope_ref {
             push_diagnostic(
-                &mut diagnostics,
-                format!("declared envelope ref mismatch: got {}, expected {}", computed, input.declared_envelope_ref),
+                &mut self.diagnostics,
+                format!(
+                    "declared envelope ref mismatch: got {}, expected {}",
+                    computed, self.input.declared_envelope_ref
+                ),
             )?;
         }
-        actual_ref = Some(computed);
+        Ok(computed)
     }
+}
 
-    let decision = if diagnostics.is_empty() { "pass" } else { "deny" }.to_string();
+pub fn evaluate_framed_envelope(
+    registry: &ProtocolRegistry,
+    input: &FramedEnvelopeInput,
+) -> Result<FramedEnvelopeDecision> {
+    let evaluation = FrameEvaluator::new(registry, input).evaluate()?;
+    let decision = if evaluation.diagnostics.is_empty() {
+        "pass"
+    } else {
+        "deny"
+    }
+    .to_string();
     let receipt_value = framed_receipt_value(FramedReceiptInput {
         decision: &decision,
         alpn: &input.alpn,
@@ -599,13 +666,13 @@ pub fn evaluate_framed_envelope(
         sequence: input.sequence,
         declared_length: input.declared_length,
         declared_envelope_ref: &input.declared_envelope_ref,
-        actual_envelope_ref: actual_ref.as_deref(),
+        actual_envelope_ref: evaluation.actual_ref.as_deref(),
         limit_profile_ref: &input.limit_profile_ref,
         authority_refs: &input.authority_refs,
         policy_refs: &input.policy_refs,
         resource_refs: &input.resource_refs,
         evidence_refs: &input.evidence_refs,
-        diagnostics: &diagnostics,
+        diagnostics: &evaluation.diagnostics,
     })?;
     Ok(FramedEnvelopeDecision {
         decision,
@@ -615,8 +682,8 @@ pub fn evaluate_framed_envelope(
         stream_id: input.stream_id.clone(),
         sequence: input.sequence,
         declared_envelope_ref: input.declared_envelope_ref.clone(),
-        actual_envelope_ref: actual_ref,
-        diagnostics,
+        actual_envelope_ref: evaluation.actual_ref,
+        diagnostics: evaluation.diagnostics,
         receipt_value,
     })
 }
