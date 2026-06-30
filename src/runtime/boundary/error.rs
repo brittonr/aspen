@@ -1,5 +1,3 @@
-use snafu::Snafu;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeErrorCategory {
     InvalidInput,
@@ -8,7 +6,7 @@ pub enum RuntimeErrorCategory {
     PersistenceFailure,
 }
 
-#[derive(Debug, Snafu)]
+#[derive(Debug, snafu::Snafu)]
 pub enum RuntimeBoundaryError {
     #[snafu(display("invalid runtime input at {boundary}: {message}"))]
     InvalidInput { boundary: &'static str, message: String },
@@ -73,20 +71,17 @@ impl RuntimeBoundaryError {
 
 #[cfg(test)]
 mod tests {
-    use super::RuntimeBoundaryError;
-    use super::RuntimeErrorCategory;
-
     #[test]
     fn runtime_boundary_errors_are_structured_by_category() {
-        let invalid = RuntimeBoundaryError::invalid_input("envelope", "bad subject");
-        let denied = RuntimeBoundaryError::denied_operation("policy", "missing send capability");
-        let adapter = RuntimeBoundaryError::adapter_unavailable("iroh-gossip", "not connected");
-        let persistence = RuntimeBoundaryError::persistence_failure("redb", "write failed");
+        let invalid = super::RuntimeBoundaryError::invalid_input("envelope", "bad subject");
+        let denied = super::RuntimeBoundaryError::denied_operation("policy", "missing send capability");
+        let adapter = super::RuntimeBoundaryError::adapter_unavailable("iroh-gossip", "not connected");
+        let persistence = super::RuntimeBoundaryError::persistence_failure("redb", "write failed");
 
-        assert_eq!(invalid.category(), RuntimeErrorCategory::InvalidInput);
-        assert_eq!(denied.category(), RuntimeErrorCategory::DeniedOperation);
-        assert_eq!(adapter.category(), RuntimeErrorCategory::AdapterUnavailable);
-        assert_eq!(persistence.category(), RuntimeErrorCategory::PersistenceFailure);
+        assert_eq!(invalid.category(), super::RuntimeErrorCategory::InvalidInput);
+        assert_eq!(denied.category(), super::RuntimeErrorCategory::DeniedOperation);
+        assert_eq!(adapter.category(), super::RuntimeErrorCategory::AdapterUnavailable);
+        assert_eq!(persistence.category(), super::RuntimeErrorCategory::PersistenceFailure);
         assert_eq!(invalid.boundary(), "envelope");
         assert!(denied.to_string().contains("runtime operation denied"));
     }
