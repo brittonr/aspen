@@ -567,14 +567,7 @@ fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
-    use crate::preserves_rail::to_text;
 
     #[test]
     fn restart_with_same_data_dir_preserves_endpoint_id_without_secret_in_receipts() {
@@ -587,8 +580,8 @@ mod tests {
         assert_eq!(first_identity.endpoint_id, second_identity.endpoint_id);
         assert_eq!(second_identity.key_source_class, "persisted-file");
         let secret = fs::read_to_string(dir.join(SECRET_FILE)).expect("read secret");
-        let first_receipt_text = to_text(&first.receipt_value).expect("receipt text");
-        let second_receipt_text = to_text(&second.receipt_value).expect("receipt text");
+        let first_receipt_text = crate::preserves_rail::to_text(&first.receipt_value).expect("receipt text");
+        let second_receipt_text = crate::preserves_rail::to_text(&second.receipt_value).expect("receipt text");
         assert!(!first_receipt_text.contains(secret.trim()));
         assert!(!second_receipt_text.contains(secret.trim()));
     }
@@ -602,7 +595,7 @@ mod tests {
         fs::write(dir.join(SECRET_FILE), "replacement-secret\n").expect("replace secret");
         let drift = resolve_node_identity(&config).expect("drift receipt");
         assert!(drift.identity.is_none());
-        assert!(to_text(&drift.receipt_value).expect("drift text").contains("drift-detected"));
+        assert!(crate::preserves_rail::to_text(&drift.receipt_value).expect("drift text").contains("drift-detected"));
 
         let mut rotation = config.clone();
         rotation.allow_rotation = true;
@@ -619,14 +612,22 @@ mod tests {
         explicit.allow_generate = false;
         let resolved = resolve_node_identity(&explicit).expect("explicit resolve");
         assert_eq!(resolved.identity.expect("explicit identity").key_source_class, "explicit-key");
-        assert!(!to_text(&resolved.receipt_value).expect("receipt text").contains("deployment-secret"));
+        assert!(
+            !crate::preserves_rail::to_text(&resolved.receipt_value)
+                .expect("receipt text")
+                .contains("deployment-secret")
+        );
 
         let denied_dir = temp_dir("node-identity-denied");
         let mut denied = NodeIdentityConfig::new("node-denied", denied_dir);
         denied.allow_generate = false;
         let denied = resolve_node_identity(&denied).expect("denial receipt");
         assert!(denied.identity.is_none());
-        assert!(to_text(&denied.receipt_value).expect("denial text").contains("deny-if-unavailable"));
+        assert!(
+            crate::preserves_rail::to_text(&denied.receipt_value)
+                .expect("denial text")
+                .contains("deny-if-unavailable")
+        );
     }
 
     #[test]
@@ -638,16 +639,20 @@ mod tests {
         let parsed = parse_node_bootstrap_handshake(&handshake).expect("parse handshake");
         assert_eq!(parsed.node_identity_ref, identity.identity_ref);
         assert_eq!(parsed.endpoint_id, identity.endpoint_id);
-        assert!(to_text(&handshake).expect("handshake text").contains("identity-grants-no-capabilities"));
+        assert!(
+            crate::preserves_rail::to_text(&handshake)
+                .expect("handshake text")
+                .contains("identity-grants-no-capabilities")
+        );
         let startup =
             node_identity_startup_evidence_value(&identity.identity_ref, &resolved.receipt_ref).expect("startup");
-        assert!(to_text(&startup).expect("startup text").contains("private-key-not-required"));
+        assert!(crate::preserves_rail::to_text(&startup).expect("startup text").contains("private-key-not-required"));
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_explicit_resolution_is_deterministic_and_receipts_redact_secret(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
-        let secret_suffix = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+    fn hegel_explicit_resolution_is_deterministic_and_receipts_redact_secret(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
+        let secret_suffix = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let secret = format!("explicit-secret-{salt}-{secret_suffix}");
         let mut first_config = NodeIdentityConfig::new(format!("node-{salt}"), temp_dir("node-identity-hegel-a"));
         first_config.explicit_key = Some(secret.clone());
@@ -661,14 +666,14 @@ mod tests {
             first.identity.as_ref().expect("first identity").endpoint_id,
             second.identity.as_ref().expect("second identity").endpoint_id
         );
-        assert!(!to_text(&first.receipt_value).expect("receipt text").contains(&secret));
-        assert!(!to_text(&second.receipt_value).expect("receipt text").contains(&secret));
+        assert!(!crate::preserves_rail::to_text(&first.receipt_value).expect("receipt text").contains(&secret));
+        assert!(!crate::preserves_rail::to_text(&second.receipt_value).expect("receipt text").contains(&secret));
     }
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
             fs::remove_dir_all(&dir).expect("remove stale temp dir");
