@@ -6,7 +6,6 @@ use preserves::Value;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -159,7 +158,7 @@ pub fn resolve_node_identity(config: &NodeIdentityConfig) -> Result<NodeIdentity
     });
     Ok(NodeIdentityResolution {
         identity: None,
-        receipt_ref: canonical_hash(&receipt_value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(&receipt_value)?,
         receipt_value,
     })
 }
@@ -221,7 +220,7 @@ pub fn parse_node_identity(value: &IOValue) -> Result<NodeIdentity> {
     require_check(&checks, "no-ambient-authority")?;
     require_check(&checks, "secret-material-redacted")?;
     Ok(NodeIdentity {
-        identity_ref: canonical_hash(value)?,
+        identity_ref: crate::preserves_rail::canonical_hash(value)?,
         node_id: record_string(&node_fields[0], "id")?,
         display_name: record_string(&node_fields[1], "display-name")?,
         endpoint_public_key: record_string(&endpoint_fields[0], "public-key")?,
@@ -273,7 +272,7 @@ pub fn parse_node_bootstrap_handshake(value: &IOValue) -> Result<NodeBootstrapHa
     let checks = parse_checks(&fields[4])?;
     require_check(&checks, "join-admission-still-required")?;
     Ok(NodeBootstrapHandshake {
-        handshake_ref: canonical_hash(value)?,
+        handshake_ref: crate::preserves_rail::canonical_hash(value)?,
         node_identity_ref: record_string(&node_fields[0], "identity")?,
         endpoint_id: record_string(&node_fields[2], "endpoint-id")?,
         peer: record_string(&fields[2], "peer")?,
@@ -309,7 +308,7 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<NodeIdentityResolutio
     fs::write(input.endpoint_path, &input.material.endpoint_id).map_err(MoltenError::from)?;
     let receipt_operation = resolution_operation(&input, is_drift);
     let pre_receipt_value = pass_receipt(&input, receipt_operation, None);
-    let pre_receipt_ref = canonical_hash(&pre_receipt_value)?;
+    let pre_receipt_ref = crate::preserves_rail::canonical_hash(&pre_receipt_value)?;
     let identity_value = node_identity_value(
         input.config,
         input.material,
@@ -321,7 +320,7 @@ fn finish_resolution(input: ResolutionInput<'_>) -> Result<NodeIdentityResolutio
     let receipt_value = pass_receipt(&input, receipt_operation, Some(&identity.identity_ref));
     Ok(NodeIdentityResolution {
         identity: Some(identity),
-        receipt_ref: canonical_hash(&receipt_value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(&receipt_value)?,
         receipt_value,
     })
 }
@@ -341,7 +340,7 @@ fn drift_denial(input: &ResolutionInput<'_>) -> Result<NodeIdentityResolution> {
     });
     Ok(NodeIdentityResolution {
         identity: None,
-        receipt_ref: canonical_hash(&receipt_value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(&receipt_value)?,
         receipt_value,
     })
 }
@@ -425,7 +424,7 @@ fn derive_endpoint_material(secret: &str) -> Result<EndpointMaterial> {
 }
 
 fn generate_secret(node_id: &str, data_dir: &std::path::Path) -> Result<String> {
-    let seed_ref = canonical_hash(&record("node-identity-generated-secret-seed", vec![
+    let seed_ref = crate::preserves_rail::canonical_hash(&record("node-identity-generated-secret-seed", vec![
         record("node-id", vec![string(node_id)]),
         record("data-dir", vec![string(data_dir.display().to_string())]),
     ]))?;
@@ -433,7 +432,7 @@ fn generate_secret(node_id: &str, data_dir: &std::path::Path) -> Result<String> 
 }
 
 fn backend_ref(data_dir: &std::path::Path) -> Result<String> {
-    canonical_hash(&record("node-identity-backend", vec![
+    crate::preserves_rail::canonical_hash(&record("node-identity-backend", vec![
         record("class", vec![string("filesystem")]),
         record("data-dir", vec![string(data_dir.display().to_string())]),
     ]))
