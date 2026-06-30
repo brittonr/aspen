@@ -5,7 +5,6 @@ use redb::ReadableDatabase;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -312,7 +311,7 @@ pub fn read_idempotency_receipt(root: &std::path::Path, receipt_ref: &str) -> Re
     let Some(bytes) = table.get(receipt_ref).map_err(store_error)? else {
         return Err(MoltenError::invalid_harness(format!("unknown delivery idempotency receipt {receipt_ref}")));
     };
-    parse_canonical_bytes(bytes.value())
+    crate::preserves_rail::parse_canonical_bytes(bytes.value())
 }
 
 pub fn retry_receipt_value(
@@ -629,7 +628,7 @@ fn read_or_create_window(
     let read_txn = db.begin_read().map_err(store_error)?;
     let windows = read_txn.open_table(STORE_WINDOWS).map_err(store_error)?;
     if let Some(bytes) = windows.get(scope_ref).map_err(store_error)? {
-        let value = parse_canonical_bytes(bytes.value())?;
+        let value = crate::preserves_rail::parse_canonical_bytes(bytes.value())?;
         return parse_delivery_window(&value);
     }
     drop(windows);
@@ -652,7 +651,7 @@ fn read_entry_from_store(db: &redb::Database, dedup_key: &str) -> Result<Option<
     let Some(bytes) = entries.get(dedup_key).map_err(store_error)? else {
         return Ok(None);
     };
-    let value = parse_canonical_bytes(bytes.value())?;
+    let value = crate::preserves_rail::parse_canonical_bytes(bytes.value())?;
     parse_dedup_entry(&value).map(Some)
 }
 
