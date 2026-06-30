@@ -1,11 +1,7 @@
-use std::path::Path;
-
-use molten::error::Result;
-
 use super::io;
 
 pub(super) struct AdmissionInput<'a> {
-    pub(super) target_registry: &'a Path,
+    pub(super) target_registry: &'a std::path::Path,
     pub(super) job: &'a str,
     pub(super) sync_ref: Option<&'a str>,
     pub(super) stages: &'a [String],
@@ -17,7 +13,7 @@ pub(super) struct AdmissionInput<'a> {
 }
 
 pub(super) struct ExecutionInput<'a> {
-    pub(super) target_registry: &'a Path,
+    pub(super) target_registry: &'a std::path::Path,
     pub(super) job: &'a str,
     pub(super) admission_value: &'a preserves::IOValue,
     pub(super) target_peer: &'a str,
@@ -28,7 +24,7 @@ pub(super) struct ExecutionInput<'a> {
 }
 
 pub(super) struct ExecutionFromAdmissionInput<'a> {
-    pub(super) target_registry: &'a Path,
+    pub(super) target_registry: &'a std::path::Path,
     pub(super) job: &'a str,
     pub(super) admission_ref: Option<&'a str>,
     pub(super) target_peer: &'a str,
@@ -39,12 +35,12 @@ pub(super) struct ExecutionFromAdmissionInput<'a> {
 }
 
 pub(super) fn request(
-    source_registry: &Path,
+    source_registry: &std::path::Path,
     job: &str,
     stages: &[String],
     target_peer: &str,
     extra_evidence_refs: &[String],
-) -> Result<preserves::IOValue> {
+) -> molten::error::Result<preserves::IOValue> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(source_registry, job)?;
     let mut evidence_refs = vec![io::synthetic_ref("sync-evidence", &dag.job_ref)?];
     evidence_refs.extend(extra_evidence_refs.iter().cloned());
@@ -58,7 +54,7 @@ pub(super) fn request(
     })
 }
 
-pub(super) fn admission(input: AdmissionInput<'_>) -> Result<preserves::IOValue> {
+pub(super) fn admission(input: AdmissionInput<'_>) -> molten::error::Result<preserves::IOValue> {
     let mut policy_refs = input.policy_refs;
     let mut capability_refs = input.capability_refs;
     let mut evidence_refs = input.evidence_refs;
@@ -102,7 +98,7 @@ pub(super) fn admission(input: AdmissionInput<'_>) -> Result<preserves::IOValue>
     })
 }
 
-pub(super) fn execution(input: ExecutionInput<'_>) -> Result<preserves::IOValue> {
+pub(super) fn execution(input: ExecutionInput<'_>) -> molten::error::Result<preserves::IOValue> {
     let admission = molten::job_dag::parse_job_admission_receipt_value(input.admission_value)?;
     let selected_stages = if input.stages.is_empty() {
         admission.stage_order.clone()
@@ -125,7 +121,7 @@ pub(super) fn execution(input: ExecutionInput<'_>) -> Result<preserves::IOValue>
     })
 }
 
-pub(super) fn from_admission_ref(input: ExecutionFromAdmissionInput<'_>) -> Result<preserves::IOValue> {
+pub(super) fn from_admission_ref(input: ExecutionFromAdmissionInput<'_>) -> molten::error::Result<preserves::IOValue> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(input.target_registry, input.job)?;
     let admission_ref = match input.admission_ref {
         Some(value) => value.to_string(),
