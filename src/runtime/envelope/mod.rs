@@ -1,6 +1,3 @@
-use serde::Deserialize;
-use serde::Serialize;
-
 use super::RuntimeValue;
 use crate::error::MoltenError;
 use crate::error::Result;
@@ -19,7 +16,8 @@ const MAX_REF_LIST_ITEMS: usize = 256;
 const MAX_ACTOR_ID_BYTES: usize = 256;
 const MAX_CAPABILITY_BYTES: usize = 512;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct ActorId(String);
 
@@ -39,7 +37,8 @@ impl ActorId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct ContentRef(String);
 
@@ -59,7 +58,8 @@ impl ContentRef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct Capability(String);
 
@@ -79,7 +79,8 @@ impl Capability {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct EvidenceRef(String);
 
@@ -99,7 +100,7 @@ impl EvidenceRef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EnvelopeDto {
     pub version: u16,
     pub sender: ActorId,
