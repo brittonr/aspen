@@ -121,23 +121,19 @@ pub fn hostcall_capability(
 
 #[cfg(test)]
 mod tests {
-    use crate::runtime::ActorId;
-    use crate::runtime::ContentRef;
-    use crate::runtime::Envelope;
-    use crate::runtime::EnvelopeInput;
-    use crate::runtime::EvidenceRef;
-    use crate::runtime::RuntimeErrorCategory;
-    use crate::runtime::RuntimeValue;
-
-    fn envelope_with_caps(caps: Vec<crate::runtime::Capability>) -> Envelope {
-        Envelope::new(EnvelopeInput {
-            sender: ActorId::parse("actor:wasm").expect("sender"),
-            subject: RuntimeValue::string("service.ready").expect("subject"),
-            body: RuntimeValue::string("ready").expect("body"),
-            blob_refs: vec![ContentRef::parse(crate::preserves_rail::content_ref_from_bytes(b"blob")).expect("blob")],
+    fn envelope_with_caps(caps: Vec<crate::runtime::Capability>) -> crate::runtime::Envelope {
+        crate::runtime::Envelope::new(crate::runtime::EnvelopeInput {
+            sender: crate::runtime::ActorId::parse("actor:wasm").expect("sender"),
+            subject: crate::runtime::RuntimeValue::string("service.ready").expect("subject"),
+            body: crate::runtime::RuntimeValue::string("ready").expect("body"),
+            blob_refs: vec![
+                crate::runtime::ContentRef::parse(crate::preserves_rail::content_ref_from_bytes(b"blob"))
+                    .expect("blob"),
+            ],
             capabilities: caps,
             evidence_refs: vec![
-                EvidenceRef::parse(crate::preserves_rail::content_ref_from_bytes(b"evidence")).expect("evidence"),
+                crate::runtime::EvidenceRef::parse(crate::preserves_rail::content_ref_from_bytes(b"evidence"))
+                    .expect("evidence"),
             ],
         })
         .expect("envelope")
@@ -151,7 +147,7 @@ mod tests {
         assert_eq!(admission.capability, "hostcall:send");
 
         let error = super::admit_hostcall(&envelope, super::RuntimeHostcall::BlobGet).expect_err("blob get denied");
-        assert_eq!(error.category(), RuntimeErrorCategory::DeniedOperation);
+        assert_eq!(error.category(), crate::runtime::RuntimeErrorCategory::DeniedOperation);
     }
 
     #[test]
