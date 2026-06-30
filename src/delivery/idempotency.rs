@@ -9,7 +9,6 @@ use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
-use crate::preserves_rail::value_to_iovalue;
 
 pub const SCOPE_ACTOR_TURN: &str = "actor-turn";
 pub const SCOPE_SERVICE_LIFECYCLE: &str = "service-lifecycle";
@@ -901,7 +900,7 @@ fn checks_value(checks: &[(&str, &str)]) -> IOValue {
 }
 
 fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
-    let value = value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("checks", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected checks record"))?;
@@ -910,7 +909,7 @@ fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
         .ok_or_else(|| MoltenError::invalid_harness("expected checks sequence"))?;
     let mut checks = Vec::with_capacity(entries.len());
     for entry in entries.iter() {
-        let check_value = value_to_iovalue(entry);
+        let check_value = crate::preserves_rail::value_to_iovalue(entry);
         let check_fields = check_value
             .collect_simple_record("check", Some(2))
             .ok_or_else(|| MoltenError::invalid_harness("expected check record"))?;
@@ -937,11 +936,11 @@ fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
 }
 
 fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
-    let value = value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
-    let inner = value_to_iovalue(&fields[0]);
+    let inner = crate::preserves_rail::value_to_iovalue(&fields[0]);
     if inner.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -960,7 +959,7 @@ fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String
 }
 
 fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
-    let value = value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
@@ -971,7 +970,7 @@ fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Str
 }
 
 fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
-    let value = value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
@@ -979,7 +978,7 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
 }
 
 fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
-    let value = value_to_iovalue(value);
+    let value = crate::preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
