@@ -6,10 +6,6 @@ use preserves::Value;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::NODE_IDENTITY_BOOTSTRAP_SCHEMA;
-use crate::preserves_rail::NODE_IDENTITY_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_IDENTITY_SCHEMA;
-use crate::preserves_rail::NODE_IDENTITY_STARTUP_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
@@ -176,7 +172,7 @@ pub fn node_identity_value(
     receipt_refs: &[String],
 ) -> IOValue {
     record("node-identity-v1", vec![
-        string(NODE_IDENTITY_SCHEMA),
+        string(crate::preserves_rail::NODE_IDENTITY_SCHEMA),
         record("node", vec![
             record("id", vec![string(&config.node_id)]),
             record("display-name", vec![string(&config.display_name)]),
@@ -206,7 +202,7 @@ pub fn parse_node_identity(value: &IOValue) -> Result<NodeIdentity> {
     let fields = value
         .collect_simple_record("node-identity-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-identity-v1 ...>"))?;
-    require_schema(&fields[0], NODE_IDENTITY_SCHEMA, "node identity schema")?;
+    require_schema(&fields[0], crate::preserves_rail::NODE_IDENTITY_SCHEMA, "node identity schema")?;
     let node = value_to_iovalue(&fields[1]);
     let node_fields = node
         .collect_simple_record("node", Some(2))
@@ -245,7 +241,7 @@ pub fn node_bootstrap_handshake_value(identity: &NodeIdentity, peer: &str, polic
     }
     validate_refs(policy_refs, "node bootstrap policy ref")?;
     Ok(record("node-identity-bootstrap-v1", vec![
-        string(NODE_IDENTITY_BOOTSTRAP_SCHEMA),
+        string(crate::preserves_rail::NODE_IDENTITY_BOOTSTRAP_SCHEMA),
         record("node", vec![
             record("identity", vec![string(&identity.identity_ref)]),
             record("node-id", vec![string(&identity.node_id)]),
@@ -265,7 +261,11 @@ pub fn parse_node_bootstrap_handshake(value: &IOValue) -> Result<NodeBootstrapHa
     let fields = value
         .collect_simple_record("node-identity-bootstrap-v1", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-identity-bootstrap-v1 ...>"))?;
-    require_schema(&fields[0], NODE_IDENTITY_BOOTSTRAP_SCHEMA, "node identity bootstrap schema")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::NODE_IDENTITY_BOOTSTRAP_SCHEMA,
+        "node identity bootstrap schema",
+    )?;
     let node = value_to_iovalue(&fields[1]);
     let node_fields = node
         .collect_simple_record("node", Some(3))
@@ -285,7 +285,7 @@ pub fn node_identity_startup_evidence_value(identity_ref: &str, receipt_ref: &st
     require_ref(identity_ref, "node identity startup identity ref")?;
     require_ref(receipt_ref, "node identity startup receipt ref")?;
     Ok(record("node-identity-startup-v1", vec![
-        string(NODE_IDENTITY_STARTUP_SCHEMA),
+        string(crate::preserves_rail::NODE_IDENTITY_STARTUP_SCHEMA),
         record("identity", vec![string(identity_ref)]),
         record("receipt", vec![string(receipt_ref)]),
         record("checks", vec![sequence(vec![
@@ -381,7 +381,7 @@ fn pass_receipt(input: &ResolutionInput<'_>, operation: &str, identity_ref: Opti
 
 fn node_identity_receipt_value(input: &ReceiptValueInput<'_>) -> IOValue {
     record("node-identity-receipt-v1", vec![
-        string(NODE_IDENTITY_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::NODE_IDENTITY_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
         record("node", vec![string(input.node_id)]),
