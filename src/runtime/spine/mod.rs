@@ -1,29 +1,21 @@
-use std::collections::BTreeMap;
-
-use serde::Deserialize;
-use serde::Serialize;
-
-use super::Envelope;
-use super::RuntimeBoundaryError;
-use crate::error::Result;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::validate_content_ref;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ContractBackend {
     NickelStatic,
     SteelReviewed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct RuntimeContractDecision {
     pub backend: ContractBackend,
     pub contract_id: String,
     pub contract_ref: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct BasaltRuntimeRequest {
     pub contract_id: String,
     pub resource: String,
@@ -31,7 +23,8 @@ pub struct BasaltRuntimeRequest {
     pub ucan_ref: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct RuntimePolicyGateReceipt {
     pub envelope_ref: String,
     pub decision: String,
@@ -39,7 +32,8 @@ pub struct RuntimePolicyGateReceipt {
     pub diagnostics: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ValenceEvidenceRef {
     pub evidence_ref: String,
     pub claim: String,
@@ -47,10 +41,11 @@ pub struct ValenceEvidenceRef {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RuntimeReceiptIndex {
-    entries: BTreeMap<String, String>,
+    entries: std::collections::BTreeMap<String, String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct RuntimeIntegrationEvidence {
     pub config_ref: String,
     pub local_route_ref: String,
@@ -62,7 +57,7 @@ pub fn nickel_contract_decision(contract_id: impl Into<String>, source: &[u8]) -
     RuntimeContractDecision {
         backend: ContractBackend::NickelStatic,
         contract_id: contract_id.into(),
-        contract_ref: content_ref_from_bytes(source),
+        contract_ref: crate::preserves_rail::content_ref_from_bytes(source),
     }
 }
 
@@ -70,7 +65,7 @@ pub fn steel_contract_decision(contract_id: impl Into<String>, reviewed_script: 
     RuntimeContractDecision {
         backend: ContractBackend::SteelReviewed,
         contract_id: contract_id.into(),
-        contract_ref: content_ref_from_bytes(reviewed_script),
+        contract_ref: crate::preserves_rail::content_ref_from_bytes(reviewed_script),
     }
 }
 
@@ -78,11 +73,11 @@ pub fn evaluate_basalt_runtime_request(
     request: &BasaltRuntimeRequest,
     expected_resource: &str,
     expected_ability: &str,
-) -> std::result::Result<(), RuntimeBoundaryError> {
-    validate_content_ref(&request.ucan_ref)
-        .map_err(|error| RuntimeBoundaryError::invalid_input("basalt-contract", error.to_string()))?;
+) -> std::result::Result<(), super::RuntimeBoundaryError> {
+    crate::preserves_rail::validate_content_ref(&request.ucan_ref)
+        .map_err(|error| super::RuntimeBoundaryError::invalid_input("basalt-contract", error.to_string()))?;
     if request.resource != expected_resource || request.ability != expected_ability {
-        return Err(RuntimeBoundaryError::denied_operation(
+        return Err(super::RuntimeBoundaryError::denied_operation(
             "basalt-contract",
             format!("request does not match resource={expected_resource} ability={expected_ability}"),
         ));
@@ -90,7 +85,10 @@ pub fn evaluate_basalt_runtime_request(
     Ok(())
 }
 
-pub fn policy_gate_receipt(envelope: &Envelope, required_capability: &str) -> Result<RuntimePolicyGateReceipt> {
+pub fn policy_gate_receipt(
+    envelope: &super::Envelope,
+    required_capability: &str,
+) -> crate::error::Result<RuntimePolicyGateReceipt> {
     let envelope_ref = envelope.canonical_hash()?;
     let has_capability = envelope.capabilities.iter().any(|capability| capability.as_str() == required_capability);
     let mut diagnostics = Vec::new();
@@ -106,14 +104,17 @@ pub fn policy_gate_receipt(envelope: &Envelope, required_capability: &str) -> Re
     })
 }
 
-pub fn validate_cairn_receipt_ref(reference: &str) -> std::result::Result<(), RuntimeBoundaryError> {
-    validate_content_ref(reference)
-        .map_err(|error| RuntimeBoundaryError::invalid_input("cairn-receipt", error.to_string()))
+pub fn validate_cairn_receipt_ref(reference: &str) -> std::result::Result<(), super::RuntimeBoundaryError> {
+    crate::preserves_rail::validate_content_ref(reference)
+        .map_err(|error| super::RuntimeBoundaryError::invalid_input("cairn-receipt", error.to_string()))
 }
 
-pub fn valence_evidence_ref(reference: impl Into<String>, claim: impl Into<String>) -> Result<ValenceEvidenceRef> {
+pub fn valence_evidence_ref(
+    reference: impl Into<String>,
+    claim: impl Into<String>,
+) -> crate::error::Result<ValenceEvidenceRef> {
     let evidence_ref = reference.into();
-    validate_content_ref(&evidence_ref)?;
+    crate::preserves_rail::validate_content_ref(&evidence_ref)?;
     Ok(ValenceEvidenceRef {
         evidence_ref,
         claim: claim.into(),
@@ -121,9 +122,9 @@ pub fn valence_evidence_ref(reference: impl Into<String>, claim: impl Into<Strin
 }
 
 impl RuntimeReceiptIndex {
-    pub fn insert(&mut self, key: impl Into<String>, receipt_ref: impl Into<String>) -> Result<()> {
+    pub fn insert(&mut self, key: impl Into<String>, receipt_ref: impl Into<String>) -> crate::error::Result<()> {
         let receipt_ref = receipt_ref.into();
-        validate_content_ref(&receipt_ref)?;
+        crate::preserves_rail::validate_content_ref(&receipt_ref)?;
         self.entries.insert(key.into(), receipt_ref);
         Ok(())
     }
@@ -140,10 +141,10 @@ pub fn integration_evidence(
     policy: &[u8],
 ) -> RuntimeIntegrationEvidence {
     RuntimeIntegrationEvidence {
-        config_ref: content_ref_from_bytes(config),
-        local_route_ref: content_ref_from_bytes(local_route),
-        remote_bridge_ref: content_ref_from_bytes(remote_bridge),
-        policy_ref: content_ref_from_bytes(policy),
+        config_ref: crate::preserves_rail::content_ref_from_bytes(config),
+        local_route_ref: crate::preserves_rail::content_ref_from_bytes(local_route),
+        remote_bridge_ref: crate::preserves_rail::content_ref_from_bytes(remote_bridge),
+        policy_ref: crate::preserves_rail::content_ref_from_bytes(policy),
     }
 }
 
