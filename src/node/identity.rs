@@ -11,11 +11,9 @@ use crate::preserves_rail::NODE_IDENTITY_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_IDENTITY_SCHEMA;
 use crate::preserves_rail::NODE_IDENTITY_STARTUP_SCHEMA;
 use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
-use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
 
 const SECRET_FILE: &str = "node-endpoint.secret";
@@ -412,10 +410,10 @@ fn derive_endpoint_material(secret: &str) -> Result<EndpointMaterial> {
     if secret.trim().is_empty() {
         return Err(MoltenError::invalid_harness("node endpoint secret must not be empty"));
     }
-    let secret_ref = content_ref_from_bytes(secret.as_bytes());
+    let secret_ref = crate::preserves_rail::content_ref_from_bytes(secret.as_bytes());
     let mut public_material = b"molten-node-public\0".to_vec();
     public_material.extend_from_slice(secret.as_bytes());
-    let public_key = content_ref_from_bytes(&public_material);
+    let public_key = crate::preserves_rail::content_ref_from_bytes(&public_material);
     let mut endpoint_material = b"molten-node-endpoint\0".to_vec();
     endpoint_material.extend_from_slice(public_key.as_bytes());
     let endpoint_id = format!("iroh:{}", blake3::hash(&endpoint_material).to_hex());
@@ -494,7 +492,7 @@ fn validate_refs(refs: &[String], field: &str) -> Result<()> {
 }
 
 fn require_ref(reference: &str, field: &str) -> Result<()> {
-    validate_content_ref(reference).map_err(|error| {
+    crate::preserves_rail::validate_content_ref(reference).map_err(|error| {
         MoltenError::invalid_harness(format!("expected canonical content ref for {field}, got {reference}: {error}"))
     })
 }
