@@ -1013,12 +1013,7 @@ fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-
     use super::*;
-    use crate::preserves_rail::record;
-    use crate::preserves_rail::string;
 
     #[test]
     fn operation_identity_is_canonical_and_payload_sensitive() {
@@ -1245,13 +1240,14 @@ mod tests {
     }
 
     fn fake_ref(label: &str) -> String {
-        canonical_hash(&record("fake-ref", vec![string(label)])).expect("fake ref")
+        canonical_hash(&crate::preserves_rail::record("fake-ref", vec![crate::preserves_rail::string(label)]))
+            .expect("fake ref")
     }
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
             fs::remove_dir_all(&dir).expect("remove stale temp dir");
