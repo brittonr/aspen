@@ -1,11 +1,9 @@
-use super::io;
-
 pub(crate) fn submit(args: super::command::refs::Submit) -> molten::error::Result<()> {
-    let executable = io::content_arg(&args.executable, "executable")?;
+    let executable = super::io::content_arg(&args.executable, "executable")?;
     let inputs = args
         .inputs
         .iter()
-        .map(|input| io::content_arg(input, "input"))
+        .map(|input| super::io::content_arg(input, "input"))
         .collect::<molten::error::Result<Vec<_>>>()?;
     let value = molten::job_dag::job_ref_submission_value(molten::job_dag::BlobRefJobSubmissionValueInput {
         job_id: &args.job_id,
@@ -23,7 +21,7 @@ pub(crate) fn submit(args: super::command::refs::Submit) -> molten::error::Resul
         evidence_refs: &args.evidence_refs,
     })?;
     let submission = molten::job_dag::parse_job_ref_submission_value(&value)?;
-    io::emit_job_analysis(&value, args.out.as_ref())?;
+    super::io::emit_job_analysis(&value, args.out.as_ref())?;
     eprintln!(
         "job ref-submit ok job={} submission={} inputs={}",
         submission.job_id,
@@ -34,13 +32,13 @@ pub(crate) fn submit(args: super::command::refs::Submit) -> molten::error::Resul
 }
 
 pub(crate) fn execute(args: super::command::refs::Execute) -> molten::error::Result<()> {
-    let submission_value = io::read_preserves_file(&args.submission)?;
+    let submission_value = super::io::read_preserves_file(&args.submission)?;
     let executed = molten::job_dag::execute_blob_ref_job(molten::job_dag::BlobRefJobExecuteInput {
         chunk_root: &args.chunks,
         submission_value: &submission_value,
         ledger_root: args.ledger.as_deref(),
     })?;
-    io::emit_named_receipt(args.receipt_out.as_ref(), "job ref receipt", &executed.receipt_value)?;
+    super::io::emit_named_receipt(args.receipt_out.as_ref(), "job ref receipt", &executed.receipt_value)?;
     eprintln!(
         "job ref-execute {} job={} receipt={} output={}",
         executed.decision,
