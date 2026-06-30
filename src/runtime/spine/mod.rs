@@ -149,34 +149,13 @@ pub fn integration_evidence(
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
-    use super::BasaltRuntimeRequest;
-    use super::ContractBackend;
-    use super::RuntimeReceiptIndex;
-    use super::evaluate_basalt_runtime_request;
-    use super::integration_evidence;
-    use super::nickel_contract_decision;
-    use super::policy_gate_receipt;
-    use super::steel_contract_decision;
-    use super::valence_evidence_ref;
-    use super::validate_cairn_receipt_ref;
-    use crate::preserves_rail::content_ref_from_bytes;
-    use crate::runtime::ActorId;
-    use crate::runtime::Capability;
-    use crate::runtime::Envelope;
-    use crate::runtime::EnvelopeInput;
-    use crate::runtime::RuntimeErrorCategory;
-    use crate::runtime::RuntimeValue;
-
-    fn envelope(capability: &str) -> Envelope {
-        Envelope::new(EnvelopeInput {
-            sender: ActorId::parse("actor:policy").expect("sender"),
-            subject: RuntimeValue::string("policy.subject").expect("subject"),
-            body: RuntimeValue::string("body").expect("body"),
+    fn envelope(capability: &str) -> crate::runtime::Envelope {
+        crate::runtime::Envelope::new(crate::runtime::EnvelopeInput {
+            sender: crate::runtime::ActorId::parse("actor:policy").expect("sender"),
+            subject: crate::runtime::RuntimeValue::string("policy.subject").expect("subject"),
+            body: crate::runtime::RuntimeValue::string("body").expect("body"),
             blob_refs: Vec::new(),
-            capabilities: vec![Capability::parse(capability).expect("capability")],
+            capabilities: vec![crate::runtime::Capability::parse(capability).expect("capability")],
             evidence_refs: Vec::new(),
         })
         .expect("envelope")
@@ -184,31 +163,32 @@ mod tests {
 
     #[test]
     fn contract_selection_records_static_nickel_and_reviewed_steel() {
-        let nickel = nickel_contract_decision("static-policy", b"{ allowed = true }");
-        let steel = steel_contract_decision("dynamic-review", b"(lambda (x) x)");
-        assert_eq!(nickel.backend, ContractBackend::NickelStatic);
-        assert_eq!(steel.backend, ContractBackend::SteelReviewed);
+        let nickel = super::nickel_contract_decision("static-policy", b"{ allowed = true }");
+        let steel = super::steel_contract_decision("dynamic-review", b"(lambda (x) x)");
+        assert_eq!(nickel.backend, super::ContractBackend::NickelStatic);
+        assert_eq!(steel.backend, super::ContractBackend::SteelReviewed);
         assert_ne!(nickel.contract_ref, steel.contract_ref);
     }
 
     #[test]
     fn basalt_runtime_request_matches_resource_and_ability() {
-        let request = BasaltRuntimeRequest {
+        let request = super::BasaltRuntimeRequest {
             contract_id: "contract:send".to_string(),
             resource: "subject:ready".to_string(),
             ability: "send".to_string(),
-            ucan_ref: content_ref_from_bytes(b"ucan"),
+            ucan_ref: crate::preserves_rail::content_ref_from_bytes(b"ucan"),
         };
-        evaluate_basalt_runtime_request(&request, "subject:ready", "send").expect("request admitted");
-        let error =
-            evaluate_basalt_runtime_request(&request, "subject:other", "send").expect_err("wrong resource denied");
-        assert_eq!(error.category(), RuntimeErrorCategory::DeniedOperation);
+        super::evaluate_basalt_runtime_request(&request, "subject:ready", "send").expect("request admitted");
+        let error = super::evaluate_basalt_runtime_request(&request, "subject:other", "send")
+            .expect_err("wrong resource denied");
+        assert_eq!(error.category(), crate::runtime::RuntimeErrorCategory::DeniedOperation);
     }
 
     #[test]
     fn policy_gate_records_pass_and_deny_receipts() {
-        let pass = policy_gate_receipt(&envelope("send:policy.subject"), "send:policy.subject").expect("pass receipt");
-        let deny = policy_gate_receipt(&envelope("send:other"), "send:policy.subject").expect("deny receipt");
+        let pass =
+            super::policy_gate_receipt(&envelope("send:policy.subject"), "send:policy.subject").expect("pass receipt");
+        let deny = super::policy_gate_receipt(&envelope("send:other"), "send:policy.subject").expect("deny receipt");
         assert_eq!(pass.decision, "pass");
         assert_eq!(deny.decision, "deny");
         assert!(deny.diagnostics[0].contains("missing capability"));
@@ -216,32 +196,32 @@ mod tests {
 
     #[test]
     fn cairn_valence_and_receipt_index_refs_are_canonical() {
-        let reference = content_ref_from_bytes(b"receipt");
-        validate_cairn_receipt_ref(&reference).expect("cairn receipt ref");
-        let evidence = valence_evidence_ref(reference.clone(), "function-object").expect("valence evidence");
+        let reference = crate::preserves_rail::content_ref_from_bytes(b"receipt");
+        super::validate_cairn_receipt_ref(&reference).expect("cairn receipt ref");
+        let evidence = super::valence_evidence_ref(reference.clone(), "function-object").expect("valence evidence");
         assert_eq!(evidence.evidence_ref, reference);
 
-        let mut index = RuntimeReceiptIndex::default();
+        let mut index = super::RuntimeReceiptIndex::default();
         index.insert("turn:1", evidence.evidence_ref.clone()).expect("insert receipt");
         assert_eq!(index.get("turn:1"), Some(evidence.evidence_ref.as_str()));
     }
 
     #[test]
     fn integration_evidence_binds_config_route_remote_and_policy_refs() {
-        let evidence = integration_evidence(b"config", b"local", b"remote", b"policy");
-        assert_eq!(evidence.config_ref, content_ref_from_bytes(b"config"));
-        assert_eq!(evidence.local_route_ref, content_ref_from_bytes(b"local"));
-        assert_eq!(evidence.remote_bridge_ref, content_ref_from_bytes(b"remote"));
-        assert_eq!(evidence.policy_ref, content_ref_from_bytes(b"policy"));
+        let evidence = super::integration_evidence(b"config", b"local", b"remote", b"policy");
+        assert_eq!(evidence.config_ref, crate::preserves_rail::content_ref_from_bytes(b"config"));
+        assert_eq!(evidence.local_route_ref, crate::preserves_rail::content_ref_from_bytes(b"local"));
+        assert_eq!(evidence.remote_bridge_ref, crate::preserves_rail::content_ref_from_bytes(b"remote"));
+        assert_eq!(evidence.policy_ref, crate::preserves_rail::content_ref_from_bytes(b"policy"));
     }
 
     #[hegel::test(test_cases = 8)]
-    fn hegel_envelope_policy_identity_is_stable(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(1).max_value(1_000_000));
+    fn hegel_envelope_policy_identity_is_stable(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(1_000_000));
         let capability = format!("send:policy.subject.{salt}");
         let envelope = envelope(&capability);
-        let left = policy_gate_receipt(&envelope, &capability).expect("left");
-        let right = policy_gate_receipt(&envelope, &capability).expect("right");
+        let left = super::policy_gate_receipt(&envelope, &capability).expect("left");
+        let right = super::policy_gate_receipt(&envelope, &capability).expect("right");
         assert_eq!(left.envelope_ref, right.envelope_ref);
         assert_eq!(left.decision, "pass");
     }
