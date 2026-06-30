@@ -4,7 +4,6 @@ use redb::ReadableDatabase;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::string;
 
@@ -141,7 +140,7 @@ pub fn scope_profile_value(profile: &str, scope_name: &str, retention_refs: &[St
 }
 
 pub fn scope_ref(profile: &str, scope_name: &str) -> Result<String> {
-    canonical_hash(&scope_profile_value(profile, scope_name, &[])?)
+    crate::preserves_rail::canonical_hash(&scope_profile_value(profile, scope_name, &[])?)
 }
 
 pub fn remote_topic_scope_ref(topic: &str, consumer_peer: &str) -> Result<String> {
@@ -205,7 +204,7 @@ pub fn parse_operation_id(value: &IOValue) -> Result<OperationId> {
     validate_operation_input(&input)?;
     require_check(&parse_checks(&fields[8])?, "canonical-operation-ref", "delivery operation id")?;
     Ok(OperationId {
-        operation_ref: canonical_hash(value)?,
+        operation_ref: crate::preserves_rail::canonical_hash(value)?,
         scope_ref: input.scope_ref,
         producer: input.producer,
         consumer: input.consumer,
@@ -257,7 +256,7 @@ pub fn parse_delivery_window(value: &IOValue) -> Result<DeliveryWindow> {
     }
     require_check(&parse_checks(&fields[6])?, "dedup-window-scoped", "delivery window")?;
     Ok(DeliveryWindow {
-        window_ref: canonical_hash(value)?,
+        window_ref: crate::preserves_rail::canonical_hash(value)?,
         scope_ref,
         scope_profile,
         next_sequence,
@@ -343,7 +342,7 @@ pub fn parse_idempotency_receipt(value: &IOValue) -> Result<IdempotencyReceipt> 
     validate_side_effect(&side_effect)?;
     require_check(&parse_checks(&fields[9])?, "dedup-before-commit", "delivery idempotency receipt")?;
     Ok(IdempotencyReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: crate::preserves_rail::canonical_hash(value)?,
         decision,
         operation_ref: record_ref(&fields[2], "operation")?,
         scope_ref: record_ref(&fields[3], "scope")?,
@@ -363,7 +362,7 @@ pub fn parse_dedup_entry(value: &IOValue) -> Result<DedupEntry> {
     require_schema(&fields[0], crate::preserves_rail::DELIVERY_DEDUP_ENTRY_SCHEMA, "delivery dedup entry schema")?;
     require_check(&parse_checks(&fields[12])?, "first-receipt-bound", "delivery dedup entry")?;
     Ok(DedupEntry {
-        entry_ref: canonical_hash(value)?,
+        entry_ref: crate::preserves_rail::canonical_hash(value)?,
         dedup_key: record_ref(&fields[1], "dedup-key")?,
         operation_ref: record_ref(&fields[2], "operation")?,
         scope_ref: record_ref(&fields[3], "scope")?,
@@ -434,7 +433,7 @@ pub fn delivery_summary(value: &IOValue) -> Result<String> {
         require_check(&parse_checks(&fields[6])?, "retry-before-side-effects", "delivery retry receipt")?;
         return Ok(format!(
             "delivery retry receipt ref={} operation={} scope={} retry_after_sequence={} diagnostics={}",
-            canonical_hash(value)?,
+            crate::preserves_rail::canonical_hash(value)?,
             record_ref(&fields[1], "operation")?,
             record_ref(&fields[2], "scope")?,
             record_u64(&fields[4], "retry-after-sequence")?,
@@ -576,7 +575,7 @@ fn gap_or_retry_decision(
     let result = suppressed_decision(db, operation, window, decision, diagnostics)?;
     if matches!(input.gap_policy, GapPolicy::Retry) {
         let retry_value = retry_receipt_value(&result.operation, &result.window, &result.receipt.diagnostics)?;
-        let retry_ref = canonical_hash(&retry_value)?;
+        let retry_ref = crate::preserves_rail::canonical_hash(&retry_value)?;
         store_raw_receipt(db, &retry_ref, &retry_value)?;
     }
     Ok(result)
@@ -777,7 +776,7 @@ struct IdempotencyReceiptValueInput<'a> {
 }
 
 fn dedup_key_ref(operation: &OperationId) -> Result<String> {
-    canonical_hash(&record("dedup-key-v1", vec![
+    crate::preserves_rail::canonical_hash(&record("dedup-key-v1", vec![
         record("scope", vec![string(&operation.scope_ref)]),
         record("producer", vec![string(&operation.producer)]),
         record("consumer", vec![string(&operation.consumer)]),
@@ -1231,8 +1230,10 @@ mod tests {
     }
 
     fn fake_ref(label: &str) -> String {
-        canonical_hash(&crate::preserves_rail::record("fake-ref", vec![crate::preserves_rail::string(label)]))
-            .expect("fake ref")
+        crate::preserves_rail::canonical_hash(&crate::preserves_rail::record("fake-ref", vec![
+            crate::preserves_rail::string(label),
+        ]))
+        .expect("fake ref")
     }
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
