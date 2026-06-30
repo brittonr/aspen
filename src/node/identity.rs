@@ -1,7 +1,5 @@
 use std::fs;
 use std::io::Write;
-use std::path::Path;
-use std::path::PathBuf;
 
 use preserves::IOValue;
 use preserves::Value;
@@ -28,7 +26,7 @@ const KEY_ALGORITHM: &str = "blake3-local-endpoint-fixture-v1";
 pub struct NodeIdentityConfig {
     pub node_id: String,
     pub display_name: String,
-    pub data_dir: PathBuf,
+    pub data_dir: std::path::PathBuf,
     pub explicit_key: Option<String>,
     pub allow_generate: bool,
     pub allow_rotation: bool,
@@ -36,7 +34,7 @@ pub struct NodeIdentityConfig {
 }
 
 impl NodeIdentityConfig {
-    pub fn new(node_id: impl Into<String>, data_dir: impl Into<PathBuf>) -> Self {
+    pub fn new(node_id: impl Into<String>, data_dir: impl Into<std::path::PathBuf>) -> Self {
         let node_id = node_id.into();
         Self {
             display_name: node_id.clone(),
@@ -87,7 +85,7 @@ struct ResolutionInput<'a> {
     secret: &'a str,
     material: &'a EndpointMaterial,
     backend_ref: &'a str,
-    endpoint_path: &'a Path,
+    endpoint_path: &'a std::path::Path,
     is_first_boot: bool,
 }
 
@@ -428,7 +426,7 @@ fn derive_endpoint_material(secret: &str) -> Result<EndpointMaterial> {
     })
 }
 
-fn generate_secret(node_id: &str, data_dir: &Path) -> Result<String> {
+fn generate_secret(node_id: &str, data_dir: &std::path::Path) -> Result<String> {
     let seed_ref = canonical_hash(&record("node-identity-generated-secret-seed", vec![
         record("node-id", vec![string(node_id)]),
         record("data-dir", vec![string(data_dir.display().to_string())]),
@@ -436,7 +434,7 @@ fn generate_secret(node_id: &str, data_dir: &Path) -> Result<String> {
     Ok(format!("molten-local-generated:{node_id}:{seed_ref}"))
 }
 
-fn backend_ref(data_dir: &Path) -> Result<String> {
+fn backend_ref(data_dir: &std::path::Path) -> Result<String> {
     canonical_hash(&record("node-identity-backend", vec![
         record("class", vec![string("filesystem")]),
         record("data-dir", vec![string(data_dir.display().to_string())]),
@@ -456,7 +454,7 @@ fn validate_config(config: &NodeIdentityConfig) -> Result<()> {
     validate_refs(&config.policy_refs, "node identity policy ref")
 }
 
-fn write_secret_restricted(path: &Path, secret: &str) -> Result<()> {
+fn write_secret_restricted(path: &std::path::Path, secret: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(MoltenError::from)?;
     }
@@ -670,7 +668,7 @@ mod tests {
         assert!(!to_text(&second.receipt_value).expect("receipt text").contains(&secret));
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
+    fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
