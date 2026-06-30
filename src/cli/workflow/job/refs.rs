@@ -1,10 +1,12 @@
-use molten::error::Result;
-
 use super::io;
 
-pub(crate) fn submit(args: super::command::refs::Submit) -> Result<()> {
+pub(crate) fn submit(args: super::command::refs::Submit) -> molten::error::Result<()> {
     let executable = io::content_arg(&args.executable, "executable")?;
-    let inputs = args.inputs.iter().map(|input| io::content_arg(input, "input")).collect::<Result<Vec<_>>>()?;
+    let inputs = args
+        .inputs
+        .iter()
+        .map(|input| io::content_arg(input, "input"))
+        .collect::<molten::error::Result<Vec<_>>>()?;
     let value = molten::job_dag::job_ref_submission_value(molten::job_dag::BlobRefJobSubmissionValueInput {
         job_id: &args.job_id,
         operation_id: &args.operation_id,
@@ -31,7 +33,7 @@ pub(crate) fn submit(args: super::command::refs::Submit) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn execute(args: super::command::refs::Execute) -> Result<()> {
+pub(crate) fn execute(args: super::command::refs::Execute) -> molten::error::Result<()> {
     let submission_value = io::read_preserves_file(&args.submission)?;
     let executed = molten::job_dag::execute_blob_ref_job(molten::job_dag::BlobRefJobExecuteInput {
         chunk_root: &args.chunks,
@@ -56,7 +58,7 @@ pub(crate) fn execute(args: super::command::refs::Execute) -> Result<()> {
     }
 }
 
-pub(crate) fn status(args: super::command::refs::Status) -> Result<()> {
+pub(crate) fn status(args: super::command::refs::Status) -> molten::error::Result<()> {
     for entry in molten::ledger::list_artifacts(&args.ledger)? {
         let value = match entry.artifact_kind.as_str() {
             "job-dag-receipt" | "job-ref-receipt" | "job-worker-receipt" | "job-worker-schedule-receipt" => {
@@ -75,14 +77,18 @@ pub(crate) fn status(args: super::command::refs::Status) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn receipt_show(args: super::command::refs::ReceiptShow) -> Result<()> {
+pub(crate) fn receipt_show(args: super::command::refs::ReceiptShow) -> molten::error::Result<()> {
     let value = molten::ledger::read_artifact(&args.ledger, &args.receipt_ref)?;
     println!("{}", molten::job_dag::receipt_summary(&value)?);
     println!("{}", molten::preserves_rail::to_text(&value)?);
     Ok(())
 }
 
-fn maybe_print_schedule(artifact_ref: &str, value: &preserves::IOValue, job: Option<&str>) -> Result<bool> {
+fn maybe_print_schedule(
+    artifact_ref: &str,
+    value: &preserves::IOValue,
+    job: Option<&str>,
+) -> molten::error::Result<bool> {
     let Ok(schedule) = molten::job_dag::parse_job_worker_schedule_receipt_value(value) else {
         return Ok(false);
     };
@@ -98,7 +104,11 @@ fn maybe_print_schedule(artifact_ref: &str, value: &preserves::IOValue, job: Opt
     Ok(true)
 }
 
-fn maybe_print_worker(artifact_ref: &str, value: &preserves::IOValue, job: Option<&str>) -> Result<bool> {
+fn maybe_print_worker(
+    artifact_ref: &str,
+    value: &preserves::IOValue,
+    job: Option<&str>,
+) -> molten::error::Result<bool> {
     let Ok(worker) = molten::job_dag::parse_job_worker_receipt_value(value) else {
         return Ok(false);
     };
@@ -114,7 +124,7 @@ fn maybe_print_worker(artifact_ref: &str, value: &preserves::IOValue, job: Optio
     Ok(true)
 }
 
-fn print_receipt(artifact_ref: &str, value: &preserves::IOValue, job: Option<&str>) -> Result<()> {
+fn print_receipt(artifact_ref: &str, value: &preserves::IOValue, job: Option<&str>) -> molten::error::Result<()> {
     let receipt = molten::job_dag::parse_job_receipt(value)
         .or_else(|_| molten::job_dag::parse_blob_ref_job_receipt_value(value))?;
     if job.is_none_or(|job_ref| receipt.job_ref.as_deref() == Some(job_ref)) {
