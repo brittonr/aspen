@@ -12,86 +12,11 @@ use wasmparser::Parser;
 use wasmparser::Payload;
 use wasmparser::Validator;
 
-use super::core::AdmissionRequest;
-use super::core::CoreEffect;
-use super::core::CoreEvent;
-use super::core::CoreStep;
-use super::core::RuntimeSnapshot;
-use super::core::RuntimeValue;
-use crate::effects::DeclaredEffect;
-use crate::effects::EffectHandleInput;
-use crate::effects::EffectHandleRequest;
-use crate::effects::EffectManifestInput;
-use crate::effects::EffectRequestInput;
-use crate::effects::EffectScope;
-use crate::effects::HANDLER_PROFILE_LOCAL;
-use crate::effects::HandlerBindingInput;
-use crate::effects::HandlerProfileInput;
-use crate::effects::TRANSFER_LOCAL_ONLY;
-use crate::effects::admit_effect_request;
-use crate::effects::effect_handle_value;
-use crate::effects::effect_manifest_value;
-use crate::effects::effect_request_value;
-use crate::effects::handler_binding_value;
-use crate::effects::handler_profile_value;
-use crate::effects::validate_handle_for_request;
+use super::core;
+use crate::effects;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::HARNESS_ACTOR_REGISTRY_SCHEMA;
-use crate::preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA;
-use crate::preserves_rail::HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA;
-use crate::preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA;
-use crate::preserves_rail::HARNESS_BUDGET_CONTRACT_SCHEMA;
-use crate::preserves_rail::HARNESS_BUDGET_GATE_SCHEMA;
-use crate::preserves_rail::HARNESS_BUDGET_NICKEL_STATIC_SCHEMA;
-use crate::preserves_rail::HARNESS_BUDGET_SCHEMA;
-use crate::preserves_rail::HARNESS_BUDGET_USAGE_SCHEMA;
-use crate::preserves_rail::HARNESS_CAPABILITIES_SCHEMA;
-use crate::preserves_rail::HARNESS_CAPABILITY_CONTRACT_SCHEMA;
-use crate::preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA;
-use crate::preserves_rail::HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA;
-use crate::preserves_rail::HARNESS_EFFECT_LOG_SCHEMA;
-use crate::preserves_rail::HARNESS_EXECUTOR_CONFORMANCE_SCHEMA;
-use crate::preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA;
-use crate::preserves_rail::HARNESS_FAILURE_SCHEMA;
-use crate::preserves_rail::HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::HARNESS_OBSERVATION_SCHEMA;
-use crate::preserves_rail::HARNESS_POLICY_CONTRACT_SCHEMA;
-use crate::preserves_rail::HARNESS_POLICY_GATE_SCHEMA;
-use crate::preserves_rail::HARNESS_POLICY_NICKEL_STATIC_SCHEMA;
-use crate::preserves_rail::HARNESS_POLICY_SCHEMA;
-use crate::preserves_rail::HARNESS_REDACTION_GATE_SCHEMA;
-use crate::preserves_rail::HARNESS_REDACTION_POLICY_SCHEMA;
-use crate::preserves_rail::HARNESS_REDACTION_PROFILE_SCHEMA;
-use crate::preserves_rail::HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA;
-use crate::preserves_rail::HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA;
-use crate::preserves_rail::HARNESS_REPORT_SCHEMA;
-use crate::preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA;
-use crate::preserves_rail::HARNESS_REPRO_SEAL_SCHEMA;
-use crate::preserves_rail::HARNESS_RUN_RECEIPT_SCHEMA;
-use crate::preserves_rail::HARNESS_SUITE_SCHEMA;
-use crate::preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA;
-use crate::preserves_rail::HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA;
-use crate::preserves_rail::HASH_ALGORITHM;
-use crate::preserves_rail::RUNTIME_ACTOR_INPUT_SCHEMA;
-use crate::preserves_rail::RUNTIME_ACTOR_OUTPUT_SCHEMA;
-use crate::preserves_rail::RUNTIME_ADAPTER_EXECUTOR_SCHEMA;
-use crate::preserves_rail::RUNTIME_ADAPTER_PREFLIGHT_RECEIPT_SCHEMA;
-use crate::preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA;
-use crate::preserves_rail::RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA;
-use crate::preserves_rail::RUNTIME_EXECUTOR_PREFLIGHT_SCHEMA;
-use crate::preserves_rail::RUNTIME_HOSTCALL_DECISION_SCHEMA;
-use crate::preserves_rail::RUNTIME_HOSTCALL_REQUEST_SCHEMA;
-use crate::preserves_rail::RUNTIME_PREDICATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA;
-use crate::preserves_rail::RUNTIME_REMOTE_PROXY_PREFLIGHT_RECEIPT_SCHEMA;
-use crate::preserves_rail::RUNTIME_STEEL_EXECUTION_RECEIPT_SCHEMA;
-use crate::preserves_rail::RUNTIME_STEEL_EXECUTOR_SCHEMA;
-use crate::preserves_rail::RUNTIME_STEEL_REVIEW_RECEIPT_SCHEMA;
-use crate::preserves_rail::RUNTIME_WASM_ABI_SCHEMA;
-use crate::preserves_rail::RUNTIME_WASM_EXECUTION_RECEIPT_SCHEMA;
-use crate::preserves_rail::RUNTIME_WASM_EXECUTOR_SCHEMA;
-use crate::preserves_rail::RUNTIME_WASM_INSPECTION_RECEIPT_SCHEMA;
+use crate::preserves_rail;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -101,21 +26,8 @@ use crate::preserves_rail::to_text;
 use crate::preserves_rail::u64_value;
 use crate::preserves_rail::validate_content_ref;
 use crate::preserves_rail::value_to_iovalue;
-use crate::runtime::AdmissionAction;
-use crate::runtime::AdmissionDecision;
-use crate::runtime::AdmissionDenyRule;
-use crate::runtime::AdmissionPolicy;
-use crate::runtime::CapabilityContext;
-use crate::runtime::CapabilityGrant;
-use crate::secrets::EncryptedRefInput;
-use crate::secrets::PrivateBundleProfileInput;
-use crate::secrets::RedactionMarkerInput;
-use crate::secrets::encrypted_ref_value;
-use crate::secrets::parse_encrypted_ref;
-use crate::secrets::parse_private_bundle_profile;
-use crate::secrets::parse_redaction_marker;
-use crate::secrets::private_bundle_profile_value;
-use crate::secrets::redaction_marker_value;
+use crate::runtime;
+use crate::secrets;
 
 const WASM_ABI_MAX_OUTPUT_BYTES_FOR_VALIDATION: u64 = 8 * 1024;
 const MAX_WASM_IMPORT_EVIDENCE: usize = 1024;
@@ -152,10 +64,10 @@ pub struct HarnessSuite {
     pub budget_explicit: bool,
     pub actors: Vec<ActorDecl>,
     pub actors_explicit: bool,
-    pub capabilities: CapabilityContext,
+    pub capabilities: runtime::CapabilityContext,
     pub capabilities_explicit: bool,
-    pub policy: AdmissionPolicy,
-    pub steps: Vec<CoreStep>,
+    pub policy: runtime::AdmissionPolicy,
+    pub steps: Vec<core::CoreStep>,
     pub source_value: IOValue,
 }
 
@@ -465,9 +377,9 @@ pub struct HarnessObservation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdmissionDecisionEvent {
     pub value: IOValue,
-    pub request: AdmissionRequest,
+    pub request: core::AdmissionRequest,
     pub authority: Option<AdmissionAuthorityEvidence>,
-    pub decision: AdmissionDecision,
+    pub decision: runtime::AdmissionDecision,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -508,9 +420,9 @@ struct SuiteFixtures {
     has_budget_fixture: bool,
     actors: Option<Vec<ActorDecl>>,
     has_actor_fixture: bool,
-    capabilities: CapabilityContext,
+    capabilities: runtime::CapabilityContext,
     has_capability_fixture: bool,
-    policy: AdmissionPolicy,
+    policy: runtime::AdmissionPolicy,
     has_policy_fixture: bool,
 }
 
@@ -588,9 +500,10 @@ pub fn parse_suite(value: &IOValue) -> Result<HarnessSuite> {
         )));
     }
     let schema = required_string(&suite[0], "suite schema")?;
-    if schema != HARNESS_SUITE_SCHEMA {
+    if schema != preserves_rail::HARNESS_SUITE_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported suite schema {schema}; expected {HARNESS_SUITE_SCHEMA}"
+            "unsupported suite schema {schema}; expected {}",
+            preserves_rail::HARNESS_SUITE_SCHEMA
         )));
     }
     let name = required_string(&suite[1], "suite name")?;
@@ -637,38 +550,42 @@ pub fn suite_ref(suite: &HarnessSuite) -> Result<String> {
     canonical_hash(&suite.source_value)
 }
 
-pub fn step_value(step: &CoreStep) -> IOValue {
+pub fn step_value(step: &core::CoreStep) -> IOValue {
     match step {
-        CoreStep::Send { from, to, body } => record("send", vec![string(from), string(to), body.as_iovalue().clone()]),
-        CoreStep::Observe { actor, pattern } => record("observe", vec![string(actor), pattern.as_iovalue().clone()]),
-        CoreStep::Assert { actor, value } => record("assert", vec![string(actor), value.as_iovalue().clone()]),
-        CoreStep::Retract { actor, value } => record("retract", vec![string(actor), value.as_iovalue().clone()]),
-        CoreStep::Clock { actor } => record("clock", vec![string(actor)]),
-        CoreStep::Random { actor, upper } => record("random", vec![string(actor), u64_value(*upper)]),
+        core::CoreStep::Send { from, to, body } => {
+            record("send", vec![string(from), string(to), body.as_iovalue().clone()])
+        }
+        core::CoreStep::Observe { actor, pattern } => {
+            record("observe", vec![string(actor), pattern.as_iovalue().clone()])
+        }
+        core::CoreStep::Assert { actor, value } => record("assert", vec![string(actor), value.as_iovalue().clone()]),
+        core::CoreStep::Retract { actor, value } => record("retract", vec![string(actor), value.as_iovalue().clone()]),
+        core::CoreStep::Clock { actor } => record("clock", vec![string(actor)]),
+        core::CoreStep::Random { actor, upper } => record("random", vec![string(actor), u64_value(*upper)]),
     }
 }
 
-pub fn event_value(event: &CoreEvent) -> IOValue {
+pub fn event_value(event: &core::CoreEvent) -> IOValue {
     match event {
-        CoreEvent::MessageDelivered { from, to, body } => {
+        core::CoreEvent::MessageDelivered { from, to, body } => {
             record("message-delivered", vec![string(from), string(to), body.as_iovalue().clone()])
         }
-        CoreEvent::ObserveRegistered { actor, pattern } => {
+        core::CoreEvent::ObserveRegistered { actor, pattern } => {
             record("observe-registered", vec![string(actor), pattern.as_iovalue().clone()])
         }
-        CoreEvent::AssertionObserved { observer, owner, value } => {
+        core::CoreEvent::AssertionObserved { observer, owner, value } => {
             record("assertion-observed", vec![string(observer), string(owner), value.as_iovalue().clone()])
         }
-        CoreEvent::AssertionCommitted { actor, value } => {
+        core::CoreEvent::AssertionCommitted { actor, value } => {
             record("assertion-committed", vec![string(actor), value.as_iovalue().clone()])
         }
-        CoreEvent::AssertionRetracted { actor, value } => {
+        core::CoreEvent::AssertionRetracted { actor, value } => {
             record("assertion-retracted", vec![string(actor), value.as_iovalue().clone()])
         }
-        CoreEvent::AssertionRetractionObserved { observer, owner, value } => {
+        core::CoreEvent::AssertionRetractionObserved { observer, owner, value } => {
             record("assertion-retraction-observed", vec![string(observer), string(owner), value.as_iovalue().clone()])
         }
-        CoreEvent::EffectRequest {
+        core::CoreEvent::EffectRequest {
             effect,
             actor,
             sequence,
@@ -680,7 +597,7 @@ pub fn event_value(event: &CoreEvent) -> IOValue {
             }
             record("effect-request", fields)
         }
-        CoreEvent::EffectResponse {
+        core::CoreEvent::EffectResponse {
             effect,
             actor,
             sequence,
@@ -694,26 +611,28 @@ pub fn event_value(event: &CoreEvent) -> IOValue {
             fields.push(u64_value(*value));
             record("effect-response", fields)
         }
-        CoreEvent::AdmissionDecision { request, decision } => admission_decision_event_value(request, decision),
-        CoreEvent::TurnRolledBack { actor, reason } => record("turn-rolled-back", vec![string(actor), string(reason)]),
+        core::CoreEvent::AdmissionDecision { request, decision } => admission_decision_event_value(request, decision),
+        core::CoreEvent::TurnRolledBack { actor, reason } => {
+            record("turn-rolled-back", vec![string(actor), string(reason)])
+        }
     }
 }
 
-fn admission_decision_event_value(request: &AdmissionRequest, decision: &AdmissionDecision) -> IOValue {
+fn admission_decision_event_value(request: &core::AdmissionRequest, decision: &runtime::AdmissionDecision) -> IOValue {
     record("admission-decision-v1", vec![
-        string(RUNTIME_ADMISSION_DECISION_SCHEMA),
+        string(preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA),
         admission_request_value(request),
         record("decision", vec![string(decision.status()), string(decision.reason())]),
     ])
 }
 
 pub fn admission_decision_event_value_with_authority(
-    request: &AdmissionRequest,
+    request: &core::AdmissionRequest,
     authority: &AdmissionAuthorityEvidence,
-    decision: &AdmissionDecision,
+    decision: &runtime::AdmissionDecision,
 ) -> IOValue {
     record("admission-decision-v1", vec![
-        string(RUNTIME_ADMISSION_DECISION_SCHEMA),
+        string(preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA),
         admission_request_value(request),
         admission_authority_value(authority),
         record("decision", vec![string(decision.status()), string(decision.reason())]),
@@ -728,7 +647,7 @@ fn admission_authority_value(authority: &AdmissionAuthorityEvidence) -> IOValue 
     ])
 }
 
-fn admission_request_value(request: &AdmissionRequest) -> IOValue {
+fn admission_request_value(request: &core::AdmissionRequest) -> IOValue {
     record("request", vec![
         string(&request.actor),
         string(request.action.as_str()),
@@ -742,7 +661,7 @@ fn optional_string_value(value: Option<&str>) -> IOValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_runtime_value(value: Option<&RuntimeValue>) -> IOValue {
+fn optional_runtime_value(value: Option<&core::RuntimeValue>) -> IOValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![value.as_iovalue().clone()]))
 }
 
@@ -752,13 +671,13 @@ fn optional_u64_value(value: Option<u64>) -> IOValue {
 
 pub fn actor_input_value(
     suite: &HarnessSuite,
-    step: &CoreStep,
+    step: &core::CoreStep,
     context: HostcallEvidenceContext<'_>,
 ) -> Result<IOValue> {
     let actor = step.primary_actor();
     let kind = actor_kind_for_primary_actor(suite, actor)?;
     Ok(record("actor-input-v1", vec![
-        string(RUNTIME_ACTOR_INPUT_SCHEMA),
+        string(preserves_rail::RUNTIME_ACTOR_INPUT_SCHEMA),
         record("actor", vec![string(actor), string(kind.as_str())]),
         record("sequence", vec![u64_value(context.sequence)]),
         record("step-ref", vec![string(context.step_ref)]),
@@ -772,11 +691,11 @@ pub fn actor_input_value(
 
 pub fn hostcall_request_value(
     suite: &HarnessSuite,
-    step: &CoreStep,
+    step: &core::CoreStep,
     context: HostcallEvidenceContext<'_>,
-    decision: &AdmissionDecision,
+    decision: &runtime::AdmissionDecision,
 ) -> Result<IOValue> {
-    let request = AdmissionRequest::from_step(step);
+    let request = core::AdmissionRequest::from_step(step);
     let effect_refs = hostcall_effect_refs(suite, step, context, decision.is_allowed())?;
     let checks = if decision.is_allowed() {
         vec![
@@ -798,7 +717,7 @@ pub fn hostcall_request_value(
         ]
     };
     let mut fields = vec![
-        string(RUNTIME_HOSTCALL_REQUEST_SCHEMA),
+        string(preserves_rail::RUNTIME_HOSTCALL_REQUEST_SCHEMA),
         record("sequence", vec![u64_value(context.sequence)]),
         record("step-ref", vec![string(context.step_ref)]),
         record("operation", vec![string(request.action.as_str())]),
@@ -841,7 +760,7 @@ struct CallBase {
     actor_ref: String,
     operation: &'static str,
     session_ref: String,
-    scope: EffectScope,
+    scope: effects::EffectScope,
     allowed_hostcalls: Vec<String>,
     preflight_ref: String,
     resource_refs: Vec<String>,
@@ -865,7 +784,7 @@ struct RequestRefs {
 
 fn hostcall_effect_refs(
     suite: &HarnessSuite,
-    step: &CoreStep,
+    step: &core::CoreStep,
     context: HostcallEvidenceContext<'_>,
     bind_effect_request: bool,
 ) -> Result<HostcallEffectRefs> {
@@ -887,12 +806,12 @@ fn hostcall_effect_refs(
     })
 }
 
-fn call_base(suite: &HarnessSuite, step: &CoreStep, context: HostcallEvidenceContext<'_>) -> Result<CallBase> {
+fn call_base(suite: &HarnessSuite, step: &core::CoreStep, context: HostcallEvidenceContext<'_>) -> Result<CallBase> {
     let actor = actor_decl_for_primary_actor(suite, step.primary_actor())?;
-    let operation = AdmissionRequest::from_step(step).action.as_str();
+    let operation = core::AdmissionRequest::from_step(step).action.as_str();
     let actor_ref = actor_identity_ref(&actor.id)?;
     let session_ref = hostcall_session_ref(context)?;
-    let scope = EffectScope {
+    let scope = effects::EffectScope {
         run_ref: context.suite_ref.to_string(),
         session_ref: session_ref.clone(),
         actor_ref: Some(actor_ref.clone()),
@@ -921,7 +840,7 @@ fn call_binding(base: &CallBase, context: HostcallEvidenceContext<'_>) -> Result
         string(base.actor_kind),
         string(&base.preflight_ref),
     ]))?;
-    let value = handler_binding_value(&HandlerBindingInput {
+    let value = effects::handler_binding_value(&effects::HandlerBindingInput {
         profile: "local-hostcall".to_string(),
         scope: base.scope.clone(),
         adapter_kind: "hostcall".to_string(),
@@ -935,7 +854,7 @@ fn call_binding(base: &CallBase, context: HostcallEvidenceContext<'_>) -> Result
         evidence_refs: base.evidence_refs.clone(),
     })?;
     let value_ref = canonical_hash(&value)?;
-    let handle = effect_handle_value(&EffectHandleInput {
+    let handle = effects::effect_handle_value(&effects::EffectHandleInput {
         kind: "hostcall".to_string(),
         scope: base.scope.clone(),
         handler_binding_ref: value_ref.clone(),
@@ -946,7 +865,7 @@ fn call_binding(base: &CallBase, context: HostcallEvidenceContext<'_>) -> Result
         not_before: Some(0),
         expires_at: None,
         revocation_refs: Vec::new(),
-        transfer: TRANSFER_LOCAL_ONLY.to_string(),
+        transfer: effects::TRANSFER_LOCAL_ONLY.to_string(),
         parent_handle_ref: None,
         evidence_refs: base.evidence_refs.clone(),
     })?;
@@ -978,7 +897,7 @@ fn request_refs(base: &CallBase, binding: &CallBinding, context: HostcallEvidenc
 }
 
 fn call_effect_manifest(base: &CallBase, context: HostcallEvidenceContext<'_>) -> Result<IOValue> {
-    effect_manifest_value(&EffectManifestInput {
+    effects::effect_manifest_value(&effects::EffectManifestInput {
         artifact_kind: base.actor_kind.to_string(),
         artifact_ref: base.actor_ref.clone(),
         executor_kind: base.actor_kind.to_string(),
@@ -986,7 +905,7 @@ fn call_effect_manifest(base: &CallBase, context: HostcallEvidenceContext<'_>) -
             .allowed_hostcalls
             .as_slice()
             .iter()
-            .map(|hostcall| DeclaredEffect {
+            .map(|hostcall| effects::DeclaredEffect {
                 effect_id: format!("hostcall.{hostcall}"),
                 operation: hostcall.clone(),
                 input_schema_ref: context.step_ref.to_string(),
@@ -1004,8 +923,8 @@ fn call_handler_profile(
     binding: &CallBinding,
     context: HostcallEvidenceContext<'_>,
 ) -> Result<IOValue> {
-    handler_profile_value(&HandlerProfileInput {
-        profile: HANDLER_PROFILE_LOCAL.to_string(),
+    effects::handler_profile_value(&effects::HandlerProfileInput {
+        profile: effects::HANDLER_PROFILE_LOCAL.to_string(),
         handler_binding_refs: vec![binding.value_ref.clone()],
         policy_ref: context.policy_ref.to_string(),
         capability_context_ref: context.capability_ref.to_string(),
@@ -1020,11 +939,11 @@ fn call_effect_request(
     context: HostcallEvidenceContext<'_>,
     effect_id: String,
 ) -> Result<IOValue> {
-    effect_request_value(&EffectRequestInput {
+    effects::effect_request_value(&effects::EffectRequestInput {
         artifact_ref: base.actor_ref.clone(),
         effect_id,
         operation: base.operation.to_string(),
-        handler_profile: HANDLER_PROFILE_LOCAL.to_string(),
+        handler_profile: effects::HANDLER_PROFILE_LOCAL.to_string(),
         input_ref: context.step_ref.to_string(),
         capability_refs: vec![context.capability_ref.to_string()],
         evidence_refs: vec![binding.value_ref.clone(), binding.handle_ref.clone()],
@@ -1038,8 +957,10 @@ fn call_binding_receipt_ref(
     profile: &IOValue,
     request: &IOValue,
 ) -> Result<String> {
-    let effect_binding =
-        admit_effect_request(manifest, profile, request, &[binding.value_ref.clone(), binding.handle_ref.clone()])?;
+    let effect_binding = effects::admit_effect_request(manifest, profile, request, &[
+        binding.value_ref.clone(),
+        binding.handle_ref.clone(),
+    ])?;
     if effect_binding.decision != "pass" {
         return Err(MoltenError::invalid_harness(format!(
             "hostcall effect manifest denied operation {}: {:?}",
@@ -1050,21 +971,22 @@ fn call_binding_receipt_ref(
 }
 
 fn validate_call_handle(base: &CallBase, binding: &CallBinding, context: HostcallEvidenceContext<'_>) -> Result<()> {
-    let validation = validate_handle_for_request(&binding.value, &binding.handle, &EffectHandleRequest {
-        kind: "hostcall",
-        operation: base.operation,
-        run_ref: context.suite_ref,
-        session_ref: &base.session_ref,
-        actor_ref: Some(&base.actor_ref),
-        turn_ref: Some(context.step_ref),
-        policy_ref: context.policy_ref,
-        capability_context_ref: context.capability_ref,
-        authority_context_ref: None,
-        resource_refs: &base.resource_refs,
-        logical_time: context.sequence,
-        remote_use: false,
-        revoked_refs: &[],
-    })?;
+    let validation =
+        effects::validate_handle_for_request(&binding.value, &binding.handle, &effects::EffectHandleRequest {
+            kind: "hostcall",
+            operation: base.operation,
+            run_ref: context.suite_ref,
+            session_ref: &base.session_ref,
+            actor_ref: Some(&base.actor_ref),
+            turn_ref: Some(context.step_ref),
+            policy_ref: context.policy_ref,
+            capability_context_ref: context.capability_ref,
+            authority_context_ref: None,
+            resource_refs: &base.resource_refs,
+            logical_time: context.sequence,
+            remote_use: false,
+            revoked_refs: &[],
+        })?;
     if validation.handler_binding_ref != binding.value_ref || validation.handle_ref != binding.handle_ref {
         return Err(MoltenError::invalid_harness("hostcall effect handle validation ref mismatch"));
     }
@@ -1110,11 +1032,11 @@ pub fn hostcall_decision_value(
     context: HostcallEvidenceContext<'_>,
     admission_event: &IOValue,
     authority: &AdmissionAuthorityEvidence,
-    decision: &AdmissionDecision,
+    decision: &runtime::AdmissionDecision,
 ) -> Result<IOValue> {
     let authority_value = admission_authority_value(authority);
     Ok(record("hostcall-decision-v1", vec![
-        string(RUNTIME_HOSTCALL_DECISION_SCHEMA),
+        string(preserves_rail::RUNTIME_HOSTCALL_DECISION_SCHEMA),
         record("sequence", vec![u64_value(context.sequence)]),
         record("step-ref", vec![string(context.step_ref)]),
         record("decision", vec![string(decision.status()), string(decision.reason())]),
@@ -1128,14 +1050,14 @@ pub fn hostcall_decision_value(
 }
 
 pub fn actor_output_value(
-    step: &CoreStep,
+    step: &core::CoreStep,
     context: HostcallEvidenceContext<'_>,
-    decision: &AdmissionDecision,
+    decision: &runtime::AdmissionDecision,
     runtime_events: &[IOValue],
 ) -> Result<IOValue> {
     let runtime_events_value = sequence(runtime_events.to_vec());
     Ok(record("actor-output-v1", vec![
-        string(RUNTIME_ACTOR_OUTPUT_SCHEMA),
+        string(preserves_rail::RUNTIME_ACTOR_OUTPUT_SCHEMA),
         record("actor", vec![string(step.primary_actor())]),
         record("sequence", vec![u64_value(context.sequence)]),
         record("step-ref", vec![string(context.step_ref)]),
@@ -1169,7 +1091,7 @@ pub(crate) struct SteelResourceReceiptInput {
 
 pub(crate) fn steel_execution_receipt_value(input: SteelExecutionReceiptInput<'_>) -> IOValue {
     record("steel-execution-receipt-v1", vec![
-        string(RUNTIME_STEEL_EXECUTION_RECEIPT_SCHEMA),
+        string(preserves_rail::RUNTIME_STEEL_EXECUTION_RECEIPT_SCHEMA),
         record("actor", vec![string(input.actor_id)]),
         record("source-ref", vec![string(input.source_ref)]),
         record("callable", vec![string(input.callable)]),
@@ -1240,7 +1162,7 @@ pub(crate) fn wasm_execution_receipt_value(input: WasmExecutionReceiptInput<'_>)
         "declared-effect-id-required",
     ];
     let mut fields = vec![
-        string(RUNTIME_WASM_EXECUTION_RECEIPT_SCHEMA),
+        string(preserves_rail::RUNTIME_WASM_EXECUTION_RECEIPT_SCHEMA),
         record("actor", vec![string(input.actor_id)]),
         record("module-ref", vec![string(input.module_ref)]),
         record("export", vec![string(input.export)]),
@@ -1259,7 +1181,7 @@ pub(crate) fn wasm_execution_receipt_value(input: WasmExecutionReceiptInput<'_>)
             "guest-memory-bounds",
         ]);
         fields.extend([
-            record("abi", vec![string(RUNTIME_WASM_ABI_SCHEMA)]),
+            record("abi", vec![string(preserves_rail::RUNTIME_WASM_ABI_SCHEMA)]),
             record("input-ref", vec![string(&abi.input_ref)]),
             record("output-ref", vec![string(&abi.output_ref)]),
             record("output-bytes", vec![u64_value(abi.output_bytes)]),
@@ -1287,7 +1209,7 @@ fn actor_kind_for_primary_actor<'a>(suite: &'a HarnessSuite, actor: &str) -> Res
     actor_decl_for_primary_actor(suite, actor).map(|decl| &decl.kind)
 }
 
-pub fn snapshot_value(snapshot: &RuntimeSnapshot) -> IOValue {
+pub fn snapshot_value(snapshot: &core::RuntimeSnapshot) -> IOValue {
     record("runtime-state-v1", vec![
         u64_value(snapshot.logical_time),
         u64_value(snapshot.rng_state),
@@ -1324,7 +1246,7 @@ pub fn observation_value(
         event_ref_values.push(string(reference));
     }
     Ok(record("turn-observation-v1", vec![
-        string(HARNESS_OBSERVATION_SCHEMA),
+        string(preserves_rail::HARNESS_OBSERVATION_SCHEMA),
         u64_value(index),
         string(step_ref),
         string(before_state_hash),
@@ -1352,16 +1274,16 @@ pub fn report_value(input: ReportValueInput<'_>) -> IOValue {
     let executor_preflights = match executor_preflights_value(input.suite) {
         Ok(value) => value,
         Err(error) => record("executor-preflights-invalid-v1", vec![
-            string(HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA),
+            string(preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA),
             record("error", vec![string(error.to_string())]),
         ]),
     };
     record("harness-report-v1", vec![
-        string(HARNESS_REPORT_SCHEMA),
+        string(preserves_rail::HARNESS_REPORT_SCHEMA),
         string("pass"),
         string("deterministic"),
         string("local-deterministic"),
-        string(HASH_ALGORITHM),
+        string(preserves_rail::HASH_ALGORITHM),
         string(input.suite_ref),
         string(input.initial_state_hash),
         string(input.final_state_hash),
@@ -1380,7 +1302,7 @@ pub fn report_value(input: ReportValueInput<'_>) -> IOValue {
 pub fn failure_value(phase: &str, error: &MoltenError, mut diagnostics: Vec<IOValue>) -> IOValue {
     diagnostics.extend(error_diagnostics(error));
     record("harness-failure-v1", vec![
-        string(HARNESS_FAILURE_SCHEMA),
+        string(preserves_rail::HARNESS_FAILURE_SCHEMA),
         record("phase", vec![string(phase)]),
         record("kind", vec![string(error_kind(error))]),
         record("message", vec![string(error.to_string())]),
@@ -1405,9 +1327,10 @@ pub fn report_failure_value(phase: &str, error: &MoltenError, report_value: &IOV
 pub fn parse_failure(failure_value: &IOValue) -> Result<HarnessFailure> {
     let failure = simple_record(failure_value, "harness-failure-v1", 5)?;
     let schema = required_string(&failure[0], "failure schema")?;
-    if schema != HARNESS_FAILURE_SCHEMA {
+    if schema != preserves_rail::HARNESS_FAILURE_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported failure schema {schema}; expected {HARNESS_FAILURE_SCHEMA}"
+            "unsupported failure schema {schema}; expected {}",
+            preserves_rail::HARNESS_FAILURE_SCHEMA
         )));
     }
     let phase_value = value_to_iovalue(&failure[1]);
@@ -1515,9 +1438,10 @@ fn valid_report_arity(report: &Record<Value<IOValue>>) -> Result<usize> {
 
 fn parsed_header(report: &Record<Value<IOValue>>) -> Result<ParsedHeader> {
     let schema = required_string(&report[0], "report schema")?;
-    if schema != HARNESS_REPORT_SCHEMA {
+    if schema != preserves_rail::HARNESS_REPORT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported report schema {schema}; expected {HARNESS_REPORT_SCHEMA}"
+            "unsupported report schema {schema}; expected {}",
+            preserves_rail::HARNESS_REPORT_SCHEMA
         )));
     }
     let status = required_string(&report[1], "report status")?;
@@ -1530,9 +1454,10 @@ fn parsed_header(report: &Record<Value<IOValue>>) -> Result<ParsedHeader> {
     }
     let profile = required_string(&report[3], "report profile")?;
     let hash_algorithm = required_string(&report[4], "report hash algorithm")?;
-    if hash_algorithm != HASH_ALGORITHM {
+    if hash_algorithm != preserves_rail::HASH_ALGORITHM {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported hash algorithm {hash_algorithm}; expected {HASH_ALGORITHM}"
+            "unsupported hash algorithm {hash_algorithm}; expected {}",
+            preserves_rail::HASH_ALGORITHM
         )));
     }
     let suite_ref = required_string(&report[5], "report suite ref")?;
@@ -1677,7 +1602,7 @@ pub fn validate_budget_fixture_evidence(suite: &HarnessSuite) -> Result<()> {
 pub fn budget_gate_value(budget: &HarnessBudget) -> Result<IOValue> {
     let preflight = budget_preflight_material(budget)?;
     Ok(record("budget-gate-v1", vec![
-        string(HARNESS_BUDGET_GATE_SCHEMA),
+        string(preserves_rail::HARNESS_BUDGET_GATE_SCHEMA),
         record("decision", vec![string("pass")]),
         record("budget-ref", vec![string(&preflight.budget_ref)]),
         preflight.nickel_source_value,
@@ -1690,9 +1615,10 @@ pub fn budget_gate_value(budget: &HarnessBudget) -> Result<IOValue> {
 pub fn parse_budget_gate(value: &IOValue) -> Result<BudgetGateEvidence> {
     let gate = simple_record(value, "budget-gate-v1", 7)?;
     let schema = required_string(&gate[0], "budget gate schema")?;
-    if schema != HARNESS_BUDGET_GATE_SCHEMA {
+    if schema != preserves_rail::HARNESS_BUDGET_GATE_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported budget gate schema {schema}; expected {HARNESS_BUDGET_GATE_SCHEMA}"
+            "unsupported budget gate schema {schema}; expected {}",
+            preserves_rail::HARNESS_BUDGET_GATE_SCHEMA
         )));
     }
     let decision = required_record_string(&gate[1], "decision", "budget gate decision")?;
@@ -1816,9 +1742,9 @@ fn budget_preflight_material(budget: &HarnessBudget) -> Result<BudgetPreflightMa
         BUDGET_CONTRACT_ID,
         BUDGET_CONTRACT_VERSION,
         source_ref.clone(),
-        HARNESS_BUDGET_SCHEMA,
-        HARNESS_BUDGET_USAGE_SCHEMA,
-        HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA,
+        preserves_rail::HARNESS_BUDGET_SCHEMA,
+        preserves_rail::HARNESS_BUDGET_USAGE_SCHEMA,
+        preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA,
     );
     let envelope_value = contract_envelope_value(&envelope);
     let envelope_ref = canonical_hash(&envelope_value)?;
@@ -1830,12 +1756,12 @@ fn budget_preflight_material(budget: &HarnessBudget) -> Result<BudgetPreflightMa
         )));
     }
     let resource_contract_value = record("resource-contract", vec![
-        string(HARNESS_BUDGET_CONTRACT_SCHEMA),
+        string(preserves_rail::HARNESS_BUDGET_CONTRACT_SCHEMA),
         envelope_value,
         record("envelope-ref", vec![string(&envelope_ref)]),
     ]);
     let resource_preflight_value = record("basalt-resource-preflight", vec![
-        string(HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA),
+        string(preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("backend", vec![string("nickel")]),
         record("contract-id", vec![string(BUDGET_CONTRACT_ID)]),
@@ -1860,7 +1786,7 @@ fn budget_nickel_source_value(
     budget_ref: &str,
 ) -> IOValue {
     record("budget-source", vec![
-        string(HARNESS_BUDGET_NICKEL_STATIC_SCHEMA),
+        string(preserves_rail::HARNESS_BUDGET_NICKEL_STATIC_SCHEMA),
         record("source", vec![string(source)]),
         record("source-ref", vec![string(source_ref)]),
         record("export-json", vec![string(export_json)]),
@@ -1873,9 +1799,10 @@ fn parse_budget_nickel_source_evidence(value: &Value<IOValue>) -> Result<BudgetN
     let value = value_to_iovalue(value);
     let source = simple_record(&value, "budget-source", 6)?;
     let schema = required_string(&source[0], "Nickel resource policy schema")?;
-    if schema != HARNESS_BUDGET_NICKEL_STATIC_SCHEMA {
+    if schema != preserves_rail::HARNESS_BUDGET_NICKEL_STATIC_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Nickel resource policy schema {schema}; expected {HARNESS_BUDGET_NICKEL_STATIC_SCHEMA}"
+            "unsupported Nickel resource policy schema {schema}; expected {}",
+            preserves_rail::HARNESS_BUDGET_NICKEL_STATIC_SCHEMA
         )));
     }
     let source_text = required_record_string(&source[1], "source", "Nickel resource policy source")?;
@@ -1912,9 +1839,10 @@ fn parse_resource_contract_evidence(value: &Value<IOValue>) -> Result<ResourceCo
     let value = value_to_iovalue(value);
     let contract = simple_record(&value, "resource-contract", 3)?;
     let schema = required_string(&contract[0], "resource contract schema")?;
-    if schema != HARNESS_BUDGET_CONTRACT_SCHEMA {
+    if schema != preserves_rail::HARNESS_BUDGET_CONTRACT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported resource contract schema {schema}; expected {HARNESS_BUDGET_CONTRACT_SCHEMA}"
+            "unsupported resource contract schema {schema}; expected {}",
+            preserves_rail::HARNESS_BUDGET_CONTRACT_SCHEMA
         )));
     }
     let envelope_value = value_to_iovalue(&contract[1]);
@@ -1959,21 +1887,24 @@ fn parse_budget_contract_envelope(value: &IOValue) -> Result<basalt::ContractEnv
     }
     let normalized_source_hash = required_hash(&envelope[3], "budget contract normalized source ref")?;
     let input_schema = required_string(&envelope[4], "budget contract input schema")?;
-    if input_schema != HARNESS_BUDGET_SCHEMA {
+    if input_schema != preserves_rail::HARNESS_BUDGET_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported budget contract input schema {input_schema}; expected {HARNESS_BUDGET_SCHEMA}"
+            "unsupported budget contract input schema {input_schema}; expected {}",
+            preserves_rail::HARNESS_BUDGET_SCHEMA
         )));
     }
     let output_schema = required_string(&envelope[5], "budget contract output schema")?;
-    if output_schema != HARNESS_BUDGET_USAGE_SCHEMA {
+    if output_schema != preserves_rail::HARNESS_BUDGET_USAGE_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported budget contract output schema {output_schema}; expected {HARNESS_BUDGET_USAGE_SCHEMA}"
+            "unsupported budget contract output schema {output_schema}; expected {}",
+            preserves_rail::HARNESS_BUDGET_USAGE_SCHEMA
         )));
     }
     let receipt_schema_version = required_string(&envelope[6], "budget contract receipt schema")?;
-    if receipt_schema_version != HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA {
+    if receipt_schema_version != preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported budget contract receipt schema {receipt_schema_version}; expected {HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA}"
+            "unsupported budget contract receipt schema {receipt_schema_version}; expected {}",
+            preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA
         )));
     }
     Ok(basalt::ContractEnvelope::new(
@@ -1991,9 +1922,10 @@ fn parse_basalt_resource_preflight_evidence(value: &Value<IOValue>) -> Result<Ba
     let value = value_to_iovalue(value);
     let receipt = simple_record(&value, "basalt-resource-preflight", 8)?;
     let schema = required_string(&receipt[0], "Basalt resource preflight schema")?;
-    if schema != HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA {
+    if schema != preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Basalt resource preflight schema {schema}; expected {HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA}"
+            "unsupported Basalt resource preflight schema {schema}; expected {}",
+            preserves_rail::HARNESS_BASALT_RESOURCE_PREFLIGHT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "Basalt resource preflight decision")?;
@@ -2031,8 +1963,8 @@ fn parse_basalt_resource_preflight_evidence(value: &Value<IOValue>) -> Result<Ba
 fn nickel_budget_source(budget: &HarnessBudget, budget_ref: &str) -> String {
     format!(
         "{{\n  schema_version = {},\n  budget_schema = {},\n  budget_ref = {},\n  limits = {{\n    max_steps = {},\n    max_effects = {},\n    max_events = {},\n    max_report_bytes = {},\n  }},\n}}",
-        nickel_string(HARNESS_BUDGET_NICKEL_STATIC_SCHEMA),
-        nickel_string(HARNESS_BUDGET_SCHEMA),
+        nickel_string(preserves_rail::HARNESS_BUDGET_NICKEL_STATIC_SCHEMA),
+        nickel_string(preserves_rail::HARNESS_BUDGET_SCHEMA),
         nickel_string(budget_ref),
         budget.max_steps,
         budget.max_effects,
@@ -2144,7 +2076,7 @@ pub fn validate_admission_evidence(
         }
 
         let recorded = parse_admission_decision_event(&observation.events[0])?;
-        let expected_request = AdmissionRequest::from_step(step);
+        let expected_request = core::AdmissionRequest::from_step(step);
         if recorded.request != expected_request {
             return Err(MoltenError::invalid_harness(format!("admission request mismatch at observation {position}")));
         }
@@ -2228,20 +2160,23 @@ pub fn validate_runtime_predicate_evidence(suite: &HarnessSuite, observations: &
     Ok(())
 }
 
-fn expected_runtime_predicates(step: &CoreStep, decision: &AdmissionDecision) -> Vec<&'static str> {
+fn expected_runtime_predicates(step: &core::CoreStep, decision: &runtime::AdmissionDecision) -> Vec<&'static str> {
     let mut expected = Vec::with_capacity(2);
     if !decision.is_allowed()
         || matches!(
             step,
-            CoreStep::Send { .. } | CoreStep::Observe { .. } | CoreStep::Assert { .. } | CoreStep::Retract { .. }
+            core::CoreStep::Send { .. }
+                | core::CoreStep::Observe { .. }
+                | core::CoreStep::Assert { .. }
+                | core::CoreStep::Retract { .. }
         )
     {
         expected.push(TURN_COMMIT_ROLLBACK_PREDICATE);
     }
     match step {
-        CoreStep::Observe { .. } => expected.push(OBSERVE_DELIVERY_PREDICATE),
-        CoreStep::Assert { .. } | CoreStep::Retract { .. } => expected.push(ASSERTION_VISIBILITY_PREDICATE),
-        CoreStep::Send { .. } | CoreStep::Clock { .. } | CoreStep::Random { .. } => {}
+        core::CoreStep::Observe { .. } => expected.push(OBSERVE_DELIVERY_PREDICATE),
+        core::CoreStep::Assert { .. } | core::CoreStep::Retract { .. } => expected.push(ASSERTION_VISIBILITY_PREDICATE),
+        core::CoreStep::Send { .. } | core::CoreStep::Clock { .. } | core::CoreStep::Random { .. } => {}
     }
     expected
 }
@@ -2251,7 +2186,7 @@ fn parse_runtime_predicate_receipt(value: &IOValue) -> Result<String> {
         .collect_simple_record("runtime-predicate-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <runtime-predicate-receipt-v1 ...>"))?;
     let schema = required_string(&receipt[0], "runtime predicate receipt schema")?;
-    if schema != RUNTIME_PREDICATE_RECEIPT_SCHEMA {
+    if schema != preserves_rail::RUNTIME_PREDICATE_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!("unsupported runtime predicate receipt schema {schema}")));
     }
     let predicate = required_string(&receipt[1], "runtime predicate name")?;
@@ -2312,7 +2247,7 @@ struct BoundaryEvidence<'a> {
 
 struct ExpectedBoundary<'a> {
     suite: &'a HarnessSuite,
-    step: &'a CoreStep,
+    step: &'a core::CoreStep,
     position: usize,
     observation: &'a HarnessObservation,
     context: HostcallEvidenceContext<'a>,
@@ -2322,10 +2257,10 @@ struct ExpectedBoundary<'a> {
 
 struct RuntimeBoundary<'a> {
     suite: &'a HarnessSuite,
-    step: &'a CoreStep,
+    step: &'a core::CoreStep,
     position: usize,
     observation: &'a HarnessObservation,
-    decision: &'a AdmissionDecision,
+    decision: &'a runtime::AdmissionDecision,
     runtime_events: &'a [IOValue],
 }
 
@@ -2358,7 +2293,7 @@ pub fn validate_hostcall_evidence(
 fn validate_boundary_observation(
     evidence: BoundaryEvidence<'_>,
     position: usize,
-    step: &CoreStep,
+    step: &core::CoreStep,
     observation: &HarnessObservation,
 ) -> Result<()> {
     let step_ref = validated_step_ref(position, step, observation)?;
@@ -2401,7 +2336,7 @@ fn validate_boundary_observation(
     require_hostcall_event(position, "actor-output", actor_output_event, &expected_output)
 }
 
-fn validated_step_ref(position: usize, step: &CoreStep, observation: &HarnessObservation) -> Result<String> {
+fn validated_step_ref(position: usize, step: &core::CoreStep, observation: &HarnessObservation) -> Result<String> {
     let step_ref = canonical_hash(&step_value(step))?;
     if observation.step_ref != step_ref {
         return Err(MoltenError::invalid_harness(format!("hostcall step ref mismatch at observation {position}")));
@@ -2467,18 +2402,18 @@ fn validate_runtime_boundary(input: &RuntimeBoundary<'_>) -> Result<()> {
 
 struct WasmExecutionEvidenceInput<'a> {
     suite: &'a HarnessSuite,
-    step: &'a CoreStep,
+    step: &'a core::CoreStep,
     position: usize,
-    decision: &'a AdmissionDecision,
+    decision: &'a runtime::AdmissionDecision,
     actor_input: &'a IOValue,
     runtime_events: &'a [IOValue],
 }
 
 fn validate_steel_execution_evidence(
     suite: &HarnessSuite,
-    step: &CoreStep,
+    step: &core::CoreStep,
     position: usize,
-    decision: &AdmissionDecision,
+    decision: &runtime::AdmissionDecision,
     runtime_events: &[IOValue],
 ) -> Result<()> {
     let actor = step.primary_actor();
@@ -2504,7 +2439,7 @@ fn validate_steel_execution_evidence(
 
 fn validate_steel_execution_receipt(
     actor: &ActorDecl,
-    step: &CoreStep,
+    step: &core::CoreStep,
     position: usize,
     value: &IOValue,
 ) -> Result<()> {
@@ -2519,9 +2454,10 @@ fn validate_steel_execution_receipt(
     }
     let receipt = &receipt_value;
     let schema = required_string(&receipt[0], "Steel execution receipt schema")?;
-    if schema != RUNTIME_STEEL_EXECUTION_RECEIPT_SCHEMA {
+    if schema != preserves_rail::RUNTIME_STEEL_EXECUTION_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Steel execution receipt schema {schema}; expected {RUNTIME_STEEL_EXECUTION_RECEIPT_SCHEMA}"
+            "unsupported Steel execution receipt schema {schema}; expected {}",
+            preserves_rail::RUNTIME_STEEL_EXECUTION_RECEIPT_SCHEMA
         )));
     }
     let actor_id = required_record_string(&receipt[1], "actor", "Steel execution actor")?;
@@ -2551,7 +2487,7 @@ fn validate_steel_execution_receipt(
             actor.id
         )));
     }
-    let operation = AdmissionRequest::from_step(step).action.as_str().to_string();
+    let operation = core::AdmissionRequest::from_step(step).action.as_str().to_string();
     let receipt_operation = required_record_string(&receipt[4], "operation", "Steel execution operation")?;
     if receipt_operation != operation {
         return Err(MoltenError::invalid_harness(format!(
@@ -2647,7 +2583,7 @@ fn validate_wasm_execution_evidence(input: &WasmExecutionEvidenceInput<'_>) -> R
 
 fn validate_wasm_execution_receipt(
     actor: &ActorDecl,
-    step: &CoreStep,
+    step: &core::CoreStep,
     position: usize,
     actor_input: &IOValue,
     value: &IOValue,
@@ -2663,9 +2599,10 @@ fn validate_wasm_execution_receipt(
     }
     let receipt = &receipt_value;
     let schema = required_string(&receipt[0], "Wasm execution receipt schema")?;
-    if schema != RUNTIME_WASM_EXECUTION_RECEIPT_SCHEMA {
+    if schema != preserves_rail::RUNTIME_WASM_EXECUTION_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Wasm execution receipt schema {schema}; expected {RUNTIME_WASM_EXECUTION_RECEIPT_SCHEMA}"
+            "unsupported Wasm execution receipt schema {schema}; expected {}",
+            preserves_rail::RUNTIME_WASM_EXECUTION_RECEIPT_SCHEMA
         )));
     }
     let actor_id = required_record_string(&receipt[1], "actor", "Wasm execution actor")?;
@@ -2689,7 +2626,7 @@ fn validate_wasm_execution_receipt(
             actor.id
         )));
     }
-    let operation = AdmissionRequest::from_step(step).action.as_str().to_string();
+    let operation = core::AdmissionRequest::from_step(step).action.as_str().to_string();
     let expected_export = wasm_executor_export_name(&operation);
     let export = required_record_string(&receipt[3], "export", "Wasm execution export")?;
     if export != expected_export {
@@ -2754,9 +2691,10 @@ fn validate_wasm_abi_fields(
     receipt: &Record<Value<IOValue>>,
 ) -> Result<()> {
     let abi = required_record_string(&receipt[8], "abi", "Wasm execution ABI schema")?;
-    if abi != RUNTIME_WASM_ABI_SCHEMA {
+    if abi != preserves_rail::RUNTIME_WASM_ABI_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Wasm execution ABI schema {abi}; expected {RUNTIME_WASM_ABI_SCHEMA}"
+            "unsupported Wasm execution ABI schema {abi}; expected {}",
+            preserves_rail::RUNTIME_WASM_ABI_SCHEMA
         )));
     }
     let input_ref = required_record_hash(&receipt[9], "input-ref", "Wasm execution input ref")?;
@@ -2815,9 +2753,10 @@ pub fn parse_admission_decision_event(value: &IOValue) -> Result<AdmissionDecisi
         )));
     }
     let schema = required_string(&admission[0], "admission decision schema")?;
-    if schema != RUNTIME_ADMISSION_DECISION_SCHEMA {
+    if schema != preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported admission decision schema {schema}; expected {RUNTIME_ADMISSION_DECISION_SCHEMA}"
+            "unsupported admission decision schema {schema}; expected {}",
+            preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA
         )));
     }
     let request = parse_admission_request(&admission[1])?;
@@ -2846,15 +2785,17 @@ pub fn boundary_coverage_value(report_value: &IOValue) -> Result<IOValue> {
     push_boundary_coverage(
         &mut coverage,
         "envelope-routes",
-        suite.steps.iter().any(|step| matches!(step, CoreStep::Send { .. })),
+        suite.steps.iter().any(|step| matches!(step, core::CoreStep::Send { .. })),
     );
     push_boundary_coverage(
         &mut coverage,
         "dataspace-semantics",
-        suite
-            .steps
-            .iter()
-            .any(|step| matches!(step, CoreStep::Observe { .. } | CoreStep::Assert { .. } | CoreStep::Retract { .. })),
+        suite.steps.iter().any(|step| {
+            matches!(
+                step,
+                core::CoreStep::Observe { .. } | core::CoreStep::Assert { .. } | core::CoreStep::Retract { .. }
+            )
+        }),
     );
     push_boundary_coverage(
         &mut coverage,
@@ -2943,7 +2884,7 @@ pub fn golden_trace_update_receipt_value(
     validate_content_ref(reviewer_ref)?;
     let report = parse_report(updated_report_value)?;
     Ok(record("golden-trace-update-receipt-v1", vec![
-        string(HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA),
+        string(preserves_rail::HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("reason", vec![string(reason)]),
         record("previous-report-ref", vec![string(previous_report_ref.unwrap_or("none"))]),
@@ -2972,9 +2913,10 @@ pub fn golden_trace_update_receipt_value(
 pub fn validate_golden_trace_update_receipt(value: &IOValue, updated_report_value: &IOValue) -> Result<()> {
     let receipt = simple_record(value, "golden-trace-update-receipt-v1", 11)?;
     let schema = required_string(&receipt[0], "golden trace update receipt schema")?;
-    if schema != HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA {
+    if schema != preserves_rail::HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported golden trace update receipt schema {schema}; expected {HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA}"
+            "unsupported golden trace update receipt schema {schema}; expected {}",
+            preserves_rail::HARNESS_GOLDEN_TRACE_UPDATE_RECEIPT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "golden trace update decision")?;
@@ -3070,7 +3012,7 @@ pub fn upgrade_replay_receipt_value(
         "diagnosed"
     };
     Ok(record("upgrade-replay-receipt-v1", vec![
-        string(HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA),
+        string(preserves_rail::HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("outcome", vec![string(outcome)]),
         record("old-report-ref", vec![string(&old_report.report_ref)]),
@@ -3116,9 +3058,10 @@ pub fn validate_upgrade_replay_receipt(
 
 fn require_upgrade_replay_header(receipt: &Record<Value<IOValue>>) -> Result<String> {
     let schema = required_string(&receipt[0], "upgrade replay receipt schema")?;
-    if schema != HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA {
+    if schema != preserves_rail::HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported upgrade replay receipt schema {schema}; expected {HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA}"
+            "unsupported upgrade replay receipt schema {schema}; expected {}",
+            preserves_rail::HARNESS_UPGRADE_REPLAY_RECEIPT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "upgrade replay decision")?;
@@ -3231,7 +3174,7 @@ pub fn harness_run_receipt_value(report_value: &IOValue, export_refs: &[&str]) -
         .map(|preflights| canonical_hash(&preflights.value))
         .transpose()?;
     Ok(record("harness-run-receipt-v1", vec![
-        string(HARNESS_RUN_RECEIPT_SCHEMA),
+        string(preserves_rail::HARNESS_RUN_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("suite-start", vec![string(&report.suite_ref)]),
         record("report-ref", vec![string(&report.report_ref)]),
@@ -3260,9 +3203,10 @@ pub fn validate_harness_run_receipt(value: &IOValue, report_value: &IOValue, exp
     }
     let receipt = simple_record(value, "harness-run-receipt-v1", 11)?;
     let schema = required_string(&receipt[0], "harness run receipt schema")?;
-    if schema != HARNESS_RUN_RECEIPT_SCHEMA {
+    if schema != preserves_rail::HARNESS_RUN_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported harness run receipt schema {schema}; expected {HARNESS_RUN_RECEIPT_SCHEMA}"
+            "unsupported harness run receipt schema {schema}; expected {}",
+            preserves_rail::HARNESS_RUN_RECEIPT_SCHEMA
         )));
     }
     if required_record_string(&receipt[1], "decision", "harness run receipt decision")? != "pass" {
@@ -3317,7 +3261,7 @@ pub fn deterministic_multipeer_receipt_value(
         .filter(|actor| matches!(actor.kind, ActorKind::RemoteProxy | ActorKind::Adapter))
         .count() as u64;
     Ok(record("deterministic-multipeer-receipt-v1", vec![
-        string(HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA),
+        string(preserves_rail::HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("replay", vec![string("stable")]),
         record("suite-ref", vec![string(&report.suite_ref)]),
@@ -3356,9 +3300,10 @@ pub fn validate_deterministic_multipeer_receipt(
     }
     let receipt = simple_record(value, "deterministic-multipeer-receipt-v1", 13)?;
     let schema = required_string(&receipt[0], "deterministic multi-peer receipt schema")?;
-    if schema != HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA {
+    if schema != preserves_rail::HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported deterministic multi-peer receipt schema {schema}; expected {HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA}"
+            "unsupported deterministic multi-peer receipt schema {schema}; expected {}",
+            preserves_rail::HARNESS_DETERMINISTIC_MULTIPEER_RECEIPT_SCHEMA
         )));
     }
     if required_record_string(&receipt[1], "decision", "deterministic multi-peer decision")? != "pass" {
@@ -3411,7 +3356,7 @@ pub fn repro_bundle_value(report_value: &IOValue) -> Result<IOValue> {
 pub fn repro_bundle_value_with_command(report_value: &IOValue, command: &[String]) -> Result<IOValue> {
     let report = parse_report(report_value)?;
     Ok(record("harness-repro-bundle-v1", vec![
-        string(HARNESS_REPRO_BUNDLE_SCHEMA),
+        string(preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA),
         record("bundle-kind", vec![string("report")]),
         tool_value(),
         command_value(command),
@@ -3449,7 +3394,7 @@ pub fn sealed_repro_bundle_value_with_command_and_receipt(
     let seal = repro_seal_value(&report, &gate_receipt_ref);
     let sealed_checks = sealed_repro_checks_value();
     Ok(record("harness-repro-bundle-v1", vec![
-        string(HARNESS_REPRO_BUNDLE_SCHEMA),
+        string(preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA),
         record("bundle-kind", vec![string("report")]),
         tool_value(),
         command_value(command),
@@ -3507,7 +3452,7 @@ pub fn profiled_repro_bundle_value_with_command(
     artifact_refs.push(("redaction-transform-manifest".to_string(), transform.manifest_ref.clone()));
     artifact_refs.push(("redaction-transform".to_string(), transform.receipt_ref.clone()));
     let private_profile_value = if profile == ReproExportProfile::EncryptedPrivate {
-        let value = private_bundle_profile_value(&PrivateBundleProfileInput {
+        let value = secrets::private_bundle_profile_value(&secrets::PrivateBundleProfileInput {
             profile_ref: canonical_hash(&export_profile_value)?,
             encrypted_refs: transform.encrypted_refs.clone(),
             reveal_receipt_refs: Vec::new(),
@@ -3520,7 +3465,7 @@ pub fn profiled_repro_bundle_value_with_command(
         None
     };
     let mut fields = vec![
-        string(HARNESS_REPRO_BUNDLE_SCHEMA),
+        string(preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA),
         record("bundle-kind", vec![string("report")]),
         tool_value(),
         command_value(command),
@@ -3870,7 +3815,7 @@ fn transform_sensitive_record(
         ));
     }
     if label == "encrypted-ref-v1" {
-        let encrypted = parse_encrypted_ref(value)?;
+        let encrypted = secrets::parse_encrypted_ref(value)?;
         if state.profile != ReproExportProfile::EncryptedPrivate {
             return redaction_marker_for_value(value, label, path, state);
         }
@@ -3899,7 +3844,7 @@ fn redaction_marker_for_value(
         string(&path_ref),
         string(&state.policy_ref),
     ]))?;
-    let marker_value = redaction_marker_value(&RedactionMarkerInput {
+    let marker_value = secrets::redaction_marker_value(&secrets::RedactionMarkerInput {
         reason: label.to_string(),
         commitment_ref: commitment_ref.clone(),
         schema_ref: canonical_hash(&string(label))?,
@@ -3907,7 +3852,7 @@ fn redaction_marker_for_value(
         policy_refs: vec![state.policy_ref.clone()],
         receipt_ref,
     })?;
-    let marker = parse_redaction_marker(&marker_value)?;
+    let marker = secrets::parse_redaction_marker(&marker_value)?;
     state.marker_refs.push(marker.marker_ref.clone());
     state.marker_entries.push(RedactionManifestEntry {
         path: path.to_string(),
@@ -3928,7 +3873,7 @@ fn encrypted_ref_for_value(
     let commitment_ref = canonical_hash(value)?;
     let ciphertext_ref =
         canonical_hash(&record("encrypted-redaction-ciphertext", vec![string(&commitment_ref), string(path)]))?;
-    let encrypted_value = encrypted_ref_value(&EncryptedRefInput {
+    let encrypted_value = secrets::encrypted_ref_value(&secrets::EncryptedRefInput {
         ciphertext_ref,
         commitment_ref: commitment_ref.clone(),
         encryption_ref: canonical_hash(&repro_export_profile_value(state.profile))?,
@@ -3936,7 +3881,7 @@ fn encrypted_ref_for_value(
         policy_refs: vec![state.policy_ref.clone()],
         evidence_refs: vec![canonical_hash(&string(path))?],
     })?;
-    let encrypted = parse_encrypted_ref(&encrypted_value)?;
+    let encrypted = secrets::parse_encrypted_ref(&encrypted_value)?;
     state.encrypted_refs.push(encrypted.encrypted_ref.clone());
     state.marker_entries.push(RedactionManifestEntry {
         path: path.to_string(),
@@ -3962,7 +3907,7 @@ pub fn failure_repro_bundle_value(failure_value: &IOValue) -> Result<IOValue> {
 pub fn failure_repro_bundle_value_with_command(failure_value: &IOValue, command: &[String]) -> Result<IOValue> {
     let failure = parse_failure(failure_value)?;
     Ok(record("harness-repro-bundle-v1", vec![
-        string(HARNESS_REPRO_BUNDLE_SCHEMA),
+        string(preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA),
         record("bundle-kind", vec![string("failure")]),
         tool_value(),
         command_value(command),
@@ -3982,9 +3927,10 @@ pub fn parse_repro_bundle(value: &IOValue) -> Result<HarnessReproBundle> {
         .ok_or_else(|| MoltenError::invalid_harness("expected <harness-repro-bundle-v1 ...>"))?;
     let arity = bundle.fields_iter().count();
     let schema = required_string(&bundle[0], "repro bundle schema")?;
-    if schema != HARNESS_REPRO_BUNDLE_SCHEMA {
+    if schema != preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported repro bundle schema {schema}; expected {HARNESS_REPRO_BUNDLE_SCHEMA}"
+            "unsupported repro bundle schema {schema}; expected {}",
+            preserves_rail::HARNESS_REPRO_BUNDLE_SCHEMA
         )));
     }
 
@@ -4043,7 +3989,7 @@ pub fn repro_bundle_summary(bundle_value: &IOValue) -> Result<String> {
 
 pub fn actor_registry_value(actors: &[ActorDecl]) -> IOValue {
     record("actor-registry-v1", vec![
-        string(HARNESS_ACTOR_REGISTRY_SCHEMA),
+        string(preserves_rail::HARNESS_ACTOR_REGISTRY_SCHEMA),
         sequence(actors.iter().map(actor_decl_value).collect()),
     ])
 }
@@ -4068,7 +4014,7 @@ fn actor_executor_config_value(config: &ActorExecutorConfig) -> IOValue {
 fn steel_executor_config_value(config: &SteelExecutorConfig) -> IOValue {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     record("steel-executor-v1", vec![
-        string(RUNTIME_STEEL_EXECUTOR_SCHEMA),
+        string(preserves_rail::RUNTIME_STEEL_EXECUTOR_SCHEMA),
         record("source", vec![string(&config.source)]),
         record("callable", vec![string(&config.callable)]),
         record("allowed-hostcalls", vec![sequence(
@@ -4080,7 +4026,7 @@ fn steel_executor_config_value(config: &SteelExecutorConfig) -> IOValue {
 fn wasm_executor_config_value(config: &WasmExecutorConfig) -> IOValue {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     record("wasm-executor-v1", vec![
-        string(RUNTIME_WASM_EXECUTOR_SCHEMA),
+        string(preserves_rail::RUNTIME_WASM_EXECUTOR_SCHEMA),
         record("module-hex", vec![string(&config.module_hex)]),
         record("wit", vec![string(&config.wit)]),
         record("allowed-hostcalls", vec![sequence(
@@ -4092,7 +4038,7 @@ fn wasm_executor_config_value(config: &WasmExecutorConfig) -> IOValue {
 fn adapter_executor_config_value(config: &AdapterExecutorConfig) -> IOValue {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     record("adapter-executor-v1", vec![
-        string(RUNTIME_ADAPTER_EXECUTOR_SCHEMA),
+        string(preserves_rail::RUNTIME_ADAPTER_EXECUTOR_SCHEMA),
         record("manifest", vec![string(&config.manifest)]),
         record("abi", vec![string(&config.abi)]),
         record("allowed-hostcalls", vec![sequence(
@@ -4105,7 +4051,7 @@ fn adapter_executor_config_value(config: &AdapterExecutorConfig) -> IOValue {
 fn remote_proxy_executor_config_value(config: &RemoteProxyExecutorConfig) -> IOValue {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     record("remote-proxy-executor-v1", vec![
-        string(RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA),
+        string(preserves_rail::RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA),
         record("peer", vec![string(&config.peer)]),
         record("endpoint", vec![string(&config.endpoint)]),
         record("contract", vec![string(&config.contract)]),
@@ -4119,7 +4065,7 @@ fn remote_proxy_executor_config_value(config: &RemoteProxyExecutorConfig) -> IOV
 pub fn executor_preflights_value(suite: &HarnessSuite) -> Result<IOValue> {
     validate_executor_preflight_inputs(suite)?;
     Ok(record("executor-preflights-v1", vec![
-        string(HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA),
+        string(preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA),
         sequence(
             suite
                 .actors
@@ -4242,7 +4188,7 @@ fn executor_preflight_value(actor: &ActorDecl, allowed_hostcalls: &[String]) -> 
         }
     };
     Ok(record("executor-preflight-v1", vec![
-        string(RUNTIME_EXECUTOR_PREFLIGHT_SCHEMA),
+        string(preserves_rail::RUNTIME_EXECUTOR_PREFLIGHT_SCHEMA),
         record("actor", vec![string(&actor.id)]),
         record("kind", vec![string(actor.kind.as_str())]),
         record("artifact-ref", vec![optional_string_value(artifact_ref.as_deref())]),
@@ -4262,15 +4208,15 @@ fn executor_conformance_refs(allowed_hostcalls: &[String]) -> Result<Vec<String>
 
 fn executor_conformance_suite_value(allowed_hostcalls: &[String]) -> IOValue {
     record("executor-conformance-suite-v1", vec![
-        string(HARNESS_EXECUTOR_CONFORMANCE_SCHEMA),
+        string(preserves_rail::HARNESS_EXECUTOR_CONFORMANCE_SCHEMA),
         record("boundary", vec![string("molten.runtime.executor-hostcall-boundary.v1")]),
         record("allowed-hostcalls", vec![sequence(
             allowed_hostcalls.iter().map(|hostcall| string(hostcall.as_str())).collect::<Vec<_>>(),
         )]),
-        record("actor-input", vec![string(RUNTIME_ACTOR_INPUT_SCHEMA)]),
-        record("hostcall-request", vec![string(RUNTIME_HOSTCALL_REQUEST_SCHEMA)]),
-        record("hostcall-decision", vec![string(RUNTIME_HOSTCALL_DECISION_SCHEMA)]),
-        record("actor-output", vec![string(RUNTIME_ACTOR_OUTPUT_SCHEMA)]),
+        record("actor-input", vec![string(preserves_rail::RUNTIME_ACTOR_INPUT_SCHEMA)]),
+        record("hostcall-request", vec![string(preserves_rail::RUNTIME_HOSTCALL_REQUEST_SCHEMA)]),
+        record("hostcall-decision", vec![string(preserves_rail::RUNTIME_HOSTCALL_DECISION_SCHEMA)]),
+        record("actor-output", vec![string(preserves_rail::RUNTIME_ACTOR_OUTPUT_SCHEMA)]),
         hostcall_checks_value(&[
             "canonical-preserves",
             "hostcall-admission-binding",
@@ -4355,7 +4301,7 @@ fn remote_proxy_executor_preflight_checks() -> &'static [&'static str] {
 fn steel_review_receipt_value(config: &SteelExecutorConfig) -> Result<IOValue> {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     Ok(record("steel-review-receipt-v1", vec![
-        string(RUNTIME_STEEL_REVIEW_RECEIPT_SCHEMA),
+        string(preserves_rail::RUNTIME_STEEL_REVIEW_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("source-ref", vec![string(steel_source_ref(config)?)]),
         record("callable", vec![string(&config.callable)]),
@@ -4374,7 +4320,7 @@ fn steel_review_receipt_value(config: &SteelExecutorConfig) -> Result<IOValue> {
 fn adapter_preflight_receipt_value(config: &AdapterExecutorConfig) -> Result<IOValue> {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     Ok(record("adapter-preflight-receipt-v1", vec![
-        string(RUNTIME_ADAPTER_PREFLIGHT_RECEIPT_SCHEMA),
+        string(preserves_rail::RUNTIME_ADAPTER_PREFLIGHT_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("manifest-ref", vec![string(adapter_manifest_ref(config)?)]),
         record("abi-ref", vec![string(canonical_hash(&string(&config.abi))?)]),
@@ -4394,7 +4340,7 @@ fn adapter_preflight_receipt_value(config: &AdapterExecutorConfig) -> Result<IOV
 fn remote_proxy_preflight_receipt_value(config: &RemoteProxyExecutorConfig) -> Result<IOValue> {
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     Ok(record("remote-proxy-preflight-receipt-v1", vec![
-        string(RUNTIME_REMOTE_PROXY_PREFLIGHT_RECEIPT_SCHEMA),
+        string(preserves_rail::RUNTIME_REMOTE_PROXY_PREFLIGHT_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("peer-ref", vec![string(canonical_hash(&string(&config.peer))?)]),
         record("endpoint-ref", vec![string(remote_proxy_endpoint_ref(config)?)]),
@@ -4462,7 +4408,7 @@ fn wasm_inspection_receipt_value(config: &WasmExecutorConfig) -> Result<IOValue>
     let inspection = inspect_wasm_module(config)?;
     let allowed_hostcalls: &[String] = config.allowed_hostcalls.as_slice();
     Ok(record("wasm-inspection-receipt-v1", vec![
-        string(RUNTIME_WASM_INSPECTION_RECEIPT_SCHEMA),
+        string(preserves_rail::RUNTIME_WASM_INSPECTION_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("module-ref", vec![string(wasm_module_ref(config)?)]),
         record("module-kind", vec![string(&inspection.module_kind)]),
@@ -4722,7 +4668,7 @@ fn hostcalls_required_by_steps(suite: &HarnessSuite, actor_id: &str) -> Vec<Stri
     let mut hostcalls = BTreeSet::new();
     for step in &suite.steps {
         if step.primary_actor() == actor_id {
-            hostcalls.insert(AdmissionRequest::from_step(step).action.as_str().to_string());
+            hostcalls.insert(core::AdmissionRequest::from_step(step).action.as_str().to_string());
         }
     }
     hostcalls.into_iter().collect()
@@ -4731,9 +4677,10 @@ fn hostcalls_required_by_steps(suite: &HarnessSuite, actor_id: &str) -> Vec<Stri
 pub fn parse_executor_preflights(value: &IOValue) -> Result<ExecutorPreflightsEvidence> {
     let preflights = simple_record(value, "executor-preflights-v1", 2)?;
     let schema = required_string(&preflights[0], "executor preflights schema")?;
-    if schema != HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA {
+    if schema != preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported executor preflights schema {schema}; expected {HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA}"
+            "unsupported executor preflights schema {schema}; expected {}",
+            preserves_rail::HARNESS_EXECUTOR_PREFLIGHTS_SCHEMA
         )));
     }
     let preflight_values = required_sequence(&preflights[1], "executor preflight entries")?;
@@ -4758,9 +4705,10 @@ fn parse_executor_preflight(value: &IOValue) -> Result<ExecutorPreflightEvidence
         )));
     }
     let schema = required_string(&preflight[0], "executor preflight schema")?;
-    if schema != RUNTIME_EXECUTOR_PREFLIGHT_SCHEMA {
+    if schema != preserves_rail::RUNTIME_EXECUTOR_PREFLIGHT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported executor preflight schema {schema}; expected {RUNTIME_EXECUTOR_PREFLIGHT_SCHEMA}"
+            "unsupported executor preflight schema {schema}; expected {}",
+            preserves_rail::RUNTIME_EXECUTOR_PREFLIGHT_SCHEMA
         )));
     }
     let actor_id = required_record_string(&preflight[1], "actor", "executor preflight actor")?;
@@ -5088,9 +5036,10 @@ fn parse_optional_steel_review_receipt(receipts: &[IOValue]) -> Result<Option<St
 fn parse_steel_review_receipt(value: &IOValue) -> Result<SteelReviewReceipt> {
     let receipt = simple_record(value, "steel-review-receipt-v1", 6)?;
     let schema = required_string(&receipt[0], "Steel review receipt schema")?;
-    if schema != RUNTIME_STEEL_REVIEW_RECEIPT_SCHEMA {
+    if schema != preserves_rail::RUNTIME_STEEL_REVIEW_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Steel review receipt schema {schema}; expected {RUNTIME_STEEL_REVIEW_RECEIPT_SCHEMA}"
+            "unsupported Steel review receipt schema {schema}; expected {}",
+            preserves_rail::RUNTIME_STEEL_REVIEW_RECEIPT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "Steel review receipt decision")?;
@@ -5131,9 +5080,10 @@ fn parse_optional_wasm_inspection_receipt(receipts: &[IOValue]) -> Result<Option
 fn parse_wasm_inspection_receipt(value: &IOValue) -> Result<WasmInspectionReceipt> {
     let receipt = simple_record(value, "wasm-inspection-receipt-v1", 8)?;
     let schema = required_string(&receipt[0], "Wasm inspection receipt schema")?;
-    if schema != RUNTIME_WASM_INSPECTION_RECEIPT_SCHEMA {
+    if schema != preserves_rail::RUNTIME_WASM_INSPECTION_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Wasm inspection receipt schema {schema}; expected {RUNTIME_WASM_INSPECTION_RECEIPT_SCHEMA}"
+            "unsupported Wasm inspection receipt schema {schema}; expected {}",
+            preserves_rail::RUNTIME_WASM_INSPECTION_RECEIPT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "Wasm inspection receipt decision")?;
@@ -5271,10 +5221,10 @@ fn is_turn_journal(value: &IOValue) -> bool {
     value.collect_simple_record("turn-journal-v1", None).is_some()
 }
 
-fn parse_admission_request(value: &Value<IOValue>) -> Result<AdmissionRequest> {
+fn parse_admission_request(value: &Value<IOValue>) -> Result<core::AdmissionRequest> {
     let request_value = value_to_iovalue(value);
     let request = simple_record(&request_value, "request", 5)?;
-    Ok(AdmissionRequest {
+    Ok(core::AdmissionRequest {
         actor: required_string(&request[0], "admission request actor")?,
         action: parse_admission_action(&required_string(&request[1], "admission request action")?)?,
         target: optional_request_string(&request[2], "admission request target")?,
@@ -5293,29 +5243,29 @@ fn parse_admission_authority(value: &Value<IOValue>) -> Result<AdmissionAuthorit
     })
 }
 
-fn parse_admission_decision(value: &Value<IOValue>) -> Result<AdmissionDecision> {
+fn parse_admission_decision(value: &Value<IOValue>) -> Result<runtime::AdmissionDecision> {
     let decision_value = value_to_iovalue(value);
     let decision = simple_record(&decision_value, "decision", 2)?;
     let status = required_string(&decision[0], "admission decision status")?;
     let reason = required_string(&decision[1], "admission decision reason")?;
     match status.as_str() {
-        "allow" => Ok(AdmissionDecision::Allow { reason }),
-        "deny" => Ok(AdmissionDecision::Deny { reason }),
+        "allow" => Ok(runtime::AdmissionDecision::Allow { reason }),
+        "deny" => Ok(runtime::AdmissionDecision::Deny { reason }),
         other => Err(MoltenError::invalid_harness(format!("unknown admission decision status {other}"))),
     }
 }
 
-pub fn policy_value(policy: &AdmissionPolicy) -> IOValue {
+pub fn policy_value(policy: &runtime::AdmissionPolicy) -> IOValue {
     record("policy-v1", vec![
-        string(HARNESS_POLICY_SCHEMA),
+        string(preserves_rail::HARNESS_POLICY_SCHEMA),
         sequence(policy.deny_rules().iter().map(deny_rule_value).collect()),
     ])
 }
 
-pub fn policy_gate_value(policy: &AdmissionPolicy) -> Result<IOValue> {
+pub fn policy_gate_value(policy: &runtime::AdmissionPolicy) -> Result<IOValue> {
     let preflight = policy_preflight_material(policy)?;
     Ok(record("policy-gate-v1", vec![
-        string(HARNESS_POLICY_GATE_SCHEMA),
+        string(preserves_rail::HARNESS_POLICY_GATE_SCHEMA),
         record("decision", vec![string("pass")]),
         record("policy-ref", vec![string(&preflight.policy_ref)]),
         preflight.nickel_source_value,
@@ -5329,9 +5279,10 @@ pub fn policy_gate_value(policy: &AdmissionPolicy) -> Result<IOValue> {
 pub fn parse_policy_gate(value: &IOValue) -> Result<PolicyGateEvidence> {
     let gate = simple_record(value, "policy-gate-v1", 8)?;
     let schema = required_string(&gate[0], "policy gate schema")?;
-    if schema != HARNESS_POLICY_GATE_SCHEMA {
+    if schema != preserves_rail::HARNESS_POLICY_GATE_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported policy gate schema {schema}; expected {HARNESS_POLICY_GATE_SCHEMA}"
+            "unsupported policy gate schema {schema}; expected {}",
+            preserves_rail::HARNESS_POLICY_GATE_SCHEMA
         )));
     }
     let decision = required_record_string(&gate[1], "decision", "policy gate decision")?;
@@ -5439,7 +5390,7 @@ const POLICY_CONTRACT_ID: &str = "molten.harness.admission-policy";
 const POLICY_CONTRACT_VERSION: &str = "v1";
 const POLICY_INPUT_SCHEMA: &str = "molten.runtime.admission-request.v1";
 
-fn policy_preflight_material(policy: &AdmissionPolicy) -> Result<PolicyPreflightMaterial> {
+fn policy_preflight_material(policy: &runtime::AdmissionPolicy) -> Result<PolicyPreflightMaterial> {
     let policy_snapshot = policy_value(policy);
     let policy_ref = canonical_hash(&policy_snapshot)?;
     let source = nickel_policy_source(policy, &policy_ref)?;
@@ -5454,8 +5405,8 @@ fn policy_preflight_material(policy: &AdmissionPolicy) -> Result<PolicyPreflight
         POLICY_CONTRACT_VERSION,
         source_ref.clone(),
         POLICY_INPUT_SCHEMA,
-        RUNTIME_ADMISSION_DECISION_SCHEMA,
-        HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA,
+        preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA,
+        preserves_rail::HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA,
     );
     let envelope_value = contract_envelope_value(&envelope);
     let envelope_ref = canonical_hash(&envelope_value)?;
@@ -5467,12 +5418,12 @@ fn policy_preflight_material(policy: &AdmissionPolicy) -> Result<PolicyPreflight
         )));
     }
     let nickel_contract_value = record("nickel-contract", vec![
-        string(HARNESS_POLICY_CONTRACT_SCHEMA),
+        string(preserves_rail::HARNESS_POLICY_CONTRACT_SCHEMA),
         envelope_value,
         record("envelope-ref", vec![string(&envelope_ref)]),
     ]);
     let basalt_preflight_value = record("basalt-preflight", vec![
-        string(HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA),
+        string(preserves_rail::HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("backend", vec![string("nickel")]),
         record("contract-id", vec![string(POLICY_CONTRACT_ID)]),
@@ -5497,7 +5448,7 @@ fn nickel_source_value(
     policy_ref: &str,
 ) -> IOValue {
     record("nickel-source", vec![
-        string(HARNESS_POLICY_NICKEL_STATIC_SCHEMA),
+        string(preserves_rail::HARNESS_POLICY_NICKEL_STATIC_SCHEMA),
         record("source", vec![string(source)]),
         record("source-ref", vec![string(source_ref)]),
         record("export-json", vec![string(export_json)]),
@@ -5522,9 +5473,10 @@ fn parse_nickel_source_evidence(value: &Value<IOValue>) -> Result<NickelSourceEv
     let value = value_to_iovalue(value);
     let source = simple_record(&value, "nickel-source", 6)?;
     let schema = required_string(&source[0], "Nickel source schema")?;
-    if schema != HARNESS_POLICY_NICKEL_STATIC_SCHEMA {
+    if schema != preserves_rail::HARNESS_POLICY_NICKEL_STATIC_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Nickel source schema {schema}; expected {HARNESS_POLICY_NICKEL_STATIC_SCHEMA}"
+            "unsupported Nickel source schema {schema}; expected {}",
+            preserves_rail::HARNESS_POLICY_NICKEL_STATIC_SCHEMA
         )));
     }
     let source_text = required_record_string(&source[1], "source", "Nickel policy source")?;
@@ -5559,9 +5511,10 @@ fn parse_nickel_contract_evidence(value: &Value<IOValue>) -> Result<NickelContra
     let value = value_to_iovalue(value);
     let contract = simple_record(&value, "nickel-contract", 3)?;
     let schema = required_string(&contract[0], "Nickel contract schema")?;
-    if schema != HARNESS_POLICY_CONTRACT_SCHEMA {
+    if schema != preserves_rail::HARNESS_POLICY_CONTRACT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Nickel contract schema {schema}; expected {HARNESS_POLICY_CONTRACT_SCHEMA}"
+            "unsupported Nickel contract schema {schema}; expected {}",
+            preserves_rail::HARNESS_POLICY_CONTRACT_SCHEMA
         )));
     }
     let envelope_value = value_to_iovalue(&contract[1]);
@@ -5612,15 +5565,17 @@ fn parse_contract_envelope(value: &IOValue) -> Result<basalt::ContractEnvelope> 
         )));
     }
     let output_schema = required_string(&envelope[5], "policy contract output schema")?;
-    if output_schema != RUNTIME_ADMISSION_DECISION_SCHEMA {
+    if output_schema != preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported policy contract output schema {output_schema}; expected {RUNTIME_ADMISSION_DECISION_SCHEMA}"
+            "unsupported policy contract output schema {output_schema}; expected {}",
+            preserves_rail::RUNTIME_ADMISSION_DECISION_SCHEMA
         )));
     }
     let receipt_schema_version = required_string(&envelope[6], "policy contract receipt schema")?;
-    if receipt_schema_version != HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA {
+    if receipt_schema_version != preserves_rail::HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported policy contract receipt schema {receipt_schema_version}; expected {HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA}"
+            "unsupported policy contract receipt schema {receipt_schema_version}; expected {}",
+            preserves_rail::HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA
         )));
     }
     Ok(basalt::ContractEnvelope::new(
@@ -5638,9 +5593,10 @@ fn parse_basalt_policy_preflight_evidence(value: &Value<IOValue>) -> Result<Basa
     let value = value_to_iovalue(value);
     let receipt = simple_record(&value, "basalt-preflight", 8)?;
     let schema = required_string(&receipt[0], "Basalt policy preflight schema")?;
-    if schema != HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA {
+    if schema != preserves_rail::HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Basalt policy preflight schema {schema}; expected {HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA}"
+            "unsupported Basalt policy preflight schema {schema}; expected {}",
+            preserves_rail::HARNESS_BASALT_POLICY_PREFLIGHT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "Basalt policy preflight decision")?;
@@ -5675,10 +5631,13 @@ fn parse_basalt_policy_preflight_evidence(value: &Value<IOValue>) -> Result<Basa
     })
 }
 
-fn nickel_policy_source(policy: &AdmissionPolicy, policy_ref: &str) -> Result<String> {
+fn nickel_policy_source(policy: &runtime::AdmissionPolicy, policy_ref: &str) -> Result<String> {
     let mut source = String::from("{\n");
-    source.push_str(&format!("  schema_version = {},\n", nickel_string(HARNESS_POLICY_NICKEL_STATIC_SCHEMA)));
-    source.push_str(&format!("  policy_schema = {},\n", nickel_string(HARNESS_POLICY_SCHEMA)));
+    source.push_str(&format!(
+        "  schema_version = {},\n",
+        nickel_string(preserves_rail::HARNESS_POLICY_NICKEL_STATIC_SCHEMA)
+    ));
+    source.push_str(&format!("  policy_schema = {},\n", nickel_string(preserves_rail::HARNESS_POLICY_SCHEMA)));
     source.push_str(&format!("  policy_ref = {},\n", nickel_string(policy_ref)));
     source.push_str("  deny_rules = [\n");
     for rule in policy.deny_rules() {
@@ -5686,7 +5645,7 @@ fn nickel_policy_source(policy: &AdmissionPolicy, policy_ref: &str) -> Result<St
         source.push_str(&format!("      actor = {},\n", nickel_optional_string(rule.actor.as_deref())));
         source.push_str(&format!(
             "      action = {},\n",
-            nickel_optional_string(rule.action.as_ref().map(AdmissionAction::as_str))
+            nickel_optional_string(rule.action.as_ref().map(runtime::AdmissionAction::as_str))
         ));
         source.push_str(&format!("      target = {},\n", nickel_optional_string(rule.target.as_deref())));
         source.push_str(&format!("      value = {},\n", nickel_optional_runtime_value(rule.value.as_ref())?));
@@ -5701,7 +5660,7 @@ fn nickel_optional_string(value: Option<&str>) -> String {
     value.map_or_else(|| "null".to_string(), nickel_string)
 }
 
-fn nickel_optional_runtime_value(value: Option<&RuntimeValue>) -> Result<String> {
+fn nickel_optional_runtime_value(value: Option<&core::RuntimeValue>) -> Result<String> {
     match value {
         Some(value) => {
             let text = to_text(value.as_iovalue())?;
@@ -5748,17 +5707,17 @@ fn nickel_error(error: nickel_lang::Error) -> MoltenError {
     }
 }
 
-pub fn capabilities_value(capabilities: &CapabilityContext) -> IOValue {
+pub fn capabilities_value(capabilities: &runtime::CapabilityContext) -> IOValue {
     record("capabilities-v1", vec![
-        string(HARNESS_CAPABILITIES_SCHEMA),
+        string(preserves_rail::HARNESS_CAPABILITIES_SCHEMA),
         sequence(capabilities.grants().iter().map(capability_grant_value).collect()),
     ])
 }
 
-pub fn capability_gate_value(capabilities: &CapabilityContext) -> Result<IOValue> {
+pub fn capability_gate_value(capabilities: &runtime::CapabilityContext) -> Result<IOValue> {
     let preflight = capability_preflight_material(capabilities)?;
     Ok(record("capability-gate-v1", vec![
-        string(HARNESS_CAPABILITY_GATE_SCHEMA),
+        string(preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA),
         record("decision", vec![string("pass")]),
         record("capability-ref", vec![string(&preflight.capability_ref)]),
         preflight.authority_contract_value,
@@ -5771,9 +5730,10 @@ pub fn capability_gate_value(capabilities: &CapabilityContext) -> Result<IOValue
 pub fn parse_capability_gate(value: &IOValue) -> Result<CapabilityGateEvidence> {
     let gate = simple_record(value, "capability-gate-v1", 7)?;
     let schema = required_string(&gate[0], "capability gate schema")?;
-    if schema != HARNESS_CAPABILITY_GATE_SCHEMA {
+    if schema != preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported capability gate schema {schema}; expected {HARNESS_CAPABILITY_GATE_SCHEMA}"
+            "unsupported capability gate schema {schema}; expected {}",
+            preserves_rail::HARNESS_CAPABILITY_GATE_SCHEMA
         )));
     }
     let decision = required_record_string(&gate[1], "decision", "capability gate decision")?;
@@ -5890,7 +5850,7 @@ const CAPABILITY_CONTRACT_ID: &str = "molten.harness.capability-context";
 const CAPABILITY_CONTRACT_VERSION: &str = "v1";
 const CAPABILITY_INPUT_SCHEMA: &str = "molten.runtime.admission-request.v1";
 
-fn capability_preflight_material(capabilities: &CapabilityContext) -> Result<CapabilityPreflightMaterial> {
+fn capability_preflight_material(capabilities: &runtime::CapabilityContext) -> Result<CapabilityPreflightMaterial> {
     let capability_snapshot = capabilities_value(capabilities);
     let capability_ref = canonical_hash(&capability_snapshot)?;
     let grant_refs: Vec<String> = capability_grant_refs(capabilities)?;
@@ -5902,8 +5862,8 @@ fn capability_preflight_material(capabilities: &CapabilityContext) -> Result<Cap
         CAPABILITY_CONTRACT_VERSION,
         capability_ref.clone(),
         CAPABILITY_INPUT_SCHEMA,
-        RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA,
-        HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA,
+        preserves_rail::RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA,
+        preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA,
     );
     let envelope_value = contract_envelope_value(&envelope);
     let envelope_ref = canonical_hash(&envelope_value)?;
@@ -5915,7 +5875,7 @@ fn capability_preflight_material(capabilities: &CapabilityContext) -> Result<Cap
         )));
     }
     let authority_contract_value = record("authority-contract", vec![
-        string(HARNESS_CAPABILITY_CONTRACT_SCHEMA),
+        string(preserves_rail::HARNESS_CAPABILITY_CONTRACT_SCHEMA),
         envelope_value,
         record("envelope-ref", vec![string(&envelope_ref)]),
     ]);
@@ -5924,7 +5884,7 @@ fn capability_preflight_material(capabilities: &CapabilityContext) -> Result<Cap
         grant_ref_values.push(string(grant_ref.as_str()));
     }
     let authority_preflight_value = record("basalt-authority-preflight", vec![
-        string(HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA),
+        string(preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("backend", vec![string("nickel")]),
         record("contract-id", vec![string(CAPABILITY_CONTRACT_ID)]),
@@ -5942,21 +5902,25 @@ fn capability_preflight_material(capabilities: &CapabilityContext) -> Result<Cap
     })
 }
 
-fn capability_grant_refs(capabilities: &CapabilityContext) -> Result<Vec<String>> {
+fn capability_grant_refs(capabilities: &runtime::CapabilityContext) -> Result<Vec<String>> {
     capabilities.grants().iter().map(|grant| canonical_hash(&capability_grant_value(grant))).collect()
 }
 
 fn ucan_proofset_value() -> IOValue {
-    record("ucan-proofset-v1", vec![string(HARNESS_UCAN_PROOFSET_SCHEMA), sequence(Vec::new())])
+    record("ucan-proofset-v1", vec![
+        string(preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA),
+        sequence(Vec::new()),
+    ])
 }
 
 fn parse_authority_contract_evidence(value: &Value<IOValue>) -> Result<AuthorityContractEvidence> {
     let value = value_to_iovalue(value);
     let contract = simple_record(&value, "authority-contract", 3)?;
     let schema = required_string(&contract[0], "authority contract schema")?;
-    if schema != HARNESS_CAPABILITY_CONTRACT_SCHEMA {
+    if schema != preserves_rail::HARNESS_CAPABILITY_CONTRACT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported authority contract schema {schema}; expected {HARNESS_CAPABILITY_CONTRACT_SCHEMA}"
+            "unsupported authority contract schema {schema}; expected {}",
+            preserves_rail::HARNESS_CAPABILITY_CONTRACT_SCHEMA
         )));
     }
     let envelope_value = value_to_iovalue(&contract[1]);
@@ -6009,15 +5973,17 @@ fn parse_capability_contract_envelope(value: &IOValue) -> Result<basalt::Contrac
         )));
     }
     let output_schema = required_string(&envelope[5], "capability contract output schema")?;
-    if output_schema != RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA {
+    if output_schema != preserves_rail::RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported capability contract output schema {output_schema}; expected {RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA}"
+            "unsupported capability contract output schema {output_schema}; expected {}",
+            preserves_rail::RUNTIME_CAPABILITY_AUTHORIZATION_SCHEMA
         )));
     }
     let receipt_schema_version = required_string(&envelope[6], "capability contract receipt schema")?;
-    if receipt_schema_version != HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA {
+    if receipt_schema_version != preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported capability contract receipt schema {receipt_schema_version}; expected {HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA}"
+            "unsupported capability contract receipt schema {receipt_schema_version}; expected {}",
+            preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA
         )));
     }
     Ok(basalt::ContractEnvelope::new(
@@ -6035,9 +6001,10 @@ fn parse_basalt_authority_preflight_evidence(value: &Value<IOValue>) -> Result<B
     let value = value_to_iovalue(value);
     let receipt = simple_record(&value, "basalt-authority-preflight", 9)?;
     let schema = required_string(&receipt[0], "Basalt authority preflight schema")?;
-    if schema != HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA {
+    if schema != preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Basalt authority preflight schema {schema}; expected {HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA}"
+            "unsupported Basalt authority preflight schema {schema}; expected {}",
+            preserves_rail::HARNESS_BASALT_AUTHORITY_PREFLIGHT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "Basalt authority preflight decision")?;
@@ -6080,9 +6047,10 @@ fn parse_ucan_proofset_evidence(value: &Value<IOValue>) -> Result<UcanProofsetEv
     let value = value_to_iovalue(value);
     let proofset = simple_record(&value, "ucan-proofset-v1", 2)?;
     let schema = required_string(&proofset[0], "UCAN proofset schema")?;
-    if schema != HARNESS_UCAN_PROOFSET_SCHEMA {
+    if schema != preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported UCAN proofset schema {schema}; expected {HARNESS_UCAN_PROOFSET_SCHEMA}"
+            "unsupported UCAN proofset schema {schema}; expected {}",
+            preserves_rail::HARNESS_UCAN_PROOFSET_SCHEMA
         )));
     }
     let proofs = required_sequence(&proofset[1], "UCAN proofset refs")?;
@@ -6097,8 +6065,8 @@ fn parse_ucan_proofset_evidence(value: &Value<IOValue>) -> Result<UcanProofsetEv
 }
 
 pub fn admission_authority_evidence(
-    capabilities: &CapabilityContext,
-    request: &AdmissionRequest,
+    capabilities: &runtime::CapabilityContext,
+    request: &core::AdmissionRequest,
 ) -> Result<AdmissionAuthorityEvidence> {
     let authorization = capabilities.authorize(request);
     let grant_ref = authorization
@@ -6113,12 +6081,13 @@ pub fn admission_authority_evidence(
     })
 }
 
-pub fn parse_capabilities(value: &IOValue) -> Result<CapabilityContext> {
+pub fn parse_capabilities(value: &IOValue) -> Result<runtime::CapabilityContext> {
     let capabilities = simple_record(value, "capabilities-v1", 2)?;
     let schema = required_string(&capabilities[0], "capabilities schema")?;
-    if schema != HARNESS_CAPABILITIES_SCHEMA {
+    if schema != preserves_rail::HARNESS_CAPABILITIES_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported capabilities schema {schema}; expected {HARNESS_CAPABILITIES_SCHEMA}"
+            "unsupported capabilities schema {schema}; expected {}",
+            preserves_rail::HARNESS_CAPABILITIES_SCHEMA
         )));
     }
     let grant_values = required_sequence(&capabilities[1], "capability grants")?;
@@ -6126,17 +6095,17 @@ pub fn parse_capabilities(value: &IOValue) -> Result<CapabilityContext> {
     for grant in grant_values.iter() {
         let grant_value = value_to_iovalue(&grant);
         let grant = simple_record(&grant_value, "grant", 4)?;
-        grants.push(CapabilityGrant {
+        grants.push(runtime::CapabilityGrant {
             actor: optional_string(&grant[0], "capability grant actor")?,
             action: optional_action(&grant[1], "capability grant action")?,
             target: optional_string(&grant[2], "capability grant target")?,
             value: optional_runtime_match_value(&grant[3])?,
         });
     }
-    Ok(CapabilityContext::from_grants(grants))
+    Ok(runtime::CapabilityContext::from_grants(grants))
 }
 
-fn capability_grant_value(grant: &CapabilityGrant) -> IOValue {
+fn capability_grant_value(grant: &runtime::CapabilityGrant) -> IOValue {
     record("grant", vec![
         optional_policy_string(grant.actor.as_deref()),
         optional_policy_action(grant.action.as_ref()),
@@ -6190,7 +6159,7 @@ fn require_capability_gate_check(checks: &[String], expected: &str) -> Result<()
     }
 }
 
-fn deny_rule_value(rule: &AdmissionDenyRule) -> IOValue {
+fn deny_rule_value(rule: &runtime::AdmissionDenyRule) -> IOValue {
     record("deny", vec![
         optional_policy_string(rule.actor.as_deref()),
         optional_policy_action(rule.action.as_ref()),
@@ -6204,11 +6173,11 @@ fn optional_policy_string(value: Option<&str>) -> IOValue {
     value.map_or_else(|| bool_value(false), string)
 }
 
-fn optional_policy_action(value: Option<&AdmissionAction>) -> IOValue {
+fn optional_policy_action(value: Option<&runtime::AdmissionAction>) -> IOValue {
     value.map_or_else(|| bool_value(false), |action| string(action.as_str()))
 }
 
-fn optional_policy_runtime_value(value: Option<&RuntimeValue>) -> IOValue {
+fn optional_policy_runtime_value(value: Option<&core::RuntimeValue>) -> IOValue {
     value.map_or_else(|| bool_value(false), |value| value.as_iovalue().clone())
 }
 
@@ -6256,12 +6225,13 @@ fn require_policy_gate_check(checks: &[String], expected: &str) -> Result<()> {
     }
 }
 
-pub fn parse_policy(value: &IOValue) -> Result<AdmissionPolicy> {
+pub fn parse_policy(value: &IOValue) -> Result<runtime::AdmissionPolicy> {
     let policy = simple_record(value, "policy-v1", 2)?;
     let schema = required_string(&policy[0], "policy schema")?;
-    if schema != HARNESS_POLICY_SCHEMA {
+    if schema != preserves_rail::HARNESS_POLICY_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported policy schema {schema}; expected {HARNESS_POLICY_SCHEMA}"
+            "unsupported policy schema {schema}; expected {}",
+            preserves_rail::HARNESS_POLICY_SCHEMA
         )));
     }
     let rule_values = required_sequence(&policy[1], "policy deny rules")?;
@@ -6284,7 +6254,7 @@ pub fn parse_policy(value: &IOValue) -> Result<AdmissionPolicy> {
         if reason.is_empty() {
             return Err(MoltenError::invalid_harness("policy deny reason must not be empty"));
         }
-        rules.push(AdmissionDenyRule {
+        rules.push(runtime::AdmissionDenyRule {
             actor,
             action,
             target,
@@ -6292,15 +6262,16 @@ pub fn parse_policy(value: &IOValue) -> Result<AdmissionPolicy> {
             reason,
         });
     }
-    Ok(AdmissionPolicy::from_deny_rules(rules))
+    Ok(runtime::AdmissionPolicy::from_deny_rules(rules))
 }
 
 pub fn parse_actor_registry(value: &IOValue) -> Result<Vec<ActorDecl>> {
     let registry = simple_record(value, "actor-registry-v1", 2)?;
     let schema = required_string(&registry[0], "actor registry schema")?;
-    if schema != HARNESS_ACTOR_REGISTRY_SCHEMA {
+    if schema != preserves_rail::HARNESS_ACTOR_REGISTRY_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported actor registry schema {schema}; expected {HARNESS_ACTOR_REGISTRY_SCHEMA}"
+            "unsupported actor registry schema {schema}; expected {}",
+            preserves_rail::HARNESS_ACTOR_REGISTRY_SCHEMA
         )));
     }
     let actor_values = required_sequence(&registry[1], "actor registry entries")?;
@@ -6377,9 +6348,10 @@ fn parse_actor_executor_config(value: &IOValue, kind: &ActorKind, actor_id: &str
 fn parse_steel_executor_config(value: &IOValue) -> Result<SteelExecutorConfig> {
     let config = simple_record(value, "steel-executor-v1", 4)?;
     let schema = required_string(&config[0], "Steel executor schema")?;
-    if schema != RUNTIME_STEEL_EXECUTOR_SCHEMA {
+    if schema != preserves_rail::RUNTIME_STEEL_EXECUTOR_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Steel executor schema {schema}; expected {RUNTIME_STEEL_EXECUTOR_SCHEMA}"
+            "unsupported Steel executor schema {schema}; expected {}",
+            preserves_rail::RUNTIME_STEEL_EXECUTOR_SCHEMA
         )));
     }
     let source = required_record_string(&config[1], "source", "Steel executor source")?;
@@ -6399,9 +6371,10 @@ fn parse_steel_executor_config(value: &IOValue) -> Result<SteelExecutorConfig> {
 fn parse_wasm_executor_config(value: &IOValue) -> Result<WasmExecutorConfig> {
     let config = simple_record(value, "wasm-executor-v1", 4)?;
     let schema = required_string(&config[0], "Wasm executor schema")?;
-    if schema != RUNTIME_WASM_EXECUTOR_SCHEMA {
+    if schema != preserves_rail::RUNTIME_WASM_EXECUTOR_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported Wasm executor schema {schema}; expected {RUNTIME_WASM_EXECUTOR_SCHEMA}"
+            "unsupported Wasm executor schema {schema}; expected {}",
+            preserves_rail::RUNTIME_WASM_EXECUTOR_SCHEMA
         )));
     }
     let module_hex = normalize_hex(
@@ -6424,9 +6397,10 @@ fn parse_wasm_executor_config(value: &IOValue) -> Result<WasmExecutorConfig> {
 fn parse_adapter_executor_config(value: &IOValue) -> Result<AdapterExecutorConfig> {
     let config = simple_record(value, "adapter-executor-v1", 5)?;
     let schema = required_string(&config[0], "adapter executor schema")?;
-    if schema != RUNTIME_ADAPTER_EXECUTOR_SCHEMA {
+    if schema != preserves_rail::RUNTIME_ADAPTER_EXECUTOR_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported adapter executor schema {schema}; expected {RUNTIME_ADAPTER_EXECUTOR_SCHEMA}"
+            "unsupported adapter executor schema {schema}; expected {}",
+            preserves_rail::RUNTIME_ADAPTER_EXECUTOR_SCHEMA
         )));
     }
     let manifest = required_record_string(&config[1], "manifest", "adapter manifest")?;
@@ -6448,9 +6422,10 @@ fn parse_adapter_executor_config(value: &IOValue) -> Result<AdapterExecutorConfi
 fn parse_remote_proxy_executor_config(value: &IOValue) -> Result<RemoteProxyExecutorConfig> {
     let config = simple_record(value, "remote-proxy-executor-v1", 6)?;
     let schema = required_string(&config[0], "remote-proxy executor schema")?;
-    if schema != RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA {
+    if schema != preserves_rail::RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported remote-proxy executor schema {schema}; expected {RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA}"
+            "unsupported remote-proxy executor schema {schema}; expected {}",
+            preserves_rail::RUNTIME_REMOTE_PROXY_EXECUTOR_SCHEMA
         )));
     }
     let peer = required_record_string(&config[1], "peer", "remote-proxy peer")?;
@@ -6482,7 +6457,7 @@ fn normalize_allowed_hostcalls(values: Vec<String>) -> Result<Vec<String>> {
     Ok(seen.into_iter().collect())
 }
 
-pub fn actor_ids_for_step(step: &CoreStep) -> Vec<&str> {
+pub fn actor_ids_for_step(step: &core::CoreStep) -> Vec<&str> {
     step.actor_ids()
 }
 
@@ -6570,7 +6545,7 @@ fn decision_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
     }
     let decision = parse_admission_decision_event(event)?;
     let mut actors = vec![decision.request.actor];
-    if matches!(&decision.request.action, AdmissionAction::Send)
+    if matches!(&decision.request.action, runtime::AdmissionAction::Send)
         && let Some(target) = decision.request.target
     {
         actors.push(target);
@@ -6593,7 +6568,7 @@ fn boundary_participants(event: &IOValue) -> Result<Option<Vec<String>>> {
         }
         let parsed_request = parse_admission_request(&request[4])?;
         let mut actors = vec![parsed_request.actor];
-        if matches!(&parsed_request.action, AdmissionAction::Send)
+        if matches!(&parsed_request.action, runtime::AdmissionAction::Send)
             && let Some(target) = parsed_request.target
         {
             actors.push(target);
@@ -6631,7 +6606,7 @@ fn require_declared_actor(
     )))
 }
 
-fn infer_actor_registry(steps: &[CoreStep]) -> Vec<ActorDecl> {
+fn infer_actor_registry(steps: &[core::CoreStep]) -> Vec<ActorDecl> {
     let mut ids = BTreeSet::new();
     for step in steps {
         for actor in actor_ids_for_step(step) {
@@ -6647,14 +6622,14 @@ fn infer_actor_registry(steps: &[CoreStep]) -> Vec<ActorDecl> {
         .collect()
 }
 
-fn parse_admission_action(action: &str) -> Result<AdmissionAction> {
+fn parse_admission_action(action: &str) -> Result<runtime::AdmissionAction> {
     match action {
-        "send" => Ok(AdmissionAction::Send),
-        "observe" => Ok(AdmissionAction::Observe),
-        "assert" => Ok(AdmissionAction::Assert),
-        "retract" => Ok(AdmissionAction::Retract),
-        "clock" => Ok(AdmissionAction::Clock),
-        "random" => Ok(AdmissionAction::Random),
+        "send" => Ok(runtime::AdmissionAction::Send),
+        "observe" => Ok(runtime::AdmissionAction::Observe),
+        "assert" => Ok(runtime::AdmissionAction::Assert),
+        "retract" => Ok(runtime::AdmissionAction::Retract),
+        "clock" => Ok(runtime::AdmissionAction::Clock),
+        "random" => Ok(runtime::AdmissionAction::Random),
         other => Err(MoltenError::invalid_harness(format!("unknown admission action {other}"))),
     }
 }
@@ -7118,7 +7093,7 @@ fn parse_profiled_private(
         });
     }
     let private_value = value_to_iovalue(&bundle[22]);
-    let private = parse_private_bundle_profile(&private_value)?;
+    let private = secrets::parse_private_bundle_profile(&private_value)?;
     require_artifact_ref(&body.artifact_refs, "private-bundle-profile", &canonical_hash(&private_value)?)?;
     if body.export_profile.profile != ReproExportProfile::EncryptedPrivate {
         return Err(MoltenError::invalid_harness(
@@ -7204,9 +7179,10 @@ fn validate_redaction_transform_manifest(
 ) -> Result<()> {
     let manifest = simple_record(value, "redaction-transform-manifest-v1", 9)?;
     let schema = required_string(&manifest[0], "redaction transform manifest schema")?;
-    if schema != HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA {
+    if schema != preserves_rail::HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported redaction transform manifest schema {schema}; expected {HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA}"
+            "unsupported redaction transform manifest schema {schema}; expected {}",
+            preserves_rail::HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA
         )));
     }
     let manifest_source_report = required_record_hash(&manifest[1], "source-report", "manifest source report")?;
@@ -7245,7 +7221,7 @@ fn collect_redaction_marker_refs(value: &IOValue) -> Result<Vec<String>> {
     while let Some(current) = stack.pop() {
         if current.collect_simple_record("redaction-marker-v1", None).is_some() {
             ensure_redaction_bound(refs.len() + 1, MAX_REDACTION_MARKER_REFS, "redaction marker refs")?;
-            refs.push(parse_redaction_marker(&current)?.marker_ref);
+            refs.push(secrets::parse_redaction_marker(&current)?.marker_ref);
             continue;
         }
         match current.value_class() {
@@ -7330,9 +7306,10 @@ fn parse_repro_seal(
     let value = value_to_iovalue(value);
     let seal = simple_record(&value, "repro-seal", 7)?;
     let schema = required_string(&seal[0], "repro seal schema")?;
-    if schema != HARNESS_REPRO_SEAL_SCHEMA {
+    if schema != preserves_rail::HARNESS_REPRO_SEAL_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported repro seal schema {schema}; expected {HARNESS_REPRO_SEAL_SCHEMA}"
+            "unsupported repro seal schema {schema}; expected {}",
+            preserves_rail::HARNESS_REPRO_SEAL_SCHEMA
         )));
     }
     let decision = required_record_string(&seal[1], "decision", "repro seal decision")?;
@@ -7577,7 +7554,7 @@ struct RedactionTransformReceiptEvidence {
 
 fn redaction_policy_value() -> IOValue {
     record("redaction-policy-v1", vec![
-        string(HARNESS_REDACTION_POLICY_SCHEMA),
+        string(preserves_rail::HARNESS_REDACTION_POLICY_SCHEMA),
         record("mode", vec![string("deny-sensitive-markers")]),
         record("forbidden-markers", vec![sequence(
             FORBIDDEN_REDACTION_MARKERS.iter().map(|marker| string(*marker)).collect(),
@@ -7587,7 +7564,7 @@ fn redaction_policy_value() -> IOValue {
 
 fn repro_export_profile_value(profile: ReproExportProfile) -> IOValue {
     record("repro-export-profile-v1", vec![
-        string(HARNESS_REDACTION_PROFILE_SCHEMA),
+        string(preserves_rail::HARNESS_REDACTION_PROFILE_SCHEMA),
         record("name", vec![string(profile.as_str())]),
         record("loss-classification", vec![string(profile.loss_classification())]),
         record("gate-preserving", vec![bool_value(profile.is_gate_preserving())]),
@@ -7604,9 +7581,10 @@ fn repro_export_profile_value(profile: ReproExportProfile) -> IOValue {
 fn parse_repro_export_profile(value: &IOValue) -> Result<ReproExportProfileEvidence> {
     let profile_value = simple_record(value, "repro-export-profile-v1", 6)?;
     let schema = required_string(&profile_value[0], "repro export profile schema")?;
-    if schema != HARNESS_REDACTION_PROFILE_SCHEMA {
+    if schema != preserves_rail::HARNESS_REDACTION_PROFILE_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported repro export profile schema {schema}; expected {HARNESS_REDACTION_PROFILE_SCHEMA}"
+            "unsupported repro export profile schema {schema}; expected {}",
+            preserves_rail::HARNESS_REDACTION_PROFILE_SCHEMA
         )));
     }
     let name = required_record_string(&profile_value[1], "name", "repro export profile name")?;
@@ -7647,7 +7625,7 @@ fn redaction_transform_manifest_value(
     encrypted_refs: &[String],
 ) -> IOValue {
     record("redaction-transform-manifest-v1", vec![
-        string(HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA),
+        string(preserves_rail::HARNESS_REDACTION_TRANSFORM_MANIFEST_SCHEMA),
         record("source-report", vec![string(&source_report.report_ref)]),
         record("source-suite", vec![string(&source_report.suite_ref)]),
         record("output-report", vec![string(&output_report.report_ref)]),
@@ -7680,7 +7658,7 @@ fn redaction_transform_manifest_value(
 
 fn redaction_transform_receipt_value(input: &RedactionTransformReceiptInput<'_>) -> Result<IOValue> {
     Ok(record("redaction-transform-receipt-v1", vec![
-        string(HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA),
+        string(preserves_rail::HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         record("source-report", vec![string(input.source_report_ref)]),
         record("source-suite", vec![string(input.source_suite_ref)]),
@@ -7698,9 +7676,10 @@ fn redaction_transform_receipt_value(input: &RedactionTransformReceiptInput<'_>)
 fn parse_redaction_transform_receipt(value: &IOValue) -> Result<RedactionTransformReceiptEvidence> {
     let receipt = simple_record(value, "redaction-transform-receipt-v1", 12)?;
     let schema = required_string(&receipt[0], "redaction transform schema")?;
-    if schema != HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA {
+    if schema != preserves_rail::HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported redaction transform schema {schema}; expected {HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA}"
+            "unsupported redaction transform schema {schema}; expected {}",
+            preserves_rail::HARNESS_REDACTION_TRANSFORM_RECEIPT_SCHEMA
         )));
     }
     let decision = required_record_string(&receipt[1], "decision", "redaction transform decision")?;
@@ -7749,7 +7728,7 @@ fn redaction_gate_value(report_value: &IOValue, report: &HarnessReport) -> Resul
     let policy = redaction_policy_value();
     let policy_ref = canonical_hash(&policy)?;
     Ok(record("redaction-gate-v1", vec![
-        string(HARNESS_REDACTION_GATE_SCHEMA),
+        string(preserves_rail::HARNESS_REDACTION_GATE_SCHEMA),
         record("decision", vec![string("pass")]),
         record("policy-ref", vec![string(policy_ref)]),
         record("report-ref", vec![string(&report.report_ref)]),
@@ -7868,9 +7847,10 @@ fn validate_redaction_evidence(
 fn parse_redaction_policy(value: &IOValue) -> Result<()> {
     let policy = simple_record(value, "redaction-policy-v1", 3)?;
     let schema = required_string(&policy[0], "redaction policy schema")?;
-    if schema != HARNESS_REDACTION_POLICY_SCHEMA {
+    if schema != preserves_rail::HARNESS_REDACTION_POLICY_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported redaction policy schema {schema}; expected {HARNESS_REDACTION_POLICY_SCHEMA}"
+            "unsupported redaction policy schema {schema}; expected {}",
+            preserves_rail::HARNESS_REDACTION_POLICY_SCHEMA
         )));
     }
     let mode = required_record_string(&policy[1], "mode", "redaction policy mode")?;
@@ -7896,9 +7876,10 @@ fn parse_redaction_gate(
 ) -> Result<()> {
     let gate = simple_record(value, "redaction-gate-v1", 7)?;
     let schema = required_string(&gate[0], "redaction gate schema")?;
-    if schema != HARNESS_REDACTION_GATE_SCHEMA {
+    if schema != preserves_rail::HARNESS_REDACTION_GATE_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported redaction gate schema {schema}; expected {HARNESS_REDACTION_GATE_SCHEMA}"
+            "unsupported redaction gate schema {schema}; expected {}",
+            preserves_rail::HARNESS_REDACTION_GATE_SCHEMA
         )));
     }
     let decision = required_record_string(&gate[1], "decision", "redaction gate decision")?;
@@ -7986,7 +7967,7 @@ fn validate_profiled_output(value: &IOValue, profile: ReproExportProfile) -> Res
                             "encrypted refs are allowed only in encrypted-private repro bundles",
                         ));
                     }
-                    let encrypted = parse_encrypted_ref(&current)?;
+                    let encrypted = secrets::parse_encrypted_ref(&current)?;
                     ensure_redaction_bound(
                         encrypted_refs.len() + 1,
                         MAX_REDACTION_ENCRYPTED_REFS,
@@ -8053,7 +8034,7 @@ fn first_sensitive_marker(value: &IOValue) -> Option<String> {
 
 fn repro_seal_value(report: &HarnessReport, gate_receipt_ref: &str) -> IOValue {
     record("repro-seal", vec![
-        string(HARNESS_REPRO_SEAL_SCHEMA),
+        string(preserves_rail::HARNESS_REPRO_SEAL_SCHEMA),
         record("decision", vec![string("pass")]),
         record("gate-receipt-ref", vec![string(gate_receipt_ref)]),
         record("report-ref", vec![string(&report.report_ref)]),
@@ -8218,7 +8199,7 @@ fn require_artifact_ref(refs: &[(String, String)], kind: &str, expected: &str) -
 
 pub fn effect_log_value(entries: &[EffectLogEntry]) -> IOValue {
     record("effect-log-v1", vec![
-        string(HARNESS_EFFECT_LOG_SCHEMA),
+        string(preserves_rail::HARNESS_EFFECT_LOG_SCHEMA),
         sequence(
             entries
                 .iter()
@@ -8235,12 +8216,12 @@ pub fn effect_log_value(entries: &[EffectLogEntry]) -> IOValue {
 }
 
 pub fn budget_limits_value(budget: &HarnessBudget) -> IOValue {
-    record("budget-v1", vec![string(HARNESS_BUDGET_SCHEMA), limits_value(budget)])
+    record("budget-v1", vec![string(preserves_rail::HARNESS_BUDGET_SCHEMA), limits_value(budget)])
 }
 
 pub fn budget_value(budget: &HarnessBudget, usage: &BudgetUsage) -> IOValue {
     record("budget-v1", vec![
-        string(HARNESS_BUDGET_SCHEMA),
+        string(preserves_rail::HARNESS_BUDGET_SCHEMA),
         limits_value(budget),
         record("usage", vec![
             u64_value(usage.steps),
@@ -8281,9 +8262,10 @@ fn limits_value(budget: &HarnessBudget) -> IOValue {
 
 fn parse_budget_schema_and_limits(budget: &Record<Value<IOValue>>) -> Result<HarnessBudget> {
     let schema = required_string(&budget[0], "budget schema")?;
-    if schema != HARNESS_BUDGET_SCHEMA {
+    if schema != preserves_rail::HARNESS_BUDGET_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported budget schema {schema}; expected {HARNESS_BUDGET_SCHEMA}"
+            "unsupported budget schema {schema}; expected {}",
+            preserves_rail::HARNESS_BUDGET_SCHEMA
         )));
     }
     let limits_value = value_to_iovalue(&budget[1]);
@@ -8299,9 +8281,10 @@ fn parse_budget_schema_and_limits(budget: &Record<Value<IOValue>>) -> Result<Har
 pub fn parse_effect_log(value: &IOValue) -> Result<Vec<EffectLogEntry>> {
     let effect_log = simple_record(value, "effect-log-v1", 2)?;
     let schema = required_string(&effect_log[0], "effect log schema")?;
-    if schema != HARNESS_EFFECT_LOG_SCHEMA {
+    if schema != preserves_rail::HARNESS_EFFECT_LOG_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported effect log schema {schema}; expected {HARNESS_EFFECT_LOG_SCHEMA}"
+            "unsupported effect log schema {schema}; expected {}",
+            preserves_rail::HARNESS_EFFECT_LOG_SCHEMA
         )));
     }
     let entry_values = required_sequence(&effect_log[1], "effect log entries")?;
@@ -8526,9 +8509,10 @@ fn parse_observation(value: &Value<IOValue>) -> Result<HarnessObservation> {
         )));
     }
     let schema = required_string(&observation[0], "observation schema")?;
-    if schema != HARNESS_OBSERVATION_SCHEMA {
+    if schema != preserves_rail::HARNESS_OBSERVATION_SCHEMA {
         return Err(MoltenError::invalid_harness(format!(
-            "unsupported observation schema {schema}; expected {HARNESS_OBSERVATION_SCHEMA}"
+            "unsupported observation schema {schema}; expected {}",
+            preserves_rail::HARNESS_OBSERVATION_SCHEMA
         )));
     }
     let events_index = if arity == 7 { 6 } else { 5 };
@@ -8563,39 +8547,39 @@ fn parse_observation(value: &Value<IOValue>) -> Result<HarnessObservation> {
     })
 }
 
-fn parse_step(value: &Value<IOValue>) -> Result<CoreStep> {
+fn parse_step(value: &Value<IOValue>) -> Result<core::CoreStep> {
     if let Some(record) = value.collect_simple_record("send", Some(3)) {
-        return Ok(CoreStep::Send {
+        return Ok(core::CoreStep::Send {
             from: required_string(&record[0], "send from")?,
             to: required_string(&record[1], "send to")?,
             body: required_runtime_value(&record[2], "send body")?,
         });
     }
     if let Some(record) = value.collect_simple_record("observe", Some(2)) {
-        return Ok(CoreStep::Observe {
+        return Ok(core::CoreStep::Observe {
             actor: required_string(&record[0], "observe actor")?,
             pattern: required_runtime_value(&record[1], "observe pattern")?,
         });
     }
     if let Some(record) = value.collect_simple_record("assert", Some(2)) {
-        return Ok(CoreStep::Assert {
+        return Ok(core::CoreStep::Assert {
             actor: required_string(&record[0], "assert actor")?,
             value: required_runtime_value(&record[1], "assert value")?,
         });
     }
     if let Some(record) = value.collect_simple_record("retract", Some(2)) {
-        return Ok(CoreStep::Retract {
+        return Ok(core::CoreStep::Retract {
             actor: required_string(&record[0], "retract actor")?,
             value: required_runtime_value(&record[1], "retract value")?,
         });
     }
     if let Some(record) = value.collect_simple_record("clock", Some(1)) {
-        return Ok(CoreStep::Clock {
+        return Ok(core::CoreStep::Clock {
             actor: required_string(&record[0], "clock actor")?,
         });
     }
     if let Some(record) = value.collect_simple_record("random", Some(2)) {
-        return Ok(CoreStep::Random {
+        return Ok(core::CoreStep::Random {
             actor: required_string(&record[0], "random actor")?,
             upper: required_u64(&record[1], "random upper bound")?,
         });
@@ -8608,10 +8592,10 @@ where F: FnMut(&T) -> IOValue {
     record(label, vec![sequence(values.iter().map(&mut render).collect())])
 }
 
-fn effect_name(effect: &CoreEffect) -> &'static str {
+fn effect_name(effect: &core::CoreEffect) -> &'static str {
     match effect {
-        CoreEffect::Clock => "clock",
-        CoreEffect::Random => "random",
+        core::CoreEffect::Clock => "clock",
+        core::CoreEffect::Random => "random",
     }
 }
 
@@ -8689,15 +8673,15 @@ fn optional_request_string(value: &Value<IOValue>, field: &str) -> Result<Option
     required_string(value, field).map(Some)
 }
 
-fn optional_request_runtime_value(value: &Value<IOValue>, _field: &str) -> Result<Option<RuntimeValue>> {
+fn optional_request_runtime_value(value: &Value<IOValue>, _field: &str) -> Result<Option<core::RuntimeValue>> {
     if value.as_boolean() == Some(false) || value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
     if let Some(some) = value.collect_simple_record("some", Some(1)) {
-        return RuntimeValue::new(value_to_iovalue(&some[0])).map(Some);
+        return core::RuntimeValue::new(value_to_iovalue(&some[0])).map(Some);
     }
     // Compatibility with early reports that encoded present optional values directly.
-    RuntimeValue::new(value_to_iovalue(value)).map(Some)
+    core::RuntimeValue::new(value_to_iovalue(value)).map(Some)
 }
 
 fn optional_request_u64(value: &Value<IOValue>, field: &str) -> Result<Option<u64>> {
@@ -8711,7 +8695,7 @@ fn optional_request_u64(value: &Value<IOValue>, field: &str) -> Result<Option<u6
     required_u64(value, field).map(Some)
 }
 
-fn optional_action(value: &Value<IOValue>, field: &str) -> Result<Option<AdmissionAction>> {
+fn optional_action(value: &Value<IOValue>, field: &str) -> Result<Option<runtime::AdmissionAction>> {
     if value.as_boolean() == Some(false) {
         Ok(None)
     } else {
@@ -8719,11 +8703,11 @@ fn optional_action(value: &Value<IOValue>, field: &str) -> Result<Option<Admissi
     }
 }
 
-fn optional_runtime_match_value(value: &Value<IOValue>) -> Result<Option<RuntimeValue>> {
+fn optional_runtime_match_value(value: &Value<IOValue>) -> Result<Option<core::RuntimeValue>> {
     if value.as_boolean() == Some(false) {
         Ok(None)
     } else {
-        RuntimeValue::new(value_to_iovalue(value)).map(Some)
+        core::RuntimeValue::new(value_to_iovalue(value)).map(Some)
     }
 }
 
@@ -8735,8 +8719,8 @@ fn required_hash(value: &Value<IOValue>, field: &str) -> Result<String> {
     Ok(hash)
 }
 
-fn required_runtime_value(value: &Value<IOValue>, _field: &str) -> Result<RuntimeValue> {
-    RuntimeValue::new(value_to_iovalue(value))
+fn required_runtime_value(value: &Value<IOValue>, _field: &str) -> Result<core::RuntimeValue> {
+    core::RuntimeValue::new(value_to_iovalue(value))
 }
 
 fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
