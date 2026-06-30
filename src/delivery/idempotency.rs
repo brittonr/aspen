@@ -4,7 +4,6 @@ use redb::ReadableDatabase;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
@@ -639,7 +638,7 @@ fn read_or_create_window(
     let window = parse_delivery_window(&value)?;
     let write_txn = db.begin_write().map_err(store_error)?;
     {
-        let bytes = canonical_bytes(&window.value)?;
+        let bytes = crate::preserves_rail::canonical_bytes(&window.value)?;
         let mut windows = write_txn.open_table(STORE_WINDOWS).map_err(store_error)?;
         windows.insert(scope_ref, bytes.as_slice()).map_err(store_error)?;
     }
@@ -666,17 +665,17 @@ fn store_first_decision(
     let write_txn = db.begin_write().map_err(store_error)?;
     {
         let mut windows = write_txn.open_table(STORE_WINDOWS).map_err(store_error)?;
-        let window_bytes = canonical_bytes(&window.value)?;
+        let window_bytes = crate::preserves_rail::canonical_bytes(&window.value)?;
         windows.insert(window.scope_ref.as_str(), window_bytes.as_slice()).map_err(store_error)?;
     }
     {
         let mut entries = write_txn.open_table(STORE_ENTRIES).map_err(store_error)?;
-        let entry_bytes = canonical_bytes(&entry.value)?;
+        let entry_bytes = crate::preserves_rail::canonical_bytes(&entry.value)?;
         entries.insert(entry.dedup_key.as_str(), entry_bytes.as_slice()).map_err(store_error)?;
     }
     {
         let mut receipts = write_txn.open_table(STORE_RECEIPTS).map_err(store_error)?;
-        let receipt_bytes = canonical_bytes(&receipt.value)?;
+        let receipt_bytes = crate::preserves_rail::canonical_bytes(&receipt.value)?;
         receipts.insert(receipt.receipt_ref.as_str(), receipt_bytes.as_slice()).map_err(store_error)?;
     }
     {
@@ -695,7 +694,7 @@ fn store_raw_receipt(db: &redb::Database, receipt_ref: &str, receipt_value: &IOV
     let write_txn = db.begin_write().map_err(store_error)?;
     {
         let mut receipts = write_txn.open_table(STORE_RECEIPTS).map_err(store_error)?;
-        let bytes = canonical_bytes(receipt_value)?;
+        let bytes = crate::preserves_rail::canonical_bytes(receipt_value)?;
         receipts.insert(receipt_ref, bytes.as_slice()).map_err(store_error)?;
     }
     write_txn.commit().map_err(store_error)
