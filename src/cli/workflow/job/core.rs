@@ -1,6 +1,5 @@
 use molten::error::Result;
 
-use super::command::base;
 use super::io;
 
 pub(crate) struct Items<T> {
@@ -47,7 +46,7 @@ impl<T: PartialEq> Items<T> {
     }
 }
 
-pub(crate) fn install(args: base::Install) -> Result<()> {
+pub(crate) fn install(args: super::command::base::Install) -> Result<()> {
     let value = io::read_preserves_file(&args.dag)?;
     let installed = molten::job_dag::install_job_dag(&args.registry, &value)?;
     if let Some(path) = args.artifact_out.as_ref() {
@@ -64,14 +63,14 @@ pub(crate) fn install(args: base::Install) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn show(args: base::Show) -> Result<()> {
+pub(crate) fn show(args: super::command::base::Show) -> Result<()> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(&args.registry, &args.job)?;
     println!("{}", molten::job_dag::dag_summary(&dag));
     println!("{}", molten::preserves_rail::to_text(&dag.value)?);
     Ok(())
 }
 
-pub(crate) fn run(args: base::Run) -> Result<()> {
+pub(crate) fn run(args: super::command::base::Run) -> Result<()> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(&args.registry, &args.job)?;
     let request = args.output_request.as_ref().map(|path| io::read_preserves_file(path)).transpose()?;
     let chunk_root = args.chunks.unwrap_or_else(|| args.registry.join("job-chunks"));
@@ -96,7 +95,7 @@ pub(crate) fn run(args: base::Run) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn plan(args: base::Plan) -> Result<()> {
+pub(crate) fn plan(args: super::command::base::Plan) -> Result<()> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(&args.registry, &args.job)?;
     let request = args.output_request.as_ref().map(|path| io::read_preserves_file(path)).transpose()?;
     let plan = molten::job_dag::plan_job_dag(&dag, request.as_ref())?;
@@ -106,7 +105,7 @@ pub(crate) fn plan(args: base::Plan) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn profile(args: base::Profile) -> Result<()> {
+pub(crate) fn profile(args: super::command::base::Profile) -> Result<()> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(&args.registry, &args.job)?;
     let request = args.output_request.as_ref().map(|path| io::read_preserves_file(path)).transpose()?;
     let profile = molten::job_dag::profile_job_dag(&dag, request.as_ref(), args.cache.as_deref())?;
@@ -119,7 +118,7 @@ pub(crate) fn profile(args: base::Profile) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn fusion_preview(args: base::FusionPreview) -> Result<()> {
+pub(crate) fn fusion_preview(args: super::command::base::FusionPreview) -> Result<()> {
     let dag = molten::job_dag::read_job_dag_file_or_registry(&args.registry, &args.job)?;
     let request = args.output_request.as_ref().map(|path| io::read_preserves_file(path)).transpose()?;
     let fusion = molten::job_dag::fusion_preview_job_dag(&dag, request.as_ref())?;
