@@ -11,9 +11,6 @@ use preserves::ValueImpl;
 use crate::artifacts;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::REWRITE_PLAN_SCHEMA;
-use crate::preserves_rail::REWRITE_QUERY_SCHEMA;
-use crate::preserves_rail::REWRITE_RECEIPT_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -504,7 +501,7 @@ pub fn parse_rewrite_receipt(value: &IOValue) -> Result<RewriteReceipt> {
     let fields = value
         .collect_simple_record("rewrite-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <rewrite-receipt-v1 ...>"))?;
-    require_schema(&fields[0], REWRITE_RECEIPT_SCHEMA, "rewrite receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::REWRITE_RECEIPT_SCHEMA, "rewrite receipt")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-receipt", "rewrite receipt")?;
     Ok(RewriteReceipt {
@@ -529,14 +526,14 @@ pub fn rewrite_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Some(fields) = value.collect_simple_record("rewrite-plan-v1", Some(11)) {
-        require_schema(&fields[0], REWRITE_PLAN_SCHEMA, "rewrite plan")?;
+        require_schema(&fields[0], crate::preserves_rail::REWRITE_PLAN_SCHEMA, "rewrite plan")?;
         let diffs = value_to_iovalue(&fields[5]);
         let diff_record = simple_record(&diffs, "diffs", 1)?;
         let diff_count = required_sequence(&diff_record[0], "rewrite plan diffs")?.len();
         return Ok(format!("rewrite plan ref={} diffs={diff_count}", canonical_hash(value)?));
     }
     if let Some(fields) = value.collect_simple_record("rewrite-query-v1", Some(6)) {
-        require_schema(&fields[0], REWRITE_QUERY_SCHEMA, "rewrite query")?;
+        require_schema(&fields[0], crate::preserves_rail::REWRITE_QUERY_SCHEMA, "rewrite query")?;
         return Ok(format!("rewrite query ref={}", canonical_hash(value)?));
     }
     Err(MoltenError::invalid_harness("unsupported rewrite artifact for show"))
@@ -545,7 +542,7 @@ pub fn rewrite_summary(value: &IOValue) -> Result<String> {
 pub fn rewrite_query_value(input: &RewriteQueryInput) -> Result<IOValue> {
     validate_query_input(input)?;
     Ok(record("rewrite-query-v1", vec![
-        string(REWRITE_QUERY_SCHEMA),
+        string(crate::preserves_rail::REWRITE_QUERY_SCHEMA),
         record("scope", vec![
             refs_sequence(&sorted_unique_refs(&input.root_refs)),
             bool_value(input.include_dependencies),
@@ -577,7 +574,7 @@ fn rewrite_plan_value(
     impacted_refs: &[String],
 ) -> Result<IOValue> {
     Ok(record("rewrite-plan-v1", vec![
-        string(REWRITE_PLAN_SCHEMA),
+        string(crate::preserves_rail::REWRITE_PLAN_SCHEMA),
         record("planner", vec![string(&input.planner_ref), refs_sequence(&input.capability_refs)]),
         record("query", vec![query.query_value.clone(), string(&query.query_ref)]),
         replacement_value(&input.replacement)?,
@@ -704,7 +701,7 @@ fn rewrite_receipt_value(input: &RewriteReceiptValueInput<'_>) -> Result<IOValue
     let mut all_checks = vec![("canonical-receipt", "pass")];
     all_checks.extend_from_slice(input.checks);
     Ok(record("rewrite-receipt-v1", vec![
-        string(REWRITE_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::REWRITE_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
         record("decision", vec![string(input.decision)]),
         record("subject", vec![string(input.subject_ref)]),
