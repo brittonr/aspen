@@ -9,8 +9,8 @@ fn parse_value(text: &str) -> crate::error::Result<preserves::IOValue> {
 }
 
 fn fixture_envelope() -> Envelope {
-    let subject = RuntimeValue::string("molten.runtime.local.subject").expect("subject");
-    let body = RuntimeValue::string("hello").expect("body");
+    let subject = crate::runtime::RuntimeValue::string("molten.runtime.local.subject").expect("subject");
+    let body = crate::runtime::RuntimeValue::string("hello").expect("body");
     Envelope::new(EnvelopeInput {
         sender: ActorId::parse("actor:alice").expect("actor id"),
         subject,
@@ -48,9 +48,11 @@ fn equivalent_envelopes_hash_identically_after_dto_boundary() {
 #[test]
 fn equivalent_envelopes_canonicalize_to_same_bytes() {
     let direct = fixture_envelope();
-    let parsed_subject = RuntimeValue::new(parse_value("\"molten.runtime.local.subject\"").expect("subject text"))
-        .expect("parsed subject");
-    let parsed_body = RuntimeValue::new(parse_value("\"hello\"").expect("body text")).expect("parsed body");
+    let parsed_subject =
+        crate::runtime::RuntimeValue::new(parse_value("\"molten.runtime.local.subject\"").expect("subject text"))
+            .expect("parsed subject");
+    let parsed_body =
+        crate::runtime::RuntimeValue::new(parse_value("\"hello\"").expect("body text")).expect("parsed body");
     let parsed = Envelope::new(EnvelopeInput {
         sender: ActorId::parse("actor:alice").expect("actor id"),
         subject: parsed_subject,

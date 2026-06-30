@@ -1,4 +1,3 @@
-use super::RuntimeValue;
 use crate::error;
 use crate::preserves_rail;
 
@@ -106,8 +105,8 @@ pub struct EnvelopeDto {
 pub struct Envelope {
     pub version: u16,
     pub sender: ActorId,
-    pub subject: RuntimeValue,
-    pub body: RuntimeValue,
+    pub subject: super::RuntimeValue,
+    pub body: super::RuntimeValue,
     pub blob_refs: Vec<ContentRef>,
     pub capabilities: Vec<Capability>,
     pub evidence_refs: Vec<EvidenceRef>,
@@ -145,8 +144,8 @@ impl Envelope {
                 dto.version
             )));
         }
-        let subject = RuntimeValue::new(preserves_rail::parse_text(&dto.subject_preserves)?)?;
-        let body = RuntimeValue::new(preserves_rail::parse_text(&dto.body_preserves)?)?;
+        let subject = super::RuntimeValue::new(preserves_rail::parse_text(&dto.subject_preserves)?)?;
+        let body = super::RuntimeValue::new(preserves_rail::parse_text(&dto.body_preserves)?)?;
         Self::new(EnvelopeInput {
             sender: dto.sender,
             subject,
@@ -209,8 +208,8 @@ impl Envelope {
 
 pub struct EnvelopeInput {
     pub sender: ActorId,
-    pub subject: RuntimeValue,
-    pub body: RuntimeValue,
+    pub subject: super::RuntimeValue,
+    pub body: super::RuntimeValue,
     pub blob_refs: Vec<ContentRef>,
     pub capabilities: Vec<Capability>,
     pub evidence_refs: Vec<EvidenceRef>,
