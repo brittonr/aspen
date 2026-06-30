@@ -1,42 +1,37 @@
-use serde::Deserialize;
-use serde::Serialize;
-
-use super::ActorId;
-use super::RuntimeValue;
 use crate::error::MoltenError;
 use crate::error::Result;
 
 const MAX_RUNTIME_ACTORS: usize = 1024;
 const MAX_RUNTIME_SUBSCRIPTIONS: usize = 4096;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeStartupConfig {
     pub source_language: RuntimeConfigSource,
     pub actors: Vec<RuntimeActorConfig>,
     pub subscriptions: Vec<RuntimeSubscriptionConfig>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RuntimeConfigSource {
     Nickel,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeActorConfig {
-    pub id: ActorId,
+    pub id: super::ActorId,
     pub kind: RuntimeActorKind,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum RuntimeActorKind {
     Native,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeSubscriptionConfig {
-    pub actor: ActorId,
+    pub actor: super::ActorId,
     pub subject_preserves: String,
 }
 
@@ -63,7 +58,7 @@ impl RuntimeStartupConfig {
             )));
         }
         for subscription in &self.subscriptions {
-            RuntimeValue::new(crate::preserves_rail::parse_text(&subscription.subject_preserves)?)?;
+            super::RuntimeValue::new(crate::preserves_rail::parse_text(&subscription.subject_preserves)?)?;
             if !self.actors.iter().any(|actor| actor.id == subscription.actor) {
                 return Err(MoltenError::invalid_harness(format!(
                     "subscription actor {} is not declared",
@@ -77,10 +72,6 @@ impl RuntimeStartupConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::RuntimeActorKind;
-    use super::RuntimeConfigSource;
-    use super::RuntimeStartupConfig;
-
     #[test]
     fn nickel_export_loads_typed_actor_and_subscription_config() {
         let source = r#"{
@@ -88,9 +79,9 @@ mod tests {
             "actors": [{ "id": "actor:consumer", "kind": "native" }],
             "subscriptions": [{ "actor": "actor:consumer", "subject_preserves": "\"service.ready\"" }]
         }"#;
-        let config = RuntimeStartupConfig::from_nickel_export_json(source).expect("config");
-        assert_eq!(config.source_language, RuntimeConfigSource::Nickel);
-        assert_eq!(config.actors[0].kind, RuntimeActorKind::Native);
+        let config = super::RuntimeStartupConfig::from_nickel_export_json(source).expect("config");
+        assert_eq!(config.source_language, super::RuntimeConfigSource::Nickel);
+        assert_eq!(config.actors[0].kind, super::RuntimeActorKind::Native);
         assert_eq!(config.actors[0].id.as_str(), "actor:consumer");
         assert_eq!(config.subscriptions[0].subject_preserves, "\"service.ready\"");
     }
@@ -102,7 +93,7 @@ mod tests {
             "actors": [],
             "subscriptions": [{ "actor": "actor:missing", "subject_preserves": "\"service.ready\"" }]
         }"#;
-        let error = RuntimeStartupConfig::from_nickel_export_json(source).expect_err("missing actor");
+        let error = super::RuntimeStartupConfig::from_nickel_export_json(source).expect_err("missing actor");
         assert!(error.to_string().contains("subscription actor actor:missing is not declared"));
     }
 }
