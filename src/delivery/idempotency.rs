@@ -1,6 +1,3 @@
-use std::fs;
-use std::path::Path;
-
 use preserves::IOValue;
 use preserves::Value;
 use redb::Database;
@@ -122,7 +119,7 @@ pub struct DeliveryDecision {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeliveryCheckInput<'a> {
-    pub root: &'a Path,
+    pub root: &'a std::path::Path,
     pub scope_profile: &'a str,
     pub scope_ref: &'a str,
     pub producer: &'a str,
@@ -309,7 +306,7 @@ pub fn check_delivery(input: DeliveryCheckInput<'_>) -> Result<DeliveryDecision>
     Ok(decision)
 }
 
-pub fn read_idempotency_receipt(root: &Path, receipt_ref: &str) -> Result<IOValue> {
+pub fn read_idempotency_receipt(root: &std::path::Path, receipt_ref: &str) -> Result<IOValue> {
     require_ref(receipt_ref, "delivery idempotency receipt ref")?;
     let db = ensure_store_tables(root)?;
     let read_txn = db.begin_read().map_err(store_error)?;
@@ -870,8 +867,8 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     }
 }
 
-fn ensure_store_tables(root: &Path) -> Result<Database> {
-    fs::create_dir_all(root).map_err(MoltenError::from)?;
+fn ensure_store_tables(root: &std::path::Path) -> Result<Database> {
+    std::fs::create_dir_all(root).map_err(MoltenError::from)?;
     let db = Database::create(store_path(root)).map_err(store_error)?;
     let write_txn = db.begin_write().map_err(store_error)?;
     {
@@ -884,7 +881,7 @@ fn ensure_store_tables(root: &Path) -> Result<Database> {
     Ok(db)
 }
 
-fn store_path(root: &Path) -> std::path::PathBuf {
+fn store_path(root: &std::path::Path) -> std::path::PathBuf {
     root.join(STORE_FILE)
 }
 
@@ -1250,9 +1247,9 @@ mod tests {
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+            std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
         }
-        fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 }
