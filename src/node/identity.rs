@@ -7,7 +7,6 @@ use preserves::Value;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::value_to_iovalue;
 
@@ -186,9 +185,13 @@ pub fn node_identity_value(
             record("backend-ref", vec![string(backend_ref)]),
             record("secret-ref", vec![string(&material.secret_ref)]),
         ]),
-        record("policy", vec![sequence(config.policy_refs.iter().map(string).collect())]),
-        record("receipts", vec![sequence(receipt_refs.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
+        record("policy", vec![crate::preserves_rail::sequence(
+            config.policy_refs.iter().map(string).collect(),
+        )]),
+        record("receipts", vec![crate::preserves_rail::sequence(
+            receipt_refs.iter().map(string).collect(),
+        )]),
+        record("checks", vec![crate::preserves_rail::sequence(vec![
             record("check", vec![string("stable-endpoint-id"), string("pass")]),
             record("check", vec![string("no-ambient-authority"), string("pass")]),
             record("check", vec![string("secret-material-redacted"), string("pass")]),
@@ -247,8 +250,10 @@ pub fn node_bootstrap_handshake_value(identity: &NodeIdentity, peer: &str, polic
             record("endpoint-id", vec![string(&identity.endpoint_id)]),
         ]),
         record("peer", vec![string(peer)]),
-        record("policy", vec![sequence(policy_refs.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
+        record("policy", vec![crate::preserves_rail::sequence(
+            policy_refs.iter().map(string).collect(),
+        )]),
+        record("checks", vec![crate::preserves_rail::sequence(vec![
             record("check", vec![string("node-identity-ref-binding"), string("pass")]),
             record("check", vec![string("join-admission-still-required"), string("pass")]),
             record("check", vec![string("identity-grants-no-capabilities"), string("pass")]),
@@ -287,7 +292,7 @@ pub fn node_identity_startup_evidence_value(identity_ref: &str, receipt_ref: &st
         string(crate::preserves_rail::NODE_IDENTITY_STARTUP_SCHEMA),
         record("identity", vec![string(identity_ref)]),
         record("receipt", vec![string(receipt_ref)]),
-        record("checks", vec![sequence(vec![
+        record("checks", vec![crate::preserves_rail::sequence(vec![
             record("check", vec![string("replay-ref-only"), string("pass")]),
             record("check", vec![string("private-key-not-required"), string("pass")]),
         ])]),
@@ -390,9 +395,11 @@ fn node_identity_receipt_value(input: &ReceiptValueInput<'_>) -> IOValue {
             record("class", vec![string(input.key_source_class)]),
             record("backend-ref", vec![string(input.backend_ref)]),
         ]),
-        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
+        record("policy", vec![crate::preserves_rail::sequence(
+            input.policy_refs.iter().map(string).collect(),
+        )]),
         record("diagnostic", vec![string(input.diagnostic)]),
-        record("checks", vec![sequence(
+        record("checks", vec![crate::preserves_rail::sequence(
             input.checks.iter().map(|check| record("check", vec![string(check), string("pass")])).collect(),
         )]),
     ])
