@@ -5,57 +5,11 @@ use preserves::IOValue;
 use preserves::Record;
 use preserves::Value;
 
-use super::replay::replay_report_value;
-use super::replay::validate_report_value;
-use super::schema::ActorDecl;
-use super::schema::BudgetEvidence;
-use super::schema::EventBoundary;
-use super::schema::HarnessObservation;
-use super::schema::HarnessReport;
-use super::schema::HarnessReproBundle;
-use super::schema::HarnessReproBundleKind;
-use super::schema::ReproExportProfile;
-use super::schema::actor_registry_value;
-use super::schema::budget_value;
-use super::schema::event_boundary;
-use super::schema::parse_actor_registry;
-use super::schema::parse_budget;
-use super::schema::parse_failure;
-use super::schema::parse_report;
-use super::schema::parse_repro_bundle;
-use super::schema::parse_suite;
-use super::schema::profiled_repro_bundle_value_with_command;
-use super::schema::sealed_repro_bundle_value_with_command_and_receipt;
-use super::schema::step_value;
+use super::replay;
+use super::schema;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE;
-use crate::evidence_chain::ChainCheck;
-use crate::evidence_chain::ChainCheckpointInput;
-use crate::evidence_chain::ChainContextRef;
-use crate::evidence_chain::ChainForkPolicy;
-use crate::evidence_chain::ChainLink;
-use crate::evidence_chain::ChainLinkInput;
-use crate::evidence_chain::ChainPayload;
-use crate::evidence_chain::ChainPredicateReceipt;
-use crate::evidence_chain::ChainPredicateReceiptValueInput;
-use crate::evidence_chain::ChainProducer;
-use crate::evidence_chain::ChainScope;
-use crate::evidence_chain::ChainVerifyReceiptPolicyValueInput;
-use crate::evidence_chain::ChainVerifyReceiptValueInput;
-use crate::evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE;
-use crate::evidence_chain::GENESIS_VALID_PREDICATE;
-use crate::evidence_chain::SEGMENT_NO_FORK_PREDICATE;
-use crate::evidence_chain::SEGMENT_NO_GAP_PREDICATE;
-use crate::evidence_chain::chain_anchor_value;
-use crate::evidence_chain::chain_checkpoint_value;
-use crate::evidence_chain::chain_link_value;
-use crate::evidence_chain::chain_predicate_receipt_value;
-use crate::evidence_chain::chain_verify_receipt_value_with_policy;
-use crate::evidence_chain::parse_chain_anchor;
-use crate::evidence_chain::parse_chain_checkpoint;
-use crate::evidence_chain::parse_chain_link;
-use crate::evidence_chain::parse_chain_predicate_receipt;
+use crate::evidence_chain;
 use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
 use crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
 use crate::preserves_rail::HARNESS_GATE_RECEIPT_SCHEMA;
@@ -205,8 +159,8 @@ pub struct GateCheck {
     pub redaction_policy_ref: Option<String>,
     pub redaction_gate_ref: Option<String>,
     pub observations: u64,
-    pub actors: Vec<ActorDecl>,
-    pub budget: BudgetEvidence,
+    pub actors: Vec<schema::ActorDecl>,
+    pub budget: schema::BudgetEvidence,
     pub chain_evidence: GateChainEvidence,
     pub turn_journals: TurnJournalEvidence,
 }
@@ -269,7 +223,7 @@ pub struct ReproVerifyReceipt {
 
 pub fn gate_check_value(value: &IOValue) -> Result<GateCheck> {
     if value.collect_simple_record("harness-failure-v1", None).is_some() {
-        let failure = parse_failure(value)?;
+        let failure = schema::parse_failure(value)?;
         return Err(MoltenError::invalid_harness(format!(
             "harness failure artifact {} phase={} kind={} cannot satisfy pass evidence gate",
             failure.failure_ref, failure.phase, failure.kind
@@ -281,9 +235,9 @@ pub fn gate_check_value(value: &IOValue) -> Result<GateCheck> {
     }
 
     if value.collect_simple_record("harness-repro-bundle-v1", None).is_some() {
-        let bundle = parse_repro_bundle(value)?;
+        let bundle = schema::parse_repro_bundle(value)?;
         return match bundle.kind {
-            HarnessReproBundleKind::Report => {
+            schema::HarnessReproBundleKind::Report => {
                 if let Some(loss_classification) = bundle.loss_classification.as_deref()
                     && loss_classification != "gate-preserving"
                 {
@@ -303,7 +257,7 @@ pub fn gate_check_value(value: &IOValue) -> Result<GateCheck> {
                 check.redaction_gate_ref = bundle.redaction_gate_ref;
                 Ok(check)
             }
-            HarnessReproBundleKind::Failure => Err(MoltenError::invalid_harness(format!(
+            schema::HarnessReproBundleKind::Failure => Err(MoltenError::invalid_harness(format!(
                 "failure repro bundle {} wrapping {} cannot satisfy pass evidence gate",
                 bundle.bundle_ref, bundle.artifact_ref
             ))),
@@ -318,25 +272,25 @@ pub fn gate_check_value(value: &IOValue) -> Result<GateCheck> {
 pub fn sealed_repro_bundle_value_with_command(report_value: &IOValue, command: &[String]) -> Result<IOValue> {
     let report_check = gate_check_report(report_value, "report".to_string(), None)?;
     let report_receipt_value = gate_receipt_value(&report_check);
-    sealed_repro_bundle_value_with_command_and_receipt(report_value, command, &report_receipt_value)
+    schema::sealed_repro_bundle_value_with_command_and_receipt(report_value, command, &report_receipt_value)
 }
 
 pub fn repro_bundle_value_with_export_profile(
     report_value: &IOValue,
     command: &[String],
-    profile: ReproExportProfile,
+    profile: schema::ReproExportProfile,
 ) -> Result<IOValue> {
     match profile {
-        ReproExportProfile::DenySensitive => sealed_repro_bundle_value_with_command(report_value, command),
-        ReproExportProfile::RedactedDiagnostic | ReproExportProfile::EncryptedPrivate => {
-            profiled_repro_bundle_value_with_command(report_value, command, profile)
+        schema::ReproExportProfile::DenySensitive => sealed_repro_bundle_value_with_command(report_value, command),
+        schema::ReproExportProfile::RedactedDiagnostic | schema::ReproExportProfile::EncryptedPrivate => {
+            schema::profiled_repro_bundle_value_with_command(report_value, command, profile)
         }
     }
 }
 
 pub fn repro_verify_receipt_value(bundle_value: &IOValue) -> Result<IOValue> {
-    let bundle = parse_repro_bundle(bundle_value)?;
-    if bundle.kind == HarnessReproBundleKind::Failure {
+    let bundle = schema::parse_repro_bundle(bundle_value)?;
+    if bundle.kind == schema::HarnessReproBundleKind::Failure {
         return Err(MoltenError::invalid_harness(format!(
             "failure repro bundle {} wrapping {} is diagnostic-only and cannot be verified as pass evidence",
             bundle.bundle_ref, bundle.artifact_ref
@@ -470,7 +424,7 @@ pub fn parse_gate_receipt(value: &IOValue) -> Result<GateReceipt> {
         suite: &suite_ref,
         final_state: &final_state_hash,
     })?;
-    let chain_link = parse_chain_link(&chain_evidence.link_value)?;
+    let chain_link = evidence_chain::parse_chain_link(&chain_evidence.link_value)?;
     require_link_context(&chain_link, &report_ref, &suite_ref, &final_state_hash)?;
     require_artifact_ref(&artifact_refs, "report", &report_ref)?;
     require_artifact_ref(&artifact_refs, "suite", &suite_ref)?;
@@ -573,7 +527,7 @@ pub fn repro_verify_receipt_summary(value: &IOValue) -> Result<String> {
     ))
 }
 
-fn validate_sealed_report_bundle(report_value: &IOValue, bundle: &HarnessReproBundle) -> Result<()> {
+fn validate_sealed_report_bundle(report_value: &IOValue, bundle: &schema::HarnessReproBundle) -> Result<()> {
     if bundle.redaction_policy_ref.is_none() || bundle.redaction_gate_ref.is_none() {
         return Err(MoltenError::invalid_harness("sealed report repro bundle missing redaction preflight evidence"));
     }
@@ -635,9 +589,9 @@ struct EvidenceRefs {
 }
 
 fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Option<String>) -> Result<GateCheck> {
-    let validation = validate_report_value(value)?;
-    let replay = replay_report_value(value)?;
-    let report = parse_report(value)?;
+    let validation = replay::validate_report_value(value)?;
+    let replay = replay::replay_report_value(value)?;
+    let report = schema::parse_report(value)?;
     if validation.report_ref != replay.expected_report_ref || validation.report_ref != replay.actual_report_ref {
         return Err(MoltenError::invalid_harness("gate replay report refs do not match validation report ref"));
     }
@@ -692,7 +646,7 @@ fn gate_check_report(value: &IOValue, artifact_kind: String, artifact_ref: Optio
     })
 }
 
-fn evidence_refs(report: &HarnessReport) -> Result<EvidenceRefs> {
+fn evidence_refs(report: &schema::HarnessReport) -> Result<EvidenceRefs> {
     let policy = report
         .policy_gate
         .as_ref()
@@ -730,21 +684,26 @@ fn evidence_refs(report: &HarnessReport) -> Result<EvidenceRefs> {
     })
 }
 
-fn executor_execution_receipts_ref(observations: &[HarnessObservation]) -> Result<String> {
+fn executor_execution_receipts_ref(observations: &[schema::HarnessObservation]) -> Result<String> {
     let receipts = observations
         .iter()
         .flat_map(|observation| observation.events.iter())
-        .filter(|event| matches!(event_boundary(event), EventBoundary::SteelExecution | EventBoundary::WasmExecution))
+        .filter(|event| {
+            matches!(
+                schema::event_boundary(event),
+                schema::EventBoundary::SteelExecution | schema::EventBoundary::WasmExecution
+            )
+        })
         .cloned()
         .collect::<Vec<_>>();
     canonical_hash(&record("executor-execution-receipts", vec![sequence(receipts)]))
 }
 
-fn runtime_predicate_receipts_ref(observations: &[HarnessObservation]) -> Result<String> {
+fn runtime_predicate_receipts_ref(observations: &[schema::HarnessObservation]) -> Result<String> {
     let receipts = observations
         .iter()
         .flat_map(|observation| observation.events.iter())
-        .filter(|event| event_boundary(event) == EventBoundary::RuntimePredicate)
+        .filter(|event| schema::event_boundary(event) == schema::EventBoundary::RuntimePredicate)
         .cloned()
         .collect::<Vec<_>>();
     canonical_hash(&record("runtime-predicate-receipts", vec![sequence(receipts)]))
@@ -769,8 +728,8 @@ fn validation_value(check: &GateCheck) -> IOValue {
         record("suite", vec![string(&check.suite_ref)]),
         record("final-state", vec![string(&check.final_state_hash)]),
         record("observations", vec![u64_value(check.observations)]),
-        actor_registry_value(&check.actors),
-        budget_value(&check.budget.limits, &check.budget.usage),
+        schema::actor_registry_value(&check.actors),
+        schema::budget_value(&check.budget.limits, &check.budget.usage),
     ])
 }
 
@@ -802,8 +761,8 @@ fn replay_value(check: &GateCheck) -> IOValue {
 }
 
 struct PassLink {
-    chain: ChainScope,
-    producer: ChainProducer,
+    chain: evidence_chain::ChainScope,
+    producer: evidence_chain::ChainProducer,
     link_ref: String,
     link_value: IOValue,
     payload_refs: Vec<String>,
@@ -831,7 +790,7 @@ struct Pred<'a> {
     subject_refs: &'a [String],
     input_refs: &'a [String],
     context_refs: &'a [String],
-    checks: &'a [ChainCheck],
+    checks: &'a [evidence_chain::ChainCheck],
 }
 
 fn build_gate_chain_evidence(
@@ -859,25 +818,25 @@ fn build_gate_chain_evidence(
 }
 
 fn pass_link(report_ref: &str, suite_ref: &str, final_state_hash: &str, profile: &str) -> Result<PassLink> {
-    let chain = ChainScope::new("harness-pass-evidence", report_ref, profile);
+    let chain = evidence_chain::ChainScope::new("harness-pass-evidence", report_ref, profile);
     let producer_key_ref = canonical_hash(&record("gate-chain-producer-key", vec![string("molten")]))?;
-    let producer = ChainProducer::new("molten-gate", producer_key_ref);
+    let producer = evidence_chain::ChainProducer::new("molten-gate", producer_key_ref);
     let trellis_input_ref = canonical_hash(&record("gate-chain-input", vec![
         string(report_ref),
         string(suite_ref),
         string(final_state_hash),
     ]))?;
-    let link_value = chain_link_value(&ChainLinkInput::genesis(
+    let link_value = evidence_chain::chain_link_value(&evidence_chain::ChainLinkInput::genesis(
         chain.clone(),
-        ChainPayload::new("harness-report", report_ref, HARNESS_REPORT_SCHEMA),
+        evidence_chain::ChainPayload::new("harness-report", report_ref, HARNESS_REPORT_SCHEMA),
         vec![
-            ChainContextRef::new("suite", suite_ref),
-            ChainContextRef::new("final-state", final_state_hash),
+            evidence_chain::ChainContextRef::new("suite", suite_ref),
+            evidence_chain::ChainContextRef::new("final-state", final_state_hash),
         ],
         producer.clone(),
         trellis_input_ref,
     ));
-    let link = parse_chain_link(&link_value)?;
+    let link = evidence_chain::parse_chain_link(&link_value)?;
     let link_ref = link.link_ref.clone();
     let scope_context_ref = canonical_hash(&record("gate-chain-scope", vec![
         string(&chain.scope),
@@ -896,7 +855,7 @@ fn pass_link(report_ref: &str, suite_ref: &str, final_state_hash: &str, profile:
 }
 
 fn pass_predicate(input: Pred<'_>) -> IOValue {
-    chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
+    evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
         predicate: input.predicate,
         decision: "pass",
         subject_refs: input.subject_refs,
@@ -908,53 +867,56 @@ fn pass_predicate(input: Pred<'_>) -> IOValue {
 
 fn pass_predicates(link: &PassLink) -> Result<PassPredicates> {
     let genesis_checks = vec![
-        ChainCheck::pass("trellis-bounded-predicate"),
-        ChainCheck::pass("predicate-decision-binding"),
+        evidence_chain::ChainCheck::pass("trellis-bounded-predicate"),
+        evidence_chain::ChainCheck::pass("predicate-decision-binding"),
     ];
     let segment_checks = vec![
-        ChainCheck::pass("segment-contiguity"),
-        ChainCheck::pass("canonical-link-order"),
+        evidence_chain::ChainCheck::pass("segment-contiguity"),
+        evidence_chain::ChainCheck::pass("canonical-link-order"),
     ];
     let fork_checks = vec![
-        ChainCheck::pass("fork-policy-profile"),
-        ChainCheck::pass("fork-evidence-binding"),
+        evidence_chain::ChainCheck::pass("fork-policy-profile"),
+        evidence_chain::ChainCheck::pass("fork-evidence-binding"),
     ];
-    let anchor_checks = vec![ChainCheck::pass("anchor-descent"), ChainCheck::pass("head-binding")];
+    let anchor_checks = vec![
+        evidence_chain::ChainCheck::pass("anchor-descent"),
+        evidence_chain::ChainCheck::pass("head-binding"),
+    ];
     let checkpoint_checks = vec![
-        ChainCheck::pass("checkpoint-range-coverage"),
-        ChainCheck::pass("verified-range"),
+        evidence_chain::ChainCheck::pass("checkpoint-range-coverage"),
+        evidence_chain::ChainCheck::pass("verified-range"),
     ];
     let values = vec![
         pass_predicate(Pred {
-            predicate: GENESIS_VALID_PREDICATE,
+            predicate: evidence_chain::GENESIS_VALID_PREDICATE,
             subject_refs: &link.subject_refs,
             input_refs: &link.payload_refs,
             context_refs: &link.context_refs,
             checks: &genesis_checks,
         }),
         pass_predicate(Pred {
-            predicate: SEGMENT_NO_GAP_PREDICATE,
+            predicate: evidence_chain::SEGMENT_NO_GAP_PREDICATE,
             subject_refs: &link.subject_refs,
             input_refs: &link.payload_refs,
             context_refs: &link.context_refs,
             checks: &segment_checks,
         }),
         pass_predicate(Pred {
-            predicate: SEGMENT_NO_FORK_PREDICATE,
+            predicate: evidence_chain::SEGMENT_NO_FORK_PREDICATE,
             subject_refs: &link.subject_refs,
             input_refs: &link.subject_refs,
             context_refs: &link.context_refs,
             checks: &fork_checks,
         }),
         pass_predicate(Pred {
-            predicate: DESCENDS_FROM_ANCHOR_PREDICATE,
+            predicate: evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE,
             subject_refs: &link.subject_refs,
             input_refs: &link.subject_refs,
             context_refs: &link.context_refs,
             checks: &anchor_checks,
         }),
         pass_predicate(Pred {
-            predicate: CHECKPOINT_COVERS_RANGE_PREDICATE,
+            predicate: evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE,
             subject_refs: &link.subject_refs,
             input_refs: &link.payload_refs,
             context_refs: &link.context_refs,
@@ -973,8 +935,8 @@ fn pass_predicate_refs(values: &[IOValue]) -> Result<(Vec<String>, String)> {
     let mut refs = Vec::with_capacity(values.len());
     let mut range_ref = None;
     for value in values {
-        let parsed = parse_chain_predicate_receipt(value)?;
-        if parsed.predicate == CHECKPOINT_COVERS_RANGE_PREDICATE {
+        let parsed = evidence_chain::parse_chain_predicate_receipt(value)?;
+        if parsed.predicate == evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE {
             range_ref = Some(parsed.receipt_ref.clone());
         }
         refs.push(parsed.receipt_ref);
@@ -989,7 +951,7 @@ fn pass_predicate_refs(values: &[IOValue]) -> Result<(Vec<String>, String)> {
 
 fn pass_verify_value(link: &PassLink, predicates: &PassPredicates) -> IOValue {
     let diagnostics = Vec::new();
-    let receipt = ChainVerifyReceiptValueInput {
+    let receipt = evidence_chain::ChainVerifyReceiptValueInput {
         decision: "pass",
         chain: &link.chain,
         anchor_ref: Some(&link.link_ref),
@@ -999,20 +961,20 @@ fn pass_verify_value(link: &PassLink, predicates: &PassPredicates) -> IOValue {
         payload_refs: &link.payload_refs,
         diagnostics: &diagnostics,
     };
-    chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
+    evidence_chain::chain_verify_receipt_value_with_policy(&evidence_chain::ChainVerifyReceiptPolicyValueInput {
         receipt,
         predicate_receipt_refs: &predicates.refs,
-        fork_policy: ChainForkPolicy::RejectUnexpectedForks,
+        fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
     })
 }
 
 fn pass_artifacts(link: &PassLink, predicates: &PassPredicates, suite_ref: &str) -> Result<PassArtifacts> {
     let policy_refs = vec![suite_ref.to_string()];
-    let anchor_value = chain_anchor_value(&link.chain, &link.link_ref, &policy_refs, &link.producer);
+    let anchor_value = evidence_chain::chain_anchor_value(&link.chain, &link.link_ref, &policy_refs, &link.producer);
     let anchor_ref = canonical_hash(&anchor_value)?;
     let verify_value = pass_verify_value(link, predicates);
     let verify_ref = canonical_hash(&verify_value)?;
-    let checkpoint_value = chain_checkpoint_value(&ChainCheckpointInput {
+    let checkpoint_value = evidence_chain::chain_checkpoint_value(&evidence_chain::ChainCheckpointInput {
         chain: link.chain.clone(),
         prior_checkpoint_ref: None,
         anchor_link_ref: link.link_ref.clone(),
@@ -1023,9 +985,9 @@ fn pass_artifacts(link: &PassLink, predicates: &PassPredicates, suite_ref: &str)
         membership_refs: vec![suite_ref.to_string()],
         producer: link.producer.clone(),
         checks: vec![
-            ChainCheck::pass("raft-control-plane-command"),
-            ChainCheck::pass("verified-range"),
-            ChainCheck::pass("checkpoint-freshness"),
+            evidence_chain::ChainCheck::pass("raft-control-plane-command"),
+            evidence_chain::ChainCheck::pass("verified-range"),
+            evidence_chain::ChainCheck::pass("checkpoint-freshness"),
         ],
     });
     let checkpoint_ref = canonical_hash(&checkpoint_value)?;
@@ -1070,19 +1032,19 @@ struct EvidenceParts {
 }
 
 struct ParsedPredicates {
-    receipts: Vec<ChainPredicateReceipt>,
+    receipts: Vec<evidence_chain::ChainPredicateReceipt>,
     refs: Vec<String>,
 }
 
 fn parse_chain_evidence(value: &Value<IOValue>) -> Result<GateChainEvidence> {
     let parts = evidence_parts(value)?;
-    let link = parse_chain_link(&parts.link_value)?;
+    let link = evidence_chain::parse_chain_link(&parts.link_value)?;
     let link_ref = link.link_ref.clone();
-    let anchor = parse_chain_anchor(&parts.anchor_value)?;
+    let anchor = evidence_chain::parse_chain_anchor(&parts.anchor_value)?;
     if anchor.link_ref != link_ref || anchor.chain != link.chain {
         return Err(MoltenError::invalid_harness("gate chain anchor does not bind the gate chain link"));
     }
-    let checkpoint = parse_chain_checkpoint(&parts.checkpoint_value)?;
+    let checkpoint = evidence_chain::parse_chain_checkpoint(&parts.checkpoint_value)?;
     if checkpoint.chain != link.chain || checkpoint.anchor_link_ref != link_ref || checkpoint.head_ref != link_ref {
         return Err(MoltenError::invalid_harness("gate chain checkpoint does not bind the anchored chain head"));
     }
@@ -1140,7 +1102,7 @@ fn parsed_predicates(values: &[IOValue]) -> Result<ParsedPredicates> {
     let mut receipts = Vec::with_capacity(values.len());
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
-        let parsed = parse_chain_predicate_receipt(value)?;
+        let parsed = evidence_chain::parse_chain_predicate_receipt(value)?;
         refs.push(parsed.receipt_ref.clone());
         receipts.push(parsed);
     }
@@ -1148,11 +1110,12 @@ fn parsed_predicates(values: &[IOValue]) -> Result<ParsedPredicates> {
 }
 
 fn require_predicates(predicates: &ParsedPredicates, range_ref: &str, link_ref: &str, payload_ref: &str) -> Result<()> {
-    let range_predicate = require_chain_predicate(&predicates.receipts, range_ref, CHECKPOINT_COVERS_RANGE_PREDICATE)?;
-    require_chain_predicate_kind(&predicates.receipts, GENESIS_VALID_PREDICATE)?;
-    require_chain_predicate_kind(&predicates.receipts, SEGMENT_NO_GAP_PREDICATE)?;
-    require_chain_predicate_kind(&predicates.receipts, SEGMENT_NO_FORK_PREDICATE)?;
-    require_chain_predicate_kind(&predicates.receipts, DESCENDS_FROM_ANCHOR_PREDICATE)?;
+    let range_predicate =
+        require_chain_predicate(&predicates.receipts, range_ref, evidence_chain::CHECKPOINT_COVERS_RANGE_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, evidence_chain::GENESIS_VALID_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, evidence_chain::SEGMENT_NO_GAP_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, evidence_chain::SEGMENT_NO_FORK_PREDICATE)?;
+    require_chain_predicate_kind(&predicates.receipts, evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE)?;
     if range_predicate.subject_refs != vec![link_ref.to_string()] {
         return Err(MoltenError::invalid_harness("gate chain range predicate subjects do not match anchored link"));
     }
@@ -1216,10 +1179,10 @@ fn validate_gate_chain_verify_receipt(
 }
 
 fn require_chain_predicate<'a>(
-    predicates: &'a [ChainPredicateReceipt],
+    predicates: &'a [evidence_chain::ChainPredicateReceipt],
     expected_ref: &str,
     expected_kind: &str,
-) -> Result<&'a ChainPredicateReceipt> {
+) -> Result<&'a evidence_chain::ChainPredicateReceipt> {
     let predicate = predicates
         .iter()
         .find(|predicate| predicate.receipt_ref == expected_ref)
@@ -1232,7 +1195,10 @@ fn require_chain_predicate<'a>(
     Ok(predicate)
 }
 
-fn require_chain_predicate_kind(predicates: &[ChainPredicateReceipt], expected_kind: &str) -> Result<()> {
+fn require_chain_predicate_kind(
+    predicates: &[evidence_chain::ChainPredicateReceipt],
+    expected_kind: &str,
+) -> Result<()> {
     if predicates
         .iter()
         .any(|predicate| predicate.predicate == expected_kind && predicate.decision == "pass")
@@ -1248,8 +1214,8 @@ fn require_chain_predicate_kind(predicates: &[ChainPredicateReceipt], expected_k
 #[derive(Debug, Clone)]
 struct TurnJournalBuilder {
     actor_id: String,
-    chain: ChainScope,
-    links: Vec<ChainLink>,
+    chain: evidence_chain::ChainScope,
+    links: Vec<evidence_chain::ChainLink>,
     link_values: Vec<IOValue>,
     payload_refs: Vec<String>,
 }
@@ -1259,8 +1225,8 @@ struct LinkEnds<'a> {
     head_ref: &'a String,
 }
 
-fn build_turn_journals(report: &HarnessReport) -> Result<TurnJournalEvidence> {
-    let suite = parse_suite(&report.suite_value)?;
+fn build_turn_journals(report: &schema::HarnessReport) -> Result<TurnJournalEvidence> {
+    let suite = schema::parse_suite(&report.suite_value)?;
     if suite.steps.len() != report.observations.len() {
         return Err(MoltenError::invalid_harness("turn journal evidence requires one observation per suite step"));
     }
@@ -1268,7 +1234,7 @@ fn build_turn_journals(report: &HarnessReport) -> Result<TurnJournalEvidence> {
     for (position, observation) in report.observations.iter().enumerate() {
         let step = &suite.steps[position];
         let actor_id = step.primary_actor().to_string();
-        let computed_step_ref = canonical_hash(&step_value(step))?;
+        let computed_step_ref = canonical_hash(&schema::step_value(step))?;
         if observation.step_ref != computed_step_ref {
             return Err(MoltenError::invalid_harness(format!(
                 "turn journal observation {} step ref does not match embedded suite step",
@@ -1277,13 +1243,14 @@ fn build_turn_journals(report: &HarnessReport) -> Result<TurnJournalEvidence> {
         }
         let builder = builders.entry(actor_id.clone()).or_insert_with(|| TurnJournalBuilder {
             actor_id: actor_id.clone(),
-            chain: ChainScope::new("harness-turn-journal", actor_id.clone(), report.report_ref.clone()),
+            chain: evidence_chain::ChainScope::new("harness-turn-journal", actor_id.clone(), report.report_ref.clone()),
             links: Vec::new(),
             link_values: Vec::new(),
             payload_refs: Vec::new(),
         });
         let observation_ref = observation.observation_ref.clone();
-        let payload = ChainPayload::new("turn-observation", observation_ref.clone(), HARNESS_OBSERVATION_SCHEMA);
+        let payload =
+            evidence_chain::ChainPayload::new("turn-observation", observation_ref.clone(), HARNESS_OBSERVATION_SCHEMA);
         let context_refs = turn_journal_context_refs(report, observation, &actor_id)?;
         let trellis_input_ref = canonical_hash(&record("turn-journal-input", vec![
             string(&actor_id),
@@ -1296,12 +1263,18 @@ fn build_turn_journals(report: &HarnessReport) -> Result<TurnJournalEvidence> {
         ]))?;
         let producer = turn_journal_producer()?;
         let input = if let Some(previous) = builder.links.last() {
-            ChainLinkInput::append(previous, payload, context_refs, producer, trellis_input_ref)
+            evidence_chain::ChainLinkInput::append(previous, payload, context_refs, producer, trellis_input_ref)
         } else {
-            ChainLinkInput::genesis(builder.chain.clone(), payload, context_refs, producer, trellis_input_ref)
+            evidence_chain::ChainLinkInput::genesis(
+                builder.chain.clone(),
+                payload,
+                context_refs,
+                producer,
+                trellis_input_ref,
+            )
         };
-        let link_value = chain_link_value(&input);
-        let link = parse_chain_link(&link_value)?;
+        let link_value = evidence_chain::chain_link_value(&input);
+        let link = evidence_chain::parse_chain_link(&link_value)?;
         builder.payload_refs.push(observation_ref);
         builder.link_values.push(link_value);
         builder.links.push(link);
@@ -1319,7 +1292,10 @@ fn build_turn_journals(report: &HarnessReport) -> Result<TurnJournalEvidence> {
     Ok(evidence)
 }
 
-fn build_turn_journal_chain(builder: TurnJournalBuilder, report: &HarnessReport) -> Result<TurnJournalChainEvidence> {
+fn build_turn_journal_chain(
+    builder: TurnJournalBuilder,
+    report: &schema::HarnessReport,
+) -> Result<TurnJournalChainEvidence> {
     let link_refs = builder.links.iter().map(|link| link.link_ref.clone()).collect::<Vec<_>>();
     let ends = link_ends(&link_refs)?;
     let context_refs = actor_refs(report, &builder.actor_id)?;
@@ -1350,7 +1326,7 @@ fn link_ends(link_refs: &[String]) -> Result<LinkEnds<'_>> {
     Ok(LinkEnds { anchor_ref, head_ref })
 }
 
-fn actor_refs(report: &HarnessReport, actor_id: &str) -> Result<Vec<String>> {
+fn actor_refs(report: &schema::HarnessReport, actor_id: &str) -> Result<Vec<String>> {
     Ok(vec![
         report.report_ref.clone(),
         report.suite_ref.clone(),
@@ -1365,34 +1341,37 @@ fn predicate_values(
     ends: &LinkEnds<'_>,
 ) -> Vec<IOValue> {
     let segment_checks = vec![
-        ChainCheck::pass("segment-contiguity"),
-        ChainCheck::pass("canonical-link-order"),
+        evidence_chain::ChainCheck::pass("segment-contiguity"),
+        evidence_chain::ChainCheck::pass("canonical-link-order"),
     ];
     let fork_checks = vec![
-        ChainCheck::pass("fork-policy-profile"),
-        ChainCheck::pass("fork-evidence-binding"),
+        evidence_chain::ChainCheck::pass("fork-policy-profile"),
+        evidence_chain::ChainCheck::pass("fork-evidence-binding"),
     ];
     let anchor_subject_refs = vec![ends.anchor_ref.clone(), ends.head_ref.clone()];
-    let anchor_checks = vec![ChainCheck::pass("anchor-descent"), ChainCheck::pass("head-binding")];
+    let anchor_checks = vec![
+        evidence_chain::ChainCheck::pass("anchor-descent"),
+        evidence_chain::ChainCheck::pass("head-binding"),
+    ];
     vec![
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
-            predicate: SEGMENT_NO_GAP_PREDICATE,
+        evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
+            predicate: evidence_chain::SEGMENT_NO_GAP_PREDICATE,
             decision: "pass",
             subject_refs: link_refs,
             input_refs: payload_refs,
             context_refs,
             checks: &segment_checks,
         }),
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
-            predicate: SEGMENT_NO_FORK_PREDICATE,
+        evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
+            predicate: evidence_chain::SEGMENT_NO_FORK_PREDICATE,
             decision: "pass",
             subject_refs: std::slice::from_ref(ends.head_ref),
             input_refs: link_refs,
             context_refs,
             checks: &fork_checks,
         }),
-        chain_predicate_receipt_value(&ChainPredicateReceiptValueInput {
-            predicate: DESCENDS_FROM_ANCHOR_PREDICATE,
+        evidence_chain::chain_predicate_receipt_value(&evidence_chain::ChainPredicateReceiptValueInput {
+            predicate: evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE,
             decision: "pass",
             subject_refs: &anchor_subject_refs,
             input_refs: link_refs,
@@ -1405,7 +1384,7 @@ fn predicate_values(
 fn predicate_refs(values: &[IOValue]) -> Result<Vec<String>> {
     Ok(values
         .iter()
-        .map(parse_chain_predicate_receipt)
+        .map(evidence_chain::parse_chain_predicate_receipt)
         .collect::<Result<Vec<_>>>()?
         .into_iter()
         .map(|receipt| receipt.receipt_ref)
@@ -1413,14 +1392,14 @@ fn predicate_refs(values: &[IOValue]) -> Result<Vec<String>> {
 }
 
 fn verify_value(
-    chain: &ChainScope,
+    chain: &evidence_chain::ChainScope,
     link_refs: &[String],
     payload_refs: &[String],
     ends: &LinkEnds<'_>,
     predicate_receipt_refs: &[String],
 ) -> IOValue {
     let verify_diagnostics = Vec::new();
-    let verify_receipt = ChainVerifyReceiptValueInput {
+    let verify_receipt = evidence_chain::ChainVerifyReceiptValueInput {
         decision: "pass",
         chain,
         anchor_ref: Some(ends.anchor_ref.as_str()),
@@ -1430,26 +1409,29 @@ fn verify_value(
         payload_refs,
         diagnostics: &verify_diagnostics,
     };
-    chain_verify_receipt_value_with_policy(&ChainVerifyReceiptPolicyValueInput {
+    evidence_chain::chain_verify_receipt_value_with_policy(&evidence_chain::ChainVerifyReceiptPolicyValueInput {
         receipt: verify_receipt,
         predicate_receipt_refs,
-        fork_policy: ChainForkPolicy::RejectUnexpectedForks,
+        fork_policy: evidence_chain::ChainForkPolicy::RejectUnexpectedForks,
     })
 }
 
 fn turn_journal_context_refs(
-    report: &HarnessReport,
-    observation: &HarnessObservation,
+    report: &schema::HarnessReport,
+    observation: &schema::HarnessObservation,
     actor_id: &str,
-) -> Result<Vec<ChainContextRef>> {
+) -> Result<Vec<evidence_chain::ChainContextRef>> {
     let mut refs = vec![
-        ChainContextRef::new("report", report.report_ref.clone()),
-        ChainContextRef::new("suite", report.suite_ref.clone()),
-        ChainContextRef::new("actor", canonical_hash(&record("turn-journal-actor", vec![string(actor_id)]))?),
-        ChainContextRef::new("observation", observation.observation_ref.clone()),
-        ChainContextRef::new("step", observation.step_ref.clone()),
-        ChainContextRef::new("before-state", observation.before_state_hash.clone()),
-        ChainContextRef::new("after-state", observation.after_state_hash.clone()),
+        evidence_chain::ChainContextRef::new("report", report.report_ref.clone()),
+        evidence_chain::ChainContextRef::new("suite", report.suite_ref.clone()),
+        evidence_chain::ChainContextRef::new(
+            "actor",
+            canonical_hash(&record("turn-journal-actor", vec![string(actor_id)]))?,
+        ),
+        evidence_chain::ChainContextRef::new("observation", observation.observation_ref.clone()),
+        evidence_chain::ChainContextRef::new("step", observation.step_ref.clone()),
+        evidence_chain::ChainContextRef::new("before-state", observation.before_state_hash.clone()),
+        evidence_chain::ChainContextRef::new("after-state", observation.after_state_hash.clone()),
     ];
     for (event, event_ref) in observation.events.iter().zip(observation.event_refs.iter()) {
         let computed_event_ref = canonical_hash(event)?;
@@ -1458,18 +1440,18 @@ fn turn_journal_context_refs(
                 "turn journal observation event refs do not match canonical events",
             ));
         }
-        let label = match event_boundary(event) {
-            EventBoundary::PolicyDecision => "admission",
-            EventBoundary::EffectRequest | EventBoundary::EffectResponse => "effect-log",
+        let label = match schema::event_boundary(event) {
+            schema::EventBoundary::PolicyDecision => "admission",
+            schema::EventBoundary::EffectRequest | schema::EventBoundary::EffectResponse => "effect-log",
             _ => "trace",
         };
-        refs.push(ChainContextRef::new(label, event_ref.clone()));
+        refs.push(evidence_chain::ChainContextRef::new(label, event_ref.clone()));
     }
     Ok(refs)
 }
 
-fn turn_journal_producer() -> Result<ChainProducer> {
-    Ok(ChainProducer::new(
+fn turn_journal_producer() -> Result<evidence_chain::ChainProducer> {
+    Ok(evidence_chain::ChainProducer::new(
         "molten-turn-journal",
         canonical_hash(&record("turn-journal-producer-key", vec![string("molten")]))?,
     ))
@@ -1524,15 +1506,32 @@ fn parse_turn_journals(value: &Value<IOValue>, report_ref: &str, suite_ref: &str
     }
     let journal_values = required_record_values(&journals_record[1], "journals")?;
     let checks = parse_checks(&journals_record[2])?;
-    require_check(&checks, "turn-journal-chains")?;
-    require_check(&checks, "turn-journal-input-binding")?;
-    require_check(&checks, "turn-journal-admission-binding")?;
-    require_check(&checks, "turn-journal-state-binding")?;
-    require_check(&checks, "turn-journal-no-global-head")?;
+    require_turn_journal_checks(&checks)?;
+    let journals = parse_turn_journal_set(&journal_values, report_ref, suite_ref)?;
+    Ok(TurnJournalEvidence {
+        aggregate_ref: canonical_hash(&value)?,
+        journals,
+    })
+}
+
+fn require_turn_journal_checks(checks: &[String]) -> Result<()> {
+    require_check(checks, "turn-journal-chains")?;
+    require_check(checks, "turn-journal-input-binding")?;
+    require_check(checks, "turn-journal-admission-binding")?;
+    require_check(checks, "turn-journal-state-binding")?;
+    require_check(checks, "turn-journal-no-global-head")?;
+    Ok(())
+}
+
+fn parse_turn_journal_set(
+    journal_values: &[IOValue],
+    report_ref: &str,
+    suite_ref: &str,
+) -> Result<Vec<TurnJournalChainEvidence>> {
     let mut journals = Vec::with_capacity(journal_values.len());
     let mut actor_ids = BTreeMap::new();
     for journal_value in journal_values {
-        let journal = parse_turn_journal(&journal_value, report_ref, suite_ref)?;
+        let journal = parse_turn_journal(journal_value, report_ref, suite_ref)?;
         if actor_ids.insert(journal.actor_id.clone(), ()).is_some() {
             return Err(MoltenError::invalid_harness(format!("duplicate turn journal for actor {}", journal.actor_id)));
         }
@@ -1541,10 +1540,7 @@ fn parse_turn_journals(value: &Value<IOValue>, report_ref: &str, suite_ref: &str
     if journals.is_empty() {
         return Err(MoltenError::invalid_harness("turn journal evidence must contain at least one actor journal"));
     }
-    Ok(TurnJournalEvidence {
-        aggregate_ref: canonical_hash(&value)?,
-        journals,
-    })
+    Ok(journals)
 }
 
 fn parse_turn_journal(value: &IOValue, report_ref: &str, suite_ref: &str) -> Result<TurnJournalChainEvidence> {
@@ -1554,64 +1550,22 @@ fn parse_turn_journal(value: &IOValue, report_ref: &str, suite_ref: &str) -> Res
     let verify_receipt_value = required_record_value(&journal_record[2], "verify-receipt")?;
     let predicate_values = required_record_values(&journal_record[3], "predicates")?;
     let checks = parse_checks(&journal_record[4])?;
-    require_check(&checks, "turn-journal-chains")?;
-    require_check(&checks, "turn-journal-input-binding")?;
-    require_check(&checks, "turn-journal-admission-binding")?;
-    require_check(&checks, "turn-journal-state-binding")?;
-    require_check(&checks, "turn-journal-no-global-head")?;
-    if link_values.is_empty() {
-        return Err(MoltenError::invalid_harness("turn journal must contain at least one link"));
-    }
-
-    let mut links = Vec::with_capacity(link_values.len());
-    let mut link_refs = Vec::with_capacity(link_values.len());
-    let mut payload_refs = Vec::with_capacity(link_values.len());
-    for (position, link_value) in link_values.iter().enumerate() {
-        let link = parse_chain_link(link_value)?;
-        if link.chain.scope != "harness-turn-journal" || link.chain.id != actor_id || link.chain.epoch != report_ref {
-            return Err(MoltenError::invalid_harness(
-                "turn journal link scope must be per actor and per report, not global",
-            ));
-        }
-        if link.sequence != position as u64 {
-            return Err(MoltenError::invalid_harness("turn journal link sequence is not contiguous"));
-        }
-        if position == 0 {
-            if link.previous_link_ref.is_some() {
-                return Err(MoltenError::invalid_harness("turn journal genesis link must not name a previous link"));
-            }
-        } else if link.previous_link_ref.as_deref() != link_refs.get(position - 1).map(String::as_str) {
-            return Err(MoltenError::invalid_harness("turn journal link does not bind previous actor-local turn"));
-        }
-        require_context_ref(&link.context_refs, "report", report_ref)?;
-        require_context_ref(&link.context_refs, "suite", suite_ref)?;
-        require_context_ref_kind(&link.context_refs, "step")?;
-        require_context_ref_kind(&link.context_refs, "before-state")?;
-        require_context_ref_kind(&link.context_refs, "after-state")?;
-        require_context_ref_kind(&link.context_refs, "admission")?;
-        require_context_ref_kind(&link.context_refs, "trace")?;
-        payload_refs.push(link.payload.artifact_ref.clone());
-        link_refs.push(link.link_ref.clone());
-        links.push(link);
-    }
-
-    let predicate_receipts = predicate_values.iter().map(parse_chain_predicate_receipt).collect::<Result<Vec<_>>>()?;
+    require_turn_journal_checks(&checks)?;
+    let parsed_links = parse_turn_journal_links(&link_values, &actor_id, report_ref, suite_ref)?;
+    let predicate_receipts = parse_turn_journal_predicates(&predicate_values)?;
     let predicate_receipt_refs =
         predicate_receipts.iter().map(|receipt| receipt.receipt_ref.clone()).collect::<Vec<_>>();
-    require_chain_predicate_kind(&predicate_receipts, SEGMENT_NO_GAP_PREDICATE)?;
-    require_chain_predicate_kind(&predicate_receipts, SEGMENT_NO_FORK_PREDICATE)?;
-    require_chain_predicate_kind(&predicate_receipts, DESCENDS_FROM_ANCHOR_PREDICATE)?;
     validate_turn_journal_verify_receipt(
         &verify_receipt_value,
-        &links[0].chain,
-        &link_refs,
-        &payload_refs,
+        &parsed_links.links[0].chain,
+        &parsed_links.link_refs,
+        &parsed_links.payload_refs,
         &predicate_receipt_refs,
     )?;
     Ok(TurnJournalChainEvidence {
         actor_id,
-        link_refs,
-        payload_refs,
+        link_refs: parsed_links.link_refs,
+        payload_refs: parsed_links.payload_refs,
         verify_receipt_ref: canonical_hash(&verify_receipt_value)?,
         predicate_receipt_refs,
         link_values,
@@ -1620,9 +1574,108 @@ fn parse_turn_journal(value: &IOValue, report_ref: &str, suite_ref: &str) -> Res
     })
 }
 
+struct ParsedTurnJournalLinks {
+    links: Vec<evidence_chain::ChainLink>,
+    link_refs: Vec<String>,
+    payload_refs: Vec<String>,
+}
+
+fn parse_turn_journal_links(
+    link_values: &[IOValue],
+    actor_id: &str,
+    report_ref: &str,
+    suite_ref: &str,
+) -> Result<ParsedTurnJournalLinks> {
+    if link_values.is_empty() {
+        return Err(MoltenError::invalid_harness("turn journal must contain at least one link"));
+    }
+    let mut links = Vec::with_capacity(link_values.len());
+    let mut link_refs = Vec::with_capacity(link_values.len());
+    let mut payload_refs = Vec::with_capacity(link_values.len());
+    for (position, link_value) in link_values.iter().enumerate() {
+        let link = evidence_chain::parse_chain_link(link_value)?;
+        validate_turn_journal_link(TurnJournalLinkValidation {
+            link: &link,
+            position,
+            link_refs: &link_refs,
+            actor_id,
+            report_ref,
+            suite_ref,
+        })?;
+        payload_refs.push(link.payload.artifact_ref.clone());
+        link_refs.push(link.link_ref.clone());
+        links.push(link);
+    }
+    Ok(ParsedTurnJournalLinks {
+        links,
+        link_refs,
+        payload_refs,
+    })
+}
+
+struct TurnJournalLinkValidation<'a> {
+    link: &'a evidence_chain::ChainLink,
+    position: usize,
+    link_refs: &'a [String],
+    actor_id: &'a str,
+    report_ref: &'a str,
+    suite_ref: &'a str,
+}
+
+fn validate_turn_journal_link(input: TurnJournalLinkValidation<'_>) -> Result<()> {
+    if input.link.chain.scope != "harness-turn-journal"
+        || input.link.chain.id != input.actor_id
+        || input.link.chain.epoch != input.report_ref
+    {
+        return Err(MoltenError::invalid_harness(
+            "turn journal link scope must be per actor and per report, not global",
+        ));
+    }
+    if input.link.sequence != input.position as u64 {
+        return Err(MoltenError::invalid_harness("turn journal link sequence is not contiguous"));
+    }
+    validate_turn_journal_previous_ref(input.link, input.position, input.link_refs)?;
+    require_context_ref(&input.link.context_refs, "report", input.report_ref)?;
+    require_context_ref(&input.link.context_refs, "suite", input.suite_ref)?;
+    require_context_ref_kind(&input.link.context_refs, "step")?;
+    require_context_ref_kind(&input.link.context_refs, "before-state")?;
+    require_context_ref_kind(&input.link.context_refs, "after-state")?;
+    require_context_ref_kind(&input.link.context_refs, "admission")?;
+    require_context_ref_kind(&input.link.context_refs, "trace")?;
+    Ok(())
+}
+
+fn validate_turn_journal_previous_ref(
+    link: &evidence_chain::ChainLink,
+    position: usize,
+    link_refs: &[String],
+) -> Result<()> {
+    if position == 0 {
+        if link.previous_link_ref.is_some() {
+            return Err(MoltenError::invalid_harness("turn journal genesis link must not name a previous link"));
+        }
+        return Ok(());
+    }
+    if link.previous_link_ref.as_deref() != link_refs.get(position - 1).map(String::as_str) {
+        return Err(MoltenError::invalid_harness("turn journal link does not bind previous actor-local turn"));
+    }
+    Ok(())
+}
+
+fn parse_turn_journal_predicates(predicate_values: &[IOValue]) -> Result<Vec<evidence_chain::ChainPredicateReceipt>> {
+    let receipts = predicate_values
+        .iter()
+        .map(evidence_chain::parse_chain_predicate_receipt)
+        .collect::<Result<Vec<_>>>()?;
+    require_chain_predicate_kind(&receipts, evidence_chain::SEGMENT_NO_GAP_PREDICATE)?;
+    require_chain_predicate_kind(&receipts, evidence_chain::SEGMENT_NO_FORK_PREDICATE)?;
+    require_chain_predicate_kind(&receipts, evidence_chain::DESCENDS_FROM_ANCHOR_PREDICATE)?;
+    Ok(receipts)
+}
+
 fn validate_turn_journal_verify_receipt(
     value: &IOValue,
-    chain: &ChainScope,
+    chain: &evidence_chain::ChainScope,
     link_refs: &[String],
     payload_refs: &[String],
     predicate_receipt_refs: &[String],
@@ -1668,7 +1721,7 @@ fn validate_turn_journal_verify_receipt(
     Ok(())
 }
 
-fn require_context_ref(context_refs: &[ChainContextRef], label: &str, expected: &str) -> Result<()> {
+fn require_context_ref(context_refs: &[evidence_chain::ChainContextRef], label: &str, expected: &str) -> Result<()> {
     if context_refs.iter().any(|context| context.label == label && context.artifact_ref == expected) {
         Ok(())
     } else {
@@ -1676,7 +1729,7 @@ fn require_context_ref(context_refs: &[ChainContextRef], label: &str, expected: 
     }
 }
 
-fn require_context_ref_kind(context_refs: &[ChainContextRef], label: &str) -> Result<()> {
+fn require_context_ref_kind(context_refs: &[evidence_chain::ChainContextRef], label: &str) -> Result<()> {
     if context_refs.iter().any(|context| context.label == label) {
         Ok(())
     } else {
@@ -1740,8 +1793,8 @@ fn parse_validation(value: &Value<IOValue>) -> Result<ValidationReceipt> {
     let suite_ref = required_record_hash(&validation[2], "suite", "gate validation suite ref")?;
     let final_state_hash = required_record_hash(&validation[3], "final-state", "gate validation final state hash")?;
     let observations = required_record_u64(&validation[4], "observations", "gate validation observations")?;
-    parse_actor_registry(&value_to_iovalue(&validation[5]))?;
-    let budget = parse_budget(&value_to_iovalue(&validation[6]))?;
+    schema::parse_actor_registry(&value_to_iovalue(&validation[5]))?;
+    let budget = schema::parse_budget(&value_to_iovalue(&validation[6]))?;
     if observations != budget.usage.steps {
         return Err(MoltenError::invalid_harness(
             "gate receipt validation observation count does not match budget step usage",
@@ -1878,7 +1931,12 @@ fn require_core_refs(input: &CoreRefs<'_>) -> Result<()> {
     Ok(())
 }
 
-fn require_link_context(link: &ChainLink, report_ref: &str, suite_ref: &str, final_state_hash: &str) -> Result<()> {
+fn require_link_context(
+    link: &evidence_chain::ChainLink,
+    report_ref: &str,
+    suite_ref: &str,
+    final_state_hash: &str,
+) -> Result<()> {
     if link.payload.artifact_ref != report_ref {
         return Err(MoltenError::invalid_harness("gate chain evidence payload does not bind the gate report ref"));
     }
@@ -2003,10 +2061,10 @@ fn required_record_u64(value: &Value<IOValue>, label: &str, field: &str) -> Resu
     required_u64(&record[0], field)
 }
 
-fn required_chain_scope(value: &Value<IOValue>) -> Result<ChainScope> {
+fn required_chain_scope(value: &Value<IOValue>) -> Result<evidence_chain::ChainScope> {
     let value = value_to_iovalue(value);
     let chain = simple_record(&value, "chain", 3)?;
-    Ok(ChainScope::new(
+    Ok(evidence_chain::ChainScope::new(
         required_record_string(&chain[0], "scope", "chain scope")?,
         required_record_string(&chain[1], "id", "chain id")?,
         required_record_string(&chain[2], "epoch", "chain epoch")?,
