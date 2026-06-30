@@ -2,8 +2,6 @@ use std::path::PathBuf;
 
 use clap::Args;
 
-use crate::RetentionEvidenceArgs;
-
 #[derive(Debug, Args)]
 pub(crate) struct Explain {
     #[arg(long)]
@@ -57,7 +55,7 @@ pub(crate) struct GcPlan {
     #[arg(long, default_value = "delete")]
     pub(crate) action: String,
     #[command(flatten)]
-    pub(crate) retention: RetentionEvidenceArgs,
+    pub(crate) retention: crate::RetentionEvidenceArgs,
     #[arg(long)]
     pub(crate) out: Option<PathBuf>,
 }
