@@ -1,14 +1,4 @@
-use serde::Deserialize;
-use serde::Serialize;
-
-use super::Envelope;
-use super::EnvelopeBoundary;
-use super::RuntimeBoundaryError;
-use crate::error::Result;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::validate_content_ref;
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct IrohEnvelopeBridgeRecord {
     pub topic: String,
     pub envelope_ref: String,
@@ -16,13 +6,13 @@ pub struct IrohEnvelopeBridgeRecord {
     pub blob_refs: Vec<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct BlobReferenceRecord {
     pub blob_ref: String,
     pub byte_len: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct DocsMutationEvidence {
     pub namespace: String,
     pub mutation_ref: String,
@@ -35,7 +25,10 @@ pub struct RemoteEnvelopeAdmission {
     pub admitted_blob_refs: Vec<String>,
 }
 
-pub fn iroh_envelope_bridge_record(topic: impl Into<String>, envelope: &Envelope) -> Result<IrohEnvelopeBridgeRecord> {
+pub fn iroh_envelope_bridge_record(
+    topic: impl Into<String>,
+    envelope: &super::Envelope,
+) -> crate::error::Result<IrohEnvelopeBridgeRecord> {
     let boundary = envelope.boundary()?;
     Ok(bridge_record_from_boundary(topic.into(), &boundary))
 }
@@ -43,12 +36,12 @@ pub fn iroh_envelope_bridge_record(topic: impl Into<String>, envelope: &Envelope
 pub fn verify_blob_reference(
     bytes: &[u8],
     declared_ref: &str,
-) -> std::result::Result<BlobReferenceRecord, RuntimeBoundaryError> {
-    validate_content_ref(declared_ref)
-        .map_err(|error| RuntimeBoundaryError::invalid_input("iroh-blob", error.to_string()))?;
-    let actual_ref = content_ref_from_bytes(bytes);
+) -> std::result::Result<BlobReferenceRecord, super::RuntimeBoundaryError> {
+    crate::preserves_rail::validate_content_ref(declared_ref)
+        .map_err(|error| super::RuntimeBoundaryError::invalid_input("iroh-blob", error.to_string()))?;
+    let actual_ref = crate::preserves_rail::content_ref_from_bytes(bytes);
     if actual_ref != declared_ref {
-        return Err(RuntimeBoundaryError::denied_operation(
+        return Err(super::RuntimeBoundaryError::denied_operation(
             "iroh-blob",
             format!("blob ref mismatch declared={declared_ref} actual={actual_ref}"),
         ));
@@ -62,26 +55,26 @@ pub fn verify_blob_reference(
 pub fn docs_mutation_evidence(
     namespace: impl Into<String>,
     mutation_bytes: &[u8],
-    envelope: &Envelope,
-) -> Result<DocsMutationEvidence> {
+    envelope: &super::Envelope,
+) -> crate::error::Result<DocsMutationEvidence> {
     Ok(DocsMutationEvidence {
         namespace: namespace.into(),
-        mutation_ref: content_ref_from_bytes(mutation_bytes),
+        mutation_ref: crate::preserves_rail::content_ref_from_bytes(mutation_bytes),
         envelope_ref: envelope.canonical_hash()?,
     })
 }
 
 pub fn admit_remote_envelope(
-    envelope: &Envelope,
+    envelope: &super::Envelope,
     declared_envelope_ref: &str,
-) -> std::result::Result<RemoteEnvelopeAdmission, RuntimeBoundaryError> {
-    validate_content_ref(declared_envelope_ref)
-        .map_err(|error| RuntimeBoundaryError::invalid_input("remote-envelope", error.to_string()))?;
+) -> std::result::Result<RemoteEnvelopeAdmission, super::RuntimeBoundaryError> {
+    crate::preserves_rail::validate_content_ref(declared_envelope_ref)
+        .map_err(|error| super::RuntimeBoundaryError::invalid_input("remote-envelope", error.to_string()))?;
     let actual_ref = envelope
         .canonical_hash()
-        .map_err(|error| RuntimeBoundaryError::invalid_input("remote-envelope", error.to_string()))?;
+        .map_err(|error| super::RuntimeBoundaryError::invalid_input("remote-envelope", error.to_string()))?;
     if actual_ref != declared_envelope_ref {
-        return Err(RuntimeBoundaryError::denied_operation(
+        return Err(super::RuntimeBoundaryError::denied_operation(
             "remote-envelope",
             format!("envelope ref mismatch declared={declared_envelope_ref} actual={actual_ref}"),
         ));
@@ -96,7 +89,7 @@ pub fn admit_remote_envelope(
     })
 }
 
-fn bridge_record_from_boundary(topic: String, boundary: &EnvelopeBoundary) -> IrohEnvelopeBridgeRecord {
+fn bridge_record_from_boundary(topic: String, boundary: &super::EnvelopeBoundary) -> IrohEnvelopeBridgeRecord {
     let mut blob_refs = Vec::with_capacity(boundary.blob_refs.len());
     for reference in &boundary.blob_refs {
         blob_refs.push(reference.as_str().to_string());
