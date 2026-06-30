@@ -264,27 +264,19 @@ impl AdmissionDecision {
 
 #[cfg(test)]
 mod tests {
-    use super::AdmissionAction;
-    use super::AdmissionDecision;
-    use super::AdmissionDenyRule;
-    use super::AdmissionPolicy;
-    use super::AdmissionRequest;
-    use crate::runtime::RuntimeStep;
-    use crate::runtime::RuntimeValue;
-
     #[test]
     fn deny_rule_matches_specific_actor_action_and_value() {
-        let policy = AdmissionPolicy::from_deny_rules(vec![AdmissionDenyRule {
+        let policy = super::AdmissionPolicy::from_deny_rules(vec![super::AdmissionDenyRule {
             actor: Some("producer".to_string()),
-            action: Some(AdmissionAction::Assert),
+            action: Some(super::AdmissionAction::Assert),
             target: None,
-            value: Some(RuntimeValue::string("service.ready").expect("runtime test value")),
+            value: Some(crate::runtime::RuntimeValue::string("service.ready").expect("runtime test value")),
             reason: "producer cannot assert readiness".to_string(),
         }]);
-        let request = AdmissionRequest::from_step(&RuntimeStep::Assert {
+        let request = super::AdmissionRequest::from_step(&crate::runtime::RuntimeStep::Assert {
             actor: "producer".into(),
-            value: RuntimeValue::string("service.ready").expect("runtime test value"),
+            value: crate::runtime::RuntimeValue::string("service.ready").expect("runtime test value"),
         });
-        assert!(matches!(policy.decide(&request), AdmissionDecision::Deny { .. }));
+        assert!(matches!(policy.decide(&request), super::AdmissionDecision::Deny { .. }));
     }
 }
