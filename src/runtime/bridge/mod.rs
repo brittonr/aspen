@@ -111,28 +111,20 @@ fn bridge_record_from_boundary(topic: String, boundary: &EnvelopeBoundary) -> Ir
 
 #[cfg(test)]
 mod tests {
-    use super::admit_remote_envelope;
-    use super::docs_mutation_evidence;
-    use super::iroh_envelope_bridge_record;
-    use super::verify_blob_reference;
-    use crate::preserves_rail::content_ref_from_bytes;
-    use crate::runtime::ActorId;
-    use crate::runtime::Capability;
-    use crate::runtime::ContentRef;
-    use crate::runtime::Envelope;
-    use crate::runtime::EnvelopeInput;
-    use crate::runtime::EvidenceRef;
-    use crate::runtime::RuntimeErrorCategory;
-    use crate::runtime::RuntimeValue;
+    fn content_ref(bytes: &[u8]) -> String {
+        crate::preserves_rail::content_ref_from_bytes(bytes)
+    }
 
-    fn envelope() -> Envelope {
-        Envelope::new(EnvelopeInput {
-            sender: ActorId::parse("actor:remote").expect("sender"),
-            subject: RuntimeValue::string("protocol.ready").expect("subject"),
-            body: RuntimeValue::string("payload metadata").expect("body"),
-            blob_refs: vec![ContentRef::parse(content_ref_from_bytes(b"blob payload")).expect("blob")],
-            capabilities: vec![Capability::parse("send:protocol.ready").expect("capability")],
-            evidence_refs: vec![EvidenceRef::parse(content_ref_from_bytes(b"transport evidence")).expect("evidence")],
+    fn envelope() -> crate::runtime::Envelope {
+        crate::runtime::Envelope::new(crate::runtime::EnvelopeInput {
+            sender: crate::runtime::ActorId::parse("actor:remote").expect("sender"),
+            subject: crate::runtime::RuntimeValue::string("protocol.ready").expect("subject"),
+            body: crate::runtime::RuntimeValue::string("payload metadata").expect("body"),
+            blob_refs: vec![crate::runtime::ContentRef::parse(content_ref(b"blob payload")).expect("blob")],
+            capabilities: vec![crate::runtime::Capability::parse("send:protocol.ready").expect("capability")],
+            evidence_refs: vec![
+                crate::runtime::EvidenceRef::parse(content_ref(b"transport evidence")).expect("evidence"),
+            ],
         })
         .expect("envelope")
     }
@@ -140,28 +132,29 @@ mod tests {
     #[test]
     fn iroh_bridge_record_binds_envelope_and_blob_refs() {
         let envelope = envelope();
-        let record = iroh_envelope_bridge_record("topic-a", &envelope).expect("bridge record");
+        let record = super::iroh_envelope_bridge_record("topic-a", &envelope).expect("bridge record");
         assert_eq!(record.topic, "topic-a");
         assert_eq!(record.envelope_ref, envelope.canonical_hash().expect("envelope ref"));
-        assert_eq!(record.blob_refs, vec![content_ref_from_bytes(b"blob payload")]);
+        assert_eq!(record.blob_refs, vec![content_ref(b"blob payload")]);
     }
 
     #[test]
     fn blob_reference_verification_rejects_tampering() {
-        let declared = content_ref_from_bytes(b"blob payload");
-        let verified = verify_blob_reference(b"blob payload", &declared).expect("verified blob");
+        let declared = content_ref(b"blob payload");
+        let verified = super::verify_blob_reference(b"blob payload", &declared).expect("verified blob");
         assert_eq!(verified.blob_ref, declared);
 
-        let error = verify_blob_reference(b"tampered", &declared).expect_err("tampered blob denied");
-        assert_eq!(error.category(), RuntimeErrorCategory::DeniedOperation);
+        let error = super::verify_blob_reference(b"tampered", &declared).expect_err("tampered blob denied");
+        assert_eq!(error.category(), crate::runtime::RuntimeErrorCategory::DeniedOperation);
     }
 
     #[test]
     fn docs_mutation_evidence_binds_namespace_mutation_and_envelope() {
         let envelope = envelope();
-        let evidence = docs_mutation_evidence("docs:runtime", b"set service.ready", &envelope).expect("docs evidence");
+        let evidence =
+            super::docs_mutation_evidence("docs:runtime", b"set service.ready", &envelope).expect("docs evidence");
         assert_eq!(evidence.namespace, "docs:runtime");
-        assert_eq!(evidence.mutation_ref, content_ref_from_bytes(b"set service.ready"));
+        assert_eq!(evidence.mutation_ref, content_ref(b"set service.ready"));
         assert_eq!(evidence.envelope_ref, envelope.canonical_hash().expect("envelope ref"));
     }
 
@@ -169,11 +162,11 @@ mod tests {
     fn remote_admission_rejects_tampered_envelope_ref() {
         let envelope = envelope();
         let envelope_ref = envelope.canonical_hash().expect("envelope ref");
-        let admitted = admit_remote_envelope(&envelope, &envelope_ref).expect("admitted");
+        let admitted = super::admit_remote_envelope(&envelope, &envelope_ref).expect("admitted");
         assert_eq!(admitted.envelope_ref, envelope_ref);
 
-        let wrong = content_ref_from_bytes(b"wrong envelope");
-        let error = admit_remote_envelope(&envelope, &wrong).expect_err("stale ref denied");
-        assert_eq!(error.category(), RuntimeErrorCategory::DeniedOperation);
+        let wrong = content_ref(b"wrong envelope");
+        let error = super::admit_remote_envelope(&envelope, &wrong).expect_err("stale ref denied");
+        assert_eq!(error.category(), crate::runtime::RuntimeErrorCategory::DeniedOperation);
     }
 }
