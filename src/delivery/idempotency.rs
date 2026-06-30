@@ -6,7 +6,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
 use crate::preserves_rail::u64_value;
 
@@ -756,7 +755,7 @@ fn idempotency_receipt_value(input: IdempotencyReceiptValueInput<'_>) -> Result<
         record("semantic-result", vec![optional_ref_value(input.semantic_result_ref)]),
         record("side-effect", vec![string(input.side_effect)]),
         record("diagnostics", vec![strings_sequence(input.diagnostics)]),
-        record("checks", vec![sequence(
+        record("checks", vec![crate::preserves_rail::sequence(
             input
                 .checks
                 .iter()
@@ -886,7 +885,7 @@ fn store_error(error: impl std::fmt::Display) -> MoltenError {
 }
 
 fn strings_sequence(values: &[String]) -> IOValue {
-    sequence(values.iter().map(string).collect())
+    crate::preserves_rail::sequence(values.iter().map(string).collect())
 }
 
 fn optional_ref_value(reference: Option<&str>) -> IOValue {
@@ -894,7 +893,7 @@ fn optional_ref_value(reference: Option<&str>) -> IOValue {
 }
 
 fn checks_value(checks: &[(&str, &str)]) -> IOValue {
-    record("checks", vec![sequence(
+    record("checks", vec![crate::preserves_rail::sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
