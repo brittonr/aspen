@@ -201,6 +201,60 @@ pub struct DiagnosticDecision {
     pub receipt_value: IOValue,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct DiagnosticLog {
+    values: Vec<String>,
+}
+
+impl DiagnosticLog {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    fn iter(&self) -> std::slice::Iter<'_, String> {
+        self.values.iter()
+    }
+
+    fn into_values(self) -> Vec<String> {
+        self.values
+    }
+
+    fn push(&mut self, diagnostic: impl Into<String>) -> Result<()> {
+        let next = self
+            .values
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| MoltenError::invalid_harness("diagnostic count overflow"))?;
+        validate_bounded_value_count(next, MAX_DIAGNOSTICS, "diagnostic")?;
+        self.values.push(diagnostic.into());
+        Ok(())
+    }
+}
+
+trait DiagnosticSink {
+    fn push_bounded(&mut self, diagnostic: String) -> Result<()>;
+}
+
+impl DiagnosticSink for DiagnosticLog {
+    fn push_bounded(&mut self, diagnostic: String) -> Result<()> {
+        self.push(diagnostic)
+    }
+}
+
+impl DiagnosticSink for Vec<String> {
+    fn push_bounded(&mut self, diagnostic: String) -> Result<()> {
+        let next =
+            self.len().checked_add(1).ok_or_else(|| MoltenError::invalid_harness("diagnostic count overflow"))?;
+        validate_bounded_value_count(next, MAX_DIAGNOSTICS, "diagnostic")?;
+        self.push(diagnostic);
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectivityProbeInput {
     pub source_node: String,
@@ -302,7 +356,7 @@ struct RouterEvaluation {
 struct RouterEvaluator<'a> {
     registry: &'a ProtocolRegistry,
     input: &'a RouterOperationInput,
-    diagnostics: Vec<String>,
+    diagnostics: DiagnosticLog,
 }
 
 impl<'a> RouterEvaluator<'a> {
@@ -310,7 +364,7 @@ impl<'a> RouterEvaluator<'a> {
         Self {
             registry,
             input,
-            diagnostics: Vec::new(),
+            diagnostics: DiagnosticLog::new(),
         }
     }
 
@@ -323,7 +377,7 @@ impl<'a> RouterEvaluator<'a> {
         };
         Ok(RouterEvaluation {
             mutation,
-            diagnostics: self.diagnostics,
+            diagnostics: self.diagnostics.into_values(),
         })
     }
 
@@ -536,7 +590,7 @@ struct FrameEvaluation {
 struct FrameEvaluator<'a> {
     registry: &'a ProtocolRegistry,
     input: &'a FramedEnvelopeInput,
-    diagnostics: Vec<String>,
+    diagnostics: DiagnosticLog,
 }
 
 impl<'a> FrameEvaluator<'a> {
@@ -544,7 +598,7 @@ impl<'a> FrameEvaluator<'a> {
         Self {
             registry,
             input,
-            diagnostics: Vec::new(),
+            diagnostics: DiagnosticLog::new(),
         }
     }
 
@@ -557,7 +611,7 @@ impl<'a> FrameEvaluator<'a> {
         };
         Ok(FrameEvaluation {
             actual_ref,
-            diagnostics: self.diagnostics,
+            diagnostics: self.diagnostics.into_values(),
         })
     }
 
@@ -1162,7 +1216,7 @@ fn descriptor_from_input(input: &RouterOperationInput) -> Result<ProtocolHandler
     })
 }
 
-fn collect_alpn_diagnostic(alpn: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_alpn_diagnostic(alpn: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     validate_bounded_text(alpn, "ALPN", MAX_ALPN_BYTES, diagnostics)?;
     if alpn.bytes().all(is_alpn_byte) {
         Ok(())
@@ -1171,11 +1225,11 @@ fn collect_alpn_diagnostic(alpn: &str, diagnostics: &mut Vec<String>) -> Result<
     }
 }
 
-fn collect_handler_diagnostic(handler: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_handler_diagnostic(handler: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     validate_bounded_text(handler, "handler kind", MAX_HANDLER_KIND_BYTES, diagnostics)
 }
 
-fn validate_interaction_kind(kind: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_interaction_kind(kind: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     if matches!(kind, "unary" | "server-streaming" | "client-streaming" | "bidirectional-streaming") {
         Ok(())
     } else {
@@ -1183,7 +1237,7 @@ fn validate_interaction_kind(kind: &str, diagnostics: &mut Vec<String>) -> Resul
     }
 }
 
-fn validate_path_kind(kind: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_path_kind(kind: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     if matches!(kind, "local" | "remote") {
         Ok(())
     } else {
@@ -1199,7 +1253,7 @@ fn validate_status(value: &str, allowed: &[&str], label: &str) -> Result<()> {
     }
 }
 
-fn validate_port(value: Option<u64>, label: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_port(value: Option<u64>, label: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     match value {
         Some(port) if (MIN_PORT_NUMBER..=MAX_PORT_NUMBER).contains(&port) => Ok(()),
         Some(port) => push_diagnostic(diagnostics, format!("{label} {port} outside valid port range")),
@@ -1207,14 +1261,18 @@ fn validate_port(value: Option<u64>, label: &str, diagnostics: &mut Vec<String>)
     }
 }
 
-fn collect_required_optional_ref(value: Option<&str>, label: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_required_optional_ref(
+    value: Option<&str>,
+    label: &str,
+    diagnostics: &mut impl DiagnosticSink,
+) -> Result<()> {
     match value {
         Some(reference) => collect_ref_diagnostics(&[reference.to_string()], label, diagnostics),
         None => push_diagnostic(diagnostics, format!("{label} ref is required")),
     }
 }
 
-fn collect_ref_diagnostics(refs: &[String], label: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_ref_diagnostics(refs: &[String], label: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     validate_bounded_value_count(refs.len(), MAX_REF_COUNT, label)?;
     for reference in refs {
         if let Err(error) = validate_content_ref(reference) {
@@ -1232,7 +1290,12 @@ fn validate_optional_ref(value: Option<&str>, label: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_bounded_text(value: &str, label: &str, maximum: usize, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_bounded_text(
+    value: &str,
+    label: &str,
+    maximum: usize,
+    diagnostics: &mut impl DiagnosticSink,
+) -> Result<()> {
     if value.trim().is_empty() {
         return push_diagnostic(diagnostics, format!("{label} must not be empty"));
     }
@@ -1242,7 +1305,7 @@ fn validate_bounded_text(value: &str, label: &str, maximum: usize, diagnostics: 
     Ok(())
 }
 
-fn validate_text(value: &str, label: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_text(value: &str, label: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     validate_bounded_text(value, label, MAX_SERVICE_ID_BYTES, diagnostics)
 }
 
@@ -1258,14 +1321,8 @@ fn ensure_string_count(values: &[String], maximum: usize, label: &str) -> Result
     validate_bounded_value_count(values.len(), maximum, label)
 }
 
-fn push_diagnostic(diagnostics: &mut Vec<String>, diagnostic: impl Into<String>) -> Result<()> {
-    let next = diagnostics
-        .len()
-        .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("diagnostic count overflow"))?;
-    validate_bounded_value_count(next, MAX_DIAGNOSTICS, "diagnostic")?;
-    diagnostics.push(diagnostic.into());
-    Ok(())
+fn push_diagnostic(diagnostics: &mut impl DiagnosticSink, diagnostic: impl Into<String>) -> Result<()> {
+    diagnostics.push_bounded(diagnostic.into())
 }
 
 fn is_alpn_byte(byte: u8) -> bool {
@@ -1306,7 +1363,7 @@ fn pass_fail(is_pass: bool) -> &'static str {
     if is_pass { "pass" } else { "fail" }
 }
 
-fn render_openmetrics(input: &MetricsSnapshotInput, diagnostics: &mut Vec<String>) -> Result<String> {
+fn render_openmetrics(input: &MetricsSnapshotInput, diagnostics: &mut impl DiagnosticSink) -> Result<String> {
     let mut output = String::new();
     let mut names = BTreeSet::new();
     for sample in &input.samples {
@@ -1341,7 +1398,7 @@ fn render_openmetrics(input: &MetricsSnapshotInput, diagnostics: &mut Vec<String
     Ok(output)
 }
 
-fn validate_metric_sample(sample: &MetricSample, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_metric_sample(sample: &MetricSample, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     validate_bounded_text(&sample.name, "metric name", MAX_METRIC_NAME_BYTES, diagnostics)?;
     if !sample.name.bytes().all(is_metric_name_byte) {
         push_diagnostic(diagnostics, "metric name contains unsupported characters")?;
