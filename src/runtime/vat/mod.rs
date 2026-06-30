@@ -1,30 +1,5 @@
 use preserves::IOValue;
 
-use super::PredicateDecision;
-use super::RuntimeActormapTransactionOutcome;
-use super::RuntimeActormapTransactionState;
-use super::RuntimeDistributedRefLifetimeState;
-use super::RuntimeNearFarRefState;
-use super::RuntimeObjectAuthorityKind;
-use super::RuntimeObjectAuthorityState;
-use super::RuntimePredicateReceipt;
-use super::RuntimePromisePipelineEntry;
-use super::RuntimePromisePipelineState;
-use super::RuntimePromiseState;
-use super::RuntimeReferenceCallMode;
-use super::RuntimeReferenceKind;
-use super::RuntimeRevocationCleanupState;
-use super::RuntimeRightsAmplificationState;
-use super::RuntimeSnapshotAuthorityState;
-use super::evaluate_actormap_transaction;
-use super::evaluate_distributed_ref_lifetime;
-use super::evaluate_near_far_refs;
-use super::evaluate_object_authority;
-use super::evaluate_promise_pipeline;
-use super::evaluate_promise_state_transition;
-use super::evaluate_revocation_cleanup;
-use super::evaluate_rights_amplification;
-use super::evaluate_snapshot_authority;
 use crate::deterministic_replay;
 use crate::error::Result;
 use crate::preserves_rail::RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA;
@@ -44,6 +19,7 @@ use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
+use crate::runtime;
 
 const LOCAL_VAT_ID: &str = "vat:fixture:local";
 const REMOTE_VAT_ID: &str = "vat:fixture:remote";
@@ -115,7 +91,7 @@ impl VatObjectRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VatCallEvidence {
     pub name: String,
-    pub receipt: RuntimePredicateReceipt,
+    pub receipt: runtime::RuntimePredicateReceipt,
 }
 
 impl VatCallEvidence {
@@ -131,7 +107,7 @@ impl VatCallEvidence {
 pub struct VatFixtureRun {
     pub value: IOValue,
     pub run_ref: String,
-    pub receipts: Vec<RuntimePredicateReceipt>,
+    pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
 }
 
@@ -140,7 +116,7 @@ pub struct VatSnapshotFixture {
     pub value: IOValue,
     pub snapshot_ref: String,
     pub fixture_ref: String,
-    pub receipts: Vec<RuntimePredicateReceipt>,
+    pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
 }
 
@@ -156,7 +132,7 @@ pub struct VatRestoreFixture {
 pub struct VatPromiseFixture {
     pub value: IOValue,
     pub fixture_ref: String,
-    pub receipts: Vec<RuntimePredicateReceipt>,
+    pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
 }
 
@@ -164,7 +140,7 @@ pub struct VatPromiseFixture {
 pub struct VatAmbientAuthorityFixture {
     pub value: IOValue,
     pub fixture_ref: String,
-    pub receipts: Vec<RuntimePredicateReceipt>,
+    pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
 }
 
@@ -172,7 +148,7 @@ pub struct VatAmbientAuthorityFixture {
 pub struct VatRightsFixture {
     pub value: IOValue,
     pub fixture_ref: String,
-    pub receipts: Vec<RuntimePredicateReceipt>,
+    pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
 }
 
@@ -180,7 +156,7 @@ pub struct VatRightsFixture {
 pub struct VatDistributedRefFixture {
     pub value: IOValue,
     pub fixture_ref: String,
-    pub receipts: Vec<RuntimePredicateReceipt>,
+    pub receipts: Vec<runtime::RuntimePredicateReceipt>,
     pub diagnostics: Vec<String>,
 }
 
@@ -281,29 +257,29 @@ fn fixture_objects() -> Result<FixtureObjects> {
 }
 
 fn near_far_calls(objects: &FixtureObjects) -> Result<Vec<VatCallEvidence>> {
-    let near_call = evaluate_near_far_refs(&RuntimeNearFarRefState {
+    let near_call = runtime::evaluate_near_far_refs(&runtime::RuntimeNearFarRefState {
         reference_ref: objects.helper_ref.clone(),
-        reference_kind: RuntimeReferenceKind::Near,
+        reference_kind: runtime::RuntimeReferenceKind::Near,
         is_live: true,
         caller_vat_id: LOCAL_VAT_ID.to_string(),
         target_vat_id: LOCAL_VAT_ID.to_string(),
-        call_mode: RuntimeReferenceCallMode::Synchronous,
+        call_mode: runtime::RuntimeReferenceCallMode::Synchronous,
     })?;
-    let far_sync_denial = evaluate_near_far_refs(&RuntimeNearFarRefState {
+    let far_sync_denial = runtime::evaluate_near_far_refs(&runtime::RuntimeNearFarRefState {
         reference_ref: objects.far_ref.clone(),
-        reference_kind: RuntimeReferenceKind::Far,
+        reference_kind: runtime::RuntimeReferenceKind::Far,
         is_live: true,
         caller_vat_id: LOCAL_VAT_ID.to_string(),
         target_vat_id: REMOTE_VAT_ID.to_string(),
-        call_mode: RuntimeReferenceCallMode::Synchronous,
+        call_mode: runtime::RuntimeReferenceCallMode::Synchronous,
     })?;
-    let far_async = evaluate_near_far_refs(&RuntimeNearFarRefState {
+    let far_async = runtime::evaluate_near_far_refs(&runtime::RuntimeNearFarRefState {
         reference_ref: objects.far_ref.clone(),
-        reference_kind: RuntimeReferenceKind::Far,
+        reference_kind: runtime::RuntimeReferenceKind::Far,
         is_live: true,
         caller_vat_id: LOCAL_VAT_ID.to_string(),
         target_vat_id: REMOTE_VAT_ID.to_string(),
-        call_mode: RuntimeReferenceCallMode::Asynchronous,
+        call_mode: runtime::RuntimeReferenceCallMode::Asynchronous,
     })?;
 
     Ok(vec![
@@ -323,8 +299,8 @@ fn near_far_calls(objects: &FixtureObjects) -> Result<Vec<VatCallEvidence>> {
 }
 
 fn actormap_calls(objects: &FixtureObjects) -> Result<Vec<VatCallEvidence>> {
-    let committed = evaluate_actormap_transaction(&RuntimeActormapTransactionState {
-        outcome: RuntimeActormapTransactionOutcome::Committed,
+    let committed = runtime::evaluate_actormap_transaction(&runtime::RuntimeActormapTransactionState {
+        outcome: runtime::RuntimeActormapTransactionOutcome::Committed,
         before_object_refs: sorted_refs(vec![objects.root_ref.clone(), objects.helper_ref.clone()]),
         after_object_refs: sorted_refs(vec![
             objects.root_ref.clone(),
@@ -340,8 +316,8 @@ fn actormap_calls(objects: &FixtureObjects) -> Result<Vec<VatCallEvidence>> {
         ]),
         used_object_refs: vec![objects.helper_ref.clone()],
     })?;
-    let rollback = evaluate_actormap_transaction(&RuntimeActormapTransactionState {
-        outcome: RuntimeActormapTransactionOutcome::RolledBack,
+    let rollback = runtime::evaluate_actormap_transaction(&runtime::RuntimeActormapTransactionState {
+        outcome: runtime::RuntimeActormapTransactionOutcome::RolledBack,
         before_object_refs: sorted_refs(vec![objects.root_ref.clone(), objects.helper_ref.clone()]),
         after_object_refs: sorted_refs(vec![objects.root_ref.clone(), objects.helper_ref.clone()]),
         spawned_object_refs: vec![objects.spawned_ref.clone()],
@@ -363,12 +339,12 @@ fn actormap_calls(objects: &FixtureObjects) -> Result<Vec<VatCallEvidence>> {
 }
 
 fn pipeline_call(far_ref: &str) -> Result<VatCallEvidence> {
-    let pipeline = evaluate_promise_pipeline(&RuntimePromisePipelineState::new(
-        RuntimePromiseState::pending("promise:far-call"),
+    let pipeline = runtime::evaluate_promise_pipeline(&runtime::RuntimePromisePipelineState::new(
+        runtime::RuntimePromiseState::pending("promise:far-call"),
         PIPELINE_MAX_QUEUE,
         vec![
-            RuntimePromisePipelineEntry::new(1, far_ref.to_string(), "get"),
-            RuntimePromisePipelineEntry::new(2, far_ref.to_string(), "subscribe"),
+            runtime::RuntimePromisePipelineEntry::new(1, far_ref.to_string(), "get"),
+            runtime::RuntimePromisePipelineEntry::new(2, far_ref.to_string(), "subscribe"),
         ],
     ))?;
     Ok(VatCallEvidence {
@@ -378,7 +354,7 @@ fn pipeline_call(far_ref: &str) -> Result<VatCallEvidence> {
 }
 
 fn revocation_call(proxy_ref: &str) -> Result<VatCallEvidence> {
-    let revoked = evaluate_revocation_cleanup(&RuntimeRevocationCleanupState {
+    let revoked = runtime::evaluate_revocation_cleanup(&runtime::RuntimeRevocationCleanupState {
         revoked_refs: vec![proxy_ref.to_string()],
         attempted_use_refs: vec![proxy_ref.to_string()],
         remaining_assertion_refs: Vec::new(),
@@ -437,7 +413,7 @@ pub fn run_vat_snapshot_fixture() -> Result<VatSnapshotFixture> {
         sequence([helper_ref.clone()].iter().map(string).collect()),
     ]);
     let snapshot_ref = canonical_hash(&snapshot_body)?;
-    let pass = evaluate_snapshot_authority(&RuntimeSnapshotAuthorityState {
+    let pass = runtime::evaluate_snapshot_authority(&runtime::RuntimeSnapshotAuthorityState {
         snapshot_ref: snapshot_ref.clone(),
         admitted_authority_refs: sorted_refs(vec![root_ref.clone(), helper_ref.clone()]),
         claimed_authority_refs: vec![helper_ref.clone()],
@@ -445,7 +421,7 @@ pub fn run_vat_snapshot_fixture() -> Result<VatSnapshotFixture> {
         readable_assertion_refs: vec![helper_ref.clone()],
         redacted_assertion_refs: Vec::new(),
     })?;
-    let denied = evaluate_snapshot_authority(&RuntimeSnapshotAuthorityState {
+    let denied = runtime::evaluate_snapshot_authority(&runtime::RuntimeSnapshotAuthorityState {
         snapshot_ref: snapshot_ref.clone(),
         admitted_authority_refs: sorted_refs(vec![root_ref.clone(), helper_ref.clone()]),
         claimed_authority_refs: vec![far_ref.clone()],
@@ -476,26 +452,40 @@ pub fn run_vat_snapshot_fixture() -> Result<VatSnapshotFixture> {
 pub fn run_vat_promise_fixture() -> Result<VatPromiseFixture> {
     let result_ref = canonical_hash(&string("far-call-result"))?;
     let cause_ref = canonical_hash(&string("target-turn-aborted"))?;
-    let pending = RuntimePromiseState::pending("promise:far-call");
-    let resolved = RuntimePromiseState::resolved("promise:far-call", result_ref);
-    let broken = RuntimePromiseState::broken("promise:failed-call", "target turn aborted", vec![cause_ref]);
-    let cancelled = RuntimePromiseState::cancelled("promise:cancelled-call", "caller revoked interest");
-    let timed_out = RuntimePromiseState::timed_out("promise:timeout-call", "logical timeout elapsed");
-    let changed_terminal = RuntimePromiseState::broken("promise:far-call", "late failure", Vec::new());
+    let pending = runtime::RuntimePromiseState::pending("promise:far-call");
+    let resolved = runtime::RuntimePromiseState::resolved("promise:far-call", result_ref);
+    let broken = runtime::RuntimePromiseState::broken("promise:failed-call", "target turn aborted", vec![cause_ref]);
+    let cancelled = runtime::RuntimePromiseState::cancelled("promise:cancelled-call", "caller revoked interest");
+    let timed_out = runtime::RuntimePromiseState::timed_out("promise:timeout-call", "logical timeout elapsed");
+    let changed_terminal = runtime::RuntimePromiseState::broken("promise:far-call", "late failure", Vec::new());
 
-    let resolve_receipt = evaluate_promise_state_transition(&pending, &resolved)?.receipt;
-    let broken_receipt =
-        evaluate_promise_state_transition(&RuntimePromiseState::pending("promise:failed-call"), &broken)?.receipt;
-    let cancel_receipt =
-        evaluate_promise_state_transition(&RuntimePromiseState::pending("promise:cancelled-call"), &cancelled)?.receipt;
-    let timeout_receipt =
-        evaluate_promise_state_transition(&RuntimePromiseState::pending("promise:timeout-call"), &timed_out)?.receipt;
-    let terminal_denial = evaluate_promise_state_transition(&resolved, &changed_terminal)?.receipt;
-    let pipeline_cleanup =
-        evaluate_promise_pipeline(&RuntimePromisePipelineState::new(broken, PIPELINE_MAX_QUEUE, vec![
-            RuntimePromisePipelineEntry::new(1, canonical_hash(&string("stale-target"))?, "after-break"),
-        ]))?
-        .receipt;
+    let resolve_receipt = runtime::evaluate_promise_state_transition(&pending, &resolved)?.receipt;
+    let broken_receipt = runtime::evaluate_promise_state_transition(
+        &runtime::RuntimePromiseState::pending("promise:failed-call"),
+        &broken,
+    )?
+    .receipt;
+    let cancel_receipt = runtime::evaluate_promise_state_transition(
+        &runtime::RuntimePromiseState::pending("promise:cancelled-call"),
+        &cancelled,
+    )?
+    .receipt;
+    let timeout_receipt = runtime::evaluate_promise_state_transition(
+        &runtime::RuntimePromiseState::pending("promise:timeout-call"),
+        &timed_out,
+    )?
+    .receipt;
+    let terminal_denial = runtime::evaluate_promise_state_transition(&resolved, &changed_terminal)?.receipt;
+    let pipeline_cleanup = runtime::evaluate_promise_pipeline(&runtime::RuntimePromisePipelineState::new(
+        broken,
+        PIPELINE_MAX_QUEUE,
+        vec![runtime::RuntimePromisePipelineEntry::new(
+            1,
+            canonical_hash(&string("stale-target"))?,
+            "after-break",
+        )],
+    ))?
+    .receipt;
 
     let receipts = vec![
         resolve_receipt,
@@ -553,8 +543,8 @@ fn dist_refs() -> Result<DistRefs> {
     })
 }
 
-fn dist_state(refs: &DistRefs, case: DistCase) -> RuntimeDistributedRefLifetimeState {
-    let mut state = RuntimeDistributedRefLifetimeState {
+fn dist_state(refs: &DistRefs, case: DistCase) -> runtime::RuntimeDistributedRefLifetimeState {
+    let mut state = runtime::RuntimeDistributedRefLifetimeState {
         far_ref: refs.far_ref.clone(),
         session_ref: refs.session_ref.clone(),
         replacement_ref: None,
@@ -584,7 +574,7 @@ fn dist_state(refs: &DistRefs, case: DistCase) -> RuntimeDistributedRefLifetimeS
     state
 }
 
-fn dist_receipts(refs: &DistRefs) -> Result<Vec<RuntimePredicateReceipt>> {
+fn dist_receipts(refs: &DistRefs) -> Result<Vec<runtime::RuntimePredicateReceipt>> {
     [
         DistCase::Live,
         DistCase::Disconnected,
@@ -593,7 +583,7 @@ fn dist_receipts(refs: &DistRefs) -> Result<Vec<RuntimePredicateReceipt>> {
         DistCase::PendingOpen,
     ]
     .into_iter()
-    .map(|case| evaluate_distributed_ref_lifetime(&dist_state(refs, case)).map(|outcome| outcome.receipt))
+    .map(|case| runtime::evaluate_distributed_ref_lifetime(&dist_state(refs, case)).map(|outcome| outcome.receipt))
     .collect()
 }
 
@@ -630,7 +620,7 @@ pub fn run_vat_rights_fixture() -> Result<VatRightsFixture> {
     ]);
     let sealed_value_ref = canonical_hash(&sealed_value)?;
 
-    let unsealed = evaluate_rights_amplification(&RuntimeRightsAmplificationState {
+    let unsealed = runtime::evaluate_rights_amplification(&runtime::RuntimeRightsAmplificationState {
         holder_object_ref: helper_ref.clone(),
         sealed_value_ref: sealed_value_ref.clone(),
         sealer_brand_ref: brand_ref.clone(),
@@ -638,7 +628,7 @@ pub fn run_vat_rights_fixture() -> Result<VatRightsFixture> {
         sealed_authority_refs: vec![root_ref.clone()],
         recovered_authority_refs: vec![root_ref.clone()],
     })?;
-    let wrong_unsealer = evaluate_rights_amplification(&RuntimeRightsAmplificationState {
+    let wrong_unsealer = runtime::evaluate_rights_amplification(&runtime::RuntimeRightsAmplificationState {
         holder_object_ref: helper_ref.clone(),
         sealed_value_ref: sealed_value_ref.clone(),
         sealer_brand_ref: brand_ref.clone(),
@@ -647,7 +637,7 @@ pub fn run_vat_rights_fixture() -> Result<VatRightsFixture> {
         recovered_authority_refs: vec![root_ref.clone()],
     })?;
     let over_recovery_ref = canonical_hash(&string("unsealed-extra-authority"))?;
-    let over_recovery = evaluate_rights_amplification(&RuntimeRightsAmplificationState {
+    let over_recovery = runtime::evaluate_rights_amplification(&runtime::RuntimeRightsAmplificationState {
         holder_object_ref: helper_ref,
         sealed_value_ref: sealed_value_ref.clone(),
         sealer_brand_ref: brand_ref.clone(),
@@ -679,22 +669,22 @@ pub fn run_vat_ambient_authority_fixture() -> Result<VatAmbientAuthorityFixture>
     let spawned = VatObjectRef::new(LOCAL_VAT_ID, SPAWNED_OBJECT_ID, VatReferenceKind::Near, Vec::new());
     let spawned_ref = spawned.object_ref()?;
     let authority_kinds = [
-        RuntimeObjectAuthorityKind::Filesystem,
-        RuntimeObjectAuthorityKind::Network,
-        RuntimeObjectAuthorityKind::Clock,
-        RuntimeObjectAuthorityKind::Process,
-        RuntimeObjectAuthorityKind::Dataspace,
-        RuntimeObjectAuthorityKind::Store,
-        RuntimeObjectAuthorityKind::Blob,
-        RuntimeObjectAuthorityKind::Consensus,
-        RuntimeObjectAuthorityKind::Choreography,
-        RuntimeObjectAuthorityKind::HostResource,
+        runtime::RuntimeObjectAuthorityKind::Filesystem,
+        runtime::RuntimeObjectAuthorityKind::Network,
+        runtime::RuntimeObjectAuthorityKind::Clock,
+        runtime::RuntimeObjectAuthorityKind::Process,
+        runtime::RuntimeObjectAuthorityKind::Dataspace,
+        runtime::RuntimeObjectAuthorityKind::Store,
+        runtime::RuntimeObjectAuthorityKind::Blob,
+        runtime::RuntimeObjectAuthorityKind::Consensus,
+        runtime::RuntimeObjectAuthorityKind::Choreography,
+        runtime::RuntimeObjectAuthorityKind::HostResource,
     ];
     let mut authority_refs = Vec::with_capacity(authority_kinds.len());
     let mut receipts = Vec::with_capacity(authority_kinds.len() + 1);
     for authority_kind in authority_kinds {
         let authority_ref = authority_descriptor_ref(authority_kind)?;
-        let denied = evaluate_object_authority(&RuntimeObjectAuthorityState {
+        let denied = runtime::evaluate_object_authority(&runtime::RuntimeObjectAuthorityState {
             object_ref: spawned_ref.clone(),
             requested_authority_ref: authority_ref.clone(),
             requested_authority_kind: authority_kind,
@@ -705,11 +695,11 @@ pub fn run_vat_ambient_authority_fixture() -> Result<VatAmbientAuthorityFixture>
         receipts.push(denied.receipt);
     }
 
-    let clock_ref = authority_descriptor_ref(RuntimeObjectAuthorityKind::Clock)?;
-    let clock_pass = evaluate_object_authority(&RuntimeObjectAuthorityState {
+    let clock_ref = authority_descriptor_ref(runtime::RuntimeObjectAuthorityKind::Clock)?;
+    let clock_pass = runtime::evaluate_object_authority(&runtime::RuntimeObjectAuthorityState {
         object_ref: spawned_ref,
         requested_authority_ref: clock_ref.clone(),
-        requested_authority_kind: RuntimeObjectAuthorityKind::Clock,
+        requested_authority_kind: runtime::RuntimeObjectAuthorityKind::Clock,
         endowed_authority_refs: vec![clock_ref.clone()],
         admitted_authority_refs: vec![clock_ref],
     })?;
@@ -1337,7 +1327,7 @@ fn authority_edge_value(from_ref: &str, to_ref: &str, edge_kind: &str) -> IOValu
     record("authority-edge-v1", vec![string(from_ref), string(to_ref), string(edge_kind)])
 }
 
-fn authority_descriptor_ref(authority_kind: RuntimeObjectAuthorityKind) -> Result<String> {
+fn authority_descriptor_ref(authority_kind: runtime::RuntimeObjectAuthorityKind) -> Result<String> {
     canonical_hash(&record("vat-authority-descriptor-v1", vec![string(authority_kind.as_str())]))
 }
 
@@ -1403,12 +1393,12 @@ fn sorted_refs(mut refs: Vec<String>) -> Vec<String> {
     refs
 }
 
-fn fixture_diagnostics(receipts: &[RuntimePredicateReceipt]) -> Vec<String> {
+fn fixture_diagnostics(receipts: &[runtime::RuntimePredicateReceipt]) -> Vec<String> {
     let mut diagnostics = Vec::new();
-    if receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny) {
+    if receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Deny) {
         diagnostics.push("expected-denials-present".to_string());
     }
-    if receipts.iter().all(|receipt| receipt.decision == PredicateDecision::Pass) {
+    if receipts.iter().all(|receipt| receipt.decision == runtime::PredicateDecision::Pass) {
         diagnostics.push("missing-negative-coverage".to_string());
     }
     diagnostics
@@ -1436,14 +1426,7 @@ mod tests {
     use super::string;
     use super::vat_fixture_summary;
     use crate::preserves_rail::to_text;
-    use crate::runtime::PredicateDecision;
-    use crate::runtime::RuntimeActormapTransactionOutcome;
-    use crate::runtime::RuntimeActormapTransactionState;
-    use crate::runtime::RuntimePromisePipelineEntry;
-    use crate::runtime::RuntimePromisePipelineState;
-    use crate::runtime::RuntimePromiseState;
-    use crate::runtime::evaluate_actormap_transaction;
-    use crate::runtime::evaluate_promise_pipeline;
+    use crate::runtime;
 
     #[test]
     fn vat_fixture_binds_near_far_actormap_pipeline_and_revocation_predicates() {
@@ -1461,7 +1444,7 @@ mod tests {
                 .iter()
                 .any(|receipt| receipt.predicate == "molten.trellis-runtime.revocation-cleanup.v1")
         );
-        assert!(run.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny));
+        assert!(run.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Deny));
         assert!(run.diagnostics.iter().any(|diagnostic| diagnostic == "expected-denials-present"));
         assert!(run.run_ref.starts_with("blake3:"));
     }
@@ -1485,8 +1468,8 @@ mod tests {
                 .iter()
                 .any(|receipt| receipt.predicate == "molten.trellis-runtime.snapshot-authority.v1")
         );
-        assert!(snapshot.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Pass));
-        assert!(snapshot.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny));
+        assert!(snapshot.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Pass));
+        assert!(snapshot.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Deny));
         assert!(
             snapshot
                 .receipts
@@ -1518,8 +1501,8 @@ mod tests {
                 .iter()
                 .any(|receipt| receipt.predicate == "molten.trellis-runtime.distributed-ref-lifetime.v1")
         );
-        assert!(distributed_ref.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Pass));
-        assert!(distributed_ref.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny));
+        assert!(distributed_ref.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Pass));
+        assert!(distributed_ref.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Deny));
         assert!(
             distributed_ref
                 .receipts
@@ -1547,8 +1530,8 @@ mod tests {
                 .iter()
                 .any(|receipt| receipt.predicate == "molten.trellis-runtime.rights-amplification.v1")
         );
-        assert!(rights.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Pass));
-        assert!(rights.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny));
+        assert!(rights.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Pass));
+        assert!(rights.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Deny));
         assert!(
             rights
                 .receipts
@@ -1576,8 +1559,8 @@ mod tests {
                 .iter()
                 .any(|receipt| receipt.predicate == "molten.trellis-runtime.object-authority.v1")
         );
-        assert!(authority.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Pass));
-        assert!(authority.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny));
+        assert!(authority.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Pass));
+        assert!(authority.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Deny));
         assert!(
             authority
                 .receipts
@@ -1611,8 +1594,8 @@ mod tests {
                 .iter()
                 .any(|receipt| receipt.predicate == "molten.trellis-runtime.promise-pipeline.v1")
         );
-        assert!(promise.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Pass));
-        assert!(promise.receipts.iter().any(|receipt| receipt.decision == PredicateDecision::Deny));
+        assert!(promise.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Pass));
+        assert!(promise.receipts.iter().any(|receipt| receipt.decision == runtime::PredicateDecision::Deny));
         assert!(
             promise
                 .receipts
@@ -1688,41 +1671,43 @@ mod tests {
     fn hegel_promise_pipeline_ordering_bounds_and_terminal_cleanup(tc: TestCase) {
         let queue_len = tc.draw(generators::integers::<u64>().min_value(0).max_value(4));
         let queue = (0..queue_len)
-            .map(|index| RuntimePromisePipelineEntry::new(index + 1, vat_test_ref(&format!("target-{index}")), "call"))
+            .map(|index| {
+                runtime::RuntimePromisePipelineEntry::new(index + 1, vat_test_ref(&format!("target-{index}")), "call")
+            })
             .collect::<Vec<_>>();
-        let pending = evaluate_promise_pipeline(&RuntimePromisePipelineState::new(
-            RuntimePromiseState::pending("promise:hegel"),
+        let pending = runtime::evaluate_promise_pipeline(&runtime::RuntimePromisePipelineState::new(
+            runtime::RuntimePromiseState::pending("promise:hegel"),
             PIPELINE_MAX_QUEUE,
             queue,
         ))
         .expect("pending pipeline");
-        assert_eq!(pending.receipt.decision, PredicateDecision::Pass);
+        assert_eq!(pending.receipt.decision, runtime::PredicateDecision::Pass);
 
         let overflow_len = tc.draw(generators::integers::<u64>().min_value(5).max_value(8));
         let overflow_queue = (0..overflow_len)
             .map(|index| {
-                RuntimePromisePipelineEntry::new(index + 1, vat_test_ref(&format!("overflow-{index}")), "call")
+                runtime::RuntimePromisePipelineEntry::new(index + 1, vat_test_ref(&format!("overflow-{index}")), "call")
             })
             .collect::<Vec<_>>();
-        let overflow = evaluate_promise_pipeline(&RuntimePromisePipelineState::new(
-            RuntimePromiseState::pending("promise:overflow"),
+        let overflow = runtime::evaluate_promise_pipeline(&runtime::RuntimePromisePipelineState::new(
+            runtime::RuntimePromiseState::pending("promise:overflow"),
             PIPELINE_MAX_QUEUE,
             overflow_queue,
         ))
         .expect("overflow pipeline");
-        assert_eq!(overflow.receipt.decision, PredicateDecision::Deny);
+        assert_eq!(overflow.receipt.decision, runtime::PredicateDecision::Deny);
 
-        let terminal = evaluate_promise_pipeline(&RuntimePromisePipelineState::new(
-            RuntimePromiseState::broken("promise:terminal", "causal failure", Vec::new()),
+        let terminal = runtime::evaluate_promise_pipeline(&runtime::RuntimePromisePipelineState::new(
+            runtime::RuntimePromiseState::broken("promise:terminal", "causal failure", Vec::new()),
             PIPELINE_MAX_QUEUE,
-            vec![RuntimePromisePipelineEntry::new(
+            vec![runtime::RuntimePromisePipelineEntry::new(
                 1,
                 vat_test_ref("stale-terminal"),
                 "late-call",
             )],
         ))
         .expect("terminal pipeline");
-        assert_eq!(terminal.receipt.decision, PredicateDecision::Deny);
+        assert_eq!(terminal.receipt.decision, runtime::PredicateDecision::Deny);
     }
 
     #[hegel::test(test_cases = 16)]
@@ -1732,8 +1717,8 @@ mod tests {
         let spawned =
             sorted_refs((0..spawn_count).map(|index| vat_test_ref(&format!("spawned-{index}"))).collect::<Vec<_>>());
         let after = sorted_refs(before.iter().cloned().chain(spawned.iter().cloned()).collect());
-        let committed = evaluate_actormap_transaction(&RuntimeActormapTransactionState {
-            outcome: RuntimeActormapTransactionOutcome::Committed,
+        let committed = runtime::evaluate_actormap_transaction(&runtime::RuntimeActormapTransactionState {
+            outcome: runtime::RuntimeActormapTransactionOutcome::Committed,
             before_object_refs: before.clone(),
             after_object_refs: after.clone(),
             spawned_object_refs: spawned.clone(),
@@ -1742,10 +1727,10 @@ mod tests {
             used_object_refs: vec![before[0].clone()],
         })
         .expect("commit");
-        assert_eq!(committed.receipt.decision, PredicateDecision::Pass);
+        assert_eq!(committed.receipt.decision, runtime::PredicateDecision::Pass);
 
-        let rollback = evaluate_actormap_transaction(&RuntimeActormapTransactionState {
-            outcome: RuntimeActormapTransactionOutcome::RolledBack,
+        let rollback = runtime::evaluate_actormap_transaction(&runtime::RuntimeActormapTransactionState {
+            outcome: runtime::RuntimeActormapTransactionOutcome::RolledBack,
             before_object_refs: before.clone(),
             after_object_refs: before.clone(),
             spawned_object_refs: spawned.clone(),
@@ -1754,10 +1739,10 @@ mod tests {
             used_object_refs: Vec::new(),
         })
         .expect("rollback");
-        assert_eq!(rollback.receipt.decision, PredicateDecision::Pass);
+        assert_eq!(rollback.receipt.decision, runtime::PredicateDecision::Pass);
 
-        let leaked_spawn = evaluate_actormap_transaction(&RuntimeActormapTransactionState {
-            outcome: RuntimeActormapTransactionOutcome::RolledBack,
+        let leaked_spawn = runtime::evaluate_actormap_transaction(&runtime::RuntimeActormapTransactionState {
+            outcome: runtime::RuntimeActormapTransactionOutcome::RolledBack,
             before_object_refs: before.clone(),
             after_object_refs: before,
             spawned_object_refs: spawned.clone(),
@@ -1766,7 +1751,7 @@ mod tests {
             used_object_refs: Vec::new(),
         })
         .expect("leaked rollback");
-        assert_eq!(leaked_spawn.receipt.decision, PredicateDecision::Deny);
+        assert_eq!(leaked_spawn.receipt.decision, runtime::PredicateDecision::Deny);
     }
 
     fn vat_test_ref(label: &str) -> String {
