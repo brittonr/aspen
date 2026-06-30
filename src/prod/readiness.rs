@@ -715,81 +715,111 @@ pub fn pilot_decision_value(input: &PilotDecisionInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn release_candidate_gate_value(input: &ReleaseCandidateGateInput<'_>) -> Result<IOValue> {
-    validate_decision(input.decision)?;
-    validate_text_field("candidate", input.candidate)?;
-    validate_content_ref(input.source_ref)?;
-    validate_source_gate_status(input.source_gate_status)?;
-    validate_text_slice("source gate caveat", input.source_gate_caveats)?;
-    validate_diagnostics(input.diagnostics)?;
-    for (label, refs) in [
-        ("Rust validation", input.rust_validation_refs),
-        ("nextest", input.nextest_refs),
-        ("Nix check", input.nix_check_refs),
-        ("Cairn validation", input.cairn_validation_refs),
-        ("Octet", input.octet_refs),
-        ("dogfood", input.dogfood_refs),
-        ("release bundle verify", input.bundle_verify_refs),
-        ("promotion", input.promotion_refs),
-        ("export verify", input.export_verify_refs),
-        ("pilot decision", input.pilot_decision_refs),
-    ] {
-        require_pass_refs(label, refs, input.decision)?;
+struct ReleaseCandidateGate<'a> {
+    input: &'a ReleaseCandidateGateInput<'a>,
+}
+
+impl<'a> ReleaseCandidateGate<'a> {
+    fn new(input: &'a ReleaseCandidateGateInput<'a>) -> Self {
+        Self { input }
     }
-    if is_pass(input.decision)
-        && input.source_gate_status != SOURCE_REMEDIATED_ZERO_STATUS
-        && input.source_gate_caveats.is_empty()
-    {
-        return Err(MoltenError::invalid_harness(
-            "passing production candidate with non-zero source gate status requires source gate caveats",
-        ));
+
+    fn validate(&self) -> Result<()> {
+        validate_decision(self.input.decision)?;
+        validate_text_field("candidate", self.input.candidate)?;
+        validate_content_ref(self.input.source_ref)?;
+        validate_source_gate_status(self.input.source_gate_status)?;
+        validate_text_slice("source gate caveat", self.input.source_gate_caveats)?;
+        validate_diagnostics(self.input.diagnostics)?;
+        self.require_evidence_refs()?;
+        self.require_source_gate_caveat()
     }
-    Ok(record("prod-release-candidate-gate-v1", vec![
-        string(PROD_RELEASE_CANDIDATE_GATE_SCHEMA),
-        decision_field(input.decision),
-        record("candidate", vec![string(input.candidate)]),
-        record("source", vec![string(input.source_ref)]),
-        refs_field("rust-validation", input.rust_validation_refs)?,
-        refs_field("nextest", input.nextest_refs)?,
-        refs_field("nix-checks", input.nix_check_refs)?,
-        refs_field("cairn-validation", input.cairn_validation_refs)?,
-        refs_field("octet-source-gates", input.octet_refs)?,
-        refs_field("dogfood", input.dogfood_refs)?,
-        refs_field("release-bundle-verification", input.bundle_verify_refs)?,
-        refs_field("promotion", input.promotion_refs)?,
-        refs_field("export-verification", input.export_verify_refs)?,
-        record("source-gate-status", vec![string(input.source_gate_status)]),
-        texts_field("source-gate-caveats", input.source_gate_caveats)?,
-        refs_field("pilot-decisions", input.pilot_decision_refs)?,
-        diagnostics_field(input.diagnostics)?,
-        checks_field(vec![
-            check_value(
-                "full-validation-matrix-bound",
-                pass_check(
-                    input.rust_validation_refs.is_empty()
-                        || input.nextest_refs.is_empty()
-                        || input.nix_check_refs.is_empty()
-                        || input.cairn_validation_refs.is_empty(),
-                ),
-            ),
-            check_value(
-                "source-gate-current-or-limited",
-                pass_check(
-                    input.source_gate_status != SOURCE_REMEDIATED_ZERO_STATUS && input.source_gate_caveats.is_empty(),
-                ),
-            ),
-            check_value(
-                "bundle-promotion-export-bound",
-                pass_check(
-                    input.bundle_verify_refs.is_empty()
-                        || input.promotion_refs.is_empty()
-                        || input.export_verify_refs.is_empty(),
-                ),
-            ),
-            check_value("pilot-decision-bound", pass_check(input.pilot_decision_refs.is_empty())),
+
+    fn require_evidence_refs(&self) -> Result<()> {
+        for (label, refs) in [
+            ("Rust validation", self.input.rust_validation_refs),
+            ("nextest", self.input.nextest_refs),
+            ("Nix check", self.input.nix_check_refs),
+            ("Cairn validation", self.input.cairn_validation_refs),
+            ("Octet", self.input.octet_refs),
+            ("dogfood", self.input.dogfood_refs),
+            ("release bundle verify", self.input.bundle_verify_refs),
+            ("promotion", self.input.promotion_refs),
+            ("export verify", self.input.export_verify_refs),
+            ("pilot decision", self.input.pilot_decision_refs),
+        ] {
+            require_pass_refs(label, refs, self.input.decision)?;
+        }
+        Ok(())
+    }
+
+    fn require_source_gate_caveat(&self) -> Result<()> {
+        if is_pass(self.input.decision)
+            && self.input.source_gate_status != SOURCE_REMEDIATED_ZERO_STATUS
+            && self.input.source_gate_caveats.is_empty()
+        {
+            return Err(MoltenError::invalid_harness(
+                "passing production candidate with non-zero source gate status requires source gate caveats",
+            ));
+        }
+        Ok(())
+    }
+
+    fn value(&self) -> Result<IOValue> {
+        Ok(record("prod-release-candidate-gate-v1", vec![
+            string(PROD_RELEASE_CANDIDATE_GATE_SCHEMA),
+            decision_field(self.input.decision),
+            record("candidate", vec![string(self.input.candidate)]),
+            record("source", vec![string(self.input.source_ref)]),
+            refs_field("rust-validation", self.input.rust_validation_refs)?,
+            refs_field("nextest", self.input.nextest_refs)?,
+            refs_field("nix-checks", self.input.nix_check_refs)?,
+            refs_field("cairn-validation", self.input.cairn_validation_refs)?,
+            refs_field("octet-source-gates", self.input.octet_refs)?,
+            refs_field("dogfood", self.input.dogfood_refs)?,
+            refs_field("release-bundle-verification", self.input.bundle_verify_refs)?,
+            refs_field("promotion", self.input.promotion_refs)?,
+            refs_field("export-verification", self.input.export_verify_refs)?,
+            record("source-gate-status", vec![string(self.input.source_gate_status)]),
+            texts_field("source-gate-caveats", self.input.source_gate_caveats)?,
+            refs_field("pilot-decisions", self.input.pilot_decision_refs)?,
+            diagnostics_field(self.input.diagnostics)?,
+            checks_field(self.checks()),
+        ]))
+    }
+
+    fn checks(&self) -> Vec<IOValue> {
+        vec![
+            check_value("full-validation-matrix-bound", pass_check(self.has_validation_matrix_gap())),
+            check_value("source-gate-current-or-limited", pass_check(self.has_source_gate_limiter())),
+            check_value("bundle-promotion-export-bound", pass_check(self.has_release_bundle_gap())),
+            check_value("pilot-decision-bound", pass_check(self.input.pilot_decision_refs.is_empty())),
             check_value("release-candidate-receipt-does-not-grant-authority", "pass"),
-        ]),
-    ]))
+        ]
+    }
+
+    fn has_validation_matrix_gap(&self) -> bool {
+        self.input.rust_validation_refs.is_empty()
+            || self.input.nextest_refs.is_empty()
+            || self.input.nix_check_refs.is_empty()
+            || self.input.cairn_validation_refs.is_empty()
+    }
+
+    fn has_source_gate_limiter(&self) -> bool {
+        self.input.source_gate_status != SOURCE_REMEDIATED_ZERO_STATUS && self.input.source_gate_caveats.is_empty()
+    }
+
+    fn has_release_bundle_gap(&self) -> bool {
+        self.input.bundle_verify_refs.is_empty()
+            || self.input.promotion_refs.is_empty()
+            || self.input.export_verify_refs.is_empty()
+    }
+}
+
+pub fn release_candidate_gate_value(input: &ReleaseCandidateGateInput<'_>) -> Result<IOValue> {
+    let gate = ReleaseCandidateGate::new(input);
+    gate.validate()?;
+    gate.value()
 }
 
 fn decision_field(decision: &str) -> IOValue {
