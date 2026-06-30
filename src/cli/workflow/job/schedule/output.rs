@@ -1,6 +1,3 @@
-use std::path::Path;
-
-use molten::error::MoltenError;
 use molten::error::Result;
 
 use super::*;
@@ -107,13 +104,13 @@ fn write_outputs(
     report_value: &preserves::IOValue,
     receipt_value: &preserves::IOValue,
 ) -> Result<()> {
-    std::fs::create_dir_all(input.input.out).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(input.input.out).map_err(molten::error::MoltenError::from)?;
     io::write_file(
         &input.input.out.join("schedule-receipt.preserves"),
         &molten::preserves_rail::to_text(receipt_value)?,
     )?;
     let coordination_out = input.input.out.join("coordination");
-    std::fs::create_dir_all(&coordination_out).map_err(MoltenError::from)?;
+    std::fs::create_dir_all(&coordination_out).map_err(molten::error::MoltenError::from)?;
     io::write_file(
         &coordination_out.join("manifest.preserves"),
         &molten::preserves_rail::to_text(&evidence_values[0])?,
@@ -123,7 +120,7 @@ fn write_outputs(
     write_optional_receipts(input, &coordination_out)
 }
 
-fn write_optional_receipts(input: &FinalizeInput<'_>, coordination_out: &Path) -> Result<()> {
+fn write_optional_receipts(input: &FinalizeInput<'_>, coordination_out: &std::path::Path) -> Result<()> {
     if let Some(result) = input.enqueue {
         io::write_file(
             &coordination_out.join("enqueue-receipt.preserves"),
