@@ -11,17 +11,6 @@ use redb::TableDefinition;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::CONTROL_REGISTRY_COMMAND_SCHEMA;
-use crate::preserves_rail::CONTROL_REGISTRY_RECEIPT_SCHEMA;
-use crate::preserves_rail::CONTROL_REGISTRY_STATE_SCHEMA;
-use crate::preserves_rail::RAFT_COMMAND_ENVELOPE_SCHEMA;
-use crate::preserves_rail::RAFT_COMMIT_RECEIPT_SCHEMA;
-use crate::preserves_rail::RAFT_GROUP_MANIFEST_SCHEMA;
-use crate::preserves_rail::RAFT_LOG_ENTRY_SCHEMA;
-use crate::preserves_rail::RAFT_PREDICATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::RAFT_READ_RECEIPT_SCHEMA;
-use crate::preserves_rail::RAFT_RECOVERY_RECEIPT_SCHEMA;
-use crate::preserves_rail::RAFT_SNAPSHOT_SCHEMA;
 use crate::preserves_rail::bool_value;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
@@ -396,7 +385,7 @@ pub fn raft_group_manifest_value(input: &RaftGroupManifestInput) -> Result<IOVal
     validate_refs(&input.resource_refs, "raft resource ref")?;
     ensure_count_at_most(input.members.len(), MAX_RAFT_MEMBERS, "raft members")?;
     Ok(record("raft-group-manifest-v1", vec![
-        string(RAFT_GROUP_MANIFEST_SCHEMA),
+        string(crate::preserves_rail::RAFT_GROUP_MANIFEST_SCHEMA),
         record("group-id", vec![string(&input.group_id)]),
         record("members", vec![strings_sequence(&input.members)]),
         record("state-machine", vec![string(&input.state_machine)]),
@@ -417,7 +406,7 @@ pub fn parse_raft_group_manifest(value: &IOValue) -> Result<RaftGroupManifest> {
     let fields = value
         .collect_simple_record("raft-group-manifest-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-group-manifest-v1 ...>"))?;
-    require_schema(&fields[0], RAFT_GROUP_MANIFEST_SCHEMA, "raft group manifest schema")?;
+    require_schema(&fields[0], crate::preserves_rail::RAFT_GROUP_MANIFEST_SCHEMA, "raft group manifest schema")?;
     let group_id = record_string(&fields[1], "group-id")?;
     validate_group_id(&group_id)?;
     let members = parse_string_sequence(&fields[2], "members")?;
@@ -448,7 +437,7 @@ pub fn parse_raft_group_manifest(value: &IOValue) -> Result<RaftGroupManifest> {
 pub fn control_registry_command_value(input: &ControlRegistryCommandInput) -> Result<IOValue> {
     validate_control_command(input)?;
     Ok(record("control-registry-command-v1", vec![
-        string(CONTROL_REGISTRY_COMMAND_SCHEMA),
+        string(crate::preserves_rail::CONTROL_REGISTRY_COMMAND_SCHEMA),
         record("operation", vec![string(&input.operation)]),
         record("namespace", vec![string(&input.namespace)]),
         record("name", vec![string(&input.name)]),
@@ -461,7 +450,11 @@ pub fn parse_control_registry_command(value: &IOValue) -> Result<ControlRegistry
     let fields = value
         .collect_simple_record("control-registry-command-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <control-registry-command-v1 ...>"))?;
-    require_schema(&fields[0], CONTROL_REGISTRY_COMMAND_SCHEMA, "control registry command schema")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::CONTROL_REGISTRY_COMMAND_SCHEMA,
+        "control registry command schema",
+    )?;
     let input = ControlRegistryCommandInput {
         operation: record_string(&fields[1], "operation")?,
         namespace: record_string(&fields[2], "namespace")?,
@@ -489,7 +482,7 @@ pub fn raft_command_envelope_value(input: &RaftCommandEnvelopeInput) -> Result<I
     validate_refs(&input.evidence_refs, "raft command evidence ref")?;
     ensure_count_at_most(input.evidence_refs.len(), MAX_RAFT_REFS, "raft command evidence")?;
     Ok(record("raft-command-envelope-v1", vec![
-        string(RAFT_COMMAND_ENVELOPE_SCHEMA),
+        string(crate::preserves_rail::RAFT_COMMAND_ENVELOPE_SCHEMA),
         record("group", vec![string(&input.group_ref)]),
         record("client-session", vec![string(&input.client_session)]),
         record("sequence", vec![u64_value(input.sequence)]),
@@ -506,7 +499,7 @@ pub fn parse_raft_command_envelope(value: &IOValue) -> Result<RaftCommandEnvelop
     let fields = value
         .collect_simple_record("raft-command-envelope-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-command-envelope-v1 ...>"))?;
-    require_schema(&fields[0], RAFT_COMMAND_ENVELOPE_SCHEMA, "raft command envelope schema")?;
+    require_schema(&fields[0], crate::preserves_rail::RAFT_COMMAND_ENVELOPE_SCHEMA, "raft command envelope schema")?;
     let command = record_iovalue(&fields[4], "command")?;
     require_check(&parse_checks(&fields[9])?, "control-plane-only", "raft command envelope")?;
     Ok(RaftCommandEnvelope {
@@ -555,7 +548,7 @@ pub fn control_registry_state_value(
         })
         .collect();
     Ok(record("control-registry-state-v1", vec![
-        string(CONTROL_REGISTRY_STATE_SCHEMA),
+        string(crate::preserves_rail::CONTROL_REGISTRY_STATE_SCHEMA),
         record("entries", vec![sequence(entry_values)]),
         record("client-sessions", vec![sequence(session_values)]),
         checks_value(&[
@@ -569,7 +562,7 @@ pub fn parse_control_registry_state(value: &IOValue) -> Result<ControlRegistrySt
     let fields = value
         .collect_simple_record("control-registry-state-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <control-registry-state-v1 ...>"))?;
-    require_schema(&fields[0], CONTROL_REGISTRY_STATE_SCHEMA, "control registry state schema")?;
+    require_schema(&fields[0], crate::preserves_rail::CONTROL_REGISTRY_STATE_SCHEMA, "control registry state schema")?;
     let entries = parse_registry_entries(&fields[1])?;
     let client_sessions = parse_client_sessions(&fields[2])?;
     require_check(&parse_checks(&fields[3])?, "deterministic-map-order", "control registry state")?;
@@ -731,7 +724,7 @@ pub fn snapshot_control_registry(input: &RaftSnapshotInput) -> Result<RaftSnapsh
     let session_refs =
         state.client_sessions.iter().map(|session| session.result_command_ref.clone()).collect::<Vec<_>>();
     let value = record("raft-snapshot-v1", vec![
-        string(RAFT_SNAPSHOT_SCHEMA),
+        string(crate::preserves_rail::RAFT_SNAPSHOT_SCHEMA),
         record("group", vec![string(&input.group_ref)]),
         record("term", vec![u64_value(input.term)]),
         record("index", vec![u64_value(input.index)]),
@@ -760,7 +753,7 @@ pub fn parse_raft_snapshot(value: &IOValue) -> Result<RaftSnapshot> {
     let fields = value
         .collect_simple_record("raft-snapshot-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-snapshot-v1 ...>"))?;
-    require_schema(&fields[0], RAFT_SNAPSHOT_SCHEMA, "raft snapshot schema")?;
+    require_schema(&fields[0], crate::preserves_rail::RAFT_SNAPSHOT_SCHEMA, "raft snapshot schema")?;
     let state_value = record_iovalue(&fields[6], "state")?;
     let state = parse_control_registry_state(&state_value)?;
     let state_ref = record_ref(&fields[4], "state-ref")?;
@@ -813,7 +806,7 @@ pub fn recover_control_registry(input: &RaftRecoveryInput) -> Result<RaftRecover
         None
     };
     let value = record("raft-recovery-receipt-v1", vec![
-        string(RAFT_RECOVERY_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::RAFT_RECOVERY_RECEIPT_SCHEMA),
         record("decision", vec![string(decision)]),
         record("group", vec![string(&input.group_ref)]),
         record("snapshot", vec![string(&snapshot.snapshot_ref)]),
@@ -1236,7 +1229,7 @@ fn raft_log_entry_value(input: &LogEntryValueInput<'_>) -> Result<IOValue> {
         require_ref(reference, "raft log prior ref")?;
     }
     Ok(record("raft-log-entry-v1", vec![
-        string(RAFT_LOG_ENTRY_SCHEMA),
+        string(crate::preserves_rail::RAFT_LOG_ENTRY_SCHEMA),
         record("group", vec![string(input.group_ref)]),
         record("term", vec![u64_value(input.term)]),
         record("index", vec![u64_value(input.index)]),
@@ -1252,7 +1245,7 @@ fn parse_raft_log_entry(value: &IOValue) -> Result<RaftLogEntry> {
     let fields = value
         .collect_simple_record("raft-log-entry-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-log-entry-v1 ...>"))?;
-    require_schema(&fields[0], RAFT_LOG_ENTRY_SCHEMA, "raft log entry schema")?;
+    require_schema(&fields[0], crate::preserves_rail::RAFT_LOG_ENTRY_SCHEMA, "raft log entry schema")?;
     let command = record_iovalue(&fields[6], "command")?;
     require_check(&parse_checks(&fields[8])?, "append-consistency", "raft log entry")?;
     Ok(RaftLogEntry {
@@ -1273,7 +1266,7 @@ fn commit_receipt_value(input: &CommitReceiptValueInput<'_>) -> Result<IOValue> 
     require_ref(input.command_ref, "raft commit command ref")?;
     validate_refs(input.quorum_refs, "raft commit quorum ref")?;
     Ok(record("raft-commit-receipt-v1", vec![
-        string(RAFT_COMMIT_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::RAFT_COMMIT_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("group", vec![string(input.group_ref)]),
         record("term", vec![u64_value(input.term)]),
@@ -1292,7 +1285,7 @@ fn parse_commit_receipt(value: &IOValue) -> Result<RaftCommitReceipt> {
     let fields = value
         .collect_simple_record("raft-commit-receipt-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-commit-receipt-v1 ...>"))?;
-    require_schema(&fields[0], RAFT_COMMIT_RECEIPT_SCHEMA, "raft commit receipt schema")?;
+    require_schema(&fields[0], crate::preserves_rail::RAFT_COMMIT_RECEIPT_SCHEMA, "raft commit receipt schema")?;
     Ok(RaftCommitReceipt {
         receipt_ref: canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
@@ -1312,7 +1305,7 @@ fn registry_receipt_value(input: &RegistryReceiptValueInput<'_>) -> Result<IOVal
         require_ref(reference, "control registry state-after ref")?;
     }
     Ok(record("control-registry-receipt-v1", vec![
-        string(CONTROL_REGISTRY_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::CONTROL_REGISTRY_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("operation", vec![string(input.operation)]),
         record("command", vec![string(input.command_ref)]),
@@ -1337,7 +1330,11 @@ fn parse_registry_receipt(value: &IOValue) -> Result<ControlRegistryReceipt> {
     let fields = value
         .collect_simple_record("control-registry-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <control-registry-receipt-v1 ...>"))?;
-    require_schema(&fields[0], CONTROL_REGISTRY_RECEIPT_SCHEMA, "control registry receipt schema")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::CONTROL_REGISTRY_RECEIPT_SCHEMA,
+        "control registry receipt schema",
+    )?;
     Ok(ControlRegistryReceipt {
         receipt_ref: canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
@@ -1356,7 +1353,7 @@ fn predicate_receipt_value(input: &PredicateReceiptInput<'_>) -> Result<IOValue>
     require_ref(input.group_ref, "raft predicate group ref")?;
     validate_refs(input.subjects, "raft predicate subject ref")?;
     Ok(record("raft-predicate-receipt-v1", vec![
-        string(RAFT_PREDICATE_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::RAFT_PREDICATE_RECEIPT_SCHEMA),
         record("predicate", vec![string(input.predicate)]),
         record("decision", vec![string(input.decision)]),
         record("group", vec![string(input.group_ref)]),
@@ -1372,7 +1369,7 @@ fn parse_predicate_receipt(value: &IOValue) -> Result<RaftPredicateReceipt> {
     let fields = value
         .collect_simple_record("raft-predicate-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <raft-predicate-receipt-v1 ...>"))?;
-    require_schema(&fields[0], RAFT_PREDICATE_RECEIPT_SCHEMA, "raft predicate receipt schema")?;
+    require_schema(&fields[0], crate::preserves_rail::RAFT_PREDICATE_RECEIPT_SCHEMA, "raft predicate receipt schema")?;
     require_check(&parse_checks(&fields[8])?, "trellis-predicate", "raft predicate receipt")?;
     Ok(RaftPredicateReceipt {
         predicate_ref: canonical_hash(value)?,
@@ -1384,7 +1381,7 @@ fn parse_predicate_receipt(value: &IOValue) -> Result<RaftPredicateReceipt> {
 
 fn read_receipt_value(input: &ReadReceiptValueInput<'_>) -> Result<IOValue> {
     Ok(record("raft-read-receipt-v1", vec![
-        string(RAFT_READ_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::RAFT_READ_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("group", vec![string(input.group_ref)]),
         record("state", vec![string(input.state_ref)]),

@@ -1,21 +1,13 @@
 use std::fs;
 use std::path::Path;
-use std::path::PathBuf;
 
 use preserves::IOValue;
 use preserves::Value;
 use redb::Database;
 use redb::ReadableDatabase;
-use redb::TableDefinition;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::DELIVERY_DEDUP_ENTRY_SCHEMA;
-use crate::preserves_rail::DELIVERY_IDEMPOTENCY_RECEIPT_SCHEMA;
-use crate::preserves_rail::DELIVERY_OPERATION_ID_SCHEMA;
-use crate::preserves_rail::DELIVERY_RETRY_RECEIPT_SCHEMA;
-use crate::preserves_rail::DELIVERY_SCOPE_PROFILE_SCHEMA;
-use crate::preserves_rail::DELIVERY_WINDOW_SCHEMA;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::parse_canonical_bytes;
@@ -33,10 +25,11 @@ pub const SCOPE_JOB_WORKER: &str = "job-worker";
 pub const SCOPE_CONTROL_COMMAND: &str = "control-plane-command";
 
 const STORE_FILE: &str = "delivery-idempotency.redb";
-const STORE_WINDOWS: TableDefinition<&str, &[u8]> = TableDefinition::new("delivery_windows_v1");
-const STORE_ENTRIES: TableDefinition<&str, &[u8]> = TableDefinition::new("delivery_dedup_entries_v1");
-const STORE_RECEIPTS: TableDefinition<&str, &[u8]> = TableDefinition::new("delivery_idempotency_receipts_v1");
-const STORE_PINS: TableDefinition<&str, &[u8]> = TableDefinition::new("delivery_retention_pins_v1");
+const STORE_WINDOWS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("delivery_windows_v1");
+const STORE_ENTRIES: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("delivery_dedup_entries_v1");
+const STORE_RECEIPTS: redb::TableDefinition<&str, &[u8]> =
+    redb::TableDefinition::new("delivery_idempotency_receipts_v1");
+const STORE_PINS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("delivery_retention_pins_v1");
 
 const MAX_DELIVERY_REFS: usize = 4096;
 const MAX_DELIVERY_DIAGNOSTICS: usize = 128;
@@ -148,7 +141,7 @@ pub fn scope_profile_value(profile: &str, scope_name: &str, retention_refs: &[St
     validate_name(scope_name, "delivery scope name")?;
     validate_refs(retention_refs, "delivery scope retention ref")?;
     Ok(record("delivery-scope-profile-v1", vec![
-        string(DELIVERY_SCOPE_PROFILE_SCHEMA),
+        string(crate::preserves_rail::DELIVERY_SCOPE_PROFILE_SCHEMA),
         record("profile", vec![string(profile)]),
         record("scope-name", vec![string(scope_name)]),
         record("retention", vec![strings_sequence(retention_refs)]),
@@ -183,7 +176,7 @@ pub fn control_command_scope_ref(group_ref: &str, client_session: &str) -> Resul
 pub fn operation_id_value(input: &OperationIdInput) -> Result<IOValue> {
     validate_operation_input(input)?;
     Ok(record("operation-id-v1", vec![
-        string(DELIVERY_OPERATION_ID_SCHEMA),
+        string(crate::preserves_rail::DELIVERY_OPERATION_ID_SCHEMA),
         record("scope", vec![string(&input.scope_ref)]),
         record("producer", vec![string(&input.producer)]),
         record("consumer", vec![string(&input.consumer)]),
@@ -208,7 +201,7 @@ pub fn parse_operation_id(value: &IOValue) -> Result<OperationId> {
     let fields = value
         .collect_simple_record("operation-id-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <operation-id-v1 ...>"))?;
-    require_schema(&fields[0], DELIVERY_OPERATION_ID_SCHEMA, "delivery operation id schema")?;
+    require_schema(&fields[0], crate::preserves_rail::DELIVERY_OPERATION_ID_SCHEMA, "delivery operation id schema")?;
     let input = OperationIdInput {
         scope_ref: record_ref(&fields[1], "scope")?,
         producer: record_string(&fields[2], "producer")?,
@@ -247,7 +240,7 @@ pub fn delivery_window_value(
         return Err(MoltenError::invalid_harness("invalid delivery window sequence bounds"));
     }
     Ok(record("delivery-window-v1", vec![
-        string(DELIVERY_WINDOW_SCHEMA),
+        string(crate::preserves_rail::DELIVERY_WINDOW_SCHEMA),
         record("scope", vec![string(scope_ref)]),
         record("profile", vec![string(scope_profile)]),
         record("next-sequence", vec![u64_value(next_sequence)]),
@@ -261,7 +254,7 @@ pub fn parse_delivery_window(value: &IOValue) -> Result<DeliveryWindow> {
     let fields = value
         .collect_simple_record("delivery-window-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <delivery-window-v1 ...>"))?;
-    require_schema(&fields[0], DELIVERY_WINDOW_SCHEMA, "delivery window schema")?;
+    require_schema(&fields[0], crate::preserves_rail::DELIVERY_WINDOW_SCHEMA, "delivery window schema")?;
     let scope_ref = record_ref(&fields[1], "scope")?;
     let scope_profile = record_string(&fields[2], "profile")?;
     let next_sequence = record_u64(&fields[3], "next-sequence")?;
@@ -334,7 +327,7 @@ pub fn retry_receipt_value(
 ) -> Result<IOValue> {
     validate_diagnostics(diagnostics)?;
     Ok(record("retry-receipt-v1", vec![
-        string(DELIVERY_RETRY_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::DELIVERY_RETRY_RECEIPT_SCHEMA),
         record("operation", vec![string(&operation.operation_ref)]),
         record("scope", vec![string(&operation.scope_ref)]),
         record("window", vec![string(&window.window_ref)]),
@@ -348,7 +341,11 @@ pub fn parse_idempotency_receipt(value: &IOValue) -> Result<IdempotencyReceipt> 
     let fields = value
         .collect_simple_record("delivery-idempotency-receipt-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <delivery-idempotency-receipt-v1 ...>"))?;
-    require_schema(&fields[0], DELIVERY_IDEMPOTENCY_RECEIPT_SCHEMA, "delivery idempotency receipt schema")?;
+    require_schema(
+        &fields[0],
+        crate::preserves_rail::DELIVERY_IDEMPOTENCY_RECEIPT_SCHEMA,
+        "delivery idempotency receipt schema",
+    )?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let side_effect = record_string(&fields[7], "side-effect")?;
@@ -372,7 +369,7 @@ pub fn parse_dedup_entry(value: &IOValue) -> Result<DedupEntry> {
     let fields = value
         .collect_simple_record("dedup-entry-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <dedup-entry-v1 ...>"))?;
-    require_schema(&fields[0], DELIVERY_DEDUP_ENTRY_SCHEMA, "delivery dedup entry schema")?;
+    require_schema(&fields[0], crate::preserves_rail::DELIVERY_DEDUP_ENTRY_SCHEMA, "delivery dedup entry schema")?;
     require_check(&parse_checks(&fields[12])?, "first-receipt-bound", "delivery dedup entry")?;
     Ok(DedupEntry {
         entry_ref: canonical_hash(value)?,
@@ -438,7 +435,11 @@ pub fn delivery_summary(value: &IOValue) -> Result<String> {
         ));
     }
     if let Some(fields) = value.collect_simple_record("retry-receipt-v1", Some(7)) {
-        require_schema(&fields[0], DELIVERY_RETRY_RECEIPT_SCHEMA, "delivery retry receipt schema")?;
+        require_schema(
+            &fields[0],
+            crate::preserves_rail::DELIVERY_RETRY_RECEIPT_SCHEMA,
+            "delivery retry receipt schema",
+        )?;
         require_check(&parse_checks(&fields[6])?, "retry-before-side-effects", "delivery retry receipt")?;
         return Ok(format!(
             "delivery retry receipt ref={} operation={} scope={} retry_after_sequence={} diagnostics={}",
@@ -711,7 +712,7 @@ fn dedup_entry_value(input: DedupEntryValueInput<'_>) -> Result<IOValue> {
     }
     require_ref(input.first_receipt_ref, "delivery dedup first receipt ref")?;
     Ok(record("dedup-entry-v1", vec![
-        string(DELIVERY_DEDUP_ENTRY_SCHEMA),
+        string(crate::preserves_rail::DELIVERY_DEDUP_ENTRY_SCHEMA),
         record("dedup-key", vec![string(input.dedup_key)]),
         record("operation", vec![string(&input.operation.operation_ref)]),
         record("scope", vec![string(&input.operation.scope_ref)]),
@@ -753,7 +754,7 @@ fn idempotency_receipt_value(input: IdempotencyReceiptValueInput<'_>) -> Result<
     validate_side_effect(input.side_effect)?;
     validate_diagnostics(input.diagnostics)?;
     Ok(record("delivery-idempotency-receipt-v1", vec![
-        string(DELIVERY_IDEMPOTENCY_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::DELIVERY_IDEMPOTENCY_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("operation", vec![string(input.operation_ref)]),
         record("scope", vec![string(input.scope_ref)]),
@@ -883,7 +884,7 @@ fn ensure_store_tables(root: &Path) -> Result<Database> {
     Ok(db)
 }
 
-fn store_path(root: &Path) -> PathBuf {
+fn store_path(root: &Path) -> std::path::PathBuf {
     root.join(STORE_FILE)
 }
 
@@ -1113,7 +1114,7 @@ mod tests {
     }
 
     struct Case {
-        root: PathBuf,
+        root: std::path::PathBuf,
         scope: String,
         policy_refs: Vec<String>,
         evidence_refs: Vec<String>,
@@ -1247,7 +1248,7 @@ mod tests {
         canonical_hash(&record("fake-ref", vec![string(label)])).expect("fake ref")
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
+    fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
         static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
