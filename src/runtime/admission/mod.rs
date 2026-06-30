@@ -1,6 +1,3 @@
-use super::RuntimeStep;
-use super::RuntimeValue;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdmissionPolicy {
     deny_rules: Vec<AdmissionDenyRule>,
@@ -109,7 +106,7 @@ pub struct CapabilityGrant {
     pub actor: Option<String>,
     pub action: Option<AdmissionAction>,
     pub target: Option<String>,
-    pub value: Option<RuntimeValue>,
+    pub value: Option<super::RuntimeValue>,
 }
 
 impl CapabilityGrant {
@@ -132,7 +129,7 @@ pub struct AdmissionDenyRule {
     pub actor: Option<String>,
     pub action: Option<AdmissionAction>,
     pub target: Option<String>,
-    pub value: Option<RuntimeValue>,
+    pub value: Option<super::RuntimeValue>,
     pub reason: String,
 }
 
@@ -150,49 +147,49 @@ pub struct AdmissionRequest {
     pub actor: String,
     pub action: AdmissionAction,
     pub target: Option<String>,
-    pub value: Option<RuntimeValue>,
+    pub value: Option<super::RuntimeValue>,
     pub upper: Option<u64>,
 }
 
 impl AdmissionRequest {
-    pub fn from_step(step: &RuntimeStep) -> Self {
+    pub fn from_step(step: &super::RuntimeStep) -> Self {
         match step {
-            RuntimeStep::Send { from, to, body } => Self {
+            super::RuntimeStep::Send { from, to, body } => Self {
                 actor: from.clone(),
                 action: AdmissionAction::Send,
                 target: Some(to.clone()),
                 value: Some(body.clone()),
                 upper: None,
             },
-            RuntimeStep::Observe { actor, pattern } => Self {
+            super::RuntimeStep::Observe { actor, pattern } => Self {
                 actor: actor.clone(),
                 action: AdmissionAction::Observe,
                 target: None,
                 value: Some(pattern.clone()),
                 upper: None,
             },
-            RuntimeStep::Assert { actor, value } => Self {
+            super::RuntimeStep::Assert { actor, value } => Self {
                 actor: actor.clone(),
                 action: AdmissionAction::Assert,
                 target: None,
                 value: Some(value.clone()),
                 upper: None,
             },
-            RuntimeStep::Retract { actor, value } => Self {
+            super::RuntimeStep::Retract { actor, value } => Self {
                 actor: actor.clone(),
                 action: AdmissionAction::Retract,
                 target: None,
                 value: Some(value.clone()),
                 upper: None,
             },
-            RuntimeStep::Clock { actor } => Self {
+            super::RuntimeStep::Clock { actor } => Self {
                 actor: actor.clone(),
                 action: AdmissionAction::Clock,
                 target: None,
                 value: None,
                 upper: None,
             },
-            RuntimeStep::Random { actor, upper } => Self {
+            super::RuntimeStep::Random { actor, upper } => Self {
                 actor: actor.clone(),
                 action: AdmissionAction::Random,
                 target: None,
