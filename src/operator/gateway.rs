@@ -130,6 +130,22 @@ pub struct GatewayIndexDecision {
     pub receipt_value: IOValue,
 }
 
+trait DiagnosticSink {
+    fn push_bounded(&mut self, diagnostic: String) -> Result<()>;
+}
+
+impl DiagnosticSink for Vec<String> {
+    fn push_bounded(&mut self, diagnostic: String) -> Result<()> {
+        let next = self
+            .len()
+            .checked_add(1)
+            .ok_or_else(|| MoltenError::invalid_harness("gateway diagnostic count overflow"))?;
+        validate_count(next, MAX_GATEWAY_DIAGNOSTICS, "gateway diagnostic")?;
+        self.push(diagnostic);
+        Ok(())
+    }
+}
+
 pub fn decide_readback(input: &GatewayReadInput<'_>) -> Result<GatewayReadDecision> {
     let mut diagnostics = Vec::new();
     collect_ref_diagnostics(std::slice::from_ref(&input.object_ref), "object", &mut diagnostics)?;
@@ -307,7 +323,7 @@ pub fn gateway_receipt_authorizes_mutation(_receipt: &IOValue) -> bool {
 fn normalize_range(
     manifest: Option<&ChunkManifest>,
     requested: Option<GatewayRange>,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl DiagnosticSink,
 ) -> Result<Option<GatewayRange>> {
     let Some(manifest) = manifest else {
         if requested.is_some() {
@@ -333,7 +349,7 @@ fn normalize_range(
 fn required_chunks_for_range(
     manifest: &ChunkManifest,
     range: GatewayRange,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl DiagnosticSink,
 ) -> Result<Vec<String>> {
     if range.length == EMPTY_RANGE_LENGTH {
         return Ok(Vec::new());
@@ -369,7 +385,7 @@ fn reconstruct_verified_range(
     range: GatewayRange,
     chunks: &BTreeMap<String, Vec<u8>>,
     chunk_size: usize,
-    diagnostics: &mut Vec<String>,
+    diagnostics: &mut impl DiagnosticSink,
 ) -> Result<Vec<u8>> {
     let mut output = Vec::new();
     let offset = usize::try_from(range.offset)
@@ -539,7 +555,7 @@ fn range_value(range: Option<GatewayRange>) -> IOValue {
     }
 }
 
-fn validate_member(member: &GatewayMember, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_member(member: &GatewayMember, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     validate_text(&member.name, "member name", MAX_MEMBER_NAME_BYTES, diagnostics)?;
     collect_ref_diagnostics(std::slice::from_ref(&member.object_ref), "member object", diagnostics)?;
     if let Some(mime) = &member.mime_hint {
@@ -548,7 +564,7 @@ fn validate_member(member: &GatewayMember, diagnostics: &mut Vec<String>) -> Res
     Ok(())
 }
 
-fn collect_visibility_diagnostics(visibility: &GatewayVisibility, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_visibility_diagnostics(visibility: &GatewayVisibility, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     if !matches!(visibility.profile.as_str(), PUBLIC_PROFILE | DIAGNOSTIC_PROFILE | INTERNAL_PROFILE) {
         push_diagnostic(diagnostics, "unsupported gateway visibility profile")?;
     }
@@ -563,7 +579,7 @@ fn collect_visibility_diagnostics(visibility: &GatewayVisibility, diagnostics: &
     Ok(())
 }
 
-fn collect_ref_diagnostics(refs: &[String], label: &str, diagnostics: &mut Vec<String>) -> Result<()> {
+fn collect_ref_diagnostics(refs: &[String], label: &str, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     validate_count(refs.len(), MAX_GATEWAY_REFS, label)?;
     for reference in refs {
         if let Err(error) = validate_content_ref(reference) {
@@ -573,7 +589,7 @@ fn collect_ref_diagnostics(refs: &[String], label: &str, diagnostics: &mut Vec<S
     Ok(())
 }
 
-fn validate_text(value: &str, label: &str, maximum: usize, diagnostics: &mut Vec<String>) -> Result<()> {
+fn validate_text(value: &str, label: &str, maximum: usize, diagnostics: &mut impl DiagnosticSink) -> Result<()> {
     if value.trim().is_empty() {
         return push_diagnostic(diagnostics, format!("{label} must not be empty"));
     }
@@ -591,14 +607,8 @@ fn validate_count(actual: usize, maximum: usize, label: &str) -> Result<()> {
     }
 }
 
-fn push_diagnostic(diagnostics: &mut Vec<String>, diagnostic: impl Into<String>) -> Result<()> {
-    let next = diagnostics
-        .len()
-        .checked_add(1)
-        .ok_or_else(|| MoltenError::invalid_harness("gateway diagnostic count overflow"))?;
-    validate_count(next, MAX_GATEWAY_DIAGNOSTICS, "gateway diagnostic")?;
-    diagnostics.push(diagnostic.into());
-    Ok(())
+fn push_diagnostic(diagnostics: &mut impl DiagnosticSink, diagnostic: impl Into<String>) -> Result<()> {
+    diagnostics.push_bounded(diagnostic.into())
 }
 
 fn refs_value(refs: &[String]) -> Result<IOValue> {
