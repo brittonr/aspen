@@ -1,25 +1,52 @@
-use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
 
 use preserves::IOValue;
-use preserves::Value;
-use redb::Database;
 use redb::ReadableDatabase;
 use redb::ReadableTableMetadata;
-use redb::TableDefinition;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
+type Path = std::path::Path;
+type Value<T> = preserves::Value<T>;
+type Database = redb::Database;
+type TableDefinition<K, V> = redb::TableDefinition<'static, K, V>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+fn bool_value(value: bool) -> IOValue {
+    crate::preserves_rail::bool_value(value)
+}
+
+fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 const CONTROL_REGISTRY_STATE_MACHINE: &str = "control-registry-v1";
 const READ_MODE_READ_INDEX: &str = "read-index";
@@ -280,8 +307,8 @@ pub struct ControlRegistryStoreStatus {
 }
 
 struct RegistryMaps {
-    entries: BTreeMap<ControlRegistryKey, String>,
-    sessions: BTreeMap<String, ClientSessionRecord>,
+    entries: OrderedMap<ControlRegistryKey, String>,
+    sessions: OrderedMap<String, ClientSessionRecord>,
 }
 
 struct ProposalDecisionInput<'a> {
@@ -1414,7 +1441,7 @@ fn state_maps(state: &ControlRegistryState) -> Result<RegistryMaps> {
                 entry.target_ref.clone(),
             )
         })
-        .collect::<BTreeMap<_, _>>();
+        .collect::<OrderedMap<_, _>>();
     if entries.len() != state.entries.len() {
         return Err(MoltenError::invalid_harness("duplicate control registry entry key"));
     }
@@ -1422,14 +1449,14 @@ fn state_maps(state: &ControlRegistryState) -> Result<RegistryMaps> {
         .client_sessions
         .iter()
         .map(|session| (session.client_session.clone(), session.clone()))
-        .collect::<BTreeMap<_, _>>();
+        .collect::<OrderedMap<_, _>>();
     if sessions.len() != state.client_sessions.len() {
         return Err(MoltenError::invalid_harness("duplicate control registry client session"));
     }
     Ok(RegistryMaps { entries, sessions })
 }
 
-fn entries_from_map(entries: &BTreeMap<ControlRegistryKey, String>) -> Vec<ControlRegistryEntry> {
+fn entries_from_map(entries: &OrderedMap<ControlRegistryKey, String>) -> Vec<ControlRegistryEntry> {
     entries
         .iter()
         .map(|(key, target_ref)| ControlRegistryEntry {
@@ -1440,7 +1467,7 @@ fn entries_from_map(entries: &BTreeMap<ControlRegistryKey, String>) -> Vec<Contr
         .collect()
 }
 
-fn sessions_from_map(sessions: &BTreeMap<String, ClientSessionRecord>) -> Vec<ClientSessionRecord> {
+fn sessions_from_map(sessions: &OrderedMap<String, ClientSessionRecord>) -> Vec<ClientSessionRecord> {
     sessions.values().cloned().collect()
 }
 
@@ -1812,17 +1839,18 @@ fn synthetic_ref(label: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
-    use crate::catalog;
-    use crate::catalog::CatalogListInput;
-    use crate::catalog::CatalogVisibilityInput;
-    use crate::catalog_mcp;
-    use crate::ledger;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::to_text;
+
+    type CatalogListInput = crate::catalog::CatalogListInput;
+    type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+
+    fn parse_text(source: &str) -> Result<IOValue> {
+        crate::preserves_rail::parse_text(source)
+    }
+
+    fn to_text(value: &IOValue) -> Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     fn test_ref(label: &str) -> String {
         canonical_hash(&record("raft-control-test-ref", vec![string(label)])).expect("test ref")
@@ -2047,31 +2075,32 @@ mod tests {
     #[test]
     fn ledger_catalog_and_mcp_classify_raft_artifacts() {
         let runtime = run_control_registry_fixture().expect("runtime");
-        assert_eq!(ledger::artifact_kind(&runtime.manifest.value), "raft-group-manifest");
-        assert_eq!(ledger::artifact_kind(&runtime.log_entries[0].value), "raft-log-entry");
-        assert_eq!(ledger::artifact_kind(&runtime.registry_receipts[0].value), "control-registry-receipt");
+        assert_eq!(crate::ledger::artifact_kind(&runtime.manifest.value), "raft-group-manifest");
+        assert_eq!(crate::ledger::artifact_kind(&runtime.log_entries[0].value), "raft-log-entry");
+        assert_eq!(crate::ledger::artifact_kind(&runtime.registry_receipts[0].value), "control-registry-receipt");
         let ledger_root = temp_dir("ledger");
-        ledger::import_artifact(&ledger_root, &runtime.registry_receipts[0].value).expect("import registry receipt");
+        crate::ledger::import_artifact(&ledger_root, &runtime.registry_receipts[0].value)
+            .expect("import registry receipt");
         let registry = temp_dir("catalog");
-        let listed = catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
+        let listed = crate::catalog::list(&registry, Some(&ledger_root), &CatalogListInput {
             kind: Some("control-registry-receipt".to_string()),
             visibility: CatalogVisibilityInput::default(),
         })
         .expect("catalog list");
         assert_eq!(listed.items.len(), 1);
-        let request = catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string(
+        let request = crate::catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string(
             "control-registry-receipt",
         )])])
         .expect("mcp request");
-        let mcp = catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("mcp call");
+        let mcp = crate::catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("mcp call");
         assert_eq!(mcp.decision, "pass");
         assert!(to_text(&mcp.response_value).expect("render mcp").contains("control-registry-receipt"));
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_bounded_registry_logs_are_deterministic_and_control_only(tc: TestCase) {
-        let command_count =
-            usize::try_from(tc.draw(generators::integers::<u64>().min_value(1).max_value(4))).expect("command count");
+    fn hegel_bounded_registry_logs_are_deterministic_and_control_only(tc: hegel::TestCase) {
+        let command_count = usize::try_from(tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(4)))
+            .expect("command count");
         let manifest = control_registry_fixture_manifest_value().expect("manifest");
         let mut left = new_control_registry_runtime(&manifest).expect("left runtime");
         let mut right = new_control_registry_runtime(&manifest).expect("right runtime");

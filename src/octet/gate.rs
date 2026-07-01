@@ -1,27 +1,55 @@
-use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
 
 use preserves::IOValue;
-use preserves::Value;
-use serde::Deserialize;
 
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::ledger;
-use crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
-use crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::content_ref_hex;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::value_to_iovalue;
+
+type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
+type Path = std::path::Path;
+type PathBuf = std::path::PathBuf;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+const OCTET_GATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::OCTET_GATE_RECEIPT_SCHEMA;
+const OCTET_REVIEW_MANIFEST_SCHEMA: &str = crate::preserves_rail::OCTET_REVIEW_MANIFEST_SCHEMA;
+const OCTET_WARNING_BASELINE_SCHEMA: &str = crate::preserves_rail::OCTET_WARNING_BASELINE_SCHEMA;
+
+fn bool_value(value: bool) -> IOValue {
+    crate::preserves_rail::bool_value(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn content_ref_from_bytes(bytes: &[u8]) -> String {
+    crate::preserves_rail::content_ref_from_bytes(bytes)
+}
+
+fn content_ref_hex(value: &str) -> Result<&str> {
+    crate::preserves_rail::content_ref_hex(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 const STRICT_PROFILE: &str = "strict-ci";
 const QUARANTINE_PROFILE: &str = "quarantine-ci";
@@ -370,7 +398,7 @@ struct CurrentOctetRun {
     summary_ref: String,
     object_corpus_ref: String,
     status: OctetStatusArtifact,
-    findings: BTreeMap<String, FindingEntry>,
+    findings: OrderedMap<String, FindingEntry>,
     unkeyed_findings: u64,
 }
 
@@ -380,7 +408,7 @@ struct ParsedWarningBaseline {
     expires_at: String,
     config_hash: String,
     profile_hash: String,
-    findings: BTreeMap<String, FindingEntry>,
+    findings: OrderedMap<String, FindingEntry>,
     allowed_profiles: Vec<String>,
     target_next: u64,
     review_refs: Vec<String>,
@@ -413,7 +441,7 @@ struct ParsedReviewManifest {
     finding_keys: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
 struct OctetStatusArtifact {
     status: String,
     exit_code: i64,
@@ -424,7 +452,7 @@ struct OctetStatusArtifact {
     autofixable_findings: u64,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
 struct OctetObjectCorpusReceipt {
     schema: Option<String>,
     schema_version: Option<u64>,
@@ -434,7 +462,7 @@ struct OctetObjectCorpusReceipt {
     pure_cache_blocked_count: Option<u64>,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
 struct OctetMetadata {
     tool_name: String,
     tool_version: String,
@@ -1625,12 +1653,12 @@ fn parse_summary_lints(
     summary: Option<&GateFile>,
     checks: &mut impl crate::bounded::VecSink<GateCheck>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
-) -> BTreeMap<String, u64> {
+) -> OrderedMap<String, u64> {
     let Some(summary) = summary else {
         push_check(checks, "summary-lints-parse", false);
-        return BTreeMap::new();
+        return OrderedMap::new();
     };
-    let mut lints = BTreeMap::new();
+    let mut lints = OrderedMap::new();
     let mut is_parsing_lints = false;
     for line in summary.text.lines() {
         let trimmed = line.trim();
@@ -2206,8 +2234,8 @@ fn octet_structured_findings_value(
     (value, unkeyed_findings)
 }
 
-fn parse_summary_findings(summary: &GateFile, status: &OctetStatusArtifact) -> (BTreeMap<String, FindingEntry>, u64) {
-    let mut findings = BTreeMap::new();
+fn parse_summary_findings(summary: &GateFile, status: &OctetStatusArtifact) -> (OrderedMap<String, FindingEntry>, u64) {
+    let mut findings = OrderedMap::new();
     let mut parsed_count = 0u64;
     let mut is_parsing_index = false;
     for line in summary.text.lines() {
@@ -2260,8 +2288,8 @@ fn finding_entry_value(finding: &FindingEntry) -> IOValue {
 }
 
 fn finding_count_delta(
-    current: &BTreeMap<String, FindingEntry>,
-    baseline: &BTreeMap<String, FindingEntry>,
+    current: &OrderedMap<String, FindingEntry>,
+    baseline: &OrderedMap<String, FindingEntry>,
     kind: DeltaKind,
 ) -> Vec<FindingEntry> {
     let mut delta = Vec::new();
@@ -2291,8 +2319,8 @@ fn finding_count_delta(
 }
 
 fn finding_intersection(
-    current: &BTreeMap<String, FindingEntry>,
-    baseline: &BTreeMap<String, FindingEntry>,
+    current: &OrderedMap<String, FindingEntry>,
+    baseline: &OrderedMap<String, FindingEntry>,
 ) -> Vec<FindingEntry> {
     let mut intersection = Vec::new();
     for (key, current_entry) in current {
@@ -2310,7 +2338,7 @@ fn finding_intersection(
     intersection
 }
 
-fn critical_keys(findings: &BTreeMap<String, FindingEntry>) -> Vec<String> {
+fn critical_keys(findings: &OrderedMap<String, FindingEntry>) -> Vec<String> {
     findings
         .values()
         .filter(|finding| is_critical_lint(&finding.lint))
@@ -2330,7 +2358,7 @@ fn source_snapshot_ref(run: &CurrentOctetRun) -> Result<String> {
     ]))
 }
 
-fn record_finding_entries(value: &Value<IOValue>, label: &str) -> Result<BTreeMap<String, FindingEntry>> {
+fn record_finding_entries(value: &Value<IOValue>, label: &str) -> Result<OrderedMap<String, FindingEntry>> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -2339,7 +2367,7 @@ fn record_finding_entries(value: &Value<IOValue>, label: &str) -> Result<BTreeMa
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected {label} sequence")))?;
     ensure_count_at_most(items.len(), MAX_OCTET_FINDING_ENTRIES, label)?;
-    let mut findings = BTreeMap::new();
+    let mut findings = OrderedMap::new();
     for item in items.iter() {
         let item = value_to_iovalue(item);
         let fields = item
@@ -2418,7 +2446,7 @@ fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
         .map_err(|error| MoltenError::invalid_harness(format!("u64 out of range for {field}: {error}")))
 }
 
-fn finding_counts(status: Option<&OctetStatusArtifact>, lint_counts: &BTreeMap<String, u64>) -> FindingCounts {
+fn finding_counts(status: Option<&OctetStatusArtifact>, lint_counts: &OrderedMap<String, u64>) -> FindingCounts {
     let mut counts = FindingCounts::default();
     if let Some(status) = status {
         counts.total = status.total_findings;
@@ -2459,7 +2487,13 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
     Err(MoltenError::invalid_harness(format!("{label} count {actual} exceeds bound {maximum}")))
 }
 
-fn insert_bounded<K: Ord, V>(values: &mut BTreeMap<K, V>, key: K, value: V, maximum: usize, label: &str) -> Result<()> {
+fn insert_bounded<K: Ord, V>(
+    values: &mut OrderedMap<K, V>,
+    key: K,
+    value: V,
+    maximum: usize,
+    label: &str,
+) -> Result<()> {
     if !values.contains_key(&key) {
         let total = values
             .len()
@@ -2515,8 +2549,14 @@ fn b3_ref_from_bytes(bytes: &[u8]) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::to_text;
+
+    fn parse_text(source: &str) -> Result<IOValue> {
+        crate::preserves_rail::parse_text(source)
+    }
+
+    fn to_text(value: &IOValue) -> Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     #[test]
     fn strict_profile_denies_warning_only_status() {

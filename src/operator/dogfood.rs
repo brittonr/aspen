@@ -5,23 +5,12 @@
 //! receipt graph emitted by this module.
 
 use std::fs;
-use std::path::Path;
 
 use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
 
 use crate::artifacts;
 use crate::authority;
 use crate::catalog_mcp;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::evidence::SignedReceiptKey;
-use crate::evidence::SignedReceiptKeyRevocation;
-use crate::evidence::VerifySignedReceiptKeyringPolicy;
-use crate::evidence::VerifySignedReceiptPolicy;
-use crate::evidence::verify_signed_receipt_with_keyring_policy;
-use crate::evidence::verify_signed_receipt_with_policy;
 use crate::harness;
 use crate::job_dag;
 use crate::ledger;
@@ -31,6 +20,30 @@ use crate::octet_gate;
 use crate::preserves_rail;
 use crate::remote_dataspace;
 use crate::retention;
+
+type Path = std::path::Path;
+type Record<T> = preserves::Record<T>;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type SignedReceiptKey = crate::evidence::SignedReceiptKey;
+type SignedReceiptKeyRevocation = crate::evidence::SignedReceiptKeyRevocation;
+type VerifySignedReceiptKeyringPolicy<'a> = crate::evidence::VerifySignedReceiptKeyringPolicy<'a>;
+type VerifySignedReceiptPolicy<'a> = crate::evidence::VerifySignedReceiptPolicy<'a>;
+
+fn verify_signed_receipt_with_policy(
+    value: &IOValue,
+    policy: &VerifySignedReceiptPolicy<'_>,
+) -> Result<crate::evidence::SignedReceipt> {
+    crate::evidence::verify_signed_receipt_with_policy(value, policy)
+}
+
+fn verify_signed_receipt_with_keyring_policy(
+    value: &IOValue,
+    policy: &VerifySignedReceiptKeyringPolicy<'_>,
+) -> Result<crate::evidence::SignedReceiptWithKey> {
+    crate::evidence::verify_signed_receipt_with_keyring_policy(value, policy)
+}
 
 pub const RELEASE_EVIDENCE_SIGNING_PURPOSE: &str = "release-evidence";
 pub const RELEASE_PROMOTION_SIGNING_PURPOSE: &str = "release-promotion";

@@ -1,25 +1,49 @@
-use std::collections::BTreeSet;
-use std::path::Path;
-
-use preserves::CompoundClass;
 use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
-use preserves::ValueClass;
 use preserves::ValueImpl;
 
 use crate::artifacts;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 use crate::upgrades;
+
+type OrderedSet<T> = std::collections::BTreeSet<T>;
+type Path = std::path::Path;
+type CompoundClass = preserves::CompoundClass;
+type Record<T> = preserves::Record<T>;
+type Value<T> = preserves::Value<T>;
+type ValueClass = preserves::ValueClass;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+fn bool_value(value: bool) -> IOValue {
+    crate::preserves_rail::bool_value(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn to_text(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::to_text(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const TOOL_VERSION: &str = "local-structured-rewrite-v1";
 
@@ -214,8 +238,8 @@ pub fn preview(root: &Path, input: &RewritePlanInput) -> Result<RewritePreview> 
 
 fn found_items(root: &Path, input: &RewriteQueryInput) -> Result<Vec<RewriteMatch>> {
     let scope = scoped_refs(root, &input.root_refs, input.include_dependencies)?;
-    let hidden = input.hidden_refs.as_slice().iter().cloned().collect::<BTreeSet<_>>();
-    let kind_filter = input.artifact_kinds.as_slice().iter().cloned().collect::<BTreeSet<_>>();
+    let hidden = input.hidden_refs.as_slice().iter().cloned().collect::<OrderedSet<_>>();
+    let kind_filter = input.artifact_kinds.as_slice().iter().cloned().collect::<OrderedSet<_>>();
     let mut matches = Vec::new();
     for artifact in artifacts::list_artifacts(root, None)? {
         if hidden.contains(&artifact.artifact_ref) {
@@ -1016,9 +1040,9 @@ impl<'a> TextTraversal<'a> {
     }
 }
 
-fn scoped_refs(root: &Path, roots: &[String], include_dependencies: bool) -> Result<BTreeSet<String>> {
+fn scoped_refs(root: &Path, roots: &[String], include_dependencies: bool) -> Result<OrderedSet<String>> {
     validate_refs(roots, "rewrite scope root ref")?;
-    let mut scoped = BTreeSet::new();
+    let mut scoped = OrderedSet::new();
     let mut stack = roots.to_vec();
     while let Some(current) = stack.pop() {
         if !scoped.insert(current.clone()) || !include_dependencies {
@@ -1032,7 +1056,7 @@ fn scoped_refs(root: &Path, roots: &[String], include_dependencies: bool) -> Res
 }
 
 fn impacted_refs(root: &Path, diffs: &[RewriteDiff]) -> Result<Vec<String>> {
-    let mut impacted = BTreeSet::new();
+    let mut impacted = OrderedSet::new();
     for diff in diffs {
         for reference in artifacts::impact_refs(root, std::slice::from_ref(&diff.artifact_ref))? {
             impacted.insert(reference);
@@ -1216,11 +1240,11 @@ fn merge_refs(left: &[String], right: &[String]) -> Vec<String> {
 }
 
 fn sorted_unique_refs(refs: &[String]) -> Vec<String> {
-    refs.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect()
+    refs.iter().cloned().collect::<OrderedSet<_>>().into_iter().collect()
 }
 
 fn sorted_unique_strings(values: &[String]) -> Vec<String> {
-    values.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect()
+    values.iter().cloned().collect::<OrderedSet<_>>().into_iter().collect()
 }
 
 fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maximum: usize, label: &str) -> Result<()> {
@@ -1259,16 +1283,13 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::PathBuf;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
-    use crate::preserves_rail::parse_text;
+
+    type PathBuf = std::path::PathBuf;
+
+    fn parse_text(source: &str) -> Result<IOValue> {
+        crate::preserves_rail::parse_text(source)
+    }
 
     #[test]
     fn find_matches_schema_shapes_and_visibility_filter_hides_refs() {
@@ -1339,8 +1360,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 12)]
-    fn hegel_preview_apply_consistency_and_path_stability(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+    fn hegel_preview_apply_consistency_and_path_stability(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let root = temp_dir("rewrite-hegel");
         let needle = format!("old-{salt}");
         let replacement = format!("new-{salt}");
@@ -1409,13 +1430,13 @@ mod tests {
 
     fn temp_dir(name: &str) -> PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+            std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
         }
-        fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 }

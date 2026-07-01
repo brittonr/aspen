@@ -1,28 +1,50 @@
-use std::borrow::Cow;
-use std::collections::BTreeMap;
-
 use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
 
 use super::replay;
 use super::schema;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::evidence_chain;
-use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
-use crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
-use crate::preserves_rail::HARNESS_GATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::HARNESS_OBSERVATION_SCHEMA;
-use crate::preserves_rail::HARNESS_REPORT_SCHEMA;
-use crate::preserves_rail::HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+
+type Cow<'a, T> = std::borrow::Cow<'a, T>;
+type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
+type Record<T> = preserves::Record<T>;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+const DETERMINISTIC_REPLAY_VERIFY_SCHEMA: &str = crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
+const EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
+const HARNESS_GATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::HARNESS_GATE_RECEIPT_SCHEMA;
+const HARNESS_OBSERVATION_SCHEMA: &str = crate::preserves_rail::HARNESS_OBSERVATION_SCHEMA;
+const HARNESS_REPORT_SCHEMA: &str = crate::preserves_rail::HARNESS_REPORT_SCHEMA;
+const HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA: &str = crate::preserves_rail::HARNESS_REPRO_VERIFY_RECEIPT_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 const PASS_CHECKS: &[&str] = &[
     "report-schema",
@@ -1230,7 +1252,7 @@ fn build_turn_journals(report: &schema::HarnessReport) -> Result<TurnJournalEvid
     if suite.steps.len() != report.observations.len() {
         return Err(MoltenError::invalid_harness("turn journal evidence requires one observation per suite step"));
     }
-    let mut builders: BTreeMap<String, TurnJournalBuilder> = BTreeMap::new();
+    let mut builders: OrderedMap<String, TurnJournalBuilder> = OrderedMap::new();
     for (position, observation) in report.observations.iter().enumerate() {
         let step = &suite.steps[position];
         let actor_id = step.primary_actor().to_string();
@@ -1529,7 +1551,7 @@ fn parse_turn_journal_set(
     suite_ref: &str,
 ) -> Result<Vec<TurnJournalChainEvidence>> {
     let mut journals = Vec::with_capacity(journal_values.len());
-    let mut actor_ids = BTreeMap::new();
+    let mut actor_ids = OrderedMap::new();
     for journal_value in journal_values {
         let journal = parse_turn_journal(journal_value, report_ref, suite_ref)?;
         if actor_ids.insert(journal.actor_id.clone(), ()).is_some() {

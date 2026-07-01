@@ -88,47 +88,46 @@ pub use schema::validate_upgrade_replay_receipt;
 
 #[cfg(test)]
 mod tests {
-    use super::ReproExportProfile;
-    use super::actor_executor_registry;
-    use super::boundary_coverage_value;
-    use super::core::CoreStep;
-    use super::core::RuntimeState;
-    use super::core::RuntimeValue;
-    use super::deterministic_multipeer_receipt_value;
-    use super::failure_repro_bundle_value;
-    use super::failure_value;
-    use super::gate_check_value;
-    use super::gate_receipt_summary;
-    use super::gate_receipt_value;
-    use super::golden_trace_update_receipt_value;
-    use super::harness_run_receipt_value;
-    use super::parse_failure;
-    use super::parse_gate_receipt;
-    use super::parse_repro_bundle;
-    use super::parse_repro_verify_receipt;
-    use super::parse_suite;
-    use super::replay_report_value;
-    use super::repro_bundle_value;
-    use super::repro_bundle_value_with_export_profile;
-    use super::repro_verify_receipt_value;
-    use super::run_suite_value;
-    use super::runner::run_suite_with_effect_log;
-    use super::schema::effect_log_from_observations;
-    use super::schema::parse_report;
-    use super::schema::snapshot_value;
-    use super::sealed_repro_bundle_value_with_command;
-    use super::suite_failure_value;
-    use super::upgrade_replay_receipt_value;
-    use super::validate_deterministic_multipeer_receipt;
-    use super::validate_golden_trace_update_receipt;
-    use super::validate_harness_run_receipt;
-    use super::validate_report_value;
-    use super::validate_upgrade_replay_receipt;
-    use crate::error::MoltenError;
-    use crate::preserves_rail::canonical_bytes;
-    use crate::preserves_rail::canonical_hash;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::to_text;
+    use super::*;
+
+    type MoltenError = crate::error::MoltenError;
+
+    fn canonical_bytes(value: &preserves::IOValue) -> crate::error::Result<Vec<u8>> {
+        crate::preserves_rail::canonical_bytes(value)
+    }
+
+    fn canonical_hash(value: &preserves::IOValue) -> crate::error::Result<String> {
+        crate::preserves_rail::canonical_hash(value)
+    }
+
+    fn effect_log_from_observations(
+        observations: &[schema::HarnessObservation],
+    ) -> crate::error::Result<Vec<schema::EffectLogEntry>> {
+        schema::effect_log_from_observations(observations)
+    }
+
+    fn parse_report(value: &preserves::IOValue) -> crate::error::Result<schema::HarnessReport> {
+        schema::parse_report(value)
+    }
+
+    fn parse_text(source: &str) -> crate::error::Result<preserves::IOValue> {
+        crate::preserves_rail::parse_text(source)
+    }
+
+    fn run_suite_with_effect_log(
+        suite: &schema::HarnessSuite,
+        effect_log: &[schema::EffectLogEntry],
+    ) -> crate::error::Result<runner::HarnessRun> {
+        runner::run_suite_with_effect_log(suite, effect_log)
+    }
+
+    fn snapshot_value(snapshot: &core::RuntimeSnapshot) -> preserves::IOValue {
+        schema::snapshot_value(snapshot)
+    }
+
+    fn to_text(value: &preserves::IOValue) -> crate::error::Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     const TWO_ACTOR_SUITE: &str = r#"
 <harness-suite-v1 "molten.harness.suite.v1" "two-actor" 7
@@ -2536,9 +2535,9 @@ mod tests {
 
     #[test]
     fn runtime_snapshot_hashes_are_canonical_and_seed_bound() {
-        let left = RuntimeState::new(7);
-        let right = RuntimeState::new(7);
-        let other_seed = RuntimeState::new(8);
+        let left = core::RuntimeState::new(7);
+        let right = core::RuntimeState::new(7);
+        let other_seed = core::RuntimeState::new(8);
         let left_ref = canonical_hash(&snapshot_value(&left.snapshot())).expect("left snapshot ref");
         let right_ref = canonical_hash(&snapshot_value(&right.snapshot())).expect("right snapshot ref");
         let other_ref = canonical_hash(&snapshot_value(&other_seed.snapshot())).expect("other snapshot ref");
@@ -2565,24 +2564,24 @@ mod tests {
     #[test]
     fn runtime_transition_module_is_deterministic_without_io() {
         let steps = [
-            CoreStep::Observe {
+            core::CoreStep::Observe {
                 actor: "consumer".into(),
-                pattern: RuntimeValue::string("service.ready").expect("runtime test value"),
+                pattern: core::RuntimeValue::string("service.ready").expect("runtime test value"),
             },
-            CoreStep::Assert {
+            core::CoreStep::Assert {
                 actor: "producer".into(),
-                value: RuntimeValue::string("service.ready").expect("runtime test value"),
+                value: core::RuntimeValue::string("service.ready").expect("runtime test value"),
             },
-            CoreStep::Clock {
+            core::CoreStep::Clock {
                 actor: "producer".into(),
             },
-            CoreStep::Random {
+            core::CoreStep::Random {
                 actor: "producer".into(),
                 upper: 100,
             },
         ];
-        let mut left = RuntimeState::new(7);
-        let mut right = RuntimeState::new(7);
+        let mut left = core::RuntimeState::new(7);
+        let mut right = core::RuntimeState::new(7);
         for step in &steps {
             assert_eq!(left.apply_step(step), right.apply_step(step));
             assert_eq!(left.snapshot(), right.snapshot());
