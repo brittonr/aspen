@@ -2,18 +2,39 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
 use crate::runtime::PendingTurn;
 use crate::runtime::RuntimeScopeCleanup;
 use crate::runtime::RuntimeSnapshot;
 use crate::runtime::RuntimeValue;
 use crate::runtime::TurnAction;
+
+fn bool_value(value: bool) -> IOValue {
+    crate::preserves_rail::bool_value(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
 
 const MAX_LIFECYCLE_REFS: usize = 1024;
 const MAX_DIAGNOSTICS: usize = 32;
@@ -751,9 +772,6 @@ fn checks_value() -> IOValue {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::LifecycleAction;
     use super::LifecycleEntityKind;
     use super::LifecycleMonitorInput;
@@ -774,11 +792,17 @@ mod tests {
     use super::service_lifecycle_assertion;
     use super::supervisor_decision_receipt;
     use super::turn_failure_receipt;
-    use crate::preserves_rail::content_ref_from_bytes;
-    use crate::preserves_rail::to_text;
     use crate::runtime::RuntimeState;
     use crate::runtime::RuntimeStep;
     use crate::runtime::RuntimeValue;
+
+    fn content_ref_from_bytes(bytes: &[u8]) -> String {
+        crate::preserves_rail::content_ref_from_bytes(bytes)
+    }
+
+    fn to_text(value: &preserves::IOValue) -> crate::error::Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     #[test]
     fn failed_turn_rolls_back_pending_actions_and_records_discarded_refs() {
@@ -1062,8 +1086,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 8)]
-    fn hegel_cleanup_idempotence_no_leaks_and_restart_bounds(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(5));
+    fn hegel_cleanup_idempotence_no_leaks_and_restart_bounds(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(5));
         let actor = format!("actor-{salt}");
         let mut state = RuntimeState::new(1);
         for index in 0..=(salt % 2) {
