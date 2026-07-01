@@ -1,8 +1,8 @@
 use preserves::IOValue;
-use preserves::Value;
 
-use crate::error::MoltenError;
-use crate::error::Result;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
 
 pub const HARNESS_SUITE_SCHEMA: &str = "molten.harness.suite.v1";
 pub const HARNESS_REPORT_SCHEMA: &str = "molten.harness.report.v1";
@@ -541,32 +541,25 @@ pub fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
 
 #[cfg(test)]
 mod tests {
-    use super::ContentRef;
-    use super::canonical_content_ref;
-    use super::canonical_hash;
-    use super::content_ref_from_hex;
-    use super::parse_text;
-    use super::to_text;
-    use super::validate_content_ref;
 
     #[test]
     fn preserves_text_roundtrip_keeps_hash() {
-        let value = parse_text("<example \"a\" [1 2 3]>").expect("parse initial text");
-        let hash = canonical_hash(&value).expect("hash initial value");
-        let rendered = to_text(&value).expect("render preserves text");
-        let reparsed = parse_text(&rendered).expect("parse rendered text");
-        assert_eq!(hash, canonical_hash(&reparsed).expect("hash reparsed value"));
+        let value = super::parse_text("<example \"a\" [1 2 3]>").expect("parse initial text");
+        let hash = super::canonical_hash(&value).expect("hash initial value");
+        let rendered = super::to_text(&value).expect("render preserves text");
+        let reparsed = super::parse_text(&rendered).expect("parse rendered text");
+        assert_eq!(hash, super::canonical_hash(&reparsed).expect("hash reparsed value"));
     }
 
     #[test]
     fn content_ref_parser_rejects_non_canonical_shapes() {
         let valid = "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        validate_content_ref(valid).expect("valid ref");
-        let parsed = ContentRef::parse(valid).expect("parsed ref");
+        super::validate_content_ref(valid).expect("valid ref");
+        let parsed = super::ContentRef::parse(valid).expect("parsed ref");
         assert_eq!(parsed.as_str(), valid);
         assert_eq!(parsed.into_string(), valid);
         assert_eq!(
-            content_ref_from_hex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+            super::content_ref_from_hex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
                 .expect("ref from hex"),
             valid
         );
@@ -582,14 +575,14 @@ mod tests {
             "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg",
             "blake3:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde/",
         ] {
-            assert!(validate_content_ref(invalid).is_err(), "invalid ref accepted: {invalid}");
+            assert!(super::validate_content_ref(invalid).is_err(), "invalid ref accepted: {invalid}");
         }
     }
 
     #[test]
     fn canonical_content_ref_matches_canonical_hash() {
-        let value = parse_text("<content-ref-fixture [#t 42]>").expect("parse fixture");
-        let reference = canonical_content_ref(&value).expect("canonical content ref");
-        assert_eq!(reference.as_str(), canonical_hash(&value).expect("canonical hash"));
+        let value = super::parse_text("<content-ref-fixture [#t 42]>").expect("parse fixture");
+        let reference = super::canonical_content_ref(&value).expect("canonical content ref");
+        assert_eq!(reference.as_str(), super::canonical_hash(&value).expect("canonical hash"));
     }
 }
