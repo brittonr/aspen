@@ -12,20 +12,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::ledger;
 use crate::octet_gate;
-use crate::preserves_rail::UPGRADE_NAME_POINTER_SCHEMA;
-use crate::preserves_rail::UPGRADE_PLAN_SCHEMA;
-use crate::preserves_rail::UPGRADE_RECEIPT_SCHEMA;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_hex;
-use crate::preserves_rail::parse_text;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 use crate::protocol_session;
 
 pub const SUPPORTED_TASK_KINDS: &[&str] = &[
@@ -55,6 +41,54 @@ const _: () = assert!(MAX_UPGRADE_DIAGNOSTICS <= 100_000);
 const _: () = assert!(MAX_UPGRADE_TASKS <= 10_000);
 const _: () = assert!(MAX_UPGRADE_POINTERS <= 1_000_000);
 const _: () = assert!(MAX_UPGRADE_SOURCE_GATES <= 1_000);
+
+const UPGRADE_NAME_POINTER_SCHEMA: &str = crate::preserves_rail::UPGRADE_NAME_POINTER_SCHEMA;
+const UPGRADE_PLAN_SCHEMA: &str = crate::preserves_rail::UPGRADE_PLAN_SCHEMA;
+const UPGRADE_RECEIPT_SCHEMA: &str = crate::preserves_rail::UPGRADE_RECEIPT_SCHEMA;
+
+fn bool_value(value: bool) -> IOValue {
+    crate::preserves_rail::bool_value(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn content_ref_hex(value: &str) -> Result<&str> {
+    crate::preserves_rail::content_ref_hex(value)
+}
+
+fn parse_text(source: &str) -> Result<IOValue> {
+    crate::preserves_rail::parse_text(source)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn to_text(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::to_text(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 type UpgradeCheckPair = (&'static str, &'static str);
 type UpgradeTaskOutcome = (&'static str, Vec<String>, Vec<UpgradeCheckPair>);
@@ -1603,7 +1637,6 @@ mod tests {
     use hegel::generators;
 
     use super::*;
-    use crate::preserves_rail::parse_text;
 
     #[test]
     fn name_move_session_keeps_artifacts_immutable_and_receipted() {
