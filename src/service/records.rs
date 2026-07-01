@@ -1,25 +1,47 @@
 use preserves::IOValue;
-use preserves::Value;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::SERVICE_CLEANUP_RECEIPT_SCHEMA;
-use crate::preserves_rail::SERVICE_DEMAND_SCHEMA;
-use crate::preserves_rail::SERVICE_LIFECYCLE_RECEIPT_SCHEMA;
-use crate::preserves_rail::SERVICE_LINK_SCHEMA;
-use crate::preserves_rail::SERVICE_MANIFEST_SCHEMA;
-use crate::preserves_rail::SERVICE_MONITOR_SCHEMA;
-use crate::preserves_rail::SERVICE_RESTART_DECISION_SCHEMA;
-use crate::preserves_rail::SERVICE_RESTART_POLICY_SCHEMA;
-use crate::preserves_rail::SERVICE_STATUS_SCHEMA;
-use crate::preserves_rail::SERVICE_SUPERVISOR_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+const SERVICE_CLEANUP_RECEIPT_SCHEMA: &str = crate::preserves_rail::SERVICE_CLEANUP_RECEIPT_SCHEMA;
+const SERVICE_DEMAND_SCHEMA: &str = crate::preserves_rail::SERVICE_DEMAND_SCHEMA;
+const SERVICE_LIFECYCLE_RECEIPT_SCHEMA: &str = crate::preserves_rail::SERVICE_LIFECYCLE_RECEIPT_SCHEMA;
+const SERVICE_LINK_SCHEMA: &str = crate::preserves_rail::SERVICE_LINK_SCHEMA;
+const SERVICE_MANIFEST_SCHEMA: &str = crate::preserves_rail::SERVICE_MANIFEST_SCHEMA;
+const SERVICE_MONITOR_SCHEMA: &str = crate::preserves_rail::SERVICE_MONITOR_SCHEMA;
+const SERVICE_RESTART_DECISION_SCHEMA: &str = crate::preserves_rail::SERVICE_RESTART_DECISION_SCHEMA;
+const SERVICE_RESTART_POLICY_SCHEMA: &str = crate::preserves_rail::SERVICE_RESTART_POLICY_SCHEMA;
+const SERVICE_STATUS_SCHEMA: &str = crate::preserves_rail::SERVICE_STATUS_SCHEMA;
+const SERVICE_SUPERVISOR_SCHEMA: &str = crate::preserves_rail::SERVICE_SUPERVISOR_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: &str) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 const MAX_SERVICE_IDS: usize = 512;
 const MAX_SERVICE_REFS: usize = 4096;
@@ -1120,15 +1142,15 @@ fn ensure_count_at_most(actual: usize, maximum: usize, label: &str) -> Result<()
 }
 
 fn service_id_sequence(values: &[String]) -> IOValue {
-    sequence(values.iter().map(string).collect())
+    sequence(values.iter().map(|value| string(value)).collect())
 }
 
 fn refs_sequence(values: &[String]) -> IOValue {
-    sequence(values.iter().map(string).collect())
+    sequence(values.iter().map(|value| string(value)).collect())
 }
 
 fn strings_sequence(values: &[String]) -> IOValue {
-    sequence(values.iter().map(string).collect())
+    sequence(values.iter().map(|value| string(value)).collect())
 }
 
 fn optional_ref_value(value: Option<&str>) -> IOValue {
