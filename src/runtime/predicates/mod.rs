@@ -1,14 +1,13 @@
-use std::collections::BTreeSet;
-
-use preserves::IOValue;
-
-use super::PendingTurn;
-use super::RuntimeObserver;
-use super::RuntimeSnapshot;
-use super::RuntimeValue;
-use super::TurnAction;
-use crate::error::Result;
 use crate::preserves_rail;
+
+type OrderedSet<T> = std::collections::BTreeSet<T>;
+type IoValue = preserves::IOValue;
+type PendingTurn = super::PendingTurn;
+type Result<T> = crate::error::Result<T>;
+type RuntimeObserver = super::RuntimeObserver;
+type RuntimeSnapshot = super::RuntimeSnapshot;
+type RuntimeValue = super::RuntimeValue;
+type TurnAction = super::TurnAction;
 
 const PREDICATE_ENGINE: &str = "trellis-bounded-local";
 const ASSERTION_VISIBILITY_PREDICATE: &str = "molten.trellis-runtime.assertion-visibility.v1";
@@ -77,7 +76,7 @@ impl RuntimePattern {
         }
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         match self {
             Self::Exact(value) => preserves_rail::record("runtime-pattern-exact-v1", vec![
                 value.as_iovalue().clone(),
@@ -99,7 +98,7 @@ pub struct RuntimePredicateReceipt {
     pub state_refs: Vec<String>,
     pub checks: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -211,7 +210,7 @@ impl RuntimePromiseState {
         preserves_rail::canonical_hash(&self.to_value())
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-promise-state-v1", vec![
             preserves_rail::string(&self.promise_id),
             preserves_rail::string(self.status.as_str()),
@@ -244,7 +243,7 @@ impl RuntimePromisePipelineEntry {
         }
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-promise-pipeline-entry-v1", vec![
             crate::preserves_rail::u64_value(self.sequence),
             preserves_rail::record("target-ref", vec![preserves_rail::string(&self.target_ref)]),
@@ -273,7 +272,7 @@ impl RuntimePromisePipelineState {
         preserves_rail::canonical_hash(&self.to_value())
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-promise-pipeline-state-v1", vec![
             self.source.to_value(),
             crate::preserves_rail::u64_value(self.max_queue),
@@ -303,7 +302,7 @@ impl RuntimeRevocationCleanupState {
         preserves_rail::canonical_hash(&self.to_value())
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-revocation-cleanup-state-v1", vec![
             ref_list_value("revoked-refs", &self.revoked_refs),
             ref_list_value("attempted-use-refs", &self.attempted_use_refs),
@@ -352,7 +351,7 @@ impl RuntimeActormapTransactionState {
         preserves_rail::canonical_hash(&self.to_value())
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-actormap-transaction-state-v1", vec![
             preserves_rail::string(self.outcome.as_str()),
             ref_list_value("before-object-refs", &self.before_object_refs),
@@ -416,7 +415,7 @@ impl RuntimeNearFarRefState {
         preserves_rail::canonical_hash(&self.to_value())
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-near-far-ref-state-v1", vec![
             preserves_rail::record("reference-ref", vec![preserves_rail::string(&self.reference_ref)]),
             preserves_rail::string(self.reference_kind.as_str()),
@@ -479,7 +478,7 @@ impl RuntimeObjectAuthorityState {
         preserves_rail::canonical_hash(&self.to_value())
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-object-authority-state-v1", vec![
             preserves_rail::record("object-ref", vec![preserves_rail::string(&self.object_ref)]),
             preserves_rail::record("requested-authority-ref", vec![preserves_rail::string(
@@ -513,7 +512,7 @@ impl RuntimeRightsAmplificationState {
         preserves_rail::canonical_hash(&self.to_value())
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-rights-amplification-state-v1", vec![
             preserves_rail::record("holder-object-ref", vec![preserves_rail::string(&self.holder_object_ref)]),
             preserves_rail::record("sealed-value-ref", vec![preserves_rail::string(&self.sealed_value_ref)]),
@@ -548,7 +547,7 @@ impl RuntimeDistributedRefLifetimeState {
         preserves_rail::canonical_hash(&self.to_value())
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-distributed-ref-lifetime-state-v1", vec![
             preserves_rail::record("far-ref", vec![preserves_rail::string(&self.far_ref)]),
             preserves_rail::record("session-ref", vec![preserves_rail::string(&self.session_ref)]),
@@ -583,7 +582,7 @@ impl RuntimeSnapshotAuthorityState {
         preserves_rail::canonical_hash(&self.to_value())
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-snapshot-authority-state-v1", vec![
             preserves_rail::record("snapshot-ref", vec![preserves_rail::string(&self.snapshot_ref)]),
             ref_list_value("admitted-authority-refs", &self.admitted_authority_refs),
@@ -619,7 +618,7 @@ impl RuntimeServiceDependenciesState {
         preserves_rail::canonical_hash(&self.to_value())
     }
 
-    fn to_value(&self) -> IOValue {
+    fn to_value(&self) -> IoValue {
         preserves_rail::record("runtime-service-dependencies-state-v1", vec![
             preserves_rail::record("service-ref", vec![preserves_rail::string(&self.service_ref)]),
             ref_list_value("demanded-service-refs", &self.demanded_service_refs),
@@ -643,7 +642,7 @@ pub struct ServiceDependenciesResult {
 pub fn evaluate_assertion_visibility(
     snapshot: &RuntimeSnapshot,
     assertion_value: &RuntimeValue,
-    live_owner_ids: &BTreeSet<String>,
+    live_owner_ids: &OrderedSet<String>,
 ) -> Result<AssertionVisibilityResult> {
     let mut visible_owner_refs = Vec::with_capacity(snapshot.assertions.len());
     for assertion in &snapshot.assertions {
@@ -1298,7 +1297,7 @@ fn validate_distributed_ref_lifetime(state: &RuntimeDistributedRefLifetimeState)
     if state.is_handoff_admitted {
         match state.replacement_ref.as_deref() {
             Some(replacement_ref) => {
-                let mut replacement_refs = BTreeSet::new();
+                let mut replacement_refs = OrderedSet::new();
                 replacement_refs.insert(replacement_ref);
                 if !is_subset(&attempted_refs, &replacement_refs) {
                     diagnostics.push("distributed-ref-handoff-use-not-replacement".to_string());
@@ -1451,7 +1450,7 @@ fn validate_promise_pipeline(state: &RuntimePromisePipelineState) -> Vec<String>
         diagnostics.push("terminal-promise-pipeline-not-cleaned".to_string());
     }
     let mut previous_sequence = None;
-    let mut seen_sequences = BTreeSet::new();
+    let mut seen_sequences = OrderedSet::new();
     for entry in state.entries.as_slice() {
         if !seen_sequences.insert(entry.sequence) {
             diagnostics.push("pipeline-forwarding-sequence-duplicate".to_string());
@@ -1495,7 +1494,7 @@ fn validate_revocation_cleanup(state: &RuntimeRevocationCleanupState) -> Vec<Str
     ));
     diagnostics.extend(validate_sorted_content_refs(&state.remaining_child_refs, "revocation", "remaining-child"));
 
-    let revoked_refs: BTreeSet<&str> = state.revoked_refs.as_slice().iter().map(String::as_str).collect();
+    let revoked_refs: OrderedSet<&str> = state.revoked_refs.as_slice().iter().map(String::as_str).collect();
     if has_revoked_intersection(&revoked_refs, &state.attempted_use_refs) {
         diagnostics.push("revoked-ref-used-after-revocation".to_string());
     }
@@ -1516,7 +1515,7 @@ fn validate_revocation_cleanup(state: &RuntimeRevocationCleanupState) -> Vec<Str
     diagnostics
 }
 
-fn has_revoked_intersection(revoked_refs: &BTreeSet<&str>, refs: &[String]) -> bool {
+fn has_revoked_intersection(revoked_refs: &OrderedSet<&str>, refs: &[String]) -> bool {
     for reference in refs {
         if revoked_refs.contains(reference.as_str()) {
             return true;
@@ -1593,11 +1592,11 @@ fn validate_actormap_transaction(state: &RuntimeActormapTransactionState) -> Vec
     diagnostics
 }
 
-fn string_set(refs: &[String]) -> BTreeSet<&str> {
+fn string_set(refs: &[String]) -> OrderedSet<&str> {
     refs.iter().map(String::as_str).collect()
 }
 
-fn is_subset(left: &BTreeSet<&str>, right: &BTreeSet<&str>) -> bool {
+fn is_subset(left: &OrderedSet<&str>, right: &OrderedSet<&str>) -> bool {
     for item in left {
         if !right.contains(item) {
             return false;
@@ -1606,7 +1605,7 @@ fn is_subset(left: &BTreeSet<&str>, right: &BTreeSet<&str>) -> bool {
     true
 }
 
-fn has_set_intersection(left: &BTreeSet<&str>, right: &BTreeSet<&str>) -> bool {
+fn has_set_intersection(left: &OrderedSet<&str>, right: &OrderedSet<&str>) -> bool {
     for item in left {
         if right.contains(item) {
             return true;
@@ -1615,8 +1614,8 @@ fn has_set_intersection(left: &BTreeSet<&str>, right: &BTreeSet<&str>) -> bool {
     false
 }
 
-fn set_intersection<'a>(left: &BTreeSet<&'a str>, right: &BTreeSet<&'a str>) -> BTreeSet<&'a str> {
-    let mut intersection = BTreeSet::new();
+fn set_intersection<'a>(left: &OrderedSet<&'a str>, right: &OrderedSet<&'a str>) -> OrderedSet<&'a str> {
+    let mut intersection = OrderedSet::new();
     for item in left {
         if right.contains(item) {
             intersection.insert(*item);
@@ -1667,13 +1666,13 @@ fn validate_promise_shape(state: &RuntimePromiseState, label: &str) -> Vec<Strin
     diagnostics
 }
 
-fn ref_list_value(label: &'static str, refs: &[String]) -> IOValue {
+fn ref_list_value(label: &'static str, refs: &[String]) -> IoValue {
     preserves_rail::record(label, vec![preserves_rail::sequence(
         refs.iter().map(preserves_rail::string).collect(),
     )])
 }
 
-fn optional_ref_record(label: &'static str, reference: Option<&str>) -> IOValue {
+fn optional_ref_record(label: &'static str, reference: Option<&str>) -> IoValue {
     match reference {
         Some(reference) => preserves_rail::record(label, vec![preserves_rail::string(reference)]),
         None => preserves_rail::record(label, Vec::new()),
@@ -1698,7 +1697,7 @@ fn validate_sorted_content_refs(refs: &[String], label: &str, field: &str) -> Ve
 
 struct RuntimePredicateReceiptInput {
     predicate: &'static str,
-    input_value: IOValue,
+    input_value: IoValue,
     decision: PredicateDecision,
     state_refs: Vec<String>,
     checks: Vec<String>,
@@ -1730,14 +1729,14 @@ fn build_runtime_predicate_receipt(input: RuntimePredicateReceiptInput) -> Resul
     })
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> IoValue {
     match value {
         Some(value) => preserves_rail::record("some", vec![preserves_rail::string(value)]),
         None => preserves_rail::record("none", Vec::new()),
     }
 }
 
-fn action_summary_value(action: &TurnAction) -> IOValue {
+fn action_summary_value(action: &TurnAction) -> IoValue {
     match action {
         TurnAction::Send(message) => preserves_rail::record("turn-action-send-v1", vec![message.to_value()]),
         TurnAction::Observe(observer) => preserves_rail::record("turn-action-observe-v1", vec![observer.to_value()]),
@@ -1822,7 +1821,7 @@ mod tests {
             actor: "owner-b".into(),
             value: ready.clone(),
         });
-        let mut live = BTreeSet::new();
+        let mut live = OrderedSet::new();
         live.insert("owner-a".to_string());
         live.insert("owner-b".to_string());
         let both = evaluate_assertion_visibility(&state.snapshot(), &ready, &live).expect("visibility");
@@ -2309,7 +2308,7 @@ mod tests {
         let retract_count = draw_property_collection_len(&tc);
         let value = RuntimeValue::string(format!("property-ready-{salt}")).expect("runtime value");
         let mut state = RuntimeState::new(salt);
-        let mut live = BTreeSet::new();
+        let mut live = OrderedSet::new();
         for index in 0..owner_count {
             let actor = format!("owner-{salt}-{index}");
             live.insert(actor.clone());
