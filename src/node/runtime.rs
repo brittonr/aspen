@@ -9,7 +9,6 @@ use crate::preserves_rail::NODE_ADAPTER_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONFIG_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_REQUEST_SCHEMA;
-use crate::preserves_rail::NODE_HEALTH_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_SHUTDOWN_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_STARTUP_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
@@ -822,7 +821,7 @@ pub fn node_health_receipt_value(input: &HealthReceiptValueInput<'_>) -> Result<
         validate_ref(&adapter.receipt_ref, "node health adapter receipt ref")?;
     }
     Ok(record("node-health-receipt-v1", vec![
-        string(NODE_HEALTH_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::NODE_HEALTH_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("startup", vec![string(input.startup_receipt_ref)]),
         record("shutdown", vec![optional_ref_value(input.shutdown_receipt_ref)]),
@@ -854,7 +853,7 @@ pub fn parse_node_health_receipt(value: &IOValue) -> Result<NodeHealthReceipt> {
     let fields = value
         .collect_simple_record("node-health-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-health-receipt-v1 ...>"))?;
-    require_schema(&fields[0], NODE_HEALTH_RECEIPT_SCHEMA, "node health receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::NODE_HEALTH_RECEIPT_SCHEMA, "node health receipt")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "canonical-receipt", "node health receipt")?;
     Ok(NodeHealthReceipt {
