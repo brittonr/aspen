@@ -4,17 +4,32 @@ use preserves::IOValue;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::PROD_SOAK_DURABILITY_SCHEMA;
-use crate::preserves_rail::PROD_SOAK_EVIDENCE_EXPORT_SCHEMA;
-use crate::preserves_rail::PROD_SOAK_FAULT_CASE_SCHEMA;
-use crate::preserves_rail::PROD_SOAK_FAULT_MATRIX_SCHEMA;
-use crate::preserves_rail::PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA;
-use crate::preserves_rail::PROD_SOAK_RUN_SCHEMA;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
+const PROD_SOAK_DURABILITY_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_DURABILITY_SCHEMA;
+const PROD_SOAK_EVIDENCE_EXPORT_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_EVIDENCE_EXPORT_SCHEMA;
+const PROD_SOAK_FAULT_CASE_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_FAULT_CASE_SCHEMA;
+const PROD_SOAK_FAULT_MATRIX_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_FAULT_MATRIX_SCHEMA;
+const PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_RESOURCE_ENVELOPE_SCHEMA;
+const PROD_SOAK_RUN_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_RUN_SCHEMA;
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
 
 const MAX_SOAK_REFS: usize = 512;
 const MAX_SOAK_TEXT_FIELDS: usize = 128;
