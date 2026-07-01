@@ -1,34 +1,33 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type PendingTurn = crate::runtime::PendingTurn;
+type RuntimeScopeCleanup = crate::runtime::RuntimeScopeCleanup;
+type RuntimeSnapshot = crate::runtime::RuntimeSnapshot;
+type RuntimeValue = crate::runtime::RuntimeValue;
+type TurnAction = crate::runtime::TurnAction;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::runtime::PendingTurn;
-use crate::runtime::RuntimeScopeCleanup;
-use crate::runtime::RuntimeSnapshot;
-use crate::runtime::RuntimeValue;
-use crate::runtime::TurnAction;
-
-fn bool_value(value: bool) -> IOValue {
+fn bool_value(value: bool) -> IoValue {
     crate::preserves_rail::bool_value(value)
 }
 
-fn canonical_hash(value: &IOValue) -> Result<String> {
+fn canonical_hash(value: &IoValue) -> Result<String> {
     crate::preserves_rail::canonical_hash(value)
 }
 
-fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::record(label, fields)
 }
 
-fn sequence(values: Vec<IOValue>) -> IOValue {
+fn sequence(values: Vec<IoValue>) -> IoValue {
     crate::preserves_rail::sequence(values)
 }
 
-fn string(value: impl AsRef<str>) -> IOValue {
+fn string(value: impl AsRef<str>) -> IoValue {
     crate::preserves_rail::string(value)
 }
 
-fn u64_value(value: u64) -> IOValue {
+fn u64_value(value: u64) -> IoValue {
     crate::preserves_rail::u64_value(value)
 }
 
@@ -143,7 +142,7 @@ pub struct LifecycleTransitionInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LifecycleTransitionRecord {
     pub transition_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -152,7 +151,7 @@ pub struct LifecycleTransitionReceipt {
     pub transition_ref: String,
     pub decision: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,7 +163,7 @@ pub struct LifecycleTraceEvent {
     pub action: LifecycleAction,
     pub cause: String,
     pub policy_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -205,7 +204,7 @@ pub struct TurnFailureReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,7 +226,7 @@ pub struct ScopeCleanupReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -245,7 +244,7 @@ pub struct LifecycleMonitorReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,7 +294,7 @@ pub struct SupervisorDecisionReceipt {
     pub receipt_ref: String,
     pub decision: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -323,7 +322,7 @@ impl ServiceLifecycleAssertionKind {
     }
 }
 
-pub fn lifecycle_transition_value(input: &LifecycleTransitionInput) -> Result<IOValue> {
+pub fn lifecycle_transition_value(input: &LifecycleTransitionInput) -> Result<IoValue> {
     validate_transition_input(input)?;
     Ok(record("lifecycle-transition-v1", vec![
         string(crate::preserves_rail::LIFECYCLE_TRANSITION_SCHEMA),
@@ -655,7 +654,7 @@ fn validate_supervisor_input(input: &SupervisorDecisionInput<'_>) -> Result<()> 
     Ok(())
 }
 
-fn restart_window_value(window: Option<&RestartWindow>) -> IOValue {
+fn restart_window_value(window: Option<&RestartWindow>) -> IoValue {
     match window {
         Some(window) => record("restart-window", vec![
             u64_value(window.start_step),
@@ -670,7 +669,7 @@ fn cleanup_removed_anything(cleanup: &RuntimeScopeCleanup) -> bool {
     !cleanup.assertion_refs.is_empty() || !cleanup.observer_refs.is_empty() || !cleanup.message_refs.is_empty()
 }
 
-fn pending_turn_value(turn: &PendingTurn) -> Result<IOValue> {
+fn pending_turn_value(turn: &PendingTurn) -> Result<IoValue> {
     let mut actions = Vec::with_capacity(turn.actions.len());
     for action in &turn.actions {
         actions.push(turn_action_value(action));
@@ -687,7 +686,7 @@ fn pending_action_refs(turn: &PendingTurn) -> Result<Vec<String>> {
     Ok(refs)
 }
 
-fn turn_action_value(action: &TurnAction) -> IOValue {
+fn turn_action_value(action: &TurnAction) -> IoValue {
     match action {
         TurnAction::Send(message) => record("runtime-turn-action-send-v1", vec![message.to_value()]),
         TurnAction::Observe(observer) => record("runtime-turn-action-observe-v1", vec![observer.to_value()]),
@@ -747,19 +746,19 @@ fn allowed_transition(from_state: LifecycleState, to_state: LifecycleState) -> b
     )
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn strings_sequence(values: &[String]) -> IOValue {
+fn strings_sequence(values: &[String]) -> IoValue {
     sequence(values.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |reference| record("some", vec![string(reference)]))
 }
 
-fn checks_value() -> IOValue {
+fn checks_value() -> IoValue {
     record("checks", vec![
         bool_value(true),
         sequence(vec![

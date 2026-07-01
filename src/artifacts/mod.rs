@@ -1,22 +1,13 @@
-use std::path::Path;
-
-use preserves::IOValue;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 
-use crate::chunk_store;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::parse_canonical_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::value_to_iovalue;
+type Path = std::path::Path;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
 
 type TableDef<'a, K, V> = redb::TableDefinition<'a, K, V>;
-type RailValue = preserves::Value<IOValue>;
+type RailValue = preserves::Value<IoValue>;
 
 pub const INLINE_PAYLOAD_LIMIT: usize = 4096;
 
@@ -57,7 +48,7 @@ pub enum ArtifactPayloadRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactInstallInput {
     pub kind: String,
-    pub payload: IOValue,
+    pub payload: IoValue,
     pub schema_refs: Vec<String>,
     pub dependency_refs: Vec<String>,
     pub effect_manifest_ref: Option<String>,
@@ -98,7 +89,7 @@ pub struct ArtifactRecord {
     pub effect_manifest_ref: Option<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -107,7 +98,7 @@ pub struct ArtifactInstall {
     pub decision: String,
     pub artifact: ArtifactRecord,
     pub missing_dependencies: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,7 +110,7 @@ pub struct ArtifactNamePointer {
     pub previous_ref: Option<String>,
     pub policy_refs: Vec<String>,
     pub receipt_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,7 +120,7 @@ pub struct ArtifactReceipt {
     pub decision: String,
     pub subject_ref: String,
     pub name: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,7 +129,7 @@ pub struct ArtifactClosure {
     pub closure_refs: Vec<String>,
     pub missing_refs: Vec<String>,
     pub closure_hash: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,14 +137,14 @@ pub struct ArtifactImpact {
     pub seeds: Vec<String>,
     pub impacted_refs: Vec<String>,
     pub impact_hash: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArtifactIndexRebuild {
     pub artifacts: usize,
     pub names: usize,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 pub fn install_artifact(root: &Path, input: &ArtifactInstallInput) -> Result<ArtifactInstall> {
@@ -182,7 +173,7 @@ struct InstallPayload {
     chunk_receipt_ref: Option<String>,
 }
 
-fn prepare_install_payload(root: &Path, payload: &IOValue) -> Result<InstallPayload> {
+fn prepare_install_payload(root: &Path, payload: &IoValue) -> Result<InstallPayload> {
     let payload_bytes = canonical_bytes(payload)?;
     let payload_value_ref = canonical_hash(payload)?;
     let (payload_ref, chunk_receipt_ref) = if payload_bytes.len() <= INLINE_PAYLOAD_LIMIT {
@@ -194,12 +185,7 @@ fn prepare_install_payload(root: &Path, payload: &IOValue) -> Result<InstallPayl
             None,
         )
     } else {
-        let put = chunk_store::put_bytes(
-            &chunk_root(root),
-            "artifact-payload",
-            &payload_bytes,
-            chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
-        )?;
+        let put = put_payload_bytes(&chunk_root(root), &payload_bytes)?;
         (
             ArtifactPayloadRef::ContentRef {
                 manifest_ref: put.manifest_ref,
@@ -277,7 +263,7 @@ fn install_receipt_value(
     refs: &[String],
     diagnostics: &[String],
     missing_dependencies: &[String],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     artifact_receipt_value(&ArtifactReceiptValueInput {
         operation: "install",
         decision,
@@ -308,7 +294,7 @@ fn commit_install(
     root: &Path,
     artifact: &ArtifactRecord,
     payload_bytes: &[u8],
-    receipt_value: &IOValue,
+    receipt_value: &IoValue,
     should_store_artifact: bool,
 ) -> Result<()> {
     let db = ensure_index_tables(root)?;
@@ -320,7 +306,7 @@ fn commit_install(
     write_txn.commit().map_err(index_error)
 }
 
-pub fn artifact_value(input: ArtifactValueInput<'_>) -> Result<IOValue> {
+pub fn artifact_value(input: ArtifactValueInput<'_>) -> Result<IoValue> {
     validate_kind(input.kind)?;
     validate_refs(input.schema_refs, "artifact schema ref")?;
     validate_refs(input.dependency_refs, "artifact dependency ref")?;
@@ -349,7 +335,7 @@ pub fn artifact_value(input: ArtifactValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_artifact_value(value: &IOValue) -> Result<ArtifactRecord> {
+pub fn parse_artifact_value(value: &IoValue) -> Result<ArtifactRecord> {
     let fields = value
         .collect_simple_record("artifact-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-v1 ...>"))?;
@@ -395,7 +381,7 @@ pub fn read_artifact(root: &Path, artifact_ref: &str) -> Result<ArtifactRecord> 
     Ok(artifact)
 }
 
-pub fn read_payload(root: &Path, artifact_ref: &str) -> Result<IOValue> {
+pub fn read_payload(root: &Path, artifact_ref: &str) -> Result<IoValue> {
     let artifact = read_artifact(root, artifact_ref)?;
     match &artifact.payload {
         ArtifactPayloadRef::Inline { value_ref, .. } => {
@@ -417,7 +403,7 @@ pub fn read_payload(root: &Path, artifact_ref: &str) -> Result<IOValue> {
             Ok(value)
         }
         ArtifactPayloadRef::ContentRef { manifest_ref, .. } => {
-            let read = chunk_store::read_object(&chunk_root(root), manifest_ref)?;
+            let read = read_chunk_object(&chunk_root(root), manifest_ref)?;
             let value = parse_canonical_bytes(&read.bytes)?;
             Ok(value)
         }
@@ -706,7 +692,7 @@ pub fn list_receipts(root: &Path) -> Result<Vec<ArtifactReceipt>> {
     Ok(receipts)
 }
 
-pub fn parse_artifact_receipt(value: &IOValue) -> Result<ArtifactReceipt> {
+pub fn parse_artifact_receipt(value: &IoValue) -> Result<ArtifactReceipt> {
     let fields = value
         .collect_simple_record("artifact-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-receipt-v1 ...>"))?;
@@ -875,7 +861,7 @@ struct NamePointerValueInput<'a> {
     receipt_ref: &'a str,
 }
 
-fn artifact_receipt_value(input: &ArtifactReceiptValueInput<'_>) -> Result<IOValue> {
+fn artifact_receipt_value(input: &ArtifactReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "artifact receipt operation")?;
     if !matches!(input.decision, "pass" | "deny") {
         return Err(MoltenError::invalid_harness(format!("unsupported artifact receipt decision {}", input.decision)));
@@ -894,7 +880,7 @@ fn artifact_receipt_value(input: &ArtifactReceiptValueInput<'_>) -> Result<IOVal
     ]))
 }
 
-fn name_pointer_value(input: &NamePointerValueInput<'_>) -> Result<IOValue> {
+fn name_pointer_value(input: &NamePointerValueInput<'_>) -> Result<IoValue> {
     validate_pointer_kind(input.pointer_kind)?;
     validate_non_empty(input.name, "artifact pointer name")?;
     validate_ref(input.artifact_ref, "artifact pointer artifact ref")?;
@@ -915,7 +901,7 @@ fn name_pointer_value(input: &NamePointerValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-fn parse_name_pointer_value(value: &IOValue) -> Result<ArtifactNamePointer> {
+fn parse_name_pointer_value(value: &IoValue) -> Result<ArtifactNamePointer> {
     let fields = value
         .collect_simple_record("artifact-name-pointer-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <artifact-name-pointer-v1 ...>"))?;
@@ -955,7 +941,7 @@ fn all_name_pointers(root: &Path) -> Result<Vec<ArtifactNamePointer>> {
     Ok(pointers)
 }
 
-fn closure_value(roots: &[String], closure_refs: &[String], missing_refs: &[String]) -> Result<IOValue> {
+fn closure_value(roots: &[String], closure_refs: &[String], missing_refs: &[String]) -> Result<IoValue> {
     validate_refs(roots, "artifact closure root")?;
     validate_refs(closure_refs, "artifact closure ref")?;
     validate_refs(missing_refs, "artifact closure missing ref")?;
@@ -968,7 +954,7 @@ fn closure_value(roots: &[String], closure_refs: &[String], missing_refs: &[Stri
     ]))
 }
 
-fn payload_value(payload: &ArtifactPayloadRef) -> Result<IOValue> {
+fn payload_value(payload: &ArtifactPayloadRef) -> Result<IoValue> {
     Ok(record("payload", vec![match payload {
         ArtifactPayloadRef::Inline { value_ref, length } => {
             validate_ref(value_ref, "inline payload value ref")?;
@@ -1000,16 +986,16 @@ fn parse_payload_ref(value: &RailValue) -> Result<ArtifactPayloadRef> {
     Err(MoltenError::invalid_harness("artifact payload must be inline or content-ref"))
 }
 
-fn refs_value(refs: &[String]) -> IOValue {
+fn refs_value(refs: &[String]) -> IoValue {
     record("refs", vec![refs_sequence(refs)])
 }
 
-fn parse_refs_value(value: &IOValue, label: &str) -> Result<Vec<String>> {
+fn parse_refs_value(value: &IoValue, label: &str) -> Result<Vec<String>> {
     let fields = simple_record(value, "refs", 1)?;
     parse_ref_sequence_value(&fields[0], label)
 }
 
-fn refs_record(label: &'static str, refs: &[String]) -> IOValue {
+fn refs_record(label: &'static str, refs: &[String]) -> IoValue {
     record(label, vec![refs_sequence(refs)])
 }
 
@@ -1026,7 +1012,7 @@ fn registry_text_contains_ref(root: &Path, target_ref: &str) -> Result<bool> {
     Ok(false)
 }
 
-fn receipt_values(root: &Path) -> Result<Vec<IOValue>> {
+fn receipt_values(root: &Path) -> Result<Vec<IoValue>> {
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     let receipts = read_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
@@ -1043,14 +1029,14 @@ fn receipt_values(root: &Path) -> Result<Vec<IOValue>> {
     Ok(values)
 }
 
-fn store_receipt(root: &Path, receipt_value: &IOValue) -> Result<()> {
+fn store_receipt(root: &Path, receipt_value: &IoValue) -> Result<()> {
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
     store_receipt_in_tx(&write_txn, receipt_value)?;
     write_txn.commit().map_err(index_error)
 }
 
-fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IOValue) -> Result<()> {
+fn store_receipt_in_tx(write_txn: &redb::WriteTransaction, receipt_value: &IoValue) -> Result<()> {
     let parsed = parse_artifact_receipt(receipt_value)?;
     let mut receipts = write_txn.open_table(INDEX_RECEIPTS).map_err(index_error)?;
     receipts
@@ -1139,6 +1125,47 @@ fn chunk_root(root: &Path) -> std::path::PathBuf {
     root.join("chunks")
 }
 
+fn canonical_bytes(value: &IoValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn canonical_hash(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IoValue> {
+    crate::preserves_rail::parse_canonical_bytes(bytes)
+}
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn value_to_iovalue(value: &RailValue) -> IoValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
+
+fn put_payload_bytes(root: &Path, payload_bytes: &[u8]) -> Result<crate::chunk_store::ChunkStorePut> {
+    crate::chunk_store::put_bytes(
+        root,
+        "artifact-payload",
+        payload_bytes,
+        crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE,
+    )
+}
+
+fn read_chunk_object(root: &Path, manifest_ref: &str) -> Result<crate::chunk_store::ChunkStoreRead> {
+    crate::chunk_store::read_object(root, manifest_ref)
+}
+
 fn name_key(pointer_kind: &str, name: &str) -> Result<String> {
     canonical_hash(&record("artifact-name-key", vec![string(pointer_kind), string(name)]))
 }
@@ -1151,15 +1178,15 @@ fn domain_for_kind(kind: &str) -> String {
     format!("molten.artifacts.domain.v1:{kind}")
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
@@ -1223,11 +1250,11 @@ fn parse_ref_sequence_value(value: &RailValue, label: &str) -> Result<Vec<String
     Ok(refs)
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     checks_value_from_pairs(&names.iter().map(|name| (*name, "pass")).collect::<Vec<_>>())
 }
 
-fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
@@ -1270,7 +1297,7 @@ fn require_schema(value: &RailValue, expected: &str, context: &str) -> Result<()
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
 ) -> Result<std::borrow::Cow<'a, preserves::Record<RailValue>>> {
@@ -1566,7 +1593,7 @@ mod tests {
     #[test]
     fn large_payloads_use_chunk_refs_and_cleanup_diagnostics_see_pointers() {
         let root = temp_dir("artifact-large");
-        let large = IOValue::new("x".repeat(INLINE_PAYLOAD_LIMIT + 512));
+        let large = IoValue::new("x".repeat(INLINE_PAYLOAD_LIMIT + 512));
         let installed = install_artifact(&root, &ArtifactInstallInput {
             kind: "doc".to_string(),
             payload: large.clone(),

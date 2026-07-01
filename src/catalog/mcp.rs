@@ -1,19 +1,13 @@
-use std::path::Path;
-
-use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
-
 use crate::catalog;
-use crate::catalog::CatalogFilter;
-use crate::catalog::CatalogVisibilityInput;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::value_to_iovalue;
+
+type Path = std::path::Path;
+type IoValue = preserves::IOValue;
+type PreservesRecord<T> = preserves::Record<T>;
+type PreservesValue<T> = preserves::Value<T>;
+type CatalogFilter = crate::catalog::CatalogFilter;
+type CatalogVisibilityInput = crate::catalog::CatalogVisibilityInput;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
 
 pub const READ_ONLY_TOOLS: &[&str] = &[
     "catalog.list",
@@ -55,9 +49,9 @@ const _: () = assert!(MAX_CATALOG_MCP_CHECKS <= 1_000);
 pub struct CatalogMcpRequest {
     pub request_ref: String,
     pub tool: String,
-    pub args: Vec<IOValue>,
+    pub args: Vec<IoValue>,
     pub visibility: CatalogVisibilityInput,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,8 +59,8 @@ pub struct CatalogMcpCall {
     pub request: CatalogMcpRequest,
     pub decision: String,
     pub response_ref: String,
-    pub response_value: IOValue,
-    pub receipt_value: IOValue,
+    pub response_value: IoValue,
+    pub receipt_value: IoValue,
     pub catalog_receipt_ref: Option<String>,
 }
 
@@ -78,15 +72,15 @@ pub struct CatalogMcpReceipt {
     pub request_ref: String,
     pub response_ref: String,
     pub catalog_receipt_ref: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 struct BuildCallInput<'a> {
     request: CatalogMcpRequest,
     decision: &'a str,
-    payload: Option<&'a IOValue>,
+    payload: Option<&'a IoValue>,
     result_ref: Option<&'a str>,
-    catalog_receipt_value: Option<&'a IOValue>,
+    catalog_receipt_value: Option<&'a IoValue>,
     diagnostics: Vec<String>,
     checks: &'a [(&'a str, &'a str)],
 }
@@ -96,7 +90,7 @@ struct ResponseValueInput<'a> {
     decision: &'a str,
     request_ref: &'a str,
     result_ref: Option<&'a str>,
-    payload: Option<&'a IOValue>,
+    payload: Option<&'a IoValue>,
     catalog_receipt_ref: Option<&'a str>,
     diagnostics: &'a [String],
     checks: &'a [(&'a str, &'a str)],
@@ -113,7 +107,7 @@ struct ReceiptValueInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-pub fn mcp_request_value(tool: &str, args: Vec<IOValue>) -> Result<IOValue> {
+pub fn mcp_request_value(tool: &str, args: Vec<IoValue>) -> Result<IoValue> {
     validate_non_empty(tool, "catalog MCP tool")?;
     ensure_count_at_most(args.len(), MAX_CATALOG_MCP_ARGS, "catalog MCP args")?;
     Ok(record("catalog-mcp-request-v1", vec![
@@ -124,7 +118,7 @@ pub fn mcp_request_value(tool: &str, args: Vec<IOValue>) -> Result<IOValue> {
     ]))
 }
 
-pub fn call(registry_root: &Path, ledger_root: Option<&Path>, request_value: &IOValue) -> Result<CatalogMcpCall> {
+pub fn call(registry_root: &Path, ledger_root: Option<&Path>, request_value: &IoValue) -> Result<CatalogMcpCall> {
     call_with_chunk_store(registry_root, ledger_root, None, request_value)
 }
 
@@ -132,7 +126,7 @@ pub fn call_with_chunk_store(
     registry_root: &Path,
     ledger_root: Option<&Path>,
     chunk_root: Option<&Path>,
-    request_value: &IOValue,
+    request_value: &IoValue,
 ) -> Result<CatalogMcpCall> {
     let request = parse_mcp_request(request_value)?;
     if !READ_ONLY_TOOLS.contains(&request.tool.as_str()) {
@@ -186,7 +180,7 @@ pub fn call_with_chunk_store(
     }
 }
 
-pub fn parse_mcp_request(value: &IOValue) -> Result<CatalogMcpRequest> {
+pub fn parse_mcp_request(value: &IoValue) -> Result<CatalogMcpRequest> {
     let fields = value
         .collect_simple_record("catalog-mcp-request-v1", Some(4))
         .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-mcp-request-v1 ...>"))?;
@@ -204,7 +198,7 @@ pub fn parse_mcp_request(value: &IOValue) -> Result<CatalogMcpRequest> {
     })
 }
 
-pub fn parse_mcp_receipt(value: &IOValue) -> Result<CatalogMcpReceipt> {
+pub fn parse_mcp_receipt(value: &IoValue) -> Result<CatalogMcpReceipt> {
     let fields = value
         .collect_simple_record("catalog-mcp-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <catalog-mcp-receipt-v1 ...>"))?;
@@ -222,7 +216,7 @@ pub fn parse_mcp_receipt(value: &IOValue) -> Result<CatalogMcpReceipt> {
     })
 }
 
-pub fn catalog_mcp_summary(value: &IOValue) -> Result<String> {
+pub fn catalog_mcp_summary(value: &IoValue) -> Result<String> {
     if let Ok(receipt) = parse_mcp_receipt(value) {
         return Ok(format!(
             "catalog MCP receipt tool={} decision={} request={} response={}",
@@ -241,8 +235,8 @@ pub fn catalog_mcp_summary(value: &IOValue) -> Result<String> {
 struct DispatchPayload {
     decision: String,
     result_ref: String,
-    value: IOValue,
-    catalog_receipt_value: IOValue,
+    value: IoValue,
+    catalog_receipt_value: IoValue,
     diagnostics: Vec<String>,
 }
 
@@ -555,7 +549,7 @@ fn build_call(input: BuildCallInput<'_>) -> Result<CatalogMcpCall> {
     })
 }
 
-fn response_value(input: &ResponseValueInput<'_>) -> Result<IOValue> {
+fn response_value(input: &ResponseValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.tool, "catalog MCP response tool")?;
     validate_decision(input.decision)?;
     validate_ref(input.request_ref, "catalog MCP response request ref")?;
@@ -578,7 +572,7 @@ fn response_value(input: &ResponseValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IOValue> {
+fn receipt_value(input: &ReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.tool, "catalog MCP receipt tool")?;
     validate_decision(input.decision)?;
     validate_ref(input.request_ref, "catalog MCP receipt request ref")?;
@@ -641,7 +635,7 @@ impl From<CoreResult> for DispatchPayload {
     }
 }
 
-fn filters_from_args(args: &[IOValue]) -> Result<Vec<CatalogFilter>> {
+fn filters_from_args(args: &[IoValue]) -> Result<Vec<CatalogFilter>> {
     let mut filters = Vec::new();
     append_filter_args(&mut filters, arg_strings(args, "ref")?, CatalogFilter::Ref)?;
     append_filter_args(&mut filters, arg_strings(args, "kind")?, CatalogFilter::ArtifactKind)?;
@@ -668,7 +662,7 @@ fn filters_from_args(args: &[IOValue]) -> Result<Vec<CatalogFilter>> {
 
 fn push_optional_text_filter(
     filters: &mut impl crate::bounded::VecSink<CatalogFilter>,
-    args: &[IOValue],
+    args: &[IoValue],
     arg_name: &str,
     prefix: &str,
 ) -> Result<()> {
@@ -694,7 +688,7 @@ fn append_filter_args(
     Ok(())
 }
 
-fn visibility_from_args(args: &[IOValue]) -> Result<CatalogVisibilityInput> {
+fn visibility_from_args(args: &[IoValue]) -> Result<CatalogVisibilityInput> {
     Ok(CatalogVisibilityInput {
         policy_refs: arg_strings(args, "policy-ref")?,
         capability_refs: arg_strings(args, "capability-ref")?,
@@ -703,19 +697,19 @@ fn visibility_from_args(args: &[IOValue]) -> Result<CatalogVisibilityInput> {
     })
 }
 
-fn required_arg_string(args: &[IOValue], label: &str) -> Result<String> {
+fn required_arg_string(args: &[IoValue], label: &str) -> Result<String> {
     optional_arg_string(args, label)
         .ok_or_else(|| MoltenError::invalid_harness(format!("catalog MCP request missing required arg <{label} ...>")))
 }
 
-fn optional_arg_string(args: &[IOValue], label: &str) -> Option<String> {
+fn optional_arg_string(args: &[IoValue], label: &str) -> Option<String> {
     args.iter().find_map(|arg| {
         arg.collect_simple_record(label, Some(1))
             .and_then(|fields| fields[0].as_string().map(|value| value.into_owned()))
     })
 }
 
-fn arg_strings(args: &[IOValue], label: &str) -> Result<Vec<String>> {
+fn arg_strings(args: &[IoValue], label: &str) -> Result<Vec<String>> {
     ensure_count_at_most(args.len(), MAX_CATALOG_MCP_ARGS, "catalog MCP args")?;
     let mut values = Vec::new();
     for arg in args {
@@ -731,7 +725,7 @@ fn arg_strings(args: &[IOValue], label: &str) -> Result<Vec<String>> {
     Ok(values)
 }
 
-fn arg_bool(args: &[IOValue], label: &str, default: bool) -> Result<bool> {
+fn arg_bool(args: &[IoValue], label: &str, default: bool) -> Result<bool> {
     for arg in args {
         if let Some(fields) = arg.collect_simple_record(label, Some(1)) {
             return fields[0]
@@ -742,7 +736,7 @@ fn arg_bool(args: &[IOValue], label: &str, default: bool) -> Result<bool> {
     Ok(default)
 }
 
-fn arg_u64(args: &[IOValue], label: &str, default: u64) -> Result<u64> {
+fn arg_u64(args: &[IoValue], label: &str, default: u64) -> Result<u64> {
     for arg in args {
         if let Some(fields) = arg.collect_simple_record(label, Some(1)) {
             return fields[0]
@@ -756,15 +750,35 @@ fn arg_u64(args: &[IOValue], label: &str, default: u64) -> Result<u64> {
     Ok(default)
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn canonical_hash(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn value_to_iovalue(value: &PreservesValue<IoValue>) -> IoValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
+
+fn refs_sequence(refs: &[String]) -> IoValue {
     sequence(refs.iter().map(string).collect())
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &PreservesValue<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -774,17 +788,17 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     checks_value_from_pairs(&names.iter().map(|name| (*name, "pass")).collect::<Vec<_>>())
 }
 
-fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
     record("checks", vec![sequence(
         checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &PreservesValue<IoValue>) -> Result<Vec<String>> {
     let value = value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "catalog MCP checks")?;
@@ -811,7 +825,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &PreservesValue<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -821,41 +835,44 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, PreservesRecord<PreservesValue<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(
+    value: &'a PreservesValue<IoValue>,
+    field: &str,
+) -> Result<std::borrow::Cow<'a, Vec<PreservesValue<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     required_string(&fields[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &PreservesValue<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     required_ref(&fields[0], label)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &PreservesValue<IoValue>, label: &str) -> Result<Option<String>> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&fields[0])
 }
 
-fn record_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
+fn record_sequence(value: &PreservesValue<IoValue>, label: &str) -> Result<Vec<IoValue>> {
     let value = value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     let items = required_sequence(&fields[0], label)?;
@@ -867,14 +884,14 @@ fn record_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> 
     Ok(values)
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &PreservesValue<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &PreservesValue<IoValue>, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
@@ -1205,7 +1222,7 @@ mod tests {
         fixture
     }
 
-    fn replay_verify_record(fixture: &ReplayCase, actual_report_ref: &str) -> IOValue {
+    fn replay_verify_record(fixture: &ReplayCase, actual_report_ref: &str) -> IoValue {
         record("deterministic-replay-verify-v1", vec![
             string(crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
             string("deny"),
@@ -1217,7 +1234,7 @@ mod tests {
         ])
     }
 
-    fn replay_divergence_record(fixture: &ReplayCase) -> IOValue {
+    fn replay_divergence_record(fixture: &ReplayCase) -> IoValue {
         record("deterministic-first-divergence-v1", vec![
             string(crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA),
             record("kind", vec![string("effect-response")]),
@@ -1231,7 +1248,7 @@ mod tests {
         ])
     }
 
-    fn replay_rollup(verify: &IOValue) -> crate::deterministic_replay::ReplayRollupReceipt {
+    fn replay_rollup(verify: &IoValue) -> crate::deterministic_replay::ReplayRollupReceipt {
         crate::deterministic_replay::rollup_replay_receipts(&[crate::deterministic_replay::ReplayRollupInput {
             expected_ref: Some(canonical_hash(verify).expect("verify ref")),
             value: verify.clone(),
@@ -1240,7 +1257,7 @@ mod tests {
     }
 
     fn replay_index(
-        verify: &IOValue,
+        verify: &IoValue,
         rollup: &crate::deterministic_replay::ReplayRollupReceipt,
     ) -> crate::deterministic_replay::ReplayIndexReceipt {
         crate::deterministic_replay::index_replay_evidence(&[
@@ -1438,7 +1455,7 @@ mod tests {
     fn install_fixture(
         root: &Path,
         kind: &str,
-        payload: IOValue,
+        payload: IoValue,
         dependency_refs: &[String],
         schema_refs: &[String],
     ) -> artifacts::ArtifactInstall {
