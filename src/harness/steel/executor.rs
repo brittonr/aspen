@@ -1,26 +1,44 @@
-use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
-
-use preserves::IOValue;
 use steel::steel_vm::engine::Engine;
 use steel::steel_vm::register_fn::RegisterFn;
 
-use super::core::AdmissionRequest;
-use super::core::CoreStep;
-use super::schema::ActorExecutorConfig;
-use super::schema::ActorKind;
-use super::schema::HarnessSuite;
-use super::schema::SteelExecutionReceiptInput;
-use super::schema::SteelResourceReceiptInput;
-use super::schema::steel_execution_receipt_value;
-use super::schema::steel_source_ref;
-use super::schema::validate_hostcall_effect_binding_request;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
+type Shared<T> = std::sync::Arc<T>;
+type Counter = std::sync::atomic::AtomicU64;
+type MemoryOrder = std::sync::atomic::Ordering;
+type PreservesValue = preserves::IOValue;
+type Request = super::core::AdmissionRequest;
+type Step = super::core::CoreStep;
+type ActorConfig = super::schema::ActorExecutorConfig;
+type ActorMode = super::schema::ActorKind;
+type Suite = super::schema::HarnessSuite;
+type RunReceipt<'a> = super::schema::SteelExecutionReceiptInput<'a>;
+type ResourceReceipt = super::schema::SteelResourceReceiptInput;
+type SourceConfig = super::schema::SteelExecutorConfig;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+fn validate_bound_request(hostcall_request: &PreservesValue, operation: &str) -> Result<()> {
+    super::schema::validate_hostcall_effect_binding_request(hostcall_request, operation)
+}
+
+fn receipt_value(input: RunReceipt<'_>) -> PreservesValue {
+    super::schema::steel_execution_receipt_value(input)
+}
+
+fn source_ref(config: &SourceConfig) -> Result<String> {
+    super::schema::steel_source_ref(config)
+}
+
+fn canonical_hash(value: &PreservesValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn string(value: &str) -> PreservesValue {
+    crate::preserves_rail::string(value)
+}
+
+fn to_text(value: &PreservesValue) -> Result<String> {
+    crate::preserves_rail::to_text(value)
+}
 
 const STEEL_FUEL_LIMIT: u64 = 16 * 1024;
 const STEEL_MAX_SOURCE_BYTES: usize = 8 * 1024;
@@ -32,29 +50,29 @@ const STEEL_MAX_DEFINED_FUNCTIONS: usize = 128;
 const _: () = assert!(STEEL_MAX_DEFINED_FUNCTIONS <= 1_024);
 
 pub fn execute_steel_actor_step(
-    suite: &HarnessSuite,
-    step: &CoreStep,
-    actor_input: &IOValue,
-    hostcall_request: &IOValue,
-) -> Result<Option<IOValue>> {
+    suite: &Suite,
+    step: &Step,
+    actor_input: &PreservesValue,
+    hostcall_request: &PreservesValue,
+) -> Result<Option<PreservesValue>> {
     let actor_id = step.primary_actor();
     let Some(actor) = suite.actors.iter().find(|actor| actor.id == actor_id) else {
         return Err(MoltenError::invalid_harness(format!("actor {actor_id} missing from executor registry")));
     };
-    if actor.kind != ActorKind::Steel {
+    if actor.kind != ActorMode::Steel {
         return Ok(None);
     }
-    let Some(ActorExecutorConfig::Steel(config)) = actor.executor.as_ref() else {
+    let Some(ActorConfig::Steel(config)) = actor.executor.as_ref() else {
         return Err(MoltenError::invalid_harness(format!(
             "steel actor {actor_id} missing reviewed Steel executor preflight fixture"
         )));
     };
 
     let prepared = prepare_run(actor_id, &config.source, &config.callable, actor_input)?;
-    let operation = AdmissionRequest::from_step(step).action.as_str().to_string();
-    validate_hostcall_effect_binding_request(hostcall_request, &operation)?;
+    let operation = Request::from_step(step).action.as_str().to_string();
+    validate_bound_request(hostcall_request, &operation)?;
     let execution = run_vm(actor_id, &config.callable, prepared.script, &operation, &config.allowed_hostcalls)?;
-    let source_ref = steel_source_ref(config)?;
+    let source_ref = source_ref(config)?;
 
     Ok(Some(finish_value(FinishInput {
         actor_id,
@@ -87,14 +105,14 @@ struct FinishInput<'a> {
     callable: &'a str,
     source_bytes: u64,
     operation: &'a str,
-    actor_input: &'a IOValue,
+    actor_input: &'a PreservesValue,
     input_text: &'a str,
     output_text: &'a str,
     estimated_fuel: u64,
     hostcall_count: u64,
 }
 
-fn prepare_run(actor_id: &str, source: &str, callable: &str, actor_input: &IOValue) -> Result<Prepared> {
+fn prepare_run(actor_id: &str, source: &str, callable: &str, actor_input: &PreservesValue) -> Result<Prepared> {
     if source.len() > STEEL_MAX_SOURCE_BYTES {
         return Err(MoltenError::invalid_harness(format!(
             "Steel executor source for actor {actor_id} exceeds deterministic resource limit"
@@ -130,11 +148,11 @@ fn run_vm(
 ) -> Result<Execution> {
     let expected_operation = expected_operation.to_string();
     let allowed_hostcalls = allowed_hostcalls.to_vec();
-    let hostcall_counter = Arc::new(AtomicU64::new(0));
-    let hostcall_counter_for_vm = Arc::clone(&hostcall_counter);
+    let hostcall_counter = Shared::new(Counter::new(0));
+    let hostcall_counter_for_vm = Shared::clone(&hostcall_counter);
     let mut engine = Engine::new();
     engine.register_fn("molten-hostcall", move |operation: String, envelope: String| -> String {
-        hostcall_counter_for_vm.fetch_add(1, Ordering::SeqCst);
+        hostcall_counter_for_vm.fetch_add(1, MemoryOrder::SeqCst);
         if operation == expected_operation && allowed_hostcalls.iter().any(|allowed| allowed == &operation) {
             format!("<steel-hostcall-response \"pass\" \"{}\">", escape_steel_string(&envelope))
         } else {
@@ -152,7 +170,7 @@ fn run_vm(
             "Steel executor output for actor {actor_id} exceeds deterministic resource limit"
         )));
     }
-    let hostcall_count = hostcall_counter.load(Ordering::SeqCst);
+    let hostcall_count = hostcall_counter.load(MemoryOrder::SeqCst);
     if hostcall_count > STEEL_MAX_HOSTCALLS {
         return Err(MoltenError::invalid_harness(format!(
             "Steel executor hostcall count for actor {actor_id} exceeds deterministic resource limit"
@@ -164,13 +182,13 @@ fn run_vm(
     })
 }
 
-fn finish_value(input: FinishInput<'_>) -> Result<IOValue> {
+fn finish_value(input: FinishInput<'_>) -> Result<PreservesValue> {
     let output_value = string(input.output_text);
     let input_ref = canonical_hash(input.actor_input)?;
     let output_ref = canonical_hash(&output_value)?;
     let hostcalls = vec![input.operation.to_string()];
 
-    Ok(steel_execution_receipt_value(SteelExecutionReceiptInput {
+    Ok(receipt_value(RunReceipt {
         actor_id: input.actor_id,
         source_ref: input.source_ref,
         callable: input.callable,
@@ -178,7 +196,7 @@ fn finish_value(input: FinishInput<'_>) -> Result<IOValue> {
         input_ref: &input_ref,
         output_ref: &output_ref,
         hostcalls: &hostcalls,
-        resource_limits: SteelResourceReceiptInput {
+        resource_limits: ResourceReceipt {
             fuel_limit: STEEL_FUEL_LIMIT,
             fuel_remaining: STEEL_FUEL_LIMIT.saturating_sub(input.estimated_fuel),
             source_bytes: input.source_bytes,
