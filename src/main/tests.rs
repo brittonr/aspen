@@ -1,32 +1,15 @@
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
-
 use molten::artifacts;
 use molten::authority;
 use molten::catalog_mcp;
 use molten::chunk_store;
 use molten::coordination;
 use molten::delivery_idempotency;
-use molten::error::MoltenError;
-use molten::error::Result;
 use molten::eval_cache;
-use molten::evidence::PASS_EVIDENCE_PURPOSE;
-use molten::harness::failure_value;
-use molten::harness::parse_failure;
-use molten::harness::parse_repro_bundle;
 use molten::job_dag;
 use molten::ledger;
 use molten::octet_gate;
 use molten::operator_dogfood;
 use molten::plugin_host;
-use molten::preserves_rail::canonical_hash;
-use molten::preserves_rail::parse_text;
-use molten::preserves_rail::record;
-use molten::preserves_rail::string;
-use molten::preserves_rail::to_text;
 use molten::protocol_session;
 use molten::provenance;
 use molten::remote_dataspace;
@@ -37,47 +20,172 @@ use molten::typed_storage;
 use molten::upgrades;
 
 use super::*;
-use crate::cli_chunk::Top;
-use crate::cli_chunk::run;
-use crate::cli_coordination::CoordinationCommand;
-use crate::cli_coordination::run_coordination_command;
-use crate::cli_delivery::DeliveryCommand;
-use crate::cli_delivery::run_delivery_command;
-use crate::cli_dogfood::DogfoodCommand;
-use crate::cli_dogfood::run_dogfood_command;
-use crate::cli_gate::GateCommand;
-use crate::cli_gate::run_gate_command;
-use crate::cli_job::JobCommand;
-use crate::cli_job::run_job_command;
-use crate::cli_ledger::ChainCommand;
-use crate::cli_ledger::run_chain_command;
-use crate::cli_plugin::PluginCommand;
-use crate::cli_plugin::run_plugin_command;
-use crate::cli_protocol::ProtocolCommand;
-use crate::cli_protocol::run_protocol_command;
-use crate::cli_provenance::ProvenanceCommand;
-use crate::cli_provenance::run_provenance_command;
-use crate::cli_raft::RaftCommand;
-use crate::cli_raft::run_raft_command;
-use crate::cli_receipts::ReceiptCommand;
-use crate::cli_receipts::ReceiptsCommand;
-use crate::cli_receipts::run_receipt_command;
-use crate::cli_receipts::run_receipts_command;
-use crate::cli_remote::RemoteCommand;
-use crate::cli_remote::RemoteEnvelopeCommand;
-use crate::cli_remote::run_remote_command;
-use crate::cli_repro::ReproCommand;
-use crate::cli_repro::run_repro_command;
-use crate::cli_retention::RetentionCommand;
-use crate::cli_retention::run_retention_command;
-use crate::cli_rewrite::RewriteCommand;
-use crate::cli_rewrite::run_rewrite_command;
-use crate::cli_secrets::SecretsCommand;
-use crate::cli_secrets::run_secrets_command;
-use crate::cli_service::ServiceCommand;
-use crate::cli_service::run_service_command;
-use crate::cli_upgrade::UpgradeCommand;
-use crate::cli_upgrade::run_upgrade_command;
+
+type Path = std::path::Path;
+type PathBuf = std::path::PathBuf;
+type MoltenError = molten::error::MoltenError;
+type Result<T> = molten::error::Result<T>;
+type Top = crate::cli_chunk::Top;
+type CoordinationCommand = crate::cli_coordination::CoordinationCommand;
+type DeliveryCommand = crate::cli_delivery::DeliveryCommand;
+type DogfoodCommand = crate::cli_dogfood::DogfoodCommand;
+type GateCommand = crate::cli_gate::GateCommand;
+type JobCommand = crate::cli_job::JobCommand;
+type ChainCommand = crate::cli_ledger::ChainCommand;
+type PluginCommand = crate::cli_plugin::PluginCommand;
+type ProtocolCommand = crate::cli_protocol::ProtocolCommand;
+type ProvenanceCommand = crate::cli_provenance::ProvenanceCommand;
+type RaftCommand = crate::cli_raft::RaftCommand;
+type ReceiptCommand = crate::cli_receipts::ReceiptCommand;
+type ReceiptsCommand = crate::cli_receipts::ReceiptsCommand;
+type RemoteCommand = crate::cli_remote::RemoteCommand;
+type RemoteEnvelopeCommand = crate::cli_remote::RemoteEnvelopeCommand;
+type ReproCommand = crate::cli_repro::ReproCommand;
+type RetentionCommand = crate::cli_retention::RetentionCommand;
+type RewriteCommand = crate::cli_rewrite::RewriteCommand;
+type SecretsCommand = crate::cli_secrets::SecretsCommand;
+type ServiceCommand = crate::cli_service::ServiceCommand;
+type UpgradeCommand = crate::cli_upgrade::UpgradeCommand;
+
+const PASS_EVIDENCE_PURPOSE: &str = molten::evidence::PASS_EVIDENCE_PURPOSE;
+
+mod fs {
+    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+
+    pub(super) fn read(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<u8>> {
+        std::fs::read(path)
+    }
+
+    pub(super) fn read_dir(path: impl AsRef<std::path::Path>) -> std::io::Result<std::fs::ReadDir> {
+        std::fs::read_dir(path)
+    }
+
+    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
+        std::fs::read_to_string(path)
+    }
+
+    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
+
+    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        std::fs::write(path, contents)
+    }
+}
+
+fn canonical_hash(value: &preserves::IOValue) -> Result<String> {
+    molten::preserves_rail::canonical_hash(value)
+}
+
+fn parse_text(source: &str) -> Result<preserves::IOValue> {
+    molten::preserves_rail::parse_text(source)
+}
+
+fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
+    molten::preserves_rail::record(label, fields)
+}
+
+fn string(value: impl AsRef<str>) -> preserves::IOValue {
+    molten::preserves_rail::string(value)
+}
+
+fn to_text(value: &preserves::IOValue) -> Result<String> {
+    molten::preserves_rail::to_text(value)
+}
+
+fn failure_value(phase: &str, error: &MoltenError, diagnostics: Vec<preserves::IOValue>) -> preserves::IOValue {
+    molten::harness::failure_value(phase, error, diagnostics)
+}
+
+fn parse_failure(value: &preserves::IOValue) -> Result<molten::harness::HarnessFailure> {
+    molten::harness::parse_failure(value)
+}
+
+fn parse_repro_bundle(value: &preserves::IOValue) -> Result<molten::harness::HarnessReproBundle> {
+    molten::harness::parse_repro_bundle(value)
+}
+
+fn run(command: Top) -> Result<()> {
+    crate::cli_chunk::run(command)
+}
+
+fn run_coordination_command(command: CoordinationCommand) -> Result<()> {
+    crate::cli_coordination::run_coordination_command(command)
+}
+
+fn run_delivery_command(command: DeliveryCommand) -> Result<()> {
+    crate::cli_delivery::run_delivery_command(command)
+}
+
+fn run_dogfood_command(command: DogfoodCommand) -> Result<()> {
+    crate::cli_dogfood::run_dogfood_command(command)
+}
+
+fn run_gate_command(command: GateCommand) -> Result<()> {
+    crate::cli_gate::run_gate_command(command)
+}
+
+fn run_job_command(command: JobCommand) -> Result<()> {
+    crate::cli_job::run_job_command(command)
+}
+
+fn run_chain_command(command: ChainCommand) -> Result<()> {
+    crate::cli_ledger::run_chain_command(command)
+}
+
+fn run_plugin_command(command: PluginCommand) -> Result<()> {
+    crate::cli_plugin::run_plugin_command(command)
+}
+
+fn run_protocol_command(command: ProtocolCommand) -> Result<()> {
+    crate::cli_protocol::run_protocol_command(command)
+}
+
+fn run_provenance_command(command: ProvenanceCommand) -> Result<()> {
+    crate::cli_provenance::run_provenance_command(command)
+}
+
+fn run_raft_command(command: RaftCommand) -> Result<()> {
+    crate::cli_raft::run_raft_command(command)
+}
+
+fn run_receipt_command(command: ReceiptCommand) -> Result<()> {
+    crate::cli_receipts::run_receipt_command(command)
+}
+
+fn run_receipts_command(command: ReceiptsCommand) -> Result<()> {
+    crate::cli_receipts::run_receipts_command(command)
+}
+
+fn run_remote_command(command: RemoteCommand) -> Result<()> {
+    crate::cli_remote::run_remote_command(command)
+}
+
+fn run_repro_command(command: ReproCommand) -> Result<()> {
+    crate::cli_repro::run_repro_command(command)
+}
+
+fn run_retention_command(command: RetentionCommand) -> Result<()> {
+    crate::cli_retention::run_retention_command(command)
+}
+
+fn run_rewrite_command(command: RewriteCommand) -> Result<()> {
+    crate::cli_rewrite::run_rewrite_command(command)
+}
+
+fn run_secrets_command(command: SecretsCommand) -> Result<()> {
+    crate::cli_secrets::run_secrets_command(command)
+}
+
+fn run_service_command(command: ServiceCommand) -> Result<()> {
+    crate::cli_service::run_service_command(command)
+}
+
+fn run_upgrade_command(command: UpgradeCommand) -> Result<()> {
+    crate::cli_upgrade::run_upgrade_command(command)
+}
 
 fn cli_synthetic_ref(label: &str) -> Result<String> {
     canonical_hash(&record("remote-cli-ref", vec![string(label)]))
