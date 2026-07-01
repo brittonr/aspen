@@ -5,17 +5,39 @@ use preserves::Value;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::PEER_AGREEMENT_SCHEMA;
-use crate::preserves_rail::PEER_BOOTSTRAP_INPUT_SCHEMA;
-use crate::preserves_rail::PEER_BOOTSTRAP_RECEIPT_SCHEMA;
-use crate::preserves_rail::PEER_HANDSHAKE_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+
+const PEER_AGREEMENT_SCHEMA: &str = crate::preserves_rail::PEER_AGREEMENT_SCHEMA;
+const PEER_BOOTSTRAP_INPUT_SCHEMA: &str = crate::preserves_rail::PEER_BOOTSTRAP_INPUT_SCHEMA;
+const PEER_BOOTSTRAP_RECEIPT_SCHEMA: &str = crate::preserves_rail::PEER_BOOTSTRAP_RECEIPT_SCHEMA;
+const PEER_HANDSHAKE_SCHEMA: &str = crate::preserves_rail::PEER_HANDSHAKE_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 const MAX_PEER_JOIN_REQUESTS: usize = 256;
 const _: () = assert!(MAX_PEER_JOIN_REQUESTS > 0);
@@ -734,9 +756,6 @@ fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
 
     #[test]
@@ -821,9 +840,9 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_negotiation_is_deterministic_and_denied_join_is_safe(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
-        let should_offer_capability = tc.draw(generators::booleans());
+    fn hegel_negotiation_is_deterministic_and_denied_join_is_safe(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
+        let should_offer_capability = tc.draw(hegel::generators::booleans());
         let offers = if should_offer_capability {
             vec![sample_offer("join:gossip", &format!("topic:{salt}"))]
         } else {
