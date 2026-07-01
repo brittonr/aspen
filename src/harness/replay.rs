@@ -1,25 +1,9 @@
-use preserves::IOValue;
+type PreservesValue = preserves::IOValue;
+type EventBoundary = super::schema::EventBoundary;
+type Divergence = crate::error::HarnessDivergence;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
 
-use super::runner::run_suite_with_effect_log;
-use super::schema::EventBoundary;
-use super::schema::effect_log_from_observations;
-use super::schema::event_boundary;
-use super::schema::parse_admission_decision_event;
-use super::schema::parse_report;
-use super::schema::parse_suite;
-use super::schema::validate_actor_registry_evidence;
-use super::schema::validate_admission_evidence;
-use super::schema::validate_budget_fixture_evidence;
-use super::schema::validate_budget_gate_evidence;
-use super::schema::validate_capability_gate_evidence;
-use super::schema::validate_executor_preflight_evidence;
-use super::schema::validate_hostcall_evidence;
-use super::schema::validate_policy_gate_evidence;
-use super::schema::validate_runtime_predicate_evidence;
-use crate::error::HarnessDivergence;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_bytes;
 mod compare;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,14 +21,14 @@ pub struct ReportValidation {
     pub observations: usize,
 }
 
-pub fn validate_report_value(report_value: &IOValue) -> Result<ReportValidation> {
-    let report = parse_report(report_value)?;
-    let suite = parse_suite(&report.suite_value)?;
-    validate_actor_registry_evidence(&suite, &report.observations)?;
-    validate_budget_fixture_evidence(&suite)?;
-    validate_budget_gate_evidence(&suite, report.budget_gate.as_ref())?;
-    validate_policy_gate_evidence(&suite, report.policy_gate.as_ref())?;
-    validate_capability_gate_evidence(&suite, report.capability_gate.as_ref())?;
+pub fn validate_report_value(report_value: &PreservesValue) -> Result<ReportValidation> {
+    let report = super::schema::parse_report(report_value)?;
+    let suite = super::schema::parse_suite(&report.suite_value)?;
+    super::schema::validate_actor_registry_evidence(&suite, &report.observations)?;
+    super::schema::validate_budget_fixture_evidence(&suite)?;
+    super::schema::validate_budget_gate_evidence(&suite, report.budget_gate.as_ref())?;
+    super::schema::validate_policy_gate_evidence(&suite, report.policy_gate.as_ref())?;
+    super::schema::validate_capability_gate_evidence(&suite, report.capability_gate.as_ref())?;
     let policy_gate = report
         .policy_gate
         .as_ref()
@@ -57,16 +41,20 @@ pub fn validate_report_value(report_value: &IOValue) -> Result<ReportValidation>
         .budget_gate
         .as_ref()
         .ok_or_else(|| MoltenError::invalid_harness("missing budget gate evidence"))?;
-    validate_admission_evidence(&suite, &report.observations, capability_gate)?;
-    validate_executor_preflight_evidence(&suite, &report.observations, report.executor_preflights.as_ref())?;
-    validate_runtime_predicate_evidence(&suite, &report.observations)?;
-    validate_hostcall_evidence(&suite, &report.observations, policy_gate, capability_gate, budget_gate)?;
-    let observed_effect_log = effect_log_from_observations(&report.observations)?;
+    super::schema::validate_admission_evidence(&suite, &report.observations, capability_gate)?;
+    super::schema::validate_executor_preflight_evidence(
+        &suite,
+        &report.observations,
+        report.executor_preflights.as_ref(),
+    )?;
+    super::schema::validate_runtime_predicate_evidence(&suite, &report.observations)?;
+    super::schema::validate_hostcall_evidence(&suite, &report.observations, policy_gate, capability_gate, budget_gate)?;
+    let observed_effect_log = super::schema::effect_log_from_observations(&report.observations)?;
     if observed_effect_log != report.effect_log {
         return Err(MoltenError::invalid_harness("effect log does not match observed effect request/response records"));
     }
     let event_count: u64 = report.observations.iter().map(|observation| observation.events.len() as u64).sum();
-    let report_bytes = canonical_bytes(report_value)?.len() as u64;
+    let report_bytes = crate::preserves_rail::canonical_bytes(report_value)?.len() as u64;
     let usage = &report.budget.usage;
     let limits = &report.budget.limits;
     if usage.steps != report.observations.len() as u64 {
@@ -96,10 +84,13 @@ pub fn validate_report_value(report_value: &IOValue) -> Result<ReportValidation>
     })
 }
 
-pub fn replay_report_value(report_value: &IOValue) -> Result<ReplayOutcome> {
-    let expected = parse_report(report_value)?;
-    let actual_run = run_suite_with_effect_log(&parse_suite(&expected.suite_value)?, &expected.effect_log)?;
-    let actual = parse_report(&actual_run.report_value)?;
+pub fn replay_report_value(report_value: &PreservesValue) -> Result<ReplayOutcome> {
+    let expected = super::schema::parse_report(report_value)?;
+    let actual_run = super::runner::run_suite_with_effect_log(
+        &super::schema::parse_suite(&expected.suite_value)?,
+        &expected.effect_log,
+    )?;
+    let actual = super::schema::parse_report(&actual_run.report_value)?;
     compare::report_start(&expected, &actual)?;
     compare::observations(&expected.observations, &actual.observations)?;
     compare::report_end(&expected, &actual)?;
@@ -110,8 +101,8 @@ pub fn replay_report_value(report_value: &IOValue) -> Result<ReplayOutcome> {
     })
 }
 
-pub fn report_summary(report_value: &IOValue) -> Result<String> {
-    let report = parse_report(report_value)?;
+pub fn report_summary(report_value: &PreservesValue) -> Result<String> {
+    let report = super::schema::parse_report(report_value)?;
     Ok(format!(
         "report {}\nstatus={}\nreplay_status={}\nprofile={}\nsuite={}\ninitial_state={}\nfinal_state={}\nobservations={}\neffects={}\nevents={}\nreport_bytes={}",
         report.report_ref,
@@ -128,11 +119,11 @@ pub fn report_summary(report_value: &IOValue) -> Result<String> {
     ))
 }
 
-fn event_divergence_kind(expected: &IOValue, actual: &IOValue) -> &'static str {
+fn event_divergence_kind(expected: &PreservesValue, actual: &PreservesValue) -> &'static str {
     if is_capability_decision_divergence(expected, actual) {
         return "capability-decision";
     }
-    match (event_boundary(expected), event_boundary(actual)) {
+    match (super::schema::event_boundary(expected), super::schema::event_boundary(actual)) {
         (EventBoundary::EffectRequest, _) | (_, EventBoundary::EffectRequest) => "effect-request",
         (EventBoundary::EffectResponse, _) | (_, EventBoundary::EffectResponse) => "effect-response",
         (EventBoundary::PolicyDecision, _) | (_, EventBoundary::PolicyDecision) => "policy-decision",
@@ -147,9 +138,11 @@ fn event_divergence_kind(expected: &IOValue, actual: &IOValue) -> &'static str {
     }
 }
 
-fn is_capability_decision_divergence(expected: &IOValue, actual: &IOValue) -> bool {
-    let (Ok(expected), Ok(actual)) = (parse_admission_decision_event(expected), parse_admission_decision_event(actual))
-    else {
+fn is_capability_decision_divergence(expected: &PreservesValue, actual: &PreservesValue) -> bool {
+    let (Ok(expected), Ok(actual)) = (
+        super::schema::parse_admission_decision_event(expected),
+        super::schema::parse_admission_decision_event(actual),
+    ) else {
         return false;
     };
     expected.authority != actual.authority
@@ -162,5 +155,5 @@ fn divergence(
     actual: impl Into<String>,
     detail: impl Into<String>,
 ) -> MoltenError {
-    MoltenError::harness_divergence(HarnessDivergence::new(kind, step, expected, actual, detail))
+    MoltenError::harness_divergence(Divergence::new(kind, step, expected, actual, detail))
 }
