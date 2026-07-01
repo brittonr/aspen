@@ -11,24 +11,64 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use preserves::IOValue;
-use preserves::Value;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::evidence::SignReceiptInput;
-use crate::evidence::SignedReceipt;
-use crate::evidence::sign_receipt;
-use crate::evidence::verify_signed_receipt;
 use crate::ledger;
-use crate::preserves_rail::EVIDENCE_CHAIN_LINK_SCHEMA;
-use crate::preserves_rail::EVIDENCE_CHAIN_PREDICATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type SignReceiptInput<'a> = crate::evidence::SignReceiptInput<'a>;
+type SignedReceipt = crate::evidence::SignedReceipt;
+
+const EVIDENCE_CHAIN_ANCHOR_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_ANCHOR_SCHEMA;
+const EVIDENCE_CHAIN_APPEND_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_APPEND_RECEIPT_SCHEMA;
+const EVIDENCE_CHAIN_CHECKPOINT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_CHECKPOINT_SCHEMA;
+const EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA;
+const EVIDENCE_CHAIN_LINK_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_LINK_SCHEMA;
+const EVIDENCE_CHAIN_PREDICATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_PREDICATE_RECEIPT_SCHEMA;
+const EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
+const EVIDENCE_SIGNED_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IOValue> {
+    crate::evidence::sign_receipt(input)
+}
+
+fn string(value: &str) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
+
+fn verify_signed_receipt(
+    value: &IOValue,
+    required_purpose: &str,
+    trust_root: &str,
+    key: &str,
+) -> Result<SignedReceipt> {
+    crate::evidence::verify_signed_receipt(value, required_purpose, trust_root, key)
+}
 
 pub const GENESIS_VALID_PREDICATE: &str = "molten.chain.genesis_valid.v1";
 pub const APPEND_VALID_PREDICATE: &str = "molten.chain.append_valid.v1";
@@ -842,7 +882,7 @@ pub fn chain_append_receipt_value(link: &ChainLink, head_before: Option<&str>, p
     }
 
     record("chain-append-receipt-v1", vec![
-        string(crate::preserves_rail::EVIDENCE_CHAIN_APPEND_RECEIPT_SCHEMA),
+        string(EVIDENCE_CHAIN_APPEND_RECEIPT_SCHEMA),
         record("decision", vec![string("pass")]),
         chain_record(&link.chain),
         record("link", vec![string(&link.link_ref)]),
@@ -861,7 +901,7 @@ pub fn chain_anchor_value(
     producer: &ChainProducer,
 ) -> IOValue {
     record("chain-anchor-v1", vec![
-        string(crate::preserves_rail::EVIDENCE_CHAIN_ANCHOR_SCHEMA),
+        string(EVIDENCE_CHAIN_ANCHOR_SCHEMA),
         chain_record(chain),
         record("anchor", vec![string(link_ref)]),
         record("policy", vec![ref_sequence_value(policy_refs)]),
@@ -899,7 +939,7 @@ pub fn publish_chain_anchor(
 
 pub fn chain_checkpoint_value(input: &ChainCheckpointInput) -> IOValue {
     record("chain-checkpoint-v1", vec![
-        string(crate::preserves_rail::EVIDENCE_CHAIN_CHECKPOINT_SCHEMA),
+        string(EVIDENCE_CHAIN_CHECKPOINT_SCHEMA),
         chain_record(&input.chain),
         record("prior-checkpoint", vec![optional_ref_value(input.prior_checkpoint_ref.as_deref())]),
         record("range", vec![
@@ -1231,7 +1271,7 @@ pub fn chain_verify_receipt_value_with_policy(input: &ChainVerifyReceiptPolicyVa
         diagnostic_check("expected-head", receipt.diagnostics, &["missing-head", "head-chain-mismatch", "stale-head"]),
     ];
     record("chain-verify-receipt-v1", vec![
-        string(crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA),
+        string(EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA),
         record("decision", vec![string(receipt.decision)]),
         chain_record(receipt.chain),
         record("anchor", vec![optional_ref_value(receipt.anchor_ref)]),
@@ -1277,7 +1317,7 @@ pub fn parse_chain_predicate_receipt(value: &IOValue) -> Result<ChainPredicateRe
 
 pub fn chain_fork_evidence_value(input: &ChainForkEvidenceValueInput<'_>) -> IOValue {
     record("chain-fork-evidence-v1", vec![
-        string(crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA),
+        string(EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA),
         chain_record(input.chain),
         record("parent", vec![optional_ref_value(input.parent_ref)]),
         record("children", vec![ref_sequence_value(input.child_refs)]),
@@ -1314,11 +1354,7 @@ pub fn verify_signed_chain_receipt(value: &IOValue, trust_root: &str, key: &str)
 }
 
 pub fn signed_receipt_payload(signed_receipt_ref: impl Into<String>) -> ChainPayload {
-    ChainPayload::new(
-        "signed-receipt",
-        signed_receipt_ref.into(),
-        crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA,
-    )
+    ChainPayload::new("signed-receipt", signed_receipt_ref.into(), EVIDENCE_SIGNED_RECEIPT_SCHEMA)
 }
 
 pub fn parse_chain_link(value: &IOValue) -> Result<ChainLink> {
@@ -1351,7 +1387,7 @@ pub fn parse_chain_fork_evidence(value: &IOValue) -> Result<ChainForkEvidence> {
     let fork = value
         .collect_simple_record("chain-fork-evidence-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-fork-evidence-v1 ...>"))?;
-    require_schema(&fork[0], crate::preserves_rail::EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA, "chain fork evidence schema")?;
+    require_schema(&fork[0], EVIDENCE_CHAIN_FORK_EVIDENCE_SCHEMA, "chain fork evidence schema")?;
     let parsed = ChainForkEvidence {
         evidence_ref: canonical_hash(value)?,
         chain: parse_chain(&fork[1])?,
@@ -1370,7 +1406,7 @@ pub fn parse_chain_anchor(value: &IOValue) -> Result<ChainAnchor> {
     let anchor = value
         .collect_simple_record("chain-anchor-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-anchor-v1 ...>"))?;
-    require_schema(&anchor[0], crate::preserves_rail::EVIDENCE_CHAIN_ANCHOR_SCHEMA, "chain anchor schema")?;
+    require_schema(&anchor[0], EVIDENCE_CHAIN_ANCHOR_SCHEMA, "chain anchor schema")?;
     let parsed = ChainAnchor {
         anchor_ref: canonical_hash(value)?,
         chain: parse_chain(&anchor[1])?,
@@ -1387,7 +1423,7 @@ pub fn parse_chain_checkpoint(value: &IOValue) -> Result<ChainCheckpoint> {
     let checkpoint = value
         .collect_simple_record("chain-checkpoint-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <chain-checkpoint-v1 ...>"))?;
-    require_schema(&checkpoint[0], crate::preserves_rail::EVIDENCE_CHAIN_CHECKPOINT_SCHEMA, "chain checkpoint schema")?;
+    require_schema(&checkpoint[0], EVIDENCE_CHAIN_CHECKPOINT_SCHEMA, "chain checkpoint schema")?;
     let range = parse_checkpoint_range(&checkpoint[3])?;
     let parsed = ChainCheckpoint {
         checkpoint_ref: canonical_hash(value)?,
@@ -1535,11 +1571,7 @@ fn validate_checkpoint_verify_receipt(input: CheckpointVerifyReceiptValidationIn
     let anchor_link_ref = input.anchor_link_ref;
     let head_ref = input.head_ref;
     let range_predicate_ref = input.range_predicate_ref;
-    require_schema(
-        &receipt[0],
-        crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA,
-        "chain verify receipt schema",
-    )?;
+    require_schema(&receipt[0], EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA, "chain verify receipt schema")?;
     let decision = record_string(&receipt[1], "decision", "chain verify decision")?;
     if decision != "pass" {
         return Err(MoltenError::invalid_harness(format!(
@@ -2024,7 +2056,7 @@ fn diagnostic_value(diagnostic: &ChainDiagnostic) -> IOValue {
 }
 
 fn ref_sequence_value(refs: &[String]) -> IOValue {
-    sequence(refs.iter().map(string).collect())
+    sequence(refs.iter().map(|reference| string(reference)).collect())
 }
 
 fn check_value(check: &ChainCheck) -> IOValue {
