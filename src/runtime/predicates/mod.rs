@@ -1769,41 +1769,26 @@ fn apply_actions_to_snapshot(before: &RuntimeSnapshot, turn: &PendingTurn) -> Ru
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
+    use super::*;
 
-    use hegel::TestCase;
-    use hegel::generators;
+    type RuntimeState = crate::runtime::RuntimeState;
+    type RuntimeStep = crate::runtime::RuntimeStep;
+    type TestCase = hegel::TestCase;
 
-    use super::PredicateDecision;
-    use super::RuntimeActormapTransactionOutcome;
-    use super::RuntimeActormapTransactionState;
-    use super::RuntimeNearFarRefState;
-    use super::RuntimePattern;
-    use super::RuntimePromisePipelineEntry;
-    use super::RuntimePromisePipelineState;
-    use super::RuntimePromiseState;
-    use super::RuntimeReferenceCallMode;
-    use super::RuntimeReferenceKind;
-    use super::RuntimeRevocationCleanupState;
-    use super::RuntimeServiceDependenciesState;
-    use super::RuntimeSnapshotAuthorityState;
-    use super::TurnOutcome;
-    use super::evaluate_actormap_transaction;
-    use super::evaluate_assertion_visibility;
-    use super::evaluate_near_far_refs;
-    use super::evaluate_observe_initial_delivery;
-    use super::evaluate_pattern_match;
-    use super::evaluate_promise_pipeline;
-    use super::evaluate_promise_state_transition;
-    use super::evaluate_revocation_cleanup;
-    use super::evaluate_service_dependencies;
-    use super::evaluate_snapshot_authority;
-    use super::evaluate_turn_transition;
-    use crate::preserves_rail;
-    use crate::runtime::RuntimeObserver;
-    use crate::runtime::RuntimeState;
-    use crate::runtime::RuntimeStep;
-    use crate::runtime::RuntimeValue;
+    const PROPERTY_MAX_COLLECTION_LEN: usize = 4;
+    const PROPERTY_MAX_SALT: u64 = 1_000_000;
+
+    fn draw_property_salt(tc: &TestCase) -> u64 {
+        tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(PROPERTY_MAX_SALT))
+    }
+
+    fn draw_property_collection_len(tc: &TestCase) -> usize {
+        tc.draw(hegel::generators::integers::<usize>().min_value(0).max_value(PROPERTY_MAX_COLLECTION_LEN))
+    }
+
+    fn draw_property_bool(tc: &TestCase) -> bool {
+        tc.draw(hegel::generators::booleans())
+    }
 
     fn sorted_refs(mut refs: Vec<String>) -> Vec<String> {
         refs.sort();
@@ -2319,9 +2304,9 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_assertion_turn_and_pattern_predicates_are_bounded_and_deterministic(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
-        let owner_count = tc.draw(generators::integers::<usize>().min_value(0).max_value(4));
-        let retract_count = tc.draw(generators::integers::<usize>().min_value(0).max_value(4));
+        let salt = draw_property_salt(&tc);
+        let owner_count = draw_property_collection_len(&tc);
+        let retract_count = draw_property_collection_len(&tc);
         let value = RuntimeValue::string(format!("property-ready-{salt}")).expect("runtime value");
         let mut state = RuntimeState::new(salt);
         let mut live = BTreeSet::new();
@@ -2373,9 +2358,9 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_promise_pipeline_revocation_and_snapshot_predicates_are_monotone(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
-        let queue_len = tc.draw(generators::integers::<usize>().min_value(0).max_value(4));
-        let max_queue = tc.draw(generators::integers::<usize>().min_value(0).max_value(4));
+        let salt = draw_property_salt(&tc);
+        let queue_len = draw_property_collection_len(&tc);
+        let max_queue = draw_property_collection_len(&tc);
         let mut entries = Vec::with_capacity(queue_len);
         for index in 0..queue_len {
             entries.push(RuntimePromisePipelineEntry::new(
@@ -2420,8 +2405,8 @@ mod tests {
         );
 
         let revoked = property_ref("revoked", salt, 0);
-        let has_attempted_use = tc.draw(generators::booleans());
-        let has_remaining_assertion = tc.draw(generators::booleans());
+        let has_attempted_use = draw_property_bool(&tc);
+        let has_remaining_assertion = draw_property_bool(&tc);
         let revocation_state = RuntimeRevocationCleanupState {
             revoked_refs: vec![revoked.clone()],
             attempted_use_refs: if has_attempted_use {
@@ -2479,9 +2464,9 @@ mod tests {
 
     #[hegel::test(test_cases = 16)]
     fn hegel_service_dependency_and_reference_predicates_fail_closed(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
-        let dependency_count = tc.draw(generators::integers::<usize>().min_value(0).max_value(4));
-        let ready_count = tc.draw(generators::integers::<usize>().min_value(0).max_value(4));
+        let salt = draw_property_salt(&tc);
+        let dependency_count = draw_property_collection_len(&tc);
+        let ready_count = draw_property_collection_len(&tc);
         let service = property_ref("service", salt, 0);
         let dependencies = property_refs("dependency", salt, dependency_count);
         let mut ready =
