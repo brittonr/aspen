@@ -1,42 +1,112 @@
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
 
-use preserves::CompoundClass;
 use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
-use preserves::ValueClass;
-use redb::Database;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
 use redb::ReadableTableMetadata;
-use redb::TableDefinition;
 
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::evidence_chain;
-use crate::preserves_rail::CHUNK_LINEAGE_SCHEMA;
-use crate::preserves_rail::CHUNK_MANIFEST_SCHEMA;
-use crate::preserves_rail::CHUNK_REF_SCHEMA;
-use crate::preserves_rail::CHUNK_STORE_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_blake3_hash;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::content_ref_from_hex;
-use crate::preserves_rail::content_ref_hex;
-use crate::preserves_rail::parse_canonical_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 use crate::retention;
+
+type Path = std::path::Path;
+type PathBuf = std::path::PathBuf;
+type CompoundClass = preserves::CompoundClass;
+type Record<T> = preserves::Record<T>;
+type Value<T> = preserves::Value<T>;
+type ValueClass = preserves::ValueClass;
+type Database = redb::Database;
+type TableDefinition<K, V> = redb::TableDefinition<'static, K, V>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+const CHUNK_LINEAGE_SCHEMA: &str = crate::preserves_rail::CHUNK_LINEAGE_SCHEMA;
+const CHUNK_MANIFEST_SCHEMA: &str = crate::preserves_rail::CHUNK_MANIFEST_SCHEMA;
+const CHUNK_REF_SCHEMA: &str = crate::preserves_rail::CHUNK_REF_SCHEMA;
+const CHUNK_STORE_RECEIPT_SCHEMA: &str = crate::preserves_rail::CHUNK_STORE_RECEIPT_SCHEMA;
+
+mod fs {
+    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+
+    pub(super) fn read(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<u8>> {
+        std::fs::read(path)
+    }
+
+    pub(super) fn read_dir(path: impl AsRef<std::path::Path>) -> std::io::Result<std::fs::ReadDir> {
+        std::fs::read_dir(path)
+    }
+
+    pub(super) fn read_to_string(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
+        std::fs::read_to_string(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
+
+    pub(super) fn remove_file(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_file(path)
+    }
+
+    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        std::fs::write(path, contents)
+    }
+}
+
+fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+    crate::preserves_rail::parse_canonical_bytes(bytes)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn content_ref_from_blake3_hash(hash: blake3::Hash) -> String {
+    crate::preserves_rail::content_ref_from_blake3_hash(hash)
+}
+
+fn content_ref_from_bytes(bytes: &[u8]) -> String {
+    crate::preserves_rail::content_ref_from_bytes(bytes)
+}
+
+fn content_ref_from_hex(hex: &str) -> Result<String> {
+    crate::preserves_rail::content_ref_from_hex(hex)
+}
+
+fn content_ref_hex(value: &str) -> Result<&str> {
+    crate::preserves_rail::content_ref_hex(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const FIXED_V1_CHUNKER: &str = "fixed_v1";
 pub const DEFAULT_FIXED_V1_CHUNK_SIZE: u64 = 64 * 1024;
@@ -4203,13 +4273,17 @@ fn write_immutable_blob(path: &Path, bytes: &[u8], expected_ref: &str) -> Result
     Ok(())
 }
 
-fn simple_record<'a>(value: &'a IOValue, label: &str, arity: usize) -> Result<Cow<'a, Record<Value<IOValue>>>> {
+fn simple_record<'a>(
+    value: &'a IOValue,
+    label: &str,
+    arity: usize,
+) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
-fn simple_record_any<'a>(value: &'a IOValue, label: &str) -> Result<Cow<'a, Record<Value<IOValue>>>> {
+fn simple_record_any<'a>(value: &'a IOValue, label: &str) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
     value
         .collect_simple_record(label, None)
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> record")))
