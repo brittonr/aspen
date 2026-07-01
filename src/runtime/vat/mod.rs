@@ -1,25 +1,43 @@
 use preserves::IOValue;
 
 use crate::deterministic_replay;
-use crate::error::Result;
-use crate::preserves_rail::RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_AUTHORITY_GRAPH_FIXTURE_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_DISTRIBUTED_REF_FIXTURE_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_FIXTURE_RUN_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_OBJECT_REF_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_PORTABLE_STORAGE_FIXTURE_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_PROMISE_FIXTURE_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_REPLAY_FIXTURE_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_RESTORE_RECEIPT_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_RIGHTS_FIXTURE_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_SNAPSHOT_SCHEMA;
-use crate::preserves_rail::RUNTIME_VAT_TIME_TRAVEL_FIXTURE_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
 use crate::runtime;
+
+type Result<T> = crate::error::Result<T>;
+
+const RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA: &str =
+    crate::preserves_rail::RUNTIME_VAT_AMBIENT_AUTHORITY_FIXTURE_SCHEMA;
+const RUNTIME_VAT_AUTHORITY_GRAPH_FIXTURE_SCHEMA: &str =
+    crate::preserves_rail::RUNTIME_VAT_AUTHORITY_GRAPH_FIXTURE_SCHEMA;
+const RUNTIME_VAT_DISTRIBUTED_REF_FIXTURE_SCHEMA: &str =
+    crate::preserves_rail::RUNTIME_VAT_DISTRIBUTED_REF_FIXTURE_SCHEMA;
+const RUNTIME_VAT_FIXTURE_RUN_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_FIXTURE_RUN_SCHEMA;
+const RUNTIME_VAT_OBJECT_REF_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_OBJECT_REF_SCHEMA;
+const RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_OBJECT_UPGRADE_RECIPE_SCHEMA;
+const RUNTIME_VAT_PORTABLE_STORAGE_FIXTURE_SCHEMA: &str =
+    crate::preserves_rail::RUNTIME_VAT_PORTABLE_STORAGE_FIXTURE_SCHEMA;
+const RUNTIME_VAT_PROMISE_FIXTURE_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_PROMISE_FIXTURE_SCHEMA;
+const RUNTIME_VAT_REPLAY_FIXTURE_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_REPLAY_FIXTURE_SCHEMA;
+const RUNTIME_VAT_RESTORE_RECEIPT_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_RESTORE_RECEIPT_SCHEMA;
+const RUNTIME_VAT_RIGHTS_FIXTURE_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_RIGHTS_FIXTURE_SCHEMA;
+const RUNTIME_VAT_SNAPSHOT_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_SNAPSHOT_SCHEMA;
+const RUNTIME_VAT_TIME_TRAVEL_FIXTURE_SCHEMA: &str = crate::preserves_rail::RUNTIME_VAT_TIME_TRAVEL_FIXTURE_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
 
 const LOCAL_VAT_ID: &str = "vat:fixture:local";
 const REMOTE_VAT_ID: &str = "vat:fixture:remote";
