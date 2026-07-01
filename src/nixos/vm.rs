@@ -1,9 +1,8 @@
-use std::collections::BTreeSet;
-
 use preserves::IOValue;
 
-use crate::error::MoltenError;
-use crate::error::Result;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
 const NIXOS_VM_NODE_EVIDENCE_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_NODE_EVIDENCE_SCHEMA;
 const NIXOS_VM_TEST_RUN_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_TEST_RUN_SCHEMA;
 const NIXOS_VM_TOPOLOGY_SCHEMA: &str = crate::preserves_rail::NIXOS_VM_TOPOLOGY_SCHEMA;
@@ -169,7 +168,7 @@ fn validate_nodes(nodes: &[String]) -> Result<()> {
             nodes.len()
         )));
     }
-    let mut seen = BTreeSet::new();
+    let mut seen = std::collections::BTreeSet::new();
     for node in nodes {
         validate_text_field("node", node)?;
         if !seen.insert(node.as_str()) {
