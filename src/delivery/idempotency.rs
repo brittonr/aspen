@@ -1,11 +1,17 @@
 use preserves::IOValue;
-use preserves::Value;
 use redb::ReadableDatabase;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::record;
-use crate::preserves_rail::string;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value.as_ref())
+}
 
 pub const SCOPE_ACTOR_TURN: &str = "actor-turn";
 pub const SCOPE_SERVICE_LIFECYCLE: &str = "service-lifecycle";
