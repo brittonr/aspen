@@ -1,32 +1,83 @@
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-
 use preserves::IOValue;
 use preserves::Value;
 
 use crate::delivery_idempotency;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::REMOTE_DATASPACE_ADMISSION_RECEIPT_SCHEMA;
-use crate::preserves_rail::REMOTE_DATASPACE_DELIVERY_LOG_SCHEMA;
-use crate::preserves_rail::REMOTE_DATASPACE_ENVELOPE_SCHEMA;
-use crate::preserves_rail::REMOTE_DATASPACE_GATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::content_ref_hex;
-use crate::preserves_rail::parse_canonical_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
-use crate::runtime::RuntimeEvent;
-use crate::runtime::RuntimeState;
-use crate::runtime::RuntimeStep;
-use crate::runtime::RuntimeValue;
+
+type Path = std::path::Path;
+type PathBuf = std::path::PathBuf;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type RuntimeEvent = crate::runtime::RuntimeEvent;
+type RuntimeState = crate::runtime::RuntimeState;
+type RuntimeStep = crate::runtime::RuntimeStep;
+type RuntimeValue = crate::runtime::RuntimeValue;
+
+const REMOTE_DATASPACE_ADMISSION_RECEIPT_SCHEMA: &str =
+    crate::preserves_rail::REMOTE_DATASPACE_ADMISSION_RECEIPT_SCHEMA;
+const REMOTE_DATASPACE_DELIVERY_LOG_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_DELIVERY_LOG_SCHEMA;
+const REMOTE_DATASPACE_ENVELOPE_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_ENVELOPE_SCHEMA;
+const REMOTE_DATASPACE_GATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::REMOTE_DATASPACE_GATE_RECEIPT_SCHEMA;
+const REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA: &str =
+    crate::preserves_rail::REMOTE_DATASPACE_TRANSPORT_RECEIPT_SCHEMA;
+
+mod fs {
+    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+
+    pub(super) fn read(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<u8>> {
+        std::fs::read(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
+
+    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        std::fs::write(path, contents)
+    }
+}
+
+fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn content_ref_from_bytes(bytes: &[u8]) -> String {
+    crate::preserves_rail::content_ref_from_bytes(bytes)
+}
+
+fn content_ref_hex(value: &str) -> Result<&str> {
+    crate::preserves_rail::content_ref_hex(value)
+}
+
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+    crate::preserves_rail::parse_canonical_bytes(bytes)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const LOCAL_GOSSIP_TRANSPORT: &str = "iroh-local-gossip";
 pub const LIVE_GOSSIP_TRANSPORT: &str = "iroh-gossip";
@@ -1187,14 +1238,10 @@ fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-
     use super::*;
-    use crate::preserves_rail::record;
-    use crate::preserves_rail::string;
-    use crate::runtime::RuntimeEvent;
-    use crate::runtime::RuntimeStep;
+
+    type AtomicU64 = std::sync::atomic::AtomicU64;
+    type Ordering = std::sync::atomic::Ordering;
 
     #[test]
     fn local_gossip_roundtrip_preserves_envelope_identity() {
