@@ -1,7 +1,8 @@
 use preserves::IOValue;
 
-use crate::error::MoltenError;
-use crate::error::Result;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
 const PROD_SOAK_DURABILITY_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_DURABILITY_SCHEMA;
 const PROD_SOAK_EVIDENCE_EXPORT_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_EVIDENCE_EXPORT_SCHEMA;
 const PROD_SOAK_FAULT_CASE_SCHEMA: &str = crate::preserves_rail::PROD_SOAK_FAULT_CASE_SCHEMA;
