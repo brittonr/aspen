@@ -1,19 +1,54 @@
-use std::collections::BTreeMap;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
+type Map<K, V> = std::collections::BTreeMap<K, V>;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Path = std::path::Path;
+type PathBuf = std::path::PathBuf;
+type Result<T> = crate::error::Result<T>;
 
-use preserves::IOValue;
-use serde::Deserialize;
+fn canonical_hash(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
+fn content_ref_from_bytes(bytes: &[u8]) -> String {
+    crate::preserves_rail::content_ref_from_bytes(bytes)
+}
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IoValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+mod fs {
+    pub(super) fn read(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<u8>> {
+        std::fs::read(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        std::fs::write(path, contents)
+    }
+}
 
 const STATUS_NAME: &str = "status.json";
 const SUMMARY_NAME: &str = "summary.txt";
@@ -66,7 +101,7 @@ pub struct OctetRemediationPlanInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OctetRemediationPlan {
     pub plan_ref: String,
-    pub value: IOValue,
+    pub value: IoValue,
     pub diagnostics: Vec<String>,
 }
 
@@ -134,7 +169,7 @@ struct PlanValueInput<'a> {
     workspace: &'a RunMetrics,
     lib_metrics: Option<&'a RunMetrics>,
     focused_object_corpus: Option<&'a ObjectCorpusMetrics>,
-    critical_surfaces: &'a [IOValue],
+    critical_surfaces: &'a [IoValue],
     source_scope_classifications: &'a [SourceScopeClassification],
     diagnostics: &'a [String],
     checks: &'a [(&'static str, &'static str)],
@@ -152,7 +187,7 @@ struct SourceScopeClassification {
     evidence: String,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
 struct OctetStatusArtifact {
     status: String,
     exit_code: i64,
@@ -163,7 +198,7 @@ struct OctetStatusArtifact {
     autofixable_findings: u64,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
 struct OctetMetadata {
     tool_name: String,
     tool_version: String,
@@ -174,7 +209,7 @@ struct OctetMetadata {
     config_hash: String,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, serde::Deserialize, Clone, PartialEq, Eq)]
 struct OctetObjectCorpusReceipt {
     object_count: Option<u64>,
     source_paths: Option<Vec<String>>,
@@ -314,10 +349,10 @@ fn read_focused_object_corpus(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SummaryMetrics {
-    by_crate: BTreeMap<String, u64>,
-    by_effect: BTreeMap<String, u64>,
-    by_lint: BTreeMap<String, u64>,
-    by_file: BTreeMap<String, u64>,
+    by_crate: Map<String, u64>,
+    by_effect: Map<String, u64>,
+    by_lint: Map<String, u64>,
+    by_file: Map<String, u64>,
     findings: Vec<FindingIndexEntry>,
     parsed_findings: u64,
 }
@@ -328,7 +363,7 @@ fn parse_summary_metrics(text: &str) -> Result<SummaryMetrics> {
     let by_lint = parse_count_section(text, "By lint:")?;
     let findings = parse_index_findings(text)?;
     let parsed_findings = findings.iter().map(|finding| finding.count).sum::<u64>();
-    let mut by_file = BTreeMap::new();
+    let mut by_file = Map::new();
     for finding in &findings {
         if finding.file.starts_with("src/") {
             increment_count(&mut by_file, &finding.file, finding.count);
@@ -344,8 +379,8 @@ fn parse_summary_metrics(text: &str) -> Result<SummaryMetrics> {
     })
 }
 
-fn parse_count_section(text: &str, header: &str) -> Result<BTreeMap<String, u64>> {
-    let mut values = BTreeMap::new();
+fn parse_count_section(text: &str, header: &str) -> Result<Map<String, u64>> {
+    let mut values = Map::new();
     let mut is_parsing_section = false;
     for (line_index, line) in text.lines().enumerate() {
         if line_index >= MAX_SUMMARY_LINES {
@@ -373,7 +408,7 @@ fn parse_count_section(text: &str, header: &str) -> Result<BTreeMap<String, u64>
 }
 
 fn parse_index_findings(text: &str) -> Result<Vec<FindingIndexEntry>> {
-    let mut by_key: BTreeMap<(String, String, String, String), u64> = BTreeMap::new();
+    let mut by_key: Map<(String, String, String, String), u64> = Map::new();
     let mut is_parsing_index = false;
     let mut parsed_rows = 0usize;
     for (line_index, line) in text.lines().enumerate() {
@@ -556,15 +591,15 @@ fn insert_source_path_bounded(values: &mut std::collections::BTreeSet<String>, v
     Ok(())
 }
 
-fn surface_inventory_values(metrics: &RunMetrics) -> Vec<IOValue> {
+fn surface_inventory_values(metrics: &RunMetrics) -> Vec<IoValue> {
     critical_surface_definitions()
         .iter()
         .map(|surface| surface_inventory_value(surface, metrics))
         .collect()
 }
 
-fn surface_inventory_value(surface: &SurfaceDefinition, metrics: &RunMetrics) -> IOValue {
-    let mut by_lint = BTreeMap::new();
+fn surface_inventory_value(surface: &SurfaceDefinition, metrics: &RunMetrics) -> IoValue {
+    let mut by_lint = Map::new();
     let mut total = 0u64;
     for finding in &metrics.findings {
         if surface.files.iter().any(|path| *path == finding.file) {
@@ -837,7 +872,7 @@ fn critical_surface_definitions() -> Vec<SurfaceDefinition> {
     SURFACES.to_vec()
 }
 
-fn remediation_plan_value(input: &PlanValueInput<'_>) -> IOValue {
+fn remediation_plan_value(input: &PlanValueInput<'_>) -> IoValue {
     record("octet-remediation-plan-v1", vec![
         string(crate::preserves_rail::OCTET_REMEDIATION_PLAN_SCHEMA),
         record("workspace", vec![run_metrics_value(input.workspace)]),
@@ -858,7 +893,7 @@ fn remediation_plan_value(input: &PlanValueInput<'_>) -> IOValue {
     ])
 }
 
-fn run_metrics_value(metrics: &RunMetrics) -> IOValue {
+fn run_metrics_value(metrics: &RunMetrics) -> IoValue {
     record("run", vec![
         record("scope", vec![string(&metrics.scope)]),
         record("artifacts", vec![sequence(artifact_ref_values(metrics))]),
@@ -886,14 +921,14 @@ fn run_metrics_value(metrics: &RunMetrics) -> IOValue {
     ])
 }
 
-fn optional_run_metrics_value(metrics: Option<&RunMetrics>) -> IOValue {
+fn optional_run_metrics_value(metrics: Option<&RunMetrics>) -> IoValue {
     match metrics {
         Some(metrics) => record("some", vec![run_metrics_value(metrics)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn artifact_ref_values(metrics: &RunMetrics) -> Vec<IOValue> {
+fn artifact_ref_values(metrics: &RunMetrics) -> Vec<IoValue> {
     let mut artifacts = vec![
         artifact_ref_value(STATUS_NAME, &metrics.status_ref),
         artifact_ref_value(SUMMARY_NAME, &metrics.summary_ref),
@@ -904,14 +939,14 @@ fn artifact_ref_values(metrics: &RunMetrics) -> Vec<IOValue> {
     artifacts
 }
 
-fn artifact_ref_value(name: &str, content_ref: &str) -> IOValue {
+fn artifact_ref_value(name: &str, content_ref: &str) -> IoValue {
     record("artifact", vec![
         record("name", vec![string(name)]),
         record("content-ref", vec![string(content_ref)]),
     ])
 }
 
-fn optional_object_corpus_value(metrics: Option<&ObjectCorpusMetrics>) -> IOValue {
+fn optional_object_corpus_value(metrics: Option<&ObjectCorpusMetrics>) -> IoValue {
     match metrics {
         Some(metrics) => record("some", vec![record("object-corpus", vec![
             record("content-ref", vec![string(&metrics.content_ref)]),
@@ -924,20 +959,20 @@ fn optional_object_corpus_value(metrics: Option<&ObjectCorpusMetrics>) -> IOValu
     }
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> IoValue {
     match value {
         Some(value) => record("some", vec![string(value)]),
         None => record("none", Vec::new()),
     }
 }
 
-fn source_scope_value(classifications: &[SourceScopeClassification]) -> IOValue {
+fn source_scope_value(classifications: &[SourceScopeClassification]) -> IoValue {
     record("source-scope-classification-v1", vec![record("classifications", vec![sequence(
         classifications.iter().map(source_scope_classification_value).collect(),
     )])])
 }
 
-fn source_scope_classification_value(classification: &SourceScopeClassification) -> IOValue {
+fn source_scope_classification_value(classification: &SourceScopeClassification) -> IoValue {
     record("classification", vec![
         record("lint", vec![string(&classification.lint)]),
         record("crate", vec![string(&classification.crate_name)]),
@@ -950,7 +985,7 @@ fn source_scope_classification_value(classification: &SourceScopeClassification)
     ])
 }
 
-fn priority_order_values() -> Vec<IOValue> {
+fn priority_order_values() -> Vec<IoValue> {
     vec![
         priority_value(
             1,
@@ -980,7 +1015,7 @@ fn priority_order_values() -> Vec<IOValue> {
     ]
 }
 
-fn priority_value(rank: u64, name: &str, rationale: &str) -> IOValue {
+fn priority_value(rank: u64, name: &str, rationale: &str) -> IoValue {
     record("priority", vec![
         record("rank", vec![u64_value(rank)]),
         record("name", vec![string(name)]),
@@ -988,7 +1023,7 @@ fn priority_value(rank: u64, name: &str, rationale: &str) -> IOValue {
     ])
 }
 
-fn no_suppression_policy_value() -> IOValue {
+fn no_suppression_policy_value() -> IoValue {
     record("policy", vec![
         record("hidden-suppressions", vec![string("deny")]),
         record("retained-warning-requires", vec![string("scheduled-remediation-or-reviewed-quarantine-receipt")]),
@@ -1050,14 +1085,14 @@ fn metrics_present_or_clean(metrics: &RunMetrics) -> bool {
     metrics.status.total_findings == 0 || !metrics.by_lint.is_empty()
 }
 
-fn metric_values(entries: &[MetricEntry]) -> Vec<IOValue> {
+fn metric_values(entries: &[MetricEntry]) -> Vec<IoValue> {
     entries
         .iter()
         .map(|entry| record("metric", vec![string(&entry.name), u64_value(entry.count)]))
         .collect()
 }
 
-fn sorted_metric_entries(counts: BTreeMap<String, u64>, limit: usize) -> Vec<MetricEntry> {
+fn sorted_metric_entries(counts: Map<String, u64>, limit: usize) -> Vec<MetricEntry> {
     let mut entries = counts.into_iter().map(|(name, count)| MetricEntry { name, count }).collect::<Vec<_>>();
     entries.sort_by(|left, right| right.count.cmp(&left.count).then(left.name.cmp(&right.name)));
     entries.truncate(limit);
@@ -1065,7 +1100,7 @@ fn sorted_metric_entries(counts: BTreeMap<String, u64>, limit: usize) -> Vec<Met
 }
 
 fn insert_count_bounded(
-    counts: &mut BTreeMap<String, u64>,
+    counts: &mut Map<String, u64>,
     name: &str,
     count: u64,
     limit: usize,
@@ -1078,7 +1113,7 @@ fn insert_count_bounded(
     Ok(())
 }
 
-fn increment_count(counts: &mut BTreeMap<String, u64>, name: &str, count: u64) {
+fn increment_count(counts: &mut Map<String, u64>, name: &str, count: u64) {
     let current = counts.entry(name.to_string()).or_insert(0);
     *current = current.saturating_add(count);
 }
@@ -1091,7 +1126,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, limit
     Ok(())
 }
 
-fn critical_count(by_lint: &BTreeMap<String, u64>) -> u64 {
+fn critical_count(by_lint: &Map<String, u64>) -> u64 {
     CRITICAL_LINTS.iter().filter_map(|lint| by_lint.get(*lint)).copied().sum()
 }
 
@@ -1108,8 +1143,14 @@ fn bytes_ref(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ledger;
-    use crate::preserves_rail::to_text;
+
+    fn artifact_kind(value: &IoValue) -> &'static str {
+        crate::ledger::artifact_kind(value)
+    }
+
+    fn to_text(value: &IoValue) -> Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
 
     #[test]
     fn remediation_plan_captures_workspace_and_lib_metrics() {
@@ -1130,7 +1171,7 @@ mod tests {
         assert!(text.contains("octet-remediation-plan-v1"));
         assert!(text.contains("source-gate-and-admission"));
         assert!(text.contains("critical-deny-classes"));
-        assert_eq!(ledger::artifact_kind(&plan.value), "octet-remediation-plan");
+        assert_eq!(artifact_kind(&plan.value), "octet-remediation-plan");
     }
 
     #[test]
