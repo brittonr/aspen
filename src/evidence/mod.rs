@@ -1,15 +1,37 @@
 use preserves::IOValue;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA;
-use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA;
-use crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::value_to_iovalue;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+const EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA: &str =
+    crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_KEY_REVOCATION_SCHEMA;
+const EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA: &str = crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA;
+const EVIDENCE_SIGNED_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_SIGNED_RECEIPT_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value.as_ref())
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const SIGNATURE_ALGORITHM: &str = "blake3-local-fixture-v1";
 pub const PASS_EVIDENCE_PURPOSE: &str = "pass-evidence";
@@ -157,10 +179,7 @@ pub fn signed_receipt_key_value(input: &SignedReceiptKeyInput<'_>) -> Result<IOV
         string(EVIDENCE_SIGNED_RECEIPT_KEY_SCHEMA),
         record("identity", vec![string(input.key_id), string(input.signer), string(input.trust_root)]),
         record("verification-key", vec![string(SIGNATURE_ALGORITHM), string(input.key)]),
-        record("status", vec![
-            string(SIGNED_RECEIPT_KEY_STATUS_CURRENT),
-            crate::preserves_rail::u64_value(input.generation),
-        ]),
+        record("status", vec![string(SIGNED_RECEIPT_KEY_STATUS_CURRENT), u64_value(input.generation)]),
         record("predecessor", vec![optional_ref_value(input.predecessor_ref)]),
         record("checks", vec![sequence(vec![
             record("check", vec![string("key-id-bound"), string("pass")]),
@@ -680,7 +699,7 @@ fn signature_for(receipt: &IOValue, signer: &str, purpose: &str, trust_root: &st
     Ok(crate::preserves_rail::content_ref_from_bytes(&material))
 }
 
-fn required_record_string(value: &preserves::Value<IOValue>, label: &str, field: &str) -> Result<String> {
+fn required_record_string(value: &Value<IOValue>, label: &str, field: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let record = value
         .collect_simple_record(label, Some(1))
@@ -700,7 +719,7 @@ fn push_bounded<T>(values: &mut impl crate::bounded::VecSink<T>, value: T, maxim
     Ok(())
 }
 
-fn required_string(value: &preserves::Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
