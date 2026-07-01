@@ -16,45 +16,7 @@ use crate::error::Result;
 use crate::eval_cache;
 use crate::ledger;
 use crate::octet_gate;
-use crate::preserves_rail::JOB_ADMISSION_PLAN_SCHEMA;
-use crate::preserves_rail::JOB_ADMISSION_RECEIPT_SCHEMA;
-use crate::preserves_rail::JOB_ADMISSION_REQUEST_SCHEMA;
-use crate::preserves_rail::JOB_DAG_EDGE_SCHEMA;
-use crate::preserves_rail::JOB_DAG_NODE_SCHEMA;
-use crate::preserves_rail::JOB_DAG_OUTPUT_REQUEST_SCHEMA;
-use crate::preserves_rail::JOB_DAG_RECEIPT_SCHEMA;
-use crate::preserves_rail::JOB_DAG_SCHEMA;
-use crate::preserves_rail::JOB_EXECUTION_RECEIPT_SCHEMA;
-use crate::preserves_rail::JOB_EXECUTION_REQUEST_SCHEMA;
-use crate::preserves_rail::JOB_FUSION_PLAN_SCHEMA;
-use crate::preserves_rail::JOB_FUSION_RECEIPT_SCHEMA;
-use crate::preserves_rail::JOB_PLAN_RECEIPT_SCHEMA;
-use crate::preserves_rail::JOB_PLAN_SCHEMA;
-use crate::preserves_rail::JOB_PROFILE_RECEIPT_SCHEMA;
-use crate::preserves_rail::JOB_PROFILE_SCHEMA;
-use crate::preserves_rail::JOB_REF_RECEIPT_SCHEMA;
-use crate::preserves_rail::JOB_REF_STATUS_SCHEMA;
-use crate::preserves_rail::JOB_REF_SUBMISSION_SCHEMA;
-use crate::preserves_rail::JOB_STAGE_OPERATION_SCHEMA;
-use crate::preserves_rail::JOB_SYNC_PLAN_SCHEMA;
-use crate::preserves_rail::JOB_SYNC_RECEIPT_SCHEMA;
-use crate::preserves_rail::JOB_SYNC_REQUEST_SCHEMA;
-use crate::preserves_rail::JOB_WORKER_ASSIGNMENT_SCHEMA;
-use crate::preserves_rail::JOB_WORKER_RECEIPT_SCHEMA;
-use crate::preserves_rail::JOB_WORKER_REQUEST_SCHEMA;
-use crate::preserves_rail::JOB_WORKER_RESULT_SCHEMA;
-use crate::preserves_rail::JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA;
-use crate::preserves_rail::JOB_WORKER_STATUS_SCHEMA;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::parse_text;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+use crate::preserves_rail;
 use crate::remote_dataspace;
 use crate::resources;
 use crate::typed_storage;
@@ -774,17 +736,17 @@ pub fn job_node_value(input: NodeValueInput<'_>) -> Result<IOValue> {
     validate_refs(input.policy_refs, "job node policy ref")?;
     validate_refs(input.evidence_refs, "job node evidence ref")?;
     reject_mobile_closure_config(&input.config)?;
-    Ok(record("job-node-v1", vec![
-        string(JOB_DAG_NODE_SCHEMA),
-        record("id", vec![string(input.id)]),
-        record("kind", vec![string(input.kind)]),
-        record("stage-artifact", vec![optional_ref_value(input.stage_artifact_ref)]),
-        record("inputs", vec![ports_sequence(input.input_ports)]),
-        record("outputs", vec![ports_sequence(input.output_ports)]),
-        record("config", vec![input.config]),
-        record("effects", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
-        record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+    Ok(preserves_rail::record("job-node-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_DAG_NODE_SCHEMA),
+        preserves_rail::record("id", vec![preserves_rail::string(input.id)]),
+        preserves_rail::record("kind", vec![preserves_rail::string(input.kind)]),
+        preserves_rail::record("stage-artifact", vec![optional_ref_value(input.stage_artifact_ref)]),
+        preserves_rail::record("inputs", vec![ports_sequence(input.input_ports)]),
+        preserves_rail::record("outputs", vec![ports_sequence(input.output_ports)]),
+        preserves_rail::record("config", vec![input.config]),
+        preserves_rail::record("effects", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
+        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
         checks_value(&[
             "stage-artifact-not-closure",
             "bounded-stage-kind",
@@ -803,13 +765,19 @@ pub fn job_edge_value(input: EdgeValueInput<'_>) -> Result<IOValue> {
     }
     validate_partitioning(input.partitioning)?;
     validate_materialization(input.materialization)?;
-    Ok(record("job-edge-v1", vec![
-        string(JOB_DAG_EDGE_SCHEMA),
-        record("from", vec![string(input.from_node), string(input.from_port)]),
-        record("to", vec![string(input.to_node), string(input.to_port)]),
-        record("schema", vec![optional_ref_value(input.schema_ref)]),
-        record("partitioning", vec![string(input.partitioning)]),
-        record("materialization", vec![string(input.materialization)]),
+    Ok(preserves_rail::record("job-edge-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_DAG_EDGE_SCHEMA),
+        preserves_rail::record("from", vec![
+            preserves_rail::string(input.from_node),
+            preserves_rail::string(input.from_port),
+        ]),
+        preserves_rail::record("to", vec![
+            preserves_rail::string(input.to_node),
+            preserves_rail::string(input.to_port),
+        ]),
+        preserves_rail::record("schema", vec![optional_ref_value(input.schema_ref)]),
+        preserves_rail::record("partitioning", vec![preserves_rail::string(input.partitioning)]),
+        preserves_rail::record("materialization", vec![preserves_rail::string(input.materialization)]),
         checks_value(&["schema-bound", "canonical-edge", "explicit-materialization"]),
     ]))
 }
@@ -819,16 +787,18 @@ pub fn job_dag_value(input: DagValueInput<'_>) -> Result<IOValue> {
     validate_refs(input.effect_manifest_refs, "job effect manifest ref")?;
     validate_refs(input.policy_refs, "job policy ref")?;
     validate_refs(input.evidence_refs, "job evidence ref")?;
-    Ok(record("job-dag-v1", vec![
-        string(JOB_DAG_SCHEMA),
-        record("version", vec![string("v1")]),
-        record("nodes", vec![sequence(input.nodes)]),
-        record("edges", vec![sequence(input.edges)]),
-        record("outputs", vec![sequence(input.output_roots.iter().map(string).collect())]),
-        record("schemas", vec![refs_sequence(&sorted_unique(input.schema_refs))]),
-        record("effect-manifests", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
-        record("policies", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+    Ok(preserves_rail::record("job-dag-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_DAG_SCHEMA),
+        preserves_rail::record("version", vec![preserves_rail::string("v1")]),
+        preserves_rail::record("nodes", vec![preserves_rail::sequence(input.nodes)]),
+        preserves_rail::record("edges", vec![preserves_rail::sequence(input.edges)]),
+        preserves_rail::record("outputs", vec![preserves_rail::sequence(
+            input.output_roots.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("schemas", vec![refs_sequence(&sorted_unique(input.schema_refs))]),
+        preserves_rail::record("effect-manifests", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
+        preserves_rail::record("policies", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
         checks_value(&[
             "canonical-dag",
             "no-name-identity",
@@ -851,29 +821,31 @@ pub fn job_output_request_value(input: OutputRequestValueInput<'_>) -> Result<IO
     if let Some(seed_config_ref) = input.seed_config_ref {
         validate_ref(seed_config_ref, "job output request seed config ref")?;
     }
-    Ok(record("job-output-request-v1", vec![
-        string(JOB_DAG_OUTPUT_REQUEST_SCHEMA),
-        record("dag", vec![string(input.dag_ref)]),
-        record("roots", vec![sequence(input.roots.iter().map(string).collect())]),
-        record("materialization", vec![string(input.materialization)]),
-        record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        record("handler-profile", vec![optional_ref_value(input.handler_profile_ref)]),
-        record("seed-config", vec![optional_ref_value(input.seed_config_ref)]),
+    Ok(preserves_rail::record("job-output-request-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_DAG_OUTPUT_REQUEST_SCHEMA),
+        preserves_rail::record("dag", vec![preserves_rail::string(input.dag_ref)]),
+        preserves_rail::record("roots", vec![preserves_rail::sequence(
+            input.roots.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("materialization", vec![preserves_rail::string(input.materialization)]),
+        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        preserves_rail::record("handler-profile", vec![optional_ref_value(input.handler_profile_ref)]),
+        preserves_rail::record("seed-config", vec![optional_ref_value(input.seed_config_ref)]),
         checks_value(&["request-ref-bound", "full-ref-identity", "deterministic-inputs-bound"]),
     ]))
 }
 
 pub fn builtin_stage_operation_value(operation: &str) -> Result<IOValue> {
     validate_stage_operation(operation)?;
-    Ok(record("job-stage-operation-v1", vec![
-        string(JOB_STAGE_OPERATION_SCHEMA),
-        record("operation", vec![string(operation)]),
+    Ok(preserves_rail::record("job-stage-operation-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_STAGE_OPERATION_SCHEMA),
+        preserves_rail::record("operation", vec![preserves_rail::string(operation)]),
         checks_value(&["bounded-built-in", "no-mobile-closure", "canonical-operation"]),
     ]))
 }
 
 pub fn builtin_stage_operation_ref(operation: &str) -> Result<String> {
-    canonical_hash(&builtin_stage_operation_value(operation)?)
+    preserves_rail::canonical_hash(&builtin_stage_operation_value(operation)?)
 }
 
 pub fn job_sync_request_value(input: SyncRequestValueInput<'_>) -> Result<IOValue> {
@@ -885,14 +857,16 @@ pub fn job_sync_request_value(input: SyncRequestValueInput<'_>) -> Result<IOValu
     validate_refs(input.policy_refs, "job sync policy ref")?;
     validate_refs(input.capability_refs, "job sync capability ref")?;
     validate_refs(input.evidence_refs, "job sync evidence ref")?;
-    Ok(record("job-sync-request-v1", vec![
-        string(JOB_SYNC_REQUEST_SCHEMA),
-        record("job", vec![string(input.job_ref)]),
-        record("stages", vec![sequence(input.stage_ids.iter().map(string).collect())]),
-        record("target-peer", vec![string(input.target_peer)]),
-        record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
-        record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+    Ok(preserves_rail::record("job-sync-request-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_SYNC_REQUEST_SCHEMA),
+        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(
+            input.stage_ids.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(input.target_peer)]),
+        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        preserves_rail::record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
+        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
         checks_value(&["transport-neutral", "no-execution", "full-ref-identity"]),
     ]))
 }
@@ -901,11 +875,11 @@ pub fn parse_job_sync_request_value(value: &IOValue) -> Result<JobSyncRequest> {
     let fields = value
         .collect_simple_record("job-sync-request-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-sync-request-v1 ...>"))?;
-    require_schema(&fields[0], JOB_SYNC_REQUEST_SCHEMA, "job sync request")?;
+    require_schema(&fields[0], preserves_rail::JOB_SYNC_REQUEST_SCHEMA, "job sync request")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "no-execution", "job sync request")?;
     Ok(JobSyncRequest {
-        request_ref: canonical_hash(value)?,
+        request_ref: preserves_rail::canonical_hash(value)?,
         job_ref: record_ref(&fields[1], "job")?,
         stage_ids: record_node_id_sequence(&fields[2], "stages")?,
         target_peer: record_string(&fields[3], "target-peer")?,
@@ -927,16 +901,18 @@ pub fn job_admission_request_value(input: AdmissionRequestValueInput<'_>) -> Res
     validate_refs(input.capability_refs, "job admission capability ref")?;
     validate_refs(input.evidence_refs, "job admission evidence ref")?;
     validate_refs(input.resource_refs, "job admission resource ref")?;
-    Ok(record("job-admission-request-v1", vec![
-        string(JOB_ADMISSION_REQUEST_SCHEMA),
-        record("job", vec![string(input.job_ref)]),
-        record("sync", vec![string(input.sync_ref)]),
-        record("stages", vec![sequence(input.stage_ids.iter().map(string).collect())]),
-        record("target-peer", vec![string(input.target_peer)]),
-        record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
-        record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
-        record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
+    Ok(preserves_rail::record("job-admission-request-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_ADMISSION_REQUEST_SCHEMA),
+        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
+        preserves_rail::record("sync", vec![preserves_rail::string(input.sync_ref)]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(
+            input.stage_ids.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(input.target_peer)]),
+        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        preserves_rail::record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
+        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+        preserves_rail::record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
         checks_value(&["target-side-admission", "no-execution", "full-ref-identity"]),
     ]))
 }
@@ -945,11 +921,11 @@ pub fn parse_job_admission_request_value(value: &IOValue) -> Result<JobAdmission
     let fields = value
         .collect_simple_record("job-admission-request-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-admission-request-v1 ...>"))?;
-    require_schema(&fields[0], JOB_ADMISSION_REQUEST_SCHEMA, "job admission request")?;
+    require_schema(&fields[0], preserves_rail::JOB_ADMISSION_REQUEST_SCHEMA, "job admission request")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "no-execution", "job admission request")?;
     Ok(JobAdmissionRequest {
-        request_ref: canonical_hash(value)?,
+        request_ref: preserves_rail::canonical_hash(value)?,
         job_ref: record_ref(&fields[1], "job")?,
         sync_ref: record_ref(&fields[2], "sync")?,
         stage_ids: record_node_id_sequence(&fields[3], "stages")?,
@@ -975,18 +951,20 @@ pub fn job_execution_request_value(input: ExecutionRequestValueInput<'_>) -> Res
     validate_refs(input.policy_refs, "job execution policy ref")?;
     validate_refs(input.capability_refs, "job execution capability ref")?;
     validate_refs(input.resource_refs, "job execution resource ref")?;
-    Ok(record("job-execution-request-v1", vec![
-        string(JOB_EXECUTION_REQUEST_SCHEMA),
-        record("job", vec![string(input.job_ref)]),
-        record("admission", vec![string(input.admission_ref)]),
-        record("target-peer", vec![string(input.target_peer)]),
-        record("stages", vec![sequence(input.stage_ids.iter().map(string).collect())]),
-        record("storage", vec![string(input.storage_profile_ref)]),
-        record("cache", vec![string(input.cache_profile_ref)]),
-        record("chunks", vec![string(input.chunk_profile_ref)]),
-        record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
-        record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
+    Ok(preserves_rail::record("job-execution-request-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_EXECUTION_REQUEST_SCHEMA),
+        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
+        preserves_rail::record("admission", vec![preserves_rail::string(input.admission_ref)]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(input.target_peer)]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(
+            input.stage_ids.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("storage", vec![preserves_rail::string(input.storage_profile_ref)]),
+        preserves_rail::record("cache", vec![preserves_rail::string(input.cache_profile_ref)]),
+        preserves_rail::record("chunks", vec![preserves_rail::string(input.chunk_profile_ref)]),
+        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        preserves_rail::record("capability", vec![refs_sequence(&sorted_unique(input.capability_refs))]),
+        preserves_rail::record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
         checks_value(&[
             "admission-required",
             "target-state-only",
@@ -1000,13 +978,13 @@ pub fn parse_job_execution_request_value(value: &IOValue) -> Result<JobExecution
     let fields = value
         .collect_simple_record("job-execution-request-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-execution-request-v1 ...>"))?;
-    require_schema(&fields[0], JOB_EXECUTION_REQUEST_SCHEMA, "job execution request")?;
+    require_schema(&fields[0], preserves_rail::JOB_EXECUTION_REQUEST_SCHEMA, "job execution request")?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "admission-required", "job execution request")?;
     require_check(&checks, "target-state-only", "job execution request")?;
     require_check(&checks, "no-source-registry", "job execution request")?;
     Ok(JobExecutionRequest {
-        request_ref: canonical_hash(value)?,
+        request_ref: preserves_rail::canonical_hash(value)?,
         job_ref: record_ref(&fields[1], "job")?,
         admission_ref: record_ref(&fields[2], "admission")?,
         target_peer: record_string(&fields[3], "target-peer")?,
@@ -1023,32 +1001,32 @@ pub fn parse_job_execution_request_value(value: &IOValue) -> Result<JobExecution
 
 pub fn job_content_ref_value(content: &JobContentRef) -> Result<IOValue> {
     validate_job_content_ref(content, "job content ref")?;
-    Ok(record("job-content-ref", vec![
-        record("content-ref", vec![string(&content.content_ref)]),
-        record("size", vec![u64_value(content.size)]),
-        record("format", vec![string(&content.format)]),
-        record("schema", vec![optional_ref_value(content.schema_ref.as_deref())]),
+    Ok(preserves_rail::record("job-content-ref", vec![
+        preserves_rail::record("content-ref", vec![preserves_rail::string(&content.content_ref)]),
+        preserves_rail::record("size", vec![preserves_rail::u64_value(content.size)]),
+        preserves_rail::record("format", vec![preserves_rail::string(&content.format)]),
+        preserves_rail::record("schema", vec![optional_ref_value(content.schema_ref.as_deref())]),
     ]))
 }
 
 pub fn job_ref_submission_value(input: BlobRefJobSubmissionValueInput<'_>) -> Result<IOValue> {
     validate_blob_ref_submission_input(&input)?;
     let input_values = input.inputs.iter().map(job_content_ref_value).collect::<Result<Vec<_>>>()?;
-    Ok(record("job-ref-submission-v1", vec![
-        string(JOB_REF_SUBMISSION_SCHEMA),
-        record("job-id", vec![string(input.job_id)]),
-        record("operation-id", vec![string(input.operation_id)]),
-        record("executable", vec![job_content_ref_value(&input.executable)?]),
-        record("inputs", vec![sequence(input_values)]),
-        record("output-mode", vec![string(input.output_mode)]),
-        record("input-schemas", vec![refs_sequence(&sorted_unique(input.input_schema_refs))]),
-        record("output-schemas", vec![refs_sequence(&sorted_unique(input.output_schema_refs))]),
-        record("effects", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
-        record("handler-profile", vec![string(input.handler_profile)]),
-        record("authority", vec![string(input.authority_context_ref)]),
-        record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        record("provenance", vec![refs_sequence(&sorted_unique(input.provenance_refs))]),
-        record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+    Ok(preserves_rail::record("job-ref-submission-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_REF_SUBMISSION_SCHEMA),
+        preserves_rail::record("job-id", vec![preserves_rail::string(input.job_id)]),
+        preserves_rail::record("operation-id", vec![preserves_rail::string(input.operation_id)]),
+        preserves_rail::record("executable", vec![job_content_ref_value(&input.executable)?]),
+        preserves_rail::record("inputs", vec![preserves_rail::sequence(input_values)]),
+        preserves_rail::record("output-mode", vec![preserves_rail::string(input.output_mode)]),
+        preserves_rail::record("input-schemas", vec![refs_sequence(&sorted_unique(input.input_schema_refs))]),
+        preserves_rail::record("output-schemas", vec![refs_sequence(&sorted_unique(input.output_schema_refs))]),
+        preserves_rail::record("effects", vec![refs_sequence(&sorted_unique(input.effect_manifest_refs))]),
+        preserves_rail::record("handler-profile", vec![preserves_rail::string(input.handler_profile)]),
+        preserves_rail::record("authority", vec![preserves_rail::string(input.authority_context_ref)]),
+        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        preserves_rail::record("provenance", vec![refs_sequence(&sorted_unique(input.provenance_refs))]),
+        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
         checks_value(&[
             "content-refs-only",
             "no-inline-large-bytes",
@@ -1064,7 +1042,7 @@ pub fn parse_job_ref_submission_value(value: &IOValue) -> Result<BlobRefJobSubmi
     let fields = value
         .collect_simple_record("job-ref-submission-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-ref-submission-v1 ...>"))?;
-    require_schema(&fields[0], JOB_REF_SUBMISSION_SCHEMA, "job ref submission")?;
+    require_schema(&fields[0], preserves_rail::JOB_REF_SUBMISSION_SCHEMA, "job ref submission")?;
     let checks = parse_checks(&fields[14])?;
     require_check(&checks, "content-refs-only", "job ref submission")?;
     require_check(&checks, "no-inline-large-bytes", "job ref submission")?;
@@ -1080,7 +1058,7 @@ pub fn parse_job_ref_submission_value(value: &IOValue) -> Result<BlobRefJobSubmi
         )?;
     }
     let submission = BlobRefJobSubmission {
-        submission_ref: canonical_hash(value)?,
+        submission_ref: preserves_rail::canonical_hash(value)?,
         job_id: record_string(&fields[1], "job-id")?,
         operation_id: record_ref(&fields[2], "operation-id")?,
         executable,
@@ -1174,19 +1152,21 @@ pub fn job_worker_request_value(input: JobWorkerRequestValueInput<'_>) -> Result
     validate_refs(input.peer_bootstrap_refs, "job worker peer bootstrap ref")?;
     validate_refs(input.node_identity_refs, "job worker node identity ref")?;
     validate_refs(input.evidence_refs, "job worker evidence ref")?;
-    Ok(record("job-worker-request-v1", vec![
-        string(JOB_WORKER_REQUEST_SCHEMA),
-        record("job", vec![string(input.job_ref)]),
-        record("target-peer", vec![string(input.target_peer)]),
-        record("stages", vec![sequence(input.stage_ids.iter().map(string).collect())]),
-        record("sync", vec![string(input.sync_ref)]),
-        record("admission", vec![string(input.admission_ref)]),
-        record("execution-request", vec![string(input.execution_request_ref)]),
-        record("authority", vec![refs_sequence(&sorted_unique(input.authority_refs))]),
-        record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
-        record("peer-bootstrap", vec![refs_sequence(&sorted_unique(input.peer_bootstrap_refs))]),
-        record("node-identity", vec![refs_sequence(&sorted_unique(input.node_identity_refs))]),
-        record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+    Ok(preserves_rail::record("job-worker-request-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_WORKER_REQUEST_SCHEMA),
+        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(input.target_peer)]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(
+            input.stage_ids.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("sync", vec![preserves_rail::string(input.sync_ref)]),
+        preserves_rail::record("admission", vec![preserves_rail::string(input.admission_ref)]),
+        preserves_rail::record("execution-request", vec![preserves_rail::string(input.execution_request_ref)]),
+        preserves_rail::record("authority", vec![refs_sequence(&sorted_unique(input.authority_refs))]),
+        preserves_rail::record("resource", vec![refs_sequence(&sorted_unique(input.resource_refs))]),
+        preserves_rail::record("peer-bootstrap", vec![refs_sequence(&sorted_unique(input.peer_bootstrap_refs))]),
+        preserves_rail::record("node-identity", vec![refs_sequence(&sorted_unique(input.node_identity_refs))]),
+        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
         checks_value(&[
             "target-admission-required",
             "loopback-execution-required",
@@ -1204,7 +1184,7 @@ pub fn parse_job_worker_request_value(value: &IOValue) -> Result<JobWorkerReques
     let fields = value
         .collect_simple_record("job-worker-request-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-request-v1 ...>"))?;
-    require_schema(&fields[0], JOB_WORKER_REQUEST_SCHEMA, "job worker request")?;
+    require_schema(&fields[0], preserves_rail::JOB_WORKER_REQUEST_SCHEMA, "job worker request")?;
     let checks = parse_checks(&fields[12])?;
     require_check(&checks, "target-admission-required", "job worker request")?;
     require_check(&checks, "loopback-execution-required", "job worker request")?;
@@ -1213,7 +1193,7 @@ pub fn parse_job_worker_request_value(value: &IOValue) -> Result<JobWorkerReques
     require_check(&checks, "target-state-only", "job worker request")?;
     require_check(&checks, "no-mobile-closures", "job worker request")?;
     Ok(JobWorkerRequest {
-        request_ref: canonical_hash(value)?,
+        request_ref: preserves_rail::canonical_hash(value)?,
         job_ref: record_ref(&fields[1], "job")?,
         target_peer: record_string(&fields[2], "target-peer")?,
         stage_ids: record_node_id_sequence(&fields[3], "stages")?,
@@ -1253,7 +1233,7 @@ pub fn job_worker_envelope(input: JobWorkerEnvelopeInput<'_>) -> Result<remote_d
 pub fn execute_worker_delivery(input: JobWorkerExecuteInput<'_>) -> Result<JobWorkerExecution> {
     let request = parse_job_worker_request_value(&input.delivery.envelope.payload)?;
     let assignment_value = job_worker_assignment_value(&request, input.delivery)?;
-    let assignment_ref = canonical_hash(&assignment_value)?;
+    let assignment_ref = preserves_rail::canonical_hash(&assignment_value)?;
     let delivery = collect_delivery_checks(&input, &request)?;
     let run = run_worker_delivery(&input, &request, &delivery)?;
     finish_worker_delivery(FinishDeliveryInput {
@@ -1278,13 +1258,13 @@ pub fn parse_job_worker_result_value(value: &IOValue) -> Result<JobWorkerResult>
     let fields = value
         .collect_simple_record("job-worker-result-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-result-v1 ...>"))?;
-    require_schema(&fields[0], JOB_WORKER_RESULT_SCHEMA, "job worker result")?;
+    require_schema(&fields[0], preserves_rail::JOB_WORKER_RESULT_SCHEMA, "job worker result")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_worker_decision(&decision)?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "canonical-result", "job worker result")?;
     Ok(JobWorkerResult {
-        result_ref: canonical_hash(value)?,
+        result_ref: preserves_rail::canonical_hash(value)?,
         decision,
         job_ref: record_ref(&fields[2], "job")?,
         target_peer: record_string(&fields[3], "target-peer")?,
@@ -1303,7 +1283,7 @@ pub fn parse_job_worker_receipt_value(value: &IOValue) -> Result<JobWorkerReceip
     let fields = value
         .collect_simple_record("job-worker-receipt-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-receipt-v1 ...>"))?;
-    require_schema(&fields[0], JOB_WORKER_RECEIPT_SCHEMA, "job worker receipt")?;
+    require_schema(&fields[0], preserves_rail::JOB_WORKER_RECEIPT_SCHEMA, "job worker receipt")?;
     let operation = record_string(&fields[1], "operation")?;
     if operation != "worker-execute" {
         return Err(MoltenError::invalid_harness(format!("unsupported job worker receipt operation {operation}")));
@@ -1312,7 +1292,7 @@ pub fn parse_job_worker_receipt_value(value: &IOValue) -> Result<JobWorkerReceip
     validate_worker_decision(&decision)?;
     require_check(&parse_checks(&fields[12])?, "canonical-receipt", "job worker receipt")?;
     Ok(JobWorkerReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision,
         job_ref: record_optional_ref(&fields[3], "job")?,
         request_ref: record_optional_ref(&fields[4], "request")?,
@@ -1330,7 +1310,7 @@ pub fn parse_job_worker_schedule_receipt_value(value: &IOValue) -> Result<JobWor
     let fields = value
         .collect_simple_record("job-worker-schedule-receipt-v1", Some(20))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-schedule-receipt-v1 ...>"))?;
-    require_schema(&fields[0], JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA, "job worker schedule receipt")?;
+    require_schema(&fields[0], preserves_rail::JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA, "job worker schedule receipt")?;
     let operation = record_string(&fields[1], "operation")?;
     if operation != "worker-schedule-local" {
         return Err(MoltenError::invalid_harness(format!("unsupported job worker schedule operation {operation}")));
@@ -1339,7 +1319,7 @@ pub fn parse_job_worker_schedule_receipt_value(value: &IOValue) -> Result<JobWor
     validate_decision(&decision)?;
     require_check(&parse_checks(&fields[19])?, "canonical-receipt", "job worker schedule receipt")?;
     Ok(JobWorkerScheduleReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         operation,
         decision,
         job_ref: record_ref(&fields[3], "job")?,
@@ -1361,12 +1341,12 @@ pub fn parse_blob_ref_job_receipt_value(value: &IOValue) -> Result<JobReceipt> {
     let fields = value
         .collect_simple_record("job-ref-receipt-v1", Some(18))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-ref-receipt-v1 ...>"))?;
-    require_schema(&fields[0], JOB_REF_RECEIPT_SCHEMA, "job ref receipt")?;
+    require_schema(&fields[0], preserves_rail::JOB_REF_RECEIPT_SCHEMA, "job ref receipt")?;
     let checks = parse_checks(&fields[17])?;
     require_check(&checks, "content-refs-only", "job ref receipt")?;
     require_check(&checks, "no-inline-large-bytes", "job ref receipt")?;
     Ok(JobReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         decision: record_string(&fields[2], "decision")?,
         job_ref: Some(record_string(&fields[4], "job-id")?),
@@ -1384,7 +1364,7 @@ pub fn parse_job_dag_value(value: &IOValue) -> Result<JobDag> {
     let fields = value
         .collect_simple_record("job-dag-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-dag-v1 ...>"))?;
-    require_schema(&fields[0], JOB_DAG_SCHEMA, "job dag")?;
+    require_schema(&fields[0], preserves_rail::JOB_DAG_SCHEMA, "job dag")?;
     let version = record_string(&fields[1], "version")?;
     if version != "v1" {
         return Err(MoltenError::invalid_harness(format!("unsupported job dag version {version}")));
@@ -1419,7 +1399,7 @@ pub fn parse_job_dag_value(value: &IOValue) -> Result<JobDag> {
     require_check(&checks, "no-name-identity", "job dag")?;
     validate_topology(&nodes, &edges)?;
     Ok(JobDag {
-        job_ref: canonical_hash(value)?,
+        job_ref: preserves_rail::canonical_hash(value)?,
         version,
         nodes,
         edges,
@@ -1436,7 +1416,7 @@ pub fn parse_job_output_request_value(value: &IOValue, expected_dag_ref: &str) -
     let fields = value
         .collect_simple_record("job-output-request-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-output-request-v1 ...>"))?;
-    require_schema(&fields[0], JOB_DAG_OUTPUT_REQUEST_SCHEMA, "job output request")?;
+    require_schema(&fields[0], preserves_rail::JOB_DAG_OUTPUT_REQUEST_SCHEMA, "job output request")?;
     let dag_ref = record_ref(&fields[1], "dag")?;
     if dag_ref != expected_dag_ref {
         return Err(MoltenError::invalid_harness(format!(
@@ -1449,7 +1429,7 @@ pub fn parse_job_output_request_value(value: &IOValue, expected_dag_ref: &str) -
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "request-ref-bound", "job output request")?;
     Ok(JobOutputRequest {
-        request_ref: canonical_hash(value)?,
+        request_ref: preserves_rail::canonical_hash(value)?,
         dag_ref,
         roots,
         materialization,
@@ -1464,11 +1444,11 @@ pub fn parse_job_receipt(value: &IOValue) -> Result<JobReceipt> {
     let fields = value
         .collect_simple_record("job-dag-receipt-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-dag-receipt-v1 ...>"))?;
-    require_schema(&fields[0], JOB_DAG_RECEIPT_SCHEMA, "job dag receipt")?;
+    require_schema(&fields[0], preserves_rail::JOB_DAG_RECEIPT_SCHEMA, "job dag receipt")?;
     let checks = parse_checks(&fields[13])?;
     require_check(&checks, "canonical-receipt", "job dag receipt")?;
     Ok(JobReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         decision: record_string(&fields[2], "decision")?,
         job_ref: record_optional_ref(&fields[3], "job")?,
@@ -1486,11 +1466,11 @@ pub fn parse_job_admission_receipt_value(value: &IOValue) -> Result<JobAdmission
     let fields = value
         .collect_simple_record("job-admission-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-admission-receipt-v1 ...>"))?;
-    require_schema(&fields[0], JOB_ADMISSION_RECEIPT_SCHEMA, "job admission receipt")?;
+    require_schema(&fields[0], preserves_rail::JOB_ADMISSION_RECEIPT_SCHEMA, "job admission receipt")?;
     let checks = parse_checks(&fields[14])?;
     require_check(&checks, "canonical-receipt", "job admission receipt")?;
     Ok(JobAdmissionReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         decision: record_string(&fields[2], "decision")?,
         job_ref: record_ref(&fields[3], "job")?,
@@ -1532,7 +1512,7 @@ pub fn install_job_dag(registry_root: &Path, value: &IOValue) -> Result<JobInsta
         installer_ref: local_ref("job-installer", &dag.job_ref)?,
         capability_refs: vec![local_ref("job-install-capability", &dag.job_ref)?],
     })?;
-    let artifact_receipt_ref = canonical_hash(&install.receipt_value)?;
+    let artifact_receipt_ref = preserves_rail::canonical_hash(&install.receipt_value)?;
     let evidence_refs = vec![artifact_receipt_ref];
     let diagnostics = install
         .missing_dependencies
@@ -1601,7 +1581,7 @@ pub fn read_job_dag_file_or_registry(registry_root: &Path, spec: &str) -> Result
     let path = Path::new(spec);
     if path.exists() {
         let text = fs::read_to_string(path).map_err(MoltenError::from)?;
-        let value = parse_text(&text)?;
+        let value = preserves_rail::parse_text(&text)?;
         parse_job_dag_value(&value)
     } else {
         read_job_dag(registry_root, spec)
@@ -1672,7 +1652,7 @@ fn run_stages(
         let node = find_job_node(&dag.nodes, node_id)?;
         let inputs = gather_inputs(node, &dag.edges, &outputs_by_index, &plan.node_index)?;
         let stage = run_stage_with_cache(dag, request, node, &inputs, options)?;
-        let receipt_ref = canonical_hash(&stage.receipt_value)?;
+        let receipt_ref = preserves_rail::canonical_hash(&stage.receipt_value)?;
         if let Some(ledger_root) = options.ledger_root {
             ledger::import_artifact(ledger_root, &stage.receipt_value)?;
         }
@@ -1747,9 +1727,9 @@ fn complete_run(input: CompleteInput<'_>) -> Result<RunFinish> {
             extend_cloned_bounded(&mut final_refs, refs, MAX_JOB_REFS, "job final refs")?;
         }
     }
-    let output_value = sequence(final_values.clone());
+    let output_value = preserves_rail::sequence(final_values.clone());
     if final_refs.is_empty() {
-        push_bounded(&mut final_refs, canonical_hash(&output_value)?, MAX_JOB_REFS, "job final refs")?;
+        push_bounded(&mut final_refs, preserves_rail::canonical_hash(&output_value)?, MAX_JOB_REFS, "job final refs")?;
     }
     let evidence_count = checked_count_sum(
         dag.evidence_refs.len(),
@@ -1805,18 +1785,25 @@ fn stage_plan_values(dag: &JobDag, plan: &TrellisExecutionPlan) -> Result<Vec<IO
         let deps = dependency_ids(plan, node_id)?;
         push_bounded(
             &mut stage_values,
-            record("job-stage-plan-v1", vec![
-                record("id", vec![string(node_id)]),
-                record("trellis-index", vec![u64_value(usize_to_u64(index, "job plan trellis index")?)]),
-                record("dependencies", vec![sequence(deps.iter().map(string).collect())]),
-                record("placement", vec![string("local")]),
-                record("cache-projection", vec![string(if node.kind == "materialize" {
-                    "not-cacheable"
-                } else {
-                    "eligible"
-                })]),
-                record("policy", vec![refs_sequence(&node.policy_refs)]),
-                record("resources", vec![sequence(Vec::new())]),
+            preserves_rail::record("job-stage-plan-v1", vec![
+                preserves_rail::record("id", vec![preserves_rail::string(node_id)]),
+                preserves_rail::record("trellis-index", vec![preserves_rail::u64_value(usize_to_u64(
+                    index,
+                    "job plan trellis index",
+                )?)]),
+                preserves_rail::record("dependencies", vec![preserves_rail::sequence(
+                    deps.iter().map(preserves_rail::string).collect(),
+                )]),
+                preserves_rail::record("placement", vec![preserves_rail::string("local")]),
+                preserves_rail::record("cache-projection", vec![preserves_rail::string(
+                    if node.kind == "materialize" {
+                        "not-cacheable"
+                    } else {
+                        "eligible"
+                    },
+                )]),
+                preserves_rail::record("policy", vec![refs_sequence(&node.policy_refs)]),
+                preserves_rail::record("resources", vec![preserves_rail::sequence(Vec::new())]),
                 checks_value(&["trellis-dependencies-bound", "placement-is-proposal", "local-only-plan"]),
             ]),
             MAX_JOB_STAGE_VALUES,
@@ -1830,13 +1817,15 @@ pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<Jo
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
     let stage_values = stage_plan_values(dag, &plan)?;
-    let value = record("job-plan-v1", vec![
-        string(JOB_PLAN_SCHEMA),
-        record("job", vec![string(&dag.job_ref)]),
-        record("request", vec![string(&request.request_ref)]),
-        record("stage-order", vec![sequence(plan.order_ids.iter().map(string).collect())]),
-        record("stages", vec![sequence(stage_values)]),
-        record("policy", vec![refs_sequence(&combined_policy_refs(dag, &request, None))]),
+    let value = preserves_rail::record("job-plan-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_PLAN_SCHEMA),
+        preserves_rail::record("job", vec![preserves_rail::string(&dag.job_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
+        preserves_rail::record("stage-order", vec![preserves_rail::sequence(
+            plan.order_ids.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(stage_values)]),
+        preserves_rail::record("policy", vec![refs_sequence(&combined_policy_refs(dag, &request, None))]),
         checks_value(&[
             "trellis-topo-order",
             "trellis-deps-ready",
@@ -1844,10 +1833,10 @@ pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<Jo
             "placement-proposals-only",
         ]),
     ]);
-    let plan_ref = canonical_hash(&value)?;
+    let plan_ref = preserves_rail::canonical_hash(&value)?;
     let receipt_value = analysis_receipt_value(AnalysisReceiptValueInput {
         label: "job-plan-receipt-v1",
-        schema: JOB_PLAN_RECEIPT_SCHEMA,
+        schema: preserves_rail::JOB_PLAN_RECEIPT_SCHEMA,
         operation: "plan",
         job_ref: &dag.job_ref,
         request_ref: &request.request_ref,
@@ -1883,23 +1872,25 @@ fn stage_profile_values(dag: &JobDag, plan: &TrellisExecutionPlan, cache_entries
             .iter()
             .find(|candidate| candidate.id == *node_id)
             .ok_or_else(|| MoltenError::invalid_harness(format!("job profile missing node {node_id}")))?;
-        let bytes = usize_to_u64(canonical_bytes(&node.config)?.len(), "job profile config bytes")?;
+        let bytes = usize_to_u64(preserves_rail::canonical_bytes(&node.config)?.len(), "job profile config bytes")?;
         config_bytes = config_bytes
             .checked_add(bytes)
             .ok_or_else(|| MoltenError::invalid_harness("job profile estimated config bytes overflowed"))?;
         push_bounded(
             &mut values,
-            record("job-stage-profile-v1", vec![
-                record("id", vec![string(node_id)]),
-                record("kind", vec![string(&node.kind)]),
-                record("estimated-config-bytes", vec![u64_value(bytes)]),
-                record("cache-projection", vec![string(if node.kind == "materialize" {
-                    "not-cacheable"
-                } else if cache_entries == 0 {
-                    "projected-miss"
-                } else {
-                    "candidate-hit-or-miss"
-                })]),
+            preserves_rail::record("job-stage-profile-v1", vec![
+                preserves_rail::record("id", vec![preserves_rail::string(node_id)]),
+                preserves_rail::record("kind", vec![preserves_rail::string(&node.kind)]),
+                preserves_rail::record("estimated-config-bytes", vec![preserves_rail::u64_value(bytes)]),
+                preserves_rail::record("cache-projection", vec![preserves_rail::string(
+                    if node.kind == "materialize" {
+                        "not-cacheable"
+                    } else if cache_entries == 0 {
+                        "projected-miss"
+                    } else {
+                        "candidate-hit-or-miss"
+                    },
+                )]),
                 checks_value(&["deterministic-estimate", "no-wall-clock-time"]),
             ]),
             MAX_JOB_STAGE_VALUES,
@@ -1933,18 +1924,23 @@ pub fn profile_job_dag(
     )?;
     let stage_count = usize_to_u64(dag.nodes.len(), "job profile stage count")?;
     let edge_count = usize_to_u64(dag.edges.len(), "job profile edge count")?;
-    let value = record("job-profile-v1", vec![
-        string(JOB_PROFILE_SCHEMA),
-        record("job", vec![string(&dag.job_ref)]),
-        record("request", vec![string(&request.request_ref)]),
-        record("stage-count", vec![u64_value(stage_count)]),
-        record("edge-count", vec![u64_value(edge_count)]),
-        record("materialization-boundaries", vec![u64_value(materialization_boundaries)]),
-        record("estimated-bytes", vec![
-            record("config", vec![u64_value(profile_stages.config_bytes)]),
-            record("known-cache-entries", vec![u64_value(usize_to_u64(cache_entries, "job cache entry count")?)]),
+    let value = preserves_rail::record("job-profile-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_PROFILE_SCHEMA),
+        preserves_rail::record("job", vec![preserves_rail::string(&dag.job_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
+        preserves_rail::record("stage-count", vec![preserves_rail::u64_value(stage_count)]),
+        preserves_rail::record("edge-count", vec![preserves_rail::u64_value(edge_count)]),
+        preserves_rail::record("materialization-boundaries", vec![preserves_rail::u64_value(
+            materialization_boundaries,
+        )]),
+        preserves_rail::record("estimated-bytes", vec![
+            preserves_rail::record("config", vec![preserves_rail::u64_value(profile_stages.config_bytes)]),
+            preserves_rail::record("known-cache-entries", vec![preserves_rail::u64_value(usize_to_u64(
+                cache_entries,
+                "job cache entry count",
+            )?)]),
         ]),
-        record("stages", vec![sequence(profile_stages.values)]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(profile_stages.values)]),
         checks_value(&[
             "deterministic-profile",
             "no-wall-clock-time",
@@ -1952,10 +1948,10 @@ pub fn profile_job_dag(
             "trellis-order-bound",
         ]),
     ]);
-    let profile_ref = canonical_hash(&value)?;
+    let profile_ref = preserves_rail::canonical_hash(&value)?;
     let receipt_value = analysis_receipt_value(AnalysisReceiptValueInput {
         label: "job-profile-receipt-v1",
-        schema: JOB_PROFILE_RECEIPT_SCHEMA,
+        schema: preserves_rail::JOB_PROFILE_RECEIPT_SCHEMA,
         operation: "profile",
         job_ref: &dag.job_ref,
         request_ref: &request.request_ref,
@@ -1997,15 +1993,17 @@ pub fn sync_plan_value(source_registry: &Path, target_registry: &Path, request_v
             Err(_) => push_bounded(&mut missing_refs, artifact_ref.clone(), MAX_JOB_REFS, "job sync missing refs")?,
         }
     }
-    let value = record("job-sync-plan-v1", vec![
-        string(JOB_SYNC_PLAN_SCHEMA),
-        record("request", vec![string(&request.request_ref)]),
-        record("job", vec![string(&request.job_ref)]),
-        record("target-peer", vec![string(&request.target_peer)]),
-        record("roots", vec![refs_sequence(&roots)]),
-        record("closure", vec![refs_sequence(&closure.closure_refs)]),
-        record("missing", vec![refs_sequence(&missing_refs)]),
-        record("stages", vec![sequence(request.stage_ids.iter().map(string).collect())]),
+    let value = preserves_rail::record("job-sync-plan-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_SYNC_PLAN_SCHEMA),
+        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
+        preserves_rail::record("job", vec![preserves_rail::string(&request.job_ref)]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(&request.target_peer)]),
+        preserves_rail::record("roots", vec![refs_sequence(&roots)]),
+        preserves_rail::record("closure", vec![refs_sequence(&closure.closure_refs)]),
+        preserves_rail::record("missing", vec![refs_sequence(&missing_refs)]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(
+            request.stage_ids.iter().map(preserves_rail::string).collect(),
+        )]),
         checks_value(&[
             "dependency-closure",
             "hash-verify-before-install",
@@ -2014,10 +2012,10 @@ pub fn sync_plan_value(source_registry: &Path, target_registry: &Path, request_v
             "no-mobile-closures",
         ]),
     ]);
-    let plan_ref = canonical_hash(&value)?;
+    let plan_ref = preserves_rail::canonical_hash(&value)?;
     let receipt_value = analysis_receipt_value(AnalysisReceiptValueInput {
         label: "job-sync-receipt-v1",
-        schema: JOB_SYNC_RECEIPT_SCHEMA,
+        schema: preserves_rail::JOB_SYNC_RECEIPT_SCHEMA,
         operation: "sync-plan",
         job_ref: &request.job_ref,
         request_ref: &request.request_ref,
@@ -2171,18 +2169,20 @@ fn loopback_receipt(input: ReceiptInput<'_>) -> Result<IOValue> {
     extend_cloned_bounded(&mut refs, input.provenance_receipt_refs, MAX_JOB_REFS, "job sync refs")?;
     push_bounded(&mut refs, input.plan.plan_ref.clone(), MAX_JOB_REFS, "job sync refs")?;
     let is_clean = input.diagnostics.is_empty();
-    Ok(record("job-sync-receipt-v1", vec![
-        string(JOB_SYNC_RECEIPT_SCHEMA),
-        record("operation", vec![string("sync-loopback")]),
-        record("decision", vec![string(input.decision)]),
-        record("job", vec![string(&input.plan.request.job_ref)]),
-        record("request", vec![string(&input.plan.request.request_ref)]),
-        record("artifact", vec![string(&input.plan.plan_ref)]),
-        record("installed", vec![refs_sequence(input.installed_refs)]),
-        record("already-present", vec![refs_sequence(input.already_present_refs)]),
-        record("provenance", vec![refs_sequence(input.provenance_receipt_refs)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(preserves_rail::record("job-sync-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_SYNC_RECEIPT_SCHEMA),
+        preserves_rail::record("operation", vec![preserves_rail::string("sync-loopback")]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("job", vec![preserves_rail::string(&input.plan.request.job_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&input.plan.request.request_ref)]),
+        preserves_rail::record("artifact", vec![preserves_rail::string(&input.plan.plan_ref)]),
+        preserves_rail::record("installed", vec![refs_sequence(input.installed_refs)]),
+        preserves_rail::record("already-present", vec![refs_sequence(input.already_present_refs)]),
+        preserves_rail::record("provenance", vec![refs_sequence(input.provenance_receipt_refs)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&[
             ("hash-verify-before-install", status(is_clean)),
             ("provenance-before-install", status(is_clean)),
@@ -2218,7 +2218,7 @@ pub fn sync_loopback(input: SyncLoopbackInput<'_>) -> Result<JobSyncLoopback> {
         provenance_receipt_refs: &provenance_receipt_refs,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     Ok(JobSyncLoopback {
         receipt_ref,
         plan,
@@ -2417,7 +2417,7 @@ fn finish_plan(input: PlanOutcomeInput) -> Result<JobAdmissionPlan> {
         diagnostics: &input.diagnostics,
         checks: &checks,
     });
-    let plan_ref = canonical_hash(&value)?;
+    let plan_ref = preserves_rail::canonical_hash(&value)?;
     let receipt_value = job_admission_receipt_value(JobAdmissionReceiptValueInput {
         operation: "admit-plan",
         decision,
@@ -2486,20 +2486,28 @@ fn plan_checks(input: &PlanOutcomeInput) -> [(&'static str, &'static str); 9] {
 }
 
 fn plan_record(input: RecordInput<'_>) -> IOValue {
-    record("job-admission-plan-v1", vec![
-        string(JOB_ADMISSION_PLAN_SCHEMA),
-        record("request", vec![string(&input.request.request_ref)]),
-        record("job", vec![string(&input.request.job_ref)]),
-        record("sync", vec![string(&input.request.sync_ref)]),
-        record("target-peer", vec![string(&input.request.target_peer)]),
-        record("stages", vec![sequence(input.request.stage_ids.iter().map(string).collect())]),
-        record("closure", vec![refs_sequence(&input.readiness.closure_refs)]),
-        record("topology", vec![sequence(input.readiness.stage_order.iter().map(string).collect())]),
-        record("stage-verdicts", vec![sequence(verdict_values(&input.readiness.stage_verdicts))]),
-        record("authority", vec![refs_sequence(input.authority_receipt_refs)]),
-        record("resource-verdict", vec![string(input.resource_verdict)]),
-        record("decision", vec![string(input.decision)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+    preserves_rail::record("job-admission-plan-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_ADMISSION_PLAN_SCHEMA),
+        preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
+        preserves_rail::record("job", vec![preserves_rail::string(&input.request.job_ref)]),
+        preserves_rail::record("sync", vec![preserves_rail::string(&input.request.sync_ref)]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(&input.request.target_peer)]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(
+            input.request.stage_ids.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("closure", vec![refs_sequence(&input.readiness.closure_refs)]),
+        preserves_rail::record("topology", vec![preserves_rail::sequence(
+            input.readiness.stage_order.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("stage-verdicts", vec![preserves_rail::sequence(verdict_values(
+            &input.readiness.stage_verdicts,
+        ))]),
+        preserves_rail::record("authority", vec![refs_sequence(input.authority_receipt_refs)]),
+        preserves_rail::record("resource-verdict", vec![preserves_rail::string(input.resource_verdict)]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
         checks_value_from_pairs(input.checks),
     ])
 }
@@ -2508,10 +2516,12 @@ fn verdict_values(verdicts: &[JobAdmissionStageVerdict]) -> Vec<IOValue> {
     verdicts
         .iter()
         .map(|verdict| {
-            record("stage", vec![
-                string(&verdict.stage_id),
-                string(&verdict.decision),
-                record("diagnostics", vec![sequence(verdict.diagnostics.iter().map(string).collect())]),
+            preserves_rail::record("stage", vec![
+                preserves_rail::string(&verdict.stage_id),
+                preserves_rail::string(&verdict.decision),
+                preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+                    verdict.diagnostics.iter().map(preserves_rail::string).collect(),
+                )]),
             ])
         })
         .collect()
@@ -2559,7 +2569,7 @@ pub fn admission_loopback(target_registry: &Path, request_value: &IOValue) -> Re
         diagnostics: &plan.diagnostics,
         checks: &checks,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     Ok(JobAdmissionLoopback {
         receipt_ref,
         plan,
@@ -2579,22 +2589,22 @@ pub fn missing_admission_execution_receipt_value(request_value: &IOValue, diagno
     refs.extend(request.policy_refs.iter().cloned());
     refs.extend(request.capability_refs.iter().cloned());
     refs.extend(request.resource_refs.iter().cloned());
-    Ok(record("job-execution-receipt-v1", vec![
-        string(JOB_EXECUTION_RECEIPT_SCHEMA),
-        record("operation", vec![string("execute-loopback")]),
-        record("decision", vec![string("deny")]),
-        record("job", vec![string(&request.job_ref)]),
-        record("request", vec![string(&request.request_ref)]),
-        record("admission", vec![string(&request.admission_ref)]),
-        record("sync", vec![string(&sync_ref)]),
-        record("target-peer", vec![string(&request.target_peer)]),
-        record("closure", vec![refs_sequence(&[])]),
-        record("authority", vec![refs_sequence(&[])]),
-        record("stages", vec![sequence(Vec::new())]),
-        record("outputs", vec![refs_sequence(&[])]),
-        record("run", vec![refs_sequence(&[])]),
-        record("diagnostics", vec![sequence(vec![string(diagnostic)])]),
-        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(preserves_rail::record("job-execution-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_EXECUTION_RECEIPT_SCHEMA),
+        preserves_rail::record("operation", vec![preserves_rail::string("execute-loopback")]),
+        preserves_rail::record("decision", vec![preserves_rail::string("deny")]),
+        preserves_rail::record("job", vec![preserves_rail::string(&request.job_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
+        preserves_rail::record("admission", vec![preserves_rail::string(&request.admission_ref)]),
+        preserves_rail::record("sync", vec![preserves_rail::string(&sync_ref)]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(&request.target_peer)]),
+        preserves_rail::record("closure", vec![refs_sequence(&[])]),
+        preserves_rail::record("authority", vec![refs_sequence(&[])]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(Vec::new())]),
+        preserves_rail::record("outputs", vec![refs_sequence(&[])]),
+        preserves_rail::record("run", vec![refs_sequence(&[])]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(vec![preserves_rail::string(diagnostic)])]),
+        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&[
             ("admission-required", "fail"),
             ("admission-readable", "fail"),
@@ -2820,7 +2830,7 @@ fn deny_result(input: DenyInput<'_>) -> Result<JobExecutionLoopback> {
         diagnostics: &input.diagnostics,
         checks: &checks_with_extra(&input.checks, input.extra_checks),
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     Ok(JobExecutionLoopback {
         receipt_ref,
         request: input.request,
@@ -2847,7 +2857,7 @@ fn pass_result(input: PassInput) -> Result<JobExecutionLoopback> {
         admission: &input.admission,
         stage_receipt_refs: &input.run.stage_receipt_refs,
         output_refs: &input.run.output_refs,
-        run_receipt_refs: &[canonical_hash(&input.run.receipt_value)?],
+        run_receipt_refs: &[preserves_rail::canonical_hash(&input.run.receipt_value)?],
         diagnostics: &input.diagnostics,
         checks: &checks_with_extra(&input.checks, &[
             ("executed-on-target-state", "pass"),
@@ -2855,7 +2865,7 @@ fn pass_result(input: PassInput) -> Result<JobExecutionLoopback> {
             ("output-refs-bound", "pass"),
         ]),
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     Ok(JobExecutionLoopback {
         receipt_ref,
         request: input.request,
@@ -2871,11 +2881,11 @@ pub fn fusion_preview_job_dag(dag: &JobDag, output_request: Option<&IOValue>) ->
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
     let (chain_values, chains) = adjacent_chains(dag, &plan.order_ids)?;
-    let value = record("job-fusion-plan-v1", vec![
-        string(JOB_FUSION_PLAN_SCHEMA),
-        record("job", vec![string(&dag.job_ref)]),
-        record("request", vec![string(&request.request_ref)]),
-        record("chains", vec![sequence(chain_values)]),
+    let value = preserves_rail::record("job-fusion-plan-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_FUSION_PLAN_SCHEMA),
+        preserves_rail::record("job", vec![preserves_rail::string(&dag.job_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
+        preserves_rail::record("chains", vec![preserves_rail::sequence(chain_values)]),
         checks_value(&[
             "trellis-order-bound",
             "no-reduce-materialize-fusion",
@@ -2883,10 +2893,10 @@ pub fn fusion_preview_job_dag(dag: &JobDag, output_request: Option<&IOValue>) ->
             "fusion-is-preview-only",
         ]),
     ]);
-    let fusion_ref = canonical_hash(&value)?;
+    let fusion_ref = preserves_rail::canonical_hash(&value)?;
     let receipt_value = analysis_receipt_value(AnalysisReceiptValueInput {
         label: "job-fusion-receipt-v1",
-        schema: JOB_FUSION_RECEIPT_SCHEMA,
+        schema: preserves_rail::JOB_FUSION_RECEIPT_SCHEMA,
         operation: "fusion-preview",
         job_ref: &dag.job_ref,
         request_ref: &request.request_ref,
@@ -2937,9 +2947,11 @@ fn adjacent_chains(dag: &JobDag, order_ids: &[String]) -> Result<(Vec<IOValue>, 
 }
 
 fn adjacent_chain_value(chain: &[String]) -> IOValue {
-    record("job-fusion-chain-v1", vec![
-        record("stages", vec![sequence(chain.iter().map(string).collect())]),
-        record("reason", vec![string("pure-adjacent-map-filter")]),
+    preserves_rail::record("job-fusion-chain-v1", vec![
+        preserves_rail::record("stages", vec![preserves_rail::sequence(
+            chain.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("reason", vec![preserves_rail::string("pure-adjacent-map-filter")]),
         checks_value(&[
             "trellis-adjacent-order",
             "no-materialization-boundary",
@@ -3179,7 +3191,7 @@ fn source_gate_value_for_ref(target_registry: &Path, gate_ref: &str) -> Result<O
     }
     for artifact in artifacts::list_artifacts(target_registry, None)? {
         let payload = artifacts::read_payload(target_registry, &artifact.artifact_ref)?;
-        if canonical_hash(&payload)? == gate_ref {
+        if preserves_rail::canonical_hash(&payload)? == gate_ref {
             return Ok(Some(payload));
         }
     }
@@ -3248,21 +3260,25 @@ fn job_admission_receipt_value(input: JobAdmissionReceiptValueInput<'_>) -> Resu
     refs.extend(input.request.resource_refs.iter().cloned());
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(record("job-admission-receipt-v1", vec![
-        string(JOB_ADMISSION_RECEIPT_SCHEMA),
-        record("operation", vec![string(input.operation)]),
-        record("decision", vec![string(input.decision)]),
-        record("job", vec![string(&input.request.job_ref)]),
-        record("request", vec![string(&input.request.request_ref)]),
-        record("artifact", vec![string(input.plan_ref)]),
-        record("sync", vec![string(&input.request.sync_ref)]),
-        record("target-peer", vec![string(&input.request.target_peer)]),
-        record("closure", vec![refs_sequence(input.closure_refs)]),
-        record("stages", vec![sequence(input.stage_order.iter().map(string).collect())]),
-        record("authority", vec![refs_sequence(input.authority_receipt_refs)]),
-        record("resource-verdict", vec![string(input.resource_verdict)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(preserves_rail::record("job-admission-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_ADMISSION_RECEIPT_SCHEMA),
+        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("job", vec![preserves_rail::string(&input.request.job_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
+        preserves_rail::record("artifact", vec![preserves_rail::string(input.plan_ref)]),
+        preserves_rail::record("sync", vec![preserves_rail::string(&input.request.sync_ref)]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(&input.request.target_peer)]),
+        preserves_rail::record("closure", vec![refs_sequence(input.closure_refs)]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(
+            input.stage_order.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("authority", vec![refs_sequence(input.authority_receipt_refs)]),
+        preserves_rail::record("resource-verdict", vec![preserves_rail::string(input.resource_verdict)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3278,8 +3294,8 @@ fn job_execution_receipt_value(input: ExecutionReceiptValueInput<'_>) -> Result<
         .iter()
         .enumerate()
         .map(|(index, stage_id)| {
-            record("stage", vec![
-                string(stage_id),
+            preserves_rail::record("stage", vec![
+                preserves_rail::string(stage_id),
                 optional_ref_value(input.stage_receipt_refs.get(index).map(String::as_str)),
             ])
         })
@@ -3301,22 +3317,24 @@ fn job_execution_receipt_value(input: ExecutionReceiptValueInput<'_>) -> Result<
     refs.extend(input.request.resource_refs.iter().cloned());
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(record("job-execution-receipt-v1", vec![
-        string(JOB_EXECUTION_RECEIPT_SCHEMA),
-        record("operation", vec![string("execute-loopback")]),
-        record("decision", vec![string(input.decision)]),
-        record("job", vec![string(&input.request.job_ref)]),
-        record("request", vec![string(&input.request.request_ref)]),
-        record("admission", vec![string(&input.request.admission_ref)]),
-        record("sync", vec![string(&input.admission.sync_ref)]),
-        record("target-peer", vec![string(&input.request.target_peer)]),
-        record("closure", vec![refs_sequence(&input.admission.closure_refs)]),
-        record("authority", vec![refs_sequence(&input.admission.authority_receipt_refs)]),
-        record("stages", vec![sequence(stage_values)]),
-        record("outputs", vec![refs_sequence(input.output_refs)]),
-        record("run", vec![refs_sequence(input.run_receipt_refs)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(preserves_rail::record("job-execution-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_EXECUTION_RECEIPT_SCHEMA),
+        preserves_rail::record("operation", vec![preserves_rail::string("execute-loopback")]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("job", vec![preserves_rail::string(&input.request.job_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
+        preserves_rail::record("admission", vec![preserves_rail::string(&input.request.admission_ref)]),
+        preserves_rail::record("sync", vec![preserves_rail::string(&input.admission.sync_ref)]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(&input.request.target_peer)]),
+        preserves_rail::record("closure", vec![refs_sequence(&input.admission.closure_refs)]),
+        preserves_rail::record("authority", vec![refs_sequence(&input.admission.authority_receipt_refs)]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(stage_values)]),
+        preserves_rail::record("outputs", vec![refs_sequence(input.output_refs)]),
+        preserves_rail::record("run", vec![refs_sequence(input.run_receipt_refs)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3325,16 +3343,18 @@ fn job_worker_assignment_value(
     request: &JobWorkerRequest,
     delivery: &remote_dataspace::RemoteDataspaceDelivery,
 ) -> Result<IOValue> {
-    Ok(record("job-worker-assignment-v1", vec![
-        string(JOB_WORKER_ASSIGNMENT_SCHEMA),
-        record("request", vec![string(&request.request_ref)]),
-        record("job", vec![string(&request.job_ref)]),
-        record("target-peer", vec![string(&request.target_peer)]),
-        record("stages", vec![sequence(request.stage_ids.iter().map(string).collect())]),
-        record("from-peer", vec![string(&delivery.envelope.from_peer)]),
-        record("delivery-envelope", vec![string(&delivery.envelope.envelope_ref)]),
-        record("operation-ref", vec![string(&delivery.envelope.operation_ref)]),
-        record("execution-request", vec![string(&request.execution_request_ref)]),
+    Ok(preserves_rail::record("job-worker-assignment-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_WORKER_ASSIGNMENT_SCHEMA),
+        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
+        preserves_rail::record("job", vec![preserves_rail::string(&request.job_ref)]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(&request.target_peer)]),
+        preserves_rail::record("stages", vec![preserves_rail::sequence(
+            request.stage_ids.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("from-peer", vec![preserves_rail::string(&delivery.envelope.from_peer)]),
+        preserves_rail::record("delivery-envelope", vec![preserves_rail::string(&delivery.envelope.envelope_ref)]),
+        preserves_rail::record("operation-ref", vec![preserves_rail::string(&delivery.envelope.operation_ref)]),
+        preserves_rail::record("execution-request", vec![preserves_rail::string(&request.execution_request_ref)]),
         checks_value(&[
             "request-assigned-to-target",
             "remote-dataspace-envelope-bound",
@@ -3357,17 +3377,21 @@ fn job_worker_status_value(input: WorkerStatusValueInput<'_>) -> Result<IOValue>
     let mut status_checks = input.checks.to_vec();
     status_checks.push(("canonical-status", "pass"));
     status_checks.push(("delivery-operation-ref-bound", "pass"));
-    Ok(record("job-worker-status-v1", vec![
-        string(JOB_WORKER_STATUS_SCHEMA),
-        record("request", vec![string(&input.request.request_ref)]),
-        record("job", vec![string(&input.request.job_ref)]),
-        record("target-peer", vec![string(&input.request.target_peer)]),
-        record("state", vec![string(input.state)]),
-        record("delivery-envelope", vec![string(&input.delivery.envelope.envelope_ref)]),
-        record("operation-ref", vec![string(&input.delivery.envelope.operation_ref)]),
-        record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(preserves_rail::record("job-worker-status-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_WORKER_STATUS_SCHEMA),
+        preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
+        preserves_rail::record("job", vec![preserves_rail::string(&input.request.job_ref)]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(&input.request.target_peer)]),
+        preserves_rail::record("state", vec![preserves_rail::string(input.state)]),
+        preserves_rail::record("delivery-envelope", vec![preserves_rail::string(
+            &input.delivery.envelope.envelope_ref,
+        )]),
+        preserves_rail::record("operation-ref", vec![preserves_rail::string(&input.delivery.envelope.operation_ref)]),
+        preserves_rail::record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&status_checks),
     ]))
 }
@@ -3401,22 +3425,26 @@ fn job_worker_result_value(input: WorkerResultValueInput<'_>) -> Result<IOValue>
     let stage_values = input
         .stage_receipt_refs
         .iter()
-        .map(|(stage_id, receipt_ref)| record("stage", vec![string(stage_id), string(receipt_ref)]))
+        .map(|(stage_id, receipt_ref)| {
+            preserves_rail::record("stage", vec![preserves_rail::string(stage_id), preserves_rail::string(receipt_ref)])
+        })
         .collect::<Vec<_>>();
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-result", "pass"));
-    Ok(record("job-worker-result-v1", vec![
-        string(JOB_WORKER_RESULT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("job", vec![string(&input.request.job_ref)]),
-        record("target-peer", vec![string(&input.request.target_peer)]),
-        record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
-        record("outputs", vec![refs_sequence(input.output_refs)]),
-        record("stage-receipts", vec![sequence(stage_values)]),
-        record("resource", vec![refs_sequence(input.resource_receipt_refs)]),
-        record("delivery-log", vec![optional_ref_value(input.delivery_log_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(preserves_rail::record("job-worker-result-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_WORKER_RESULT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("job", vec![preserves_rail::string(&input.request.job_ref)]),
+        preserves_rail::record("target-peer", vec![preserves_rail::string(&input.request.target_peer)]),
+        preserves_rail::record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
+        preserves_rail::record("outputs", vec![refs_sequence(input.output_refs)]),
+        preserves_rail::record("stage-receipts", vec![preserves_rail::sequence(stage_values)]),
+        preserves_rail::record("resource", vec![refs_sequence(input.resource_receipt_refs)]),
+        preserves_rail::record("delivery-log", vec![optional_ref_value(input.delivery_log_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3448,19 +3476,21 @@ fn job_worker_receipt_value(input: WorkerReceiptValueInput<'_>) -> Result<IOValu
     }
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(record("job-worker-receipt-v1", vec![
-        string(JOB_WORKER_RECEIPT_SCHEMA),
-        record("operation", vec![string("worker-execute")]),
-        record("decision", vec![string(input.decision)]),
-        record("job", vec![optional_ref_value(job_ref)]),
-        record("request", vec![optional_ref_value(request_ref)]),
-        record("assignment", vec![string(input.assignment_ref)]),
-        record("status", vec![refs_sequence(input.status_refs)]),
-        record("result", vec![string(input.result_ref)]),
-        record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
-        record("delivery-log", vec![optional_ref_value(input.delivery_log_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(preserves_rail::record("job-worker-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_WORKER_RECEIPT_SCHEMA),
+        preserves_rail::record("operation", vec![preserves_rail::string("worker-execute")]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("job", vec![optional_ref_value(job_ref)]),
+        preserves_rail::record("request", vec![optional_ref_value(request_ref)]),
+        preserves_rail::record("assignment", vec![preserves_rail::string(input.assignment_ref)]),
+        preserves_rail::record("status", vec![refs_sequence(input.status_refs)]),
+        preserves_rail::record("result", vec![preserves_rail::string(input.result_ref)]),
+        preserves_rail::record("execution-receipt", vec![optional_ref_value(input.execution_receipt_ref)]),
+        preserves_rail::record("delivery-log", vec![optional_ref_value(input.delivery_log_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3479,26 +3509,28 @@ pub fn job_worker_schedule_receipt_value(input: JobWorkerScheduleReceiptValueInp
     ensure_count_at_most(input.diagnostics.len(), MAX_JOB_REFS, "job worker schedule diagnostics")?;
     let refs = collected_refs(&input)?;
     let checks = checked_pairs(&input);
-    Ok(record("job-worker-schedule-receipt-v1", vec![
-        string(JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA),
-        record("operation", vec![string(input.operation)]),
-        record("decision", vec![string(input.decision)]),
-        record("job", vec![string(input.job_ref)]),
-        record("request", vec![string(input.request_ref)]),
-        record("queue-key", vec![string(input.queue_key)]),
-        record("lease-key", vec![string(input.lease_key)]),
-        record("worker-session", vec![string(input.worker_session)]),
-        record("coordination-report", vec![string(input.coordination_report_ref)]),
-        record("enqueue", vec![optional_ref_value(input.enqueue_receipt_ref)]),
-        record("enqueue-duplicate", vec![optional_ref_value(input.enqueue_duplicate_receipt_ref)]),
-        record("dequeue", vec![optional_ref_value(input.dequeue_receipt_ref)]),
-        record("lease", vec![optional_ref_value(input.lease_receipt_ref)]),
-        record("release", vec![optional_ref_value(input.release_receipt_ref)]),
-        record("token", vec![optional_ref_value(input.token_ref)]),
-        record("worker-receipt", vec![optional_ref_value(input.worker_receipt_ref)]),
-        record("result", vec![optional_ref_value(input.result_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(preserves_rail::record("job-worker-schedule-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_WORKER_SCHEDULE_RECEIPT_SCHEMA),
+        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(input.request_ref)]),
+        preserves_rail::record("queue-key", vec![preserves_rail::string(input.queue_key)]),
+        preserves_rail::record("lease-key", vec![preserves_rail::string(input.lease_key)]),
+        preserves_rail::record("worker-session", vec![preserves_rail::string(input.worker_session)]),
+        preserves_rail::record("coordination-report", vec![preserves_rail::string(input.coordination_report_ref)]),
+        preserves_rail::record("enqueue", vec![optional_ref_value(input.enqueue_receipt_ref)]),
+        preserves_rail::record("enqueue-duplicate", vec![optional_ref_value(input.enqueue_duplicate_receipt_ref)]),
+        preserves_rail::record("dequeue", vec![optional_ref_value(input.dequeue_receipt_ref)]),
+        preserves_rail::record("lease", vec![optional_ref_value(input.lease_receipt_ref)]),
+        preserves_rail::record("release", vec![optional_ref_value(input.release_receipt_ref)]),
+        preserves_rail::record("token", vec![optional_ref_value(input.token_ref)]),
+        preserves_rail::record("worker-receipt", vec![optional_ref_value(input.worker_receipt_ref)]),
+        preserves_rail::record("result", vec![optional_ref_value(input.result_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3645,11 +3677,11 @@ fn run_output(chunk_root: &Path, submission: &BlobRefJobSubmission, input_bytes:
     )?;
     let output_bytes = run_blob_ref_job_handler(submission, input_bytes)?;
     let put = chunk_store::put_bytes(chunk_root, "job-ref-result", &output_bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
-    let output_put_ref = canonical_hash(&put.receipt_value)?;
+    let output_put_ref = preserves_rail::canonical_hash(&put.receipt_value)?;
     let output_verify = chunk_store::verify_manifest(chunk_root, &put.manifest_ref)?;
-    let verify_ref = canonical_hash(&output_verify.receipt_value)?;
+    let verify_ref = preserves_rail::canonical_hash(&output_verify.receipt_value)?;
     let output_pin = chunk_store::pin_manifest(chunk_root, &put.manifest_ref)?;
-    let pin_ref = canonical_hash(&output_pin.receipt_value)?;
+    let pin_ref = preserves_rail::canonical_hash(&output_pin.receipt_value)?;
     let output_manifest_ref = put.manifest_ref.clone();
     push_bounded(
         &mut status_values,
@@ -3675,7 +3707,7 @@ fn cleanup_content(chunk_root: &Path, content_refs: &[JobContentRef]) -> Result<
         if let Ok(unpin) = chunk_store::unpin_manifest(chunk_root, &content.content_ref) {
             push_bounded(
                 &mut cleanup_refs,
-                canonical_hash(&unpin.receipt_value)?,
+                preserves_rail::canonical_hash(&unpin.receipt_value)?,
                 MAX_JOB_REFS,
                 "job ref cleanup refs",
             )?;
@@ -3711,7 +3743,7 @@ fn finish_run(input: FinishInput<'_>) -> Result<BlobRefJobExecution> {
         MAX_JOB_REFS,
         "job ref status values",
     )?;
-    let status_refs = status_values.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
+    let status_refs = status_values.iter().map(preserves_rail::canonical_hash).collect::<Result<Vec<_>>>()?;
     let receipt_checks = final_checks(
         preflight,
         is_content_verified,
@@ -3732,7 +3764,7 @@ fn finish_run(input: FinishInput<'_>) -> Result<BlobRefJobExecution> {
         diagnostics: &diagnostics,
         checks: &receipt_checks,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     if let Some(ledger_root) = ledger_root {
         import_blob_ref_job_artifacts(ledger_root, &status_values, &receipt_value)?;
     }
@@ -3781,14 +3813,14 @@ fn blob_ref_job_status_value(
     extend_cloned_bounded(&mut refs, output_refs, MAX_JOB_REFS, "job ref status refs")?;
     let mut status_checks = checks.to_vec();
     status_checks.push(("canonical-status", "pass"));
-    Ok(record("job-ref-status-v1", vec![
-        string(JOB_REF_STATUS_SCHEMA),
-        record("submission", vec![string(&submission.submission_ref)]),
-        record("job-id", vec![string(&submission.job_id)]),
-        record("operation-id", vec![string(&submission.operation_id)]),
-        record("state", vec![string(state)]),
-        record("outputs", vec![refs_sequence(output_refs)]),
-        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+    Ok(preserves_rail::record("job-ref-status-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_REF_STATUS_SCHEMA),
+        preserves_rail::record("submission", vec![preserves_rail::string(&submission.submission_ref)]),
+        preserves_rail::record("job-id", vec![preserves_rail::string(&submission.job_id)]),
+        preserves_rail::record("operation-id", vec![preserves_rail::string(&submission.operation_id)]),
+        preserves_rail::record("state", vec![preserves_rail::string(state)]),
+        preserves_rail::record("outputs", vec![refs_sequence(output_refs)]),
+        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&status_checks),
     ]))
 }
@@ -3831,26 +3863,28 @@ fn blob_ref_job_receipt_value(input: BlobRefReceiptValueInput<'_>) -> Result<IOV
     }
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(record("job-ref-receipt-v1", vec![
-        string(JOB_REF_RECEIPT_SCHEMA),
-        record("operation", vec![string("blob-ref-worker-execute")]),
-        record("decision", vec![string(input.decision)]),
-        record("submission", vec![string(&input.submission.submission_ref)]),
-        record("job-id", vec![string(&input.submission.job_id)]),
-        record("operation-id", vec![string(&input.submission.operation_id)]),
-        record("executable", vec![string(&input.submission.executable.content_ref)]),
-        record("inputs", vec![refs_sequence(
+    Ok(preserves_rail::record("job-ref-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_REF_RECEIPT_SCHEMA),
+        preserves_rail::record("operation", vec![preserves_rail::string("blob-ref-worker-execute")]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("submission", vec![preserves_rail::string(&input.submission.submission_ref)]),
+        preserves_rail::record("job-id", vec![preserves_rail::string(&input.submission.job_id)]),
+        preserves_rail::record("operation-id", vec![preserves_rail::string(&input.submission.operation_id)]),
+        preserves_rail::record("executable", vec![preserves_rail::string(&input.submission.executable.content_ref)]),
+        preserves_rail::record("inputs", vec![refs_sequence(
             &input.submission.inputs.iter().map(|content| content.content_ref.clone()).collect::<Vec<_>>(),
         )]),
-        record("status", vec![refs_sequence(input.status_refs)]),
-        record("verify", vec![refs_sequence(input.verify_refs)]),
-        record("fetch", vec![refs_sequence(input.fetch_refs)]),
-        record("pins", vec![refs_sequence(input.pin_refs)]),
-        record("cleanup", vec![refs_sequence(input.cleanup_refs)]),
-        record("output", vec![optional_ref_value(input.output_manifest_ref)]),
-        record("output-put", vec![optional_ref_value(input.output_put_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
+        preserves_rail::record("status", vec![refs_sequence(input.status_refs)]),
+        preserves_rail::record("verify", vec![refs_sequence(input.verify_refs)]),
+        preserves_rail::record("fetch", vec![refs_sequence(input.fetch_refs)]),
+        preserves_rail::record("pins", vec![refs_sequence(input.pin_refs)]),
+        preserves_rail::record("cleanup", vec![refs_sequence(input.cleanup_refs)]),
+        preserves_rail::record("output", vec![optional_ref_value(input.output_manifest_ref)]),
+        preserves_rail::record("output-put", vec![optional_ref_value(input.output_put_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("refs", vec![refs_sequence(&sorted_unique(&refs))]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -3870,11 +3904,16 @@ fn fetch_blob_ref_job_content(
         )));
     }
     let verify = chunk_store::verify_manifest(chunk_root, &content.content_ref)?;
-    push_bounded(verify_refs, canonical_hash(&verify.receipt_value)?, MAX_JOB_REFS, "job ref verify refs")?;
+    push_bounded(
+        verify_refs,
+        preserves_rail::canonical_hash(&verify.receipt_value)?,
+        MAX_JOB_REFS,
+        "job ref verify refs",
+    )?;
     let read = chunk_store::read_object(chunk_root, &content.content_ref)?;
-    push_bounded(fetch_refs, canonical_hash(&read.receipt_value)?, MAX_JOB_REFS, "job ref fetch refs")?;
+    push_bounded(fetch_refs, preserves_rail::canonical_hash(&read.receipt_value)?, MAX_JOB_REFS, "job ref fetch refs")?;
     let pin = chunk_store::pin_manifest(chunk_root, &content.content_ref)?;
-    push_bounded(pin_refs, canonical_hash(&pin.receipt_value)?, MAX_JOB_REFS, "job ref pin refs")?;
+    push_bounded(pin_refs, preserves_rail::canonical_hash(&pin.receipt_value)?, MAX_JOB_REFS, "job ref pin refs")?;
     Ok(read.bytes)
 }
 
@@ -4184,7 +4223,7 @@ fn worker_result(
 fn worker_receipt(input: WorkerReceiptInput<'_>) -> Result<WorkerReceipt> {
     let final_decision =
         final_worker_decision(input.outputs.is_execution_pass, input.input.delivery.has_recorded_delivery);
-    let status_refs = input.status_values.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
+    let status_refs = input.status_values.iter().map(preserves_rail::canonical_hash).collect::<Result<Vec<_>>>()?;
     let receipt_checks = checks_with_extra(input.result_checks, &[
         ("assignment-bound", "pass"),
         ("status-log-bound", "pass"),
@@ -4203,7 +4242,7 @@ fn worker_receipt(input: WorkerReceiptInput<'_>) -> Result<WorkerReceipt> {
         checks: &receipt_checks,
     })?;
     Ok(WorkerReceipt {
-        receipt_ref: canonical_hash(&receipt_value)?,
+        receipt_ref: preserves_rail::canonical_hash(&receipt_value)?,
         receipt_value,
     })
 }
@@ -4246,7 +4285,7 @@ fn push_input_checks(
     request: &JobWorkerRequest,
     buffers: &mut DeliveryCheckBuffers,
 ) -> Result<(JobExecutionRequest, JobAdmissionReceipt)> {
-    let execution_request_ref = canonical_hash(input.execution_request_value)?;
+    let execution_request_ref = preserves_rail::canonical_hash(input.execution_request_value)?;
     let has_execution_request_ref = execution_request_ref == request.execution_request_ref;
     buffers.push("execution-request-ref-binding", has_execution_request_ref);
     if !has_execution_request_ref {
@@ -4257,7 +4296,7 @@ fn push_input_checks(
     }
     let execution_request = parse_job_execution_request_value(input.execution_request_value)?;
 
-    let admission_ref = canonical_hash(input.admission_receipt_value)?;
+    let admission_ref = preserves_rail::canonical_hash(input.admission_receipt_value)?;
     let has_admission_ref = admission_ref == request.admission_ref;
     buffers.push("admission-ref-binding", has_admission_ref);
     if !has_admission_ref {
@@ -4350,8 +4389,8 @@ fn push_target_state_check(
     buffers: &mut DeliveryCheckBuffers,
 ) -> Result<()> {
     let has_target_state_only = execution_request.target_peer == request.target_peer
-        && !to_text(&request.value)?.contains("<source-registry")
-        && !to_text(&execution_request.value)?.contains("<source-registry");
+        && !preserves_rail::to_text(&request.value)?.contains("<source-registry")
+        && !preserves_rail::to_text(&execution_request.value)?.contains("<source-registry");
     buffers.push("target-state-only", has_target_state_only);
     if !has_target_state_only {
         buffers.note("job worker execution request must run from target roots only");
@@ -4489,14 +4528,16 @@ fn analysis_receipt_value(input: AnalysisReceiptValueInput<'_>) -> Result<IOValu
     validate_ref(input.artifact_ref, "job analysis receipt artifact ref")?;
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(record(input.label, vec![
-        string(input.schema),
-        record("operation", vec![string(input.operation)]),
-        record("decision", vec![string("pass")]),
-        record("job", vec![string(input.job_ref)]),
-        record("request", vec![string(input.request_ref)]),
-        record("artifact", vec![string(input.artifact_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+    Ok(preserves_rail::record(input.label, vec![
+        preserves_rail::string(input.schema),
+        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
+        preserves_rail::record("decision", vec![preserves_rail::string("pass")]),
+        preserves_rail::record("job", vec![preserves_rail::string(input.job_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(input.request_ref)]),
+        preserves_rail::record("artifact", vec![preserves_rail::string(input.artifact_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
         checks_value_from_pairs(&checks),
     ]))
 }
@@ -4612,7 +4653,7 @@ fn stage_memo_hit(input: &StageMemo<'_>) -> Result<Option<JobStageRun>> {
     {
         let output_values = parse_cached_stage_output(&output)?;
         let output_refs = refs_for_values(&output_values)?;
-        let cache_ref = canonical_hash(&hit.receipt_value)?;
+        let cache_ref = preserves_rail::canonical_hash(&hit.receipt_value)?;
         let receipt_value = job_receipt_value(JobReceiptInput {
             operation: "memo-hit",
             decision: "pass",
@@ -4643,7 +4684,7 @@ fn stage_memo_hit(input: &StageMemo<'_>) -> Result<Option<JobStageRun>> {
 }
 
 fn stage_memo_store(input: &StageMemo<'_>, stage: JobStageRun) -> Result<JobStageRun> {
-    let stage_output = sequence(stage.output_values.clone());
+    let stage_output = preserves_rail::sequence(stage.output_values.clone());
     let policy_refs = combined_policy_refs(input.dag, input.request, Some(input.node));
     let tier = if policy_refs.is_empty() {
         eval_cache::TIER_PURE
@@ -4656,11 +4697,11 @@ fn stage_memo_store(input: &StageMemo<'_>, stage: JobStageRun) -> Result<JobStag
         output: Some(stage_output),
         dependency_refs: input.key_input.dependency_refs.clone(),
         policy_refs: policy_refs.clone(),
-        evidence_refs: vec![canonical_hash(&stage.receipt_value)?],
+        evidence_refs: vec![preserves_rail::canonical_hash(&stage.receipt_value)?],
         diagnostics: Vec::new(),
     })?;
-    let cache_ref = canonical_hash(&cache_put.receipt_value)?;
-    let stage_receipt_ref = canonical_hash(&stage.receipt_value)?;
+    let cache_ref = preserves_rail::canonical_hash(&cache_put.receipt_value)?;
+    let stage_receipt_ref = preserves_rail::canonical_hash(&stage.receipt_value)?;
     let evidence_refs = vec![stage_receipt_ref, cache_ref.clone()];
     let receipt_value = job_receipt_value(JobReceiptInput {
         operation: "stage",
@@ -4738,12 +4779,12 @@ fn execute_source(
     effects: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<Vec<IOValue>> {
     let source = simple_record(&node.config, "source", 1)?;
-    let payload = value_to_iovalue(&source[0]);
+    let payload = preserves_rail::value_to_iovalue(&source[0]);
     if let Some(values) = payload.collect_simple_record("values", Some(1)) {
         return sequence_items(&values[0], "source values");
     }
     if let Some(value) = payload.collect_simple_record("value", Some(1)) {
-        return Ok(vec![value_to_iovalue(&value[0])]);
+        return Ok(vec![preserves_rail::value_to_iovalue(&value[0])]);
     }
     if let Some(typed) = payload.collect_simple_record("typed-storage", Some(3)) {
         let namespace = required_string(&typed[0], "source typed storage namespace")?;
@@ -4751,19 +4792,24 @@ fn execute_source(
         let schema_ref = parse_optional_ref_value(&typed[2])?;
         let admission = typed_storage::TypedStorageAdmission::local_fixture(&format!("job:{}:{}", namespace, key));
         let get = typed_storage::get_value(options.storage_root, &namespace, &key, schema_ref.as_deref(), &admission)?;
-        effects.push_item(canonical_hash(&get.receipt_value)?);
+        effects.push_item(preserves_rail::canonical_hash(&get.receipt_value)?);
         return Ok(vec![get.value]);
     }
     if let Some(chunk) = payload.collect_simple_record("chunk-manifest", Some(1)) {
         let manifest_ref = required_ref(&chunk[0], "source chunk manifest ref")?;
         let read = chunk_store::read_object(options.chunk_root, &manifest_ref)?;
-        effects.push_item(canonical_hash(&read.receipt_value)?);
+        effects.push_item(preserves_rail::canonical_hash(&read.receipt_value)?);
         let value = crate::preserves_rail::parse_canonical_bytes(&read.bytes)?;
         if let Some(items) = value.collect_sequence() {
             ensure_count_at_most(items.len(), MAX_JOB_STAGE_VALUES, "source chunk values")?;
             let mut output = Vec::with_capacity(items.len());
             for item in items.iter() {
-                push_bounded(&mut output, value_to_iovalue(item), MAX_JOB_STAGE_VALUES, "source chunk values")?;
+                push_bounded(
+                    &mut output,
+                    preserves_rail::value_to_iovalue(item),
+                    MAX_JOB_STAGE_VALUES,
+                    "source chunk values",
+                )?;
             }
             return Ok(output);
         }
@@ -4798,7 +4844,7 @@ fn execute_filter(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
 fn execute_reduce(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
     let op = stage_operation(&node.config)?;
     match op.name.as_str() {
-        "count" => Ok(vec![u64_value(inputs.len() as u64)]),
+        "count" => Ok(vec![preserves_rail::u64_value(inputs.len() as u64)]),
         "sum-u64" | "sum-integers" => {
             let mut sum = 0_u64;
             for value in inputs {
@@ -4806,7 +4852,7 @@ fn execute_reduce(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
                     .checked_add(required_u64_value(value, "sum-u64 input")?)
                     .ok_or_else(|| MoltenError::invalid_harness("sum-u64 reducer overflowed u64"))?;
             }
-            Ok(vec![u64_value(sum)])
+            Ok(vec![preserves_rail::u64_value(sum)])
         }
         "concat-lists" => {
             let mut values = Vec::new();
@@ -4815,7 +4861,7 @@ fn execute_reduce(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
                     for item in items.iter() {
                         push_bounded(
                             &mut values,
-                            value_to_iovalue(item),
+                            preserves_rail::value_to_iovalue(item),
                             MAX_JOB_STAGE_VALUES,
                             "concat-list output values",
                         )?;
@@ -4824,7 +4870,7 @@ fn execute_reduce(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
                     return Err(MoltenError::invalid_harness("concat-lists reducer requires sequence inputs"));
                 }
             }
-            Ok(vec![sequence(values)])
+            Ok(vec![preserves_rail::sequence(values)])
         }
         other => Err(MoltenError::invalid_harness(format!("unsupported reduce operation {other}"))),
     }
@@ -4837,7 +4883,7 @@ fn execute_materialize(
     effects: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<Vec<IOValue>> {
     let config = materialize_config(&node.config)?;
-    let value = sequence(inputs.to_vec());
+    let value = preserves_rail::sequence(inputs.to_vec());
     match config.kind.as_str() {
         "inline" => Ok(vec![value]),
         "typed-storage" => {
@@ -4858,15 +4904,17 @@ fn execute_materialize(
                 evidence_refs: node.evidence_refs.clone(),
                 admission,
             })?;
-            effects.push_item(canonical_hash(&put.receipt_value)?);
+            effects.push_item(preserves_rail::canonical_hash(&put.receipt_value)?);
             Ok(vec![put.typed_ref_value])
         }
         "chunk-manifest" => {
-            let bytes = canonical_bytes(&value)?;
+            let bytes = preserves_rail::canonical_bytes(&value)?;
             let put =
                 chunk_store::put_bytes(options.chunk_root, "job-materialization", &bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?;
-            effects.push_item(canonical_hash(&put.receipt_value)?);
-            Ok(vec![record("chunk-manifest-ref", vec![string(&put.manifest_ref)])])
+            effects.push_item(preserves_rail::canonical_hash(&put.receipt_value)?);
+            Ok(vec![preserves_rail::record("chunk-manifest-ref", vec![
+                preserves_rail::string(&put.manifest_ref),
+            ])])
         }
         other => Err(MoltenError::invalid_harness(format!("unsupported materialization kind {other}"))),
     }
@@ -4884,7 +4932,7 @@ fn stage_operation(config: &IOValue) -> Result<StageOperation> {
         validate_stage_operation(&name)?;
         return Ok(StageOperation {
             name,
-            argument: Some(value_to_iovalue(&fields[1])),
+            argument: Some(preserves_rail::value_to_iovalue(&fields[1])),
         });
     }
     let fields = simple_record(config, "op", 1)?;
@@ -4904,7 +4952,7 @@ fn apply_map_op(op: &StageOperation, value: &IOValue) -> Result<IOValue> {
                 .as_string()
                 .map(|value| value.into_owned())
                 .ok_or_else(|| MoltenError::invalid_harness("wrap operation label must be a string"))?;
-            Ok(record("wrapped", vec![string(&label), value.clone()]))
+            Ok(preserves_rail::record("wrapped", vec![preserves_rail::string(&label), value.clone()]))
         }
         "project-field" => {
             let label = op
@@ -4915,7 +4963,7 @@ fn apply_map_op(op: &StageOperation, value: &IOValue) -> Result<IOValue> {
                 .map(|value| value.into_owned())
                 .ok_or_else(|| MoltenError::invalid_harness("project-field label must be a string"))?;
             if let Some(fields) = value.collect_simple_record(&label, Some(1)) {
-                Ok(value_to_iovalue(&fields[0]))
+                Ok(preserves_rail::value_to_iovalue(&fields[0]))
             } else {
                 Err(MoltenError::invalid_harness(format!("project-field did not match record label {label}")))
             }
@@ -5012,15 +5060,17 @@ fn stage_cache_key_input(
     dependency_refs.extend(node.effect_manifest_refs.iter().cloned());
     dependency_refs.extend(node.evidence_refs.iter().cloned());
     let dependency_refs = sorted_unique(&dependency_refs);
-    let dependency_closure_hash =
-        canonical_hash(&record("job-stage-dependency-closure", vec![refs_sequence(&dependency_refs)]))?;
-    let input_ref = canonical_hash(&record("job-stage-input-v1", vec![
-        record("job", vec![string(&dag.job_ref)]),
-        record("request", vec![string(&request.request_ref)]),
-        record("stage", vec![string(&node.id)]),
-        record("stage-artifact", vec![string(&stage_artifact_ref)]),
-        record("inputs", vec![sequence(inputs.to_vec())]),
-        record("config", vec![node.config.clone()]),
+    let dependency_closure_hash = preserves_rail::canonical_hash(&preserves_rail::record(
+        "job-stage-dependency-closure",
+        vec![refs_sequence(&dependency_refs)],
+    ))?;
+    let input_ref = preserves_rail::canonical_hash(&preserves_rail::record("job-stage-input-v1", vec![
+        preserves_rail::record("job", vec![preserves_rail::string(&dag.job_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
+        preserves_rail::record("stage", vec![preserves_rail::string(&node.id)]),
+        preserves_rail::record("stage-artifact", vec![preserves_rail::string(&stage_artifact_ref)]),
+        preserves_rail::record("inputs", vec![preserves_rail::sequence(inputs.to_vec())]),
+        preserves_rail::record("config", vec![node.config.clone()]),
     ]))?;
     let assumption_capacity = dag
         .schema_refs
@@ -5033,7 +5083,7 @@ fn stage_cache_key_input(
     assumptions.extend(dag.schema_refs.iter().cloned());
     assumptions.extend(node.effect_manifest_refs.iter().cloned());
     assumptions.extend(request.seed_config_ref.iter().cloned());
-    assumptions.push(canonical_hash(&node.config)?);
+    assumptions.push(preserves_rail::canonical_hash(&node.config)?);
     Ok(eval_cache::EvalCacheKeyInput {
         operation: JOB_CACHE_OPERATION.to_string(),
         version: "v1".to_string(),
@@ -5063,7 +5113,10 @@ fn stage_artifact_or_builtin_ref(node: &JobNode) -> Result<String> {
 }
 
 fn job_tool_ref() -> Result<String> {
-    canonical_hash(&record("job-dag-tool-v1", vec![string("molten-job-dag"), string(JOB_TOOL_VERSION)]))
+    preserves_rail::canonical_hash(&preserves_rail::record("job-dag-tool-v1", vec![
+        preserves_rail::string("molten-job-dag"),
+        preserves_rail::string(JOB_TOOL_VERSION),
+    ]))
 }
 
 struct JobReceiptInput<'a> {
@@ -5104,32 +5157,39 @@ fn job_receipt_value(input: JobReceiptInput<'_>) -> Result<IOValue> {
     validate_refs(input.evidence_refs, "job receipt evidence ref")?;
     let mut checks = input.checks.to_vec();
     checks.push(("canonical-receipt", "pass"));
-    Ok(record("job-dag-receipt-v1", vec![
-        string(JOB_DAG_RECEIPT_SCHEMA),
-        record("operation", vec![string(input.operation)]),
-        record("decision", vec![string(input.decision)]),
-        record("job", vec![optional_ref_value(input.job_ref)]),
-        record("request", vec![optional_ref_value(input.request_ref)]),
-        record("stage", vec![optional_string_value(input.stage_id)]),
-        record("inputs", vec![refs_sequence(&sorted_unique(input.input_refs))]),
-        record("outputs", vec![refs_sequence(&sorted_unique(input.output_refs))]),
-        record("cache", vec![optional_ref_value(input.cache_ref)]),
-        record("effects", vec![refs_sequence(&sorted_unique(input.effect_refs))]),
-        record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
-        record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+    Ok(preserves_rail::record("job-dag-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::JOB_DAG_RECEIPT_SCHEMA),
+        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("job", vec![optional_ref_value(input.job_ref)]),
+        preserves_rail::record("request", vec![optional_ref_value(input.request_ref)]),
+        preserves_rail::record("stage", vec![optional_string_value(input.stage_id)]),
+        preserves_rail::record("inputs", vec![refs_sequence(&sorted_unique(input.input_refs))]),
+        preserves_rail::record("outputs", vec![refs_sequence(&sorted_unique(input.output_refs))]),
+        preserves_rail::record("cache", vec![optional_ref_value(input.cache_ref)]),
+        preserves_rail::record("effects", vec![refs_sequence(&sorted_unique(input.effect_refs))]),
+        preserves_rail::record("policy", vec![refs_sequence(&sorted_unique(input.policy_refs))]),
+        preserves_rail::record("evidence", vec![refs_sequence(&sorted_unique(input.evidence_refs))]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
         checks_value_from_pairs(&checks),
     ]))
 }
 
 fn parse_node_sequence(value: &Value<IOValue>) -> Result<Vec<JobNode>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, "nodes", 1)?;
     let items = required_sequence(&record[0], "job nodes")?;
     ensure_count_at_most(items.len(), MAX_JOB_NODES, "job nodes")?;
     let mut nodes = Vec::with_capacity(items.len());
     for item in items.iter() {
-        push_bounded(&mut nodes, parse_job_node_value(&value_to_iovalue(item))?, MAX_JOB_NODES, "job nodes")?;
+        push_bounded(
+            &mut nodes,
+            parse_job_node_value(&preserves_rail::value_to_iovalue(item))?,
+            MAX_JOB_NODES,
+            "job nodes",
+        )?;
     }
     Ok(nodes)
 }
@@ -5138,7 +5198,7 @@ fn parse_job_node_value(value: &IOValue) -> Result<JobNode> {
     let fields = value
         .collect_simple_record("job-node-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-node-v1 ...>"))?;
-    require_schema(&fields[0], JOB_DAG_NODE_SCHEMA, "job node")?;
+    require_schema(&fields[0], preserves_rail::JOB_DAG_NODE_SCHEMA, "job node")?;
     let id = record_string(&fields[1], "id")?;
     validate_node_id(&id)?;
     let kind = record_string(&fields[2], "kind")?;
@@ -5165,13 +5225,18 @@ fn parse_job_node_value(value: &IOValue) -> Result<JobNode> {
 }
 
 fn parse_edge_sequence(value: &Value<IOValue>) -> Result<Vec<JobEdge>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, "edges", 1)?;
     let items = required_sequence(&record[0], "job edges")?;
     ensure_count_at_most(items.len(), MAX_JOB_EDGES, "job edges")?;
     let mut edges = Vec::with_capacity(items.len());
     for item in items.iter() {
-        push_bounded(&mut edges, parse_job_edge_value(&value_to_iovalue(item))?, MAX_JOB_EDGES, "job edges")?;
+        push_bounded(
+            &mut edges,
+            parse_job_edge_value(&preserves_rail::value_to_iovalue(item))?,
+            MAX_JOB_EDGES,
+            "job edges",
+        )?;
     }
     Ok(edges)
 }
@@ -5180,10 +5245,10 @@ fn parse_job_edge_value(value: &IOValue) -> Result<JobEdge> {
     let fields = value
         .collect_simple_record("job-edge-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-edge-v1 ...>"))?;
-    require_schema(&fields[0], JOB_DAG_EDGE_SCHEMA, "job edge")?;
-    let from = value_to_iovalue(&fields[1]);
+    require_schema(&fields[0], preserves_rail::JOB_DAG_EDGE_SCHEMA, "job edge")?;
+    let from = preserves_rail::value_to_iovalue(&fields[1]);
     let from_fields = simple_record(&from, "from", 2)?;
-    let to = value_to_iovalue(&fields[2]);
+    let to = preserves_rail::value_to_iovalue(&fields[2]);
     let to_fields = simple_record(&to, "to", 2)?;
     let partitioning = record_string(&fields[4], "partitioning")?;
     let materialization = record_string(&fields[5], "materialization")?;
@@ -5399,7 +5464,7 @@ fn refs_for_values(values: &[IOValue]) -> Result<Vec<String>> {
     ensure_count_at_most(values.len(), MAX_JOB_STAGE_VALUES, "job values to hash")?;
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
-        push_bounded(&mut refs, canonical_hash(value)?, MAX_JOB_REFS, "job value refs")?;
+        push_bounded(&mut refs, preserves_rail::canonical_hash(value)?, MAX_JOB_REFS, "job value refs")?;
     }
     Ok(refs)
 }
@@ -5409,7 +5474,12 @@ fn parse_cached_stage_output(value: &IOValue) -> Result<Vec<IOValue>> {
         ensure_count_at_most(items.len(), MAX_JOB_STAGE_VALUES, "cached job stage output")?;
         let mut values = Vec::with_capacity(items.len());
         for item in items.iter() {
-            push_bounded(&mut values, value_to_iovalue(item), MAX_JOB_STAGE_VALUES, "cached job stage output")?;
+            push_bounded(
+                &mut values,
+                preserves_rail::value_to_iovalue(item),
+                MAX_JOB_STAGE_VALUES,
+                "cached job stage output",
+            )?;
         }
         Ok(values)
     } else {
@@ -5435,43 +5505,43 @@ fn combined_policy_refs(dag: &JobDag, request: &JobOutputRequest, node: Option<&
 }
 
 fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
 fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
 fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
 fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_string_value(&record[0])
 }
 
 fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
-    Ok(value_to_iovalue(&record[0]))
+    Ok(preserves_rail::value_to_iovalue(&record[0]))
 }
 
 fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&record[0], label)
 }
 
 fn record_node_id_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     ensure_count_at_most(items.len(), MAX_JOB_NODES, label)?;
@@ -5485,7 +5555,7 @@ fn record_node_id_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<St
 }
 
 fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     ensure_count_at_most(items.len(), MAX_JOB_REFS, label)?;
@@ -5497,13 +5567,13 @@ fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Str
 }
 
 fn record_port_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     ensure_count_at_most(items.len(), MAX_JOB_PORTS, label)?;
     let mut ports = Vec::with_capacity(items.len());
     for item in items.iter() {
-        let port = value_to_iovalue(item);
+        let port = preserves_rail::value_to_iovalue(item);
         let fields = simple_record(&port, "port", 2)?;
         let name = required_string(&fields[0], "port name")?;
         validate_non_empty(&name, "port name")?;
@@ -5527,7 +5597,7 @@ fn sequence_items(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
     ensure_count_at_most(items.len(), MAX_JOB_STAGE_VALUES, label)?;
     let mut values = Vec::with_capacity(items.len());
     for item in items.iter() {
-        push_bounded(&mut values, value_to_iovalue(item), MAX_JOB_STAGE_VALUES, label)?;
+        push_bounded(&mut values, preserves_rail::value_to_iovalue(item), MAX_JOB_STAGE_VALUES, label)?;
     }
     Ok(values)
 }
@@ -5620,11 +5690,17 @@ fn insert_bounded<K: Ord, V>(
 }
 
 fn optional_ref_value(value: Option<&str>) -> IOValue {
-    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+    value.map_or_else(
+        || preserves_rail::record("none", Vec::new()),
+        |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
+    )
 }
 
 fn optional_string_value(value: Option<&str>) -> IOValue {
-    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+    value.map_or_else(
+        || preserves_rail::record("none", Vec::new()),
+        |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
+    )
 }
 
 fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
@@ -5648,11 +5724,21 @@ fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>>
 }
 
 fn refs_sequence(refs: &[String]) -> IOValue {
-    sequence(refs.iter().map(string).collect())
+    preserves_rail::sequence(refs.iter().map(preserves_rail::string).collect())
 }
 
 fn ports_sequence(ports: &[String]) -> IOValue {
-    sequence(ports.iter().map(|port| record("port", vec![string(port), record("none", Vec::new())])).collect())
+    preserves_rail::sequence(
+        ports
+            .iter()
+            .map(|port| {
+                preserves_rail::record("port", vec![
+                    preserves_rail::string(port),
+                    preserves_rail::record("none", Vec::new()),
+                ])
+            })
+            .collect(),
+    )
 }
 
 fn checks_value(names: &[&str]) -> IOValue {
@@ -5660,19 +5746,24 @@ fn checks_value(names: &[&str]) -> IOValue {
 }
 
 fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
-    record("checks", vec![sequence(
-        checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
+    preserves_rail::record("checks", vec![preserves_rail::sequence(
+        checks
+            .iter()
+            .map(|(name, status)| {
+                preserves_rail::record("check", vec![preserves_rail::string(name), preserves_rail::string(status)])
+            })
+            .collect(),
     )])
 }
 
 fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
     ensure_count_at_most(items.len(), MAX_JOB_CHECKS, "checks")?;
     let mut parsed = Vec::with_capacity(items.len());
     for item in items.iter() {
-        let item = value_to_iovalue(item);
+        let item = preserves_rail::value_to_iovalue(item);
         let check = simple_record(&item, "check", 2)?;
         let name = required_string(&check[0], "check name")?;
         let status = required_string(&check[1], "check status")?;
@@ -5702,13 +5793,13 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
 }
 
 fn record_sequence_values(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     ensure_count_at_most(items.len(), MAX_JOB_REFS, label)?;
     let mut values = Vec::with_capacity(items.len());
     for item in items.iter() {
-        push_bounded(&mut values, value_to_iovalue(item), MAX_JOB_REFS, label)?;
+        push_bounded(&mut values, preserves_rail::value_to_iovalue(item), MAX_JOB_REFS, label)?;
     }
     Ok(values)
 }
@@ -5807,7 +5898,7 @@ fn validate_blob_ref_state(state: &str) -> Result<()> {
 }
 
 fn reject_blob_ref_job_inline_tokens(value: &IOValue) -> Result<()> {
-    let text = to_text(value)?;
+    let text = preserves_rail::to_text(value)?;
     for token in ["inline-bytes", "inline-executable", "inline-dataset"] {
         if text.contains(token) {
             return Err(MoltenError::invalid_harness(format!(
@@ -5893,13 +5984,13 @@ fn validate_stage_receipt_refs(stage_receipts: &[(String, String)]) -> Result<()
 }
 
 fn record_stage_receipt_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<(String, String)>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
     ensure_count_at_most(items.len(), MAX_JOB_NODES, label)?;
     let mut stage_receipts = Vec::with_capacity(items.len());
     for item in items.iter() {
-        let item = value_to_iovalue(item);
+        let item = preserves_rail::value_to_iovalue(item);
         let stage = simple_record(&item, "stage", 2)?;
         let stage_id = required_string(&stage[0], "job worker stage id")?;
         validate_node_id(&stage_id)?;
@@ -5926,7 +6017,7 @@ fn import_worker_artifacts(
 }
 
 fn reject_worker_ambient_tokens(value: &IOValue) -> Result<()> {
-    let text = to_text(value)?;
+    let text = preserves_rail::to_text(value)?;
     let banned = [
         "<raw-closure",
         "<closure",
@@ -5999,7 +6090,7 @@ fn validate_node_id(id: &str) -> Result<()> {
 
 fn validate_ref(value_ref: &str, field: &str) -> Result<()> {
     validate_non_empty(value_ref, field)?;
-    validate_content_ref(value_ref).map_err(|error| {
+    preserves_rail::validate_content_ref(value_ref).map_err(|error| {
         MoltenError::invalid_harness(format!("{field} must be a canonical blake3 content ref: {error}"))
     })
 }
@@ -6020,7 +6111,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 }
 
 fn reject_mobile_closure_config(config: &IOValue) -> Result<()> {
-    let text = to_text(config)?;
+    let text = preserves_rail::to_text(config)?;
     let banned = [
         "<closure",
         "<raw-closure",
@@ -6039,7 +6130,10 @@ fn reject_mobile_closure_config(config: &IOValue) -> Result<()> {
 }
 
 fn local_ref(kind: &str, label: &str) -> Result<String> {
-    canonical_hash(&record("job-dag-local-ref", vec![string(kind), string(label)]))
+    preserves_rail::canonical_hash(&preserves_rail::record("job-dag-local-ref", vec![
+        preserves_rail::string(kind),
+        preserves_rail::string(label),
+    ]))
 }
 
 fn sorted_unique(refs: &[String]) -> Vec<String> {
@@ -6105,8 +6199,10 @@ mod tests {
     fn dag_identity_is_stable_and_ignores_names() {
         let dag = fixture_value("identity");
         let parsed = parse_job_dag_value(&dag).expect("parse dag");
-        let reparsed =
-            parse_job_dag_value(&parse_text(&to_text(&dag).expect("text")).expect("text parse")).expect("reparse");
+        let reparsed = parse_job_dag_value(
+            &preserves_rail::parse_text(&preserves_rail::to_text(&dag).expect("text")).expect("text parse"),
+        )
+        .expect("reparse");
         assert_eq!(parsed.job_ref, reparsed.job_ref);
         let changed = fixture_value("count");
         let changed = parse_job_dag_value(&changed).expect("changed parse");
@@ -6136,9 +6232,9 @@ mod tests {
         let first = run_job_dag(&dag, &options).expect("first run");
         let second = run_job_dag(&dag, &options).expect("second run");
         assert_eq!(first.output_refs, second.output_refs);
-        let second_text = to_text(&second.receipt_value).expect("receipt text");
+        let second_text = preserves_rail::to_text(&second.receipt_value).expect("receipt text");
         assert!(["memo-hit", "stage-receipts-bound"].iter().any(|needle| second_text.contains(needle)));
-        let output_text = to_text(&second.output_value).expect("output text");
+        let output_text = preserves_rail::to_text(&second.output_value).expect("output text");
         assert!(output_text.contains("wrapped"));
     }
 
@@ -6294,21 +6390,23 @@ mod tests {
     fn blob_ref_job_submission_rejects_inline_large_bytes() {
         let operation_id = local_ref("job-ref-operation", "inline").expect("operation id");
         let authority_ref = local_ref("job-ref-authority", "inline").expect("authority ref");
-        let value = record("job-ref-submission-v1", vec![
-            string(JOB_REF_SUBMISSION_SCHEMA),
-            record("job-id", vec![string("job-ref-inline")]),
-            record("operation-id", vec![string(&operation_id)]),
-            record("executable", vec![record("inline-bytes", vec![string("not-a-content-ref")])]),
-            record("inputs", vec![sequence(vec![])]),
-            record("output-mode", vec![string("chunk-manifest")]),
-            record("input-schemas", vec![refs_sequence(&[])]),
-            record("output-schemas", vec![refs_sequence(&[])]),
-            record("effects", vec![refs_sequence(&[])]),
-            record("handler-profile", vec![string("local-echo-v1")]),
-            record("authority", vec![string(&authority_ref)]),
-            record("policy", vec![refs_sequence(&[])]),
-            record("provenance", vec![refs_sequence(&[])]),
-            record("evidence", vec![refs_sequence(&[])]),
+        let value = preserves_rail::record("job-ref-submission-v1", vec![
+            preserves_rail::string(preserves_rail::JOB_REF_SUBMISSION_SCHEMA),
+            preserves_rail::record("job-id", vec![preserves_rail::string("job-ref-inline")]),
+            preserves_rail::record("operation-id", vec![preserves_rail::string(&operation_id)]),
+            preserves_rail::record("executable", vec![preserves_rail::record("inline-bytes", vec![
+                preserves_rail::string("not-a-content-ref"),
+            ])]),
+            preserves_rail::record("inputs", vec![preserves_rail::sequence(vec![])]),
+            preserves_rail::record("output-mode", vec![preserves_rail::string("chunk-manifest")]),
+            preserves_rail::record("input-schemas", vec![refs_sequence(&[])]),
+            preserves_rail::record("output-schemas", vec![refs_sequence(&[])]),
+            preserves_rail::record("effects", vec![refs_sequence(&[])]),
+            preserves_rail::record("handler-profile", vec![preserves_rail::string("local-echo-v1")]),
+            preserves_rail::record("authority", vec![preserves_rail::string(&authority_ref)]),
+            preserves_rail::record("policy", vec![refs_sequence(&[])]),
+            preserves_rail::record("provenance", vec![refs_sequence(&[])]),
+            preserves_rail::record("evidence", vec![refs_sequence(&[])]),
             checks_value(&["content-refs-only", "no-inline-large-bytes"]),
         ]);
         assert!(
@@ -6331,11 +6429,13 @@ mod tests {
             "source",
             &[],
             &["out".to_string()],
-            record("source", vec![record("values", vec![sequence(vec![
-                u64_value(1),
-                u64_value(2),
-                u64_value(3),
-            ])])]),
+            preserves_rail::record("source", vec![preserves_rail::record("values", vec![preserves_rail::sequence(
+                vec![
+                    preserves_rail::u64_value(1),
+                    preserves_rail::u64_value(2),
+                    preserves_rail::u64_value(3),
+                ],
+            )])]),
         )
         .expect("source");
         let reduce = test_node_value(
@@ -6343,7 +6443,7 @@ mod tests {
             "reduce",
             &["in".to_string()],
             &["out".to_string()],
-            record("op", vec![string("sum-u64")]),
+            preserves_rail::record("op", vec![preserves_rail::string("sum-u64")]),
         )
         .expect("reduce");
         let edge = stream_edge_value("source", "sum").expect("edge");
@@ -6358,7 +6458,7 @@ mod tests {
             output_request: None,
         };
         let run = run_job_dag(&dag, &options).expect("run");
-        assert_eq!(to_text(&run.output_value).expect("output"), "[6]");
+        assert_eq!(preserves_rail::to_text(&run.output_value).expect("output"), "[6]");
     }
 
     #[test]
@@ -6368,7 +6468,7 @@ mod tests {
             "map",
             &["in".to_string()],
             &["out".to_string()],
-            record("op", vec![string("identity")]),
+            preserves_rail::record("op", vec![preserves_rail::string("identity")]),
         )
         .expect("a");
         let b = test_node_value(
@@ -6376,7 +6476,7 @@ mod tests {
             "map",
             &["in".to_string()],
             &["out".to_string()],
-            record("op", vec![string("identity")]),
+            preserves_rail::record("op", vec![preserves_rail::string("identity")]),
         )
         .expect("b");
         let a_node = parse_job_node_value(&a).expect("parse a");
@@ -6449,8 +6549,13 @@ mod tests {
     }
 
     fn copy_artifacts(source: &Path) -> CopyArtifacts {
-        let base =
-            install_case_artifact(source, "schema", record("schema", vec![string("base")]), Vec::new(), "install base");
+        let base = install_case_artifact(
+            source,
+            "schema",
+            preserves_rail::record("schema", vec![preserves_rail::string("base")]),
+            Vec::new(),
+            "install base",
+        );
         let source_stage = install_case_artifact(
             source,
             "stage",
@@ -6487,7 +6592,9 @@ mod tests {
             stage_artifact_ref: Some(&source_stage.artifact_ref),
             input_ports: &[],
             output_ports: &["out".to_string()],
-            config: record("source", vec![record("values", vec![sequence(vec![string("x")])])]),
+            config: preserves_rail::record("source", vec![preserves_rail::record("values", vec![
+                preserves_rail::sequence(vec![preserves_rail::string("x")]),
+            ])]),
             effect_manifest_refs: &[],
             policy_refs: &[],
             evidence_refs: &[],
@@ -6499,7 +6606,7 @@ mod tests {
             stage_artifact_ref: Some(&stage.artifact_ref),
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
-            config: record("op", vec![string("identity")]),
+            config: preserves_rail::record("op", vec![preserves_rail::string("identity")]),
             effect_manifest_refs: &[],
             policy_refs: &[],
             evidence_refs: &[],
@@ -6576,8 +6683,8 @@ mod tests {
         .expect("sync no-op");
         assert!(second.installed_refs.is_empty());
         assert!(second.already_present_refs.contains(&case.base.artifact_ref));
-        assert!(to_text(&second.receipt_value).expect("receipt text").contains("no-execution"));
-        canonical_hash(&synced.receipt_value).expect("sync receipt ref")
+        assert!(preserves_rail::to_text(&second.receipt_value).expect("receipt text").contains("no-execution"));
+        preserves_rail::canonical_hash(&synced.receipt_value).expect("sync receipt ref")
     }
 
     fn passing_flow(case: &CopyCase, sync_ref: String) -> CopyFlow {
@@ -6596,8 +6703,12 @@ mod tests {
         .expect("admission request");
         let admission = admission_loopback(&case.target, &admission_request).expect("admission loopback");
         assert_eq!(admission.plan.decision, "pass");
-        assert!(to_text(&admission.receipt_value).expect("admission receipt").contains("no-execution"));
-        let admission_ref = canonical_hash(&admission.receipt_value).expect("admission ref");
+        assert!(
+            preserves_rail::to_text(&admission.receipt_value)
+                .expect("admission receipt")
+                .contains("no-execution")
+        );
+        let admission_ref = preserves_rail::canonical_hash(&admission.receipt_value).expect("admission ref");
         CopyFlow {
             sync_ref,
             source_gate_ref,
@@ -6636,7 +6747,11 @@ mod tests {
     fn assert_target_run(case: &CopyCase, flow: &CopyFlow) {
         let (request, execution) = passing_execution(case, flow);
         assert_eq!(execution.decision, "pass");
-        assert!(to_text(&execution.run.as_ref().expect("run").output_value).expect("execution output").contains("x"));
+        assert!(
+            preserves_rail::to_text(&execution.run.as_ref().expect("run").output_value)
+                .expect("execution output")
+                .contains("x")
+        );
         let equivalent_source_run = run_job_dag(
             &read_job_dag(&case.source, &case.installed_job.job_ref).expect("source job"),
             &JobRunOptions {
@@ -6652,7 +6767,7 @@ mod tests {
         assert_eq!(execution.run.as_ref().expect("execution run").output_value, equivalent_source_run.output_value);
         assert_eq!(crate::ledger::artifact_kind(&request), "job-execution-request");
         assert_eq!(crate::ledger::artifact_kind(&execution.receipt_value), "job-execution-receipt");
-        let execution_text = to_text(&execution.receipt_value).expect("execution receipt");
+        let execution_text = preserves_rail::to_text(&execution.receipt_value).expect("execution receipt");
         assert!(execution_text.contains("job-execution-receipt-v1"));
         assert!(execution_text.contains("executed-on-target-state"));
         assert!(execution_text.contains(&flow.admission.plan.request.sync_ref));
@@ -6688,7 +6803,7 @@ mod tests {
         assert_eq!(denied.decision, "deny");
         assert!(denied.run.is_none());
         assert!(
-            to_text(&denied.receipt_value)
+            preserves_rail::to_text(&denied.receipt_value)
                 .expect("denied execution receipt")
                 .contains("no-stage-execution-on-deny")
         );
@@ -6723,13 +6838,16 @@ mod tests {
 
     fn assert_stale_closure_execution(case: &CopyCase, flow: &CopyFlow) {
         let stale_ref = test_ref("stale-stage-artifact");
-        let tampered_admission = parse_text(&to_text(&flow.admission.receipt_value).expect("admission text").replacen(
-            &case.stage.artifact_ref,
-            &stale_ref,
-            1,
-        ))
+        let tampered_admission = preserves_rail::parse_text(
+            &preserves_rail::to_text(&flow.admission.receipt_value).expect("admission text").replacen(
+                &case.stage.artifact_ref,
+                &stale_ref,
+                1,
+            ),
+        )
         .expect("tampered admission parse");
-        let tampered_admission_ref = canonical_hash(&tampered_admission).expect("tampered admission ref");
+        let tampered_admission_ref =
+            preserves_rail::canonical_hash(&tampered_admission).expect("tampered admission ref");
         let request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &case.installed_job.job_ref,
             admission_ref: &tampered_admission_ref,
@@ -6773,7 +6891,7 @@ mod tests {
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("policy")));
         assert!(denied.diagnostics.iter().any(|diagnostic| diagnostic.contains("strict Octet source gate")));
         let admission = admission_loopback(&case.target, &request).expect("denied admission receipt");
-        let admission_ref = canonical_hash(&admission.receipt_value).expect("denied admission ref");
+        let admission_ref = preserves_rail::canonical_hash(&admission.receipt_value).expect("denied admission ref");
         let execution_request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &case.installed_job.job_ref,
             admission_ref: &admission_ref,
@@ -6867,8 +6985,8 @@ mod tests {
         assert!(kinds.contains("job-worker-status"));
         assert!(kinds.contains("job-worker-result"));
         assert!(kinds.contains("job-worker-receipt"));
-        let receipt_text = to_text(&worker.receipt_value).expect("worker receipt text");
-        let result_text = to_text(&worker.result.value).expect("worker result text");
+        let receipt_text = preserves_rail::to_text(&worker.receipt_value).expect("worker receipt text");
+        let result_text = preserves_rail::to_text(&worker.result.value).expect("worker result text");
         assert!(receipt_text.contains("transport-is-not-authority"));
         assert!(receipt_text.contains("recorded-delivery-log"));
         assert!(result_text.contains(&fixture.sync_ref));
@@ -6974,7 +7092,7 @@ mod tests {
         .expect("denied admission request");
         let admission = admission_loopback(&fixture.target, &request_value).expect("denied admission");
         assert_eq!(admission.plan.decision, "deny");
-        let admission_ref = canonical_hash(&admission.receipt_value).expect("denied admission ref");
+        let admission_ref = preserves_rail::canonical_hash(&admission.receipt_value).expect("denied admission ref");
         let execution_request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &fixture.installed_job.job_ref,
             admission_ref: &admission_ref,
@@ -6988,7 +7106,7 @@ mod tests {
             resource_refs: &[],
         })
         .expect("denied execution request");
-        let execution_request_ref = canonical_hash(&execution_request).expect("denied execution ref");
+        let execution_request_ref = preserves_rail::canonical_hash(&execution_request).expect("denied execution ref");
         let worker_request = job_worker_request_value(JobWorkerRequestValueInput {
             job_ref: &fixture.installed_job.job_ref,
             target_peer: "peer:b",
@@ -7175,10 +7293,11 @@ mod tests {
             evidence_refs: &evidence,
         })
         .expect("first request");
-        let second = parse_text(&to_text(&first).expect("request text")).expect("reparse request");
+        let second = preserves_rail::parse_text(&preserves_rail::to_text(&first).expect("request text"))
+            .expect("reparse request");
         let parsed = parse_job_worker_request_value(&second).expect("parse worker request");
-        assert_eq!(canonical_hash(&first).expect("first ref"), parsed.request_ref);
-        let request_text = to_text(&first).expect("worker request text");
+        assert_eq!(preserves_rail::canonical_hash(&first).expect("first ref"), parsed.request_ref);
+        let request_text = preserves_rail::to_text(&first).expect("worker request text");
         assert!(!request_text.contains("source-registry"));
         assert!(request_text.contains("target-state-only"));
         assert!(request_text.contains(&sync_ref));
@@ -7195,21 +7314,23 @@ mod tests {
         };
         let operation_id = test_ref(&format!("job-ref-hegel-operation-{salt}"));
         let authority_ref = test_ref(&format!("job-ref-hegel-authority-{salt}"));
-        let inline_value = record("job-ref-submission-v1", vec![
-            string(JOB_REF_SUBMISSION_SCHEMA),
-            record("job-id", vec![string(format!("job-ref-hegel-{salt}"))]),
-            record("operation-id", vec![string(&operation_id)]),
-            record("executable", vec![record(token, vec![string("bytes")])]),
-            record("inputs", vec![sequence(vec![])]),
-            record("output-mode", vec![string("chunk-manifest")]),
-            record("input-schemas", vec![refs_sequence(&[])]),
-            record("output-schemas", vec![refs_sequence(&[])]),
-            record("effects", vec![refs_sequence(&[])]),
-            record("handler-profile", vec![string("local-echo-v1")]),
-            record("authority", vec![string(&authority_ref)]),
-            record("policy", vec![refs_sequence(&[])]),
-            record("provenance", vec![refs_sequence(&[])]),
-            record("evidence", vec![refs_sequence(&[])]),
+        let inline_value = preserves_rail::record("job-ref-submission-v1", vec![
+            preserves_rail::string(preserves_rail::JOB_REF_SUBMISSION_SCHEMA),
+            preserves_rail::record("job-id", vec![preserves_rail::string(format!("job-ref-hegel-{salt}"))]),
+            preserves_rail::record("operation-id", vec![preserves_rail::string(&operation_id)]),
+            preserves_rail::record("executable", vec![preserves_rail::record(token, vec![preserves_rail::string(
+                "bytes",
+            )])]),
+            preserves_rail::record("inputs", vec![preserves_rail::sequence(vec![])]),
+            preserves_rail::record("output-mode", vec![preserves_rail::string("chunk-manifest")]),
+            preserves_rail::record("input-schemas", vec![refs_sequence(&[])]),
+            preserves_rail::record("output-schemas", vec![refs_sequence(&[])]),
+            preserves_rail::record("effects", vec![refs_sequence(&[])]),
+            preserves_rail::record("handler-profile", vec![preserves_rail::string("local-echo-v1")]),
+            preserves_rail::record("authority", vec![preserves_rail::string(&authority_ref)]),
+            preserves_rail::record("policy", vec![refs_sequence(&[])]),
+            preserves_rail::record("provenance", vec![refs_sequence(&[])]),
+            preserves_rail::record("evidence", vec![refs_sequence(&[])]),
             checks_value(&["content-refs-only", "no-inline-large-bytes"]),
         ]);
         assert!(parse_job_ref_submission_value(&inline_value).is_err());
@@ -7257,7 +7378,7 @@ mod tests {
         })
         .expect("execute");
         assert_eq!(executed.decision, "pass");
-        let receipt_text = to_text(&executed.receipt_value).expect("receipt text");
+        let receipt_text = preserves_rail::to_text(&executed.receipt_value).expect("receipt text");
         assert!(receipt_text.contains("content-verification-before-run"));
         assert!(receipt_text.contains("retention-pins"));
         assert!(receipt_text.contains("cleanup-receipts"));
@@ -7302,10 +7423,10 @@ mod tests {
         let dag = parse_job_dag_value(&dag_value).expect("parse dag");
         let plan = plan_job_dag(&dag, None).expect("plan");
         assert_eq!(plan.stage_order.first(), Some(&"source".to_string()));
-        assert!(to_text(&plan.value).expect("plan text").contains("trellis-topo-order"));
+        assert!(preserves_rail::to_text(&plan.value).expect("plan text").contains("trellis-topo-order"));
         let profile = profile_job_dag(&dag, None, Some(&root.join("cache"))).expect("profile");
         assert_eq!(profile.stage_count, 4);
-        assert!(to_text(&profile.value).expect("profile text").contains("no-wall-clock-time"));
+        assert!(preserves_rail::to_text(&profile.value).expect("profile text").contains("no-wall-clock-time"));
         let fusion = fusion_preview_job_dag(&dag, None).expect("fusion");
         assert!(fusion.chains.iter().any(|chain| chain == &vec!["filter".to_string(), "map".to_string()]));
 
@@ -7316,7 +7437,7 @@ mod tests {
             stage_artifact_ref: None,
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
-            config: record("op", vec![string("identity")]),
+            config: preserves_rail::record("op", vec![preserves_rail::string("identity")]),
             effect_manifest_refs: &[],
             policy_refs: std::slice::from_ref(&policy_ref),
             evidence_refs: &[],
@@ -7327,7 +7448,7 @@ mod tests {
             "filter",
             &["in".to_string()],
             &["out".to_string()],
-            record("op", vec![string("keep-all")]),
+            preserves_rail::record("op", vec![preserves_rail::string("keep-all")]),
         )
         .expect("right");
         let edge = stream_edge_value("left", "right").expect("edge");
@@ -7343,7 +7464,9 @@ mod tests {
             "source",
             &[],
             &["out".to_string()],
-            record("source", vec![record("values", vec![sequence(vec![string("ok")])])]),
+            preserves_rail::record("source", vec![preserves_rail::record("values", vec![preserves_rail::sequence(
+                vec![preserves_rail::string("ok")],
+            )])]),
         )
         .expect("source");
         let bad = test_node_value(
@@ -7351,21 +7474,23 @@ mod tests {
             "map",
             &["in".to_string()],
             &["out".to_string()],
-            record("host-path", vec![string("/bin/echo")]),
+            preserves_rail::record("host-path", vec![preserves_rail::string("/bin/echo")]),
         );
         assert!(bad.expect_err("bad config").to_string().contains("mobile/ambient"));
         let edge = stream_edge_value("source", "bad").expect("edge");
-        let bad_node = record("job-node-v1", vec![
-            string(JOB_DAG_NODE_SCHEMA),
-            record("id", vec![string("bad")]),
-            record("kind", vec![string("map")]),
-            record("stage-artifact", vec![record("none", Vec::new())]),
-            record("inputs", vec![ports_sequence(&["in".to_string()])]),
-            record("outputs", vec![ports_sequence(&["out".to_string()])]),
-            record("config", vec![record("host-path", vec![string("/bin/echo")])]),
-            record("effects", vec![sequence(Vec::new())]),
-            record("policy", vec![sequence(Vec::new())]),
-            record("evidence", vec![sequence(Vec::new())]),
+        let bad_node = preserves_rail::record("job-node-v1", vec![
+            preserves_rail::string(preserves_rail::JOB_DAG_NODE_SCHEMA),
+            preserves_rail::record("id", vec![preserves_rail::string("bad")]),
+            preserves_rail::record("kind", vec![preserves_rail::string("map")]),
+            preserves_rail::record("stage-artifact", vec![preserves_rail::record("none", Vec::new())]),
+            preserves_rail::record("inputs", vec![ports_sequence(&["in".to_string()])]),
+            preserves_rail::record("outputs", vec![ports_sequence(&["out".to_string()])]),
+            preserves_rail::record("config", vec![preserves_rail::record("host-path", vec![preserves_rail::string(
+                "/bin/echo",
+            )])]),
+            preserves_rail::record("effects", vec![preserves_rail::sequence(Vec::new())]),
+            preserves_rail::record("policy", vec![preserves_rail::sequence(Vec::new())]),
+            preserves_rail::record("evidence", vec![preserves_rail::sequence(Vec::new())]),
             checks_value(&["stage-artifact-not-closure"]),
         ]);
         let dag = test_dag_value(vec![source, bad_node], vec![edge], &["bad".to_string()]).expect("dag");
@@ -7377,8 +7502,10 @@ mod tests {
         let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let dag = fixture_value(if salt.is_multiple_of(2) { "identity" } else { "count" });
         let first = parse_job_dag_value(&dag).expect("first");
-        let second =
-            parse_job_dag_value(&parse_text(&to_text(&dag).expect("text")).expect("parse text")).expect("second");
+        let second = parse_job_dag_value(
+            &preserves_rail::parse_text(&preserves_rail::to_text(&dag).expect("text")).expect("parse text"),
+        )
+        .expect("second");
         assert_eq!(first.job_ref, second.job_ref);
         assert_eq!(
             execution_order(&first.nodes, &first.edges).expect("order"),
@@ -7392,32 +7519,34 @@ mod tests {
             "source",
             &[],
             &["out".to_string()],
-            record("source", vec![record("values", vec![sequence(vec![
-                record("keep", vec![string("a")]),
-                record("drop", vec![string("b")]),
-                record("keep", vec![string("c")]),
-            ])])]),
+            preserves_rail::record("source", vec![preserves_rail::record("values", vec![preserves_rail::sequence(
+                vec![
+                    preserves_rail::record("keep", vec![preserves_rail::string("a")]),
+                    preserves_rail::record("drop", vec![preserves_rail::string("b")]),
+                    preserves_rail::record("keep", vec![preserves_rail::string("c")]),
+                ],
+            )])]),
         )?;
         let filter = test_node_value(
             "filter",
             "filter",
             &["in".to_string()],
             &["out".to_string()],
-            record("op", vec![string("match-record"), string("keep")]),
+            preserves_rail::record("op", vec![preserves_rail::string("match-record"), preserves_rail::string("keep")]),
         )?;
         let map = test_node_value(
             "map",
             "map",
             &["in".to_string()],
             &["out".to_string()],
-            record("op", vec![string("wrap"), string("item")]),
+            preserves_rail::record("op", vec![preserves_rail::string("wrap"), preserves_rail::string("item")]),
         )?;
         let materialize = test_node_value(
             "out",
             "materialize",
             &["in".to_string()],
             &["out".to_string()],
-            record("materialize", vec![string("inline")]),
+            preserves_rail::record("materialize", vec![preserves_rail::string("inline")]),
         )?;
         let e1 = stream_edge_value("source", "filter")?;
         let e2 = stream_edge_value("filter", "map")?;
@@ -7431,7 +7560,9 @@ mod tests {
             "source",
             &[],
             &["out".to_string()],
-            record("source", vec![record("values", vec![sequence(vec![string("a"), string("b")])])]),
+            preserves_rail::record("source", vec![preserves_rail::record("values", vec![preserves_rail::sequence(
+                vec![preserves_rail::string("a"), preserves_rail::string("b")],
+            )])]),
         )
         .expect("source");
         let stage_kind = if operation == "count" { "reduce" } else { "map" };
@@ -7440,7 +7571,7 @@ mod tests {
             stage_kind,
             &["in".to_string()],
             &["out".to_string()],
-            record("op", vec![string(operation)]),
+            preserves_rail::record("op", vec![preserves_rail::string(operation)]),
         )
         .expect("stage");
         let edge = stream_edge_value("source", "stage").expect("edge");
@@ -7448,7 +7579,8 @@ mod tests {
     }
 
     fn test_ref(label: &str) -> String {
-        canonical_hash(&record("job-dag-test-ref", vec![string(label)])).expect("test ref")
+        preserves_rail::canonical_hash(&preserves_rail::record("job-dag-test-ref", vec![preserves_rail::string(label)]))
+            .expect("test ref")
     }
 
     fn reviewed_provenance_values(artifact_refs: &[String]) -> Vec<IOValue> {
@@ -7462,7 +7594,7 @@ mod tests {
 
     fn install_clean_octet_gate(registry: &Path) -> String {
         let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean octet gate fixture");
-        let gate_ref = canonical_hash(&gate_value).expect("octet gate ref");
+        let gate_ref = preserves_rail::canonical_hash(&gate_value).expect("octet gate ref");
         let install = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
             kind: "octet-gate-receipt".to_string(),
             payload: gate_value,
@@ -7497,7 +7629,7 @@ mod tests {
             evidence_refs: &[test_ref("authority-evidence")],
         })
         .expect("authority context");
-        let context_ref = canonical_hash(&context_value).expect("authority context ref");
+        let context_ref = preserves_rail::canonical_hash(&context_value).expect("authority context ref");
         let install = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
             kind: "authority-context".to_string(),
             payload: context_value,
@@ -7560,7 +7692,7 @@ mod tests {
     fn seed_artifacts(source: &Path) -> SeedArtifacts {
         let base = artifacts::install_artifact(source, &artifacts::ArtifactInstallInput {
             kind: "schema".to_string(),
-            payload: record("schema", vec![string("worker-base")]),
+            payload: preserves_rail::record("schema", vec![preserves_rail::string("worker-base")]),
             schema_refs: vec![test_ref("worker-schema")],
             dependency_refs: Vec::new(),
             effect_manifest_ref: None,
@@ -7608,7 +7740,9 @@ mod tests {
             stage_artifact_ref: Some(&seed.source_stage.artifact_ref),
             input_ports: &[],
             output_ports: &["out".to_string()],
-            config: record("source", vec![record("values", vec![sequence(vec![string("remote-x")])])]),
+            config: preserves_rail::record("source", vec![preserves_rail::record("values", vec![
+                preserves_rail::sequence(vec![preserves_rail::string("remote-x")]),
+            ])]),
             effect_manifest_refs: &[],
             policy_refs: &[],
             evidence_refs: &[],
@@ -7620,7 +7754,7 @@ mod tests {
             stage_artifact_ref: Some(&seed.map_stage.artifact_ref),
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
-            config: record("op", vec![string("identity")]),
+            config: preserves_rail::record("op", vec![preserves_rail::string("identity")]),
             effect_manifest_refs: &[],
             policy_refs: &[],
             evidence_refs: &[],
@@ -7656,7 +7790,7 @@ mod tests {
             build_verification_values: &[],
         })
         .expect("worker sync loopback");
-        canonical_hash(&synced.receipt_value).expect("worker sync ref")
+        preserves_rail::canonical_hash(&synced.receipt_value).expect("worker sync ref")
     }
 
     fn flow_parts(target: &Path, installed: &JobInstall, sync_ref: &str) -> FlowParts {
@@ -7676,7 +7810,7 @@ mod tests {
         .expect("worker admission request");
         let admission = admission_loopback(target, &admission_request).expect("worker admission");
         assert_eq!(admission.plan.decision, "pass");
-        let admission_ref = canonical_hash(&admission.receipt_value).expect("worker admission ref");
+        let admission_ref = preserves_rail::canonical_hash(&admission.receipt_value).expect("worker admission ref");
         let execution_request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &installed.job_ref,
             admission_ref: &admission_ref,
@@ -7690,7 +7824,8 @@ mod tests {
             resource_refs: &resource_refs,
         })
         .expect("worker execution request");
-        let execution_request_ref = canonical_hash(&execution_request).expect("worker execution request ref");
+        let execution_request_ref =
+            preserves_rail::canonical_hash(&execution_request).expect("worker execution request ref");
         FlowParts {
             authority_context_ref,
             resource_refs,
