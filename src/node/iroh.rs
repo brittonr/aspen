@@ -7,7 +7,6 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail::canonical_bytes;
 use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::parse_canonical_bytes;
 use crate::preserves_rail::record;
 use crate::preserves_rail::sequence;
 use crate::preserves_rail::string;
@@ -675,7 +674,7 @@ impl<'a> FrameEvaluator<'a> {
                 format!("declared frame length {} does not match bytes {byte_len}", self.input.declared_length),
             )?;
         }
-        let parsed = match parse_canonical_bytes(&self.input.envelope_bytes) {
+        let parsed = match crate::preserves_rail::parse_canonical_bytes(&self.input.envelope_bytes) {
             Ok(value) => value,
             Err(error) => {
                 push_diagnostic(&mut self.diagnostics, format!("malformed Preserves frame: {error}"))?;
