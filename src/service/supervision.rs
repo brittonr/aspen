@@ -5,31 +5,8 @@ use preserves::Value;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::SERVICE_FAILURE_MARKER_SCHEMA;
-use crate::preserves_rail::SERVICE_MONITOR_NOTIFICATION_SCHEMA;
-use crate::preserves_rail::SERVICE_OWNED_STATE_SCHEMA;
-use crate::preserves_rail::SERVICE_RETENTION_INPUT_SCHEMA;
-use crate::preserves_rail::SERVICE_RETRACTION_SCHEMA;
-use crate::preserves_rail::SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::SERVICE_SUPERVISION_REPORT_SCHEMA;
-use crate::preserves_rail::SERVICE_SUPERVISION_SUITE_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+use crate::preserves_rail;
 use crate::service_records;
-use crate::service_records::ServiceCleanupReceiptInput;
-use crate::service_records::ServiceDemandInput;
-use crate::service_records::ServiceLifecycleReceiptInput;
-use crate::service_records::ServiceLink;
-use crate::service_records::ServiceManifest;
-use crate::service_records::ServiceMonitor;
-use crate::service_records::ServiceRestartDecisionInput;
-use crate::service_records::ServiceRestartPolicy;
-use crate::service_records::ServiceStatusInput;
 
 const MAX_SUPERVISION_ITEMS: usize = 4096;
 
@@ -86,10 +63,10 @@ pub struct ServiceSupervisionSuiteInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceSupervisionSuite {
     pub suite_ref: String,
-    pub manifest: ServiceManifest,
-    pub links: Vec<ServiceLink>,
-    pub monitors: Vec<ServiceMonitor>,
-    pub restart_policy: ServiceRestartPolicy,
+    pub manifest: service_records::ServiceManifest,
+    pub links: Vec<service_records::ServiceLink>,
+    pub monitors: Vec<service_records::ServiceMonitor>,
+    pub restart_policy: service_records::ServiceRestartPolicy,
     pub owned_state: ServiceOwnedState,
     pub restart_attempt: u64,
     pub logical_step: u64,
@@ -183,16 +160,16 @@ struct CleanupTarget {
 
 pub fn service_owned_state_value(input: &ServiceOwnedStateInput) -> Result<IOValue> {
     validate_owned_state_input(input)?;
-    Ok(record("service-owned-state-v1", vec![
-        string(SERVICE_OWNED_STATE_SCHEMA),
-        record("service-id", vec![string(&input.service_id)]),
-        record("manifest", vec![optional_ref_value(input.manifest_ref.as_deref())]),
-        record("owned-assertions", vec![refs_sequence(&input.owned_assertion_refs)]),
-        record("observers", vec![refs_sequence(&input.observer_refs)]),
-        record("live-refs", vec![refs_sequence(&input.live_ref_refs)]),
-        record("exposed-refs", vec![refs_sequence(&input.exposed_ref_refs)]),
-        record("pending-effects", vec![refs_sequence(&input.pending_effect_refs)]),
-        record("foreign-claims", vec![refs_sequence(&input.foreign_ref_claims)]),
+    Ok(preserves_rail::record("service-owned-state-v1", vec![
+        preserves_rail::string(preserves_rail::SERVICE_OWNED_STATE_SCHEMA),
+        preserves_rail::record("service-id", vec![preserves_rail::string(&input.service_id)]),
+        preserves_rail::record("manifest", vec![optional_ref_value(input.manifest_ref.as_deref())]),
+        preserves_rail::record("owned-assertions", vec![refs_sequence(&input.owned_assertion_refs)]),
+        preserves_rail::record("observers", vec![refs_sequence(&input.observer_refs)]),
+        preserves_rail::record("live-refs", vec![refs_sequence(&input.live_ref_refs)]),
+        preserves_rail::record("exposed-refs", vec![refs_sequence(&input.exposed_ref_refs)]),
+        preserves_rail::record("pending-effects", vec![refs_sequence(&input.pending_effect_refs)]),
+        preserves_rail::record("foreign-claims", vec![refs_sequence(&input.foreign_ref_claims)]),
         checks_value(&["service-owned-state", "cleanup-index", "foreign-claims-explicit"]),
     ]))
 }
@@ -201,11 +178,11 @@ pub fn parse_service_owned_state(value: &IOValue) -> Result<ServiceOwnedState> {
     let fields = value
         .collect_simple_record("service-owned-state-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-owned-state-v1 ...>"))?;
-    require_schema(&fields[0], SERVICE_OWNED_STATE_SCHEMA, "service owned-state schema")?;
+    require_schema(&fields[0], preserves_rail::SERVICE_OWNED_STATE_SCHEMA, "service owned-state schema")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "cleanup-index", "service owned state")?;
     let owned_state = ServiceOwnedState {
-        state_ref: canonical_hash(value)?,
+        state_ref: preserves_rail::canonical_hash(value)?,
         service_id: record_string(&fields[1], "service-id")?,
         manifest_ref: record_optional_ref(&fields[2], "manifest")?,
         owned_assertion_refs: parse_ref_sequence(&fields[3], "owned-assertions")?,
@@ -222,15 +199,15 @@ pub fn parse_service_owned_state(value: &IOValue) -> Result<ServiceOwnedState> {
 
 pub fn service_supervision_suite_value(input: &ServiceSupervisionSuiteInput) -> Result<IOValue> {
     validate_suite_input(input)?;
-    Ok(record("service-supervision-suite-v1", vec![
-        string(SERVICE_SUPERVISION_SUITE_SCHEMA),
-        record("manifest", vec![input.manifest.clone()]),
-        record("links", vec![sequence(input.links.clone())]),
-        record("monitors", vec![sequence(input.monitors.clone())]),
-        record("restart-policy", vec![input.restart_policy.clone()]),
-        record("owned-state", vec![input.owned_state.clone()]),
-        record("restart-attempt", vec![u64_value(input.restart_attempt)]),
-        record("logical-step", vec![u64_value(input.logical_step)]),
+    Ok(preserves_rail::record("service-supervision-suite-v1", vec![
+        preserves_rail::string(preserves_rail::SERVICE_SUPERVISION_SUITE_SCHEMA),
+        preserves_rail::record("manifest", vec![input.manifest.clone()]),
+        preserves_rail::record("links", vec![preserves_rail::sequence(input.links.clone())]),
+        preserves_rail::record("monitors", vec![preserves_rail::sequence(input.monitors.clone())]),
+        preserves_rail::record("restart-policy", vec![input.restart_policy.clone()]),
+        preserves_rail::record("owned-state", vec![input.owned_state.clone()]),
+        preserves_rail::record("restart-attempt", vec![preserves_rail::u64_value(input.restart_attempt)]),
+        preserves_rail::record("logical-step", vec![preserves_rail::u64_value(input.logical_step)]),
         evidence_value(&input.evidence),
         checks_value(&[
             "canonical-service-supervision-suite",
@@ -244,14 +221,14 @@ pub fn parse_service_supervision_suite(value: &IOValue) -> Result<ServiceSupervi
     let fields = value
         .collect_simple_record("service-supervision-suite-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervision-suite-v1 ...>"))?;
-    require_schema(&fields[0], SERVICE_SUPERVISION_SUITE_SCHEMA, "service supervision suite schema")?;
+    require_schema(&fields[0], preserves_rail::SERVICE_SUPERVISION_SUITE_SCHEMA, "service supervision suite schema")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "logical-supervision-only", "service supervision suite")?;
     let manifest_value = record_iovalue(&fields[1], "manifest")?;
     let restart_policy_value = record_iovalue(&fields[4], "restart-policy")?;
     let owned_state_value = record_iovalue(&fields[5], "owned-state")?;
     let suite = ServiceSupervisionSuite {
-        suite_ref: canonical_hash(value)?,
+        suite_ref: preserves_rail::canonical_hash(value)?,
         manifest: service_records::parse_service_manifest(&manifest_value)?,
         links: parse_link_sequence(&fields[2])?,
         monitors: parse_monitor_sequence(&fields[3])?,
@@ -287,18 +264,18 @@ pub fn run_service_supervision_suite(suite: &ServiceSupervisionSuite) -> Result<
     });
 
     let failure_marker = failure_marker_value(suite)?;
-    let failure_ref = canonical_hash(&failure_marker)?;
+    let failure_ref = preserves_rail::canonical_hash(&failure_marker)?;
     let monitor_refs = monitors.iter().map(|monitor| monitor.monitor_ref.clone()).collect::<Vec<_>>();
     let failure_status = failure_status_value(suite, &failure_ref, &monitor_refs)?;
-    let failure_status_ref = canonical_hash(&failure_status)?;
+    let failure_status_ref = preserves_rail::canonical_hash(&failure_status)?;
     let monitor_notifications = monitor_notification_values(&monitors, suite, &failure_ref, &failure_status_ref)?;
     let notification_refs = refs_for_values(&monitor_notifications)?;
     let supervision_refs = supervision_refs(suite, &monitor_refs, &notification_refs)?;
     let failure_lifecycle = failure_lifecycle_receipt(suite, &failure_status_ref, &supervision_refs)?;
-    let failure_lifecycle_ref = canonical_hash(&failure_lifecycle)?;
+    let failure_lifecycle_ref = preserves_rail::canonical_hash(&failure_lifecycle)?;
     let restart_evaluation = evaluate_restart(suite)?;
     let restart_decision = restart_decision_value(suite, &restart_evaluation, &failure_lifecycle_ref)?;
-    let restart_decision_ref = canonical_hash(&restart_decision)?;
+    let restart_decision_ref = preserves_rail::canonical_hash(&restart_decision)?;
     let scheduled_demands = scheduled_demands(suite, &restart_evaluation)?;
     let cleanup_evaluation = evaluate_cleanup(suite, &restart_evaluation, &restart_decision_ref)?;
     let final_statuses =
@@ -325,7 +302,7 @@ pub fn run_service_supervision_suite(suite: &ServiceSupervisionSuite) -> Result<
     Ok(ServiceSupervisionRun {
         suite_ref: suite.suite_ref.clone(),
         suite_value: suite.value.clone(),
-        report_ref: canonical_hash(&report_value)?,
+        report_ref: preserves_rail::canonical_hash(&report_value)?,
         failure_markers,
         statuses,
         lifecycle_receipts,
@@ -342,7 +319,7 @@ pub fn run_service_supervision_suite(suite: &ServiceSupervisionSuite) -> Result<
 pub fn replay_service_supervision_report(value: &IOValue) -> Result<ServiceSupervisionReplay> {
     let report = parse_service_supervision_report(value)?;
     let rerun = run_service_supervision_suite_value(&report.suite_value)?;
-    let expected_report_ref = canonical_hash(value)?;
+    let expected_report_ref = preserves_rail::canonical_hash(value)?;
     let decision = if expected_report_ref == rerun.report_ref {
         "pass"
     } else {
@@ -382,7 +359,7 @@ pub fn gate_service_supervision_report(value: &IOValue) -> Result<ServiceSupervi
         cleanup_count: report.cleanup_receipts.len(),
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     diagnostics.shrink_to_fit();
     Ok(ServiceSupervisionGate {
         receipt_ref,
@@ -402,7 +379,11 @@ pub fn parse_service_supervision_gate_receipt(value: &IOValue) -> Result<Service
     let fields = value
         .collect_simple_record("service-supervision-gate-receipt-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervision-gate-receipt-v1 ...>"))?;
-    require_schema(&fields[0], SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA, "service supervision gate receipt schema")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA,
+        "service supervision gate receipt schema",
+    )?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "service-supervision-gate-is-not-authority", "service supervision gate receipt")?;
     let decision = record_string(&fields[1], "decision")?;
@@ -412,7 +393,7 @@ pub fn parse_service_supervision_gate_receipt(value: &IOValue) -> Result<Service
         validate_restart_decision(decision, "service supervision restart decision")?;
     }
     Ok(ServiceSupervisionGateReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision,
         report_ref: record_ref(&fields[2], "report")?,
         suite_ref: record_ref(&fields[3], "suite")?,
@@ -469,15 +450,15 @@ pub fn parse_service_supervision_report(value: &IOValue) -> Result<ServiceSuperv
     let fields = value
         .collect_simple_record("service-supervision-report-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-supervision-report-v1 ...>"))?;
-    require_schema(&fields[0], SERVICE_SUPERVISION_REPORT_SCHEMA, "service supervision report schema")?;
+    require_schema(&fields[0], preserves_rail::SERVICE_SUPERVISION_REPORT_SCHEMA, "service supervision report schema")?;
     let checks = parse_checks(&fields[11])?;
     require_check(&checks, "canonical-service-supervision-report", "service supervision report")?;
     let suite_value = record_iovalue(&fields[1], "suite")?;
-    let suite_ref = canonical_hash(&suite_value)?;
+    let suite_ref = preserves_rail::canonical_hash(&suite_value)?;
     Ok(ServiceSupervisionRun {
         suite_ref,
         suite_value,
-        report_ref: canonical_hash(value)?,
+        report_ref: preserves_rail::canonical_hash(value)?,
         failure_markers: parse_iovalue_sequence(&fields[2], "failures")?,
         statuses: parse_iovalue_sequence(&fields[3], "statuses")?,
         lifecycle_receipts: parse_iovalue_sequence(&fields[4], "lifecycle")?,
@@ -512,18 +493,20 @@ pub fn service_supervision_summary(value: &IOValue) -> Result<String> {
 
 pub fn service_supervision_report_value(input: ReportValueInput<'_>) -> Result<IOValue> {
     validate_report_input(&input)?;
-    Ok(record("service-supervision-report-v1", vec![
-        string(SERVICE_SUPERVISION_REPORT_SCHEMA),
-        record("suite", vec![input.suite_value.clone()]),
-        record("failures", vec![sequence(input.failure_markers.to_vec())]),
-        record("statuses", vec![sequence(input.statuses.to_vec())]),
-        record("lifecycle", vec![sequence(input.lifecycle_receipts.to_vec())]),
-        record("monitor-notifications", vec![sequence(input.monitor_notifications.to_vec())]),
-        record("restart-decisions", vec![sequence(input.restart_decisions.to_vec())]),
-        record("scheduled-demands", vec![sequence(input.scheduled_demands.to_vec())]),
-        record("cleanup", vec![sequence(input.cleanup_receipts.to_vec())]),
-        record("retractions", vec![sequence(input.retractions.to_vec())]),
-        record("retention", vec![sequence(input.retention_inputs.to_vec())]),
+    Ok(preserves_rail::record("service-supervision-report-v1", vec![
+        preserves_rail::string(preserves_rail::SERVICE_SUPERVISION_REPORT_SCHEMA),
+        preserves_rail::record("suite", vec![input.suite_value.clone()]),
+        preserves_rail::record("failures", vec![preserves_rail::sequence(input.failure_markers.to_vec())]),
+        preserves_rail::record("statuses", vec![preserves_rail::sequence(input.statuses.to_vec())]),
+        preserves_rail::record("lifecycle", vec![preserves_rail::sequence(input.lifecycle_receipts.to_vec())]),
+        preserves_rail::record("monitor-notifications", vec![preserves_rail::sequence(
+            input.monitor_notifications.to_vec(),
+        )]),
+        preserves_rail::record("restart-decisions", vec![preserves_rail::sequence(input.restart_decisions.to_vec())]),
+        preserves_rail::record("scheduled-demands", vec![preserves_rail::sequence(input.scheduled_demands.to_vec())]),
+        preserves_rail::record("cleanup", vec![preserves_rail::sequence(input.cleanup_receipts.to_vec())]),
+        preserves_rail::record("retractions", vec![preserves_rail::sequence(input.retractions.to_vec())]),
+        preserves_rail::record("retention", vec![preserves_rail::sequence(input.retention_inputs.to_vec())]),
         checks_value(&[
             "canonical-service-supervision-report",
             "monitor-order-bound",
@@ -535,23 +518,50 @@ pub fn service_supervision_report_value(input: ReportValueInput<'_>) -> Result<I
 fn service_supervision_gate_receipt_value(input: &GateReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision, "service supervision gate receipt decision")?;
     let gate_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("service-supervision-gate-receipt-v1", vec![
-        string(SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("report", vec![string(input.report_ref)]),
-        record("suite", vec![string(input.suite_ref)]),
-        record("restart-decision", vec![optional_string_value(input.restart_decision)]),
-        record("status-count", vec![u64_value(count_as_u64(input.status_count, "service status count")?)]),
-        record("monitor-count", vec![u64_value(count_as_u64(input.monitor_count, "service monitor count")?)]),
-        record("cleanup-count", vec![u64_value(count_as_u64(input.cleanup_count, "service cleanup count")?)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("supervision-report-replay"), string(gate_status)]),
-            record("check", vec![string("failure-status-lifecycle-bound"), string(gate_status)]),
-            record("check", vec![string("restart-decision-bound"), string(gate_status)]),
-            record("check", vec![string("monitor-notifications-bound"), string(gate_status)]),
-            record("check", vec![string("cleanup-evidence-bound"), string(gate_status)]),
-            record("check", vec![string("service-supervision-gate-is-not-authority"), string("pass")]),
+    Ok(preserves_rail::record("service-supervision-gate-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::SERVICE_SUPERVISION_GATE_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("report", vec![preserves_rail::string(input.report_ref)]),
+        preserves_rail::record("suite", vec![preserves_rail::string(input.suite_ref)]),
+        preserves_rail::record("restart-decision", vec![optional_string_value(input.restart_decision)]),
+        preserves_rail::record("status-count", vec![preserves_rail::u64_value(count_as_u64(
+            input.status_count,
+            "service status count",
+        )?)]),
+        preserves_rail::record("monitor-count", vec![preserves_rail::u64_value(count_as_u64(
+            input.monitor_count,
+            "service monitor count",
+        )?)]),
+        preserves_rail::record("cleanup-count", vec![preserves_rail::u64_value(count_as_u64(
+            input.cleanup_count,
+            "service cleanup count",
+        )?)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("supervision-report-replay"),
+                preserves_rail::string(gate_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("failure-status-lifecycle-bound"),
+                preserves_rail::string(gate_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("restart-decision-bound"),
+                preserves_rail::string(gate_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("monitor-notifications-bound"),
+                preserves_rail::string(gate_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("cleanup-evidence-bound"),
+                preserves_rail::string(gate_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("service-supervision-gate-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -573,9 +583,9 @@ pub struct ReportValueInput<'a> {
 pub fn supervision_fixture_suite_value() -> Result<IOValue> {
     let refs = fixture_refs()?;
     let restart_policy = fixture_restart_policy(&refs)?;
-    let restart_policy_ref = canonical_hash(&restart_policy)?;
+    let restart_policy_ref = preserves_rail::canonical_hash(&restart_policy)?;
     let manifest = fixture_manifest(&refs, restart_policy_ref)?;
-    let manifest_ref = canonical_hash(&manifest)?;
+    let manifest_ref = preserves_rail::canonical_hash(&manifest)?;
     let monitors = fixture_monitors(&refs.policy_ref)?;
     let link = fixture_link(&refs.policy_ref)?;
     let owned_state = fixture_owned_state(manifest_ref)?;
@@ -683,12 +693,12 @@ fn fixture_owned_state(manifest_ref: String) -> Result<IOValue> {
 }
 
 fn failure_marker_value(suite: &ServiceSupervisionSuite) -> Result<IOValue> {
-    Ok(record("service-failure-v1", vec![
-        string(SERVICE_FAILURE_MARKER_SCHEMA),
-        record("service-id", vec![string(&suite.manifest.service_id)]),
-        record("manifest", vec![string(&suite.manifest.manifest_ref)]),
-        record("prior-lifecycle", vec![refs_sequence(&suite.evidence.prior_lifecycle_refs)]),
-        record("effect-log", vec![refs_sequence(&suite.evidence.effect_log_refs)]),
+    Ok(preserves_rail::record("service-failure-v1", vec![
+        preserves_rail::string(preserves_rail::SERVICE_FAILURE_MARKER_SCHEMA),
+        preserves_rail::record("service-id", vec![preserves_rail::string(&suite.manifest.service_id)]),
+        preserves_rail::record("manifest", vec![preserves_rail::string(&suite.manifest.manifest_ref)]),
+        preserves_rail::record("prior-lifecycle", vec![refs_sequence(&suite.evidence.prior_lifecycle_refs)]),
+        preserves_rail::record("effect-log", vec![refs_sequence(&suite.evidence.effect_log_refs)]),
         checks_value(&["canonical-service-failure", "logical-supervision", "replay-bound"]),
     ]))
 }
@@ -697,30 +707,34 @@ fn parse_failure_marker_ref(value: &IOValue) -> Result<String> {
     let fields = value
         .collect_simple_record("service-failure-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-failure-v1 ...>"))?;
-    require_schema(&fields[0], SERVICE_FAILURE_MARKER_SCHEMA, "service failure marker schema")?;
+    require_schema(&fields[0], preserves_rail::SERVICE_FAILURE_MARKER_SCHEMA, "service failure marker schema")?;
     let checks = parse_checks(&fields[5])?;
     require_check(&checks, "logical-supervision", "service failure marker")?;
-    canonical_hash(value)
+    preserves_rail::canonical_hash(value)
 }
 
 fn parse_monitor_notification_ref(value: &IOValue) -> Result<String> {
     let fields = value
         .collect_simple_record("service-monitor-notification-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-monitor-notification-v1 ...>"))?;
-    require_schema(&fields[0], SERVICE_MONITOR_NOTIFICATION_SCHEMA, "service monitor notification schema")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::SERVICE_MONITOR_NOTIFICATION_SCHEMA,
+        "service monitor notification schema",
+    )?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "failure-bound", "service monitor notification")?;
-    canonical_hash(value)
+    preserves_rail::canonical_hash(value)
 }
 
 fn parse_retraction_ref(value: &IOValue) -> Result<String> {
     let fields = value
         .collect_simple_record("service-retraction-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <service-retraction-v1 ...>"))?;
-    require_schema(&fields[0], SERVICE_RETRACTION_SCHEMA, "service retraction schema")?;
+    require_schema(&fields[0], preserves_rail::SERVICE_RETRACTION_SCHEMA, "service retraction schema")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "service-owned-retraction", "service retraction")?;
-    canonical_hash(value)
+    preserves_rail::canonical_hash(value)
 }
 
 fn failure_status_value(
@@ -728,7 +742,7 @@ fn failure_status_value(
     failure_ref: &str,
     monitor_refs: &[String],
 ) -> Result<IOValue> {
-    service_records::service_status_value(&ServiceStatusInput {
+    service_records::service_status_value(&service_records::ServiceStatusInput {
         service_id: suite.manifest.service_id.clone(),
         state: "failed".to_string(),
         manifest_ref: Some(suite.manifest.manifest_ref.clone()),
@@ -757,7 +771,7 @@ fn final_status_values(
     } else {
         "stopped"
     };
-    let status = service_records::service_status_value(&ServiceStatusInput {
+    let status = service_records::service_status_value(&service_records::ServiceStatusInput {
         service_id: suite.manifest.service_id.clone(),
         state: state.to_string(),
         manifest_ref: Some(suite.manifest.manifest_ref.clone()),
@@ -773,20 +787,20 @@ fn final_status_values(
 }
 
 fn monitor_notification_values(
-    monitors: &[ServiceMonitor],
+    monitors: &[service_records::ServiceMonitor],
     suite: &ServiceSupervisionSuite,
     failure_ref: &str,
     failure_status_ref: &str,
 ) -> Result<Vec<IOValue>> {
     let mut notifications = Vec::with_capacity(monitors.len());
     for monitor in monitors {
-        let notification = record("service-monitor-notification-v1", vec![
-            string(SERVICE_MONITOR_NOTIFICATION_SCHEMA),
-            record("service-id", vec![string(&suite.manifest.service_id)]),
-            record("monitor", vec![string(&monitor.monitor_ref)]),
-            record("observer", vec![string(&monitor.observer_ref)]),
-            record("failure", vec![string(failure_ref)]),
-            record("status", vec![string(failure_status_ref)]),
+        let notification = preserves_rail::record("service-monitor-notification-v1", vec![
+            preserves_rail::string(preserves_rail::SERVICE_MONITOR_NOTIFICATION_SCHEMA),
+            preserves_rail::record("service-id", vec![preserves_rail::string(&suite.manifest.service_id)]),
+            preserves_rail::record("monitor", vec![preserves_rail::string(&monitor.monitor_ref)]),
+            preserves_rail::record("observer", vec![preserves_rail::string(&monitor.observer_ref)]),
+            preserves_rail::record("failure", vec![preserves_rail::string(failure_ref)]),
+            preserves_rail::record("status", vec![preserves_rail::string(failure_status_ref)]),
             checks_value(&["monitor-order-bound", "logical-notification", "failure-bound"]),
         ]);
         notifications.push(notification);
@@ -799,7 +813,7 @@ fn failure_lifecycle_receipt(
     failure_status_ref: &str,
     supervision_refs: &[String],
 ) -> Result<IOValue> {
-    service_records::service_lifecycle_receipt_value(&ServiceLifecycleReceiptInput {
+    service_records::service_lifecycle_receipt_value(&service_records::ServiceLifecycleReceiptInput {
         operation: "fail".to_string(),
         decision: "pass".to_string(),
         service_id: suite.manifest.service_id.clone(),
@@ -873,7 +887,7 @@ fn restart_decision_value(
 ) -> Result<IOValue> {
     let mut prior_lifecycle_refs = suite.evidence.prior_lifecycle_refs.clone();
     prior_lifecycle_refs.push(failure_lifecycle_ref.to_string());
-    service_records::service_restart_decision_value(&ServiceRestartDecisionInput {
+    service_records::service_restart_decision_value(&service_records::ServiceRestartDecisionInput {
         decision: restart.decision.clone(),
         service_id: suite.manifest.service_id.clone(),
         manifest_ref: Some(suite.manifest.manifest_ref.clone()),
@@ -899,7 +913,7 @@ fn scheduled_demands(suite: &ServiceSupervisionSuite, restart: &RestartEvaluatio
         .first()
         .cloned()
         .ok_or_else(|| MoltenError::invalid_harness("restart pass requires authority ref"))?;
-    let demand = service_records::service_demand_value(&ServiceDemandInput {
+    let demand = service_records::service_demand_value(&service_records::ServiceDemandInput {
         demand_id: format!("restart:{}:{}", suite.manifest.service_id, restart.attempt),
         service_id: suite.manifest.service_id.clone(),
         requester_ref,
@@ -924,22 +938,24 @@ fn evaluate_cleanup(
     }
     let is_foreign_claim_present = !suite.owned_state.foreign_ref_claims.is_empty();
     if is_foreign_claim_present {
-        let cleanup_receipt = service_records::service_cleanup_receipt_value(&ServiceCleanupReceiptInput {
-            decision: "deny".to_string(),
-            service_id: suite.manifest.service_id.clone(),
-            manifest_ref: Some(suite.manifest.manifest_ref.clone()),
-            authority_refs: suite.evidence.authority_refs.clone(),
-            owned_assertion_refs: suite.owned_state.owned_assertion_refs.clone(),
-            observer_refs: suite.owned_state.observer_refs.clone(),
-            live_ref_refs: suite.owned_state.live_ref_refs.clone(),
-            exposed_ref_refs: suite.owned_state.exposed_ref_refs.clone(),
-            pending_effect_refs: suite.owned_state.pending_effect_refs.clone(),
-            retraction_refs: Vec::new(),
-            revocation_refs: suite.evidence.revocation_refs.clone(),
-            retention_refs: suite.evidence.retention_policy_refs.clone(),
-            diagnostics: vec!["foreign service-owned state cannot be proven".to_string()],
-        })?;
-        let retention_input = retention_input_value(suite, &canonical_hash(&cleanup_receipt)?, restart_decision_ref)?;
+        let cleanup_receipt =
+            service_records::service_cleanup_receipt_value(&service_records::ServiceCleanupReceiptInput {
+                decision: "deny".to_string(),
+                service_id: suite.manifest.service_id.clone(),
+                manifest_ref: Some(suite.manifest.manifest_ref.clone()),
+                authority_refs: suite.evidence.authority_refs.clone(),
+                owned_assertion_refs: suite.owned_state.owned_assertion_refs.clone(),
+                observer_refs: suite.owned_state.observer_refs.clone(),
+                live_ref_refs: suite.owned_state.live_ref_refs.clone(),
+                exposed_ref_refs: suite.owned_state.exposed_ref_refs.clone(),
+                pending_effect_refs: suite.owned_state.pending_effect_refs.clone(),
+                retraction_refs: Vec::new(),
+                revocation_refs: suite.evidence.revocation_refs.clone(),
+                retention_refs: suite.evidence.retention_policy_refs.clone(),
+                diagnostics: vec!["foreign service-owned state cannot be proven".to_string()],
+            })?;
+        let retention_input =
+            retention_input_value(suite, &preserves_rail::canonical_hash(&cleanup_receipt)?, restart_decision_ref)?;
         return Ok(CleanupEvaluation {
             cleanup_receipt: Some(cleanup_receipt),
             retractions: Vec::new(),
@@ -951,25 +967,27 @@ fn evaluate_cleanup(
     let mut retraction_refs = Vec::with_capacity(targets.len());
     for target in targets {
         let retraction = retraction_value(suite, &target)?;
-        retraction_refs.push(canonical_hash(&retraction)?);
+        retraction_refs.push(preserves_rail::canonical_hash(&retraction)?);
         retractions.push(retraction);
     }
-    let cleanup_receipt = service_records::service_cleanup_receipt_value(&ServiceCleanupReceiptInput {
-        decision: "pass".to_string(),
-        service_id: suite.manifest.service_id.clone(),
-        manifest_ref: Some(suite.manifest.manifest_ref.clone()),
-        authority_refs: suite.evidence.authority_refs.clone(),
-        owned_assertion_refs: suite.owned_state.owned_assertion_refs.clone(),
-        observer_refs: suite.owned_state.observer_refs.clone(),
-        live_ref_refs: suite.owned_state.live_ref_refs.clone(),
-        exposed_ref_refs: suite.owned_state.exposed_ref_refs.clone(),
-        pending_effect_refs: suite.owned_state.pending_effect_refs.clone(),
-        retraction_refs,
-        revocation_refs: suite.evidence.revocation_refs.clone(),
-        retention_refs: suite.evidence.retention_policy_refs.clone(),
-        diagnostics: Vec::new(),
-    })?;
-    let retention_input = retention_input_value(suite, &canonical_hash(&cleanup_receipt)?, restart_decision_ref)?;
+    let cleanup_receipt =
+        service_records::service_cleanup_receipt_value(&service_records::ServiceCleanupReceiptInput {
+            decision: "pass".to_string(),
+            service_id: suite.manifest.service_id.clone(),
+            manifest_ref: Some(suite.manifest.manifest_ref.clone()),
+            authority_refs: suite.evidence.authority_refs.clone(),
+            owned_assertion_refs: suite.owned_state.owned_assertion_refs.clone(),
+            observer_refs: suite.owned_state.observer_refs.clone(),
+            live_ref_refs: suite.owned_state.live_ref_refs.clone(),
+            exposed_ref_refs: suite.owned_state.exposed_ref_refs.clone(),
+            pending_effect_refs: suite.owned_state.pending_effect_refs.clone(),
+            retraction_refs,
+            revocation_refs: suite.evidence.revocation_refs.clone(),
+            retention_refs: suite.evidence.retention_policy_refs.clone(),
+            diagnostics: Vec::new(),
+        })?;
+    let retention_input =
+        retention_input_value(suite, &preserves_rail::canonical_hash(&cleanup_receipt)?, restart_decision_ref)?;
     Ok(CleanupEvaluation {
         cleanup_receipt: Some(cleanup_receipt),
         retractions,
@@ -1006,14 +1024,14 @@ fn insert_targets(targets: &mut BTreeSet<CleanupTarget>, kind: &str, refs: &[Str
 }
 
 fn retraction_value(suite: &ServiceSupervisionSuite, target: &CleanupTarget) -> Result<IOValue> {
-    Ok(record("service-retraction-v1", vec![
-        string(SERVICE_RETRACTION_SCHEMA),
-        record("service-id", vec![string(&suite.manifest.service_id)]),
-        record("manifest", vec![string(&suite.manifest.manifest_ref)]),
-        record("kind", vec![string(&target.kind)]),
-        record("target", vec![string(&target.target_ref)]),
-        record("authority", vec![refs_sequence(&suite.evidence.authority_refs)]),
-        record("revocations", vec![refs_sequence(&suite.evidence.revocation_refs)]),
+    Ok(preserves_rail::record("service-retraction-v1", vec![
+        preserves_rail::string(preserves_rail::SERVICE_RETRACTION_SCHEMA),
+        preserves_rail::record("service-id", vec![preserves_rail::string(&suite.manifest.service_id)]),
+        preserves_rail::record("manifest", vec![preserves_rail::string(&suite.manifest.manifest_ref)]),
+        preserves_rail::record("kind", vec![preserves_rail::string(&target.kind)]),
+        preserves_rail::record("target", vec![preserves_rail::string(&target.target_ref)]),
+        preserves_rail::record("authority", vec![refs_sequence(&suite.evidence.authority_refs)]),
+        preserves_rail::record("revocations", vec![refs_sequence(&suite.evidence.revocation_refs)]),
         checks_value(&["service-owned-retraction", "no-foreign-delete", "retention-still-gates"]),
     ]))
 }
@@ -1023,12 +1041,12 @@ fn retention_input_value(
     cleanup_receipt_ref: &str,
     restart_decision_ref: &str,
 ) -> Result<IOValue> {
-    Ok(record("service-retention-input-v1", vec![
-        string(SERVICE_RETENTION_INPUT_SCHEMA),
-        record("service-id", vec![string(&suite.manifest.service_id)]),
-        record("cleanup", vec![string(cleanup_receipt_ref)]),
-        record("restart-decision", vec![string(restart_decision_ref)]),
-        record("retention-policy", vec![refs_sequence(&suite.evidence.retention_policy_refs)]),
+    Ok(preserves_rail::record("service-retention-input-v1", vec![
+        preserves_rail::string(preserves_rail::SERVICE_RETENTION_INPUT_SCHEMA),
+        preserves_rail::record("service-id", vec![preserves_rail::string(&suite.manifest.service_id)]),
+        preserves_rail::record("cleanup", vec![preserves_rail::string(cleanup_receipt_ref)]),
+        preserves_rail::record("restart-decision", vec![preserves_rail::string(restart_decision_ref)]),
+        preserves_rail::record("retention-policy", vec![refs_sequence(&suite.evidence.retention_policy_refs)]),
         checks_value(&[
             "cleanup-is-input-evidence",
             "retention-policy-still-decides",
@@ -1051,7 +1069,7 @@ fn status_values(failure_status: &IOValue, final_statuses: &[IOValue]) -> Result
 fn refs_for_values(values: &[IOValue]) -> Result<Vec<String>> {
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
-        refs.push(canonical_hash(value)?);
+        refs.push(preserves_rail::canonical_hash(value)?);
     }
     Ok(refs)
 }
@@ -1152,13 +1170,13 @@ fn ensure_count_at_most(actual: usize, label: &str) -> Result<()> {
 }
 
 fn evidence_value(input: &ServiceSupervisionEvidenceInput) -> IOValue {
-    record("evidence", vec![
-        record("authority", vec![refs_sequence(&input.authority_refs)]),
-        record("resource", vec![refs_sequence(&input.resource_refs)]),
-        record("revocations", vec![refs_sequence(&input.revocation_refs)]),
-        record("retention", vec![refs_sequence(&input.retention_policy_refs)]),
-        record("prior-lifecycle", vec![refs_sequence(&input.prior_lifecycle_refs)]),
-        record("effect-log", vec![refs_sequence(&input.effect_log_refs)]),
+    preserves_rail::record("evidence", vec![
+        preserves_rail::record("authority", vec![refs_sequence(&input.authority_refs)]),
+        preserves_rail::record("resource", vec![refs_sequence(&input.resource_refs)]),
+        preserves_rail::record("revocations", vec![refs_sequence(&input.revocation_refs)]),
+        preserves_rail::record("retention", vec![refs_sequence(&input.retention_policy_refs)]),
+        preserves_rail::record("prior-lifecycle", vec![refs_sequence(&input.prior_lifecycle_refs)]),
+        preserves_rail::record("effect-log", vec![refs_sequence(&input.effect_log_refs)]),
     ])
 }
 
@@ -1176,11 +1194,11 @@ fn parse_evidence(value: &Value<IOValue>) -> Result<ServiceSupervisionEvidenceIn
     })
 }
 
-fn parse_link_sequence(value: &Value<IOValue>) -> Result<Vec<ServiceLink>> {
+fn parse_link_sequence(value: &Value<IOValue>) -> Result<Vec<service_records::ServiceLink>> {
     parse_iovalue_sequence(value, "links")?.iter().map(service_records::parse_service_link).collect()
 }
 
-fn parse_monitor_sequence(value: &Value<IOValue>) -> Result<Vec<ServiceMonitor>> {
+fn parse_monitor_sequence(value: &Value<IOValue>) -> Result<Vec<service_records::ServiceMonitor>> {
     parse_iovalue_sequence(value, "monitors")?
         .iter()
         .map(service_records::parse_service_monitor)
@@ -1190,19 +1208,19 @@ fn parse_monitor_sequence(value: &Value<IOValue>) -> Result<Vec<ServiceMonitor>>
 fn parse_iovalue_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
     let values = field_sequence(value, label)?;
     ensure_count_at_most(values.len(), label)?;
-    Ok(values.iter().map(value_to_iovalue).collect())
+    Ok(values.iter().map(preserves_rail::value_to_iovalue).collect())
 }
 
 fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
-    Ok(value_to_iovalue(&fields[0]))
+    Ok(preserves_rail::value_to_iovalue(&fields[0]))
 }
 
 fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} N>")))?;
@@ -1213,7 +1231,7 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
 }
 
 fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} STRING>")))?;
@@ -1227,7 +1245,7 @@ fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
 }
 
 fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
@@ -1243,7 +1261,7 @@ fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Str
 }
 
 fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} OPTION>")))?;
@@ -1270,7 +1288,7 @@ fn parse_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Stri
 }
 
 fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} [...]>")))?;
@@ -1285,7 +1303,7 @@ fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
     ensure_count_at_most(checks.len(), "checks")?;
     let mut parsed = Vec::with_capacity(checks.len());
     for check in checks {
-        let check = value_to_iovalue(&check);
+        let check = preserves_rail::value_to_iovalue(&check);
         let check_fields = check
             .collect_simple_record("check", Some(2))
             .ok_or_else(|| MoltenError::invalid_harness("expected <check NAME STATUS>"))?;
@@ -1314,25 +1332,36 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
 }
 
 fn refs_sequence(values: &[String]) -> IOValue {
-    sequence(values.iter().map(string).collect())
+    preserves_rail::sequence(values.iter().map(preserves_rail::string).collect())
 }
 
 fn strings_sequence(values: &[String]) -> IOValue {
-    sequence(values.iter().map(string).collect())
+    preserves_rail::sequence(values.iter().map(preserves_rail::string).collect())
 }
 
 fn checks_value(values: &[&str]) -> IOValue {
-    record("checks", vec![sequence(
-        values.iter().map(|value| record("check", vec![string(value), string("pass")])).collect(),
+    preserves_rail::record("checks", vec![preserves_rail::sequence(
+        values
+            .iter()
+            .map(|value| {
+                preserves_rail::record("check", vec![preserves_rail::string(value), preserves_rail::string("pass")])
+            })
+            .collect(),
     )])
 }
 
 fn optional_ref_value(value: Option<&str>) -> IOValue {
-    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+    value.map_or_else(
+        || preserves_rail::record("none", Vec::new()),
+        |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
+    )
 }
 
 fn optional_string_value(value: Option<&str>) -> IOValue {
-    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+    value.map_or_else(
+        || preserves_rail::record("none", Vec::new()),
+        |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
+    )
 }
 
 fn count_as_u64(count: usize, label: &str) -> Result<u64> {
@@ -1386,7 +1415,7 @@ fn required_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
 }
 
 fn require_ref(reference: &str, label: &str) -> Result<()> {
-    validate_content_ref(reference).map_err(|error| {
+    preserves_rail::validate_content_ref(reference).map_err(|error| {
         MoltenError::invalid_harness(format!("expected canonical content ref for {label}, got {reference}: {error}"))
     })
 }
@@ -1399,7 +1428,9 @@ fn required_string(value: &Value<IOValue>, label: &str) -> Result<String> {
 }
 
 fn synthetic_ref(label: &str) -> Result<String> {
-    canonical_hash(&record("service-supervision-fixture-ref", vec![string(label)]))
+    preserves_rail::canonical_hash(&preserves_rail::record("service-supervision-fixture-ref", vec![
+        preserves_rail::string(label),
+    ]))
 }
 
 #[cfg(test)]
@@ -1413,11 +1444,13 @@ mod tests {
     use crate::catalog::CatalogVisibilityInput;
     use crate::catalog_mcp;
     use crate::ledger;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::to_text;
+    use crate::preserves_rail;
 
     fn test_ref(label: &str) -> String {
-        canonical_hash(&record("service-supervision-test-ref", vec![string(label)])).expect("test ref")
+        preserves_rail::canonical_hash(&preserves_rail::record("service-supervision-test-ref", vec![
+            preserves_rail::string(label),
+        ]))
+        .expect("test ref")
     }
 
     fn temp_dir(label: &str) -> std::path::PathBuf {
@@ -1581,7 +1614,7 @@ mod tests {
         let decision =
             service_records::parse_service_restart_decision(&restart_report.restart_decisions[0]).expect("decision");
         restart_report.restart_decisions[0] =
-            service_records::service_restart_decision_value(&ServiceRestartDecisionInput {
+            service_records::service_restart_decision_value(&service_records::ServiceRestartDecisionInput {
                 decision: decision.decision,
                 service_id: decision.service_id,
                 manifest_ref: decision.manifest_ref,
@@ -1652,22 +1685,26 @@ mod tests {
         .expect("catalog list supervision report");
         assert_eq!(listed.items.len(), 1);
         assert!(
-            to_text(&listed.value)
+            preserves_rail::to_text(&listed.value)
                 .expect("render catalog result")
                 .contains("ledger-kind:service-supervision-report")
         );
-        let request = catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string(
-            "service-supervision-report",
-        )])])
+        let request = catalog_mcp::mcp_request_value("catalog.list", vec![preserves_rail::record("kind", vec![
+            preserves_rail::string("service-supervision-report"),
+        ])])
         .expect("MCP request");
         let mcp = catalog_mcp::call(&registry, Some(&ledger_root), &request).expect("MCP list supervision report");
         assert_eq!(mcp.decision, "pass");
-        assert!(to_text(&mcp.response_value).expect("render MCP response").contains("service-supervision-report"));
+        assert!(
+            preserves_rail::to_text(&mcp.response_value)
+                .expect("render MCP response")
+                .contains("service-supervision-report")
+        );
     }
 
     #[test]
     fn malformed_os_parentage_is_not_supervision_evidence() {
-        let value = parse_text(
+        let value = preserves_rail::parse_text(
             "<service-link-v1 \"molten.service.link.v1\" <supervisor-id \"supervisor:web\"> \
              <parent-service \"1234\"> <child-service \"svc:web\"> <propagation \"restart\"> \
              <policy []> <checks [<check \"logical-supervision\" \"pass\">]>>",
