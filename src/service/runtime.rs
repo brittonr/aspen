@@ -1,22 +1,5 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
 use preserves::IOValue;
-use preserves::Value;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::SERVICE_READINESS_ASSERTION_SCHEMA;
-use crate::preserves_rail::SERVICE_REPLAY_IDENTITY_SCHEMA;
-use crate::preserves_rail::SERVICE_RUNTIME_REPORT_SCHEMA;
-use crate::preserves_rail::SERVICE_RUNTIME_SUITE_SCHEMA;
-use crate::preserves_rail::SERVICE_TURN_CONTEXT_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 use crate::runtime::RuntimeEvent;
 use crate::runtime::RuntimeState;
 use crate::runtime::RuntimeStep;
@@ -27,6 +10,42 @@ use crate::service_records::ServiceLifecycleReceiptInput;
 use crate::service_records::ServiceManifest;
 use crate::service_records::ServiceStatus;
 use crate::service_records::ServiceStatusInput;
+
+type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
+type OrderedSet<T> = std::collections::BTreeSet<T>;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+const SERVICE_READINESS_ASSERTION_SCHEMA: &str = crate::preserves_rail::SERVICE_READINESS_ASSERTION_SCHEMA;
+const SERVICE_REPLAY_IDENTITY_SCHEMA: &str = crate::preserves_rail::SERVICE_REPLAY_IDENTITY_SCHEMA;
+const SERVICE_RUNTIME_REPORT_SCHEMA: &str = crate::preserves_rail::SERVICE_RUNTIME_REPORT_SCHEMA;
+const SERVICE_RUNTIME_SUITE_SCHEMA: &str = crate::preserves_rail::SERVICE_RUNTIME_SUITE_SCHEMA;
+const SERVICE_TURN_CONTEXT_SCHEMA: &str = crate::preserves_rail::SERVICE_TURN_CONTEXT_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 const MAX_SERVICE_RUNTIME_ITEMS: usize = 4096;
 const MAX_SERVICE_RUNTIME_CHECKS: usize = 256;
@@ -172,8 +191,8 @@ impl Artifacts {
 
 struct RunCtx<'a> {
     evidence: &'a ServiceRuntimeEvidenceInput,
-    manifests: &'a BTreeMap<String, ServiceManifest>,
-    ready_statuses: BTreeMap<String, String>,
+    manifests: &'a OrderedMap<String, ServiceManifest>,
+    ready_statuses: OrderedMap<String, String>,
     artifacts: Artifacts,
     runtime: RuntimeState,
 }
@@ -190,7 +209,7 @@ enum StepOutcome {
 }
 
 impl<'a> RunCtx<'a> {
-    fn new(suite: &'a ServiceRuntimeSuite, manifests: &'a BTreeMap<String, ServiceManifest>) -> Result<Self> {
+    fn new(suite: &'a ServiceRuntimeSuite, manifests: &'a OrderedMap<String, ServiceManifest>) -> Result<Self> {
         let ready_statuses = ready_status_map(&suite.statuses)?;
         let statuses = suite.statuses.iter().map(|status| status.value.clone()).collect::<Vec<_>>();
         Ok(Self {
@@ -349,8 +368,8 @@ pub fn run_service_runtime_suite(suite: &ServiceRuntimeSuite) -> Result<ServiceR
     finish_runtime_run(suite, context.into_artifacts())
 }
 
-fn manifest_map(manifests: &[ServiceManifest]) -> Result<BTreeMap<String, ServiceManifest>> {
-    let mut mapped = BTreeMap::new();
+fn manifest_map(manifests: &[ServiceManifest]) -> Result<OrderedMap<String, ServiceManifest>> {
+    let mut mapped = OrderedMap::new();
     for manifest in manifests {
         if mapped.insert(manifest.service_id.clone(), manifest.clone()).is_some() {
             return Err(MoltenError::invalid_harness(format!(
@@ -771,8 +790,8 @@ fn runtime_event_label(event: &RuntimeEvent) -> &'static str {
     }
 }
 
-fn ready_status_map(statuses: &[ServiceStatus]) -> Result<BTreeMap<String, String>> {
-    let mut ready = BTreeMap::new();
+fn ready_status_map(statuses: &[ServiceStatus]) -> Result<OrderedMap<String, String>> {
+    let mut ready = OrderedMap::new();
     for status in statuses {
         if status.state == "ready" && ready.insert(status.service_id.clone(), status.status_ref.clone()).is_some() {
             return Err(MoltenError::invalid_harness(format!(
@@ -784,7 +803,7 @@ fn ready_status_map(statuses: &[ServiceStatus]) -> Result<BTreeMap<String, Strin
     Ok(ready)
 }
 
-fn dependency_status_refs(manifest: &ServiceManifest, ready_statuses: &BTreeMap<String, String>) -> Vec<String> {
+fn dependency_status_refs(manifest: &ServiceManifest, ready_statuses: &OrderedMap<String, String>) -> Vec<String> {
     manifest
         .dependencies
         .iter()
@@ -796,10 +815,10 @@ fn manifest_ref_mismatch(demand: &ServiceDemand, manifest: &ServiceManifest) -> 
     demand.manifest_ref.as_ref().is_some_and(|manifest_ref| manifest_ref != &manifest.manifest_ref)
 }
 
-fn dependency_cycle_exists(manifests: &BTreeMap<String, ServiceManifest>) -> Result<bool> {
+fn dependency_cycle_exists(manifests: &OrderedMap<String, ServiceManifest>) -> Result<bool> {
     for service_id in manifests.keys() {
         let mut stack = manifests.get(service_id).map(|manifest| manifest.dependencies.clone()).unwrap_or_default();
-        let mut seen = BTreeSet::new();
+        let mut seen = OrderedSet::new();
         while let Some(next) = stack.pop() {
             if &next == service_id {
                 return Ok(true);
