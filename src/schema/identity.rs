@@ -3,15 +3,32 @@ use preserves::Record;
 use preserves::Value;
 use preserves::ValueImpl;
 
-use crate::artifacts;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const MODE_STRUCTURAL: &str = "structural";
 pub const MODE_UNIQUE: &str = "unique";
@@ -404,8 +421,8 @@ pub fn search_registry_by_fingerprint(
 ) -> Result<Vec<SchemaIdentity>> {
     validate_ref(fingerprint, "schema structural fingerprint")?;
     let mut matches = Vec::new();
-    for artifact in artifacts::list_artifacts(registry_root, Some("schema-identity"))? {
-        let payload = artifacts::read_payload(registry_root, &artifact.artifact_ref)?;
+    for artifact in crate::artifacts::list_artifacts(registry_root, Some("schema-identity"))? {
+        let payload = crate::artifacts::read_payload(registry_root, &artifact.artifact_ref)?;
         if let Ok(identity) = parse_schema_identity(&payload)
             && identity.structural_fingerprint == fingerprint
         {
@@ -693,14 +710,11 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicU64;
-    use std::sync::atomic::Ordering;
-
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
-    use crate::preserves_rail::parse_text;
+
+    fn parse_text(source: &str) -> Result<IOValue> {
+        crate::preserves_rail::parse_text(source)
+    }
 
     #[test]
     fn structural_fingerprint_ignores_record_field_order() {
@@ -872,7 +886,7 @@ mod tests {
         let root = temp_dir("schema-registry");
         let shape = parse_text(r#"<shape "string">"#).expect("shape");
         let identity = identity(MODE_STRUCTURAL, "search", &shape, None);
-        let installed = artifacts::install_artifact(&root, &artifacts::ArtifactInstallInput {
+        let installed = crate::artifacts::install_artifact(&root, &crate::artifacts::ArtifactInstallInput {
             kind: "schema-identity".to_string(),
             payload: identity.value.clone(),
             schema_refs: vec![identity.schema_ref.clone()],
@@ -885,7 +899,7 @@ mod tests {
         })
         .expect("install identity");
         assert_eq!(installed.decision, "deny", "identity depends on schema ref not installed yet");
-        let schema_artifact = artifacts::install_artifact(&root, &artifacts::ArtifactInstallInput {
+        let schema_artifact = crate::artifacts::install_artifact(&root, &crate::artifacts::ArtifactInstallInput {
             kind: "schema".to_string(),
             payload: record("schema-source", vec![string("search")]),
             schema_refs: Vec::new(),
@@ -898,7 +912,7 @@ mod tests {
         })
         .expect("install schema");
         let identity = identity_with_schema(MODE_STRUCTURAL, &schema_artifact.artifact_ref, &shape, None);
-        let installed = artifacts::install_artifact(&root, &artifacts::ArtifactInstallInput {
+        let installed = crate::artifacts::install_artifact(&root, &crate::artifacts::ArtifactInstallInput {
             kind: "schema-identity".to_string(),
             payload: identity.value.clone(),
             schema_refs: vec![identity.schema_ref.clone()],
@@ -917,8 +931,8 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_fingerprint_and_compatibility_invariants(tc: TestCase) {
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+    fn hegel_fingerprint_and_compatibility_invariants(tc: hegel::TestCase) {
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let shape = record("shape", vec![
             string("record"),
             string(format!("profile-{salt}")),
@@ -989,8 +1003,8 @@ mod tests {
 
     fn temp_dir(name: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
-        static TEMP_DIR_COUNTER: AtomicU64 = AtomicU64::new(0);
-        let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        static TEMP_DIR_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let nonce = TEMP_DIR_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
             std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
