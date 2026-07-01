@@ -1,26 +1,52 @@
 use preserves::IOValue;
-use preserves::Value;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::PROTOCOL_INSTALL_RECEIPT_SCHEMA;
-use crate::preserves_rail::PROTOCOL_LOCAL_STATE_SCHEMA;
-use crate::preserves_rail::PROTOCOL_MANIFEST_SCHEMA;
-use crate::preserves_rail::PROTOCOL_MESSAGE_SCHEMA;
-use crate::preserves_rail::PROTOCOL_OPERATION_RECEIPT_SCHEMA;
-use crate::preserves_rail::PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::PROTOCOL_SESSION_STATE_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
-use crate::remote_dataspace;
-use crate::remote_dataspace::RemoteDataspaceEnvelope;
-use crate::remote_dataspace::RemoteDataspaceEnvelopeInput;
-use crate::remote_dataspace::RemoteDataspaceOperation;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type RemoteDataspaceEnvelope = crate::remote_dataspace::RemoteDataspaceEnvelope;
+type RemoteDataspaceEnvelopeInput = crate::remote_dataspace::RemoteDataspaceEnvelopeInput;
+type RemoteDataspaceOperation = crate::remote_dataspace::RemoteDataspaceOperation;
+
+const PROTOCOL_ENDPOINT_SCHEMA: &str = crate::preserves_rail::PROTOCOL_ENDPOINT_SCHEMA;
+const PROTOCOL_INSTALL_RECEIPT_SCHEMA: &str = crate::preserves_rail::PROTOCOL_INSTALL_RECEIPT_SCHEMA;
+const PROTOCOL_LOCAL_STATE_SCHEMA: &str = crate::preserves_rail::PROTOCOL_LOCAL_STATE_SCHEMA;
+const PROTOCOL_MANIFEST_SCHEMA: &str = crate::preserves_rail::PROTOCOL_MANIFEST_SCHEMA;
+const PROTOCOL_MESSAGE_SCHEMA: &str = crate::preserves_rail::PROTOCOL_MESSAGE_SCHEMA;
+const PROTOCOL_OPERATION_RECEIPT_SCHEMA: &str = crate::preserves_rail::PROTOCOL_OPERATION_RECEIPT_SCHEMA;
+const PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA: &str = crate::preserves_rail::PROTOCOL_SESSION_GATE_RECEIPT_SCHEMA;
+const PROTOCOL_SESSION_STATE_SCHEMA: &str = crate::preserves_rail::PROTOCOL_SESSION_STATE_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: &str) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
+
+fn build_remote_envelope(input: RemoteDataspaceEnvelopeInput) -> Result<RemoteDataspaceEnvelope> {
+    crate::remote_dataspace::build_envelope(input)
+}
 
 const MAX_PROTOCOL_ITEMS: usize = 1024;
 const MAX_PROTOCOL_STEPS: usize = 256;
@@ -754,7 +780,7 @@ pub fn offer_protocol_branch(input: ProtocolBranchOperationInput) -> Result<Prot
 
 pub fn protocol_message_remote_envelope(input: ProtocolRemoteEnvelopeInput) -> Result<RemoteDataspaceEnvelope> {
     let message = parse_protocol_message(&input.message)?;
-    remote_dataspace::build_envelope(RemoteDataspaceEnvelopeInput {
+    build_remote_envelope(RemoteDataspaceEnvelopeInput {
         from_peer: input.from_peer,
         from_actor: input.from_actor,
         to_peer: input.to_peer,
@@ -1799,7 +1825,7 @@ fn protocol_endpoint(
 ) -> Result<ProtocolEndpoint> {
     let local_value = protocol_local_state_value(&local_state)?;
     let endpoint_value = record("protocol-endpoint-v1", vec![
-        string(crate::preserves_rail::PROTOCOL_ENDPOINT_SCHEMA),
+        string(PROTOCOL_ENDPOINT_SCHEMA),
         record("protocol", vec![string(&manifest.manifest_ref)]),
         record("role", vec![string(&role.name)]),
         record("role-id", vec![u64_value(u64::from(role.id))]),
@@ -1813,7 +1839,7 @@ fn parse_protocol_endpoint(value: &IOValue) -> Result<ProtocolEndpoint> {
     let fields = value
         .collect_simple_record("protocol-endpoint-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <protocol-endpoint-v1 ...>"))?;
-    require_schema(&fields[0], crate::preserves_rail::PROTOCOL_ENDPOINT_SCHEMA, "protocol endpoint schema")?;
+    require_schema(&fields[0], PROTOCOL_ENDPOINT_SCHEMA, "protocol endpoint schema")?;
     let protocol_ref = record_ref(&fields[1], "protocol")?;
     let role = record_string(&fields[2], "role")?;
     let role_id = u32::try_from(record_u64(&fields[3], "role-id")?)
@@ -2307,11 +2333,11 @@ fn require_check(checks: &[(String, String)], name: &str, label: &str) -> Result
 }
 
 fn strings_sequence(values: &[String]) -> IOValue {
-    sequence(values.iter().map(string).collect())
+    sequence(values.iter().map(|value| string(value)).collect())
 }
 
 fn refs_sequence(values: &[String]) -> IOValue {
-    sequence(values.iter().map(string).collect())
+    sequence(values.iter().map(|value| string(value)).collect())
 }
 
 fn checks_value(names: &[&str]) -> IOValue {
