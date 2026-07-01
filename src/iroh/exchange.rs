@@ -1,29 +1,78 @@
-use std::collections::BTreeMap;
-use std::fs;
-use std::path::Path;
-
 use preserves::IOValue;
-use preserves::Value;
 
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::evidence_chain;
 use crate::harness;
 use crate::ledger;
-use crate::preserves_rail::EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA;
-use crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
-use crate::preserves_rail::IROH_CHAIN_EXCHANGE_RECEIPT_SCHEMA;
-use crate::preserves_rail::IROH_REPRO_EXCHANGE_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::content_ref_hex;
-use crate::preserves_rail::parse_canonical_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+
+type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
+type Path = std::path::Path;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+const EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_SEGMENT_BUNDLE_SCHEMA;
+const EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVIDENCE_CHAIN_VERIFY_RECEIPT_SCHEMA;
+const IROH_CHAIN_EXCHANGE_RECEIPT_SCHEMA: &str = crate::preserves_rail::IROH_CHAIN_EXCHANGE_RECEIPT_SCHEMA;
+const IROH_REPRO_EXCHANGE_RECEIPT_SCHEMA: &str = crate::preserves_rail::IROH_REPRO_EXCHANGE_RECEIPT_SCHEMA;
+
+mod fs {
+    pub(super) fn create_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::create_dir_all(path)
+    }
+
+    pub(super) fn read(path: impl AsRef<std::path::Path>) -> std::io::Result<Vec<u8>> {
+        std::fs::read(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn remove_dir_all(path: impl AsRef<std::path::Path>) -> std::io::Result<()> {
+        std::fs::remove_dir_all(path)
+    }
+
+    pub(super) fn write(path: impl AsRef<std::path::Path>, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+        std::fs::write(path, contents)
+    }
+}
+
+fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn content_ref_from_bytes(bytes: &[u8]) -> String {
+    crate::preserves_rail::content_ref_from_bytes(bytes)
+}
+
+fn content_ref_hex(value: &str) -> Result<&str> {
+    crate::preserves_rail::content_ref_hex(value)
+}
+
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+    crate::preserves_rail::parse_canonical_bytes(bytes)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 const MAX_CHAIN_BUNDLE_ARTIFACTS: usize = 100_000;
 const MAX_CHAIN_BUNDLE_CHECKPOINTS: usize = 10_000;
@@ -317,7 +366,7 @@ fn build_chain_segment_bundle_value(
     let verified =
         evidence_chain::verify_chain_segment_with_policy(ledger_root, chain, anchor_ref, expected_head, fork_policy)?;
     let index = evidence_chain::build_chain_index(ledger_root)?;
-    let mut artifacts = BTreeMap::<String, IOValue>::new();
+    let mut artifacts = OrderedMap::<String, IOValue>::new();
     for link_ref in &verified.verified_links {
         add_ledger_artifact(ledger_root, &mut artifacts, link_ref)?;
         if let Some(link) = index.links_by_ref.get(link_ref) {
@@ -374,7 +423,7 @@ fn build_chain_segment_bundle_value(
     }))
 }
 
-fn add_ledger_artifact(root: &Path, artifacts: &mut BTreeMap<String, IOValue>, artifact_ref: &str) -> Result<()> {
+fn add_ledger_artifact(root: &Path, artifacts: &mut OrderedMap<String, IOValue>, artifact_ref: &str) -> Result<()> {
     if !artifacts.contains_key(artifact_ref) {
         artifacts.insert(artifact_ref.to_string(), ledger::read_artifact(root, artifact_ref)?);
     }
@@ -440,9 +489,9 @@ fn parse_chain_segment_bundle(
 }
 
 struct Parts<'a> {
-    artifacts: BTreeMap<String, &'a ChainBundleArtifact>,
-    links: BTreeMap<String, evidence_chain::ChainLink>,
-    predicates: BTreeMap<String, evidence_chain::ChainPredicateReceipt>,
+    artifacts: OrderedMap<String, &'a ChainBundleArtifact>,
+    links: OrderedMap<String, evidence_chain::ChainLink>,
+    predicates: OrderedMap<String, evidence_chain::ChainPredicateReceipt>,
     has_forks: bool,
 }
 
@@ -480,12 +529,12 @@ fn parsed_parts(artifacts: &[ChainBundleArtifact]) -> Result<Parts<'_>> {
     let parts = artifacts
         .iter()
         .map(|artifact| (artifact.artifact_ref.clone(), artifact))
-        .collect::<BTreeMap<_, _>>();
+        .collect::<OrderedMap<_, _>>();
     let links = artifacts
         .iter()
         .filter(|artifact| artifact.kind == "chain-link")
         .map(|artifact| evidence_chain::parse_chain_link(&artifact.value).map(|link| (link.link_ref.clone(), link)))
-        .collect::<Result<BTreeMap<_, _>>>()?;
+        .collect::<Result<OrderedMap<_, _>>>()?;
     let predicates = artifacts
         .iter()
         .filter(|artifact| artifact.kind == "chain-predicate-receipt")
@@ -493,7 +542,7 @@ fn parsed_parts(artifacts: &[ChainBundleArtifact]) -> Result<Parts<'_>> {
             evidence_chain::parse_chain_predicate_receipt(&artifact.value)
                 .map(|receipt| (receipt.receipt_ref.clone(), receipt))
         })
-        .collect::<Result<BTreeMap<_, _>>>()?;
+        .collect::<Result<OrderedMap<_, _>>>()?;
     let mut has_forks = false;
     for artifact in artifacts.iter().filter(|artifact| artifact.kind == "chain-fork-evidence") {
         evidence_chain::parse_chain_fork_evidence(&artifact.value)?;
@@ -519,7 +568,7 @@ fn anchors(chain: &evidence_chain::ChainScope, artifacts: &[ChainBundleArtifact]
 
 fn receipts(
     refs: &[String],
-    artifacts: &BTreeMap<String, &ChainBundleArtifact>,
+    artifacts: &OrderedMap<String, &ChainBundleArtifact>,
 ) -> Result<Vec<ParsedChainVerifyReceipt>> {
     refs.iter()
         .map(|verify_ref| {
@@ -566,7 +615,7 @@ fn check_primary(input: PrimaryCheck<'_>) -> Result<()> {
     Ok(())
 }
 
-fn payloads(verify: &ParsedChainVerifyReceipt, artifacts: &BTreeMap<String, &ChainBundleArtifact>) -> Result<()> {
+fn payloads(verify: &ParsedChainVerifyReceipt, artifacts: &OrderedMap<String, &ChainBundleArtifact>) -> Result<()> {
     for payload_ref in &verify.payload_refs {
         if !artifacts.contains_key(payload_ref) {
             return Err(MoltenError::invalid_harness(format!(
@@ -579,7 +628,7 @@ fn payloads(verify: &ParsedChainVerifyReceipt, artifacts: &BTreeMap<String, &Cha
 
 fn predicates(
     verify: &ParsedChainVerifyReceipt,
-    predicates: &BTreeMap<String, evidence_chain::ChainPredicateReceipt>,
+    predicates: &OrderedMap<String, evidence_chain::ChainPredicateReceipt>,
 ) -> Result<()> {
     for predicate_ref in &verify.predicate_refs {
         let Some(predicate) = predicates.get(predicate_ref) else {
@@ -598,7 +647,7 @@ fn predicates(
 
 fn checkpoints(
     refs: &[String],
-    artifacts: &BTreeMap<String, &ChainBundleArtifact>,
+    artifacts: &OrderedMap<String, &ChainBundleArtifact>,
 ) -> Result<Vec<evidence_chain::ChainCheckpoint>> {
     refs.iter()
         .map(|checkpoint_ref| {
@@ -611,7 +660,7 @@ fn checkpoints(
 }
 
 fn validate_chain_links(
-    links: &BTreeMap<String, evidence_chain::ChainLink>,
+    links: &OrderedMap<String, evidence_chain::ChainLink>,
     verify: &ParsedChainVerifyReceipt,
     anchor_ref: Option<&str>,
     head_ref: Option<&str>,
@@ -653,9 +702,9 @@ fn validate_chain_links(
 fn validate_bundle_checkpoints(
     chain: &evidence_chain::ChainScope,
     checkpoints: &[evidence_chain::ChainCheckpoint],
-    artifacts: &BTreeMap<String, &ChainBundleArtifact>,
-    links: &BTreeMap<String, evidence_chain::ChainLink>,
-    predicates: &BTreeMap<String, evidence_chain::ChainPredicateReceipt>,
+    artifacts: &OrderedMap<String, &ChainBundleArtifact>,
+    links: &OrderedMap<String, evidence_chain::ChainLink>,
+    predicates: &OrderedMap<String, evidence_chain::ChainPredicateReceipt>,
 ) -> Result<()> {
     for checkpoint in checkpoints {
         if &checkpoint.chain != chain {
