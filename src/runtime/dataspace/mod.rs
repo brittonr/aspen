@@ -17,12 +17,24 @@ use super::RuntimeValue;
 use super::TurnAction;
 use super::TurnOutcome;
 use super::evaluate_turn_transition;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::u64_value;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+fn canonical_hash(value: &preserves::IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<preserves::IOValue>) -> preserves::IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<preserves::IOValue>) -> preserves::IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn u64_value(value: u64) -> preserves::IOValue {
+    crate::preserves_rail::u64_value(value)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeSnapshot {
