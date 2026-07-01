@@ -6,27 +6,8 @@ use preserves::IOValue;
 use preserves::Value;
 
 use crate::chunk_store;
-use crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 use crate::error::Result;
-use crate::preserves_rail::DETERMINISTIC_CHAOS_SCHEDULE_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_EFFECT_LOG_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_FIXTURE_RECORD_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_INTEGRATION_GATE_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_RUN_IDENTITY_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_TRACE_PRIVACY_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_TURN_JOURNAL_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_hex;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+use crate::preserves_rail;
 
 const DEFAULT_ARTIFACT_REF: &str = "blake3:1111111111111111111111111111111111111111111111111111111111111111";
 const DEFAULT_CLOSURE_REF: &str = "blake3:2222222222222222222222222222222222222222222222222222222222222222";
@@ -250,22 +231,22 @@ struct ReplayRunParts {
 
 pub fn record_fixture_value() -> Result<ReplayFixtureRecord> {
     let parts = run_parts(ReplayFixtureVariant::Baseline)?;
-    let value = record("deterministic-fixture-record-v1", vec![
-        string(DETERMINISTIC_FIXTURE_RECORD_SCHEMA),
-        record("identity-ref", vec![string(&parts.identity_ref)]),
+    let value = preserves_rail::record("deterministic-fixture-record-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_FIXTURE_RECORD_SCHEMA),
+        preserves_rail::record("identity-ref", vec![preserves_rail::string(&parts.identity_ref)]),
         parts.identity,
-        record("effect-log-ref", vec![string(&parts.effect_log_ref)]),
+        preserves_rail::record("effect-log-ref", vec![preserves_rail::string(&parts.effect_log_ref)]),
         parts.effect_log,
-        sequence(vec![parts.turn_journal]),
-        record("output-ref", vec![string(&parts.output_ref)]),
-        record("final-state-ref", vec![string(&parts.after_state_ref)]),
-        sequence(vec![
-            string("recorded-responses-bound"),
-            string("canonical-journal-order"),
-            string("no-ambient-observations"),
+        preserves_rail::sequence(vec![parts.turn_journal]),
+        preserves_rail::record("output-ref", vec![preserves_rail::string(&parts.output_ref)]),
+        preserves_rail::record("final-state-ref", vec![preserves_rail::string(&parts.after_state_ref)]),
+        preserves_rail::sequence(vec![
+            preserves_rail::string("recorded-responses-bound"),
+            preserves_rail::string("canonical-journal-order"),
+            preserves_rail::string("no-ambient-observations"),
         ]),
     ]);
-    let record_ref = canonical_hash(&value)?;
+    let record_ref = preserves_rail::canonical_hash(&value)?;
     Ok(ReplayFixtureRecord {
         value,
         record_ref,
@@ -282,13 +263,16 @@ pub fn replay_snapshot_manifest_bundle(
 ) -> Result<ReplaySnapshotManifestBundle> {
     let expected = run_parts(ReplayFixtureVariant::Baseline)?;
     let actual = run_parts(variant)?;
-    let snapshot = record("deterministic-replay-snapshot-v1", vec![
-        string("molten.deterministic-replay.snapshot.v1"),
-        record("identity-ref", vec![string(&expected.identity_ref)]),
-        record("final-state-ref", vec![string(&expected.after_state_ref)]),
-        record("turn-journal-ref", vec![string(&expected.turn_journal_ref)]),
-        record("effect-log-ref", vec![string(&expected.effect_log_ref)]),
-        sequence(vec![string("manifest-backed"), string("partial-debug-fetch")]),
+    let snapshot = preserves_rail::record("deterministic-replay-snapshot-v1", vec![
+        preserves_rail::string("molten.deterministic-replay.snapshot.v1"),
+        preserves_rail::record("identity-ref", vec![preserves_rail::string(&expected.identity_ref)]),
+        preserves_rail::record("final-state-ref", vec![preserves_rail::string(&expected.after_state_ref)]),
+        preserves_rail::record("turn-journal-ref", vec![preserves_rail::string(&expected.turn_journal_ref)]),
+        preserves_rail::record("effect-log-ref", vec![preserves_rail::string(&expected.effect_log_ref)]),
+        preserves_rail::sequence(vec![
+            preserves_rail::string("manifest-backed"),
+            preserves_rail::string("partial-debug-fetch"),
+        ]),
     ]);
     let effect_log_manifest_ref = store_replay_manifest(chunk_root, "replay-effect-log", &expected.effect_log)?;
     let turn_journal_manifest_ref = store_replay_manifest(chunk_root, "replay-turn-journal", &expected.turn_journal)?;
@@ -300,22 +284,24 @@ pub fn replay_snapshot_manifest_bundle(
         let divergence_value = first_divergence_value(divergence, &expected, &actual)?;
         let manifest_ref = store_replay_manifest(chunk_root, "replay-first-divergence", &divergence_value)?;
         let range = chunk_store::range_read(chunk_root, &manifest_ref, 0, 32)?;
-        (Some(manifest_ref), Some(canonical_hash(&range.receipt_value)?))
+        (Some(manifest_ref), Some(preserves_rail::canonical_hash(&range.receipt_value)?))
     };
-    let value = record("deterministic-replay-snapshot-manifests-v1", vec![
-        string("molten.deterministic-replay.snapshot-manifests.v1"),
-        record("effect-log-manifest-ref", vec![string(&effect_log_manifest_ref)]),
-        record("turn-journal-manifest-ref", vec![string(&turn_journal_manifest_ref)]),
-        record("snapshot-manifest-ref", vec![string(&snapshot_manifest_ref)]),
-        record("first-divergence-manifest-ref", vec![optional_ref_value(first_divergence_manifest_ref.as_deref())]),
-        record("debug-range-receipt-ref", vec![optional_ref_value(debug_range_receipt_ref.as_deref())]),
-        sequence(vec![
-            string("manifest-backed-replay"),
-            string("verified-before-load"),
-            string("partial-divergence-debug-fetch"),
+    let value = preserves_rail::record("deterministic-replay-snapshot-manifests-v1", vec![
+        preserves_rail::string("molten.deterministic-replay.snapshot-manifests.v1"),
+        preserves_rail::record("effect-log-manifest-ref", vec![preserves_rail::string(&effect_log_manifest_ref)]),
+        preserves_rail::record("turn-journal-manifest-ref", vec![preserves_rail::string(&turn_journal_manifest_ref)]),
+        preserves_rail::record("snapshot-manifest-ref", vec![preserves_rail::string(&snapshot_manifest_ref)]),
+        preserves_rail::record("first-divergence-manifest-ref", vec![optional_ref_value(
+            first_divergence_manifest_ref.as_deref(),
+        )]),
+        preserves_rail::record("debug-range-receipt-ref", vec![optional_ref_value(debug_range_receipt_ref.as_deref())]),
+        preserves_rail::sequence(vec![
+            preserves_rail::string("manifest-backed-replay"),
+            preserves_rail::string("verified-before-load"),
+            preserves_rail::string("partial-divergence-debug-fetch"),
         ]),
     ]);
-    let bundle_ref = canonical_hash(&value)?;
+    let bundle_ref = preserves_rail::canonical_hash(&value)?;
     Ok(ReplaySnapshotManifestBundle {
         value,
         bundle_ref,
@@ -329,13 +315,13 @@ pub fn replay_snapshot_manifest_bundle(
 
 fn store_replay_manifest(chunk_root: &Path, object_kind: &str, value: &IOValue) -> Result<String> {
     let bytes = crate::preserves_rail::canonical_bytes(value)?;
-    Ok(chunk_store::put_bytes(chunk_root, object_kind, &bytes, DEFAULT_FIXED_V1_CHUNK_SIZE)?.manifest_ref)
+    Ok(chunk_store::put_bytes(chunk_root, object_kind, &bytes, chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE)?.manifest_ref)
 }
 
 fn optional_ref_value(value: Option<&str>) -> IOValue {
     match value {
-        Some(value) => record("some", vec![string(value)]),
-        None => record("none", Vec::new()),
+        Some(value) => preserves_rail::record("some", vec![preserves_rail::string(value)]),
+        None => preserves_rail::record("none", Vec::new()),
     }
 }
 
@@ -349,7 +335,7 @@ pub fn verify_fixture_value(variant: ReplayFixtureVariant) -> Result<ReplayVerif
         Some(first_divergence_value(divergence, &expected, &actual)?)
     };
     let first_divergence_ref = match &first_divergence {
-        Some(value) => canonical_hash(value)?,
+        Some(value) => preserves_rail::canonical_hash(value)?,
         None => "none".to_string(),
     };
     let decision = if divergence == ReplayDivergenceKind::None {
@@ -357,22 +343,22 @@ pub fn verify_fixture_value(variant: ReplayFixtureVariant) -> Result<ReplayVerif
     } else {
         "deny"
     };
-    let value = record("deterministic-replay-verify-v1", vec![
-        string(DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
-        string(decision),
-        record("expected-identity-ref", vec![string(&expected.identity_ref)]),
-        record("actual-identity-ref", vec![string(&actual.identity_ref)]),
-        record("expected-effect-log-ref", vec![string(&expected.effect_log_ref)]),
-        record("actual-effect-log-ref", vec![string(&actual.effect_log_ref)]),
-        record("expected-output-ref", vec![string(&expected.output_ref)]),
-        record("actual-output-ref", vec![string(&actual.output_ref)]),
-        record("expected-final-state-ref", vec![string(&expected.after_state_ref)]),
-        record("actual-final-state-ref", vec![string(&actual.after_state_ref)]),
-        record("divergence", vec![string(divergence.as_str())]),
-        record("first-divergence-ref", vec![string(&first_divergence_ref)]),
-        sequence(verify_checks(decision, divergence)),
+    let value = preserves_rail::record("deterministic-replay-verify-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA),
+        preserves_rail::string(decision),
+        preserves_rail::record("expected-identity-ref", vec![preserves_rail::string(&expected.identity_ref)]),
+        preserves_rail::record("actual-identity-ref", vec![preserves_rail::string(&actual.identity_ref)]),
+        preserves_rail::record("expected-effect-log-ref", vec![preserves_rail::string(&expected.effect_log_ref)]),
+        preserves_rail::record("actual-effect-log-ref", vec![preserves_rail::string(&actual.effect_log_ref)]),
+        preserves_rail::record("expected-output-ref", vec![preserves_rail::string(&expected.output_ref)]),
+        preserves_rail::record("actual-output-ref", vec![preserves_rail::string(&actual.output_ref)]),
+        preserves_rail::record("expected-final-state-ref", vec![preserves_rail::string(&expected.after_state_ref)]),
+        preserves_rail::record("actual-final-state-ref", vec![preserves_rail::string(&actual.after_state_ref)]),
+        preserves_rail::record("divergence", vec![preserves_rail::string(divergence.as_str())]),
+        preserves_rail::record("first-divergence-ref", vec![preserves_rail::string(&first_divergence_ref)]),
+        preserves_rail::sequence(verify_checks(decision, divergence)),
     ]);
-    let receipt_ref = canonical_hash(&value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&value)?;
     Ok(ReplayVerifyReceipt {
         value,
         receipt_ref,
@@ -391,9 +377,9 @@ pub fn rollup_replay_receipts(inputs: &[ReplayRollupInput]) -> Result<ReplayRoll
     let mut diagnostics = Vec::with_capacity(inputs.len());
     let mut parsed_receipts = Vec::with_capacity(inputs.len());
     for input in inputs {
-        let actual_ref = canonical_hash(&input.value)?;
+        let actual_ref = preserves_rail::canonical_hash(&input.value)?;
         if let Some(expected_ref) = input.expected_ref.as_deref() {
-            validate_content_ref(expected_ref)?;
+            preserves_rail::validate_content_ref(expected_ref)?;
             if expected_ref != actual_ref {
                 diagnostics.push(format!("replay receipt ref mismatch expected={expected_ref} actual={actual_ref}"));
                 continue;
@@ -427,19 +413,21 @@ pub fn rollup_replay_receipts(inputs: &[ReplayRollupInput]) -> Result<ReplayRoll
     } else {
         "deny"
     };
-    let value = record("deterministic-replay-rollup-v1", vec![
-        string(DETERMINISTIC_REPLAY_ROLLUP_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("total-count", vec![u64_value(total_count)]),
-        record("pass-count", vec![u64_value(pass_count)]),
-        record("deny-count", vec![u64_value(deny_count)]),
-        record("receipt-refs", vec![refs_value(&receipt_refs)]),
-        record("divergence-counts", vec![divergence_counts_value(&divergence_counts)]),
-        record("first-divergence-refs", vec![refs_value(&first_divergence_refs)]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
-        sequence(rollup_checks(decision, diagnostics.is_empty())),
+    let value = preserves_rail::record("deterministic-replay-rollup-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("total-count", vec![preserves_rail::u64_value(total_count)]),
+        preserves_rail::record("pass-count", vec![preserves_rail::u64_value(pass_count)]),
+        preserves_rail::record("deny-count", vec![preserves_rail::u64_value(deny_count)]),
+        preserves_rail::record("receipt-refs", vec![refs_value(&receipt_refs)]),
+        preserves_rail::record("divergence-counts", vec![divergence_counts_value(&divergence_counts)]),
+        preserves_rail::record("first-divergence-refs", vec![refs_value(&first_divergence_refs)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::sequence(rollup_checks(decision, diagnostics.is_empty())),
     ]);
-    let rollup_ref = canonical_hash(&value)?;
+    let rollup_ref = preserves_rail::canonical_hash(&value)?;
     Ok(ReplayRollupReceipt {
         value,
         rollup_ref,
@@ -466,7 +454,7 @@ pub fn index_replay_evidence(inputs: &[ReplayIndexInput]) -> Result<ReplayIndexR
         "deny"
     };
     let value = index_value(decision, &diagnostics, &summary);
-    let index_ref = canonical_hash(&value)?;
+    let index_ref = preserves_rail::canonical_hash(&value)?;
     Ok(ReplayIndexReceipt {
         value,
         index_ref,
@@ -504,7 +492,7 @@ fn collect_index_inputs(inputs: &[ReplayIndexInput]) -> Result<ParsedInputs> {
     let mut receipts = Vec::with_capacity(inputs.len());
     let mut rollups = Vec::with_capacity(inputs.len());
     for input in inputs {
-        let actual_ref = canonical_hash(&input.value)?;
+        let actual_ref = preserves_rail::canonical_hash(&input.value)?;
         if let Some(diagnostic) = expected_ref_diagnostic(input.expected_ref.as_deref(), &actual_ref)? {
             diagnostics.push(diagnostic);
             continue;
@@ -528,7 +516,7 @@ fn expected_ref_diagnostic(expected_ref: Option<&str>, actual_ref: &str) -> Resu
     let Some(expected_ref) = expected_ref else {
         return Ok(None);
     };
-    validate_content_ref(expected_ref)?;
+    preserves_rail::validate_content_ref(expected_ref)?;
     if expected_ref == actual_ref {
         Ok(None)
     } else {
@@ -590,61 +578,72 @@ fn rollup_anomalies(rollups: &[ParsedReplayRollup]) -> Vec<String> {
 }
 
 fn index_value(decision: &str, diagnostics: &[String], summary: &IndexSummary) -> IOValue {
-    record("deterministic-replay-index-v1", vec![
-        string(DETERMINISTIC_REPLAY_INDEX_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("total-count", vec![u64_value(summary.total_count)]),
-        record("pass-count", vec![u64_value(summary.pass_count)]),
-        record("deny-count", vec![u64_value(summary.deny_count)]),
-        record("raw-receipt-count", vec![u64_value(summary.raw_receipt_count)]),
-        record("rollup-count", vec![u64_value(summary.rollup_count)]),
-        record("receipt-refs", vec![refs_value(&summary.receipt_refs)]),
-        record("rollup-refs", vec![refs_value(&summary.rollup_refs)]),
-        record("divergence-counts", vec![divergence_counts_value(&summary.divergence_counts)]),
-        record("first-divergence-refs", vec![refs_value(&summary.first_divergence_refs)]),
-        record("report-refs", vec![refs_value(&summary.report_refs)]),
-        record("final-state-refs", vec![refs_value(&summary.final_state_refs)]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
-        sequence(index_checks(decision, diagnostics.is_empty())),
+    preserves_rail::record("deterministic-replay-index-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("total-count", vec![preserves_rail::u64_value(summary.total_count)]),
+        preserves_rail::record("pass-count", vec![preserves_rail::u64_value(summary.pass_count)]),
+        preserves_rail::record("deny-count", vec![preserves_rail::u64_value(summary.deny_count)]),
+        preserves_rail::record("raw-receipt-count", vec![preserves_rail::u64_value(summary.raw_receipt_count)]),
+        preserves_rail::record("rollup-count", vec![preserves_rail::u64_value(summary.rollup_count)]),
+        preserves_rail::record("receipt-refs", vec![refs_value(&summary.receipt_refs)]),
+        preserves_rail::record("rollup-refs", vec![refs_value(&summary.rollup_refs)]),
+        preserves_rail::record("divergence-counts", vec![divergence_counts_value(&summary.divergence_counts)]),
+        preserves_rail::record("first-divergence-refs", vec![refs_value(&summary.first_divergence_refs)]),
+        preserves_rail::record("report-refs", vec![refs_value(&summary.report_refs)]),
+        preserves_rail::record("final-state-refs", vec![refs_value(&summary.final_state_refs)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::sequence(index_checks(decision, diagnostics.is_empty())),
     ])
 }
 
 pub fn chaos_schedule_receipt(input: &ChaosScheduleInput) -> Result<ChaosScheduleReceipt> {
-    validate_content_ref(&input.seed_ref)?;
-    validate_content_ref(&input.event_ref)?;
+    preserves_rail::validate_content_ref(&input.seed_ref)?;
+    preserves_rail::validate_content_ref(&input.event_ref)?;
     validate_chaos_fault_kind(&input.fault_kind)?;
     if input.intensity_percent > 100 {
         return Err(crate::error::MoltenError::invalid_harness("chaos schedule intensity exceeds 100"));
     }
-    let preimage = record("deterministic-chaos-schedule-preimage-v1", vec![
-        record("seed-ref", vec![string(&input.seed_ref)]),
-        record("position", vec![u64_value(input.schedule_position)]),
-        record("event-ref", vec![string(&input.event_ref)]),
-        record("fault-kind", vec![string(&input.fault_kind)]),
+    let preimage = preserves_rail::record("deterministic-chaos-schedule-preimage-v1", vec![
+        preserves_rail::record("seed-ref", vec![preserves_rail::string(&input.seed_ref)]),
+        preserves_rail::record("position", vec![preserves_rail::u64_value(input.schedule_position)]),
+        preserves_rail::record("event-ref", vec![preserves_rail::string(&input.event_ref)]),
+        preserves_rail::record("fault-kind", vec![preserves_rail::string(&input.fault_kind)]),
     ]);
-    let sample_ref = canonical_hash(&preimage)?;
+    let sample_ref = preserves_rail::canonical_hash(&preimage)?;
     let sample = chaos_sample_percent(&sample_ref)?;
     let decision = if sample < input.intensity_percent {
         "inject"
     } else {
         "pass"
     };
-    let value = record("deterministic-chaos-schedule-v1", vec![
-        string(DETERMINISTIC_CHAOS_SCHEDULE_SCHEMA),
-        record("seed-ref", vec![string(&input.seed_ref)]),
-        record("position", vec![u64_value(input.schedule_position)]),
-        record("event-ref", vec![string(&input.event_ref)]),
-        record("fault-kind", vec![string(&input.fault_kind)]),
-        record("intensity-percent", vec![u64_value(input.intensity_percent)]),
-        record("sample-ref", vec![string(&sample_ref)]),
-        record("decision", vec![string(decision)]),
-        sequence(vec![
-            record("check", vec![string("deterministic-schedule"), string("pass")]),
-            record("check", vec![string("replay-identity-bound"), string("pass")]),
-            record("check", vec![string("evidence-only-no-authority"), string("pass")]),
+    let value = preserves_rail::record("deterministic-chaos-schedule-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_CHAOS_SCHEDULE_SCHEMA),
+        preserves_rail::record("seed-ref", vec![preserves_rail::string(&input.seed_ref)]),
+        preserves_rail::record("position", vec![preserves_rail::u64_value(input.schedule_position)]),
+        preserves_rail::record("event-ref", vec![preserves_rail::string(&input.event_ref)]),
+        preserves_rail::record("fault-kind", vec![preserves_rail::string(&input.fault_kind)]),
+        preserves_rail::record("intensity-percent", vec![preserves_rail::u64_value(input.intensity_percent)]),
+        preserves_rail::record("sample-ref", vec![preserves_rail::string(&sample_ref)]),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("deterministic-schedule"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("replay-identity-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("evidence-only-no-authority"),
+                preserves_rail::string("pass"),
+            ]),
         ]),
     ]);
-    let schedule_ref = canonical_hash(&value)?;
+    let schedule_ref = preserves_rail::canonical_hash(&value)?;
     Ok(ChaosScheduleReceipt {
         value,
         schedule_ref,
@@ -656,31 +655,43 @@ pub fn deterministic_integration_receipt(
     input: &DeterministicIntegrationInput,
 ) -> Result<DeterministicIntegrationReceipt> {
     validate_integration_kind(&input.integration_kind)?;
-    validate_content_ref(&input.handler_profile_ref)?;
-    validate_content_ref(&input.effect_log_ref)?;
-    validate_content_ref(&input.snapshot_ref)?;
-    validate_content_ref(&input.gate_ref)?;
+    preserves_rail::validate_content_ref(&input.handler_profile_ref)?;
+    preserves_rail::validate_content_ref(&input.effect_log_ref)?;
+    preserves_rail::validate_content_ref(&input.snapshot_ref)?;
+    preserves_rail::validate_content_ref(&input.gate_ref)?;
     let decision = if input.admitted_live_effects { "deny" } else { "pass" };
-    let value = record("deterministic-integration-gate-v1", vec![
-        string(DETERMINISTIC_INTEGRATION_GATE_SCHEMA),
-        record("integration-kind", vec![string(&input.integration_kind)]),
-        record("decision", vec![string(decision)]),
-        record("handler-profile-ref", vec![string(&input.handler_profile_ref)]),
-        record("effect-log-ref", vec![string(&input.effect_log_ref)]),
-        record("snapshot-ref", vec![string(&input.snapshot_ref)]),
-        record("gate-ref", vec![string(&input.gate_ref)]),
-        sequence(vec![
-            record("check", vec![string("handler-profile-bound"), string("pass")]),
-            record("check", vec![string("effect-log-bound"), string("pass")]),
-            record("check", vec![string("snapshot-bound"), string("pass")]),
-            record("check", vec![
-                string("no-live-effect-during-replay"),
-                string(if input.admitted_live_effects { "deny" } else { "pass" }),
+    let value = preserves_rail::record("deterministic-integration-gate-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_INTEGRATION_GATE_SCHEMA),
+        preserves_rail::record("integration-kind", vec![preserves_rail::string(&input.integration_kind)]),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("handler-profile-ref", vec![preserves_rail::string(&input.handler_profile_ref)]),
+        preserves_rail::record("effect-log-ref", vec![preserves_rail::string(&input.effect_log_ref)]),
+        preserves_rail::record("snapshot-ref", vec![preserves_rail::string(&input.snapshot_ref)]),
+        preserves_rail::record("gate-ref", vec![preserves_rail::string(&input.gate_ref)]),
+        preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("handler-profile-bound"),
+                preserves_rail::string("pass"),
             ]),
-            record("check", vec![string("integration-gate-decision"), string(decision)]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("effect-log-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("snapshot-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("no-live-effect-during-replay"),
+                preserves_rail::string(if input.admitted_live_effects { "deny" } else { "pass" }),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("integration-gate-decision"),
+                preserves_rail::string(decision),
+            ]),
         ]),
     ]);
-    let receipt_ref = canonical_hash(&value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&value)?;
     Ok(DeterministicIntegrationReceipt {
         value,
         receipt_ref,
@@ -689,26 +700,32 @@ pub fn deterministic_integration_receipt(
 }
 
 pub fn trace_privacy_receipt(input: &TracePrivacyInput) -> Result<TracePrivacyReceipt> {
-    validate_content_ref(&input.trace_ref)?;
-    validate_content_ref(&input.snapshot_ref)?;
-    validate_content_ref(&input.requester_ref)?;
-    validate_content_ref(&input.policy_ref)?;
+    preserves_rail::validate_content_ref(&input.trace_ref)?;
+    preserves_rail::validate_content_ref(&input.snapshot_ref)?;
+    preserves_rail::validate_content_ref(&input.requester_ref)?;
+    preserves_rail::validate_content_ref(&input.policy_ref)?;
     let decision = match (input.has_export_authority, input.contains_sensitive_refs) {
         (false, true) => "deny",
         (true, true) => "redacted",
         _ => "pass",
     };
-    let value = record("deterministic-trace-privacy-v1", vec![
-        string(DETERMINISTIC_TRACE_PRIVACY_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("trace-ref", vec![string(&input.trace_ref)]),
-        record("snapshot-ref", vec![string(&input.snapshot_ref)]),
-        record("requester-ref", vec![string(&input.requester_ref)]),
-        record("policy-ref", vec![string(&input.policy_ref)]),
-        record("contains-sensitive-refs", vec![string(if input.contains_sensitive_refs { "yes" } else { "no" })]),
-        sequence(trace_privacy_checks(decision, input.has_export_authority, input.contains_sensitive_refs)),
+    let value = preserves_rail::record("deterministic-trace-privacy-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_TRACE_PRIVACY_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("trace-ref", vec![preserves_rail::string(&input.trace_ref)]),
+        preserves_rail::record("snapshot-ref", vec![preserves_rail::string(&input.snapshot_ref)]),
+        preserves_rail::record("requester-ref", vec![preserves_rail::string(&input.requester_ref)]),
+        preserves_rail::record("policy-ref", vec![preserves_rail::string(&input.policy_ref)]),
+        preserves_rail::record("contains-sensitive-refs", vec![preserves_rail::string(
+            if input.contains_sensitive_refs { "yes" } else { "no" },
+        )]),
+        preserves_rail::sequence(trace_privacy_checks(
+            decision,
+            input.has_export_authority,
+            input.contains_sensitive_refs,
+        )),
     ]);
-    let receipt_ref = canonical_hash(&value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&value)?;
     Ok(TracePrivacyReceipt {
         value,
         receipt_ref,
@@ -718,24 +735,30 @@ pub fn trace_privacy_receipt(input: &TracePrivacyInput) -> Result<TracePrivacyRe
 
 fn trace_privacy_checks(decision: &str, has_export_authority: bool, contains_sensitive_refs: bool) -> Vec<IOValue> {
     vec![
-        record("check", vec![string("policy-admission-before-render"), string("pass")]),
-        record("check", vec![
-            string("sensitive-trace-gated"),
-            string(if !contains_sensitive_refs || has_export_authority {
+        preserves_rail::record("check", vec![
+            preserves_rail::string("policy-admission-before-render"),
+            preserves_rail::string("pass"),
+        ]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("sensitive-trace-gated"),
+            preserves_rail::string(if !contains_sensitive_refs || has_export_authority {
                 "pass"
             } else {
                 "deny"
             }),
         ]),
-        record("check", vec![
-            string("redacted-view-when-authorized-sensitive"),
-            string(if decision == "redacted" || !contains_sensitive_refs {
+        preserves_rail::record("check", vec![
+            preserves_rail::string("redacted-view-when-authorized-sensitive"),
+            preserves_rail::string(if decision == "redacted" || !contains_sensitive_refs {
                 "pass"
             } else {
                 "deny"
             }),
         ]),
-        record("check", vec![string("trace-privacy-decision"), string(decision)]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("trace-privacy-decision"),
+            preserves_rail::string(decision),
+        ]),
     ]
 }
 
@@ -756,7 +779,7 @@ fn validate_chaos_fault_kind(kind: &str) -> Result<()> {
 }
 
 fn chaos_sample_percent(sample_ref: &str) -> Result<u64> {
-    let hex = content_ref_hex(sample_ref)?;
+    let hex = preserves_rail::content_ref_hex(sample_ref)?;
     let sample = u64::from_str_radix(&hex[..16], 16)
         .map_err(|error| crate::error::MoltenError::invalid_harness(format!("invalid chaos sample ref: {error}")))?;
     Ok(sample % 100)
@@ -764,7 +787,11 @@ fn chaos_sample_percent(sample_ref: &str) -> Result<u64> {
 
 fn parse_replay_verify_receipt(value: &IOValue, receipt_ref: &str) -> Result<ParsedReplayVerify> {
     if let Some(fields) = value.collect_simple_record("deterministic-replay-verify-v1", Some(13)) {
-        require_schema_value(&fields[0], DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "deterministic replay verify")?;
+        require_schema_value(
+            &fields[0],
+            preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA,
+            "deterministic replay verify",
+        )?;
         let decision = required_string_value(&fields[1], "deterministic replay decision")?;
         let divergence = record_string_value(&fields[10], "divergence")?;
         let first_divergence_ref = record_string_value(&fields[11], "first-divergence-ref")?;
@@ -772,8 +799,8 @@ fn parse_replay_verify_receipt(value: &IOValue, receipt_ref: &str) -> Result<Par
         validate_divergence_ref(&first_divergence_ref)?;
         let expected_final_state_ref = record_string_value(&fields[8], "expected-final-state-ref")?;
         let actual_final_state_ref = record_string_value(&fields[9], "actual-final-state-ref")?;
-        validate_content_ref(&expected_final_state_ref)?;
-        validate_content_ref(&actual_final_state_ref)?;
+        preserves_rail::validate_content_ref(&expected_final_state_ref)?;
+        preserves_rail::validate_content_ref(&actual_final_state_ref)?;
         return Ok(ParsedReplayVerify {
             receipt_ref: receipt_ref.to_string(),
             decision,
@@ -784,16 +811,20 @@ fn parse_replay_verify_receipt(value: &IOValue, receipt_ref: &str) -> Result<Par
         });
     }
     if let Some(fields) = value.collect_simple_record("deterministic-replay-verify-v1", Some(7)) {
-        require_schema_value(&fields[0], DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "deterministic replay verify")?;
+        require_schema_value(
+            &fields[0],
+            preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA,
+            "deterministic replay verify",
+        )?;
         let decision = required_string_value(&fields[1], "deterministic replay decision")?;
         let divergence = record_string_value(&fields[5], "divergence")?;
         validate_replay_decision(&decision)?;
         let expected_report_ref = record_string_value(&fields[2], "expected-report-ref")?;
         let actual_report_ref = record_string_value(&fields[3], "actual-report-ref")?;
         let final_state_ref = record_string_value(&fields[4], "final-state-ref")?;
-        validate_content_ref(&expected_report_ref)?;
-        validate_content_ref(&actual_report_ref)?;
-        validate_content_ref(&final_state_ref)?;
+        preserves_rail::validate_content_ref(&expected_report_ref)?;
+        preserves_rail::validate_content_ref(&actual_report_ref)?;
+        preserves_rail::validate_content_ref(&final_state_ref)?;
         return Ok(ParsedReplayVerify {
             receipt_ref: receipt_ref.to_string(),
             decision,
@@ -810,7 +841,11 @@ fn parse_replay_rollup_receipt(value: &IOValue, rollup_ref: &str) -> Result<Pars
     let fields = value
         .collect_simple_record("deterministic-replay-rollup-v1", Some(10))
         .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected <deterministic-replay-rollup-v1 ...>"))?;
-    require_schema_value(&fields[0], DETERMINISTIC_REPLAY_ROLLUP_SCHEMA, "deterministic replay rollup")?;
+    require_schema_value(
+        &fields[0],
+        preserves_rail::DETERMINISTIC_REPLAY_ROLLUP_SCHEMA,
+        "deterministic replay rollup",
+    )?;
     let decision = record_string_value(&fields[1], "decision")?;
     validate_replay_decision(&decision)?;
     let total_count = record_u64_value(&fields[2], "total-count")?;
@@ -867,14 +902,14 @@ struct StateRefs {
 fn run_parts(variant: ReplayFixtureVariant) -> Result<ReplayRunParts> {
     let choices = run_choices(variant);
     let identity = run_identity_value(choices.scenario_label, choices.policy_ref);
-    let identity_ref = canonical_hash(&identity)?;
+    let identity_ref = preserves_rail::canonical_hash(&identity)?;
     let effects = effect_refs(&choices, &identity_ref)?;
     let outputs = output_refs(&choices, &effects)?;
     let states = state_refs(&choices, &identity_ref, &outputs)?;
     let effect_log = effect_log_value(&effects);
-    let effect_log_ref = canonical_hash(&effect_log)?;
+    let effect_log_ref = preserves_rail::canonical_hash(&effect_log)?;
     let turn_journal = turn_journal_value(&effects, &outputs, &states);
-    let turn_journal_ref = canonical_hash(&turn_journal)?;
+    let turn_journal_ref = preserves_rail::canonical_hash(&turn_journal)?;
     Ok(ReplayRunParts {
         identity,
         identity_ref,
@@ -946,28 +981,34 @@ fn run_choices(variant: ReplayFixtureVariant) -> RunChoices {
 }
 
 fn effect_refs(choices: &RunChoices, identity_ref: &str) -> Result<EffectRefs> {
-    let scheduler_ref = canonical_hash(&record("deterministic-scheduler-key-v1", vec![string(choices.scheduler_key)]))?;
-    let input_ref = canonical_hash(&record("deterministic-fixture-input-v1", vec![
-        string(choices.input_message),
-        record("identity-ref", vec![string(identity_ref)]),
+    let scheduler_ref =
+        preserves_rail::canonical_hash(&preserves_rail::record("deterministic-scheduler-key-v1", vec![
+            preserves_rail::string(choices.scheduler_key),
+        ]))?;
+    let input_ref = preserves_rail::canonical_hash(&preserves_rail::record("deterministic-fixture-input-v1", vec![
+        preserves_rail::string(choices.input_message),
+        preserves_rail::record("identity-ref", vec![preserves_rail::string(identity_ref)]),
     ]))?;
-    let effect_request_ref = canonical_hash(&record("deterministic-effect-request-v1", vec![
-        string("clock"),
-        string(choices.request_payload),
-        record("input-ref", vec![string(&input_ref)]),
-        record("profile", vec![string("replay")]),
-    ]))?;
-    let effect_response_ref = canonical_hash(&record("deterministic-effect-response-v1", vec![
-        string(choices.response_payload),
-        record("request-ref", vec![string(&effect_request_ref)]),
-        record("source", vec![string("recorded-effect-log")]),
-    ]))?;
-    let policy_decision_ref = canonical_hash(&record("deterministic-policy-decision-v1", vec![
-        string(choices.decision),
-        record("policy-ref", vec![string(choices.policy_ref)]),
-        record("input-ref", vec![string(&input_ref)]),
-        record("effect-response-ref", vec![string(&effect_response_ref)]),
-    ]))?;
+    let effect_request_ref =
+        preserves_rail::canonical_hash(&preserves_rail::record("deterministic-effect-request-v1", vec![
+            preserves_rail::string("clock"),
+            preserves_rail::string(choices.request_payload),
+            preserves_rail::record("input-ref", vec![preserves_rail::string(&input_ref)]),
+            preserves_rail::record("profile", vec![preserves_rail::string("replay")]),
+        ]))?;
+    let effect_response_ref =
+        preserves_rail::canonical_hash(&preserves_rail::record("deterministic-effect-response-v1", vec![
+            preserves_rail::string(choices.response_payload),
+            preserves_rail::record("request-ref", vec![preserves_rail::string(&effect_request_ref)]),
+            preserves_rail::record("source", vec![preserves_rail::string("recorded-effect-log")]),
+        ]))?;
+    let policy_decision_ref =
+        preserves_rail::canonical_hash(&preserves_rail::record("deterministic-policy-decision-v1", vec![
+            preserves_rail::string(choices.decision),
+            preserves_rail::record("policy-ref", vec![preserves_rail::string(choices.policy_ref)]),
+            preserves_rail::record("input-ref", vec![preserves_rail::string(&input_ref)]),
+            preserves_rail::record("effect-response-ref", vec![preserves_rail::string(&effect_response_ref)]),
+        ]))?;
     Ok(EffectRefs {
         scheduler_ref,
         input_ref,
@@ -978,17 +1019,17 @@ fn effect_refs(choices: &RunChoices, identity_ref: &str) -> Result<EffectRefs> {
 }
 
 fn output_refs(choices: &RunChoices, effects: &EffectRefs) -> Result<OutputRefs> {
-    let action_ref = canonical_hash(&record("deterministic-action-v1", vec![
-        string(choices.action),
-        record("policy-decision-ref", vec![string(&effects.policy_decision_ref)]),
+    let action_ref = preserves_rail::canonical_hash(&preserves_rail::record("deterministic-action-v1", vec![
+        preserves_rail::string(choices.action),
+        preserves_rail::record("policy-decision-ref", vec![preserves_rail::string(&effects.policy_decision_ref)]),
     ]))?;
-    let receipt_ref = canonical_hash(&record("deterministic-turn-receipt-v1", vec![
-        string(choices.receipt),
-        record("action-ref", vec![string(&action_ref)]),
+    let receipt_ref = preserves_rail::canonical_hash(&preserves_rail::record("deterministic-turn-receipt-v1", vec![
+        preserves_rail::string(choices.receipt),
+        preserves_rail::record("action-ref", vec![preserves_rail::string(&action_ref)]),
     ]))?;
-    let output_ref = canonical_hash(&record("deterministic-output-v1", vec![
-        string(choices.output),
-        record("receipt-ref", vec![string(&receipt_ref)]),
+    let output_ref = preserves_rail::canonical_hash(&preserves_rail::record("deterministic-output-v1", vec![
+        preserves_rail::string(choices.output),
+        preserves_rail::record("receipt-ref", vec![preserves_rail::string(&receipt_ref)]),
     ]))?;
     Ok(OutputRefs {
         action_ref,
@@ -998,14 +1039,14 @@ fn output_refs(choices: &RunChoices, effects: &EffectRefs) -> Result<OutputRefs>
 }
 
 fn state_refs(choices: &RunChoices, identity_ref: &str, outputs: &OutputRefs) -> Result<StateRefs> {
-    let before_state_ref = canonical_hash(&record("deterministic-state-v1", vec![
-        string("before"),
-        record("identity-ref", vec![string(identity_ref)]),
+    let before_state_ref = preserves_rail::canonical_hash(&preserves_rail::record("deterministic-state-v1", vec![
+        preserves_rail::string("before"),
+        preserves_rail::record("identity-ref", vec![preserves_rail::string(identity_ref)]),
     ]))?;
-    let after_state_ref = canonical_hash(&record("deterministic-state-v1", vec![
-        string(choices.after_state),
-        record("before-state-ref", vec![string(&before_state_ref)]),
-        record("output-ref", vec![string(&outputs.output_ref)]),
+    let after_state_ref = preserves_rail::canonical_hash(&preserves_rail::record("deterministic-state-v1", vec![
+        preserves_rail::string(choices.after_state),
+        preserves_rail::record("before-state-ref", vec![preserves_rail::string(&before_state_ref)]),
+        preserves_rail::record("output-ref", vec![preserves_rail::string(&outputs.output_ref)]),
     ]))?;
     Ok(StateRefs {
         before_state_ref,
@@ -1014,50 +1055,53 @@ fn state_refs(choices: &RunChoices, identity_ref: &str, outputs: &OutputRefs) ->
 }
 
 fn effect_log_value(effects: &EffectRefs) -> IOValue {
-    record("deterministic-effect-log-v1", vec![
-        string(DETERMINISTIC_EFFECT_LOG_SCHEMA),
-        record("handler-profile-ref", vec![string(DEFAULT_HANDLER_PROFILE_REF)]),
-        sequence(vec![record("effect-entry-v1", vec![
-            record("sequence", vec![string("0")]),
-            record("effect-kind", vec![string("clock")]),
-            record("request-ref", vec![string(&effects.effect_request_ref)]),
-            record("response-ref", vec![string(&effects.effect_response_ref)]),
+    preserves_rail::record("deterministic-effect-log-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_EFFECT_LOG_SCHEMA),
+        preserves_rail::record("handler-profile-ref", vec![preserves_rail::string(DEFAULT_HANDLER_PROFILE_REF)]),
+        preserves_rail::sequence(vec![preserves_rail::record("effect-entry-v1", vec![
+            preserves_rail::record("sequence", vec![preserves_rail::string("0")]),
+            preserves_rail::record("effect-kind", vec![preserves_rail::string("clock")]),
+            preserves_rail::record("request-ref", vec![preserves_rail::string(&effects.effect_request_ref)]),
+            preserves_rail::record("response-ref", vec![preserves_rail::string(&effects.effect_response_ref)]),
         ])]),
     ])
 }
 
 fn turn_journal_value(effects: &EffectRefs, outputs: &OutputRefs, states: &StateRefs) -> IOValue {
-    record("deterministic-turn-journal-v1", vec![
-        string(DETERMINISTIC_TURN_JOURNAL_SCHEMA),
-        record("turn-id", vec![string("turn:0001")]),
-        record("actor-id", vec![string("actor:helper")]),
-        record("scheduler-key-ref", vec![string(&effects.scheduler_ref)]),
-        record("input-ref", vec![string(&effects.input_ref)]),
-        record("before-state-ref", vec![string(&states.before_state_ref)]),
-        record("effect-request-ref", vec![string(&effects.effect_request_ref)]),
-        record("effect-response-ref", vec![string(&effects.effect_response_ref)]),
-        record("policy-decision-ref", vec![string(&effects.policy_decision_ref)]),
-        record("action-ref", vec![string(&outputs.action_ref)]),
-        record("receipt-ref", vec![string(&outputs.receipt_ref)]),
-        record("output-ref", vec![string(&outputs.output_ref)]),
-        record("after-state-ref", vec![string(&states.after_state_ref)]),
+    preserves_rail::record("deterministic-turn-journal-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_TURN_JOURNAL_SCHEMA),
+        preserves_rail::record("turn-id", vec![preserves_rail::string("turn:0001")]),
+        preserves_rail::record("actor-id", vec![preserves_rail::string("actor:helper")]),
+        preserves_rail::record("scheduler-key-ref", vec![preserves_rail::string(&effects.scheduler_ref)]),
+        preserves_rail::record("input-ref", vec![preserves_rail::string(&effects.input_ref)]),
+        preserves_rail::record("before-state-ref", vec![preserves_rail::string(&states.before_state_ref)]),
+        preserves_rail::record("effect-request-ref", vec![preserves_rail::string(&effects.effect_request_ref)]),
+        preserves_rail::record("effect-response-ref", vec![preserves_rail::string(&effects.effect_response_ref)]),
+        preserves_rail::record("policy-decision-ref", vec![preserves_rail::string(&effects.policy_decision_ref)]),
+        preserves_rail::record("action-ref", vec![preserves_rail::string(&outputs.action_ref)]),
+        preserves_rail::record("receipt-ref", vec![preserves_rail::string(&outputs.receipt_ref)]),
+        preserves_rail::record("output-ref", vec![preserves_rail::string(&outputs.output_ref)]),
+        preserves_rail::record("after-state-ref", vec![preserves_rail::string(&states.after_state_ref)]),
     ])
 }
 
 fn run_identity_value(scenario_label: &'static str, policy_ref: &'static str) -> IOValue {
-    record("deterministic-run-identity-v1", vec![
-        string(DETERMINISTIC_RUN_IDENTITY_SCHEMA),
-        record("scenario", vec![string(scenario_label)]),
-        record("artifact-ref", vec![string(DEFAULT_ARTIFACT_REF)]),
-        record("dependency-closure-ref", vec![string(DEFAULT_CLOSURE_REF)]),
-        record("initial-state-ref", vec![string(DEFAULT_INITIAL_STATE_REF)]),
-        sequence(vec![string(DEFAULT_SCHEMA_REF)]),
-        sequence(vec![string(policy_ref)]),
-        sequence(vec![string(DEFAULT_CAPABILITY_REF)]),
-        sequence(vec![string(DEFAULT_REVOCATION_REF)]),
-        record("handler-profile-ref", vec![string(DEFAULT_HANDLER_PROFILE_REF)]),
-        record("seed-ref", vec![string(DEFAULT_SEED_REF)]),
-        sequence(vec![string(DEFAULT_RUNTIME_REF), string(DEFAULT_TOOL_REF)]),
+    preserves_rail::record("deterministic-run-identity-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_RUN_IDENTITY_SCHEMA),
+        preserves_rail::record("scenario", vec![preserves_rail::string(scenario_label)]),
+        preserves_rail::record("artifact-ref", vec![preserves_rail::string(DEFAULT_ARTIFACT_REF)]),
+        preserves_rail::record("dependency-closure-ref", vec![preserves_rail::string(DEFAULT_CLOSURE_REF)]),
+        preserves_rail::record("initial-state-ref", vec![preserves_rail::string(DEFAULT_INITIAL_STATE_REF)]),
+        preserves_rail::sequence(vec![preserves_rail::string(DEFAULT_SCHEMA_REF)]),
+        preserves_rail::sequence(vec![preserves_rail::string(policy_ref)]),
+        preserves_rail::sequence(vec![preserves_rail::string(DEFAULT_CAPABILITY_REF)]),
+        preserves_rail::sequence(vec![preserves_rail::string(DEFAULT_REVOCATION_REF)]),
+        preserves_rail::record("handler-profile-ref", vec![preserves_rail::string(DEFAULT_HANDLER_PROFILE_REF)]),
+        preserves_rail::record("seed-ref", vec![preserves_rail::string(DEFAULT_SEED_REF)]),
+        preserves_rail::sequence(vec![
+            preserves_rail::string(DEFAULT_RUNTIME_REF),
+            preserves_rail::string(DEFAULT_TOOL_REF),
+        ]),
     ])
 }
 
@@ -1108,18 +1152,18 @@ fn first_divergence_value(
     actual: &ReplayRunParts,
 ) -> Result<IOValue> {
     let (expected_ref, actual_ref) = divergence_refs(kind, expected, actual);
-    Ok(record("deterministic-first-divergence-v1", vec![
-        string(DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA),
-        record("kind", vec![string(kind.as_str())]),
-        record("turn-id", vec![string("turn:0001")]),
-        record("actor-id", vec![string("actor:helper")]),
-        record("log-position", vec![string("0")]),
-        record("handler-profile-ref", vec![string(DEFAULT_HANDLER_PROFILE_REF)]),
-        record("expected-ref", vec![string(expected_ref)]),
-        record("actual-ref", vec![string(actual_ref)]),
-        sequence(vec![
-            string("safe-canonical-refs-only"),
-            string("redact-secret-capability-material"),
+    Ok(preserves_rail::record("deterministic-first-divergence-v1", vec![
+        preserves_rail::string(preserves_rail::DETERMINISTIC_FIRST_DIVERGENCE_SCHEMA),
+        preserves_rail::record("kind", vec![preserves_rail::string(kind.as_str())]),
+        preserves_rail::record("turn-id", vec![preserves_rail::string("turn:0001")]),
+        preserves_rail::record("actor-id", vec![preserves_rail::string("actor:helper")]),
+        preserves_rail::record("log-position", vec![preserves_rail::string("0")]),
+        preserves_rail::record("handler-profile-ref", vec![preserves_rail::string(DEFAULT_HANDLER_PROFILE_REF)]),
+        preserves_rail::record("expected-ref", vec![preserves_rail::string(expected_ref)]),
+        preserves_rail::record("actual-ref", vec![preserves_rail::string(actual_ref)]),
+        preserves_rail::sequence(vec![
+            preserves_rail::string("safe-canonical-refs-only"),
+            preserves_rail::string("redact-secret-capability-material"),
         ]),
     ]))
 }
@@ -1149,48 +1193,80 @@ fn divergence_refs<'a>(
 fn verify_checks(decision: &str, divergence: ReplayDivergenceKind) -> Vec<IOValue> {
     let replay_status = if decision == "pass" { "pass" } else { "deny" };
     vec![
-        record("check", vec![string("identity-bound"), string("pass")]),
-        record("check", vec![string("ordered-boundary-comparison"), string(replay_status)]),
-        record("check", vec![string("recorded-effects-only"), string(replay_status)]),
-        record("check", vec![string("first-divergence"), string(divergence.as_str())]),
+        preserves_rail::record("check", vec![preserves_rail::string("identity-bound"), preserves_rail::string("pass")]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("ordered-boundary-comparison"),
+            preserves_rail::string(replay_status),
+        ]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("recorded-effects-only"),
+            preserves_rail::string(replay_status),
+        ]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("first-divergence"),
+            preserves_rail::string(divergence.as_str()),
+        ]),
     ]
 }
 
 fn rollup_checks(decision: &str, all_inputs_readable: bool) -> Vec<IOValue> {
     vec![
-        record("check", vec![string("evidence-only"), string("pass")]),
-        record("check", vec![string("no-authority-grant"), string("pass")]),
-        record("check", vec![string("individual-receipts-required"), string("pass")]),
-        record("check", vec![
-            string("all-inputs-readable"),
-            string(if all_inputs_readable { "pass" } else { "fail" }),
+        preserves_rail::record("check", vec![preserves_rail::string("evidence-only"), preserves_rail::string("pass")]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("no-authority-grant"),
+            preserves_rail::string("pass"),
         ]),
-        record("check", vec![string("rollup-decision"), string(decision)]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("individual-receipts-required"),
+            preserves_rail::string("pass"),
+        ]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("all-inputs-readable"),
+            preserves_rail::string(if all_inputs_readable { "pass" } else { "fail" }),
+        ]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("rollup-decision"),
+            preserves_rail::string(decision),
+        ]),
     ]
 }
 
 fn index_checks(decision: &str, all_inputs_readable: bool) -> Vec<IOValue> {
     vec![
-        record("check", vec![string("evidence-only"), string("pass")]),
-        record("check", vec![string("no-authority-grant"), string("pass")]),
-        record("check", vec![string("rollup-and-receipt-refs-verified"), string("pass")]),
-        record("check", vec![
-            string("all-inputs-readable"),
-            string(if all_inputs_readable { "pass" } else { "fail" }),
+        preserves_rail::record("check", vec![preserves_rail::string("evidence-only"), preserves_rail::string("pass")]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("no-authority-grant"),
+            preserves_rail::string("pass"),
         ]),
-        record("check", vec![string("index-decision"), string(decision)]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("rollup-and-receipt-refs-verified"),
+            preserves_rail::string("pass"),
+        ]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("all-inputs-readable"),
+            preserves_rail::string(if all_inputs_readable { "pass" } else { "fail" }),
+        ]),
+        preserves_rail::record("check", vec![
+            preserves_rail::string("index-decision"),
+            preserves_rail::string(decision),
+        ]),
     ]
 }
 
 fn refs_value(refs: &BTreeSet<String>) -> IOValue {
-    sequence(refs.iter().map(string).collect())
+    preserves_rail::sequence(refs.iter().map(preserves_rail::string).collect())
 }
 
 fn divergence_counts_value(counts: &BTreeMap<String, u64>) -> IOValue {
-    sequence(
+    preserves_rail::sequence(
         counts
             .iter()
-            .map(|(kind, count)| record("divergence-count", vec![string(kind), u64_value(*count)]))
+            .map(|(kind, count)| {
+                preserves_rail::record("divergence-count", vec![
+                    preserves_rail::string(kind),
+                    preserves_rail::u64_value(*count),
+                ])
+            })
             .collect(),
     )
 }
@@ -1207,7 +1283,7 @@ fn require_schema_value(value: &Value<IOValue>, schema: &str, label: &str) -> Re
 }
 
 fn record_string_value(value: &Value<IOValue>, label: &'static str) -> Result<String> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
@@ -1215,7 +1291,7 @@ fn record_string_value(value: &Value<IOValue>, label: &'static str) -> Result<St
 }
 
 fn record_u64_value(value: &Value<IOValue>, label: &'static str) -> Result<u64> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
@@ -1226,7 +1302,7 @@ fn record_u64_value(value: &Value<IOValue>, label: &'static str) -> Result<u64> 
 }
 
 fn record_ref_list_value(value: &Value<IOValue>, label: &'static str) -> Result<Vec<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| crate::error::MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
@@ -1236,14 +1312,14 @@ fn record_ref_list_value(value: &Value<IOValue>, label: &'static str) -> Result<
     let mut refs = Vec::with_capacity(items.len());
     for item in items.iter() {
         let reference = required_string_value(item, label)?;
-        validate_content_ref(&reference)?;
+        preserves_rail::validate_content_ref(&reference)?;
         refs.push(reference);
     }
     Ok(refs)
 }
 
 fn record_divergence_counts_value(value: &Value<IOValue>) -> Result<BTreeMap<String, u64>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("divergence-counts", Some(1))
         .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected <divergence-counts ...>"))?;
@@ -1257,7 +1333,7 @@ fn record_divergence_counts_value(value: &Value<IOValue>) -> Result<BTreeMap<Str
     }
     let mut count_entries = Vec::with_capacity(items.len());
     for item in items.iter() {
-        let item = value_to_iovalue(item);
+        let item = preserves_rail::value_to_iovalue(item);
         let count_fields = item
             .collect_simple_record("divergence-count", Some(2))
             .ok_or_else(|| crate::error::MoltenError::invalid_harness("expected <divergence-count ...>"))?;
@@ -1300,7 +1376,7 @@ fn validate_divergence_ref(reference: &str) -> Result<()> {
     if reference == "none" {
         Ok(())
     } else {
-        validate_content_ref(reference)
+        preserves_rail::validate_content_ref(reference)
     }
 }
 
@@ -1335,9 +1411,7 @@ mod tests {
     use super::trace_privacy_receipt;
     use super::verify_fixture_value;
     use crate::chunk_store;
-    use crate::preserves_rail::canonical_hash;
-    use crate::preserves_rail::string;
-    use crate::preserves_rail::to_text;
+    use crate::preserves_rail;
     use crate::runtime::PredicateDecision;
     use crate::runtime::RuntimeSnapshotAuthorityState;
     use crate::runtime::evaluate_snapshot_authority;
@@ -1363,7 +1437,7 @@ mod tests {
         assert!(fixture.effect_log_ref.starts_with("blake3:"));
         assert!(fixture.output_ref.starts_with("blake3:"));
         assert!(fixture.final_state_ref.starts_with("blake3:"));
-        let text = to_text(&fixture.value).expect("render fixture");
+        let text = preserves_rail::to_text(&fixture.value).expect("render fixture");
         assert!(text.contains("deterministic-fixture-record-v1"));
         assert!(text.contains("deterministic-run-identity-v1"));
         assert!(text.contains("artifact-ref"));
@@ -1384,7 +1458,7 @@ mod tests {
         assert_eq!(receipt.decision, "pass");
         assert_eq!(receipt.divergence, ReplayDivergenceKind::None);
         assert!(receipt.first_divergence.is_none());
-        assert_eq!(receipt.receipt_ref, canonical_hash(&receipt.value).expect("receipt hash"));
+        assert_eq!(receipt.receipt_ref, preserves_rail::canonical_hash(&receipt.value).expect("receipt hash"));
     }
 
     #[test]
@@ -1406,7 +1480,7 @@ mod tests {
             assert_eq!(receipt.decision, "deny");
             assert_eq!(receipt.divergence, expected);
             let divergence = receipt.first_divergence.expect("first divergence");
-            let text = to_text(&divergence).expect("render divergence");
+            let text = preserves_rail::to_text(&divergence).expect("render divergence");
             assert!(text.contains(expected.as_str()));
             assert!(text.contains("safe-canonical-refs-only"));
         }
@@ -1417,7 +1491,7 @@ mod tests {
         let receipt = verify_fixture_value(ReplayFixtureVariant::MissingRecordedEffect).expect("verify missing effect");
         assert_eq!(receipt.decision, "deny");
         assert_eq!(receipt.divergence, ReplayDivergenceKind::LiveEffect);
-        let text = to_text(&receipt.value).expect("render receipt");
+        let text = preserves_rail::to_text(&receipt.value).expect("render receipt");
         assert!(text.contains("recorded-effects-only"));
         assert!(text.contains("live-effect"));
     }
@@ -1441,8 +1515,8 @@ mod tests {
         assert_eq!(rollup.total_count, 2);
         assert_eq!(rollup.pass_count, 1);
         assert_eq!(rollup.deny_count, 1);
-        assert_eq!(rollup.rollup_ref, canonical_hash(&rollup.value).expect("rollup hash"));
-        let text = to_text(&rollup.value).expect("render rollup");
+        assert_eq!(rollup.rollup_ref, preserves_rail::canonical_hash(&rollup.value).expect("rollup hash"));
+        let text = preserves_rail::to_text(&rollup.value).expect("render rollup");
         assert!(text.contains("deterministic-replay-rollup-v1"));
         assert!(text.contains("effect-response"));
         assert!(text.contains("individual-receipts-required"));
@@ -1451,7 +1525,8 @@ mod tests {
     #[test]
     fn replay_rollup_denies_mismatched_receipt_refs_without_counting_them() {
         let pass = verify_fixture_value(ReplayFixtureVariant::Baseline).expect("pass replay");
-        let wrong_ref = canonical_hash(&record_fixture_value().expect("fixture").value).expect("fixture ref");
+        let wrong_ref =
+            preserves_rail::canonical_hash(&record_fixture_value().expect("fixture").value).expect("fixture ref");
         let rollup = rollup_replay_receipts(&[ReplayRollupInput {
             expected_ref: Some(wrong_ref.clone()),
             value: pass.value,
@@ -1459,7 +1534,7 @@ mod tests {
         .expect("rollup replay receipts");
         assert_eq!(rollup.decision, "deny");
         assert_eq!(rollup.total_count, 0);
-        let text = to_text(&rollup.value).expect("render rollup");
+        let text = preserves_rail::to_text(&rollup.value).expect("render rollup");
         assert!(text.contains("replay receipt ref mismatch"));
         assert!(text.contains(&wrong_ref));
         assert!(text.contains("all-inputs-readable"));
@@ -1514,8 +1589,8 @@ mod tests {
         assert_eq!(index.deny_count, 1);
         assert_eq!(index.raw_receipt_count, 1);
         assert_eq!(index.rollup_count, 1);
-        assert_eq!(index.index_ref, canonical_hash(&index.value).expect("index hash"));
-        let text = to_text(&index.value).expect("render index");
+        assert_eq!(index.index_ref, preserves_rail::canonical_hash(&index.value).expect("index hash"));
+        let text = preserves_rail::to_text(&index.value).expect("render index");
         assert!(text.contains("deterministic-replay-index-v1"));
         assert!(text.contains("rollup-and-receipt-refs-verified"));
         assert!(text.contains("output"));
@@ -1529,7 +1604,8 @@ mod tests {
             value: pass.value,
         }])
         .expect("rollup replay receipts");
-        let wrong_ref = canonical_hash(&record_fixture_value().expect("fixture").value).expect("fixture ref");
+        let wrong_ref =
+            preserves_rail::canonical_hash(&record_fixture_value().expect("fixture").value).expect("fixture ref");
         let index = index_replay_evidence(&[ReplayIndexInput {
             expected_ref: Some(wrong_ref.clone()),
             value: rollup.value,
@@ -1537,7 +1613,7 @@ mod tests {
         .expect("index replay evidence");
         assert_eq!(index.decision, "deny");
         assert_eq!(index.total_count, 0);
-        let text = to_text(&index.value).expect("render index");
+        let text = preserves_rail::to_text(&index.value).expect("render index");
         assert!(text.contains("replay index ref mismatch"));
         assert!(text.contains(&wrong_ref));
     }
@@ -1555,8 +1631,8 @@ mod tests {
             })
             .expect("integration receipt");
             assert_eq!(receipt.decision, "pass");
-            assert_eq!(receipt.receipt_ref, canonical_hash(&receipt.value).expect("receipt ref"));
-            let text = to_text(&receipt.value).expect("render integration receipt");
+            assert_eq!(receipt.receipt_ref, preserves_rail::canonical_hash(&receipt.value).expect("receipt ref"));
+            let text = preserves_rail::to_text(&receipt.value).expect("render integration receipt");
             assert!(text.contains(integration_kind));
             assert!(text.contains("handler-profile-bound"));
             assert!(text.contains("effect-log-bound"));
@@ -1572,7 +1648,11 @@ mod tests {
         })
         .expect("integration denial");
         assert_eq!(denied.decision, "deny");
-        assert!(to_text(&denied.value).expect("denial text").contains("no-live-effect-during-replay"));
+        assert!(
+            preserves_rail::to_text(&denied.value)
+                .expect("denial text")
+                .contains("no-live-effect-during-replay")
+        );
     }
 
     #[test]
@@ -1587,8 +1667,8 @@ mod tests {
         };
         let denied = trace_privacy_receipt(&input).expect("trace privacy deny");
         assert_eq!(denied.decision, "deny");
-        assert_eq!(denied.receipt_ref, canonical_hash(&denied.value).expect("privacy receipt ref"));
-        let denied_text = to_text(&denied.value).expect("render denied privacy receipt");
+        assert_eq!(denied.receipt_ref, preserves_rail::canonical_hash(&denied.value).expect("privacy receipt ref"));
+        let denied_text = preserves_rail::to_text(&denied.value).expect("render denied privacy receipt");
         assert!(denied_text.contains("policy-admission-before-render"));
         assert!(denied_text.contains("sensitive-trace-gated"));
 
@@ -1598,7 +1678,7 @@ mod tests {
         })
         .expect("trace privacy redacted");
         assert_eq!(redacted.decision, "redacted");
-        let redacted_text = to_text(&redacted.value).expect("render redacted privacy receipt");
+        let redacted_text = preserves_rail::to_text(&redacted.value).expect("render redacted privacy receipt");
         assert!(redacted_text.contains("redacted-view-when-authorized-sensitive"));
 
         let public = trace_privacy_receipt(&TracePrivacyInput {
@@ -1622,7 +1702,7 @@ mod tests {
         let second = chaos_schedule_receipt(&input).expect("chaos schedule repeat");
         assert_eq!(first.schedule_ref, second.schedule_ref);
         assert_eq!(first.decision, second.decision);
-        let text = to_text(&first.value).expect("render chaos schedule");
+        let text = preserves_rail::to_text(&first.value).expect("render chaos schedule");
         assert!(text.contains("deterministic-chaos-schedule-v1"));
         assert!(text.contains("replay-identity-bound"));
         assert!(text.contains("evidence-only-no-authority"));
@@ -1653,7 +1733,7 @@ mod tests {
         assert_eq!(first.receipt_ref, second.receipt_ref);
         assert_eq!(first.decision, "pass");
         assert_eq!(first.divergence, ReplayDivergenceKind::None);
-        let first_text = to_text(&first.value).expect("render first replay");
+        let first_text = preserves_rail::to_text(&first.value).expect("render first replay");
         assert!(first_text.contains("ordered-boundary-comparison"));
         assert!(first_text.contains("recorded-effects-only"));
 
@@ -1662,7 +1742,7 @@ mod tests {
         assert_eq!(trace_a.record_ref, trace_b.record_ref);
         assert_eq!(trace_a.effect_log_ref, trace_b.effect_log_ref);
         assert_eq!(trace_a.final_state_ref, trace_b.final_state_ref);
-        let trace_text = to_text(&trace_a.value).expect("render fixture record");
+        let trace_text = preserves_rail::to_text(&trace_a.value).expect("render fixture record");
         assert!(trace_text.contains("no-ambient-observations"));
 
         let variant = if salt.is_multiple_of(2) {
@@ -1678,9 +1758,12 @@ mod tests {
             assert_eq!(scheduler_check.decision, "pass");
         }
 
-        let snapshot_ref = canonical_hash(&string(format!("snapshot-{salt}"))).expect("snapshot ref");
-        let admitted_ref = canonical_hash(&string(format!("admitted-{salt}"))).expect("admitted ref");
-        let redacted_ref = canonical_hash(&string(format!("redacted-{salt}"))).expect("redacted ref");
+        let snapshot_ref =
+            preserves_rail::canonical_hash(&preserves_rail::string(format!("snapshot-{salt}"))).expect("snapshot ref");
+        let admitted_ref =
+            preserves_rail::canonical_hash(&preserves_rail::string(format!("admitted-{salt}"))).expect("admitted ref");
+        let redacted_ref =
+            preserves_rail::canonical_hash(&preserves_rail::string(format!("redacted-{salt}"))).expect("redacted ref");
         let mut requested_refs = vec![admitted_ref.clone(), redacted_ref.clone()];
         requested_refs.sort();
         let snapshot_state = RuntimeSnapshotAuthorityState {
