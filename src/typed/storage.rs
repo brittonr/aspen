@@ -8,22 +8,60 @@ use redb::ReadableDatabase;
 use redb::ReadableTable;
 
 use crate::chunk_store;
-use crate::effects::ADAPTER_KIND_STORAGE;
-use crate::effects::EffectScope;
-use crate::effects::effect_handle_value;
-use crate::effects::handler_binding_value;
-use crate::effects::validate_handle_for_request;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::parse_canonical_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::value_to_iovalue;
 use crate::schema_identity;
+
+const ADAPTER_KIND_STORAGE: &str = crate::effects::ADAPTER_KIND_STORAGE;
+type EffectScope = crate::effects::EffectScope;
+
+fn effect_handle_value(input: &crate::effects::EffectHandleInput) -> Result<IOValue> {
+    crate::effects::effect_handle_value(input)
+}
+
+fn handler_binding_value(input: &crate::effects::HandlerBindingInput) -> Result<IOValue> {
+    crate::effects::handler_binding_value(input)
+}
+
+fn validate_handle_for_request(
+    handler_value: &IOValue,
+    handle_value: &IOValue,
+    request: &crate::effects::EffectHandleRequest<'_>,
+) -> Result<crate::effects::EffectHandleValidation> {
+    crate::effects::validate_handle_for_request(handler_value, handle_value, request)
+}
+
+fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+    crate::preserves_rail::parse_canonical_bytes(bytes)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const INLINE_VALUE_LIMIT: usize = 4096;
 
