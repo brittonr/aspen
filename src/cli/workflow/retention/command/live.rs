@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
-use clap::Args;
-
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct RequestSend {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -62,7 +60,7 @@ pub(crate) struct RequestSend {
     pub(crate) receipt_out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct ResponseSend {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -113,7 +111,7 @@ pub(crate) struct ResponseSend {
     pub(crate) receipt_out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct ImportWorkflow {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -147,7 +145,7 @@ pub(crate) struct ImportWorkflow {
     pub(crate) receipt_out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Loopback {
     #[arg(long)]
     pub(crate) root: PathBuf,

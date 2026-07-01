@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
-use clap::Args;
-
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Class {
     #[arg(long)]
     pub(crate) class_name: String,
@@ -24,7 +22,7 @@ pub(crate) struct Class {
     pub(crate) out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Pin {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -54,7 +52,7 @@ pub(crate) struct Pin {
     pub(crate) receipt_out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Unpin {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -72,7 +70,7 @@ pub(crate) struct Unpin {
     pub(crate) receipt_out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Admit {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -108,7 +106,7 @@ pub(crate) struct Admit {
     pub(crate) out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Record {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -146,7 +144,7 @@ pub(crate) struct Record {
     pub(crate) out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Request {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -174,7 +172,7 @@ pub(crate) struct Request {
     pub(crate) out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Respond {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -193,7 +191,7 @@ pub(crate) struct Respond {
     pub(crate) out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Import {
     #[arg(long)]
     pub(crate) root: PathBuf,

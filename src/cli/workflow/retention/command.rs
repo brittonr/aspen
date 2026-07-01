@@ -5,10 +5,8 @@ pub(crate) mod live;
 #[path = "command/ops.rs"]
 pub(crate) mod ops;
 
-use clap::Subcommand;
-
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, Subcommand)]
+#[derive(Debug, clap::Subcommand)]
 pub(crate) enum Top {
     Class(base::Class),
     Pin(base::Pin),

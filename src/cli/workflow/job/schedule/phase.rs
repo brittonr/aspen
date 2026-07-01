@@ -1,5 +1,3 @@
-use molten::error::Result;
-
 use super::*;
 
 pub(super) struct ApplyInput<'a> {
@@ -18,7 +16,9 @@ pub(super) struct LeaseInput<'a> {
     pub(super) lease_key: &'a str,
 }
 
-pub(super) fn dequeue_once(input: ApplyInput<'_>) -> Result<Option<molten::coordination::CoordinationApplyResult>> {
+pub(super) fn dequeue_once(
+    input: ApplyInput<'_>,
+) -> molten::error::Result<Option<molten::coordination::CoordinationApplyResult>> {
     let request = coordination_request(RequestInput {
         service: molten::coordination::SERVICE_QUEUE,
         operation: molten::coordination::OP_DEQUEUE,
@@ -37,7 +37,9 @@ pub(super) fn dequeue_once(input: ApplyInput<'_>) -> Result<Option<molten::coord
     Ok(Some(result))
 }
 
-pub(super) fn lease_once(input: LeaseInput<'_>) -> Result<Option<molten::coordination::CoordinationApplyResult>> {
+pub(super) fn lease_once(
+    input: LeaseInput<'_>,
+) -> molten::error::Result<Option<molten::coordination::CoordinationApplyResult>> {
     let request = coordination_request(RequestInput {
         service: molten::coordination::SERVICE_LOCK,
         operation: molten::coordination::OP_ACQUIRE,
@@ -71,7 +73,7 @@ pub(super) struct WorkerInput<'a> {
     pub(super) worker: &'a mut Option<molten::job_dag::JobWorkerExecution>,
 }
 
-pub(super) fn run_or_release(input: WorkerInput<'_>) -> Result<()> {
+pub(super) fn run_or_release(input: WorkerInput<'_>) -> molten::error::Result<()> {
     let Some(token) = input.lease.and_then(|result| result.token.as_ref()) else {
         input.diagnostics.push("coordination lease did not emit fencing token".to_string());
         return Ok(());
@@ -126,7 +128,7 @@ struct ReleaseInput<'a> {
     token: u64,
 }
 
-fn release_once(input: ReleaseInput<'_>) -> Result<molten::coordination::CoordinationApplyResult> {
+fn release_once(input: ReleaseInput<'_>) -> molten::error::Result<molten::coordination::CoordinationApplyResult> {
     let request = coordination_request(RequestInput {
         service: molten::coordination::SERVICE_LOCK,
         operation: molten::coordination::OP_RELEASE,
@@ -140,7 +142,7 @@ fn release_once(input: ReleaseInput<'_>) -> Result<molten::coordination::Coordin
     molten::coordination::apply_coordination_request(input.runtime, &request)
 }
 
-fn worker_execution(input: &LocalInput<'_>) -> Result<molten::job_dag::JobWorkerExecution> {
+fn worker_execution(input: &LocalInput<'_>) -> molten::error::Result<molten::job_dag::JobWorkerExecution> {
     let worker_out = input.out.join("worker");
     super::super::worker::run_local_execution(super::super::worker::RunInput {
         request_value: input.request_value,

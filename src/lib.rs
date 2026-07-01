@@ -93,10 +93,8 @@ pub fn greeting() -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use super::greeting;
-
     #[test]
     fn greeting_mentions_project_name() {
-        assert!(greeting().contains("molten"));
+        assert!(super::greeting().contains("molten"));
     }
 }

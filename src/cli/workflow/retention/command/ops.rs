@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
-use clap::Args;
-
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Explain {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -20,7 +18,7 @@ pub(crate) struct Explain {
     pub(crate) out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct BundleExport {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -32,7 +30,7 @@ pub(crate) struct BundleExport {
     pub(crate) profile: String,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct BundleVerify {
     #[arg(long)]
     pub(crate) bundle: PathBuf,
@@ -40,7 +38,7 @@ pub(crate) struct BundleVerify {
     pub(crate) receipt_out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct GcPlan {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -60,7 +58,7 @@ pub(crate) struct GcPlan {
     pub(crate) out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct GcApplyPlan {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -70,7 +68,7 @@ pub(crate) struct GcApplyPlan {
     pub(crate) receipt_out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct GcAudit {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -80,7 +78,7 @@ pub(crate) struct GcAudit {
     pub(crate) out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Check {
     #[arg(long)]
     pub(crate) root: PathBuf,
@@ -112,13 +110,13 @@ pub(crate) struct Check {
     pub(crate) receipt_out: Option<PathBuf>,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct RunFixture {
     #[arg(long)]
     pub(crate) out: PathBuf,
 }
 
-#[derive(Debug, Args)]
+#[derive(Debug, clap::Args)]
 pub(crate) struct Show {
     pub(crate) artifact: PathBuf,
 }

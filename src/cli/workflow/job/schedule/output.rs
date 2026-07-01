@@ -1,12 +1,10 @@
-use molten::error::Result;
-
 use super::*;
 
 fn pass_fail(value: bool) -> &'static str {
     if value { "pass" } else { "fail" }
 }
 
-pub(super) fn finalize(input: FinalizeInput<'_>) -> Result<LocalResult> {
+pub(super) fn finalize(input: FinalizeInput<'_>) -> molten::error::Result<LocalResult> {
     let mut input = input;
     let final_state_value = molten::coordination::coordination_state_snapshot_value(&input.runtime.state)?;
     let final_state_ref = molten::preserves_rail::canonical_hash(&final_state_value)?;
@@ -16,7 +14,7 @@ pub(super) fn finalize(input: FinalizeInput<'_>) -> Result<LocalResult> {
         .as_slice()
         .iter()
         .map(molten::preserves_rail::canonical_hash)
-        .collect::<Result<Vec<_>>>()?;
+        .collect::<molten::error::Result<Vec<_>>>()?;
     let decision = if input.diagnostics.is_empty() { "pass" } else { "deny" };
     let report_value =
         molten::coordination::coordination_apply_report_value(molten::coordination::ApplyReportValueInput {
@@ -58,7 +56,7 @@ fn receipt_value(
     decision: &str,
     report_ref: &str,
     refs: &[String],
-) -> Result<preserves::IOValue> {
+) -> molten::error::Result<preserves::IOValue> {
     let worker_receipt_ref = input.worker.map(|worker| worker.receipt_ref.as_str());
     let result_ref = input.worker.map(|worker| worker.result.result_ref.as_str());
     let token_ref = input.lease.and_then(|lease| lease.token.as_ref()).map(|token| token.token_ref.as_str());
@@ -103,7 +101,7 @@ fn write_outputs(
     evidence_values: &[preserves::IOValue],
     report_value: &preserves::IOValue,
     receipt_value: &preserves::IOValue,
-) -> Result<()> {
+) -> molten::error::Result<()> {
     std::fs::create_dir_all(input.input.out).map_err(molten::error::MoltenError::from)?;
     io::write_file(
         &input.input.out.join("schedule-receipt.preserves"),
@@ -120,7 +118,7 @@ fn write_outputs(
     write_optional_receipts(input, &coordination_out)
 }
 
-fn write_optional_receipts(input: &FinalizeInput<'_>, coordination_out: &std::path::Path) -> Result<()> {
+fn write_optional_receipts(input: &FinalizeInput<'_>, coordination_out: &std::path::Path) -> molten::error::Result<()> {
     if let Some(result) = input.enqueue {
         io::write_file(
             &coordination_out.join("enqueue-receipt.preserves"),

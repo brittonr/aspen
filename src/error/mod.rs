@@ -1,5 +1,3 @@
-use std::fmt;
-
 pub type Result<T> = std::result::Result<T, MoltenError>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,8 +45,8 @@ impl MoltenError {
     }
 }
 
-impl fmt::Display for MoltenError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for MoltenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MoltenError::Io(message) => write!(f, "io error: {message}"),
             MoltenError::Preserves(message) => write!(f, "preserves error: {message}"),
