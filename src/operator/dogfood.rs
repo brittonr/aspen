@@ -4972,18 +4972,36 @@ fn usize_to_u64(value: usize, field: &str) -> Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    type PathBuf = std::path::PathBuf;
+    type SignReceiptInput<'a> = crate::evidence::SignReceiptInput<'a>;
+    type SignedReceiptKeyInput<'a> = crate::evidence::SignedReceiptKeyInput<'a>;
+    type SignedReceiptKeyRevocationInput<'a> = crate::evidence::SignedReceiptKeyRevocationInput<'a>;
 
     use super::*;
-    use crate::evidence::SignReceiptInput;
-    use crate::evidence::SignedReceiptKeyInput;
-    use crate::evidence::SignedReceiptKeyRevocationInput;
-    use crate::evidence::parse_signed_receipt_key;
-    use crate::evidence::parse_signed_receipt_key_revocation;
-    use crate::evidence::sign_receipt;
-    use crate::evidence::signed_receipt_key_revocation_value;
-    use crate::evidence::signed_receipt_key_value;
-    use crate::preserves_rail::to_text;
+
+    fn parse_signed_receipt_key(value: &IOValue) -> Result<SignedReceiptKey> {
+        crate::evidence::parse_signed_receipt_key(value)
+    }
+
+    fn parse_signed_receipt_key_revocation(value: &IOValue) -> Result<SignedReceiptKeyRevocation> {
+        crate::evidence::parse_signed_receipt_key_revocation(value)
+    }
+
+    fn sign_receipt(input: &SignReceiptInput<'_>) -> Result<IOValue> {
+        crate::evidence::sign_receipt(input)
+    }
+
+    fn signed_receipt_key_value(input: &SignedReceiptKeyInput<'_>) -> Result<IOValue> {
+        crate::evidence::signed_receipt_key_value(input)
+    }
+
+    fn signed_receipt_key_revocation_value(input: &SignedReceiptKeyRevocationInput<'_>) -> Result<IOValue> {
+        crate::evidence::signed_receipt_key_revocation_value(input)
+    }
+
+    fn to_text(value: &IOValue) -> Result<String> {
+        preserves_rail::to_text(value)
+    }
 
     #[test]
     fn local_node_dogfood_runs_and_gates_release() {
