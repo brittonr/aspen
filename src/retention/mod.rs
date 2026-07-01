@@ -14,35 +14,7 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::node_daemon;
 use crate::node_runtime;
-use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
-use crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_PROFILE_SCHEMA;
-use crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_SCHEMA;
-use crate::preserves_rail::RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA;
-use crate::preserves_rail::RETENTION_CANDIDATE_EXPLAIN_SCHEMA;
-use crate::preserves_rail::RETENTION_CLASS_SCHEMA;
-use crate::preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA;
-use crate::preserves_rail::RETENTION_GC_APPLY_SCHEMA;
-use crate::preserves_rail::RETENTION_GC_AUDIT_SCHEMA;
-use crate::preserves_rail::RETENTION_GC_EXECUTE_SCHEMA;
-use crate::preserves_rail::RETENTION_GC_PLAN_SCHEMA;
-use crate::preserves_rail::RETENTION_PIN_SCHEMA;
-use crate::preserves_rail::RETENTION_RECEIPT_SCHEMA;
-use crate::preserves_rail::RETENTION_REFERENCE_INDEX_SCHEMA;
-use crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_IMPORT_SCHEMA;
-use crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_LIVE_WORKFLOW_SCHEMA;
-use crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_REQUEST_SCHEMA;
-use crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_RESPONSE_SCHEMA;
-use crate::preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_SCHEMA;
-use crate::preserves_rail::RETENTION_TOMBSTONE_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::parse_text;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+use crate::preserves_rail;
 
 pub const CLASS_EPHEMERAL_CACHE: &str = "ephemeral-cache";
 pub const CLASS_DEBUG_TRACE: &str = "debug-trace";
@@ -898,19 +870,23 @@ pub struct RetentionEvaluation {
 pub fn retention_class_profile_value(input: &RetentionClassProfileInput) -> Result<IOValue> {
     validate_class_profile_input(input)?;
     let diagnostics = class_profile_diagnostics(input)?;
-    Ok(record("retention-class-v1", vec![
-        string(RETENTION_CLASS_SCHEMA),
-        record("class", vec![string(&input.class_name)]),
-        record("minimum-age-seconds", vec![u64_value(input.minimum_age_seconds)]),
-        record("maximum-age-seconds", vec![optional_u64_value(input.maximum_age_seconds)]),
-        record("deletion-authority", vec![string(&input.deletion_authority_ref)]),
-        record("policy", vec![strings_sequence(&input.policy_refs)]),
-        record("capabilities", vec![sequence(vec![
-            record("secret-redaction-hook", vec![string(pass_or_deny(input.has_secret_redaction_hook))]),
-            record("remote-gc-plan", vec![string(pass_or_deny(input.has_remote_gc_plan))]),
-            record("compaction", vec![string(pass_or_deny(input.can_compact))]),
+    Ok(preserves_rail::record("retention-class-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_CLASS_SCHEMA),
+        preserves_rail::record("class", vec![preserves_rail::string(&input.class_name)]),
+        preserves_rail::record("minimum-age-seconds", vec![preserves_rail::u64_value(input.minimum_age_seconds)]),
+        preserves_rail::record("maximum-age-seconds", vec![optional_u64_value(input.maximum_age_seconds)]),
+        preserves_rail::record("deletion-authority", vec![preserves_rail::string(&input.deletion_authority_ref)]),
+        preserves_rail::record("policy", vec![strings_sequence(&input.policy_refs)]),
+        preserves_rail::record("capabilities", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("secret-redaction-hook", vec![preserves_rail::string(pass_or_deny(
+                input.has_secret_redaction_hook,
+            ))]),
+            preserves_rail::record("remote-gc-plan", vec![preserves_rail::string(pass_or_deny(
+                input.has_remote_gc_plan,
+            ))]),
+            preserves_rail::record("compaction", vec![preserves_rail::string(pass_or_deny(input.can_compact))]),
         ])]),
-        record("diagnostics", vec![strings_sequence(&diagnostics)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value(&[
             ("class-known", "pass"),
             ("policy-bound", "pass"),
@@ -923,7 +899,7 @@ pub fn parse_retention_class_profile(value: &IOValue) -> Result<RetentionClassPr
     let fields = value
         .collect_simple_record("retention-class-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-class-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_CLASS_SCHEMA, "retention class schema")?;
+    require_schema(&fields[0], preserves_rail::RETENTION_CLASS_SCHEMA, "retention class schema")?;
     let class_name = record_string(&fields[1], "class")?;
     let minimum_age_seconds = record_u64(&fields[2], "minimum-age-seconds")?;
     let maximum_age_seconds = record_optional_u64(&fields[3], "maximum-age-seconds")?;
@@ -933,7 +909,7 @@ pub fn parse_retention_class_profile(value: &IOValue) -> Result<RetentionClassPr
     validate_retention_class(&class_name)?;
     require_check(&parse_checks(&fields[8])?, "mutable-name-not-gc-proof", "retention class profile")?;
     Ok(RetentionClassProfile {
-        profile_ref: canonical_hash(value)?,
+        profile_ref: preserves_rail::canonical_hash(value)?,
         class_name,
         minimum_age_seconds,
         maximum_age_seconds,
@@ -947,16 +923,16 @@ pub fn parse_retention_class_profile(value: &IOValue) -> Result<RetentionClassPr
 pub fn retention_pin_value(input: &RetentionPinInput) -> Result<IOValue> {
     validate_pin_input(input)?;
     let authority_status = if input.has_authority { "pass" } else { "deny" };
-    Ok(record("retention-pin-v1", vec![
-        string(RETENTION_PIN_SCHEMA),
+    Ok(preserves_rail::record("retention-pin-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_PIN_SCHEMA),
         object_value(&input.object_ref, &input.object_kind),
-        record("class", vec![string(&input.retention_class)]),
-        record("source", vec![string(&input.source)]),
-        record("reason", vec![string(&input.reason)]),
-        record("owner", vec![string(&input.owner_ref)]),
-        record("expiry", vec![optional_ref_value(input.expiry_ref.as_deref())]),
-        record("policy", vec![strings_sequence(&input.policy_refs)]),
-        record("evidence", vec![strings_sequence(&input.evidence_refs)]),
+        preserves_rail::record("class", vec![preserves_rail::string(&input.retention_class)]),
+        preserves_rail::record("source", vec![preserves_rail::string(&input.source)]),
+        preserves_rail::record("reason", vec![preserves_rail::string(&input.reason)]),
+        preserves_rail::record("owner", vec![preserves_rail::string(&input.owner_ref)]),
+        preserves_rail::record("expiry", vec![optional_ref_value(input.expiry_ref.as_deref())]),
+        preserves_rail::record("policy", vec![strings_sequence(&input.policy_refs)]),
+        preserves_rail::record("evidence", vec![strings_sequence(&input.evidence_refs)]),
         checks_value(&[
             ("object-ref-bound", "pass"),
             ("pin-source-bound", "pass"),
@@ -970,7 +946,7 @@ pub fn parse_retention_pin(value: &IOValue) -> Result<RetentionPin> {
     let fields = value
         .collect_simple_record("retention-pin-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-pin-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_PIN_SCHEMA, "retention pin schema")?;
+    require_schema(&fields[0], preserves_rail::RETENTION_PIN_SCHEMA, "retention pin schema")?;
     let (object_ref, object_kind) = parse_object_value(&fields[1])?;
     let retention_class = record_string(&fields[2], "class")?;
     let source = record_string(&fields[3], "source")?;
@@ -985,7 +961,7 @@ pub fn parse_retention_pin(value: &IOValue) -> Result<RetentionPin> {
     validate_retention_class(&retention_class)?;
     validate_pin_source(&source)?;
     Ok(RetentionPin {
-        pin_ref: canonical_hash(value)?,
+        pin_ref: preserves_rail::canonical_hash(value)?,
         object_ref,
         object_kind,
         retention_class,
@@ -1088,14 +1064,18 @@ pub fn unpin_object(input: UnpinObjectInput<'_>) -> Result<RetentionReceipt> {
 
 pub fn reference_index_value(input: &RetentionReferenceIndexInput) -> Result<IOValue> {
     validate_reference_index_input(input)?;
-    Ok(record("retention-reference-index-v1", vec![
-        string(RETENTION_REFERENCE_INDEX_SCHEMA),
+    Ok(preserves_rail::record("retention-reference-index-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_REFERENCE_INDEX_SCHEMA),
         object_value(&input.object_ref, &input.object_kind),
-        record("pins", vec![strings_sequence(&input.pin_refs)]),
-        record("retained", vec![strings_sequence(&input.retained_refs)]),
-        record("tombstones", vec![strings_sequence(&input.tombstone_refs)]),
-        record("remote", vec![strings_sequence(&input.remote_refs)]),
-        record("proof", vec![string(if input.is_complete { "complete" } else { "incomplete" })]),
+        preserves_rail::record("pins", vec![strings_sequence(&input.pin_refs)]),
+        preserves_rail::record("retained", vec![strings_sequence(&input.retained_refs)]),
+        preserves_rail::record("tombstones", vec![strings_sequence(&input.tombstone_refs)]),
+        preserves_rail::record("remote", vec![strings_sequence(&input.remote_refs)]),
+        preserves_rail::record("proof", vec![preserves_rail::string(if input.is_complete {
+            "complete"
+        } else {
+            "incomplete"
+        })]),
         checks_value(&[
             ("active-pins-indexed", "pass"),
             ("receipt-dependencies-indexed", "pass"),
@@ -1109,7 +1089,7 @@ pub fn parse_reference_index(value: &IOValue) -> Result<RetentionReferenceIndex>
     let fields = value
         .collect_simple_record("retention-reference-index-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-reference-index-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_REFERENCE_INDEX_SCHEMA, "retention reference index schema")?;
+    require_schema(&fields[0], preserves_rail::RETENTION_REFERENCE_INDEX_SCHEMA, "retention reference index schema")?;
     let (object_ref, object_kind) = parse_object_value(&fields[1])?;
     let pin_refs = record_ref_sequence(&fields[2], "pins")?;
     let retained_refs = record_ref_sequence(&fields[3], "retained")?;
@@ -1118,7 +1098,7 @@ pub fn parse_reference_index(value: &IOValue) -> Result<RetentionReferenceIndex>
     let proof = record_string(&fields[6], "proof")?;
     require_check(&parse_checks(&fields[7])?, "mutable-name-not-gc-proof", "retention reference index")?;
     Ok(RetentionReferenceIndex {
-        index_ref: canonical_hash(value)?,
+        index_ref: preserves_rail::canonical_hash(value)?,
         object_ref,
         object_kind,
         pin_refs,
@@ -1220,21 +1200,23 @@ pub fn evaluate_retention(input: RetentionEvaluationInput<'_>) -> Result<Retenti
 
 pub fn retention_evidence_admission_value(input: &RetentionEvidenceAdmissionInput<'_>) -> Result<IOValue> {
     validate_evidence_admission_input(input)?;
-    Ok(record("retention-evidence-admission-v1", vec![
-        string(RETENTION_EVIDENCE_ADMISSION_SCHEMA),
-        record("kind", vec![string(input.kind)]),
-        record("decision", vec![string(input.decision)]),
-        record("requester", vec![string(input.requester_ref)]),
+    Ok(preserves_rail::record("retention-evidence-admission-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA),
+        preserves_rail::record("kind", vec![preserves_rail::string(input.kind)]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("requester", vec![preserves_rail::string(input.requester_ref)]),
         object_value(input.object_ref, input.object_kind),
-        record("class", vec![string(input.retention_class)]),
-        record("action", vec![string(input.action)]),
-        record("bound", vec![strings_sequence(input.bound_refs)]),
-        record("retained", vec![strings_sequence(input.retained_refs)]),
-        record("remote", vec![strings_sequence(input.remote_refs)]),
-        record("reference-index-complete", vec![string(pass_or_deny(input.is_reference_index_complete))]),
-        record("current", vec![string(pass_or_deny(input.is_current))]),
-        record("revoked", vec![strings_sequence(input.revoked_refs)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("class", vec![preserves_rail::string(input.retention_class)]),
+        preserves_rail::record("action", vec![preserves_rail::string(input.action)]),
+        preserves_rail::record("bound", vec![strings_sequence(input.bound_refs)]),
+        preserves_rail::record("retained", vec![strings_sequence(input.retained_refs)]),
+        preserves_rail::record("remote", vec![strings_sequence(input.remote_refs)]),
+        preserves_rail::record("reference-index-complete", vec![preserves_rail::string(pass_or_deny(
+            input.is_reference_index_complete,
+        ))]),
+        preserves_rail::record("current", vec![preserves_rail::string(pass_or_deny(input.is_current))]),
+        preserves_rail::record("revoked", vec![strings_sequence(input.revoked_refs)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(&[
             ("canonical-ref-binding", "pass"),
             ("scope-bound", "pass"),
@@ -1248,7 +1230,11 @@ pub fn parse_retention_evidence_admission(value: &IOValue) -> Result<RetentionEv
     let fields = value
         .collect_simple_record("retention-evidence-admission-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-evidence-admission-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_EVIDENCE_ADMISSION_SCHEMA, "retention evidence admission schema")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::RETENTION_EVIDENCE_ADMISSION_SCHEMA,
+        "retention evidence admission schema",
+    )?;
     let kind = record_string(&fields[1], "kind")?;
     validate_admission_kind(&kind)?;
     let decision = record_string(&fields[2], "decision")?;
@@ -1268,7 +1254,7 @@ pub fn parse_retention_evidence_admission(value: &IOValue) -> Result<RetentionEv
     let diagnostics = record_string_sequence(&fields[13], "diagnostics")?;
     require_check(&parse_checks(&fields[14])?, "typed-admission", "retention evidence admission")?;
     Ok(RetentionEvidenceAdmission {
-        admission_ref: canonical_hash(value)?,
+        admission_ref: preserves_rail::canonical_hash(value)?,
         kind,
         decision,
         requester_ref,
@@ -1300,22 +1286,22 @@ pub fn store_retention_evidence_admission(
 
 pub fn retention_remote_gc_clearance_value(input: &RetentionRemoteGcClearanceInput<'_>) -> Result<IOValue> {
     validate_remote_gc_clearance_input(input)?;
-    Ok(record("retention-remote-gc-clearance-v1", vec![
-        string(RETENTION_REMOTE_GC_CLEARANCE_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("requester", vec![string(input.requester_ref)]),
-        record("peer", vec![string(input.peer_ref)]),
+    Ok(preserves_rail::record("retention-remote-gc-clearance-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("requester", vec![preserves_rail::string(input.requester_ref)]),
+        preserves_rail::record("peer", vec![preserves_rail::string(input.peer_ref)]),
         object_value(input.object_ref, input.object_kind),
-        record("class", vec![string(input.retention_class)]),
-        record("action", vec![string(input.action)]),
-        record("remote", vec![string(input.remote_ref)]),
-        record("policy", vec![string(input.policy_ref)]),
-        record("authority", vec![string(input.authority_ref)]),
-        record("evidence", vec![strings_sequence(input.evidence_refs)]),
-        record("retained", vec![strings_sequence(input.retained_refs)]),
-        record("current", vec![string(pass_or_deny(input.is_current))]),
-        record("revoked", vec![strings_sequence(input.revoked_refs)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("class", vec![preserves_rail::string(input.retention_class)]),
+        preserves_rail::record("action", vec![preserves_rail::string(input.action)]),
+        preserves_rail::record("remote", vec![preserves_rail::string(input.remote_ref)]),
+        preserves_rail::record("policy", vec![preserves_rail::string(input.policy_ref)]),
+        preserves_rail::record("authority", vec![preserves_rail::string(input.authority_ref)]),
+        preserves_rail::record("evidence", vec![strings_sequence(input.evidence_refs)]),
+        preserves_rail::record("retained", vec![strings_sequence(input.retained_refs)]),
+        preserves_rail::record("current", vec![preserves_rail::string(pass_or_deny(input.is_current))]),
+        preserves_rail::record("revoked", vec![strings_sequence(input.revoked_refs)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(&[
             ("canonical-ref-binding", "pass"),
             ("peer-bound", "pass"),
@@ -1330,7 +1316,11 @@ pub fn parse_retention_remote_gc_clearance(value: &IOValue) -> Result<RetentionR
     let fields = value
         .collect_simple_record("retention-remote-gc-clearance-v1", Some(16))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_REMOTE_GC_CLEARANCE_SCHEMA, "retention remote GC clearance schema")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_SCHEMA,
+        "retention remote GC clearance schema",
+    )?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let requester_ref = record_ref(&fields[2], "requester")?;
@@ -1350,7 +1340,7 @@ pub fn parse_retention_remote_gc_clearance(value: &IOValue) -> Result<RetentionR
     let diagnostics = record_string_sequence(&fields[14], "diagnostics")?;
     require_check(&parse_checks(&fields[15])?, "peer-bound", "retention remote GC clearance")?;
     Ok(RetentionRemoteGcClearance {
-        clearance_ref: canonical_hash(value)?,
+        clearance_ref: preserves_rail::canonical_hash(value)?,
         decision,
         requester_ref,
         peer_ref,
@@ -1385,17 +1375,17 @@ pub fn retention_remote_gc_clearance_request_value(
     input: &RetentionRemoteGcClearanceRequestInput<'_>,
 ) -> Result<IOValue> {
     validate_remote_gc_clearance_request_input(input)?;
-    Ok(record("retention-remote-gc-clearance-request-v1", vec![
-        string(RETENTION_REMOTE_GC_CLEARANCE_REQUEST_SCHEMA),
-        record("requester", vec![string(input.requester_ref)]),
-        record("peer", vec![string(input.peer_ref)]),
+    Ok(preserves_rail::record("retention-remote-gc-clearance-request-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_REQUEST_SCHEMA),
+        preserves_rail::record("requester", vec![preserves_rail::string(input.requester_ref)]),
+        preserves_rail::record("peer", vec![preserves_rail::string(input.peer_ref)]),
         object_value(input.object_ref, input.object_kind),
-        record("class", vec![string(input.retention_class)]),
-        record("action", vec![string(input.action)]),
-        record("remote", vec![string(input.remote_ref)]),
-        record("policy", vec![string(input.policy_ref)]),
-        record("authority", vec![string(input.authority_ref)]),
-        record("evidence", vec![strings_sequence(input.evidence_refs)]),
+        preserves_rail::record("class", vec![preserves_rail::string(input.retention_class)]),
+        preserves_rail::record("action", vec![preserves_rail::string(input.action)]),
+        preserves_rail::record("remote", vec![preserves_rail::string(input.remote_ref)]),
+        preserves_rail::record("policy", vec![preserves_rail::string(input.policy_ref)]),
+        preserves_rail::record("authority", vec![preserves_rail::string(input.authority_ref)]),
+        preserves_rail::record("evidence", vec![strings_sequence(input.evidence_refs)]),
         checks_value(&[("request-scope-bound", "pass"), ("peer-bound", "pass")]),
     ]))
 }
@@ -1406,13 +1396,13 @@ pub fn parse_retention_remote_gc_clearance_request(value: &IOValue) -> Result<Re
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-request-v1 ...>"))?;
     require_schema(
         &fields[0],
-        RETENTION_REMOTE_GC_CLEARANCE_REQUEST_SCHEMA,
+        preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_REQUEST_SCHEMA,
         "retention remote clearance request schema",
     )?;
     require_check(&parse_checks(&fields[10])?, "request-scope-bound", "retention remote clearance request")?;
     let (object_ref, object_kind) = parse_object_value(&fields[3])?;
     let request = RetentionRemoteGcClearanceRequest {
-        request_ref: canonical_hash(value)?,
+        request_ref: preserves_rail::canonical_hash(value)?,
         requester_ref: record_ref(&fields[1], "requester")?,
         peer_ref: record_ref(&fields[2], "peer")?,
         object_ref,
@@ -1493,12 +1483,17 @@ pub fn retention_remote_gc_clearance_response_value(
         "retention remote clearance response diagnostics",
     )?;
     validate_remote_gc_clearance_workflow_scope(request, clearance)?;
-    Ok(record("retention-remote-gc-clearance-response-v1", vec![
-        string(RETENTION_REMOTE_GC_CLEARANCE_RESPONSE_SCHEMA),
-        record("request", vec![string(&request.request_ref), request.value.clone()]),
-        record("decision", vec![string(decision)]),
-        record("clearance", vec![string(&clearance.clearance_ref), clearance.value.clone()]),
-        record("diagnostics", vec![sequence(diagnostics.iter().map(string).collect())]),
+    Ok(preserves_rail::record("retention-remote-gc-clearance-response-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_RESPONSE_SCHEMA),
+        preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref), request.value.clone()]),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("clearance", vec![
+            preserves_rail::string(&clearance.clearance_ref),
+            clearance.value.clone(),
+        ]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
         checks_value(&[
             ("request-ref-verified", "pass"),
             ("clearance-ref-verified", "pass"),
@@ -1513,7 +1508,7 @@ pub fn parse_retention_remote_gc_clearance_response(value: &IOValue) -> Result<R
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-response-v1 ...>"))?;
     require_schema(
         &fields[0],
-        RETENTION_REMOTE_GC_CLEARANCE_RESPONSE_SCHEMA,
+        preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_RESPONSE_SCHEMA,
         "retention remote clearance response schema",
     )?;
     let request = parse_embedded_remote_clearance_request(&fields[1])?;
@@ -1529,7 +1524,7 @@ pub fn parse_retention_remote_gc_clearance_response(value: &IOValue) -> Result<R
     }
     validate_remote_gc_clearance_workflow_scope(&request, &clearance)?;
     Ok(RetentionRemoteGcClearanceResponse {
-        response_ref: canonical_hash(value)?,
+        response_ref: preserves_rail::canonical_hash(value)?,
         decision,
         request_ref: request.request_ref.clone(),
         request,
@@ -1555,7 +1550,7 @@ pub fn import_retention_remote_gc_clearance_response(
         Ok(response) => response,
         Err(error) => {
             let diagnostics = vec![format!("remote-clearance-tampered-response:{error}")];
-            let response_ref = canonical_hash(input.response_value)?;
+            let response_ref = preserves_rail::canonical_hash(input.response_value)?;
             let value = retention_remote_gc_clearance_import_value(&RetentionRemoteGcClearanceImportValueInput {
                 decision: "deny",
                 request_ref: &request.request_ref,
@@ -1612,15 +1607,17 @@ pub fn retention_remote_gc_clearance_import_value(
         MAX_RETENTION_DIAGNOSTICS,
         "retention remote clearance import diagnostics",
     )?;
-    Ok(record("retention-remote-gc-clearance-import-v1", vec![
-        string(RETENTION_REMOTE_GC_CLEARANCE_IMPORT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("request", vec![string(input.request_ref)]),
-        record("response", vec![string(input.response_ref)]),
-        record("clearance", vec![optional_ref_value(input.clearance_ref)]),
-        record("peer", vec![string(input.peer_ref)]),
-        record("remote", vec![string(input.remote_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
+    Ok(preserves_rail::record("retention-remote-gc-clearance-import-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_IMPORT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("request", vec![preserves_rail::string(input.request_ref)]),
+        preserves_rail::record("response", vec![preserves_rail::string(input.response_ref)]),
+        preserves_rail::record("clearance", vec![optional_ref_value(input.clearance_ref)]),
+        preserves_rail::record("peer", vec![preserves_rail::string(input.peer_ref)]),
+        preserves_rail::record("remote", vec![preserves_rail::string(input.remote_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
         checks_value(&[
             ("evidence-only", "pass"),
             ("local-clearance-stored", pass_or_deny(input.clearance_ref.is_some())),
@@ -1634,7 +1631,7 @@ pub fn parse_retention_remote_gc_clearance_import(value: &IOValue) -> Result<Ret
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-import-v1 ...>"))?;
     require_schema(
         &fields[0],
-        RETENTION_REMOTE_GC_CLEARANCE_IMPORT_SCHEMA,
+        preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_IMPORT_SCHEMA,
         "retention remote clearance import schema",
     )?;
     require_check(&parse_checks(&fields[8])?, "evidence-only", "retention remote clearance import")?;
@@ -1647,7 +1644,7 @@ pub fn parse_retention_remote_gc_clearance_import(value: &IOValue) -> Result<Ret
     let remote_ref = record_ref(&fields[6], "remote")?;
     let diagnostics = record_string_sequence(&fields[7], "diagnostics")?;
     Ok(RetentionRemoteGcClearanceImport {
-        import_ref: canonical_hash(value)?,
+        import_ref: preserves_rail::canonical_hash(value)?,
         decision,
         request_ref,
         response_ref,
@@ -1844,7 +1841,7 @@ pub fn import_retention_remote_gc_clearance_live_workflow(
     ensure_store(input.root)?;
     validate_remote_gc_clearance_live_import_workflow_input(&input)?;
     let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
-    let response_ref = canonical_hash(input.response_value)?;
+    let response_ref = preserves_rail::canonical_hash(input.response_value)?;
     let import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
         root: input.root,
         request_value: input.request_value,
@@ -1854,8 +1851,8 @@ pub fn import_retention_remote_gc_clearance_live_workflow(
     })?;
     let request_control = node_runtime::parse_node_control_request(input.request_control_value)?;
     let response_control = node_runtime::parse_node_control_request(input.response_control_value)?;
-    let request_control_ref = canonical_hash(input.request_control_value)?;
-    let response_control_ref = canonical_hash(input.response_control_value)?;
+    let request_control_ref = preserves_rail::canonical_hash(input.request_control_value)?;
+    let response_control_ref = preserves_rail::canonical_hash(input.response_control_value)?;
     let request_send = node_daemon::parse_node_control_live_send_receipt(input.request_send_receipt_value)?;
     let response_send = node_daemon::parse_node_control_live_send_receipt(input.response_send_receipt_value)?;
     let request_receive = parse_node_live_transport_receipt(input.request_receive_receipt_value)?;
@@ -2004,23 +2001,34 @@ pub fn retention_remote_gc_clearance_live_workflow_value(
     let parts = flow_parts(input)?;
     let refs = flow_refs(input);
     let decision = if parts.diagnostics.is_empty() { "pass" } else { "deny" };
-    Ok(record("retention-remote-gc-clearance-live-workflow-v1", vec![
-        string(RETENTION_REMOTE_GC_CLEARANCE_LIVE_WORKFLOW_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("request", vec![string(&parts.request.request_ref), input.request_value.clone()]),
-        record("response", vec![string(&parts.response_ref), input.response_value.clone()]),
-        record("import", vec![string(&parts.import.import_ref), input.import_value.clone()]),
-        record("request-live", vec![strings_sequence(&refs.request)]),
-        record("response-live", vec![strings_sequence(&refs.response)]),
-        record("scope", vec![
-            record("requester", vec![string(&parts.request.requester_ref)]),
-            record("peer", vec![string(&parts.request.peer_ref)]),
-            record("remote", vec![string(&parts.request.remote_ref)]),
-            object_value(&parts.request.object_ref, &parts.request.object_kind),
-            record("class", vec![string(&parts.request.retention_class)]),
-            record("action", vec![string(&parts.request.action)]),
+    Ok(preserves_rail::record("retention-remote-gc-clearance-live-workflow-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_LIVE_WORKFLOW_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("request", vec![
+            preserves_rail::string(&parts.request.request_ref),
+            input.request_value.clone(),
         ]),
-        record("diagnostics", vec![sequence(parts.diagnostics.iter().map(string).collect())]),
+        preserves_rail::record("response", vec![
+            preserves_rail::string(&parts.response_ref),
+            input.response_value.clone(),
+        ]),
+        preserves_rail::record("import", vec![
+            preserves_rail::string(&parts.import.import_ref),
+            input.import_value.clone(),
+        ]),
+        preserves_rail::record("request-live", vec![strings_sequence(&refs.request)]),
+        preserves_rail::record("response-live", vec![strings_sequence(&refs.response)]),
+        preserves_rail::record("scope", vec![
+            preserves_rail::record("requester", vec![preserves_rail::string(&parts.request.requester_ref)]),
+            preserves_rail::record("peer", vec![preserves_rail::string(&parts.request.peer_ref)]),
+            preserves_rail::record("remote", vec![preserves_rail::string(&parts.request.remote_ref)]),
+            object_value(&parts.request.object_ref, &parts.request.object_kind),
+            preserves_rail::record("class", vec![preserves_rail::string(&parts.request.retention_class)]),
+            preserves_rail::record("action", vec![preserves_rail::string(&parts.request.action)]),
+        ]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            parts.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
         checks_value(&[
             (
                 "request-response-bound",
@@ -2062,7 +2070,7 @@ struct FlowDiagnosticsInput<'a> {
 
 fn flow_parts(input: &RetentionRemoteGcClearanceLiveWorkflowValueInput<'_>) -> Result<FlowParts> {
     let request = parse_retention_remote_gc_clearance_request(input.request_value)?;
-    let response_ref = canonical_hash(input.response_value)?;
+    let response_ref = preserves_rail::canonical_hash(input.response_value)?;
     let (response, parse_diagnostic) = match parse_retention_remote_gc_clearance_response(input.response_value) {
         Ok(response) => (Some(response), None),
         Err(error) => (None, Some(format!("remote-clearance-live-tampered-response:{error}"))),
@@ -2217,7 +2225,7 @@ pub fn parse_retention_remote_gc_clearance_live_workflow(
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-remote-gc-clearance-live-workflow-v1 ...>"))?;
     require_schema(
         &fields[0],
-        RETENTION_REMOTE_GC_CLEARANCE_LIVE_WORKFLOW_SCHEMA,
+        preserves_rail::RETENTION_REMOTE_GC_CLEARANCE_LIVE_WORKFLOW_SCHEMA,
         "retention remote clearance live workflow schema",
     )?;
     let checks = parse_checks(&fields[9])?;
@@ -2245,7 +2253,7 @@ pub fn parse_retention_remote_gc_clearance_live_workflow(
         ));
     }
     Ok(RetentionRemoteGcClearanceLiveWorkflow {
-        workflow_ref: canonical_hash(value)?,
+        workflow_ref: preserves_rail::canonical_hash(value)?,
         decision,
         request_ref: request.request_ref,
         response_ref,
@@ -2576,7 +2584,7 @@ fn remote_clearance_live_control_request_value(input: &LiveControlRequestInput<'
         resource_refs: input.resource_refs,
         evidence_refs: input.evidence_refs,
     })?;
-    let reference = canonical_hash(&value)?;
+    let reference = preserves_rail::canonical_hash(&value)?;
     Ok((reference, value))
 }
 
@@ -3120,17 +3128,17 @@ fn retention_plan_gate_value(input: &RetentionPlanGate) -> Result<IOValue> {
     validate_decision(&input.decision)?;
     validate_refs(&input.required_refs, "retention GC plan gate required ref")?;
     validate_refs(&input.admitted_refs, "retention GC plan gate admitted ref")?;
-    Ok(record("gate", vec![
-        record("name", vec![string(&input.name)]),
-        record("decision", vec![string(&input.decision)]),
-        record("required", vec![strings_sequence(&input.required_refs)]),
-        record("admitted", vec![strings_sequence(&input.admitted_refs)]),
-        record("diagnostics", vec![strings_sequence(&input.diagnostics)]),
+    Ok(preserves_rail::record("gate", vec![
+        preserves_rail::record("name", vec![preserves_rail::string(&input.name)]),
+        preserves_rail::record("decision", vec![preserves_rail::string(&input.decision)]),
+        preserves_rail::record("required", vec![strings_sequence(&input.required_refs)]),
+        preserves_rail::record("admitted", vec![strings_sequence(&input.admitted_refs)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(&input.diagnostics)]),
     ]))
 }
 
 fn parse_retention_plan_gates(value: &Value<IOValue>) -> Result<Vec<RetentionPlanGate>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("gates", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected retention GC plan gates"))?;
@@ -3139,7 +3147,7 @@ fn parse_retention_plan_gates(value: &Value<IOValue>) -> Result<Vec<RetentionPla
         .ok_or_else(|| MoltenError::invalid_harness("expected retention GC plan gate sequence"))?;
     let mut gates = Vec::with_capacity(entries.len());
     for entry in entries.iter() {
-        let gate_value = value_to_iovalue(entry);
+        let gate_value = preserves_rail::value_to_iovalue(entry);
         push_bounded(
             &mut gates,
             parse_retention_plan_gate(&gate_value)?,
@@ -3171,13 +3179,13 @@ fn parse_retention_plan_gate(value: &IOValue) -> Result<RetentionPlanGate> {
 }
 
 fn parse_embedded_reference_index(value: &Value<IOValue>) -> Result<(String, RetentionReferenceIndex)> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("index", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("expected embedded retention index"))?;
     let index_ref = required_string(&fields[0], "embedded retention index ref")?;
     require_ref(&index_ref, "embedded retention index ref")?;
-    let index_value = value_to_iovalue(&fields[1]);
+    let index_value = preserves_rail::value_to_iovalue(&fields[1]);
     let index = parse_reference_index(&index_value)?;
     if index.index_ref != index_ref {
         return Err(MoltenError::invalid_harness("embedded retention index ref mismatch"));
@@ -3186,11 +3194,11 @@ fn parse_embedded_reference_index(value: &Value<IOValue>) -> Result<(String, Ret
 }
 
 fn parse_embedded_destructive_retention_evidence_summary(value: &Value<IOValue>) -> Result<IOValue> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("retention-evidence", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected embedded retention evidence summary"))?;
-    parse_destructive_retention_evidence_summary(&value_to_iovalue(&fields[0]))
+    parse_destructive_retention_evidence_summary(&preserves_rail::value_to_iovalue(&fields[0]))
 }
 
 fn parse_destructive_retention_evidence_summary(value: &IOValue) -> Result<IOValue> {
@@ -3205,7 +3213,7 @@ fn parse_destructive_retention_evidence_summary_to_evidence(value: &IOValue) -> 
     let requester_fields = fields[0]
         .collect_simple_record("requester", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected retention evidence requester"))?;
-    let requester_value = value_to_iovalue(&requester_fields[0]);
+    let requester_value = preserves_rail::value_to_iovalue(&requester_fields[0]);
     let requester_ref = if requester_value.collect_simple_record("none", Some(0)).is_some() {
         None
     } else {
@@ -3844,19 +3852,25 @@ pub fn destructive_retention_evidence_diagnostics(
 
 pub fn destructive_retention_evidence_value(input: &DestructiveRetentionEvidence) -> Result<IOValue> {
     validate_destructive_retention_evidence(input)?;
-    let requester_value = input.requester_ref.as_deref().map(string).unwrap_or_else(|| record("none", Vec::new()));
-    Ok(record("retention-evidence-summary-v1", vec![
-        record("requester", vec![requester_value]),
-        record("policy", vec![strings_sequence(&input.policy_refs)]),
-        record("authority", vec![strings_sequence(&input.authority_refs)]),
-        record("evidence", vec![strings_sequence(&input.evidence_refs)]),
-        record("retained", vec![strings_sequence(&input.retained_refs)]),
-        record("remote-peer", vec![strings_sequence(&input.remote_peer_refs)]),
-        record("remote", vec![strings_sequence(&input.remote_refs)]),
-        record("reference-index", vec![strings_sequence(&input.reference_index_refs)]),
-        record("remote-gc", vec![strings_sequence(&input.remote_gc_refs)]),
-        record("remote-clearance", vec![strings_sequence(&input.remote_clearance_refs)]),
-        record("reference-index-complete", vec![string(pass_or_deny(input.is_reference_index_complete))]),
+    let requester_value = input
+        .requester_ref
+        .as_deref()
+        .map(preserves_rail::string)
+        .unwrap_or_else(|| preserves_rail::record("none", Vec::new()));
+    Ok(preserves_rail::record("retention-evidence-summary-v1", vec![
+        preserves_rail::record("requester", vec![requester_value]),
+        preserves_rail::record("policy", vec![strings_sequence(&input.policy_refs)]),
+        preserves_rail::record("authority", vec![strings_sequence(&input.authority_refs)]),
+        preserves_rail::record("evidence", vec![strings_sequence(&input.evidence_refs)]),
+        preserves_rail::record("retained", vec![strings_sequence(&input.retained_refs)]),
+        preserves_rail::record("remote-peer", vec![strings_sequence(&input.remote_peer_refs)]),
+        preserves_rail::record("remote", vec![strings_sequence(&input.remote_refs)]),
+        preserves_rail::record("reference-index", vec![strings_sequence(&input.reference_index_refs)]),
+        preserves_rail::record("remote-gc", vec![strings_sequence(&input.remote_gc_refs)]),
+        preserves_rail::record("remote-clearance", vec![strings_sequence(&input.remote_clearance_refs)]),
+        preserves_rail::record("reference-index-complete", vec![preserves_rail::string(pass_or_deny(
+            input.is_reference_index_complete,
+        ))]),
         checks_value(&[
             ("requester-bound", pass_or_deny(input.requester_ref.is_some())),
             ("policy-bound", pass_or_deny(!input.policy_refs.is_empty())),
@@ -3935,19 +3949,22 @@ pub fn retention_gc_plan_value(input: &RetentionGcPlanValueInput<'_>) -> Result<
     }
     parse_destructive_retention_evidence_summary(input.evidence_value)?;
     let gate_values = input.gates.iter().map(retention_plan_gate_value).collect::<Result<Vec<_>>>()?;
-    Ok(record("retention-gc-plan-v1", vec![
-        string(RETENTION_GC_PLAN_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("mode", vec![string("dry-run")]),
-        record("subsystem", vec![string(input.subsystem)]),
-        record("action", vec![string(input.action)]),
+    Ok(preserves_rail::record("retention-gc-plan-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_GC_PLAN_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("mode", vec![preserves_rail::string("dry-run")]),
+        preserves_rail::record("subsystem", vec![preserves_rail::string(input.subsystem)]),
+        preserves_rail::record("action", vec![preserves_rail::string(input.action)]),
         object_value(input.object_ref, input.object_kind),
-        record("class", vec![string(input.retention_class)]),
-        record("requester", vec![optional_ref_value(input.requester_ref)]),
-        record("index", vec![string(&input.index.index_ref), input.index.value.clone()]),
-        record("retention-evidence", vec![input.evidence_value.clone()]),
-        record("gates", vec![sequence(gate_values)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("class", vec![preserves_rail::string(input.retention_class)]),
+        preserves_rail::record("requester", vec![optional_ref_value(input.requester_ref)]),
+        preserves_rail::record("index", vec![
+            preserves_rail::string(&input.index.index_ref),
+            input.index.value.clone(),
+        ]),
+        preserves_rail::record("retention-evidence", vec![input.evidence_value.clone()]),
+        preserves_rail::record("gates", vec![preserves_rail::sequence(gate_values)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(&[
             ("canonical-ref-binding", "pass"),
             ("dry-run-only", "pass"),
@@ -3963,7 +3980,7 @@ pub fn parse_retention_gc_plan(value: &IOValue) -> Result<RetentionGcPlan> {
     let fields = value
         .collect_simple_record("retention-gc-plan-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-plan-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_GC_PLAN_SCHEMA, "retention GC plan schema")?;
+    require_schema(&fields[0], preserves_rail::RETENTION_GC_PLAN_SCHEMA, "retention GC plan schema")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let mode = record_string(&fields[2], "mode")?;
@@ -3993,10 +4010,10 @@ pub fn parse_retention_gc_plan(value: &IOValue) -> Result<RetentionGcPlan> {
     require_check(&checks, "dry-run-only", "retention GC plan")?;
     require_check(&checks, "plan-is-not-authority", "retention GC plan")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention GC plan")?;
-    let evidence_ref = canonical_hash(&evidence_value)?;
+    let evidence_ref = preserves_rail::canonical_hash(&evidence_value)?;
     require_ref(&evidence_ref, "retention GC plan evidence summary ref")?;
     Ok(RetentionGcPlan {
-        plan_ref: canonical_hash(value)?,
+        plan_ref: preserves_rail::canonical_hash(value)?,
         decision,
         subsystem,
         action,
@@ -4181,21 +4198,21 @@ fn apply_value(input: &ApplyValueInput<'_>) -> Result<IOValue> {
     let is_plan_passed = input.decision == "pass";
     let is_tombstone_bound =
         !is_destructive_action(input.action) || input.decision != "pass" || input.tombstone_ref.is_some();
-    Ok(record("retention-gc-apply-v1", vec![
-        string(RETENTION_GC_APPLY_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("mode", vec![string("apply")]),
-        record("subsystem", vec![string(input.subsystem)]),
-        record("action", vec![string(input.action)]),
+    Ok(preserves_rail::record("retention-gc-apply-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_GC_APPLY_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("mode", vec![preserves_rail::string("apply")]),
+        preserves_rail::record("subsystem", vec![preserves_rail::string(input.subsystem)]),
+        preserves_rail::record("action", vec![preserves_rail::string(input.action)]),
         object_value(input.object_ref, input.object_kind),
-        record("class", vec![string(input.retention_class)]),
-        record("requester", vec![optional_ref_value(input.requester_ref)]),
-        record("plan", vec![string(input.plan_ref)]),
-        record("recomputed-plan", vec![string(input.recomputed_plan_ref)]),
-        record("retention-receipt", vec![optional_ref_value(input.retention_receipt_ref)]),
-        record("tombstone", vec![optional_ref_value(input.tombstone_ref)]),
-        record("admission", vec![strings_sequence(input.admission_refs)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("class", vec![preserves_rail::string(input.retention_class)]),
+        preserves_rail::record("requester", vec![optional_ref_value(input.requester_ref)]),
+        preserves_rail::record("plan", vec![preserves_rail::string(input.plan_ref)]),
+        preserves_rail::record("recomputed-plan", vec![preserves_rail::string(input.recomputed_plan_ref)]),
+        preserves_rail::record("retention-receipt", vec![optional_ref_value(input.retention_receipt_ref)]),
+        preserves_rail::record("tombstone", vec![optional_ref_value(input.tombstone_ref)]),
+        preserves_rail::record("admission", vec![strings_sequence(input.admission_refs)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(&[
             ("plan-ref-bound", "pass"),
             ("plan-recomputed-before-mutation", "pass"),
@@ -4221,7 +4238,7 @@ pub fn parse_retention_gc_apply(value: &IOValue) -> Result<RetentionGcApply> {
     let fields = value
         .collect_simple_record("retention-gc-apply-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-apply-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_GC_APPLY_SCHEMA, "retention GC apply schema")?;
+    require_schema(&fields[0], preserves_rail::RETENTION_GC_APPLY_SCHEMA, "retention GC apply schema")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let mode = record_string(&fields[2], "mode")?;
@@ -4249,7 +4266,7 @@ pub fn parse_retention_gc_apply(value: &IOValue) -> Result<RetentionGcApply> {
     require_check(&checks, "plan-is-not-authority", "retention GC apply")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention GC apply")?;
     Ok(RetentionGcApply {
-        apply_ref: canonical_hash(value)?,
+        apply_ref: preserves_rail::canonical_hash(value)?,
         decision,
         subsystem,
         action,
@@ -4557,20 +4574,20 @@ fn execution_gate_value(input: &ExecutionGateValueInput<'_>) -> Result<IOValue> 
     if let Some(tombstone_ref) = input.tombstone_ref {
         require_ref(tombstone_ref, "retention GC execution tombstone ref")?;
     }
-    Ok(record("retention-gc-execute-v1", vec![
-        string(RETENTION_GC_EXECUTE_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("mode", vec![string("execute-gate")]),
-        record("subsystem", vec![string(input.subsystem)]),
-        record("action", vec![string(input.action)]),
+    Ok(preserves_rail::record("retention-gc-execute-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_GC_EXECUTE_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("mode", vec![preserves_rail::string("execute-gate")]),
+        preserves_rail::record("subsystem", vec![preserves_rail::string(input.subsystem)]),
+        preserves_rail::record("action", vec![preserves_rail::string(input.action)]),
         object_value(input.object_ref, input.object_kind),
-        record("class", vec![string(input.retention_class)]),
-        record("apply", vec![optional_ref_value(input.apply_ref)]),
-        record("plan", vec![optional_ref_value(input.plan_ref)]),
-        record("recomputed-plan", vec![optional_ref_value(input.recomputed_plan_ref)]),
-        record("retention-receipt", vec![optional_ref_value(input.retention_receipt_ref)]),
-        record("tombstone", vec![optional_ref_value(input.tombstone_ref)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("class", vec![preserves_rail::string(input.retention_class)]),
+        preserves_rail::record("apply", vec![optional_ref_value(input.apply_ref)]),
+        preserves_rail::record("plan", vec![optional_ref_value(input.plan_ref)]),
+        preserves_rail::record("recomputed-plan", vec![optional_ref_value(input.recomputed_plan_ref)]),
+        preserves_rail::record("retention-receipt", vec![optional_ref_value(input.retention_receipt_ref)]),
+        preserves_rail::record("tombstone", vec![optional_ref_value(input.tombstone_ref)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(&[
             ("apply-ref-required", pass_or_deny(input.apply_ref.is_some())),
             ("apply-decision-pass", pass_or_deny(input.decision == "pass")),
@@ -4594,7 +4611,7 @@ pub fn parse_retention_gc_execution_gate(value: &IOValue) -> Result<RetentionGcE
     let fields = value
         .collect_simple_record("retention-gc-execute-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-execute-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_GC_EXECUTE_SCHEMA, "retention GC execution schema")?;
+    require_schema(&fields[0], preserves_rail::RETENTION_GC_EXECUTE_SCHEMA, "retention GC execution schema")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let mode = record_string(&fields[2], "mode")?;
@@ -4619,7 +4636,7 @@ pub fn parse_retention_gc_execution_gate(value: &IOValue) -> Result<RetentionGcE
     require_check(&checks, "normal-admission-still-required", "retention GC execution")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention GC execution")?;
     Ok(RetentionGcExecutionGate {
-        execution_ref: canonical_hash(value)?,
+        execution_ref: preserves_rail::canonical_hash(value)?,
         decision,
         subsystem,
         action,
@@ -4928,23 +4945,35 @@ fn audit_value(input: &AuditValueInput<'_>) -> Result<IOValue> {
         require_ref(tombstone_ref, "retention GC audit tombstone ref")?;
     }
     validate_audit_step_status(input.tombstone_status, "retention GC audit tombstone status")?;
-    Ok(record("retention-gc-audit-v1", vec![
-        string(RETENTION_GC_AUDIT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("mode", vec![string("audit")]),
-        record("subsystem", vec![string(input.subsystem)]),
-        record("action", vec![string(input.action)]),
+    Ok(preserves_rail::record("retention-gc-audit-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_GC_AUDIT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("mode", vec![preserves_rail::string("audit")]),
+        preserves_rail::record("subsystem", vec![preserves_rail::string(input.subsystem)]),
+        preserves_rail::record("action", vec![preserves_rail::string(input.action)]),
         object_value(input.object_ref, input.object_kind),
-        record("class", vec![string(input.retention_class)]),
-        record("plan", vec![optional_ref_value(input.plan_ref), string(input.plan_decision)]),
-        record("apply", vec![optional_ref_value(input.apply_ref), string(input.apply_decision)]),
-        record("execution", vec![string(input.execution_ref), string(input.execution_decision)]),
-        record("retention-receipt", vec![
-            optional_ref_value(input.retention_receipt_ref),
-            string(input.retention_receipt_decision),
+        preserves_rail::record("class", vec![preserves_rail::string(input.retention_class)]),
+        preserves_rail::record("plan", vec![
+            optional_ref_value(input.plan_ref),
+            preserves_rail::string(input.plan_decision),
         ]),
-        record("tombstone", vec![optional_ref_value(input.tombstone_ref), string(input.tombstone_status)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("apply", vec![
+            optional_ref_value(input.apply_ref),
+            preserves_rail::string(input.apply_decision),
+        ]),
+        preserves_rail::record("execution", vec![
+            preserves_rail::string(input.execution_ref),
+            preserves_rail::string(input.execution_decision),
+        ]),
+        preserves_rail::record("retention-receipt", vec![
+            optional_ref_value(input.retention_receipt_ref),
+            preserves_rail::string(input.retention_receipt_decision),
+        ]),
+        preserves_rail::record("tombstone", vec![
+            optional_ref_value(input.tombstone_ref),
+            preserves_rail::string(input.tombstone_status),
+        ]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(&[
             ("audit-is-not-authority", "pass"),
             ("plan-link-bound", pass_or_deny(input.plan_ref.is_some())),
@@ -4972,7 +5001,7 @@ pub fn parse_retention_gc_audit(value: &IOValue) -> Result<RetentionGcAudit> {
     let fields = value
         .collect_simple_record("retention-gc-audit-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-gc-audit-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_GC_AUDIT_SCHEMA, "retention GC audit schema")?;
+    require_schema(&fields[0], preserves_rail::RETENTION_GC_AUDIT_SCHEMA, "retention GC audit schema")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let mode = record_string(&fields[2], "mode")?;
@@ -5004,7 +5033,7 @@ pub fn parse_retention_gc_audit(value: &IOValue) -> Result<RetentionGcAudit> {
     require_check(&checks, "normal-admission-still-required", "retention GC audit")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention GC audit")?;
     Ok(RetentionGcAudit {
-        audit_ref: canonical_hash(value)?,
+        audit_ref: preserves_rail::canonical_hash(value)?,
         decision,
         subsystem,
         action,
@@ -5292,25 +5321,28 @@ fn retention_candidate_explain_diagnostics(input: &RetentionCandidateExplainValu
 
 fn retention_candidate_explain_value(input: &RetentionCandidateExplainValueInput<'_>) -> Result<IOValue> {
     validate_retention_candidate_explain_value_input(input)?;
-    Ok(record("retention-candidate-explain-v1", vec![
-        string(RETENTION_CANDIDATE_EXPLAIN_SCHEMA),
-        record("object", vec![string(input.object_ref), optional_string_value(input.object_kind)]),
-        record("filters", vec![
-            record("class", vec![optional_string_value(input.retention_class)]),
-            record("action", vec![optional_string_value(input.action)]),
-            record("subsystem", vec![optional_string_value(input.subsystem)]),
+    Ok(preserves_rail::record("retention-candidate-explain-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_CANDIDATE_EXPLAIN_SCHEMA),
+        preserves_rail::record("object", vec![
+            preserves_rail::string(input.object_ref),
+            optional_string_value(input.object_kind),
         ]),
-        record("pins", vec![strings_sequence(input.pin_refs)]),
-        record("admissions", vec![strings_sequence(input.admission_refs)]),
-        record("remote-clearances", vec![strings_sequence(input.remote_clearance_refs)]),
-        record("remote-clearance-imports", vec![strings_sequence(input.remote_clearance_import_refs)]),
-        record("gc-plans", vec![strings_sequence(input.gc_plan_refs)]),
-        record("gc-applies", vec![strings_sequence(input.gc_apply_refs)]),
-        record("gc-executes", vec![strings_sequence(input.gc_execution_refs)]),
-        record("gc-audits", vec![strings_sequence(input.gc_audit_refs)]),
-        record("retention-receipts", vec![strings_sequence(input.retention_receipt_refs)]),
-        record("tombstones", vec![strings_sequence(input.tombstone_refs)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("filters", vec![
+            preserves_rail::record("class", vec![optional_string_value(input.retention_class)]),
+            preserves_rail::record("action", vec![optional_string_value(input.action)]),
+            preserves_rail::record("subsystem", vec![optional_string_value(input.subsystem)]),
+        ]),
+        preserves_rail::record("pins", vec![strings_sequence(input.pin_refs)]),
+        preserves_rail::record("admissions", vec![strings_sequence(input.admission_refs)]),
+        preserves_rail::record("remote-clearances", vec![strings_sequence(input.remote_clearance_refs)]),
+        preserves_rail::record("remote-clearance-imports", vec![strings_sequence(input.remote_clearance_import_refs)]),
+        preserves_rail::record("gc-plans", vec![strings_sequence(input.gc_plan_refs)]),
+        preserves_rail::record("gc-applies", vec![strings_sequence(input.gc_apply_refs)]),
+        preserves_rail::record("gc-executes", vec![strings_sequence(input.gc_execution_refs)]),
+        preserves_rail::record("gc-audits", vec![strings_sequence(input.gc_audit_refs)]),
+        preserves_rail::record("retention-receipts", vec![strings_sequence(input.retention_receipt_refs)]),
+        preserves_rail::record("tombstones", vec![strings_sequence(input.tombstone_refs)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(&[
             ("read-only-explain", "pass"),
             ("catalog-discovery-only", "pass"),
@@ -5325,7 +5357,11 @@ pub fn parse_retention_candidate_explain(value: &IOValue) -> Result<RetentionCan
     let fields = value
         .collect_simple_record("retention-candidate-explain-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-explain-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_CANDIDATE_EXPLAIN_SCHEMA, "retention candidate explain schema")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::RETENTION_CANDIDATE_EXPLAIN_SCHEMA,
+        "retention candidate explain schema",
+    )?;
     let object_fields = fields[1]
         .collect_simple_record("object", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("expected retention candidate object"))?;
@@ -5367,7 +5403,7 @@ pub fn parse_retention_candidate_explain(value: &IOValue) -> Result<RetentionCan
     require_check(&checks, "plan-apply-execute-still-required", "retention candidate explain")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention candidate explain")?;
     Ok(RetentionCandidateExplain {
-        explain_ref: canonical_hash(value)?,
+        explain_ref: preserves_rail::canonical_hash(value)?,
         object_ref,
         object_kind,
         retention_class,
@@ -5624,7 +5660,7 @@ fn collect_retention_bundle_sensitive_markers(
             for (index, child) in current.iter().enumerate() {
                 push_bounded(
                     &mut children,
-                    (index, value_to_iovalue(&child)),
+                    (index, preserves_rail::value_to_iovalue(&child)),
                     MAX_RETENTION_REFS,
                     "retention bundle marker scan children",
                 )?;
@@ -5718,7 +5754,7 @@ impl RedactionResults {
             .checked_sub(child_count)
             .ok_or_else(|| MoltenError::invalid_harness("retention bundle redaction sequence stack underflow"))?;
         let values = self.values.split_off(start);
-        self.push(sequence(values))
+        self.push(preserves_rail::sequence(values))
     }
 
     fn finish(mut self) -> Result<IOValue> {
@@ -5761,7 +5797,7 @@ fn redacted_retention_bundle_value(
                 match current.value_class() {
                     ValueClass::Atomic(_) | ValueClass::Embedded => results.push(current)?,
                     ValueClass::Compound(CompoundClass::Record) => {
-                        let label = value_to_iovalue(&current.label());
+                        let label = preserves_rail::value_to_iovalue(&current.label());
                         let children = redaction_children(&current)?;
                         let child_count = children.len();
                         push_bounded(
@@ -5817,7 +5853,9 @@ fn sensitive_marker(
 fn marker_result(bundle_ref: &str, path: &str, token: &str, marker_refs: &mut impl VecSink<String>) -> Result<IOValue> {
     let marker_ref = retention_bundle_marker_ref(bundle_ref, path, token)?;
     push_bounded(marker_refs, marker_ref.clone(), MAX_RETENTION_REFS, "retention bundle profile markers")?;
-    Ok(record("retention-bundle-redaction-marker", vec![string(&marker_ref)]))
+    Ok(preserves_rail::record("retention-bundle-redaction-marker", vec![preserves_rail::string(
+        &marker_ref,
+    )]))
 }
 
 fn redaction_children(value: &IOValue) -> Result<Vec<(usize, IOValue)>> {
@@ -5825,7 +5863,7 @@ fn redaction_children(value: &IOValue) -> Result<Vec<(usize, IOValue)>> {
     for (index, child) in value.iter().enumerate() {
         push_bounded(
             &mut children,
-            (index, value_to_iovalue(&child)),
+            (index, preserves_rail::value_to_iovalue(&child)),
             MAX_RETENTION_REFS,
             "retention bundle redaction children",
         )?;
@@ -5853,7 +5891,11 @@ fn push_visit_frames(
 }
 
 fn retention_bundle_marker_ref(bundle_ref: &str, path: &str, token: &str) -> Result<String> {
-    canonical_hash(&record("retention-bundle-sensitive-marker", vec![string(bundle_ref), string(path), string(token)]))
+    preserves_rail::canonical_hash(&preserves_rail::record("retention-bundle-sensitive-marker", vec![
+        preserves_rail::string(bundle_ref),
+        preserves_rail::string(path),
+        preserves_rail::string(token),
+    ]))
 }
 
 fn is_sensitive_retention_bundle_token(value: &str) -> bool {
@@ -5879,14 +5921,16 @@ fn record_label_string(value: &IOValue) -> Option<String> {
 
 fn retention_candidate_bundle_profile_value(input: &RetentionCandidateBundleProfileValueInput<'_>) -> Result<IOValue> {
     validate_retention_candidate_bundle_profile_value_input(input)?;
-    Ok(record("retention-candidate-bundle-profile-v1", vec![
-        string(RETENTION_CANDIDATE_BUNDLE_PROFILE_SCHEMA),
-        record("profile", vec![string(input.profile.as_str())]),
-        record("loss-classification", vec![string(input.profile.loss_classification())]),
-        record("decision", vec![string(input.decision)]),
-        record("bundle", vec![string(input.bundle_ref)]),
-        record("markers", vec![strings_sequence(input.marker_refs)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+    Ok(preserves_rail::record("retention-candidate-bundle-profile-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_CANDIDATE_BUNDLE_PROFILE_SCHEMA),
+        preserves_rail::record("profile", vec![preserves_rail::string(input.profile.as_str())]),
+        preserves_rail::record("loss-classification", vec![preserves_rail::string(
+            input.profile.loss_classification(),
+        )]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
+        preserves_rail::record("markers", vec![strings_sequence(input.marker_refs)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(&[
             ("profile-is-not-authority", "pass"),
             ("read-only-profile", "pass"),
@@ -5901,7 +5945,11 @@ pub fn parse_retention_candidate_bundle_profile(value: &IOValue) -> Result<Reten
     let fields = value
         .collect_simple_record("retention-candidate-bundle-profile-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-profile-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_CANDIDATE_BUNDLE_PROFILE_SCHEMA, "retention candidate bundle profile schema")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::RETENTION_CANDIDATE_BUNDLE_PROFILE_SCHEMA,
+        "retention candidate bundle profile schema",
+    )?;
     let profile = record_string(&fields[1], "profile")?;
     let parsed_profile = RetentionCandidateBundleExportProfile::parse(&profile)?;
     let loss_classification = record_string(&fields[2], "loss-classification")?;
@@ -5920,7 +5968,7 @@ pub fn parse_retention_candidate_bundle_profile(value: &IOValue) -> Result<Reten
     require_check(&checks, "plan-apply-execute-still-required", "retention candidate bundle profile")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention candidate bundle profile")?;
     Ok(RetentionCandidateBundleProfile {
-        profile_ref: canonical_hash(value)?,
+        profile_ref: preserves_rail::canonical_hash(value)?,
         decision,
         profile,
         loss_classification,
@@ -5942,26 +5990,26 @@ fn validate_retention_candidate_bundle_profile_value_input(
 
 fn retention_candidate_bundle_value(input: &RetentionCandidateBundleValueInput<'_>) -> Result<IOValue> {
     validate_retention_candidate_bundle_value_input(input)?;
-    Ok(record("retention-candidate-bundle-v1", vec![
-        string(RETENTION_CANDIDATE_BUNDLE_SCHEMA),
-        record("explain", vec![string(&input.explain.explain_ref)]),
-        record("object", vec![
-            string(&input.explain.object_ref),
+    Ok(preserves_rail::record("retention-candidate-bundle-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_CANDIDATE_BUNDLE_SCHEMA),
+        preserves_rail::record("explain", vec![preserves_rail::string(&input.explain.explain_ref)]),
+        preserves_rail::record("object", vec![
+            preserves_rail::string(&input.explain.object_ref),
             optional_string_value(input.explain.object_kind.as_deref()),
         ]),
-        record("filters", vec![
-            record("class", vec![optional_string_value(input.explain.retention_class.as_deref())]),
-            record("action", vec![optional_string_value(input.explain.action.as_deref())]),
-            record("subsystem", vec![optional_string_value(input.explain.subsystem.as_deref())]),
+        preserves_rail::record("filters", vec![
+            preserves_rail::record("class", vec![optional_string_value(input.explain.retention_class.as_deref())]),
+            preserves_rail::record("action", vec![optional_string_value(input.explain.action.as_deref())]),
+            preserves_rail::record("subsystem", vec![optional_string_value(input.explain.subsystem.as_deref())]),
         ]),
-        record("gc-plans", vec![strings_sequence(&input.explain.gc_plan_refs)]),
-        record("gc-applies", vec![strings_sequence(&input.explain.gc_apply_refs)]),
-        record("gc-executes", vec![strings_sequence(&input.explain.gc_execution_refs)]),
-        record("gc-audits", vec![strings_sequence(&input.explain.gc_audit_refs)]),
-        record("retention-receipts", vec![strings_sequence(&input.explain.retention_receipt_refs)]),
-        record("tombstones", vec![strings_sequence(&input.explain.tombstone_refs)]),
-        record("artifacts", vec![strings_sequence(input.artifact_refs)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("gc-plans", vec![strings_sequence(&input.explain.gc_plan_refs)]),
+        preserves_rail::record("gc-applies", vec![strings_sequence(&input.explain.gc_apply_refs)]),
+        preserves_rail::record("gc-executes", vec![strings_sequence(&input.explain.gc_execution_refs)]),
+        preserves_rail::record("gc-audits", vec![strings_sequence(&input.explain.gc_audit_refs)]),
+        preserves_rail::record("retention-receipts", vec![strings_sequence(&input.explain.retention_receipt_refs)]),
+        preserves_rail::record("tombstones", vec![strings_sequence(&input.explain.tombstone_refs)]),
+        preserves_rail::record("artifacts", vec![strings_sequence(input.artifact_refs)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(&[
             ("bundle-is-not-authority", "pass"),
             ("read-only-export", "pass"),
@@ -5976,7 +6024,7 @@ pub fn parse_retention_candidate_bundle(value: &IOValue) -> Result<RetentionCand
     let fields = value
         .collect_simple_record("retention-candidate-bundle-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_CANDIDATE_BUNDLE_SCHEMA, "retention candidate bundle schema")?;
+    require_schema(&fields[0], preserves_rail::RETENTION_CANDIDATE_BUNDLE_SCHEMA, "retention candidate bundle schema")?;
     let explain_ref = record_ref(&fields[1], "explain")?;
     let object_fields = fields[2]
         .collect_simple_record("object", Some(2))
@@ -6017,7 +6065,7 @@ pub fn parse_retention_candidate_bundle(value: &IOValue) -> Result<RetentionCand
     require_check(&checks, "plan-apply-execute-still-required", "retention candidate bundle")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention candidate bundle")?;
     Ok(RetentionCandidateBundle {
-        bundle_ref: canonical_hash(value)?,
+        bundle_ref: preserves_rail::canonical_hash(value)?,
         explain_ref,
         object_ref,
         object_kind,
@@ -6353,7 +6401,7 @@ fn scan_retention_bundle_artifact_group_files(
         }
         match read_store_value(&entry.path()) {
             Ok(value) => {
-                let actual_ref = canonical_hash(&value)?;
+                let actual_ref = preserves_rail::canonical_hash(&value)?;
                 if !seen_files.insert(actual_ref.clone()) {
                     push_bounded(
                         diagnostics,
@@ -6414,7 +6462,7 @@ fn verify_retention_bundle_artifact_group(
                 continue;
             }
         };
-        let actual_ref = canonical_hash(&value)?;
+        let actual_ref = preserves_rail::canonical_hash(&value)?;
         if &actual_ref != reference {
             push_bounded(
                 diagnostics,
@@ -6449,23 +6497,23 @@ fn retention_bundle_artifact_dirs() -> &'static [&'static str] {
 
 fn retention_candidate_bundle_verify_value(input: &RetentionCandidateBundleVerifyValueInput<'_>) -> Result<IOValue> {
     validate_retention_candidate_bundle_verify_value_input(input)?;
-    Ok(record("retention-candidate-bundle-verify-v1", vec![
-        string(RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("bundle", vec![string(&input.bundle.bundle_ref)]),
-        record("explain", vec![string(&input.bundle.explain_ref)]),
-        record("object", vec![
-            string(&input.bundle.object_ref),
+    Ok(preserves_rail::record("retention-candidate-bundle-verify-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(&input.bundle.bundle_ref)]),
+        preserves_rail::record("explain", vec![preserves_rail::string(&input.bundle.explain_ref)]),
+        preserves_rail::record("object", vec![
+            preserves_rail::string(&input.bundle.object_ref),
             optional_string_value(input.bundle.object_kind.as_deref()),
         ]),
-        record("filters", vec![
-            record("class", vec![optional_string_value(input.bundle.retention_class.as_deref())]),
-            record("action", vec![optional_string_value(input.bundle.action.as_deref())]),
-            record("subsystem", vec![optional_string_value(input.bundle.subsystem.as_deref())]),
+        preserves_rail::record("filters", vec![
+            preserves_rail::record("class", vec![optional_string_value(input.bundle.retention_class.as_deref())]),
+            preserves_rail::record("action", vec![optional_string_value(input.bundle.action.as_deref())]),
+            preserves_rail::record("subsystem", vec![optional_string_value(input.bundle.subsystem.as_deref())]),
         ]),
-        record("artifacts", vec![strings_sequence(&input.bundle.artifact_refs)]),
-        record("files", vec![strings_sequence(input.file_refs)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("artifacts", vec![strings_sequence(&input.bundle.artifact_refs)]),
+        preserves_rail::record("files", vec![strings_sequence(input.file_refs)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value(&[
             ("verify-is-not-authority", "pass"),
             ("read-only-verify", "pass"),
@@ -6480,7 +6528,11 @@ pub fn parse_retention_candidate_bundle_verify(value: &IOValue) -> Result<Retent
     let fields = value
         .collect_simple_record("retention-candidate-bundle-verify-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-candidate-bundle-verify-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA, "retention candidate bundle verify schema")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::RETENTION_CANDIDATE_BUNDLE_VERIFY_SCHEMA,
+        "retention candidate bundle verify schema",
+    )?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     let bundle_ref = record_ref(&fields[2], "bundle")?;
@@ -6519,7 +6571,7 @@ pub fn parse_retention_candidate_bundle_verify(value: &IOValue) -> Result<Retent
     require_check(&checks, "plan-apply-execute-still-required", "retention candidate bundle verify")?;
     require_check(&checks, "remote-clearance-import-still-required", "retention candidate bundle verify")?;
     Ok(RetentionCandidateBundleVerify {
-        verify_ref: canonical_hash(value)?,
+        verify_ref: preserves_rail::canonical_hash(value)?,
         decision,
         bundle_ref,
         explain_ref,
@@ -6719,7 +6771,10 @@ where
 }
 
 fn optional_string_value(value: Option<&str>) -> IOValue {
-    value.map_or_else(|| record("none", Vec::new()), |text| record("some", vec![string(text)]))
+    value.map_or_else(
+        || preserves_rail::record("none", Vec::new()),
+        |text| preserves_rail::record("some", vec![preserves_rail::string(text)]),
+    )
 }
 
 fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
@@ -6730,7 +6785,7 @@ fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<
 }
 
 fn optional_record_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
-    let inner = value_to_iovalue(value);
+    let inner = preserves_rail::value_to_iovalue(value);
     if inner.collect_simple_record("none", Some(0)).is_some() {
         Ok(None)
     } else {
@@ -6745,7 +6800,7 @@ fn record_optional_ref_with_status(value: &Value<IOValue>, label: &str) -> Resul
     let fields = value
         .collect_simple_record(label, Some(2))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected retention GC audit {label} record")))?;
-    let inner = value_to_iovalue(&fields[0]);
+    let inner = preserves_rail::value_to_iovalue(&fields[0]);
     let reference = if inner.collect_simple_record("none", Some(0)).is_some() {
         None
     } else {
@@ -6765,7 +6820,7 @@ pub fn parse_retention_receipt(value: &IOValue) -> Result<RetentionReceipt> {
     let fields = value
         .collect_simple_record("retention-receipt-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-receipt-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_RECEIPT_SCHEMA, "retention receipt schema")?;
+    require_schema(&fields[0], preserves_rail::RETENTION_RECEIPT_SCHEMA, "retention receipt schema")?;
     let decision = record_string(&fields[1], "decision")?;
     let action = record_string(&fields[2], "action")?;
     let (object_ref, object_kind) = parse_object_value(&fields[3])?;
@@ -6782,7 +6837,7 @@ pub fn parse_retention_receipt(value: &IOValue) -> Result<RetentionReceipt> {
     validate_action(&action)?;
     validate_retention_class(&retention_class)?;
     Ok(RetentionReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision,
         action,
         object_ref,
@@ -6803,7 +6858,7 @@ pub fn parse_tombstone(value: &IOValue) -> Result<RetentionTombstone> {
     let fields = value
         .collect_simple_record("retention-tombstone-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <retention-tombstone-v1 ...>"))?;
-    require_schema(&fields[0], RETENTION_TOMBSTONE_SCHEMA, "retention tombstone schema")?;
+    require_schema(&fields[0], preserves_rail::RETENTION_TOMBSTONE_SCHEMA, "retention tombstone schema")?;
     let (object_ref, object_kind) = parse_object_value(&fields[1])?;
     let retention_class = record_string(&fields[2], "class")?;
     let action = record_string(&fields[3], "action")?;
@@ -6814,7 +6869,7 @@ pub fn parse_tombstone(value: &IOValue) -> Result<RetentionTombstone> {
     validate_retention_class(&retention_class)?;
     validate_action(&action)?;
     Ok(RetentionTombstone {
-        tombstone_ref: canonical_hash(value)?,
+        tombstone_ref: preserves_rail::canonical_hash(value)?,
         object_ref,
         object_kind,
         retention_class,
@@ -7329,20 +7384,20 @@ struct ReceiptBuildInput<'a> {
 
 fn build_receipt(input: ReceiptBuildInput<'_>) -> Result<RetentionReceipt> {
     validate_receipt_build_input(&input)?;
-    let value = record("retention-receipt-v1", vec![
-        string(RETENTION_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("action", vec![string(input.action)]),
+    let value = preserves_rail::record("retention-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("action", vec![preserves_rail::string(input.action)]),
         object_value(input.object_ref, input.object_kind),
-        record("class", vec![string(input.retention_class)]),
-        record("requester", vec![string(input.requester_ref)]),
-        record("index", vec![string(input.index_ref)]),
-        record("pins", vec![strings_sequence(input.pin_refs)]),
-        record("retained", vec![strings_sequence(input.retained_refs)]),
-        record("remote", vec![strings_sequence(input.remote_refs)]),
-        record("tombstone", vec![optional_ref_value(input.tombstone_ref)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
-        record("policy", vec![strings_sequence(input.policy_refs)]),
+        preserves_rail::record("class", vec![preserves_rail::string(input.retention_class)]),
+        preserves_rail::record("requester", vec![preserves_rail::string(input.requester_ref)]),
+        preserves_rail::record("index", vec![preserves_rail::string(input.index_ref)]),
+        preserves_rail::record("pins", vec![strings_sequence(input.pin_refs)]),
+        preserves_rail::record("retained", vec![strings_sequence(input.retained_refs)]),
+        preserves_rail::record("remote", vec![strings_sequence(input.remote_refs)]),
+        preserves_rail::record("tombstone", vec![optional_ref_value(input.tombstone_ref)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+        preserves_rail::record("policy", vec![strings_sequence(input.policy_refs)]),
         checks_value(&[
             ("reference-index-bound", "pass"),
             ("policy-bound", pass_or_deny(!input.policy_refs.is_empty())),
@@ -7370,18 +7425,18 @@ fn build_tombstone(input: TombstoneBuildInput<'_>) -> Result<RetentionTombstone>
     } else {
         input.receipt_ref.to_string()
     };
-    let value = record("retention-tombstone-v1", vec![
-        string(RETENTION_TOMBSTONE_SCHEMA),
+    let value = preserves_rail::record("retention-tombstone-v1", vec![
+        preserves_rail::string(preserves_rail::RETENTION_TOMBSTONE_SCHEMA),
         object_value(input.object_ref, input.object_kind),
-        record("class", vec![string(input.retention_class)]),
-        record("action", vec![string(input.action)]),
-        record("receipt", vec![string(&receipt_ref)]),
-        record("policy", vec![strings_sequence(input.policy_refs)]),
-        record("evidence", vec![strings_sequence(input.evidence_refs)]),
-        record("public-metadata", vec![sequence(vec![
-            record("object-kind", vec![string(input.object_kind)]),
-            record("class", vec![string(input.retention_class)]),
-            record("content", vec![string("redacted-or-deleted")]),
+        preserves_rail::record("class", vec![preserves_rail::string(input.retention_class)]),
+        preserves_rail::record("action", vec![preserves_rail::string(input.action)]),
+        preserves_rail::record("receipt", vec![preserves_rail::string(&receipt_ref)]),
+        preserves_rail::record("policy", vec![strings_sequence(input.policy_refs)]),
+        preserves_rail::record("evidence", vec![strings_sequence(input.evidence_refs)]),
+        preserves_rail::record("public-metadata", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("object-kind", vec![preserves_rail::string(input.object_kind)]),
+            preserves_rail::record("class", vec![preserves_rail::string(input.retention_class)]),
+            preserves_rail::record("content", vec![preserves_rail::string("redacted-or-deleted")]),
         ])]),
         checks_value(&[
             ("audit-visible-tombstone", "pass"),
@@ -7790,13 +7845,13 @@ fn validate_remote_gc_clearance_workflow_scope(
 }
 
 fn parse_embedded_remote_clearance_request(value: &Value<IOValue>) -> Result<RetentionRemoteGcClearanceRequest> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("request", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("expected embedded remote clearance request"))?;
     let request_ref = required_string(&fields[0], "remote clearance request ref")?;
     require_ref(&request_ref, "remote clearance request ref")?;
-    let request_value = value_to_iovalue(&fields[1]);
+    let request_value = preserves_rail::value_to_iovalue(&fields[1]);
     let request = parse_retention_remote_gc_clearance_request(&request_value)?;
     if request.request_ref != request_ref {
         return Err(MoltenError::invalid_harness("embedded remote clearance request ref mismatch"));
@@ -7805,13 +7860,13 @@ fn parse_embedded_remote_clearance_request(value: &Value<IOValue>) -> Result<Ret
 }
 
 fn parse_embedded_remote_clearance(value: &Value<IOValue>) -> Result<RetentionRemoteGcClearance> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("clearance", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("expected embedded remote clearance"))?;
     let clearance_ref = required_string(&fields[0], "remote clearance ref")?;
     require_ref(&clearance_ref, "remote clearance ref")?;
-    let clearance_value = value_to_iovalue(&fields[1]);
+    let clearance_value = preserves_rail::value_to_iovalue(&fields[1]);
     let clearance = parse_retention_remote_gc_clearance(&clearance_value)?;
     if clearance.clearance_ref != clearance_ref {
         return Err(MoltenError::invalid_harness("embedded remote clearance ref mismatch"));
@@ -7820,13 +7875,13 @@ fn parse_embedded_remote_clearance(value: &Value<IOValue>) -> Result<RetentionRe
 }
 
 fn parse_embedded_remote_clearance_import(value: &Value<IOValue>) -> Result<RetentionRemoteGcClearanceImport> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("import", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("expected embedded remote clearance import"))?;
     let import_ref = required_string(&fields[0], "remote clearance import ref")?;
     require_ref(&import_ref, "remote clearance import ref")?;
-    let import_value = value_to_iovalue(&fields[1]);
+    let import_value = preserves_rail::value_to_iovalue(&fields[1]);
     let import = parse_retention_remote_gc_clearance_import(&import_value)?;
     if import.import_ref != import_ref {
         return Err(MoltenError::invalid_harness("embedded remote clearance import ref mismatch"));
@@ -7835,14 +7890,14 @@ fn parse_embedded_remote_clearance_import(value: &Value<IOValue>) -> Result<Rete
 }
 
 fn parse_embedded_value(value: &Value<IOValue>, label: &str) -> Result<(String, IOValue)> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(2))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected embedded {label}")))?;
     let value_ref = required_string(&fields[0], label)?;
     require_ref(&value_ref, label)?;
-    let embedded = value_to_iovalue(&fields[1]);
-    if canonical_hash(&embedded)? != value_ref {
+    let embedded = preserves_rail::value_to_iovalue(&fields[1]);
+    if preserves_rail::canonical_hash(&embedded)? != value_ref {
         return Err(MoltenError::invalid_harness(format!("embedded {label} ref mismatch")));
     }
     Ok((value_ref, embedded))
@@ -8085,20 +8140,20 @@ fn write_store_value(path: &Path, value: &IOValue) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(MoltenError::from)?;
     }
-    fs::write(path, to_text(value)?).map_err(MoltenError::from)
+    fs::write(path, preserves_rail::to_text(value)?).map_err(MoltenError::from)
 }
 
 fn read_store_value(path: &Path) -> Result<IOValue> {
     let text = fs::read_to_string(path).map_err(MoltenError::from)?;
-    parse_text(&text)
+    preserves_rail::parse_text(&text)
 }
 
 fn object_value(object_ref: &str, object_kind: &str) -> IOValue {
-    record("object", vec![string(object_ref), string(object_kind)])
+    preserves_rail::record("object", vec![preserves_rail::string(object_ref), preserves_rail::string(object_kind)])
 }
 
 fn parse_object_value(value: &Value<IOValue>) -> Result<(String, String)> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("object", Some(2))
         .ok_or_else(|| MoltenError::invalid_harness("expected object record"))?;
@@ -8110,25 +8165,36 @@ fn parse_object_value(value: &Value<IOValue>) -> Result<(String, String)> {
 }
 
 fn optional_ref_value(reference: Option<&str>) -> IOValue {
-    reference.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+    reference.map_or_else(
+        || preserves_rail::record("none", Vec::new()),
+        |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
+    )
 }
 
 fn optional_u64_value(value: Option<u64>) -> IOValue {
-    value.map_or_else(|| record("none", Vec::new()), |number| record("some", vec![u64_value(number)]))
+    value.map_or_else(
+        || preserves_rail::record("none", Vec::new()),
+        |number| preserves_rail::record("some", vec![preserves_rail::u64_value(number)]),
+    )
 }
 
 fn strings_sequence(values: &[String]) -> IOValue {
-    sequence(values.iter().map(string).collect())
+    preserves_rail::sequence(values.iter().map(preserves_rail::string).collect())
 }
 
 fn checks_value(checks: &[(&str, &str)]) -> IOValue {
-    record("checks", vec![sequence(
-        checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
+    preserves_rail::record("checks", vec![preserves_rail::sequence(
+        checks
+            .iter()
+            .map(|(name, status)| {
+                preserves_rail::record("check", vec![preserves_rail::string(name), preserves_rail::string(status)])
+            })
+            .collect(),
     )])
 }
 
 fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record("checks", Some(1))
         .ok_or_else(|| MoltenError::invalid_harness("expected checks record"))?;
@@ -8137,7 +8203,7 @@ fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
         .ok_or_else(|| MoltenError::invalid_harness("expected checks sequence"))?;
     let mut checks = Vec::with_capacity(entries.len());
     for entry in entries.iter() {
-        let check_value = value_to_iovalue(entry);
+        let check_value = preserves_rail::value_to_iovalue(entry);
         let check_fields = check_value
             .collect_simple_record("check", Some(2))
             .ok_or_else(|| MoltenError::invalid_harness("expected check record"))?;
@@ -8178,12 +8244,16 @@ fn parse_node_live_transport_receipt(value: &IOValue) -> Result<NodeLiveTranspor
     let fields = value
         .collect_simple_record("node-control-live-transport-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA, "node control live transport receipt")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA,
+        "node control live transport receipt",
+    )?;
     require_check(&parse_checks(&fields[10])?, "transport-is-not-authority", "node control live transport")?;
     let decision = record_string(&fields[2], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeLiveTransportReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         operation: record_string(&fields[1], "operation")?,
         decision,
         node_id: record_string(&fields[5], "node")?,
@@ -8281,11 +8351,11 @@ fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
 }
 
 fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
-    let inner = value_to_iovalue(&fields[0]);
+    let inner = preserves_rail::value_to_iovalue(&fields[0]);
     if inner.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -8298,11 +8368,11 @@ fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<Str
 }
 
 fn record_optional_u64(value: &Value<IOValue>, label: &str) -> Result<Option<u64>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
-    let inner = value_to_iovalue(&fields[0]);
+    let inner = preserves_rail::value_to_iovalue(&fields[0]);
     if inner.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -8323,7 +8393,7 @@ fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String
 }
 
 fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
@@ -8338,7 +8408,7 @@ fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Str
 }
 
 fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
@@ -8346,7 +8416,7 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
 }
 
 fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...>")))?;
@@ -8398,7 +8468,7 @@ fn validate_diagnostics(values: &[String], label: &str) -> Result<()> {
 
 fn require_ref(value: &str, label: &str) -> Result<()> {
     validate_name(value, label)?;
-    validate_content_ref(value)
+    preserves_rail::validate_content_ref(value)
         .map_err(|error| MoltenError::invalid_harness(format!("{label} must be a canonical content ref: {error}")))
 }
 
@@ -8455,7 +8525,9 @@ fn pass_or_deny(value: bool) -> &'static str {
 }
 
 fn synthetic_ref(label: &str) -> Result<String> {
-    canonical_hash(&record("retention-synthetic-ref", vec![string(label)]))
+    preserves_rail::canonical_hash(&preserves_rail::record("retention-synthetic-ref", vec![preserves_rail::string(
+        label,
+    )]))
 }
 
 const RETENTION_CLASSES: &[&str] = &[
@@ -8520,9 +8592,6 @@ mod tests {
     use n0_future::StreamExt;
 
     use super::*;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::record;
-    use crate::preserves_rail::string;
 
     #[test]
     fn pinned_objects_are_not_delete_eligible_until_unpinned() {
@@ -8686,7 +8755,7 @@ mod tests {
         })
         .expect("redact");
         let tombstone = evaluation.tombstone.expect("tombstone");
-        let text = to_text(&tombstone.value).expect("text");
+        let text = preserves_rail::to_text(&tombstone.value).expect("text");
         assert!(text.contains("redacted-or-deleted"));
         assert!(!text.contains("plaintext"));
         let summary = retention_summary(&tombstone.value).expect("summary");
@@ -9030,7 +9099,7 @@ mod tests {
         assert_eq!(audit.retention_receipt_ref, apply.retention_receipt_ref);
         assert_eq!(audit.tombstone_ref, apply.tombstone_ref);
         assert_eq!(store_file_count(&gc_audits_dir(&root)), 1);
-        assert!(retention_summary(&audit.value).expect("audit summary").contains("retention gc audit"));
+        assert_retention_summary_contains(&audit.value, "retention gc audit");
     }
 
     #[test]
@@ -9057,7 +9126,7 @@ mod tests {
         assert_eq!(explain.retention_receipt_refs.len(), 1);
         assert_eq!(explain.tombstone_refs.len(), 1);
         assert!(explain.diagnostics.is_empty());
-        assert!(retention_summary(&explain.value).expect("explain summary").contains("retention candidate explain"));
+        assert_retention_summary_contains(&explain.value, "retention candidate explain");
         let bundle_dir = root.join("bundle");
         let bundle = export_retention_candidate_bundle(RetentionCandidateBundleExportInput {
             root: &root,
@@ -9072,7 +9141,7 @@ mod tests {
         assert!(bundle_dir.join("bundle.preserves").exists());
         assert!(bundle_dir.join("explain.preserves").exists());
         assert!(bundle_dir.join("artifacts/gc-plans").exists());
-        assert!(retention_summary(&bundle.value).expect("bundle summary").contains("retention candidate bundle"));
+        assert_retention_summary_contains(&bundle.value, "retention candidate bundle");
         let verify = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
             bundle_dir: &bundle_dir,
         })
@@ -9083,15 +9152,12 @@ mod tests {
         assert_eq!(verify.artifact_refs.len(), 6);
         assert_eq!(verify.file_refs.len(), 6);
         assert!(verify.diagnostics.is_empty());
-        assert!(
-            retention_summary(&verify.value)
-                .expect("bundle verify summary")
-                .contains("retention candidate bundle verify")
-        );
+        assert_retention_summary_contains(&verify.value, "retention candidate bundle verify");
         let tampered_path = bundle_dir
             .join("artifacts/gc-plans")
             .join(format!("{}.preserves", ref_file_name(&flow.plan.plan_ref).expect("plan file name")));
-        write_store_value(&tampered_path, &record("tampered", vec![string("plan")])).expect("tamper bundle plan");
+        write_store_value(&tampered_path, &preserves_rail::record("tampered", vec![preserves_rail::string("plan")]))
+            .expect("tamper bundle plan");
         let tampered = verify_retention_candidate_bundle(RetentionCandidateBundleVerifyInput {
             bundle_dir: &bundle_dir,
         })
@@ -9374,7 +9440,8 @@ mod tests {
         assert!(wrong_import.clearance_ref.is_none());
         assert!(wrong_import.diagnostics.iter().any(|diagnostic| diagnostic == "remote-clearance-wrong-request"));
 
-        let tampered_response = record("not-a-remote-clearance-response", vec![string("tampered")]);
+        let tampered_response =
+            preserves_rail::record("not-a-remote-clearance-response", vec![preserves_rail::string("tampered")]);
         let tampered_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
             root: &root,
             request_value: &pair.request_value,
@@ -9589,7 +9656,8 @@ mod tests {
         remote_ref: &str,
         live_refs: &[String],
     ) {
-        let tampered_response = record("not-a-remote-clearance-response", vec![string("tampered")]);
+        let tampered_response =
+            preserves_rail::record("not-a-remote-clearance-response", vec![preserves_rail::string("tampered")]);
         let tampered_import = import_retention_remote_gc_clearance_response(RetentionRemoteGcClearanceImportInput {
             root,
             request_value: &request.value,
@@ -10011,7 +10079,7 @@ mod tests {
 
     async fn start_bound_live_node(state_root: &Path, topic: &str) -> LiveNodeHarness {
         let identity_text = fs::read_to_string(state_root.join("identity.preserves")).expect("node identity file");
-        let identity_value = parse_text(&identity_text).expect("parse node identity file");
+        let identity_value = preserves_rail::parse_text(&identity_text).expect("parse node identity file");
         let identity = crate::node_identity::parse_node_identity(&identity_value).expect("parse node identity");
         let seed = blake3::hash(
             format!("molten.node-control.live.endpoint.v1:{}:{}", identity.node_id, identity.endpoint_id).as_bytes(),
@@ -10252,17 +10320,21 @@ mod tests {
     }
 
     fn fake_live_transport_receipt(operation: &str, node_id: &str, envelope_label: &str, ingress_ref: &str) -> IOValue {
-        record("node-control-live-transport-receipt-v1", vec![
-            string(crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA),
-            record("operation", vec![string(operation)]),
-            record("decision", vec![string("pass")]),
-            record("transport", vec![string("iroh-gossip")]),
-            record("topic", vec![string(crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]),
-            record("node", vec![string(node_id)]),
-            record("delivered-from", vec![optional_ref_value(Some(&fake_ref(&format!("{envelope_label}-peer"))))]),
-            record("envelope", vec![string(fake_ref(envelope_label))]),
-            record("ingress-receipt", vec![optional_ref_value(Some(ingress_ref))]),
-            record("diagnostics", vec![sequence(Vec::new())]),
+        preserves_rail::record("node-control-live-transport-receipt-v1", vec![
+            preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA),
+            preserves_rail::record("operation", vec![preserves_rail::string(operation)]),
+            preserves_rail::record("decision", vec![preserves_rail::string("pass")]),
+            preserves_rail::record("transport", vec![preserves_rail::string("iroh-gossip")]),
+            preserves_rail::record("topic", vec![preserves_rail::string(
+                crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+            )]),
+            preserves_rail::record("node", vec![preserves_rail::string(node_id)]),
+            preserves_rail::record("delivered-from", vec![optional_ref_value(Some(&fake_ref(&format!(
+                "{envelope_label}-peer"
+            ))))]),
+            preserves_rail::record("envelope", vec![preserves_rail::string(fake_ref(envelope_label))]),
+            preserves_rail::record("ingress-receipt", vec![optional_ref_value(Some(ingress_ref))]),
+            preserves_rail::record("diagnostics", vec![preserves_rail::sequence(Vec::new())]),
             checks_value(&[
                 ("canonical-envelope-ref", "pass"),
                 ("live-iroh-gossip", "pass"),
@@ -10280,19 +10352,23 @@ mod tests {
         transport_ref: &str,
         ticket_label: &str,
     ) -> IOValue {
-        record("node-control-live-send-receipt-v1", vec![
-            string(crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA),
-            record("decision", vec![string("pass")]),
-            record("transport", vec![string("iroh-gossip")]),
-            record("topic", vec![string(crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC)]),
-            record("from-peer", vec![string(from_peer)]),
-            record("to-node", vec![string(to_node)]),
-            record("receiver-ticket", vec![string(fake_ref(ticket_label))]),
-            record("receiver-endpoint", vec![string(to_node)]),
-            record("receiver-addresses", vec![sequence(vec![string(fake_ref(&format!("{ticket_label}-address")))])]),
-            record("envelope", vec![string(fake_ref(envelope_label))]),
-            record("transport-receipt", vec![optional_ref_value(Some(transport_ref))]),
-            record("diagnostics", vec![sequence(Vec::new())]),
+        preserves_rail::record("node-control-live-send-receipt-v1", vec![
+            preserves_rail::string(crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA),
+            preserves_rail::record("decision", vec![preserves_rail::string("pass")]),
+            preserves_rail::record("transport", vec![preserves_rail::string("iroh-gossip")]),
+            preserves_rail::record("topic", vec![preserves_rail::string(
+                crate::node_daemon::DEFAULT_CONTROL_INGRESS_TOPIC,
+            )]),
+            preserves_rail::record("from-peer", vec![preserves_rail::string(from_peer)]),
+            preserves_rail::record("to-node", vec![preserves_rail::string(to_node)]),
+            preserves_rail::record("receiver-ticket", vec![preserves_rail::string(fake_ref(ticket_label))]),
+            preserves_rail::record("receiver-endpoint", vec![preserves_rail::string(to_node)]),
+            preserves_rail::record("receiver-addresses", vec![preserves_rail::sequence(vec![preserves_rail::string(
+                fake_ref(&format!("{ticket_label}-address")),
+            )])]),
+            preserves_rail::record("envelope", vec![preserves_rail::string(fake_ref(envelope_label))]),
+            preserves_rail::record("transport-receipt", vec![optional_ref_value(Some(transport_ref))]),
+            preserves_rail::record("diagnostics", vec![preserves_rail::sequence(Vec::new())]),
             checks_value(&[
                 ("receiver-ticket-bound", "pass"),
                 ("receiver-address-bound", "pass"),
@@ -10993,6 +11069,11 @@ mod tests {
         }
     }
 
+    fn assert_retention_summary_contains(value: &IOValue, expected: &str) {
+        let summary = retention_summary(value).expect("retention summary");
+        assert!(summary.contains(expected), "{summary}");
+    }
+
     fn fixture_material(root: &Path) -> Material {
         let case = live_case(root, "multihost");
         let pair = request_pair(root, &case);
@@ -11109,7 +11190,10 @@ mod tests {
     }
 
     fn fake_ref(label: &str) -> String {
-        canonical_hash(&record("retention-test-ref", vec![string(label)])).expect("fake ref")
+        preserves_rail::canonical_hash(&preserves_rail::record("retention-test-ref", vec![preserves_rail::string(
+            label,
+        )]))
+        .expect("fake ref")
     }
 
     fn store_file_count(dir: &Path) -> usize {
