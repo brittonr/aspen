@@ -28,31 +28,7 @@ use crate::ledger;
 use crate::node_identity;
 use crate::node_runtime;
 use crate::octet_gate;
-use crate::preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA;
-use crate::preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA;
-use crate::preserves_rail::OPERATOR_CHECKPOINT_SCHEMA;
-use crate::preserves_rail::OPERATOR_DOGFOOD_REPORT_SCHEMA;
-use crate::preserves_rail::OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA;
-use crate::preserves_rail::OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA;
-use crate::preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA;
-use crate::preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA;
-use crate::preserves_rail::OPERATOR_RELEASE_EXPORT_MANIFEST_SCHEMA;
-use crate::preserves_rail::OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA;
-use crate::preserves_rail::OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA;
-use crate::preserves_rail::OPERATOR_STEP_SCHEMA;
-use crate::preserves_rail::OPERATOR_WORKFLOW_SCHEMA;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::parse_text;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+use crate::preserves_rail;
 use crate::remote_dataspace;
 use crate::retention;
 
@@ -432,16 +408,16 @@ pub fn operator_step_value(input: &OperatorStepInput<'_>) -> Result<IOValue> {
     ensure_count_at_most(input.diagnostics.len(), MAX_OPERATOR_DIAGNOSTICS, "operator step diagnostics")?;
     let has_receipt = input.receipt_ref.is_some();
     let mandatory_status = if input.mandatory { "pass" } else { "diagnostic" };
-    Ok(record("operator-step-v1", vec![
-        string(OPERATOR_STEP_SCHEMA),
-        record("name", vec![string(input.name)]),
-        record("request", vec![optional_ref_value(input.request_ref)]),
-        record("receipt", vec![optional_ref_value(input.receipt_ref)]),
-        record("decision", vec![string(input.decision)]),
-        record("replay", vec![string(input.replay_status)]),
-        record("mandatory", vec![bool_value(input.mandatory)]),
-        record("artifacts", vec![refs_sequence(input.artifact_refs)]),
-        record("diagnostics", vec![strings_sequence(input.diagnostics)]),
+    Ok(preserves_rail::record("operator-step-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_STEP_SCHEMA),
+        preserves_rail::record("name", vec![preserves_rail::string(input.name)]),
+        preserves_rail::record("request", vec![optional_ref_value(input.request_ref)]),
+        preserves_rail::record("receipt", vec![optional_ref_value(input.receipt_ref)]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("replay", vec![preserves_rail::string(input.replay_status)]),
+        preserves_rail::record("mandatory", vec![preserves_rail::bool_value(input.mandatory)]),
+        preserves_rail::record("artifacts", vec![refs_sequence(input.artifact_refs)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(input.diagnostics)]),
         checks_value_from_pairs(&[
             ("canonical-step", "pass"),
             ("explicit-request-ref", status(input.request_ref.is_some())),
@@ -456,7 +432,7 @@ pub fn parse_operator_step(value: &IOValue) -> Result<OperatorStep> {
     let fields = value
         .collect_simple_record("operator-step-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <operator-step-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_STEP_SCHEMA, "operator step")?;
+    require_schema(&fields[0], preserves_rail::OPERATOR_STEP_SCHEMA, "operator step")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "canonical-step", "operator step")?;
     require_check(&checks, "no-text-oracle", "operator step")?;
@@ -472,7 +448,7 @@ pub fn parse_operator_step(value: &IOValue) -> Result<OperatorStep> {
     validate_decision(&decision)?;
     validate_replay_status(&replay_status)?;
     Ok(OperatorStep {
-        step_ref: canonical_hash(value)?,
+        step_ref: preserves_rail::canonical_hash(value)?,
         name,
         request_ref,
         receipt_ref,
@@ -493,15 +469,15 @@ pub fn operator_checkpoint_value(input: &OperatorCheckpointInput<'_>) -> Result<
     validate_optional_ref(input.receipt_ref, "operator checkpoint receipt ref")?;
     validate_optional_ref(input.result_ref, "operator checkpoint result ref")?;
     validate_ref(input.state_root_ref, "operator checkpoint state root ref")?;
-    Ok(record("operator-checkpoint-v1", vec![
-        string(OPERATOR_CHECKPOINT_SCHEMA),
-        record("workflow", vec![string(input.workflow_id)]),
-        record("sequence", vec![u64_value(input.sequence)]),
-        record("step", vec![string(input.step_ref)]),
-        record("request", vec![optional_ref_value(input.request_ref)]),
-        record("receipt", vec![optional_ref_value(input.receipt_ref)]),
-        record("result", vec![optional_ref_value(input.result_ref)]),
-        record("state-root", vec![string(input.state_root_ref)]),
+    Ok(preserves_rail::record("operator-checkpoint-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_CHECKPOINT_SCHEMA),
+        preserves_rail::record("workflow", vec![preserves_rail::string(input.workflow_id)]),
+        preserves_rail::record("sequence", vec![preserves_rail::u64_value(input.sequence)]),
+        preserves_rail::record("step", vec![preserves_rail::string(input.step_ref)]),
+        preserves_rail::record("request", vec![optional_ref_value(input.request_ref)]),
+        preserves_rail::record("receipt", vec![optional_ref_value(input.receipt_ref)]),
+        preserves_rail::record("result", vec![optional_ref_value(input.result_ref)]),
+        preserves_rail::record("state-root", vec![preserves_rail::string(input.state_root_ref)]),
         checks_value_from_pairs(&[
             ("checkpoint-after-step", "pass"),
             ("request-receipt-result-bound", status(input.receipt_ref.is_some() && input.result_ref.is_some())),
@@ -514,7 +490,7 @@ pub fn parse_operator_checkpoint(value: &IOValue) -> Result<OperatorCheckpoint> 
     let fields = value
         .collect_simple_record("operator-checkpoint-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <operator-checkpoint-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_CHECKPOINT_SCHEMA, "operator checkpoint")?;
+    require_schema(&fields[0], preserves_rail::OPERATOR_CHECKPOINT_SCHEMA, "operator checkpoint")?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "checkpoint-after-step", "operator checkpoint")?;
     require_check(&checks, "explicit-state-root", "operator checkpoint")?;
@@ -527,7 +503,7 @@ pub fn parse_operator_checkpoint(value: &IOValue) -> Result<OperatorCheckpoint> 
     let result_ref = record_optional_ref(&fields[6], "result")?;
     let state_root_ref = record_ref(&fields[7], "state-root")?;
     Ok(OperatorCheckpoint {
-        checkpoint_ref: canonical_hash(value)?,
+        checkpoint_ref: preserves_rail::canonical_hash(value)?,
         workflow_id,
         sequence,
         step_ref,
@@ -551,14 +527,14 @@ pub fn operator_workflow_value(input: &OperatorWorkflowInput<'_>) -> Result<IOVa
     let has_hidden_bypass = steps
         .iter()
         .any(|step| step.mandatory && (step.request_ref.is_none() || step.receipt_ref.is_none()));
-    Ok(record("operator-workflow-v1", vec![
-        string(OPERATOR_WORKFLOW_SCHEMA),
-        record("workflow-id", vec![string(input.workflow_id)]),
-        record("steps", vec![sequence(input.steps.to_vec())]),
-        record("policy", vec![refs_sequence(input.policy_refs)]),
-        record("capability", vec![refs_sequence(input.capability_refs)]),
-        record("resource", vec![refs_sequence(input.resource_refs)]),
-        record("replay-profile", vec![string(input.replay_profile)]),
+    Ok(preserves_rail::record("operator-workflow-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_WORKFLOW_SCHEMA),
+        preserves_rail::record("workflow-id", vec![preserves_rail::string(input.workflow_id)]),
+        preserves_rail::record("steps", vec![preserves_rail::sequence(input.steps.to_vec())]),
+        preserves_rail::record("policy", vec![refs_sequence(input.policy_refs)]),
+        preserves_rail::record("capability", vec![refs_sequence(input.capability_refs)]),
+        preserves_rail::record("resource", vec![refs_sequence(input.resource_refs)]),
+        preserves_rail::record("replay-profile", vec![preserves_rail::string(input.replay_profile)]),
         checks_value_from_pairs(&[
             ("canonical-workflow", "pass"),
             ("no-hidden-bypass", status(!has_hidden_bypass)),
@@ -572,7 +548,7 @@ pub fn parse_operator_workflow(value: &IOValue) -> Result<OperatorWorkflow> {
     let fields = value
         .collect_simple_record("operator-workflow-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <operator-workflow-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_WORKFLOW_SCHEMA, "operator workflow")?;
+    require_schema(&fields[0], preserves_rail::OPERATOR_WORKFLOW_SCHEMA, "operator workflow")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-workflow", "operator workflow")?;
     require_check(&checks, "no-hidden-bypass", "operator workflow")?;
@@ -581,7 +557,7 @@ pub fn parse_operator_workflow(value: &IOValue) -> Result<OperatorWorkflow> {
     ensure_count_at_most(step_values.len(), MAX_OPERATOR_STEPS, "operator workflow steps")?;
     let steps = step_values.iter().map(parse_operator_step).collect::<Result<Vec<_>>>()?;
     Ok(OperatorWorkflow {
-        workflow_ref: canonical_hash(value)?,
+        workflow_ref: preserves_rail::canonical_hash(value)?,
         workflow_id: record_string(&fields[1], "workflow-id")?,
         steps,
         policy_refs: record_ref_sequence(&fields[3], "policy")?,
@@ -601,7 +577,8 @@ struct ReportParts {
 
 impl ReportParts {
     fn collect(input: &DogfoodReportInput<'_>, workflow: &OperatorWorkflow) -> Result<Self> {
-        let checkpoint_refs = input.checkpoint_values.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?;
+        let checkpoint_refs =
+            input.checkpoint_values.iter().map(preserves_rail::canonical_hash).collect::<Result<Vec<_>>>()?;
         ensure_count_at_most(checkpoint_refs.len(), MAX_OPERATOR_STEPS, "dogfood checkpoints")?;
         let diagnostics = input.diagnostics.to_vec();
         ensure_count_at_most(diagnostics.len(), MAX_OPERATOR_DIAGNOSTICS, "dogfood report diagnostics")?;
@@ -679,16 +656,16 @@ pub fn dogfood_report_value(input: &DogfoodReportInput<'_>) -> Result<IOValue> {
     validate_ref(input.final_state_ref, "dogfood final state ref")?;
     let parts = ReportParts::collect(input, &workflow)?;
     let decision = if parts.diagnostics.is_empty() { "pass" } else { "deny" };
-    Ok(record("dogfood-report-v1", vec![
-        string(OPERATOR_DOGFOOD_REPORT_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("workflow", vec![string(&workflow.workflow_ref)]),
-        record("checkpoints", vec![refs_sequence(&parts.checkpoint_refs)]),
-        record("step-receipts", vec![step_receipts_sequence(&parts.step_receipts)]),
-        record("gate-receipts", vec![refs_sequence(input.gate_receipt_refs)]),
-        record("repro-bundles", vec![refs_sequence(input.repro_bundle_refs)]),
-        record("final-state", vec![string(input.final_state_ref)]),
-        record("diagnostics", vec![strings_sequence(&parts.diagnostics)]),
+    Ok(preserves_rail::record("dogfood-report-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_DOGFOOD_REPORT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("workflow", vec![preserves_rail::string(&workflow.workflow_ref)]),
+        preserves_rail::record("checkpoints", vec![refs_sequence(&parts.checkpoint_refs)]),
+        preserves_rail::record("step-receipts", vec![step_receipts_sequence(&parts.step_receipts)]),
+        preserves_rail::record("gate-receipts", vec![refs_sequence(input.gate_receipt_refs)]),
+        preserves_rail::record("repro-bundles", vec![refs_sequence(input.repro_bundle_refs)]),
+        preserves_rail::record("final-state", vec![preserves_rail::string(input.final_state_ref)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(&parts.diagnostics)]),
         checks_value_from_pairs(&[
             ("canonical-report", "pass"),
             (
@@ -710,13 +687,13 @@ pub fn parse_dogfood_report(value: &IOValue) -> Result<DogfoodReport> {
     let fields = value
         .collect_simple_record("dogfood-report-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <dogfood-report-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_DOGFOOD_REPORT_SCHEMA, "dogfood report")?;
+    require_schema(&fields[0], preserves_rail::OPERATOR_DOGFOOD_REPORT_SCHEMA, "dogfood report")?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "canonical-report", "dogfood report")?;
     require_check(&checks, "final-state-bound", "dogfood report")?;
     require_check(&checks, "no-text-oracle", "dogfood report")?;
     Ok(DogfoodReport {
-        report_ref: canonical_hash(value)?,
+        report_ref: preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         workflow_ref: record_ref(&fields[2], "workflow")?,
         checkpoint_refs: record_ref_sequence(&fields[3], "checkpoints")?,
@@ -746,17 +723,20 @@ pub fn release_gate_receipt_value(input: &ReleaseGateInput<'_>) -> Result<IOValu
     require_non_empty_refs(input.replay_index_refs, "dogfood release replay index ref")?;
     require_non_empty_refs(input.retention_gc_refs, "dogfood release retention GC ref")?;
     require_non_empty_refs(input.validation_command_refs, "dogfood release validation command ref")?;
-    Ok(record("release-gate-receipt-v1", vec![
-        string(OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA),
-        record("decision", vec![string("pass")]),
-        record("report", vec![string(&report.report_ref)]),
-        record("node", vec![string(input.node_startup_ref), string(input.node_shutdown_ref)]),
-        record("harness-gates", vec![refs_sequence(input.harness_gate_refs)]),
-        record("catalog-queries", vec![refs_sequence(input.catalog_query_refs)]),
-        record("repro-verifies", vec![refs_sequence(input.repro_verify_refs)]),
-        record("replay-indexes", vec![refs_sequence(input.replay_index_refs)]),
-        record("retention-gc", vec![refs_sequence(input.retention_gc_refs)]),
-        record("validation-commands", vec![refs_sequence(input.validation_command_refs)]),
+    Ok(preserves_rail::record("release-gate-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string("pass")]),
+        preserves_rail::record("report", vec![preserves_rail::string(&report.report_ref)]),
+        preserves_rail::record("node", vec![
+            preserves_rail::string(input.node_startup_ref),
+            preserves_rail::string(input.node_shutdown_ref),
+        ]),
+        preserves_rail::record("harness-gates", vec![refs_sequence(input.harness_gate_refs)]),
+        preserves_rail::record("catalog-queries", vec![refs_sequence(input.catalog_query_refs)]),
+        preserves_rail::record("repro-verifies", vec![refs_sequence(input.repro_verify_refs)]),
+        preserves_rail::record("replay-indexes", vec![refs_sequence(input.replay_index_refs)]),
+        preserves_rail::record("retention-gc", vec![refs_sequence(input.retention_gc_refs)]),
+        preserves_rail::record("validation-commands", vec![refs_sequence(input.validation_command_refs)]),
         checks_value_from_pairs(&[
             ("dogfood-report-pass", "pass"),
             ("deterministic-or-recorded-only", "pass"),
@@ -776,16 +756,16 @@ pub fn parse_release_gate_receipt(value: &IOValue) -> Result<ReleaseGateReceipt>
     let fields = value
         .collect_simple_record("release-gate-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-gate-receipt-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA, "operator release gate")?;
+    require_schema(&fields[0], preserves_rail::OPERATOR_RELEASE_GATE_RECEIPT_SCHEMA, "operator release gate")?;
     let checks = parse_checks(&fields[10])?;
     require_check(&checks, "dogfood-report-pass", "operator release gate")?;
     require_check(&checks, "replay-evidence-index-bound", "operator release gate")?;
     require_check(&checks, "replay-index-is-evidence-only", "operator release gate")?;
     require_check(&checks, "no-text-oracle", "operator release gate")?;
-    let node = value_to_iovalue(&fields[3]);
+    let node = preserves_rail::value_to_iovalue(&fields[3]);
     let node_fields = simple_record(&node, "node", 2)?;
     Ok(ReleaseGateReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         report_ref: record_ref(&fields[2], "report")?,
         startup_ref: required_ref(&node_fields[0], "release gate startup ref")?,
@@ -803,19 +783,22 @@ pub fn parse_release_gate_receipt(value: &IOValue) -> Result<ReleaseGateReceipt>
 
 pub fn nix_dogfood_release_evidence_value(input: &NixDogfoodEvidenceInput<'_>) -> Result<IOValue> {
     let observed = observe_nix_dogfood_output(input.output_path)?;
-    Ok(record("nix-dogfood-release-evidence-v1", vec![
-        string(OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA),
-        record("output-path", vec![string(observed.output_path.as_str()), string(&observed.output_path_ref)]),
-        record("report", vec![string(&observed.report_ref)]),
-        record("release-gate", vec![string(&observed.release_gate_ref)]),
-        record("replay-verify", vec![string(&observed.replay_verify_ref)]),
-        record("replay-index", vec![string(&observed.replay_index_ref)]),
-        record("summary", vec![string(&observed.summary_ref)]),
-        record("nextest", vec![
-            string(&observed.nextest_marker_ref),
-            string(observed.nextest_check_path.as_str()),
+    Ok(preserves_rail::record("nix-dogfood-release-evidence-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA),
+        preserves_rail::record("output-path", vec![
+            preserves_rail::string(observed.output_path.as_str()),
+            preserves_rail::string(&observed.output_path_ref),
         ]),
-        record("files", vec![file_refs_sequence(&observed.file_refs)]),
+        preserves_rail::record("report", vec![preserves_rail::string(&observed.report_ref)]),
+        preserves_rail::record("release-gate", vec![preserves_rail::string(&observed.release_gate_ref)]),
+        preserves_rail::record("replay-verify", vec![preserves_rail::string(&observed.replay_verify_ref)]),
+        preserves_rail::record("replay-index", vec![preserves_rail::string(&observed.replay_index_ref)]),
+        preserves_rail::record("summary", vec![preserves_rail::string(&observed.summary_ref)]),
+        preserves_rail::record("nextest", vec![
+            preserves_rail::string(&observed.nextest_marker_ref),
+            preserves_rail::string(observed.nextest_check_path.as_str()),
+        ]),
+        preserves_rail::record("files", vec![file_refs_sequence(&observed.file_refs)]),
         checks_value_from_pairs(&[
             ("dogfood-report-pass", "pass"),
             ("release-gate-ref-bound", "pass"),
@@ -834,10 +817,10 @@ pub fn parse_nix_dogfood_evidence(value: &IOValue) -> Result<NixDogfoodEvidence>
     let fields = value
         .collect_simple_record("nix-dogfood-release-evidence-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <nix-dogfood-release-evidence-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA, "Nix dogfood evidence")?;
-    let output_path = value_to_iovalue(&fields[1]);
+    require_schema(&fields[0], preserves_rail::OPERATOR_NIX_DOGFOOD_EVIDENCE_SCHEMA, "Nix dogfood evidence")?;
+    let output_path = preserves_rail::value_to_iovalue(&fields[1]);
     let output_fields = simple_record(&output_path, "output-path", 2)?;
-    let nextest = value_to_iovalue(&fields[7]);
+    let nextest = preserves_rail::value_to_iovalue(&fields[7]);
     let nextest_fields = simple_record(&nextest, "nextest", 2)?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "replay-verify-ref-bound", "Nix dogfood evidence")?;
@@ -846,7 +829,7 @@ pub fn parse_nix_dogfood_evidence(value: &IOValue) -> Result<NixDogfoodEvidence>
     require_check(&checks, "release-evidence-only", "Nix dogfood evidence")?;
     require_check(&checks, "no-text-oracle", "Nix dogfood evidence")?;
     Ok(NixDogfoodEvidence {
-        evidence_ref: canonical_hash(value)?,
+        evidence_ref: preserves_rail::canonical_hash(value)?,
         output_path: required_string(&output_fields[0], "Nix dogfood output path")?,
         output_path_ref: required_ref(&output_fields[1], "Nix dogfood output path ref")?,
         report_ref: record_ref(&fields[2], "report")?,
@@ -938,16 +921,19 @@ pub fn verify_nix_dogfood_evidence(input: &NixDogfoodVerifyInput<'_>) -> Result<
         diagnostics.push_limited_value(diagnostic, MAX_OPERATOR_DIAGNOSTICS, "Nix dogfood verify diagnostics")?;
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = record("nix-dogfood-release-verify-receipt-v1", vec![
-        string(OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("evidence", vec![string(&evidence.evidence_ref)]),
-        record("output-path", vec![string(observed.output_path.as_str()), string(&observed.output_path_ref)]),
-        record("report", vec![string(&observed.report_ref)]),
-        record("release-gate", vec![string(&observed.release_gate_ref)]),
-        record("replay-verify", vec![string(&observed.replay_verify_ref)]),
-        record("replay-index", vec![string(&observed.replay_index_ref)]),
-        record("diagnostics", vec![strings_sequence(&diagnostics)]),
+    let value = preserves_rail::record("nix-dogfood-release-verify-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("evidence", vec![preserves_rail::string(&evidence.evidence_ref)]),
+        preserves_rail::record("output-path", vec![
+            preserves_rail::string(observed.output_path.as_str()),
+            preserves_rail::string(&observed.output_path_ref),
+        ]),
+        preserves_rail::record("report", vec![preserves_rail::string(&observed.report_ref)]),
+        preserves_rail::record("release-gate", vec![preserves_rail::string(&observed.release_gate_ref)]),
+        preserves_rail::record("replay-verify", vec![preserves_rail::string(&observed.replay_verify_ref)]),
+        preserves_rail::record("replay-index", vec![preserves_rail::string(&observed.replay_index_ref)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value_from_pairs(&[
             ("dogfood-report-pass", status(is_output_observed)),
             ("release-gate-ref-bound", status(evidence.release_gate_ref == observed.release_gate_ref)),
@@ -967,8 +953,12 @@ pub fn parse_nix_dogfood_verify_receipt(value: &IOValue) -> Result<NixDogfoodVer
     let fields = value
         .collect_simple_record("nix-dogfood-release-verify-receipt-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <nix-dogfood-release-verify-receipt-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA, "Nix dogfood verify receipt")?;
-    let output_path = value_to_iovalue(&fields[3]);
+    require_schema(
+        &fields[0],
+        preserves_rail::OPERATOR_NIX_DOGFOOD_VERIFY_RECEIPT_SCHEMA,
+        "Nix dogfood verify receipt",
+    )?;
+    let output_path = preserves_rail::value_to_iovalue(&fields[3]);
     let output_fields = simple_record(&output_path, "output-path", 2)?;
     let checks = parse_checks(&fields[9])?;
     require_check(&checks, "replay-verify-ref-bound", "Nix dogfood verify receipt")?;
@@ -977,7 +967,7 @@ pub fn parse_nix_dogfood_verify_receipt(value: &IOValue) -> Result<NixDogfoodVer
     require_check(&checks, "release-evidence-only", "Nix dogfood verify receipt")?;
     require_check(&checks, "no-text-oracle", "Nix dogfood verify receipt")?;
     Ok(NixDogfoodVerifyReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         evidence_ref: record_ref(&fields[2], "evidence")?,
         output_path_ref: required_ref(&output_fields[1], "Nix dogfood verify output path ref")?,
@@ -993,16 +983,28 @@ pub fn parse_nix_dogfood_verify_receipt(value: &IOValue) -> Result<NixDogfoodVer
 
 pub fn release_evidence_bundle_value(input: &ReleaseEvidenceBundleInput<'_>) -> Result<IOValue> {
     let observed = observe_release_bundle_output(input.output_path)?;
-    Ok(record("release-evidence-bundle-v1", vec![
-        string(OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA),
-        record("output-path", vec![string(observed.output_path.as_str()), string(&observed.output_path_ref)]),
-        record("members", vec![file_refs_sequence(&observed.member_refs)]),
-        record("dogfood", vec![string(&observed.report_ref), string(&observed.release_gate_ref)]),
-        record("replay", vec![string(&observed.replay_verify_ref), string(&observed.replay_index_ref)]),
-        record("nix", vec![string(&observed.nix_evidence_ref), string(&observed.nix_verify_ref)]),
-        record("nextest", vec![
-            string(&observed.nextest_marker_ref),
-            string(observed.nextest_check_path.as_str()),
+    Ok(preserves_rail::record("release-evidence-bundle-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA),
+        preserves_rail::record("output-path", vec![
+            preserves_rail::string(observed.output_path.as_str()),
+            preserves_rail::string(&observed.output_path_ref),
+        ]),
+        preserves_rail::record("members", vec![file_refs_sequence(&observed.member_refs)]),
+        preserves_rail::record("dogfood", vec![
+            preserves_rail::string(&observed.report_ref),
+            preserves_rail::string(&observed.release_gate_ref),
+        ]),
+        preserves_rail::record("replay", vec![
+            preserves_rail::string(&observed.replay_verify_ref),
+            preserves_rail::string(&observed.replay_index_ref),
+        ]),
+        preserves_rail::record("nix", vec![
+            preserves_rail::string(&observed.nix_evidence_ref),
+            preserves_rail::string(&observed.nix_verify_ref),
+        ]),
+        preserves_rail::record("nextest", vec![
+            preserves_rail::string(&observed.nextest_marker_ref),
+            preserves_rail::string(observed.nextest_check_path.as_str()),
         ]),
         checks_value_from_pairs(&[
             ("dogfood-report-pass", "pass"),
@@ -1023,16 +1025,16 @@ pub fn parse_release_evidence_bundle(value: &IOValue) -> Result<ReleaseEvidenceB
     let fields = value
         .collect_simple_record("release-evidence-bundle-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-evidence-bundle-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA, "release evidence bundle")?;
-    let output_path = value_to_iovalue(&fields[1]);
+    require_schema(&fields[0], preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_SCHEMA, "release evidence bundle")?;
+    let output_path = preserves_rail::value_to_iovalue(&fields[1]);
     let output_fields = simple_record(&output_path, "output-path", 2)?;
-    let dogfood = value_to_iovalue(&fields[3]);
+    let dogfood = preserves_rail::value_to_iovalue(&fields[3]);
     let dogfood_fields = simple_record(&dogfood, "dogfood", 2)?;
-    let replay = value_to_iovalue(&fields[4]);
+    let replay = preserves_rail::value_to_iovalue(&fields[4]);
     let replay_fields = simple_record(&replay, "replay", 2)?;
-    let nix = value_to_iovalue(&fields[5]);
+    let nix = preserves_rail::value_to_iovalue(&fields[5]);
     let nix_fields = simple_record(&nix, "nix", 2)?;
-    let nextest = value_to_iovalue(&fields[6]);
+    let nextest = preserves_rail::value_to_iovalue(&fields[6]);
     let nextest_fields = simple_record(&nextest, "nextest", 2)?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "bundle-members-bound", "release evidence bundle")?;
@@ -1042,7 +1044,7 @@ pub fn parse_release_evidence_bundle(value: &IOValue) -> Result<ReleaseEvidenceB
     require_check(&checks, "release-evidence-only", "release evidence bundle")?;
     require_check(&checks, "no-text-oracle", "release evidence bundle")?;
     Ok(ReleaseEvidenceBundle {
-        bundle_ref: canonical_hash(value)?,
+        bundle_ref: preserves_rail::canonical_hash(value)?,
         output_path: required_string(&output_fields[0], "release evidence output path")?,
         output_path_ref: required_ref(&output_fields[1], "release evidence output path ref")?,
         report_ref: required_ref(&dogfood_fields[0], "release evidence report ref")?,
@@ -1138,15 +1140,27 @@ pub fn verify_release_evidence_bundle(
         )?;
     }
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = record("release-evidence-bundle-verify-receipt-v1", vec![
-        string(OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("bundle", vec![string(&bundle.bundle_ref)]),
-        record("output-path", vec![string(observed.output_path.as_str()), string(&observed.output_path_ref)]),
-        record("dogfood", vec![string(&observed.report_ref), string(&observed.release_gate_ref)]),
-        record("replay", vec![string(&observed.replay_verify_ref), string(&observed.replay_index_ref)]),
-        record("nix", vec![string(&observed.nix_evidence_ref), string(&observed.nix_verify_ref)]),
-        record("diagnostics", vec![strings_sequence(&diagnostics)]),
+    let value = preserves_rail::record("release-evidence-bundle-verify-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(&bundle.bundle_ref)]),
+        preserves_rail::record("output-path", vec![
+            preserves_rail::string(observed.output_path.as_str()),
+            preserves_rail::string(&observed.output_path_ref),
+        ]),
+        preserves_rail::record("dogfood", vec![
+            preserves_rail::string(&observed.report_ref),
+            preserves_rail::string(&observed.release_gate_ref),
+        ]),
+        preserves_rail::record("replay", vec![
+            preserves_rail::string(&observed.replay_verify_ref),
+            preserves_rail::string(&observed.replay_index_ref),
+        ]),
+        preserves_rail::record("nix", vec![
+            preserves_rail::string(&observed.nix_evidence_ref),
+            preserves_rail::string(&observed.nix_verify_ref),
+        ]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value_from_pairs(&[
             ("dogfood-report-pass", status(is_output_observed)),
             ("release-gate-pass", status(is_output_observed)),
@@ -1170,16 +1184,16 @@ pub fn parse_release_evidence_bundle_verify_receipt(value: &IOValue) -> Result<R
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-evidence-bundle-verify-receipt-v1 ...>"))?;
     require_schema(
         &fields[0],
-        OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA,
+        preserves_rail::OPERATOR_RELEASE_EVIDENCE_BUNDLE_VERIFY_RECEIPT_SCHEMA,
         "release evidence bundle verify receipt",
     )?;
-    let output_path = value_to_iovalue(&fields[3]);
+    let output_path = preserves_rail::value_to_iovalue(&fields[3]);
     let output_fields = simple_record(&output_path, "output-path", 2)?;
-    let dogfood = value_to_iovalue(&fields[4]);
+    let dogfood = preserves_rail::value_to_iovalue(&fields[4]);
     let dogfood_fields = simple_record(&dogfood, "dogfood", 2)?;
-    let replay = value_to_iovalue(&fields[5]);
+    let replay = preserves_rail::value_to_iovalue(&fields[5]);
     let replay_fields = simple_record(&replay, "replay", 2)?;
-    let nix = value_to_iovalue(&fields[6]);
+    let nix = preserves_rail::value_to_iovalue(&fields[6]);
     let nix_fields = simple_record(&nix, "nix", 2)?;
     let checks = parse_checks(&fields[8])?;
     require_check(&checks, "bundle-members-bound", "release evidence bundle verify receipt")?;
@@ -1191,7 +1205,7 @@ pub fn parse_release_evidence_bundle_verify_receipt(value: &IOValue) -> Result<R
     require_check(&checks, "release-evidence-only", "release evidence bundle verify receipt")?;
     require_check(&checks, "no-text-oracle", "release evidence bundle verify receipt")?;
     Ok(ReleaseEvidenceBundleVerifyReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         bundle_ref: record_ref(&fields[2], "bundle")?,
         output_path_ref: required_ref(&output_fields[1], "release evidence verify output path ref")?,
@@ -1233,34 +1247,43 @@ pub fn release_promotion_gate_receipt_value(
     let bundle_verify = parse_release_evidence_bundle_verify_receipt(input.bundle_verify_value)?;
     let facts = promotion_facts(input, &bundle_verify)?;
     let decision = if facts.diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = record("release-promotion-gate-receipt-v1", vec![
-        string(OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("bundle-verify", vec![
-            string(&bundle_verify.receipt_ref),
-            string(&bundle_verify.bundle_ref),
-            string(&bundle_verify.output_path_ref),
-            string(&bundle_verify.report_ref),
-            string(&bundle_verify.release_gate_ref),
-            string(&bundle_verify.nix_evidence_ref),
-            string(&bundle_verify.nix_verify_ref),
+    let value = preserves_rail::record("release-promotion-gate-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("bundle-verify", vec![
+            preserves_rail::string(&bundle_verify.receipt_ref),
+            preserves_rail::string(&bundle_verify.bundle_ref),
+            preserves_rail::string(&bundle_verify.output_path_ref),
+            preserves_rail::string(&bundle_verify.report_ref),
+            preserves_rail::string(&bundle_verify.release_gate_ref),
+            preserves_rail::string(&bundle_verify.nix_evidence_ref),
+            preserves_rail::string(&bundle_verify.nix_verify_ref),
         ]),
-        record("signed-keyring", vec![
-            record("selected-key", vec![
-                string(&facts.key.selected_key_ref),
-                string(&facts.key.selected_key_id),
-                string(&facts.key.selected_signer),
-                string(&facts.key.selected_trust_root),
-                u64_value(facts.key.selected_generation),
+        preserves_rail::record("signed-keyring", vec![
+            preserves_rail::record("selected-key", vec![
+                preserves_rail::string(&facts.key.selected_key_ref),
+                preserves_rail::string(&facts.key.selected_key_id),
+                preserves_rail::string(&facts.key.selected_signer),
+                preserves_rail::string(&facts.key.selected_trust_root),
+                preserves_rail::u64_value(facts.key.selected_generation),
             ]),
             refs_sequence(&facts.key_revocation_refs),
         ]),
-        record("evidence", vec![
-            record("source", vec![string(input.source_evidence), string(&facts.source_ref)]),
-            record("octet", vec![string(input.octet_evidence), string(&facts.octet_ref)]),
-            record("cairn", vec![string(input.cairn_evidence), string(&facts.cairn_ref)]),
+        preserves_rail::record("evidence", vec![
+            preserves_rail::record("source", vec![
+                preserves_rail::string(input.source_evidence),
+                preserves_rail::string(&facts.source_ref),
+            ]),
+            preserves_rail::record("octet", vec![
+                preserves_rail::string(input.octet_evidence),
+                preserves_rail::string(&facts.octet_ref),
+            ]),
+            preserves_rail::record("cairn", vec![
+                preserves_rail::string(input.cairn_evidence),
+                preserves_rail::string(&facts.cairn_ref),
+            ]),
         ]),
-        record("diagnostics", vec![strings_sequence(&facts.diagnostics)]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(&facts.diagnostics)]),
         checks_value_from_pairs(&[
             ("release-bundle-verify-pass", status(bundle_verify.decision == "pass")),
             ("promotion-output-path-bound", status(facts.output_path_ref == bundle_verify.output_path_ref)),
@@ -1386,20 +1409,24 @@ pub fn parse_release_promotion_gate_receipt(value: &IOValue) -> Result<ReleasePr
     let fields = value
         .collect_simple_record("release-promotion-gate-receipt-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-promotion-gate-receipt-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA, "release promotion gate receipt")?;
-    let bundle_value = value_to_iovalue(&fields[2]);
+    require_schema(
+        &fields[0],
+        preserves_rail::OPERATOR_RELEASE_PROMOTION_GATE_RECEIPT_SCHEMA,
+        "release promotion gate receipt",
+    )?;
+    let bundle_value = preserves_rail::value_to_iovalue(&fields[2]);
     let bundle_fields = simple_record(&bundle_value, "bundle-verify", 7)?;
-    let keyring_value = value_to_iovalue(&fields[3]);
+    let keyring_value = preserves_rail::value_to_iovalue(&fields[3]);
     let keyring_fields = simple_record(&keyring_value, "signed-keyring", 2)?;
-    let selected_key_value = value_to_iovalue(&keyring_fields[0]);
+    let selected_key_value = preserves_rail::value_to_iovalue(&keyring_fields[0]);
     let selected_key_fields = simple_record(&selected_key_value, "selected-key", 5)?;
-    let evidence_value = value_to_iovalue(&fields[4]);
+    let evidence_value = preserves_rail::value_to_iovalue(&fields[4]);
     let evidence_fields = simple_record(&evidence_value, "evidence", 3)?;
-    let source_value = value_to_iovalue(&evidence_fields[0]);
+    let source_value = preserves_rail::value_to_iovalue(&evidence_fields[0]);
     let source_fields = simple_record(&source_value, "source", 2)?;
-    let octet_value = value_to_iovalue(&evidence_fields[1]);
+    let octet_value = preserves_rail::value_to_iovalue(&evidence_fields[1]);
     let octet_fields = simple_record(&octet_value, "octet", 2)?;
-    let cairn_value = value_to_iovalue(&evidence_fields[2]);
+    let cairn_value = preserves_rail::value_to_iovalue(&evidence_fields[2]);
     let cairn_fields = simple_record(&cairn_value, "cairn", 2)?;
     let checks = parse_checks(&fields[6])?;
     require_check(&checks, "release-bundle-verify-pass", "release promotion gate receipt")?;
@@ -1411,7 +1438,7 @@ pub fn parse_release_promotion_gate_receipt(value: &IOValue) -> Result<ReleasePr
     require_check(&checks, "release-promotion-is-evidence-only", "release promotion gate receipt")?;
     require_check(&checks, "no-subsystem-authority-granted", "release promotion gate receipt")?;
     Ok(ReleasePromotionGateReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         bundle_verify_ref: required_ref(&bundle_fields[0], "release promotion bundle verify receipt ref")?,
         bundle_ref: required_ref(&bundle_fields[1], "release promotion bundle ref")?,
@@ -1492,7 +1519,7 @@ fn summary_facts(input: &ReleasePromotionSummaryInput<'_>, output_path_ref: &str
 fn read_summary_gate(input: &ReleasePromotionSummaryInput<'_>, output_path_ref: &str) -> Result<GateReadback> {
     let mut diagnostics = Vec::new();
     let promotion_result = read_output_text(input.output_path, "release-promotion-gate.preserves")
-        .and_then(|text| parse_text(&text))
+        .and_then(|text| preserves_rail::parse_text(&text))
         .and_then(|value| parse_release_promotion_gate_receipt(&value));
     let promotion = match promotion_result {
         Ok(promotion) => Some(promotion),
@@ -1544,7 +1571,7 @@ fn read_signed_summary(
     expected_subject_ref: Option<&str>,
 ) -> Result<SignedReadback> {
     let signed_result = read_output_text(input.output_path, "release-promotion-gate.signed.preserves")
-        .and_then(|text| parse_text(&text))
+        .and_then(|text| preserves_rail::parse_text(&text))
         .and_then(|value| {
             verify_signed_receipt_with_keyring_policy(&value, &VerifySignedReceiptKeyringPolicy {
                 required_purpose: RELEASE_PROMOTION_SIGNING_PURPOSE,
@@ -1635,28 +1662,31 @@ fn summary_record(
     refs: &SummaryRefs,
 ) -> IOValue {
     let decision = if facts.diagnostics.is_empty() { "pass" } else { "deny" };
-    record("release-promotion-summary-v1", vec![
-        string(OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("output", vec![string(output_path_string), string(output_path_ref)]),
-        record("promotion", vec![
-            string(&refs.promotion_ref),
-            string(&refs.promotion_decision),
-            string(&refs.bundle_verify_ref),
-            string(&refs.bundle_ref),
+    preserves_rail::record("release-promotion-summary-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("output", vec![
+            preserves_rail::string(output_path_string),
+            preserves_rail::string(output_path_ref),
         ]),
-        record("signed-promotion", vec![
-            string(&refs.signed_envelope_ref),
-            string(&refs.signed_subject_ref),
-            string(&refs.signed_key_ref),
-            string(RELEASE_PROMOTION_SIGNING_PURPOSE),
+        preserves_rail::record("promotion", vec![
+            preserves_rail::string(&refs.promotion_ref),
+            preserves_rail::string(&refs.promotion_decision),
+            preserves_rail::string(&refs.bundle_verify_ref),
+            preserves_rail::string(&refs.bundle_ref),
         ]),
-        record("evidence", vec![
-            record("source", vec![string(&refs.source_ref)]),
-            record("octet", vec![string(&refs.octet_ref)]),
-            record("cairn", vec![string(&refs.cairn_ref)]),
+        preserves_rail::record("signed-promotion", vec![
+            preserves_rail::string(&refs.signed_envelope_ref),
+            preserves_rail::string(&refs.signed_subject_ref),
+            preserves_rail::string(&refs.signed_key_ref),
+            preserves_rail::string(RELEASE_PROMOTION_SIGNING_PURPOSE),
         ]),
-        record("diagnostics", vec![strings_sequence(&facts.diagnostics)]),
+        preserves_rail::record("evidence", vec![
+            preserves_rail::record("source", vec![preserves_rail::string(&refs.source_ref)]),
+            preserves_rail::record("octet", vec![preserves_rail::string(&refs.octet_ref)]),
+            preserves_rail::record("cairn", vec![preserves_rail::string(&refs.cairn_ref)]),
+        ]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(&facts.diagnostics)]),
         checks_value_from_pairs(&[
             (
                 "release-promotion-pass",
@@ -1682,18 +1712,18 @@ pub fn parse_release_promotion_summary(value: &IOValue) -> Result<ReleasePromoti
     let fields = value
         .collect_simple_record("release-promotion-summary-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-promotion-summary-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA, "release promotion summary")?;
-    let promotion_value = value_to_iovalue(&fields[3]);
+    require_schema(&fields[0], preserves_rail::OPERATOR_RELEASE_PROMOTION_SUMMARY_SCHEMA, "release promotion summary")?;
+    let promotion_value = preserves_rail::value_to_iovalue(&fields[3]);
     let promotion_fields = simple_record(&promotion_value, "promotion", 4)?;
-    let signed_value = value_to_iovalue(&fields[4]);
+    let signed_value = preserves_rail::value_to_iovalue(&fields[4]);
     let signed_fields = simple_record(&signed_value, "signed-promotion", 4)?;
-    let evidence_value = value_to_iovalue(&fields[5]);
+    let evidence_value = preserves_rail::value_to_iovalue(&fields[5]);
     let evidence_fields = simple_record(&evidence_value, "evidence", 3)?;
-    let source_value = value_to_iovalue(&evidence_fields[0]);
+    let source_value = preserves_rail::value_to_iovalue(&evidence_fields[0]);
     let source_fields = simple_record(&source_value, "source", 1)?;
-    let octet_value = value_to_iovalue(&evidence_fields[1]);
+    let octet_value = preserves_rail::value_to_iovalue(&evidence_fields[1]);
     let octet_fields = simple_record(&octet_value, "octet", 1)?;
-    let cairn_value = value_to_iovalue(&evidence_fields[2]);
+    let cairn_value = preserves_rail::value_to_iovalue(&evidence_fields[2]);
     let cairn_fields = simple_record(&cairn_value, "cairn", 1)?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "release-promotion-pass", "release promotion summary")?;
@@ -1704,7 +1734,7 @@ pub fn parse_release_promotion_summary(value: &IOValue) -> Result<ReleasePromoti
     require_check(&checks, "release-promotion-summary-is-evidence-only", "release promotion summary")?;
     require_check(&checks, "no-release-authority-granted", "release promotion summary")?;
     Ok(ReleasePromotionSummary {
-        summary_ref: canonical_hash(value)?,
+        summary_ref: preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         promotion_ref: required_ref(&promotion_fields[0], "release promotion summary promotion ref")?,
         bundle_verify_ref: required_ref(&promotion_fields[2], "release promotion summary bundle verify ref")?,
@@ -1723,7 +1753,8 @@ pub fn parse_release_promotion_summary(value: &IOValue) -> Result<ReleasePromoti
 pub fn release_export_manifest_value(input: &ReleaseExportManifestInput<'_>) -> Result<ReleaseExportManifest> {
     let output_path_string = input.output_path.display().to_string();
     let output_path_ref = raw_text_ref("molten.operator.nix-dogfood-output-path.v1", &output_path_string);
-    let summary_value = parse_text(&read_output_text(input.output_path, "release-promotion-summary.preserves")?)?;
+    let summary_value =
+        preserves_rail::parse_text(&read_output_text(input.output_path, "release-promotion-summary.preserves")?)?;
     let summary = parse_release_promotion_summary(&summary_value)?;
     if summary.decision != "pass" {
         return Err(MoltenError::invalid_harness(format!(
@@ -1732,11 +1763,14 @@ pub fn release_export_manifest_value(input: &ReleaseExportManifestInput<'_>) -> 
         )));
     }
     let member_refs = observe_release_export_members(input.output_path)?;
-    let value = record("release-export-manifest-v1", vec![
-        string(OPERATOR_RELEASE_EXPORT_MANIFEST_SCHEMA),
-        record("output", vec![string(&output_path_string), string(&output_path_ref)]),
-        record("promotion-summary", vec![string(&summary.summary_ref)]),
-        record("members", vec![file_refs_sequence(&member_refs)]),
+    let value = preserves_rail::record("release-export-manifest-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_RELEASE_EXPORT_MANIFEST_SCHEMA),
+        preserves_rail::record("output", vec![
+            preserves_rail::string(&output_path_string),
+            preserves_rail::string(&output_path_ref),
+        ]),
+        preserves_rail::record("promotion-summary", vec![preserves_rail::string(&summary.summary_ref)]),
+        preserves_rail::record("members", vec![file_refs_sequence(&member_refs)]),
         checks_value_from_pairs(&[
             ("release-promotion-summary-pass", "pass"),
             ("release-export-members-bound", "pass"),
@@ -1752,8 +1786,8 @@ pub fn parse_release_export_manifest(value: &IOValue) -> Result<ReleaseExportMan
     let fields = value
         .collect_simple_record("release-export-manifest-v1", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-export-manifest-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_RELEASE_EXPORT_MANIFEST_SCHEMA, "release export manifest")?;
-    let output_value = value_to_iovalue(&fields[1]);
+    require_schema(&fields[0], preserves_rail::OPERATOR_RELEASE_EXPORT_MANIFEST_SCHEMA, "release export manifest")?;
+    let output_value = preserves_rail::value_to_iovalue(&fields[1]);
     let output_fields = simple_record(&output_value, "output", 2)?;
     let checks = parse_checks(&fields[4])?;
     require_check(&checks, "release-promotion-summary-pass", "release export manifest")?;
@@ -1762,7 +1796,7 @@ pub fn parse_release_export_manifest(value: &IOValue) -> Result<ReleaseExportMan
     require_check(&checks, "release-export-is-evidence-only", "release export manifest")?;
     require_check(&checks, "no-release-authority-granted", "release export manifest")?;
     Ok(ReleaseExportManifest {
-        manifest_ref: canonical_hash(value)?,
+        manifest_ref: preserves_rail::canonical_hash(value)?,
         output_path_ref: required_ref(&output_fields[1], "release export output path ref")?,
         promotion_summary_ref: record_ref(&fields[2], "promotion-summary")?,
         member_refs: record_file_refs(&fields[3], "members")?,
@@ -1808,11 +1842,14 @@ pub fn verify_release_export(input: &ReleaseExportVerifyInput<'_>) -> Result<Rel
         |manifest| Ok(manifest.promotion_summary_ref.clone()),
     )?;
     let decision = if diagnostics.is_empty() { "pass" } else { "deny" };
-    let value = record("release-export-verify-receipt-v1", vec![
-        string(OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA),
-        record("decision", vec![string(decision)]),
-        record("manifest", vec![string(&manifest_ref), string(&promotion_summary_ref)]),
-        record("diagnostics", vec![strings_sequence(&diagnostics)]),
+    let value = preserves_rail::record("release-export-verify-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(decision)]),
+        preserves_rail::record("manifest", vec![
+            preserves_rail::string(&manifest_ref),
+            preserves_rail::string(&promotion_summary_ref),
+        ]),
+        preserves_rail::record("diagnostics", vec![strings_sequence(&diagnostics)]),
         checks_value_from_pairs(&[
             ("release-export-members-bound", status(diagnostics.is_empty())),
             ("release-promotion-summary-bound", status(parsed_manifest.is_some() && diagnostics.is_empty())),
@@ -1827,8 +1864,12 @@ pub fn parse_release_export_verify_receipt(value: &IOValue) -> Result<ReleaseExp
     let fields = value
         .collect_simple_record("release-export-verify-receipt-v1", Some(5))
         .ok_or_else(|| MoltenError::invalid_harness("expected <release-export-verify-receipt-v1 ...>"))?;
-    require_schema(&fields[0], OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA, "release export verify receipt")?;
-    let manifest_value = value_to_iovalue(&fields[2]);
+    require_schema(
+        &fields[0],
+        preserves_rail::OPERATOR_RELEASE_EXPORT_VERIFY_RECEIPT_SCHEMA,
+        "release export verify receipt",
+    )?;
+    let manifest_value = preserves_rail::value_to_iovalue(&fields[2]);
     let manifest_fields = simple_record(&manifest_value, "manifest", 2)?;
     let checks = parse_checks(&fields[4])?;
     require_check(&checks, "release-export-members-bound", "release export verify receipt")?;
@@ -1836,7 +1877,7 @@ pub fn parse_release_export_verify_receipt(value: &IOValue) -> Result<ReleaseExp
     require_check(&checks, "release-export-is-evidence-only", "release export verify receipt")?;
     require_check(&checks, "no-release-authority-granted", "release export verify receipt")?;
     Ok(ReleaseExportVerifyReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         manifest_ref: required_ref(&manifest_fields[0], "release export manifest ref")?,
         promotion_summary_ref: required_ref(&manifest_fields[1], "release export promotion summary ref")?,
@@ -1979,10 +2020,10 @@ fn observe_nix_dogfood_output(output_path: &Path) -> Result<ObservedNixDogfoodOu
     let replay_index_text = read_output_text(output_path, "replay-evidence-index.preserves")?;
     let summary_text = read_output_text(output_path, "dogfood-summary.txt")?;
     let nextest_text = read_output_text(output_path, "after-nextest.txt")?;
-    let report_value = parse_text(&report_text)?;
-    let release_gate_value = parse_text(&release_gate_text)?;
-    let replay_verify_value = parse_text(&replay_verify_text)?;
-    let replay_index_value = parse_text(&replay_index_text)?;
+    let report_value = preserves_rail::parse_text(&report_text)?;
+    let release_gate_value = preserves_rail::parse_text(&release_gate_text)?;
+    let replay_verify_value = preserves_rail::parse_text(&replay_verify_text)?;
+    let replay_index_value = preserves_rail::parse_text(&replay_index_text)?;
     let report = parse_dogfood_report(&report_value)?;
     let release_gate = parse_release_gate_receipt(&release_gate_value)?;
     let replay_verify_ref = parse_release_replay_verify(&replay_verify_value)?;
@@ -2043,7 +2084,7 @@ fn parse_release_replay_verify(value: &IOValue) -> Result<String> {
     let fields = value
         .collect_simple_record("deterministic-replay-verify-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <deterministic-replay-verify-v1 ...>"))?;
-    require_schema(&fields[0], DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "release replay verify")?;
+    require_schema(&fields[0], preserves_rail::DETERMINISTIC_REPLAY_VERIFY_SCHEMA, "release replay verify")?;
     let decision = required_string(&fields[1], "release replay verify decision")?;
     if decision != "pass" {
         return Err(MoltenError::invalid_harness(format!(
@@ -2056,14 +2097,14 @@ fn parse_release_replay_verify(value: &IOValue) -> Result<String> {
             "release replay verify divergence is {divergence}; expected none"
         )));
     }
-    canonical_hash(value)
+    preserves_rail::canonical_hash(value)
 }
 
 fn parse_release_replay_index(value: &IOValue) -> Result<String> {
     let fields = value
         .collect_simple_record("deterministic-replay-index-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <deterministic-replay-index-v1 ...>"))?;
-    require_schema(&fields[0], DETERMINISTIC_REPLAY_INDEX_SCHEMA, "release replay index")?;
+    require_schema(&fields[0], preserves_rail::DETERMINISTIC_REPLAY_INDEX_SCHEMA, "release replay index")?;
     let decision = record_string(&fields[1], "decision")?;
     if decision != "pass" {
         return Err(MoltenError::invalid_harness(format!(
@@ -2073,7 +2114,7 @@ fn parse_release_replay_index(value: &IOValue) -> Result<String> {
     let checks = parse_replay_index_checks(&fields[14])?;
     require_check(&checks, "evidence-only", "release replay index")?;
     require_check(&checks, "no-authority-grant", "release replay index")?;
-    canonical_hash(value)
+    preserves_rail::canonical_hash(value)
 }
 
 fn parse_release_replay_index_receipt_refs(value: &IOValue) -> Result<Vec<String>> {
@@ -2088,7 +2129,7 @@ fn parse_replay_index_checks(value: &Value<IOValue>) -> Result<Vec<(String, Stri
     ensure_count_at_most(items.len(), MAX_OPERATOR_REFS, "release replay index checks")?;
     let mut checks = Vec::new();
     for item in items.iter() {
-        let item = value_to_iovalue(item);
+        let item = preserves_rail::value_to_iovalue(item);
         let fields = simple_record(&item, "check", 2)?;
         let name = required_string(&fields[0], "release replay index check name")?;
         let status = required_string(&fields[1], "release replay index check status")?;
@@ -2099,8 +2140,9 @@ fn parse_replay_index_checks(value: &Value<IOValue>) -> Result<Vec<(String, Stri
 
 fn observe_release_bundle_output(output_path: &Path) -> Result<ObservedReleaseBundleOutput> {
     let observed_nix = observe_nix_dogfood_output(output_path)?;
-    let nix_evidence_value = parse_text(&read_output_text(output_path, "nix-dogfood-evidence.preserves")?)?;
-    let nix_verify_value = parse_text(&read_output_text(output_path, "nix-dogfood-verify.preserves")?)?;
+    let nix_evidence_value =
+        preserves_rail::parse_text(&read_output_text(output_path, "nix-dogfood-evidence.preserves")?)?;
+    let nix_verify_value = preserves_rail::parse_text(&read_output_text(output_path, "nix-dogfood-verify.preserves")?)?;
     let nix_evidence = parse_nix_dogfood_evidence(&nix_evidence_value)?;
     let nix_verify = parse_nix_dogfood_verify_receipt(&nix_verify_value)?;
     ensure_nix_release_artifacts_match(&observed_nix, &nix_evidence, &nix_verify)?;
@@ -2398,7 +2440,7 @@ fn raw_text_ref(domain: &str, text: &str) -> String {
     bytes.extend_from_slice(domain.as_bytes());
     bytes.push(0);
     bytes.extend_from_slice(text.as_bytes());
-    content_ref_from_bytes(&bytes)
+    preserves_rail::content_ref_from_bytes(&bytes)
 }
 
 fn raw_bytes_ref(domain: &str, name: &str, payload: &[u8]) -> String {
@@ -2409,7 +2451,7 @@ fn raw_bytes_ref(domain: &str, name: &str, payload: &[u8]) -> String {
     bytes.extend_from_slice(name.as_bytes());
     bytes.push(0);
     bytes.extend_from_slice(payload);
-    content_ref_from_bytes(&bytes)
+    preserves_rail::content_ref_from_bytes(&bytes)
 }
 
 fn mismatch_diagnostic(label: &str, expected: &str, actual: &str) -> Option<String> {
@@ -2857,7 +2899,7 @@ fn push_step_checkpoint(buffers: &mut StepCheckpointBuffers, input: StepCheckpoi
         artifact_refs: input.artifact_refs,
         diagnostics: input.diagnostics,
     })?;
-    let step_ref = canonical_hash(&step)?;
+    let step_ref = preserves_rail::canonical_hash(&step)?;
     let sequence = usize_to_u64(buffers.checkpoints.len(), "operator checkpoint sequence")?;
     let checkpoint = operator_checkpoint_value(&OperatorCheckpointInput {
         workflow_id: LOCAL_NODE_WORKFLOW_ID,
@@ -2910,7 +2952,7 @@ fn dirty_state_report(state_root_ref: &str, diagnostic: String) -> Result<LocalN
     let StepCheckpointBuffers { steps, checkpoints } = step_checkpoints;
     Ok(LocalNodeDogfoodRun {
         decision: report.decision,
-        workflow_ref: canonical_hash(&workflow_value)?,
+        workflow_ref: preserves_rail::canonical_hash(&workflow_value)?,
         workflow_value,
         step_values: steps,
         checkpoint_values: checkpoints,
@@ -2955,7 +2997,7 @@ fn start_node(
         effect_profile_refs: &[effects_ref],
     })?;
     let source_gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
-    let source_gate_ref = canonical_hash(&source_gate_value)?;
+    let source_gate_ref = preserves_rail::canonical_hash(&source_gate_value)?;
     node_runtime::start_node_runtime(&node_runtime::NodeRuntimeStartInput {
         config_value,
         identity_receipt_ref: identity_receipt_ref.to_string(),
@@ -3275,7 +3317,7 @@ fn record_shutdown_step(input: ShutdownStepInput<'_>) -> Result<ShutdownStep> {
         index_receipt_refs: &[dogfood_ref("shutdown-index")?],
         diagnostics: &[],
     })?;
-    let shutdown_ref = canonical_hash(&shutdown)?;
+    let shutdown_ref = preserves_rail::canonical_hash(&shutdown)?;
     let health = node_runtime::node_restart_health_receipt_value(&node_runtime::RestartHealthReceiptValueInput {
         startup_receipt: &input.node_started.startup_receipt,
         shutdown_receipt_ref: Some(&shutdown_ref),
@@ -3287,7 +3329,7 @@ fn record_shutdown_step(input: ShutdownStepInput<'_>) -> Result<ShutdownStep> {
         open_job_refs: &[],
         diagnostics: &[],
     })?;
-    let health_ref = canonical_hash(&health)?;
+    let health_ref = preserves_rail::canonical_hash(&health)?;
     push_step_checkpoint(input.checkpoints, StepCheckpointInput {
         name: "shutdown-node",
         request_ref: Some(input.startup_ref),
@@ -3333,11 +3375,12 @@ fn build_finish_report(input: FinishReportInput<'_>) -> Result<FinishReport> {
         resource_refs: input.resource_refs,
         replay_profile: "recorded",
     })?;
-    let final_state_ref = canonical_hash(&record("operator-dogfood-final-state", vec![
-        string(input.state_root_ref),
-        string(input.shutdown_ref),
-        string(input.health_ref),
-    ]))?;
+    let final_state_ref =
+        preserves_rail::canonical_hash(&preserves_rail::record("operator-dogfood-final-state", vec![
+            preserves_rail::string(input.state_root_ref),
+            preserves_rail::string(input.shutdown_ref),
+            preserves_rail::string(input.health_ref),
+        ]))?;
     let report_value = dogfood_report_value(&DogfoodReportInput {
         workflow_value: &workflow_value,
         checkpoint_values: &input.checkpoints.checkpoints,
@@ -3475,11 +3518,11 @@ impl<'a> FinishState<'a> {
         release_gate_value: Option<IOValue>,
         import_refs: Vec<String>,
     ) -> Result<LocalNodeDogfoodRun> {
-        let release_gate_ref = release_gate_value.as_ref().map(canonical_hash).transpose()?;
+        let release_gate_ref = release_gate_value.as_ref().map(preserves_rail::canonical_hash).transpose()?;
         let StepCheckpointBuffers { steps, checkpoints } = self.input.step_checkpoints;
         Ok(LocalNodeDogfoodRun {
             decision: finish_report.report.decision,
-            workflow_ref: canonical_hash(&finish_report.workflow_value)?,
+            workflow_ref: preserves_rail::canonical_hash(&finish_report.workflow_value)?,
             workflow_value: finish_report.workflow_value,
             step_values: steps,
             checkpoint_values: checkpoints,
@@ -3535,7 +3578,7 @@ fn record_start_steps(input: StartStepInput<'_>) -> Result<StartSteps> {
         .ok_or_else(|| MoltenError::invalid_harness("local dogfood identity resolution denied"))?;
     let identity_startup =
         node_identity::node_identity_startup_evidence_value(&identity.identity_ref, &identity_resolution.receipt_ref)?;
-    let identity_startup_ref = canonical_hash(&identity_startup)?;
+    let identity_startup_ref = preserves_rail::canonical_hash(&identity_startup)?;
     push_step_checkpoint(checkpoints, StepCheckpointInput {
         name: "clean-state",
         request_ref: Some(state_root_ref),
@@ -3590,7 +3633,7 @@ fn record_install_step(input: InstallStepInput<'_>) -> Result<artifacts::Artifac
     } = input;
     let installed = artifacts::install_artifact(registry_root, &artifacts::ArtifactInstallInput {
         kind: "operator-artifact".to_string(),
-        payload: record("dogfood-artifact", vec![string("local-node")]),
+        payload: preserves_rail::record("dogfood-artifact", vec![preserves_rail::string("local-node")]),
         schema_refs: Vec::new(),
         dependency_refs: Vec::new(),
         effect_manifest_ref: None,
@@ -3602,7 +3645,7 @@ fn record_install_step(input: InstallStepInput<'_>) -> Result<artifacts::Artifac
     push_step_checkpoint(checkpoints, StepCheckpointInput {
         name: "install-artifact",
         request_ref: Some(startup_ref),
-        receipt_ref: Some(&canonical_hash(&installed.receipt_value)?),
+        receipt_ref: Some(&preserves_rail::canonical_hash(&installed.receipt_value)?),
         result_ref: Some(&installed.artifact_ref),
         decision: &installed.decision,
         replay_status: "deterministic",
@@ -3629,13 +3672,17 @@ fn record_service_step(input: ServiceStepInput<'_>) -> Result<()> {
     };
     push_step_checkpoint(input.checkpoints, StepCheckpointInput {
         name: "start-service",
-        request_ref: Some(&canonical_hash(&service_suite)?),
+        request_ref: Some(&preserves_rail::canonical_hash(&service_suite)?),
         receipt_ref: Some(&service_run.report_ref),
         result_ref: Some(&service_run.report_ref),
         decision: service_decision,
         replay_status: "deterministic",
         mandatory: true,
-        artifact_refs: &service_run.readiness_assertions.iter().map(canonical_hash).collect::<Result<Vec<_>>>()?,
+        artifact_refs: &service_run
+            .readiness_assertions
+            .iter()
+            .map(preserves_rail::canonical_hash)
+            .collect::<Result<Vec<_>>>()?,
         diagnostics: &[],
         state_root_ref: input.state_root_ref,
     })
@@ -3665,7 +3712,7 @@ fn record_remote_step(input: RemoteStepInput<'_>) -> Result<RemoteStep> {
             authority_refs: vec![dogfood_ref("remote-authority")?],
         },
     )?;
-    let gate_ref = canonical_hash(&remote.gate_receipt_value)?;
+    let gate_ref = preserves_rail::canonical_hash(&remote.gate_receipt_value)?;
     push_step_checkpoint(input.checkpoints, StepCheckpointInput {
         name: "publish-remote-assertion",
         request_ref: Some(&remote.delivery_log.log_ref),
@@ -3728,10 +3775,11 @@ struct CatalogStepInput<'a> {
 fn record_catalog_step(input: CatalogStepInput<'_>) -> Result<String> {
     ledger::import_artifact(input.ledger_root, &input.installed.artifact.value)?;
     ledger::import_artifact(input.ledger_root, input.remote_gate_value)?;
-    let mcp_request =
-        catalog_mcp::mcp_request_value("catalog.list", vec![record("kind", vec![string("operator-artifact")])])?;
+    let mcp_request = catalog_mcp::mcp_request_value("catalog.list", vec![preserves_rail::record("kind", vec![
+        preserves_rail::string("operator-artifact"),
+    ])])?;
     let mcp_call = catalog_mcp::call(input.registry_root, Some(input.ledger_root), &mcp_request)?;
-    let mcp_receipt_ref = canonical_hash(&mcp_call.receipt_value)?;
+    let mcp_receipt_ref = preserves_rail::canonical_hash(&mcp_call.receipt_value)?;
     push_step_checkpoint(input.checkpoints, StepCheckpointInput {
         name: "query-catalog-mcp",
         request_ref: Some(&mcp_call.request.request_ref),
@@ -3920,7 +3968,7 @@ fn install_stage_artifacts(
 ) -> Result<StageArtifacts> {
     let base = artifacts::install_artifact(source, &artifacts::ArtifactInstallInput {
         kind: "schema".to_string(),
-        payload: record("schema", vec![string("dogfood-job-base")]),
+        payload: preserves_rail::record("schema", vec![preserves_rail::string("dogfood-job-base")]),
         schema_refs: vec![dogfood_ref("job-schema")?],
         dependency_refs: Vec::new(),
         effect_manifest_ref: None,
@@ -3965,7 +4013,9 @@ fn job_graph_value(stages: &StageArtifacts, policy_refs: &[String]) -> Result<IO
         stage_artifact_ref: Some(&stages.source_ref),
         input_ports: &[],
         output_ports: &["out".to_string()],
-        config: record("source", vec![record("values", vec![sequence(vec![string("dogfood-job")])])]),
+        config: preserves_rail::record("source", vec![preserves_rail::record("values", vec![
+            preserves_rail::sequence(vec![preserves_rail::string("dogfood-job")]),
+        ])]),
         effect_manifest_refs: &[],
         policy_refs: &[],
         evidence_refs: &[],
@@ -3976,7 +4026,7 @@ fn job_graph_value(stages: &StageArtifacts, policy_refs: &[String]) -> Result<IO
         stage_artifact_ref: Some(&stages.map_ref),
         input_ports: &["in".to_string()],
         output_ports: &["out".to_string()],
-        config: record("op", vec![string("identity")]),
+        config: preserves_rail::record("op", vec![preserves_rail::string("identity")]),
         effect_manifest_refs: &[],
         policy_refs: &[],
         evidence_refs: &[],
@@ -4029,7 +4079,7 @@ fn sync_job_stack(input: JobSyncInput<'_>) -> Result<String> {
         provenance_values: &input.parts.provenance_values,
         build_verification_values: &[],
     })?;
-    canonical_hash(&sync.receipt_value)
+    preserves_rail::canonical_hash(&sync.receipt_value)
 }
 
 fn admit_job_stack(input: JobAdmissionInput<'_>) -> Result<JobAdmissionParts> {
@@ -4049,7 +4099,7 @@ fn admit_job_stack(input: JobAdmissionInput<'_>) -> Result<JobAdmissionParts> {
     let admission = job_dag::admission_loopback(input.target, &admission_request)?;
     Ok(JobAdmissionParts {
         authority_ref,
-        receipt_ref: canonical_hash(&admission.receipt_value)?,
+        receipt_ref: preserves_rail::canonical_hash(&admission.receipt_value)?,
         receipt_value: admission.receipt_value,
         stage_order: admission.plan.stage_order,
     })
@@ -4068,7 +4118,7 @@ fn execute_job_stack(input: JobExecutionInput<'_>) -> Result<JobExecutionParts> 
         capability_refs: std::slice::from_ref(&input.admission.authority_ref),
         resource_refs: input.resource_refs,
     })?;
-    let request_ref = canonical_hash(&execution_request)?;
+    let request_ref = preserves_rail::canonical_hash(&execution_request)?;
     let execution = job_dag::execution_loopback(job_dag::ExecutionLoopbackInput {
         target_registry: input.target,
         storage_root: &input.state_root.join("job-storage"),
@@ -4279,8 +4329,9 @@ fn gc_flow(
         out: input.bundle_dir,
         profile: retention::RetentionCandidateBundleExportProfile::Public,
     })?;
-    let profile_value =
-        parse_text(&fs::read_to_string(input.bundle_dir.join("bundle-profile.preserves")).map_err(MoltenError::from)?)?;
+    let profile_value = preserves_rail::parse_text(
+        &fs::read_to_string(input.bundle_dir.join("bundle-profile.preserves")).map_err(MoltenError::from)?,
+    )?;
     let profile = retention::parse_retention_candidate_bundle_profile(&profile_value)?;
     let verify = retention::verify_retention_candidate_bundle(retention::RetentionCandidateBundleVerifyInput {
         bundle_dir: input.bundle_dir,
@@ -4317,7 +4368,7 @@ fn import_gc_values(root: &Path, admissions: &GcAdmissions, flow: &GcFlow) -> Re
     ] {
         let imported = ledger::import_artifact(root, value)?;
         refs.push_limited_value(
-            canonical_hash(&imported.receipt_value)?,
+            preserves_rail::canonical_hash(&imported.receipt_value)?,
             MAX_OPERATOR_REFS,
             "retention dogfood ledger imports",
         )?;
@@ -4331,12 +4382,12 @@ fn gc_catalog(
     object_ref: &str,
 ) -> Result<(catalog_mcp::CatalogMcpCall, String)> {
     let mcp_request = catalog_mcp::mcp_request_value("search_retention_gc", vec![
-        record("stage", vec![string("audit")]),
-        record("object-ref", vec![string(object_ref)]),
-        record("subsystem", vec![string("ledger-gc")]),
+        preserves_rail::record("stage", vec![preserves_rail::string("audit")]),
+        preserves_rail::record("object-ref", vec![preserves_rail::string(object_ref)]),
+        preserves_rail::record("subsystem", vec![preserves_rail::string("ledger-gc")]),
     ])?;
     let mcp_call = catalog_mcp::call(registry_root, Some(ledger_root), &mcp_request)?;
-    let catalog_receipt_ref = canonical_hash(&mcp_call.receipt_value)?;
+    let catalog_receipt_ref = preserves_rail::canonical_hash(&mcp_call.receipt_value)?;
     Ok((mcp_call, catalog_receipt_ref))
 }
 
@@ -4477,7 +4528,7 @@ fn install_job_execute_authority_context(
         policy_refs,
         evidence_refs: &[dogfood_ref("authority-evidence")?],
     })?;
-    let context_ref = canonical_hash(&context_value)?;
+    let context_ref = preserves_rail::canonical_hash(&context_value)?;
     artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
         kind: "authority-context".to_string(),
         payload: context_value,
@@ -4494,7 +4545,7 @@ fn install_job_execute_authority_context(
 
 fn install_clean_octet_gate(registry: &Path, policy_refs: &[String], capability_refs: &[String]) -> Result<String> {
     let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
-    let gate_ref = canonical_hash(&gate_value)?;
+    let gate_ref = preserves_rail::canonical_hash(&gate_value)?;
     artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
         kind: "octet-gate-receipt".to_string(),
         payload: gate_value,
@@ -4518,18 +4569,18 @@ struct DogfoodRepro {
 }
 
 fn build_dogfood_repro() -> Result<DogfoodRepro> {
-    let suite = parse_text(DOGFOOD_HARNESS_SUITE)?;
+    let suite = preserves_rail::parse_text(DOGFOOD_HARNESS_SUITE)?;
     let run = harness::run_suite_value(&suite)?;
     let gate = harness::gate_receipt_value(&harness::gate_check_value(&run.report_value)?);
-    let gate_ref = canonical_hash(&gate)?;
+    let gate_ref = preserves_rail::canonical_hash(&gate)?;
     let bundle = harness::sealed_repro_bundle_value_with_command(&run.report_value, &[
         "molten".to_string(),
         "dogfood".to_string(),
         "local-node".to_string(),
     ])?;
-    let bundle_ref = canonical_hash(&bundle)?;
+    let bundle_ref = preserves_rail::canonical_hash(&bundle)?;
     let verify = harness::repro_verify_receipt_value(&bundle)?;
-    let verify_ref = canonical_hash(&verify)?;
+    let verify_ref = preserves_rail::canonical_hash(&verify)?;
     Ok(DogfoodRepro {
         report_ref: run.report_ref,
         gate_ref,
@@ -4573,7 +4624,7 @@ fn import_dogfood_evidence(input: DogfoodEvidenceImportInput<'_>) -> Result<Vec<
     {
         let import = ledger::import_artifact(ledger_root, value)?;
         imports.push_limited_value(
-            canonical_hash(&import.receipt_value)?,
+            preserves_rail::canonical_hash(&import.receipt_value)?,
             MAX_OPERATOR_REFS,
             "dogfood ledger import refs",
         )?;
@@ -4601,7 +4652,7 @@ fn dirty_state_reason(path: &Path) -> Result<Option<String>> {
 }
 
 fn dogfood_ref(label: &str) -> Result<String> {
-    canonical_hash(&record("operator-dogfood-ref", vec![string(label)]))
+    preserves_rail::canonical_hash(&preserves_rail::record("operator-dogfood-ref", vec![preserves_rail::string(label)]))
 }
 
 fn validate_workflow_id(value: &str) -> Result<()> {
@@ -4646,7 +4697,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
 }
 
 fn validate_ref(value: &str, field: &str) -> Result<()> {
-    validate_content_ref(value)
+    preserves_rail::validate_content_ref(value)
         .map_err(|error| MoltenError::invalid_harness(format!("{field} must be a canonical content ref: {error}")))
 }
 
@@ -4697,44 +4748,60 @@ fn status(value: bool) -> &'static str {
 }
 
 fn refs_sequence(refs: &[String]) -> IOValue {
-    sequence(refs.iter().map(string).collect())
+    preserves_rail::sequence(refs.iter().map(preserves_rail::string).collect())
 }
 
 fn strings_sequence(values: &[String]) -> IOValue {
-    sequence(values.iter().map(string).collect())
+    preserves_rail::sequence(values.iter().map(preserves_rail::string).collect())
 }
 
 fn optional_ref_value(value: Option<&str>) -> IOValue {
-    value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
+    value.map_or_else(
+        || preserves_rail::record("none", Vec::new()),
+        |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
+    )
 }
 
 fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
-    record("checks", vec![sequence(
-        checks.iter().map(|(name, status)| record("check", vec![string(name), string(status)])).collect(),
+    preserves_rail::record("checks", vec![preserves_rail::sequence(
+        checks
+            .iter()
+            .map(|(name, status)| {
+                preserves_rail::record("check", vec![preserves_rail::string(name), preserves_rail::string(status)])
+            })
+            .collect(),
     )])
 }
 
 fn step_receipts_sequence(receipts: &[(String, String)]) -> IOValue {
-    sequence(
+    preserves_rail::sequence(
         receipts
             .iter()
-            .map(|(name, reference)| record("step", vec![string(name), string(reference)]))
+            .map(|(name, reference)| {
+                preserves_rail::record("step", vec![preserves_rail::string(name), preserves_rail::string(reference)])
+            })
             .collect(),
     )
 }
 
 fn file_refs_sequence(refs: &[(String, String)]) -> IOValue {
-    sequence(refs.iter().map(|(name, reference)| record("file", vec![string(name), string(reference)])).collect())
+    preserves_rail::sequence(
+        refs.iter()
+            .map(|(name, reference)| {
+                preserves_rail::record("file", vec![preserves_rail::string(name), preserves_rail::string(reference)])
+            })
+            .collect(),
+    )
 }
 
 fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "operator checks")?;
     ensure_count_at_most(items.len(), MAX_OPERATOR_REFS, "operator checks")?;
     let mut parsed = Vec::new();
     for item in items.iter() {
-        let item = value_to_iovalue(item);
+        let item = preserves_rail::value_to_iovalue(item);
         let check = simple_record(&item, "check", 2)?;
         let name = required_string(&check[0], "operator check name")?;
         let status = required_string(&check[1], "operator check status")?;
@@ -4785,13 +4852,13 @@ fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::
 }
 
 fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     required_string(&fields[0], label)
 }
 
 fn record_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     fields[0]
         .as_boolean()
@@ -4799,7 +4866,7 @@ fn record_bool(value: &Value<IOValue>, label: &str) -> Result<bool> {
 }
 
 fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     let number = fields[0]
         .as_u64()
@@ -4808,13 +4875,13 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
 }
 
 fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     required_ref(&fields[0], label)
 }
 
 fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&fields[0])
 }
@@ -4834,13 +4901,13 @@ fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Str
 }
 
 fn record_iovalue_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
-    let value = value_to_iovalue(value);
+    let value = preserves_rail::value_to_iovalue(value);
     let fields = simple_record(&value, label, 1)?;
     let items = required_sequence(&fields[0], label)?;
     ensure_count_at_most(items.len(), MAX_OPERATOR_REFS, label)?;
     let mut values = Vec::new();
     for item in items.iter() {
-        values.push_limited_value(value_to_iovalue(item), MAX_OPERATOR_REFS, label)?;
+        values.push_limited_value(preserves_rail::value_to_iovalue(item), MAX_OPERATOR_REFS, label)?;
     }
     Ok(values)
 }
@@ -5132,8 +5199,10 @@ mod tests {
         ledger::import_artifact(&release_ledger, &case.evidence).expect("import Nix evidence");
         ledger::import_artifact(&release_ledger, &case.bundle_verify.value).expect("import bundle verify");
         let replay_binding_request = catalog_mcp::mcp_request_value("search_replay_evidence", vec![
-            record("stage", vec![string("release-binding")]),
-            record("release-replay-index-ref", vec![string(&case.parsed.replay_index_ref)]),
+            preserves_rail::record("stage", vec![preserves_rail::string("release-binding")]),
+            preserves_rail::record("release-replay-index-ref", vec![preserves_rail::string(
+                &case.parsed.replay_index_ref,
+            )]),
         ])
         .expect("replay binding request");
         let replay_binding = catalog_mcp::call(&catalog_registry, Some(&release_ledger), &replay_binding_request)
@@ -5350,7 +5419,7 @@ mod tests {
         let stale_bundle_text = to_text(&case.bundle)
             .expect("bundle text")
             .replace(&case.parsed_bundle.summary_ref, &stale_bundle_ref);
-        let stale_bundle = parse_text(&stale_bundle_text).expect("stale bundle parse");
+        let stale_bundle = preserves_rail::parse_text(&stale_bundle_text).expect("stale bundle parse");
         let stale_bundle_verify = unsigned_bundle_verify(&case.output_root, &stale_bundle);
         assert_eq!(stale_bundle_verify.decision, "deny");
         assert!(stale_bundle_verify.diagnostics.iter().any(|diagnostic| diagnostic.contains("summary-ref mismatch")));
@@ -5359,7 +5428,7 @@ mod tests {
     fn assert_stale_evidence_denies(case: &NixCase) {
         let stale_ref = dogfood_ref("stale-summary").expect("stale ref");
         let stale_text = to_text(&case.evidence).expect("evidence text").replace(&case.parsed.summary_ref, &stale_ref);
-        let stale_evidence = parse_text(&stale_text).expect("stale evidence parse");
+        let stale_evidence = preserves_rail::parse_text(&stale_text).expect("stale evidence parse");
         let stale_receipt = verify_nix_dogfood_evidence(&NixDogfoodVerifyInput {
             output_path: &case.output_root,
             evidence_value: &stale_evidence,
