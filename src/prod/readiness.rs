@@ -1,25 +1,51 @@
-use preserves::IOValue;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::PROD_OPS_BACKUP_RESTORE_DRILL_SCHEMA;
-use crate::preserves_rail::PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA;
-use crate::preserves_rail::PROD_OPS_OBSERVABILITY_SLO_SCHEMA;
-use crate::preserves_rail::PROD_OPS_RUNBOOK_CHECK_SCHEMA;
-use crate::preserves_rail::PROD_OPS_UPGRADE_ROLLBACK_DRILL_SCHEMA;
-use crate::preserves_rail::PROD_RELEASE_CANDIDATE_GATE_SCHEMA;
-use crate::preserves_rail::PROD_RELEASE_PILOT_DECISION_SCHEMA;
-use crate::preserves_rail::PROD_SECURITY_BOUNDARY_NEGATIVE_SUITE_SCHEMA;
-use crate::preserves_rail::PROD_SECURITY_DRILL_SCHEMA;
-use crate::preserves_rail::PROD_SECURITY_READINESS_REPORT_SCHEMA;
-use crate::preserves_rail::PROD_SECURITY_REDACTION_AUDIT_SCHEMA;
-use crate::preserves_rail::PROD_SECURITY_SUPPLY_CHAIN_REVIEW_SCHEMA;
-use crate::preserves_rail::PROD_SECURITY_THREAT_MODEL_SCHEMA;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
+const PROD_OPS_BACKUP_RESTORE_DRILL_SCHEMA: &str = crate::preserves_rail::PROD_OPS_BACKUP_RESTORE_DRILL_SCHEMA;
+const PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA: &str = crate::preserves_rail::PROD_OPS_DEPLOYMENT_PROFILE_SCHEMA;
+const PROD_OPS_OBSERVABILITY_SLO_SCHEMA: &str = crate::preserves_rail::PROD_OPS_OBSERVABILITY_SLO_SCHEMA;
+const PROD_OPS_RUNBOOK_CHECK_SCHEMA: &str = crate::preserves_rail::PROD_OPS_RUNBOOK_CHECK_SCHEMA;
+const PROD_OPS_UPGRADE_ROLLBACK_DRILL_SCHEMA: &str = crate::preserves_rail::PROD_OPS_UPGRADE_ROLLBACK_DRILL_SCHEMA;
+const PROD_RELEASE_CANDIDATE_GATE_SCHEMA: &str = crate::preserves_rail::PROD_RELEASE_CANDIDATE_GATE_SCHEMA;
+const PROD_RELEASE_PILOT_DECISION_SCHEMA: &str = crate::preserves_rail::PROD_RELEASE_PILOT_DECISION_SCHEMA;
+const PROD_SECURITY_BOUNDARY_NEGATIVE_SUITE_SCHEMA: &str =
+    crate::preserves_rail::PROD_SECURITY_BOUNDARY_NEGATIVE_SUITE_SCHEMA;
+const PROD_SECURITY_DRILL_SCHEMA: &str = crate::preserves_rail::PROD_SECURITY_DRILL_SCHEMA;
+const PROD_SECURITY_READINESS_REPORT_SCHEMA: &str = crate::preserves_rail::PROD_SECURITY_READINESS_REPORT_SCHEMA;
+const PROD_SECURITY_REDACTION_AUDIT_SCHEMA: &str = crate::preserves_rail::PROD_SECURITY_REDACTION_AUDIT_SCHEMA;
+const PROD_SECURITY_SUPPLY_CHAIN_REVIEW_SCHEMA: &str = crate::preserves_rail::PROD_SECURITY_SUPPLY_CHAIN_REVIEW_SCHEMA;
+const PROD_SECURITY_THREAT_MODEL_SCHEMA: &str = crate::preserves_rail::PROD_SECURITY_THREAT_MODEL_SCHEMA;
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IoValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+#[cfg(test)]
+fn canonical_hash(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+#[cfg(test)]
+fn to_text(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::to_text(value)
+}
 
 const MAX_PROD_REFS: usize = 512;
 const MAX_PROD_TEXTS: usize = 256;
@@ -228,7 +254,7 @@ pub struct ReleaseCandidateGateInput<'a> {
     pub diagnostics: &'a [String],
 }
 
-pub fn deployment_profile_value(input: &DeploymentProfileInput<'_>) -> Result<IOValue> {
+pub fn deployment_profile_value(input: &DeploymentProfileInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("profile name", input.profile_name)?;
     validate_diagnostics(input.diagnostics)?;
@@ -270,7 +296,7 @@ pub fn deployment_profile_value(input: &DeploymentProfileInput<'_>) -> Result<IO
     ]))
 }
 
-pub fn backup_restore_drill_value(input: &BackupRestoreDrillInput<'_>) -> Result<IOValue> {
+pub fn backup_restore_drill_value(input: &BackupRestoreDrillInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("backup restore drill name", input.drill_name)?;
     validate_diagnostics(input.diagnostics)?;
@@ -319,7 +345,7 @@ pub fn backup_restore_drill_value(input: &BackupRestoreDrillInput<'_>) -> Result
     ]))
 }
 
-pub fn upgrade_rollback_drill_value(input: &UpgradeRollbackDrillInput<'_>) -> Result<IOValue> {
+pub fn upgrade_rollback_drill_value(input: &UpgradeRollbackDrillInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("upgrade rollback plan", input.plan_name)?;
     validate_diagnostics(input.diagnostics)?;
@@ -351,7 +377,7 @@ pub fn upgrade_rollback_drill_value(input: &UpgradeRollbackDrillInput<'_>) -> Re
     ]))
 }
 
-pub fn observability_slo_value(input: &ObservabilitySloInput<'_>) -> Result<IOValue> {
+pub fn observability_slo_value(input: &ObservabilitySloInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("observability snapshot name", input.snapshot_name)?;
     validate_diagnostics(input.diagnostics)?;
@@ -383,7 +409,7 @@ pub fn observability_slo_value(input: &ObservabilitySloInput<'_>) -> Result<IOVa
     ]))
 }
 
-pub fn runbook_check_value(input: &RunbookCheckInput<'_>) -> Result<IOValue> {
+pub fn runbook_check_value(input: &RunbookCheckInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("runbook name", input.runbook_name)?;
     validate_text_field("runbook operation", input.operation)?;
@@ -407,7 +433,7 @@ pub fn runbook_check_value(input: &RunbookCheckInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn threat_model_value(input: &ThreatModelInput<'_>) -> Result<IOValue> {
+pub fn threat_model_value(input: &ThreatModelInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("threat model name", input.model_name)?;
     validate_text_slice("threat entry", input.threat_entries)?;
@@ -457,7 +483,7 @@ pub fn threat_model_value(input: &ThreatModelInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn security_drill_value(input: &SecurityDrillInput<'_>) -> Result<IOValue> {
+pub fn security_drill_value(input: &SecurityDrillInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_allowed_text("security drill kind", input.drill_kind, SECURITY_DRILL_KINDS)?;
     validate_text_field("security drill scenario", input.scenario)?;
@@ -485,7 +511,7 @@ pub fn security_drill_value(input: &SecurityDrillInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn redaction_audit_value(input: &RedactionAuditInput<'_>) -> Result<IOValue> {
+pub fn redaction_audit_value(input: &RedactionAuditInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("redaction audit name", input.audit_name)?;
     validate_diagnostics(input.diagnostics)?;
@@ -509,7 +535,7 @@ pub fn redaction_audit_value(input: &RedactionAuditInput<'_>) -> Result<IOValue>
     ]))
 }
 
-pub fn supply_chain_review_value(input: &SupplyChainReviewInput<'_>) -> Result<IOValue> {
+pub fn supply_chain_review_value(input: &SupplyChainReviewInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("supply chain review name", input.review_name)?;
     validate_diagnostics(input.diagnostics)?;
@@ -552,7 +578,7 @@ pub fn supply_chain_review_value(input: &SupplyChainReviewInput<'_>) -> Result<I
     ]))
 }
 
-pub fn boundary_negative_suite_value(input: &BoundaryNegativeSuiteInput<'_>) -> Result<IOValue> {
+pub fn boundary_negative_suite_value(input: &BoundaryNegativeSuiteInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("boundary negative suite name", input.suite_name)?;
     validate_diagnostics(input.diagnostics)?;
@@ -592,7 +618,7 @@ pub fn boundary_negative_suite_value(input: &BoundaryNegativeSuiteInput<'_>) -> 
     ]))
 }
 
-pub fn incident_response_drill_value(input: &IncidentResponseDrillInput<'_>) -> Result<IOValue> {
+pub fn incident_response_drill_value(input: &IncidentResponseDrillInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_allowed_text("incident kind", input.incident_kind, INCIDENT_KINDS)?;
     validate_text_field("incident response scenario", input.scenario)?;
@@ -626,7 +652,7 @@ pub fn incident_response_drill_value(input: &IncidentResponseDrillInput<'_>) -> 
     ]))
 }
 
-pub fn security_readiness_report_value(input: &SecurityReadinessReportInput<'_>) -> Result<IOValue> {
+pub fn security_readiness_report_value(input: &SecurityReadinessReportInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("security readiness report name", input.report_name)?;
     validate_text_field("pilot recommendation", input.pilot_recommendation)?;
@@ -673,7 +699,7 @@ pub fn security_readiness_report_value(input: &SecurityReadinessReportInput<'_>)
     ]))
 }
 
-pub fn pilot_decision_value(input: &PilotDecisionInput<'_>) -> Result<IOValue> {
+pub fn pilot_decision_value(input: &PilotDecisionInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_text_field("pilot scope", input.scope)?;
     validate_text_slice("allowed workload", input.allowed_workloads)?;
@@ -765,7 +791,7 @@ impl<'a> ReleaseCandidateGate<'a> {
         Ok(())
     }
 
-    fn value(&self) -> Result<IOValue> {
+    fn value(&self) -> Result<IoValue> {
         Ok(record("prod-release-candidate-gate-v1", vec![
             string(PROD_RELEASE_CANDIDATE_GATE_SCHEMA),
             decision_field(self.input.decision),
@@ -788,7 +814,7 @@ impl<'a> ReleaseCandidateGate<'a> {
         ]))
     }
 
-    fn checks(&self) -> Vec<IOValue> {
+    fn checks(&self) -> Vec<IoValue> {
         vec![
             check_value("full-validation-matrix-bound", pass_check(self.has_validation_matrix_gap())),
             check_value("source-gate-current-or-limited", pass_check(self.has_source_gate_limiter())),
@@ -816,33 +842,33 @@ impl<'a> ReleaseCandidateGate<'a> {
     }
 }
 
-pub fn release_candidate_gate_value(input: &ReleaseCandidateGateInput<'_>) -> Result<IOValue> {
+pub fn release_candidate_gate_value(input: &ReleaseCandidateGateInput<'_>) -> Result<IoValue> {
     let gate = ReleaseCandidateGate::new(input);
     gate.validate()?;
     gate.value()
 }
 
-fn decision_field(decision: &str) -> IOValue {
+fn decision_field(decision: &str) -> IoValue {
     record("decision", vec![string(decision)])
 }
 
-fn diagnostics_field(values: &[String]) -> Result<IOValue> {
+fn diagnostics_field(values: &[String]) -> Result<IoValue> {
     Ok(record("diagnostics", vec![sequence(string_values("diagnostic", values)?)]))
 }
 
-fn refs_field(label: &'static str, refs: &[String]) -> Result<IOValue> {
+fn refs_field(label: &'static str, refs: &[String]) -> Result<IoValue> {
     Ok(record(label, vec![sequence(ref_values(label, refs)?)]))
 }
 
-fn texts_field(label: &'static str, values: &[String]) -> Result<IOValue> {
+fn texts_field(label: &'static str, values: &[String]) -> Result<IoValue> {
     Ok(record(label, vec![sequence(string_values(label, values)?)]))
 }
 
-fn checks_field(checks: Vec<IOValue>) -> IOValue {
+fn checks_field(checks: Vec<IoValue>) -> IoValue {
     record("checks", vec![sequence(checks)])
 }
 
-fn check_value(name: &'static str, status: &'static str) -> IOValue {
+fn check_value(name: &'static str, status: &'static str) -> IoValue {
     record("check", vec![string(name), string(status)])
 }
 
@@ -968,12 +994,12 @@ fn require_pass_metric_bound(label: &str, actual: u64, maximum: u64, decision: &
     }
 }
 
-fn ref_values(label: &str, refs: &[String]) -> Result<Vec<IOValue>> {
+fn ref_values(label: &str, refs: &[String]) -> Result<Vec<IoValue>> {
     validate_ref_slice(label, refs)?;
     Ok(refs.iter().map(string).collect())
 }
 
-fn string_values(label: &str, values: &[String]) -> Result<Vec<IOValue>> {
+fn string_values(label: &str, values: &[String]) -> Result<Vec<IoValue>> {
     if values.len() > MAX_PROD_TEXTS {
         return Err(MoltenError::invalid_harness(format!(
             "production readiness {label} count {} exceeds bound {MAX_PROD_TEXTS}",
@@ -991,9 +1017,6 @@ fn string_values(label: &str, values: &[String]) -> Result<Vec<IOValue>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::preserves_rail::canonical_hash;
-    use crate::preserves_rail::to_text;
-
     const OBSERVED_QUEUE_DEPTH: u64 = 2;
     const MAX_QUEUE_DEPTH: u64 = 8;
     const OVER_LIMIT_QUEUE_DEPTH: u64 = 13;
