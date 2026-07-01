@@ -1,15 +1,13 @@
-use std::path::Path;
-
-use molten::error::MoltenError;
-use molten::error::Result;
-
 use super::command::worker;
-use super::io;
-use super::schedule;
+
+type CliError = molten::error::MoltenError;
+type FsPath = std::path::Path;
+type IoValue = preserves::IOValue;
+type JobWorkerExecution = molten::job_dag::JobWorkerExecution;
 
 struct RequestInput<'a> {
-    admission_value: &'a preserves::IOValue,
-    execution_request_value: &'a preserves::IOValue,
+    admission_value: &'a IoValue,
+    execution_request_value: &'a IoValue,
     sync_ref: Option<&'a str>,
     target_peer: &'a str,
     stages: &'a [String],
@@ -21,24 +19,24 @@ struct RequestInput<'a> {
 }
 
 pub(super) struct RunInput<'a> {
-    pub(super) request_value: &'a preserves::IOValue,
-    pub(super) target_registry: &'a Path,
-    pub(super) storage_root: &'a Path,
-    pub(super) cache_root: &'a Path,
-    pub(super) chunk_root: &'a Path,
-    pub(super) admission_value: &'a preserves::IOValue,
-    pub(super) execution_request_value: &'a preserves::IOValue,
-    pub(super) transport_root: &'a Path,
+    pub(super) request_value: &'a IoValue,
+    pub(super) target_registry: &'a FsPath,
+    pub(super) storage_root: &'a FsPath,
+    pub(super) cache_root: &'a FsPath,
+    pub(super) chunk_root: &'a FsPath,
+    pub(super) admission_value: &'a IoValue,
+    pub(super) execution_request_value: &'a IoValue,
+    pub(super) transport_root: &'a FsPath,
     pub(super) from_peer: &'a str,
     pub(super) from_actor: &'a str,
     pub(super) topic: &'a str,
-    pub(super) ledger_root: Option<&'a Path>,
-    pub(super) out: &'a Path,
+    pub(super) ledger_root: Option<&'a FsPath>,
+    pub(super) out: &'a FsPath,
 }
 
-pub(crate) fn request(args: worker::Request) -> Result<()> {
-    let admission_value = io::read_preserves_file(&args.admission_receipt)?;
-    let execution_request_value = io::read_preserves_file(&args.execution_request)?;
+pub(crate) fn request(args: worker::Request) -> Result<(), CliError> {
+    let admission_value = super::io::read_preserves_file(&args.admission_receipt)?;
+    let execution_request_value = super::io::read_preserves_file(&args.execution_request)?;
     let request_value = request_value(RequestInput {
         admission_value: &admission_value,
         execution_request_value: &execution_request_value,
@@ -52,7 +50,7 @@ pub(crate) fn request(args: worker::Request) -> Result<()> {
         evidence_refs: args.evidence_refs,
     })?;
     let parsed = molten::job_dag::parse_job_worker_request_value(&request_value)?;
-    io::emit_job_analysis(&request_value, args.out.as_ref())?;
+    super::io::emit_job_analysis(&request_value, args.out.as_ref())?;
     eprintln!(
         "job worker-request ok job={} request={} target={} stages={}",
         parsed.job_ref,
@@ -63,10 +61,10 @@ pub(crate) fn request(args: worker::Request) -> Result<()> {
     Ok(())
 }
 
-pub(crate) fn run_local(args: worker::RunLocal) -> Result<()> {
-    let request_value = io::read_preserves_file(&args.request)?;
-    let admission_value = io::read_preserves_file(&args.admission_receipt)?;
-    let execution_request_value = io::read_preserves_file(&args.execution_request)?;
+pub(crate) fn run_local(args: worker::RunLocal) -> Result<(), CliError> {
+    let request_value = super::io::read_preserves_file(&args.request)?;
+    let admission_value = super::io::read_preserves_file(&args.admission_receipt)?;
+    let execution_request_value = super::io::read_preserves_file(&args.execution_request)?;
     let chunk_root = args.chunks.unwrap_or_else(|| args.target_registry.join("job-chunks"));
     let executed = run_local_execution(RunInput {
         request_value: &request_value,
@@ -94,27 +92,27 @@ pub(crate) fn run_local(args: worker::RunLocal) -> Result<()> {
     if executed.result.decision == "pass" {
         Ok(())
     } else {
-        Err(MoltenError::invalid_harness(format!(
+        Err(CliError::invalid_harness(format!(
             "job worker-run-local denied: {}",
             executed.result.diagnostics.join("; ")
         )))
     }
 }
 
-pub(crate) fn schedule_local(args: worker::ScheduleLocal) -> Result<()> {
-    schedule::local(args)
+pub(crate) fn schedule_local(args: worker::ScheduleLocal) -> Result<(), CliError> {
+    super::schedule::local(args)
 }
 
-fn request_value(input: RequestInput<'_>) -> Result<preserves::IOValue> {
+fn request_value(input: RequestInput<'_>) -> Result<IoValue, CliError> {
     let admission = molten::job_dag::parse_job_admission_receipt_value(input.admission_value)?;
     let execution_request = molten::job_dag::parse_job_execution_request_value(input.execution_request_value)?;
     let admission_ref = molten::preserves_rail::canonical_hash(input.admission_value)?;
     let execution_request_ref = molten::preserves_rail::canonical_hash(input.execution_request_value)?;
     if execution_request.admission_ref != admission_ref {
-        return Err(MoltenError::invalid_harness("job worker execution request does not bind admission receipt"));
+        return Err(CliError::invalid_harness("job worker execution request does not bind admission receipt"));
     }
     if execution_request.job_ref != admission.job_ref {
-        return Err(MoltenError::invalid_harness("job worker execution request job ref mismatches admission"));
+        return Err(CliError::invalid_harness("job worker execution request job ref mismatches admission"));
     }
     let sync_ref = input.sync_ref.map(str::to_string).unwrap_or_else(|| admission.sync_ref.clone());
     let stage_ids = if input.stages.is_empty() {
@@ -149,7 +147,7 @@ fn evidence_refs(
     sync_ref: &str,
     admission_ref: &str,
     execution_request_ref: &str,
-) -> Result<Vec<String>> {
+) -> Result<Vec<String>, CliError> {
     let mut refs = super::core::Items::new(super::JOB_WORKER_CLI_REF_LIMIT, "job worker evidence refs");
     for reference in &input.evidence_refs {
         refs.push_unique(reference.clone())?;
@@ -166,7 +164,7 @@ fn evidence_refs(
     Ok(refs.into_vec())
 }
 
-pub(super) fn run_local_execution(input: RunInput<'_>) -> Result<molten::job_dag::JobWorkerExecution> {
+pub(super) fn run_local_execution(input: RunInput<'_>) -> Result<JobWorkerExecution, CliError> {
     let request = molten::job_dag::parse_job_worker_request_value(input.request_value)?;
     let envelope = molten::job_dag::job_worker_envelope(molten::job_dag::JobWorkerEnvelopeInput {
         from_peer: input.from_peer,
@@ -214,48 +212,48 @@ struct WriteInput<'a> {
     executed: &'a molten::job_dag::JobWorkerExecution,
 }
 
-fn write_execution(input: WriteInput<'_>) -> Result<()> {
-    std::fs::create_dir_all(input.run.out).map_err(MoltenError::from)?;
-    io::write_file(
+fn write_execution(input: WriteInput<'_>) -> Result<(), CliError> {
+    std::fs::create_dir_all(input.run.out).map_err(CliError::from)?;
+    super::io::write_file(
         &input.run.out.join("request.preserves"),
         &molten::preserves_rail::to_text(input.run.request_value)?,
     )?;
-    io::write_file(
+    super::io::write_file(
         &input.run.out.join("envelope.preserves"),
         &molten::preserves_rail::to_text(&input.envelope.value)?,
     )?;
-    io::write_file(
+    super::io::write_file(
         &input.run.out.join("publish-receipt.preserves"),
         &molten::preserves_rail::to_text(&input.published.receipt_value)?,
     )?;
-    io::write_file(
+    super::io::write_file(
         &input.run.out.join("delivery-receipt.preserves"),
         &molten::preserves_rail::to_text(&input.delivery.receipt_value)?,
     )?;
-    io::write_file(
+    super::io::write_file(
         &input.run.out.join("delivery-log.preserves"),
         &molten::preserves_rail::to_text(&input.delivery_log.value)?,
     )?;
-    io::write_file(
+    super::io::write_file(
         &input.run.out.join("assignment.preserves"),
         &molten::preserves_rail::to_text(&input.executed.assignment_value)?,
     )?;
-    io::write_indexed_values(input.run.out, "status", &input.executed.status_values)?;
-    io::write_file(
+    super::io::write_indexed_values(input.run.out, "status", &input.executed.status_values)?;
+    super::io::write_file(
         &input.run.out.join("result.preserves"),
         &molten::preserves_rail::to_text(&input.executed.result.value)?,
     )?;
-    io::write_file(
+    super::io::write_file(
         &input.run.out.join("worker-receipt.preserves"),
         &molten::preserves_rail::to_text(&input.executed.receipt_value)?,
     )?;
     if let Some(execution) = input.executed.execution.as_ref() {
-        io::write_file(
+        super::io::write_file(
             &input.run.out.join("execution-receipt.preserves"),
             &molten::preserves_rail::to_text(&execution.receipt_value)?,
         )?;
         if let Some(run) = execution.run.as_ref() {
-            io::write_file(
+            super::io::write_file(
                 &input.run.out.join("output.preserves"),
                 &molten::preserves_rail::to_text(&run.output_value)?,
             )?;

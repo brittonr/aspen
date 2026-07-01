@@ -1,23 +1,22 @@
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
+type CliError = molten::error::MoltenError;
+type FsPath = std::path::Path;
+type FsPathBuf = std::path::PathBuf;
+type IoValue = preserves::IOValue;
 
-use molten::error::Result;
-
-pub(crate) fn emit_analysis(value: &preserves::IOValue, out: Option<&PathBuf>) -> Result<()> {
+pub(crate) fn emit_analysis(value: &IoValue, out: Option<&FsPathBuf>) -> Result<(), CliError> {
     let text = molten::preserves_rail::to_text(value)?;
     write_optional_output(out, &text)
 }
 
-pub(crate) fn emit_job_analysis(value: &preserves::IOValue, out: Option<&PathBuf>) -> Result<()> {
+pub(crate) fn emit_job_analysis(value: &IoValue, out: Option<&FsPathBuf>) -> Result<(), CliError> {
     emit_analysis(value, out)
 }
 
-pub(crate) fn read_preserves_file(path: &Path) -> Result<preserves::IOValue> {
-    molten::preserves_rail::parse_text(&fs::read_to_string(path)?)
+pub(crate) fn read_preserves_file(path: &FsPath) -> Result<IoValue, CliError> {
+    molten::preserves_rail::parse_text(&std::fs::read_to_string(path)?)
 }
 
-pub(crate) fn read_preserves_files(paths: &[PathBuf]) -> Result<Vec<preserves::IOValue>> {
+pub(crate) fn read_preserves_files(paths: &[FsPathBuf]) -> Result<Vec<IoValue>, CliError> {
     let mut values = super::core::Items::new(super::JOB_CLI_EVIDENCE_LIMIT, "Preserves input files");
     for path in paths {
         values.push(read_preserves_file(path)?)?;
@@ -25,7 +24,7 @@ pub(crate) fn read_preserves_files(paths: &[PathBuf]) -> Result<Vec<preserves::I
     Ok(values.into_vec())
 }
 
-pub(crate) fn values_canonical_refs(values: &[preserves::IOValue]) -> Result<Vec<String>> {
+pub(crate) fn values_canonical_refs(values: &[IoValue]) -> Result<Vec<String>, CliError> {
     let mut refs = super::core::Items::new(super::JOB_CLI_EVIDENCE_LIMIT, "Preserves input refs");
     for value in values {
         refs.push(molten::preserves_rail::canonical_hash(value)?)?;
@@ -33,7 +32,7 @@ pub(crate) fn values_canonical_refs(values: &[preserves::IOValue]) -> Result<Vec
     Ok(refs.into_vec())
 }
 
-pub(crate) fn emit_named_receipt(path: Option<&PathBuf>, label: &str, receipt: &preserves::IOValue) -> Result<()> {
+pub(crate) fn emit_named_receipt(path: Option<&FsPathBuf>, label: &str, receipt: &IoValue) -> Result<(), CliError> {
     let receipt_text = molten::preserves_rail::to_text(receipt)?;
     let receipt_ref = molten::preserves_rail::canonical_hash(receipt)?;
     if let Some(path) = path {
@@ -46,14 +45,14 @@ pub(crate) fn emit_named_receipt(path: Option<&PathBuf>, label: &str, receipt: &
     Ok(())
 }
 
-pub(crate) fn write_indexed_values(out: &Path, prefix: &str, values: &[preserves::IOValue]) -> Result<()> {
+pub(crate) fn write_indexed_values(out: &FsPath, prefix: &str, values: &[IoValue]) -> Result<(), CliError> {
     for (index, value) in values.iter().enumerate() {
         write_file(&out.join(format!("{prefix}-{index:02}.preserves")), &molten::preserves_rail::to_text(value)?)?;
     }
     Ok(())
 }
 
-pub(crate) fn write_optional_output(out: Option<&PathBuf>, contents: &str) -> Result<()> {
+pub(crate) fn write_optional_output(out: Option<&FsPathBuf>, contents: &str) -> Result<(), CliError> {
     if let Some(path) = out {
         write_file(path, contents)?;
     } else {
@@ -62,24 +61,24 @@ pub(crate) fn write_optional_output(out: Option<&PathBuf>, contents: &str) -> Re
     Ok(())
 }
 
-pub(crate) fn write_file(path: &Path, contents: &str) -> Result<()> {
+pub(crate) fn write_file(path: &FsPath, contents: &str) -> Result<(), CliError> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)?;
     }
-    fs::write(path, contents)?;
+    std::fs::write(path, contents)?;
     Ok(())
 }
 
-pub(crate) fn content_arg(value: &str, label: &str) -> Result<molten::job_dag::JobContentRef> {
+pub(crate) fn content_arg(value: &str, label: &str) -> Result<molten::job_dag::JobContentRef, CliError> {
     let parts = value.split('@').collect::<Vec<_>>();
     if parts.len() < 3 || parts.len() > 4 {
-        return Err(molten::error::MoltenError::invalid_harness(format!(
+        return Err(CliError::invalid_harness(format!(
             "job {label} must be formatted as <content-ref>@<size>@<format>[@<schema-ref>]"
         )));
     }
-    let size = parts[1].parse::<u64>().map_err(|error| {
-        molten::error::MoltenError::invalid_harness(format!("job {label} size is invalid: {error}"))
-    })?;
+    let size = parts[1]
+        .parse::<u64>()
+        .map_err(|error| CliError::invalid_harness(format!("job {label} size is invalid: {error}")))?;
     let schema_ref = if parts.len() == 4 {
         Some(parts[3].to_string())
     } else {
@@ -93,7 +92,7 @@ pub(crate) fn content_arg(value: &str, label: &str) -> Result<molten::job_dag::J
     })
 }
 
-pub(crate) fn synthetic_ref(kind: &str, label: &str) -> Result<String> {
+pub(crate) fn synthetic_ref(kind: &str, label: &str) -> Result<String, CliError> {
     molten::preserves_rail::canonical_hash(&molten::preserves_rail::record("job-cli-ref", vec![
         molten::preserves_rail::string(kind),
         molten::preserves_rail::string(label),
