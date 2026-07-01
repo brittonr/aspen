@@ -5,35 +5,60 @@
 //! callers must present canonical coordination requests and receive receipts
 //! with Raft/control-registry evidence before dataspace facts are reflected.
 
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-
 use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
 
 use crate::bounded::VecSink;
 use crate::delivery_idempotency;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::COORDINATION_APPLY_REPORT_SCHEMA;
-use crate::preserves_rail::COORDINATION_FENCING_TOKEN_SCHEMA;
-use crate::preserves_rail::COORDINATION_RECEIPT_SCHEMA;
-use crate::preserves_rail::COORDINATION_REQUEST_SCHEMA;
-use crate::preserves_rail::COORDINATION_SERVICE_MANIFEST_SCHEMA;
-use crate::preserves_rail::COORDINATION_STATE_SNAPSHOT_SCHEMA;
-use crate::preserves_rail::COORDINATION_STATUS_ASSERTION_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 use crate::raft_control_plane;
-use crate::raft_control_plane::ControlRegistryRuntime;
-use crate::raft_control_plane::RaftReadReceipt;
+
+type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
+type OrderedSet<T> = std::collections::BTreeSet<T>;
+type Record<T> = preserves::Record<T>;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+type ControlRegistryRuntime = crate::raft_control_plane::ControlRegistryRuntime;
+type RaftReadReceipt = crate::raft_control_plane::RaftReadReceipt;
+
+const COORDINATION_APPLY_REPORT_SCHEMA: &str = crate::preserves_rail::COORDINATION_APPLY_REPORT_SCHEMA;
+const COORDINATION_FENCING_TOKEN_SCHEMA: &str = crate::preserves_rail::COORDINATION_FENCING_TOKEN_SCHEMA;
+const COORDINATION_RECEIPT_SCHEMA: &str = crate::preserves_rail::COORDINATION_RECEIPT_SCHEMA;
+const COORDINATION_REQUEST_SCHEMA: &str = crate::preserves_rail::COORDINATION_REQUEST_SCHEMA;
+const COORDINATION_SERVICE_MANIFEST_SCHEMA: &str = crate::preserves_rail::COORDINATION_SERVICE_MANIFEST_SCHEMA;
+const COORDINATION_STATE_SNAPSHOT_SCHEMA: &str = crate::preserves_rail::COORDINATION_STATE_SNAPSHOT_SCHEMA;
+const COORDINATION_STATUS_ASSERTION_SCHEMA: &str = crate::preserves_rail::COORDINATION_STATUS_ASSERTION_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn content_ref_from_bytes(bytes: &[u8]) -> String {
+    crate::preserves_rail::content_ref_from_bytes(bytes)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const SERVICE_LOCK: &str = "lock";
 pub const SERVICE_QUEUE: &str = "queue";
@@ -212,7 +237,7 @@ pub struct CoordinationRuntime {
     pub manifest: CoordinationServiceManifest,
     pub raft: ControlRegistryRuntime,
     pub state: CoordinationState,
-    pub applied_operations: BTreeMap<String, CoordinationApplyResult>,
+    pub applied_operations: OrderedMap<String, CoordinationApplyResult>,
     pub receipts: Vec<CoordinationReceipt>,
     pub assertions: Vec<CoordinationStatusAssertion>,
     pub tokens: Vec<FencingToken>,
@@ -221,13 +246,13 @@ pub struct CoordinationRuntime {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct CoordinationState {
-    pub locks: BTreeMap<String, LockState>,
-    pub queues: BTreeMap<String, Vec<String>>,
-    pub semaphores: BTreeMap<String, BTreeSet<String>>,
-    pub rates: BTreeMap<String, u64>,
-    pub elections: BTreeMap<String, ElectionState>,
-    pub barriers: BTreeMap<String, BarrierState>,
-    pub registry: BTreeMap<String, RegistryEntry>,
+    pub locks: OrderedMap<String, LockState>,
+    pub queues: OrderedMap<String, Vec<String>>,
+    pub semaphores: OrderedMap<String, OrderedSet<String>>,
+    pub rates: OrderedMap<String, u64>,
+    pub elections: OrderedMap<String, ElectionState>,
+    pub barriers: OrderedMap<String, BarrierState>,
+    pub registry: OrderedMap<String, RegistryEntry>,
     pub next_fencing_token: u64,
 }
 
@@ -248,7 +273,7 @@ pub struct ElectionState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BarrierState {
-    pub participants: BTreeSet<String>,
+    pub participants: OrderedSet<String>,
     pub required: u64,
     pub is_released: bool,
 }
@@ -502,7 +527,7 @@ fn state_records(state: &CoordinationState) -> Result<StateRecords> {
     })
 }
 
-fn lock_records(locks: &BTreeMap<String, LockState>) -> Vec<IOValue> {
+fn lock_records(locks: &OrderedMap<String, LockState>) -> Vec<IOValue> {
     locks
         .iter()
         .map(|(key, lock)| {
@@ -517,14 +542,14 @@ fn lock_records(locks: &BTreeMap<String, LockState>) -> Vec<IOValue> {
         .collect()
 }
 
-fn queue_records(queues: &BTreeMap<String, Vec<String>>) -> Vec<IOValue> {
+fn queue_records(queues: &OrderedMap<String, Vec<String>>) -> Vec<IOValue> {
     queues
         .iter()
         .map(|(key, items)| record("queue", vec![string(key), strings_sequence(items)]))
         .collect()
 }
 
-fn semaphore_records(semaphores: &BTreeMap<String, BTreeSet<String>>) -> Vec<IOValue> {
+fn semaphore_records(semaphores: &OrderedMap<String, OrderedSet<String>>) -> Vec<IOValue> {
     semaphores
         .iter()
         .map(|(key, holders)| {
@@ -534,11 +559,11 @@ fn semaphore_records(semaphores: &BTreeMap<String, BTreeSet<String>>) -> Vec<IOV
         .collect()
 }
 
-fn rate_records(rates: &BTreeMap<String, u64>) -> Vec<IOValue> {
+fn rate_records(rates: &OrderedMap<String, u64>) -> Vec<IOValue> {
     rates.iter().map(|(key, used)| record("rate", vec![string(key), u64_value(*used)])).collect()
 }
 
-fn election_records(elections: &BTreeMap<String, ElectionState>) -> Vec<IOValue> {
+fn election_records(elections: &OrderedMap<String, ElectionState>) -> Vec<IOValue> {
     elections
         .iter()
         .map(|(key, election)| {
@@ -552,7 +577,7 @@ fn election_records(elections: &BTreeMap<String, ElectionState>) -> Vec<IOValue>
         .collect()
 }
 
-fn barrier_records(barriers: &BTreeMap<String, BarrierState>) -> Vec<IOValue> {
+fn barrier_records(barriers: &OrderedMap<String, BarrierState>) -> Vec<IOValue> {
     barriers
         .iter()
         .map(|(key, barrier)| {
@@ -567,7 +592,7 @@ fn barrier_records(barriers: &BTreeMap<String, BarrierState>) -> Vec<IOValue> {
         .collect()
 }
 
-fn registry_records(registry: &BTreeMap<String, RegistryEntry>) -> Vec<IOValue> {
+fn registry_records(registry: &OrderedMap<String, RegistryEntry>) -> Vec<IOValue> {
     registry
         .iter()
         .map(|(key, entry)| {
@@ -693,7 +718,7 @@ pub fn new_coordination_runtime(manifest_value: &IOValue) -> Result<Coordination
             next_fencing_token: 1,
             ..CoordinationState::default()
         },
-        applied_operations: BTreeMap::new(),
+        applied_operations: OrderedMap::new(),
         receipts: Vec::new(),
         assertions: Vec::new(),
         tokens: Vec::new(),
@@ -1638,7 +1663,7 @@ fn prepare_barrier(runtime: &CoordinationRuntime, request: &CoordinationRequest)
         .map_or_else(|| Ok(request.client_session.clone()), |payload| simple_payload_text(payload, "participant"))?;
     let mut state = runtime.state.clone();
     let barrier = state.barriers.entry(request.key.clone()).or_insert_with(|| BarrierState {
-        participants: BTreeSet::new(),
+        participants: OrderedSet::new(),
         required: runtime.manifest.barrier_parties,
         is_released: false,
     });
@@ -2270,7 +2295,7 @@ fn vec_len_u64<T>(values: &[T]) -> Result<u64> {
     u64::try_from(values.len()).map_err(|_| MoltenError::invalid_harness("coordination vector length overflow"))
 }
 
-fn set_len_u64<T>(values: &BTreeSet<T>) -> Result<u64> {
+fn set_len_u64<T>(values: &OrderedSet<T>) -> Result<u64> {
     u64::try_from(values.len()).map_err(|_| MoltenError::invalid_harness("coordination set length overflow"))
 }
 
