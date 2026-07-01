@@ -14,7 +14,7 @@
         let dep_out = dir.join("dependent-artifact.preserves");
         write_file(&base_payload, "<schema \"base\">").expect("write base payload");
         write_file(&dep_payload, "<module \"dependent\">").expect("write dep payload");
-        run_artifact_command(ArtifactCommand::Install {
+        crate::cli_artifact::run(crate::cli_artifact::Command::Install {
             payload: base_payload,
             registry: registry.to_path_buf(),
             kind: "schema".to_string(),
@@ -27,7 +27,7 @@
         .expect("install base artifact");
         let base_value = read_preserves_file(&base_out).expect("read base artifact");
         let base = artifacts::parse_artifact_value(&base_value).expect("parse base artifact");
-        run_artifact_command(ArtifactCommand::Install {
+        crate::cli_artifact::run(crate::cli_artifact::Command::Install {
             payload: dep_payload,
             registry: registry.to_path_buf(),
             kind: "steel".to_string(),
@@ -44,18 +44,18 @@
     }
 
     fn show_artifact_surfaces(registry: &Path, dep_ref: &str) {
-        run_artifact_command(ArtifactCommand::List {
+        crate::cli_artifact::run(crate::cli_artifact::Command::List {
             registry: registry.to_path_buf(),
             kind: None,
         })
         .expect("artifact list");
-        run_artifact_command(ArtifactCommand::View {
+        crate::cli_artifact::run(crate::cli_artifact::Command::View {
             artifact_ref: dep_ref.to_string(),
             registry: registry.to_path_buf(),
             payload: false,
         })
         .expect("artifact view envelope");
-        run_artifact_command(ArtifactCommand::View {
+        crate::cli_artifact::run(crate::cli_artifact::Command::View {
             artifact_ref: dep_ref.to_string(),
             registry: registry.to_path_buf(),
             payload: true,
@@ -64,7 +64,7 @@
     }
 
     fn exercise_artifact_name_and_graph(dir: &Path, registry: PathBuf, base_ref: String, dep_ref: String) {
-        run_artifact_command(ArtifactCommand::NameSet {
+        crate::cli_artifact::run(crate::cli_artifact::Command::NameSet {
             registry: registry.clone(),
             kind: "name".to_string(),
             name: "app/main".to_string(),
@@ -72,30 +72,30 @@
             receipt_out: Some(dir.join("name-set-receipt.preserves")),
         })
         .expect("artifact name set");
-        run_artifact_command(ArtifactCommand::NameShow {
+        crate::cli_artifact::run(crate::cli_artifact::Command::NameShow {
             registry: registry.clone(),
             kind: "name".to_string(),
             name: "app/main".to_string(),
         })
         .expect("artifact name show");
-        run_artifact_command(ArtifactCommand::Deps {
+        crate::cli_artifact::run(crate::cli_artifact::Command::Deps {
             artifact_ref: dep_ref.clone(),
             registry: registry.clone(),
         })
         .expect("artifact deps");
-        run_artifact_command(ArtifactCommand::Closure {
+        crate::cli_artifact::run(crate::cli_artifact::Command::Closure {
             artifact_ref: dep_ref,
             registry: registry.clone(),
             receipt_out: Some(dir.join("closure-receipt.preserves")),
         })
         .expect("artifact closure");
-        run_artifact_command(ArtifactCommand::Impact {
+        crate::cli_artifact::run(crate::cli_artifact::Command::Impact {
             artifact_ref: base_ref,
             registry: registry.clone(),
             receipt_out: Some(dir.join("impact-receipt.preserves")),
         })
         .expect("artifact impact");
-        run_artifact_command(ArtifactCommand::IndexRebuild {
+        crate::cli_artifact::run(crate::cli_artifact::Command::IndexRebuild {
             registry,
             receipt_out: Some(dir.join("rebuild-receipt.preserves")),
         })

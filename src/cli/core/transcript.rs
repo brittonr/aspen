@@ -5,13 +5,13 @@ mod io;
 #[path = "transcript/ops.rs"]
 mod ops;
 
-pub(crate) type TranscriptCommand = command::Top;
+pub(crate) type Command = command::Top;
 
-pub(crate) fn run_transcript_command(command: TranscriptCommand) -> molten::error::Result<()> {
+pub(crate) fn run(command: Command) -> molten::error::Result<()> {
     match command {
-        command @ TranscriptCommand::Parse { .. } => ops::parse(command),
-        command @ TranscriptCommand::Run { .. } => ops::run(command),
-        command @ TranscriptCommand::Show { .. } => ops::show(command),
-        command @ TranscriptCommand::Render { .. } => ops::render(command),
+        command @ Command::Parse { .. } => ops::parse(command),
+        command @ Command::Run { .. } => ops::run(command),
+        command @ Command::Show { .. } => ops::show(command),
+        command @ Command::Render { .. } => ops::render(command),
     }
 }

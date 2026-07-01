@@ -17,7 +17,7 @@
         let value_file = dir.join("value.preserves");
         let typed_ref_out = dir.join("typed-ref.preserves");
         write_file(&value_file, "<profile \"alice\" 7>").expect("write value");
-        run_storage_command(StorageCommand::Put {
+        crate::cli_storage::run(crate::cli_storage::Command::Put {
             value: value_file,
             store: store.to_path_buf(),
             namespace: "profiles".to_string(),
@@ -38,7 +38,7 @@
 
     fn get_and_verify_profile(dir: &Path, store: &Path, typed: &StoredProfile) {
         let get_out = dir.join("get.preserves");
-        run_storage_command(StorageCommand::Get {
+        crate::cli_storage::run(crate::cli_storage::Command::Get {
             store: store.to_path_buf(),
             namespace: "profiles".to_string(),
             key: "alice".to_string(),
@@ -49,7 +49,7 @@
         })
         .expect("storage get");
         assert_eq!(fs::read_to_string(&get_out).expect("read get"), "<profile \"alice\" 7>");
-        run_storage_command(StorageCommand::Verify {
+        crate::cli_storage::run(crate::cli_storage::Command::Verify {
             storage_ref: typed.storage_ref.clone(),
             store: store.to_path_buf(),
             schema_ref: Some(typed.schema_ref.clone()),
@@ -61,7 +61,7 @@
     fn migrate_profile(dir: &Path, store: &Path, source_schema_ref: &str) {
         let recipe_path = dir.join("migration-recipe.preserves");
         let target_schema_ref = test_ref("storage-cli-target-schema");
-        run_storage_command(StorageCommand::Recipe {
+        crate::cli_storage::run(crate::cli_storage::Command::Recipe {
             source_schema_ref: source_schema_ref.to_string(),
             target_schema_ref: target_schema_ref.clone(),
             transformer_ref: test_ref("storage-cli-transformer"),
@@ -70,7 +70,7 @@
             out: recipe_path.clone(),
         })
         .expect("storage recipe");
-        run_storage_command(StorageCommand::Migrate {
+        crate::cli_storage::run(crate::cli_storage::Command::Migrate {
             recipe: recipe_path,
             store: store.to_path_buf(),
             namespace: "profiles".to_string(),
@@ -79,7 +79,7 @@
             receipt_out: Some(dir.join("migrate-receipt.preserves")),
         })
         .expect("storage migrate");
-        run_storage_command(StorageCommand::Get {
+        crate::cli_storage::run(crate::cli_storage::Command::Get {
             store: store.to_path_buf(),
             namespace: "profiles".to_string(),
             key: "alice".to_string(),
@@ -92,7 +92,7 @@
     }
 
     fn assert_wrong_schema_denied(store: PathBuf) {
-        let error = run_storage_command(StorageCommand::Get {
+        let error = crate::cli_storage::run(crate::cli_storage::Command::Get {
             store,
             namespace: "profiles".to_string(),
             key: "alice".to_string(),

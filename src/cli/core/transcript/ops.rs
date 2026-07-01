@@ -1,5 +1,5 @@
-pub(super) fn parse(command: super::TranscriptCommand) -> molten::error::Result<()> {
-    let super::TranscriptCommand::Parse {
+pub(super) fn parse(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Parse {
         markdown,
         out,
         dependency_refs,
@@ -35,8 +35,8 @@ pub(super) fn parse(command: super::TranscriptCommand) -> molten::error::Result<
     Ok(())
 }
 
-pub(super) fn run(command: super::TranscriptCommand) -> molten::error::Result<()> {
-    let super::TranscriptCommand::Run {
+pub(super) fn run(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Run {
         transcript,
         cache,
         state,
@@ -77,8 +77,8 @@ pub(super) fn run(command: super::TranscriptCommand) -> molten::error::Result<()
     Ok(())
 }
 
-pub(super) fn show(command: super::TranscriptCommand) -> molten::error::Result<()> {
-    let super::TranscriptCommand::Show { transcript } = command else {
+pub(super) fn show(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Show { transcript } = command else {
         return dispatch_mismatch("show");
     };
     let artifact = super::io::read_transcript_input(&transcript)?;
@@ -86,8 +86,8 @@ pub(super) fn show(command: super::TranscriptCommand) -> molten::error::Result<(
     Ok(())
 }
 
-pub(super) fn render(command: super::TranscriptCommand) -> molten::error::Result<()> {
-    let super::TranscriptCommand::Render {
+pub(super) fn render(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Render {
         transcript,
         receipt,
         out,

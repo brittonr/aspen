@@ -46,7 +46,7 @@ fn install_catalog_artifact(
     dependencies: Vec<String>,
 ) -> artifacts::ArtifactRecord {
     let artifact_out = dir.join(format!("{name}-artifact.preserves"));
-    run_artifact_command(ArtifactCommand::Install {
+    crate::cli_artifact::run(crate::cli_artifact::Command::Install {
         payload: dir.join(format!("{name}.preserves")),
         registry: registry.to_path_buf(),
         kind: kind.to_string(),
@@ -68,7 +68,7 @@ fn catalog_query_fixture(dir: &Path, fixture: &CatalogCliFixture) {
 }
 
 fn catalog_list_and_view(fixture: &CatalogCliFixture) {
-    run_catalog_command(CatalogCommand::List {
+    crate::cli_catalog::run(crate::cli_catalog::Command::List {
         registry: fixture.registry.clone(),
         ledger: Some(fixture.ledger_root.clone()),
         kind: Some("doc".to_string()),
@@ -76,7 +76,7 @@ fn catalog_list_and_view(fixture: &CatalogCliFixture) {
         receipt_out: Some(fixture.list_receipt.clone()),
     })
     .expect("catalog list");
-    run_catalog_command(CatalogCommand::View {
+    crate::cli_catalog::run(crate::cli_catalog::Command::View {
         reference: fixture.dep_ref.clone(),
         registry: fixture.registry.clone(),
         ledger: Some(fixture.ledger_root.clone()),
@@ -89,7 +89,7 @@ fn catalog_list_and_view(fixture: &CatalogCliFixture) {
 }
 
 fn catalog_search_and_links(dir: &Path, fixture: &CatalogCliFixture) {
-    run_catalog_command(CatalogCommand::Search {
+    crate::cli_catalog::run(crate::cli_catalog::Command::Search {
         registry: fixture.registry.clone(),
         ledger: Some(fixture.ledger_root.clone()),
         artifact_kind: Some("doc".to_string()),
@@ -118,7 +118,7 @@ fn catalog_search_and_links(dir: &Path, fixture: &CatalogCliFixture) {
 }
 
 fn catalog_dependency_views(dir: &Path, fixture: &CatalogCliFixture) {
-    run_catalog_command(CatalogCommand::Deps {
+    crate::cli_catalog::run(crate::cli_catalog::Command::Deps {
         reference: fixture.dep_ref.clone(),
         registry: fixture.registry.clone(),
         ledger: Some(fixture.ledger_root.clone()),
@@ -127,7 +127,7 @@ fn catalog_dependency_views(dir: &Path, fixture: &CatalogCliFixture) {
         receipt_out: Some(dir.join("catalog-deps-receipt.preserves")),
     })
     .expect("catalog deps");
-    run_catalog_command(CatalogCommand::Dependents {
+    crate::cli_catalog::run(crate::cli_catalog::Command::Dependents {
         reference: fixture.base_ref.clone(),
         registry: fixture.registry.clone(),
         ledger: Some(fixture.ledger_root.clone()),
@@ -139,7 +139,7 @@ fn catalog_dependency_views(dir: &Path, fixture: &CatalogCliFixture) {
 }
 
 fn catalog_short_id(dir: &Path, fixture: &CatalogCliFixture) {
-    run_catalog_command(CatalogCommand::ShortId {
+    crate::cli_catalog::run(crate::cli_catalog::Command::ShortId {
         prefix: fixture.dep_ref[7..19].to_string(),
         registry: fixture.registry.clone(),
         ledger: Some(fixture.ledger_root.clone()),
@@ -155,7 +155,7 @@ fn catalog_mcp_fixture(dir: &Path, fixture: CatalogCliFixture) {
     let mcp_response = dir.join("catalog-mcp-response.preserves");
     let mcp_receipt = dir.join("catalog-mcp-receipt.preserves");
     write_catalog_mcp_request(&mcp_request, &fixture.base_ref);
-    run_catalog_command(CatalogCommand::McpCall {
+    crate::cli_catalog::run(crate::cli_catalog::Command::McpCall {
         request: mcp_request,
         registry: fixture.registry,
         ledger: Some(fixture.ledger_root),
@@ -167,12 +167,12 @@ fn catalog_mcp_fixture(dir: &Path, fixture: CatalogCliFixture) {
     assert!(fs::read_to_string(&mcp_response)
         .expect("read mcp response")
         .contains(&fixture.dep_ref));
-    run_catalog_command(CatalogCommand::Show { artifact: mcp_receipt }).expect("catalog show MCP receipt");
-    run_catalog_command(CatalogCommand::Show {
+    crate::cli_catalog::run(crate::cli_catalog::Command::Show { artifact: mcp_receipt }).expect("catalog show MCP receipt");
+    crate::cli_catalog::run(crate::cli_catalog::Command::Show {
         artifact: fixture.list_receipt,
     })
     .expect("catalog show receipt");
-    run_catalog_command(CatalogCommand::Show {
+    crate::cli_catalog::run(crate::cli_catalog::Command::Show {
         artifact: fixture.view_receipt,
     })
     .expect("catalog show view receipt");

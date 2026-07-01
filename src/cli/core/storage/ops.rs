@@ -1,5 +1,5 @@
-pub(super) fn put(command: super::StorageCommand) -> molten::error::Result<()> {
-    let super::StorageCommand::Put {
+pub(super) fn put(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Put {
         value,
         store,
         namespace,
@@ -44,8 +44,8 @@ pub(super) fn put(command: super::StorageCommand) -> molten::error::Result<()> {
     Ok(())
 }
 
-pub(super) fn get(command: super::StorageCommand) -> molten::error::Result<()> {
-    let super::StorageCommand::Get {
+pub(super) fn get(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Get {
         store,
         namespace,
         key,
@@ -92,8 +92,8 @@ pub(super) fn get(command: super::StorageCommand) -> molten::error::Result<()> {
     Ok(())
 }
 
-pub(super) fn recipe(command: super::StorageCommand) -> molten::error::Result<()> {
-    let super::StorageCommand::Recipe {
+pub(super) fn recipe(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Recipe {
         source_schema_ref,
         target_schema_ref,
         transformer_ref,
@@ -122,8 +122,8 @@ pub(super) fn recipe(command: super::StorageCommand) -> molten::error::Result<()
     Ok(())
 }
 
-pub(super) fn migrate(command: super::StorageCommand) -> molten::error::Result<()> {
-    let super::StorageCommand::Migrate {
+pub(super) fn migrate(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Migrate {
         recipe,
         store,
         namespace,
@@ -153,8 +153,8 @@ pub(super) fn migrate(command: super::StorageCommand) -> molten::error::Result<(
     Ok(())
 }
 
-pub(super) fn verify(command: super::StorageCommand) -> molten::error::Result<()> {
-    let super::StorageCommand::Verify {
+pub(super) fn verify(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Verify {
         storage_ref,
         store,
         schema_ref,

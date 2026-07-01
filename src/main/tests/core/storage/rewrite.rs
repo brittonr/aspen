@@ -12,7 +12,7 @@
         let payload = dir.join("doc.preserves");
         let artifact_out = dir.join("doc-artifact.preserves");
         write_file(&payload, r#"<doc "old" ["old" "keep"]>"#).expect("write rewrite payload");
-        run_artifact_command(ArtifactCommand::Install {
+        crate::cli_artifact::run(crate::cli_artifact::Command::Install {
             payload,
             registry: registry.to_path_buf(),
             kind: "doc".to_string(),

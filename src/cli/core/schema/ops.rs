@@ -1,5 +1,5 @@
-pub(super) fn identity(command: super::SchemaCommand) -> molten::error::Result<()> {
-    let super::SchemaCommand::Identity {
+pub(super) fn identity(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Identity {
         shape,
         schema_ref,
         mode,
@@ -45,8 +45,8 @@ pub(super) fn identity(command: super::SchemaCommand) -> molten::error::Result<(
     Ok(())
 }
 
-pub(super) fn alias(command: super::SchemaCommand) -> molten::error::Result<()> {
-    let super::SchemaCommand::Alias {
+pub(super) fn alias(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Alias {
         from_ref,
         to_ref,
         scope,
@@ -89,8 +89,8 @@ pub(super) fn alias(command: super::SchemaCommand) -> molten::error::Result<()> 
     Ok(())
 }
 
-pub(super) fn compat(command: super::SchemaCommand) -> molten::error::Result<()> {
-    let super::SchemaCommand::Compat {
+pub(super) fn compat(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Compat {
         expected_identity,
         actual_identity,
         alias,
@@ -132,8 +132,8 @@ pub(super) fn compat(command: super::SchemaCommand) -> molten::error::Result<()>
     Ok(())
 }
 
-pub(super) fn search_fingerprint(command: super::SchemaCommand) -> molten::error::Result<()> {
-    let super::SchemaCommand::SearchFingerprint { registry, fingerprint } = command else {
+pub(super) fn search_fingerprint(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::SearchFingerprint { registry, fingerprint } = command else {
         return dispatch_mismatch("search-fingerprint");
     };
     for identity in molten::schema_identity::search_registry_by_fingerprint(&registry, &fingerprint)? {

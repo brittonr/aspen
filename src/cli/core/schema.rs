@@ -5,13 +5,13 @@ mod io;
 #[path = "schema/ops.rs"]
 mod ops;
 
-pub(crate) type SchemaCommand = command::Top;
+pub(crate) type Command = command::Top;
 
-pub(crate) fn run_schema_command(command: SchemaCommand) -> molten::error::Result<()> {
+pub(crate) fn run(command: Command) -> molten::error::Result<()> {
     match command {
-        command @ SchemaCommand::Identity { .. } => ops::identity(command),
-        command @ SchemaCommand::Alias { .. } => ops::alias(command),
-        command @ SchemaCommand::Compat { .. } => ops::compat(command),
-        command @ SchemaCommand::SearchFingerprint { .. } => ops::search_fingerprint(command),
+        command @ Command::Identity { .. } => ops::identity(command),
+        command @ Command::Alias { .. } => ops::alias(command),
+        command @ Command::Compat { .. } => ops::compat(command),
+        command @ Command::SearchFingerprint { .. } => ops::search_fingerprint(command),
     }
 }

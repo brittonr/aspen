@@ -19,7 +19,7 @@ fn parse_transcript_fixture(dir: &Path) -> TranscriptFixture {
         "```preserves:hide\n<value \"cli\">\n```\n```expect\n<expect-output <value \"cli\">>\n```\n",
     )
     .expect("write transcript markdown");
-    run_transcript_command(TranscriptCommand::Parse {
+    crate::cli_transcript::run(crate::cli_transcript::Command::Parse {
         markdown,
         out: transcript_out.clone(),
         dependency_refs: Vec::new(),
@@ -40,7 +40,7 @@ fn parse_transcript_fixture(dir: &Path) -> TranscriptFixture {
 
 fn run_transcript_fixture(dir: &Path, fixture: &TranscriptFixture) {
     let rendered = dir.join("rendered.md");
-    run_transcript_command(TranscriptCommand::Run {
+    crate::cli_transcript::run(crate::cli_transcript::Command::Run {
         transcript: fixture.transcript_out.clone(),
         cache: Some(dir.join("transcript-cache")),
         state: "fresh".to_string(),
@@ -54,11 +54,11 @@ fn run_transcript_fixture(dir: &Path, fixture: &TranscriptFixture) {
 }
 
 fn show_transcript_fixture(fixture: TranscriptFixture) {
-    run_transcript_command(TranscriptCommand::Show {
+    crate::cli_transcript::run(crate::cli_transcript::Command::Show {
         transcript: fixture.transcript_out.clone(),
     })
     .expect("transcript show");
-    run_transcript_command(TranscriptCommand::Render {
+    crate::cli_transcript::run(crate::cli_transcript::Command::Render {
         transcript: fixture.transcript_out,
         receipt: Some(fixture.run_receipt),
         out: temp_dir("transcript-render").join("rendered-again.md"),
@@ -93,7 +93,7 @@ fn put_cache_value(dir: &Path) -> CacheFixture {
     let policy_ref = test_ref("cache-cli-policy");
     write_file(&input, "<schema-shape <record \"x\">>").expect("write cache input");
     write_file(&output, "<fingerprint \"ok\">").expect("write cache output");
-    run_cache_command(CacheCommand::Put(crate::cli_cache::command::Put {
+    crate::cli_cache::run(crate::cli_cache::Command::Put(crate::cli_cache::command::Put {
         input,
         cache: cache.clone(),
         output: Some(output),
@@ -130,7 +130,7 @@ fn put_cache_value(dir: &Path) -> CacheFixture {
 
 fn fetch_cache_value(dir: &Path, fixture: &CacheFixture) {
     let hit_out = dir.join("hit.preserves");
-    run_cache_command(CacheCommand::Get(crate::cli_cache::command::Get {
+    crate::cli_cache::run(crate::cli_cache::Command::Get(crate::cli_cache::command::Get {
         key_ref: fixture.key.key_ref.clone(),
         cache: fixture.cache.clone(),
         current_policy_refs: Vec::new(),
@@ -145,11 +145,11 @@ fn fetch_cache_value(dir: &Path, fixture: &CacheFixture) {
 }
 
 fn inspect_cache_entries(fixture: &CacheFixture) {
-    run_cache_command(CacheCommand::Status(crate::cli_cache::command::Status {
+    crate::cli_cache::run(crate::cli_cache::Command::Status(crate::cli_cache::command::Status {
         cache: fixture.cache.clone(),
     }))
     .expect("cache status");
-    run_cache_command(CacheCommand::List(crate::cli_cache::command::List {
+    crate::cli_cache::run(crate::cli_cache::Command::List(crate::cli_cache::command::List {
         cache: fixture.cache.clone(),
         operation: Some("schema-fingerprint".to_string()),
         tier: Some(eval_cache::TIER_PURE.to_string()),
@@ -165,12 +165,12 @@ fn inspect_cache_entries(fixture: &CacheFixture) {
 }
 
 fn show_cache_key_and_value(fixture: &CacheFixture) {
-    run_cache_command(CacheCommand::Show(crate::cli_cache::command::Show {
+    crate::cli_cache::run(crate::cli_cache::Command::Show(crate::cli_cache::command::Show {
         reference: fixture.key.key_ref.clone(),
         cache: fixture.cache.clone(),
     }))
     .expect("cache show key");
-    run_cache_command(CacheCommand::Show(crate::cli_cache::command::Show {
+    crate::cli_cache::run(crate::cli_cache::Command::Show(crate::cli_cache::command::Show {
         reference: eval_cache::parse_eval_cache_value(&read_preserves_file(&fixture.value_out).expect("read value"))
             .expect("parse cache value")
             .value_ref,
@@ -191,7 +191,7 @@ fn invalidate_cache_entry(dir: &Path, fixture: CacheFixture) {
     let retention = retention_cli_args_for_object(retention_object);
     let apply_refs = vec![retention_apply_ref(retention_object, "eval-cache-invalidate", &retention)];
     let invalidate_receipt = dir.join("invalidate-receipt.preserves");
-    run_cache_command(CacheCommand::Invalidate(crate::cli_cache::command::Invalidate {
+    crate::cli_cache::run(crate::cli_cache::Command::Invalidate(crate::cli_cache::command::Invalidate {
         cache: fixture.cache.clone(),
         key_ref: None,
         dependency_ref: Some(fixture.dependency_ref.clone()),
@@ -211,7 +211,7 @@ fn invalidate_cache_entry(dir: &Path, fixture: CacheFixture) {
 }
 
 fn assert_cache_miss(fixture: CacheFixture) {
-    let error = run_cache_command(CacheCommand::Get(crate::cli_cache::command::Get {
+    let error = crate::cli_cache::run(crate::cli_cache::Command::Get(crate::cli_cache::command::Get {
         key_ref: fixture.key.key_ref,
         cache: fixture.cache,
         current_policy_refs: Vec::new(),

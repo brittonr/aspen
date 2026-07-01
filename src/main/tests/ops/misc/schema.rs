@@ -38,7 +38,7 @@
     fn run_schema_identities(dir: &Path, files: &SchemaCliFiles) -> SchemaCliRefs {
         let expected = test_ref("expected-schema-cli");
         let actual = test_ref("actual-schema-cli");
-        run_schema_command(SchemaCommand::Identity {
+        crate::cli_schema::run(crate::cli_schema::Command::Identity {
             shape: files.shape.clone(),
             schema_ref: expected.clone(),
             mode: "structural".to_string(),
@@ -47,7 +47,7 @@
             receipt_out: Some(dir.join("expected-identity-receipt.preserves")),
         })
         .expect("schema expected identity");
-        run_schema_command(SchemaCommand::Identity {
+        crate::cli_schema::run(crate::cli_schema::Command::Identity {
             shape: files.shape.clone(),
             schema_ref: actual.clone(),
             mode: "structural".to_string(),
@@ -60,7 +60,7 @@
     }
 
     fn run_schema_alias_and_compat(dir: &Path, files: &SchemaCliFiles, refs: &SchemaCliRefs) {
-        run_schema_command(SchemaCommand::Alias {
+        crate::cli_schema::run(crate::cli_schema::Command::Alias {
             from_ref: refs.actual.clone(),
             to_ref: refs.expected.clone(),
             scope: "storage".to_string(),
@@ -68,7 +68,7 @@
             receipt_out: Some(dir.join("alias-receipt.preserves")),
         })
         .expect("schema alias");
-        run_schema_command(SchemaCommand::Compat {
+        crate::cli_schema::run(crate::cli_schema::Command::Compat {
             expected_identity: files.expected_identity.clone(),
             actual_identity: files.actual_identity.clone(),
             alias: Some(files.alias.clone()),
@@ -120,7 +120,7 @@
             capability_refs: vec![test_ref("capability")],
         })
         .expect("install schema identity artifact");
-        run_schema_command(SchemaCommand::SearchFingerprint {
+        crate::cli_schema::run(crate::cli_schema::Command::SearchFingerprint {
             registry: registry.to_path_buf(),
             fingerprint: identity.structural_fingerprint,
         })

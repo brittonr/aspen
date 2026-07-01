@@ -7,8 +7,8 @@ mod io;
 #[path = "catalog/ops.rs"]
 mod ops;
 
-pub(crate) type CatalogCommand = command::Command;
+pub(crate) type Command = command::Command;
 
-pub(crate) fn run_catalog_command(command: CatalogCommand) -> molten::error::Result<()> {
+pub(crate) fn run(command: Command) -> molten::error::Result<()> {
     ops::run(command)
 }

@@ -1,5 +1,5 @@
-pub(super) fn install(command: super::ArtifactCommand) -> molten::error::Result<()> {
-    let super::ArtifactCommand::Install {
+pub(super) fn install(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Install {
         payload,
         registry,
         kind,
@@ -43,8 +43,8 @@ pub(super) fn install(command: super::ArtifactCommand) -> molten::error::Result<
     Ok(())
 }
 
-pub(super) fn list(command: super::ArtifactCommand) -> molten::error::Result<()> {
-    let super::ArtifactCommand::List { registry, kind } = command else {
+pub(super) fn list(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::List { registry, kind } = command else {
         return dispatch_mismatch("list");
     };
     for artifact in molten::artifacts::list_artifacts(&registry, kind.as_deref())? {
@@ -53,8 +53,8 @@ pub(super) fn list(command: super::ArtifactCommand) -> molten::error::Result<()>
     Ok(())
 }
 
-pub(super) fn view(command: super::ArtifactCommand) -> molten::error::Result<()> {
-    let super::ArtifactCommand::View {
+pub(super) fn view(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::View {
         artifact_ref,
         registry,
         payload,
@@ -71,8 +71,8 @@ pub(super) fn view(command: super::ArtifactCommand) -> molten::error::Result<()>
     Ok(())
 }
 
-pub(super) fn name_set(command: super::ArtifactCommand) -> molten::error::Result<()> {
-    let super::ArtifactCommand::NameSet {
+pub(super) fn name_set(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::NameSet {
         registry,
         kind,
         name,
@@ -100,8 +100,8 @@ pub(super) fn name_set(command: super::ArtifactCommand) -> molten::error::Result
     Ok(())
 }
 
-pub(super) fn name_show(command: super::ArtifactCommand) -> molten::error::Result<()> {
-    let super::ArtifactCommand::NameShow { registry, kind, name } = command else {
+pub(super) fn name_show(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::NameShow { registry, kind, name } = command else {
         return dispatch_mismatch("name-show");
     };
     let pointer = molten::artifacts::read_name_pointer(&registry, &kind, &name)?.ok_or_else(|| {
@@ -111,8 +111,8 @@ pub(super) fn name_show(command: super::ArtifactCommand) -> molten::error::Resul
     Ok(())
 }
 
-pub(super) fn deps(command: super::ArtifactCommand) -> molten::error::Result<()> {
-    let super::ArtifactCommand::Deps { artifact_ref, registry } = command else {
+pub(super) fn deps(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Deps { artifact_ref, registry } = command else {
         return dispatch_mismatch("deps");
     };
     for dependency in molten::artifacts::direct_dependencies(&registry, &artifact_ref)? {
@@ -121,8 +121,8 @@ pub(super) fn deps(command: super::ArtifactCommand) -> molten::error::Result<()>
     Ok(())
 }
 
-pub(super) fn closure(command: super::ArtifactCommand) -> molten::error::Result<()> {
-    let super::ArtifactCommand::Closure {
+pub(super) fn closure(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Closure {
         artifact_ref,
         registry,
         receipt_out,
@@ -142,8 +142,8 @@ pub(super) fn closure(command: super::ArtifactCommand) -> molten::error::Result<
     Ok(())
 }
 
-pub(super) fn impact(command: super::ArtifactCommand) -> molten::error::Result<()> {
-    let super::ArtifactCommand::Impact {
+pub(super) fn impact(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::Impact {
         artifact_ref,
         registry,
         receipt_out,
@@ -160,8 +160,8 @@ pub(super) fn impact(command: super::ArtifactCommand) -> molten::error::Result<(
     Ok(())
 }
 
-pub(super) fn index_rebuild(command: super::ArtifactCommand) -> molten::error::Result<()> {
-    let super::ArtifactCommand::IndexRebuild { registry, receipt_out } = command else {
+pub(super) fn index_rebuild(command: super::Command) -> molten::error::Result<()> {
+    let super::Command::IndexRebuild { registry, receipt_out } = command else {
         return dispatch_mismatch("index-rebuild");
     };
     let rebuild = molten::artifacts::rebuild_index(&registry)?;

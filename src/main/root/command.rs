@@ -85,19 +85,19 @@ pub(crate) enum Test {
     },
     Storage {
         #[command(subcommand)]
-        command: crate::cli_storage::StorageCommand,
+        command: crate::cli_storage::Command,
     },
     Artifact {
         #[command(subcommand)]
-        command: crate::cli_artifact::ArtifactCommand,
+        command: crate::cli_artifact::Command,
     },
     Schema {
         #[command(subcommand)]
-        command: crate::cli_schema::SchemaCommand,
+        command: crate::cli_schema::Command,
     },
     Cache {
         #[command(subcommand)]
-        command: crate::cli_cache::CacheCommand,
+        command: crate::cli_cache::Command,
     },
     Upgrade {
         #[command(subcommand)]
@@ -105,7 +105,7 @@ pub(crate) enum Test {
     },
     Transcript {
         #[command(subcommand)]
-        command: crate::cli_transcript::TranscriptCommand,
+        command: crate::cli_transcript::Command,
     },
     Rewrite {
         #[command(subcommand)]
@@ -113,7 +113,7 @@ pub(crate) enum Test {
     },
     Catalog {
         #[command(subcommand)]
-        command: crate::cli_catalog::CatalogCommand,
+        command: crate::cli_catalog::Command,
     },
     Job {
         #[command(subcommand)]

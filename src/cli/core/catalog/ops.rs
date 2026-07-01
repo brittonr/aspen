@@ -1,4 +1,4 @@
-type Command = super::CatalogCommand;
+type Command = super::Command;
 type FilePath = std::path::PathBuf;
 type Outcome<T> = molten::error::Result<T>;
 
