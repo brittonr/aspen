@@ -17,15 +17,6 @@ use crate::effects;
 use crate::error::MoltenError;
 use crate::error::Result;
 use crate::preserves_rail;
-use crate::preserves_rail::bool_value;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 use crate::runtime;
 use crate::secrets;
 
@@ -55,6 +46,47 @@ const _: () = assert!(MAX_REDACTION_TRANSFORM_NODES <= 1_000_000);
 const _: () = assert!(MAX_REDACTION_CONTAINER_ITEMS <= 1_000_000);
 const _: () = assert!(MAX_REDACTION_MARKER_REFS <= 1_000_000);
 const _: () = assert!(MAX_REDACTION_ENCRYPTED_REFS <= 1_000_000);
+
+fn bool_value(value: bool) -> IOValue {
+    crate::preserves_rail::bool_value(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn to_text(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::to_text(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
+
+#[cfg(test)]
+fn parse_text(source: &str) -> Result<IOValue> {
+    crate::preserves_rail::parse_text(source)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessSuite {
@@ -8732,10 +8764,7 @@ fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_suite;
-    use crate::preserves_rail::canonical_hash;
-    use crate::preserves_rail::parse_text;
-    use crate::preserves_rail::to_text;
+    use super::*;
 
     #[test]
     fn suite_schema_roundtrip_preserves_canonical_hash() {
