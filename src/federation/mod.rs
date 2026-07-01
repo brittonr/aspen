@@ -7,21 +7,46 @@ use preserves::Value;
 use crate::chunk_store;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::evidence::SIGNATURE_ALGORITHM;
 use crate::ledger;
-use crate::preserves_rail::FEDERATION_ANNOUNCEMENT_SCHEMA;
-use crate::preserves_rail::FEDERATION_INVENTORY_SCHEMA;
-use crate::preserves_rail::FEDERATION_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 use crate::runtime::RuntimeAssertion;
 use crate::runtime::RuntimeValue;
+
+const FEDERATION_ANNOUNCEMENT_SCHEMA: &str = crate::preserves_rail::FEDERATION_ANNOUNCEMENT_SCHEMA;
+const FEDERATION_INVENTORY_SCHEMA: &str = crate::preserves_rail::FEDERATION_INVENTORY_SCHEMA;
+const FEDERATION_RECEIPT_SCHEMA: &str = crate::preserves_rail::FEDERATION_RECEIPT_SCHEMA;
+const SIGNATURE_ALGORITHM: &str = crate::evidence::SIGNATURE_ALGORITHM;
+
+fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn content_ref_from_bytes(bytes: &[u8]) -> String {
+    crate::preserves_rail::content_ref_from_bytes(bytes)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const FEDERATION_ANNOUNCEMENT_PURPOSE: &str = "federation-announcement";
 pub const FEDERATION_INVENTORY_PURPOSE: &str = "federation-inventory";
@@ -1000,9 +1025,6 @@ mod tests {
     use std::sync::atomic::AtomicU64;
     use std::sync::atomic::Ordering;
 
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
 
     #[test]
@@ -1241,9 +1263,9 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_receiver_driven_sync_no_push_and_verify_before_import(tc: TestCase) {
-        let count = tc.draw(generators::integers::<usize>().min_value(1).max_value(4));
-        let salt = tc.draw(generators::integers::<u64>().min_value(0).max_value(1_000_000));
+    fn hegel_receiver_driven_sync_no_push_and_verify_before_import(tc: hegel::TestCase) {
+        let count = tc.draw(hegel::generators::integers::<usize>().min_value(1).max_value(4));
+        let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let source = temp_dir("federation-hegel-source");
         let destination = temp_dir("federation-hegel-destination");
         let mut refs = Vec::with_capacity(count);
