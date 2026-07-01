@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use preserves::IOValue;
 
 use crate::error::MoltenError;
@@ -470,7 +468,7 @@ fn validate_fault_matrix_coverage(kinds: &[String], decision: &str) -> Result<()
 }
 
 fn missing_required_faults(kinds: &[String]) -> Option<Vec<String>> {
-    let present = kinds.iter().map(String::as_str).collect::<BTreeSet<_>>();
+    let present = kinds.iter().map(String::as_str).collect::<std::collections::BTreeSet<_>>();
     let missing = REQUIRED_NETWORK_FAULTS
         .iter()
         .filter(|kind| !present.contains(**kind))
@@ -542,9 +540,18 @@ fn status(is_problem: bool) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::preserves_rail::canonical_hash;
-    use crate::preserves_rail::content_ref_from_bytes;
-    use crate::preserves_rail::to_text;
+
+    fn content_ref_from_bytes(bytes: &[u8]) -> String {
+        crate::preserves_rail::content_ref_from_bytes(bytes)
+    }
+
+    fn to_text(value: &preserves::IOValue) -> crate::error::Result<String> {
+        crate::preserves_rail::to_text(value)
+    }
+
+    fn canonical_hash(value: &preserves::IOValue) -> crate::error::Result<String> {
+        crate::preserves_rail::canonical_hash(value)
+    }
 
     fn local_ref(name: &str) -> String {
         content_ref_from_bytes(name.as_bytes())
