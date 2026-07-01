@@ -6,23 +6,45 @@ use preserves::Value;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::EFFECT_BINDING_RECEIPT_SCHEMA;
-use crate::preserves_rail::EFFECT_COMPOUND_HANDLER_SCHEMA;
-use crate::preserves_rail::EFFECT_DYNAMIC_OPERATION_SCHEMA;
-use crate::preserves_rail::EFFECT_HANDLE_CLEANUP_SCHEMA;
-use crate::preserves_rail::EFFECT_HANDLE_SCHEMA;
-use crate::preserves_rail::EFFECT_HANDLER_BINDING_SCHEMA;
-use crate::preserves_rail::EFFECT_HANDLER_PROFILE_SCHEMA;
-use crate::preserves_rail::EFFECT_MANIFEST_SCHEMA;
-use crate::preserves_rail::EFFECT_REQUEST_SCHEMA;
-use crate::preserves_rail::EFFECT_RESPONSE_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+
+const EFFECT_BINDING_RECEIPT_SCHEMA: &str = crate::preserves_rail::EFFECT_BINDING_RECEIPT_SCHEMA;
+const EFFECT_COMPOUND_HANDLER_SCHEMA: &str = crate::preserves_rail::EFFECT_COMPOUND_HANDLER_SCHEMA;
+const EFFECT_DYNAMIC_OPERATION_SCHEMA: &str = crate::preserves_rail::EFFECT_DYNAMIC_OPERATION_SCHEMA;
+const EFFECT_HANDLE_CLEANUP_SCHEMA: &str = crate::preserves_rail::EFFECT_HANDLE_CLEANUP_SCHEMA;
+const EFFECT_HANDLE_SCHEMA: &str = crate::preserves_rail::EFFECT_HANDLE_SCHEMA;
+const EFFECT_HANDLER_BINDING_SCHEMA: &str = crate::preserves_rail::EFFECT_HANDLER_BINDING_SCHEMA;
+const EFFECT_HANDLER_PROFILE_SCHEMA: &str = crate::preserves_rail::EFFECT_HANDLER_PROFILE_SCHEMA;
+const EFFECT_MANIFEST_SCHEMA: &str = crate::preserves_rail::EFFECT_MANIFEST_SCHEMA;
+const EFFECT_REQUEST_SCHEMA: &str = crate::preserves_rail::EFFECT_REQUEST_SCHEMA;
+const EFFECT_RESPONSE_SCHEMA: &str = crate::preserves_rail::EFFECT_RESPONSE_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const TRANSFER_LOCAL_ONLY: &str = "local-only";
 pub const TRANSFER_ATTENUATED_DELEGATION: &str = "attenuated-delegation";
