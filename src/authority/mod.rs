@@ -1,14 +1,31 @@
-use preserves::IOValue;
-use preserves::Value;
+type IoValue = preserves::IOValue;
+type Value<T> = preserves::Value<T>;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
 
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::value_to_iovalue;
+fn canonical_hash(value: &IoValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IoValue>) -> IoValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IoValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IoValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn value_to_iovalue(value: &Value<IoValue>) -> IoValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 type RuntimeAssertion = crate::runtime::RuntimeAssertion;
 #[cfg(test)]
@@ -23,7 +40,7 @@ pub struct AuthorityIdentity {
     pub key_refs: Vec<String>,
     pub parent_refs: Vec<String>,
     pub metadata_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,7 +62,7 @@ pub struct AuthorityContext {
     pub key_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,7 +74,7 @@ pub struct AuthorityRevocation {
     pub effective_at: u64,
     pub issuer_ref: String,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,7 +83,7 @@ pub struct AuthorityReceipt {
     pub operation: String,
     pub decision: String,
     pub authority_context_ref: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,7 +100,7 @@ pub struct AuthorityLiveRef {
     pub attenuation: String,
     pub expires_at: Option<u64>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -130,7 +147,7 @@ pub struct ReceiptValueInput<'a> {
     pub diagnostics: &'a [&'a str],
 }
 
-pub fn authority_identity_value(input: IdentityValueInput<'_>) -> Result<IOValue> {
+pub fn authority_identity_value(input: IdentityValueInput<'_>) -> Result<IoValue> {
     validate_identity_type(input.identity_type)?;
     validate_non_empty(input.id, "authority identity id")?;
     validate_non_empty(input.display_name, "authority identity display name")?;
@@ -154,7 +171,7 @@ pub fn authority_identity_value(input: IdentityValueInput<'_>) -> Result<IOValue
     ]))
 }
 
-pub fn parse_authority_identity(value: &IOValue) -> Result<AuthorityIdentity> {
+pub fn parse_authority_identity(value: &IoValue) -> Result<AuthorityIdentity> {
     let fields = value
         .collect_simple_record("authority-identity-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <authority-identity-v1 ...>"))?;
@@ -177,7 +194,7 @@ pub fn parse_authority_identity(value: &IOValue) -> Result<AuthorityIdentity> {
     })
 }
 
-pub fn authority_context_value(input: ContextValueInput<'_>) -> Result<IOValue> {
+pub fn authority_context_value(input: ContextValueInput<'_>) -> Result<IoValue> {
     require_ref(input.subject_ref, "authority context subject ref")?;
     for capability in input.capabilities {
         validate_capability(capability)?;
@@ -208,7 +225,7 @@ pub fn authority_context_value(input: ContextValueInput<'_>) -> Result<IOValue> 
     ]))
 }
 
-pub fn parse_authority_context(value: &IOValue) -> Result<AuthorityContext> {
+pub fn parse_authority_context(value: &IoValue) -> Result<AuthorityContext> {
     let fields = value
         .collect_simple_record("authority-context-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <authority-context-v1 ...>"))?;
@@ -234,7 +251,7 @@ pub fn parse_authority_context(value: &IOValue) -> Result<AuthorityContext> {
     })
 }
 
-pub fn revocation_value(input: RevocationValueInput<'_>) -> Result<IOValue> {
+pub fn revocation_value(input: RevocationValueInput<'_>) -> Result<IoValue> {
     validate_revocation_target(input.target_kind)?;
     require_ref(input.target_ref, "authority revocation target ref")?;
     validate_non_empty(input.reason, "authority revocation reason")?;
@@ -257,7 +274,7 @@ pub fn revocation_value(input: RevocationValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn parse_revocation(value: &IOValue) -> Result<AuthorityRevocation> {
+pub fn parse_revocation(value: &IoValue) -> Result<AuthorityRevocation> {
     let fields = value
         .collect_simple_record("authority-revocation-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <authority-revocation-v1 ...>"))?;
@@ -281,11 +298,11 @@ pub fn parse_revocation(value: &IOValue) -> Result<AuthorityRevocation> {
 }
 
 pub fn admit_authority(
-    context_value: &IOValue,
+    context_value: &IoValue,
     requested_capability: &str,
     requested_scope: &str,
     logical_time: u64,
-    revocation_values: &[IOValue],
+    revocation_values: &[IoValue],
 ) -> Result<AuthorityAdmission> {
     let context = parse_authority_context(context_value)?;
     let has_revocation_hit = revocation_values
@@ -351,11 +368,11 @@ pub fn admit_authority(
 }
 
 pub fn gatekeeper_resolve_live_ref(
-    context_value: &IOValue,
+    context_value: &IoValue,
     scope: &str,
     requested_capability: &str,
     logical_time: u64,
-    revocation_values: &[IOValue],
+    revocation_values: &[IoValue],
 ) -> Result<AuthorityLiveRef> {
     let admission = admit_authority(context_value, requested_capability, scope, logical_time, revocation_values)?;
     if admission.decision != "pass" {
@@ -391,7 +408,7 @@ pub fn gatekeeper_resolve_live_ref(
 
 pub fn cleanup_for_revocation(
     assertions: &[RuntimeAssertion],
-    revocation_value: &IOValue,
+    revocation_value: &IoValue,
     logical_time: u64,
 ) -> Result<(Vec<RuntimeAssertion>, AuthorityReceipt)> {
     let revocation = parse_revocation(revocation_value)?;
@@ -430,7 +447,7 @@ pub fn cleanup_for_revocation(
     }))
 }
 
-pub fn replay_verify_authority_receipt(receipt: &AuthorityReceipt, context_value: &IOValue) -> Result<()> {
+pub fn replay_verify_authority_receipt(receipt: &AuthorityReceipt, context_value: &IoValue) -> Result<()> {
     let context = parse_authority_context(context_value)?;
     if receipt.authority_context_ref.as_deref() != Some(context.context_ref.as_str()) {
         return Err(MoltenError::invalid_harness("replay authority receipt does not bind recorded context"));
@@ -438,7 +455,7 @@ pub fn replay_verify_authority_receipt(receipt: &AuthorityReceipt, context_value
     Ok(())
 }
 
-pub fn authority_receipt_value(input: ReceiptValueInput<'_>) -> IOValue {
+pub fn authority_receipt_value(input: ReceiptValueInput<'_>) -> IoValue {
     record("authority-receipt-v1", vec![
         string(crate::preserves_rail::AUTHORITY_RECEIPT_SCHEMA),
         record("operation", vec![string(input.operation)]),
@@ -459,7 +476,7 @@ pub fn authority_receipt_value(input: ReceiptValueInput<'_>) -> IOValue {
     ])
 }
 
-fn capability_value(capability: &AuthorityCapability) -> IOValue {
+fn capability_value(capability: &AuthorityCapability) -> IoValue {
     record("capability", vec![
         record("name", vec![string(&capability.capability)]),
         record("scope", vec![string(&capability.scope)]),
@@ -467,7 +484,7 @@ fn capability_value(capability: &AuthorityCapability) -> IOValue {
     ])
 }
 
-fn parse_capability(value: &IOValue) -> Result<AuthorityCapability> {
+fn parse_capability(value: &IoValue) -> Result<AuthorityCapability> {
     let fields = value
         .collect_simple_record("capability", Some(3))
         .ok_or_else(|| MoltenError::invalid_harness("expected authority capability"))?;
@@ -480,7 +497,7 @@ fn parse_capability(value: &IOValue) -> Result<AuthorityCapability> {
     Ok(capability)
 }
 
-fn parse_capability_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<AuthorityCapability>> {
+fn parse_capability_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<AuthorityCapability>> {
     let values = field_sequence(value, label)?;
     values.iter().map(|value| parse_capability(&value_to_iovalue(value))).collect()
 }
@@ -537,15 +554,15 @@ fn require_ref(reference: &str, field: &str) -> Result<()> {
     })
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![string(value)]))
 }
 
-fn optional_u64_value(value: Option<u64>) -> IOValue {
+fn optional_u64_value(value: Option<u64>) -> IoValue {
     value.map_or_else(|| record("none", Vec::new()), |value| record("some", vec![u64_value(value)]))
 }
 
-fn parse_optional_u64_value(value: &Value<IOValue>) -> Result<Option<u64>> {
+fn parse_optional_u64_value(value: &Value<IoValue>) -> Result<Option<u64>> {
     let optional = value_to_iovalue(value);
     if optional.collect_simple_record("none", Some(0)).is_some() {
         Ok(None)
@@ -556,7 +573,7 @@ fn parse_optional_u64_value(value: &Value<IOValue>) -> Result<Option<u64>> {
     }
 }
 
-fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let values = field_sequence(value, label)?;
     values
         .iter()
@@ -568,7 +585,7 @@ fn parse_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>
         .collect()
 }
 
-fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOValue>>> {
+fn field_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<Value<IoValue>>> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -579,7 +596,7 @@ fn field_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Value<IOVal
     Ok(values.iter().cloned().collect())
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<(String, String)>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<(String, String)>> {
     let values = field_sequence(value, "checks")?;
     values
         .iter()
@@ -601,7 +618,7 @@ fn require_check(checks: &[(String, String)], name: &str) -> Result<()> {
     }
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -609,7 +626,7 @@ fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
     required_string(&fields[0], label)
 }
 
-fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
+fn record_u64(value: &Value<IoValue>, label: &str) -> Result<u64> {
     let value = value_to_iovalue(value);
     let fields = value
         .collect_simple_record(label, Some(1))
@@ -617,7 +634,7 @@ fn record_u64(value: &Value<IOValue>, label: &str) -> Result<u64> {
     required_u64(&fields[0], label)
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, field: &str) -> Result<()> {
     let actual = required_string(value, field)?;
     if actual != expected {
         return Err(MoltenError::invalid_harness(format!("expected {field} {expected}, got {actual}")));
@@ -625,14 +642,14 @@ fn require_schema(value: &Value<IOValue>, expected: &str, field: &str) -> Result
     Ok(())
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
+fn required_u64(value: &Value<IoValue>, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
