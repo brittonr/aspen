@@ -13,20 +13,49 @@ use crate::error::MoltenError;
 use crate::error::Result;
 use crate::eval_cache;
 use crate::harness;
-use crate::preserves_rail::TRANSCRIPT_ARTIFACT_SCHEMA;
-use crate::preserves_rail::TRANSCRIPT_RUN_RECEIPT_SCHEMA;
-use crate::preserves_rail::TRANSCRIPT_STANZA_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::parse_text;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 use crate::schema_identity;
 use crate::typed_storage;
+
+const TRANSCRIPT_ARTIFACT_SCHEMA: &str = crate::preserves_rail::TRANSCRIPT_ARTIFACT_SCHEMA;
+const TRANSCRIPT_RUN_RECEIPT_SCHEMA: &str = crate::preserves_rail::TRANSCRIPT_RUN_RECEIPT_SCHEMA;
+const TRANSCRIPT_STANZA_OUTCOME_SCHEMA: &str = crate::preserves_rail::TRANSCRIPT_STANZA_OUTCOME_SCHEMA;
+const TRANSCRIPT_STANZA_SCHEMA: &str = crate::preserves_rail::TRANSCRIPT_STANZA_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn parse_text(source: &str) -> Result<IOValue> {
+    crate::preserves_rail::parse_text(source)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn to_text(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::to_text(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const RUNNER_TOOL_VERSION: &str = "local-transcript-runner-v1";
 
@@ -929,7 +958,7 @@ fn stanza_outcome(
     validate_decision(decision)?;
     let output_ref = output.as_ref().map(canonical_hash).transpose()?;
     let value = record("transcript-stanza-outcome-v1", vec![
-        string(crate::preserves_rail::TRANSCRIPT_STANZA_OUTCOME_SCHEMA),
+        string(TRANSCRIPT_STANZA_OUTCOME_SCHEMA),
         record("index", vec![u64_value(stanza.index)]),
         record("kind", vec![string(&stanza.kind)]),
         record("stanza", vec![string(&stanza.stanza_ref)]),
@@ -1325,7 +1354,6 @@ mod tests {
     use hegel::generators;
 
     use super::*;
-    use crate::preserves_rail::parse_text;
 
     #[test]
     fn parse_markdown_preserves_order_modifiers_and_stable_refs() {
