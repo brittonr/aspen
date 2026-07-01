@@ -14,7 +14,7 @@ pub(super) fn install(command: super::Command) -> molten::error::Result<()> {
     };
     let payload = super::io::read_preserves_file(&payload)?;
     let schemas = if schema_refs.is_empty() {
-        vec![super::io::cli_artifact_ref("schema", &kind)?]
+        vec![super::io::local_ref("schema", &kind)?]
     } else {
         schema_refs
     };
@@ -24,10 +24,10 @@ pub(super) fn install(command: super::Command) -> molten::error::Result<()> {
         schema_refs: schemas,
         dependency_refs: dependencies,
         effect_manifest_ref,
-        policy_refs: vec![super::io::cli_artifact_ref("policy", &kind)?],
-        evidence_refs: vec![super::io::cli_artifact_ref("evidence", &kind)?],
-        installer_ref: super::io::cli_artifact_ref("installer", &kind)?,
-        capability_refs: vec![super::io::cli_artifact_ref("capability", &kind)?],
+        policy_refs: vec![super::io::local_ref("policy", &kind)?],
+        evidence_refs: vec![super::io::local_ref("evidence", &kind)?],
+        installer_ref: super::io::local_ref("installer", &kind)?,
+        capability_refs: vec![super::io::local_ref("capability", &kind)?],
     })?;
     if let Some(path) = artifact_out.as_ref() {
         super::io::write_file(path, &molten::preserves_rail::to_text(&install.artifact.value)?)?;
@@ -82,8 +82,8 @@ pub(super) fn name_set(command: super::Command) -> molten::error::Result<()> {
     else {
         return dispatch_mismatch("name-set");
     };
-    let policy_refs = [super::io::cli_artifact_ref("policy", &name)?];
-    let evidence_refs = [super::io::cli_artifact_ref("evidence", &name)?];
+    let policy_refs = [super::io::local_ref("policy", &name)?];
+    let evidence_refs = [super::io::local_ref("evidence", &name)?];
     let pointer = molten::artifacts::set_name_pointer(&registry, &molten::artifacts::SetNamePointerInput {
         pointer_kind: &kind,
         name: &name,

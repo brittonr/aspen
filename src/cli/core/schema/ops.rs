@@ -16,9 +16,9 @@ pub(super) fn identity(command: super::Command) -> molten::error::Result<()> {
         schema_ref,
         shape,
         brand_ref,
-        metadata_refs: vec![super::io::cli_schema_ref("metadata", "identity")?],
-        policy_refs: vec![super::io::cli_schema_ref("policy", "identity")?],
-        evidence_refs: vec![super::io::cli_schema_ref("evidence", "identity")?],
+        metadata_refs: vec![super::io::local_ref("metadata", "identity")?],
+        policy_refs: vec![super::io::local_ref("policy", "identity")?],
+        evidence_refs: vec![super::io::local_ref("evidence", "identity")?],
     })?;
     let identity = molten::schema_identity::parse_schema_identity(&value)?;
     let receipt = molten::schema_identity::compatibility_receipt_value(
@@ -60,8 +60,8 @@ pub(super) fn alias(command: super::Command) -> molten::error::Result<()> {
         from_schema_ref: from_ref,
         to_schema_ref: to_ref,
         scope,
-        policy_refs: vec![super::io::cli_schema_ref("policy", "alias")?],
-        evidence_refs: vec![super::io::cli_schema_ref("evidence", "alias")?],
+        policy_refs: vec![super::io::local_ref("policy", "alias")?],
+        evidence_refs: vec![super::io::local_ref("evidence", "alias")?],
     })?;
     let alias = molten::schema_identity::parse_schema_alias(&value)?;
     let expected = local_unique_schema_identity(&alias.to_schema_ref)?;
@@ -116,8 +116,8 @@ pub(super) fn compat(command: super::Command) -> molten::error::Result<()> {
             actual,
             alias,
             migration_ref,
-            policy_refs: vec![super::io::cli_schema_ref("policy", "compat")?],
-            evidence_refs: vec![super::io::cli_schema_ref("evidence", "compat")?],
+            policy_refs: vec![super::io::local_ref("policy", "compat")?],
+            evidence_refs: vec![super::io::local_ref("evidence", "compat")?],
             deny_by_policy: false,
         })?;
     let parsed = molten::schema_identity::parse_schema_compatibility(&compatibility)?;
@@ -149,9 +149,9 @@ fn local_unique_schema_identity(schema_ref: &str) -> molten::error::Result<molte
         schema_ref: schema_ref.to_string(),
         shape,
         brand_ref: None,
-        metadata_refs: vec![super::io::cli_schema_ref("metadata", schema_ref)?],
-        policy_refs: vec![super::io::cli_schema_ref("policy", schema_ref)?],
-        evidence_refs: vec![super::io::cli_schema_ref("evidence", schema_ref)?],
+        metadata_refs: vec![super::io::local_ref("metadata", schema_ref)?],
+        policy_refs: vec![super::io::local_ref("policy", schema_ref)?],
+        evidence_refs: vec![super::io::local_ref("evidence", schema_ref)?],
     })?;
     molten::schema_identity::parse_schema_identity(&value)
 }

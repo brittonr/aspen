@@ -69,7 +69,7 @@ struct GuardRefs<'a> {
 fn resolve_tool_ref(tool_ref: Option<String>, operation: &str) -> molten::error::Result<String> {
     match tool_ref {
         Some(tool_ref) => Ok(tool_ref),
-        None => super::io::cli_cache_ref("tool", operation),
+        None => super::io::local_ref("tool", operation),
     }
 }
 

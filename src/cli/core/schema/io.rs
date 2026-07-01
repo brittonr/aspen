@@ -1,4 +1,4 @@
-pub(super) fn cli_schema_ref(kind: &str, label: &str) -> molten::error::Result<String> {
+pub(super) fn local_ref(kind: &str, label: &str) -> molten::error::Result<String> {
     molten::preserves_rail::canonical_hash(&molten::preserves_rail::record("schema-cli-ref", vec![
         molten::preserves_rail::string(kind),
         molten::preserves_rail::string(label),

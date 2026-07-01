@@ -15,7 +15,7 @@ pub(super) fn put(command: super::Command) -> molten::error::Result<()> {
     let value = super::io::read_preserves_file(&value)?;
     let producer_ref = match producer_ref {
         Some(producer_ref) => producer_ref,
-        None => super::io::cli_storage_ref("producer", &namespace, &key)?,
+        None => super::io::local_ref("producer", &namespace, &key)?,
     };
     let admission = molten::typed_storage::TypedStorageAdmission::local_fixture(&format!("cli:{namespace}:{key}"));
     let put = molten::typed_storage::put_value(&store, &molten::typed_storage::TypedStoragePutInput {
@@ -110,8 +110,8 @@ pub(super) fn recipe(command: super::Command) -> molten::error::Result<()> {
         transformer_ref,
         transformer_kind,
         mode,
-        policy_refs: vec![super::io::cli_storage_ref("migration-policy", "recipe", "policy")?],
-        evidence_refs: vec![super::io::cli_storage_ref("migration-evidence", "recipe", "evidence")?],
+        policy_refs: vec![super::io::local_ref("migration-policy", "recipe", "policy")?],
+        evidence_refs: vec![super::io::local_ref("migration-evidence", "recipe", "evidence")?],
     })?;
     super::io::write_file(&out, &molten::preserves_rail::to_text(&recipe)?)?;
     println!(

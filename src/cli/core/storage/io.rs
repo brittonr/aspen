@@ -1,4 +1,4 @@
-pub(super) fn cli_storage_ref(kind: &str, namespace: &str, key: &str) -> molten::error::Result<String> {
+pub(super) fn local_ref(kind: &str, namespace: &str, key: &str) -> molten::error::Result<String> {
     molten::preserves_rail::canonical_hash(&molten::preserves_rail::record("typed-storage-cli-ref", vec![
         molten::preserves_rail::string(kind),
         molten::preserves_rail::string(namespace),
