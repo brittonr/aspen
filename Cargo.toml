@@ -48,7 +48,7 @@ tar = "0.4"
 syndicate = "0.44.0-rc.3"
 toml = "0.9"
 tracing = "0.1"
-trellis = { git = "ssh://git@github.com/OnixResearch/trellis.git", version = "0.2.0", package = "verified-logic" }
+trellis = { git = "ssh://git@github.com/OnixResearch/ucan.git", rev = "2aad993027d48ff148028c537cdaf91f6e5285ca", version = "0.2.0", package = "verified-logic" }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 wasmparser = "0.240"
 wasmtime = "45.0.0"

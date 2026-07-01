@@ -3,13 +3,13 @@
     "basalt-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1782770665,
-        "narHash": "sha256-UE9ts/G8xP9jKoVxPBnxCmUmkg8Wm5HXJMGHVWwimqQ=",
-        "path": "/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/005e149",
+        "lastModified": 1782891666,
+        "narHash": "sha256-R+xMGd+hWXg5co76zUeD71WCwXI+ySHvoSrHgZ7Y+dg=",
+        "path": "/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/d913dc0",
         "type": "path"
       },
       "original": {
-        "path": "/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/005e149",
+        "path": "/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/d913dc0",
         "type": "path"
       }
     },
@@ -130,7 +130,6 @@
         "onix-kache-lib": "onix-kache-lib",
         "onix-kache-package-src": "onix-kache-package-src",
         "rust-overlay": "rust-overlay",
-        "trellis-src": "trellis-src",
         "ucan-src": "ucan-src",
         "unit2nix": "unit2nix"
       }
@@ -170,29 +169,16 @@
         "type": "github"
       }
     },
-    "trellis-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1782770665,
-        "narHash": "sha256-DVTKwtlYQ7bi+oNZqx+3BcC5n/u8hrSmB6G2Y3giDBY=",
-        "path": "/home/brittonr/.cargo/git/checkouts/trellis-71b30c19277df8df/68ac582",
-        "type": "path"
-      },
-      "original": {
-        "path": "/home/brittonr/.cargo/git/checkouts/trellis-71b30c19277df8df/68ac582",
-        "type": "path"
-      }
-    },
     "ucan-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1782770665,
-        "narHash": "sha256-OH/02hIxaUj/WO0j6Mr9814VUKyGDQtgq+PC6RA/bbI=",
-        "path": "/home/brittonr/.cargo/git/checkouts/ucan-9abe9593165792e6/ad61b53",
+        "lastModified": 1782890868,
+        "narHash": "sha256-ArMSAiNM0yGGcNpdqZL9HSjzFl6rPu4JB9aFnxRYf4c=",
+        "path": "/home/brittonr/.cargo/git/checkouts/ucan-9abe9593165792e6/2aad993",
         "type": "path"
       },
       "original": {
-        "path": "/home/brittonr/.cargo/git/checkouts/ucan-9abe9593165792e6/ad61b53",
+        "path": "/home/brittonr/.cargo/git/checkouts/ucan-9abe9593165792e6/2aad993",
         "type": "path"
       }
     },

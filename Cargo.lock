@@ -363,7 +363,7 @@ dependencies = [
 [[package]]
 name = "basalt"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/basalt.git#005e1496a4a1be477ba84008ecbcdf8793a236c6"
+source = "git+ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74"
 dependencies = [
  "blake3",
  "serde",
@@ -1349,7 +1349,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccc2776f0c61eca1ca32528f85548abd1a4be8fb53d1b21c013e4f18da1e7090"
 dependencies = [
  "data-encoding",
- "syn 2.0.117",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -3629,7 +3629,7 @@ dependencies = [
  "toml",
  "tracing",
  "valence-core",
- "verified-logic 0.2.0",
+ "verified-logic",
  "wasmparser 0.240.0",
  "wasmtime",
  "wasmtime-wasi",
@@ -5669,7 +5669,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn 2.0.117",
@@ -6582,7 +6582,7 @@ checksum = "40ce102ab67701b8526c123c1bab5cbe42d7040ccfd0f64af1a385808d2f43de"
 [[package]]
 name = "ucan"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
+source = "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#2aad993027d48ff148028c537cdaf91f6e5285ca"
 dependencies = [
  "base64 0.22.1",
  "blake3",
@@ -6590,13 +6590,13 @@ dependencies = [
  "serde_json",
  "snafu",
  "ucan-core",
- "verified-logic 0.1.0",
+ "verified-logic",
 ]
 
 [[package]]
 name = "ucan-core"
 version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
+source = "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#2aad993027d48ff148028c537cdaf91f6e5285ca"
 
 [[package]]
 name = "unicode-ident"
@@ -6747,24 +6747,8 @@ dependencies = [
 
 [[package]]
 name = "verified-logic"
-version = "0.1.0"
-source = "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ad61b53e89fa45f9bf7d313ce14c45de645bf53d"
-dependencies = [
- "anyhow",
- "blake3",
- "bs58",
- "ed25519-dalek 2.2.0",
- "redb 2.6.3",
- "regex",
- "serde",
- "serde_json",
- "vstd",
-]
-
-[[package]]
-name = "verified-logic"
 version = "0.2.0"
-source = "git+ssh://git@github.com/OnixResearch/trellis.git#68ac5824f0ef664e4bedeb8ea92ee938b9e00da0"
+source = "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#2aad993027d48ff148028c537cdaf91f6e5285ca"
 dependencies = [
  "anyhow",
  "blake3",

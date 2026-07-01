@@ -20,7 +20,7 @@
       flake = false;
     };
     basalt-src = {
-      url = "path:/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/005e149";
+      url = "path:/home/brittonr/.cargo/git/checkouts/basalt-d217f0a83bebd193/d913dc0";
       flake = false;
     };
     cairn-src = {
@@ -31,18 +31,14 @@
       url = "path:/home/brittonr/.cargo/git/checkouts/octet-d771f362f4abe884/9b6a206";
       flake = false;
     };
-    trellis-src = {
-      url = "path:/home/brittonr/.cargo/git/checkouts/trellis-71b30c19277df8df/68ac582";
-      flake = false;
-    };
     ucan-src = {
-      url = "path:/home/brittonr/.cargo/git/checkouts/ucan-9abe9593165792e6/ad61b53";
+      url = "path:/home/brittonr/.cargo/git/checkouts/ucan-9abe9593165792e6/2aad993";
       flake = false;
     };
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { nixpkgs, unit2nix, rust-overlay, flake-utils, onix-kache-lib, onix-kache-package-src, basalt-src, cairn-src, octet-src, trellis-src, ucan-src, ... }:
+  outputs = { nixpkgs, unit2nix, rust-overlay, flake-utils, onix-kache-lib, onix-kache-package-src, basalt-src, cairn-src, octet-src, ucan-src, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgsBase = import nixpkgs {
@@ -51,11 +47,10 @@
         };
 
         localGitSources = {
-          "ssh://git@github.com/OnixResearch/basalt.git#005e1496a4a1be477ba84008ecbcdf8793a236c6" = basalt-src;
+          "ssh://git@github.com/OnixResearch/basalt.git#d913dc01e765c9b297df5fcc57dfa06aac39bc74" = basalt-src;
           "ssh://git@github.com/OnixResearch/cairn.git#3b4c280b893f2709aebea21fc51a4f9eeba3fe3b" = cairn-src;
           "ssh://git@github.com/OnixResearch/octet.git#9b6a2065ef9e8e363d81299cf59d74f885926215" = octet-src;
-          "ssh://git@github.com/OnixResearch/trellis.git#68ac5824f0ef664e4bedeb8ea92ee938b9e00da0" = trellis-src;
-          "ssh://git@github.com/OnixResearch/ucan.git#ad61b53e89fa45f9bf7d313ce14c45de645bf53d" = ucan-src;
+          "ssh://git@github.com/OnixResearch/ucan.git#2aad993027d48ff148028c537cdaf91f6e5285ca" = ucan-src;
         };
 
         pkgs = pkgsBase;

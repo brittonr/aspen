@@ -8,8 +8,8 @@
   "workspaceMembers": {
     "molten": "path+file:///home/brittonr/git/aspen#molten@0.1.0"
   },
-  "cargoLockHash": "28435f8d8f220c093b2b752bb0ef737c2bef72e8820e018f62ae6d72f26b05a7",
-  "inputsHash": "adc42836f436795ad0e91f2c91584d470a268949e83c217726dbff15646cd494",
+  "cargoLockHash": "b091ee18c66d5208cda144e75e366a9d1d5de6de034871cbde9c9640faae02d4",
+  "inputsHash": "ed67e0c0899d5abd6cca6b30d777894248c48865bd8b0b227c21c7fc1f2174e1",
   "crates": {
     "git+https://github.com/hegeldev/hegel-rust#hegeltest-macros@0.14.12": {
       "crateName": "hegeltest-macros",
@@ -133,8 +133,8 @@
       "source": {
         "type": "git",
         "url": "ssh://git@github.com/OnixResearch/basalt.git",
-        "rev": "005e1496a4a1be477ba84008ecbcdf8793a236c6",
-        "sha256": "0mlbypy88c2849kimgx6abqj38h2sgph6qyl5h0vjb5zdhykv9yv"
+        "rev": "d913dc01e765c9b297df5fcc57dfa06aac39bc74",
+        "sha256": "10qb9j64kxnr57qp4fbna3b7s7l70x4kri1knqhxpjsa85q4dw67"
       },
       "features": [
         "default"
@@ -157,7 +157,7 @@
           "externCrateName": "snafu"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ucan@0.1.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#ucan@0.1.0",
           "externCrateName": "ucan"
         }
       ],
@@ -258,16 +258,97 @@
       "license": "AGPL-3.0-or-later",
       "repository": "https://github.com/onixresearch/octet"
     },
-    "git+ssh://git@github.com/OnixResearch/trellis.git#verified-logic@0.2.0": {
+    "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#ucan-core@0.1.0": {
+      "crateName": "ucan-core",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/ucan.git",
+        "rev": "2aad993027d48ff148028c537cdaf91f6e5285ca",
+        "subDir": "crates/ucan-core",
+        "sha256": "1aq7jx1sqnsnc0rll6rj1xswvap8cshsmnlfc8bscy5x2gvnwrb7"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "AGPL-3.0-or-later"
+    },
+    "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#ucan@0.1.0": {
+      "crateName": "ucan",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "ssh://git@github.com/OnixResearch/ucan.git",
+        "rev": "2aad993027d48ff148028c537cdaf91f6e5285ca",
+        "sha256": "1aq7jx1sqnsnc0rll6rj1xswvap8cshsmnlfc8bscy5x2gvnwrb7"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
+          "externCrateName": "base64"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
+          "externCrateName": "blake3"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#snafu@0.8.9",
+          "externCrateName": "snafu"
+        },
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#ucan-core@0.1.0",
+          "externCrateName": "ucan_core"
+        },
+        {
+          "packageId": "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#verified-logic@0.2.0",
+          "externCrateName": "verified_logic"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "license": "AGPL-3.0-or-later"
+    },
+    "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#verified-logic@0.2.0": {
       "crateName": "verified-logic",
       "version": "0.2.0",
       "edition": "2024",
       "sha256": null,
       "source": {
         "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/trellis.git",
-        "rev": "68ac5824f0ef664e4bedeb8ea92ee938b9e00da0",
-        "sha256": "106x9xkiyz988m6f3jl11vkkg49pxqszzs39hh4mvyj8j1r9m2hq"
+        "url": "ssh://git@github.com/OnixResearch/ucan.git",
+        "rev": "2aad993027d48ff148028c537cdaf91f6e5285ca",
+        "subDir": "vendor/verified-logic",
+        "sha256": "1aq7jx1sqnsnc0rll6rj1xswvap8cshsmnlfc8bscy5x2gvnwrb7"
       },
       "features": [
         "default"
@@ -321,152 +402,6 @@
       "crateBin": [],
       "links": null,
       "description": "Trellis: composable verified-logic building blocks, machine-checked with Verus",
-      "license": "AGPL-3.0-or-later"
-    },
-    "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ucan-core@0.1.0": {
-      "crateName": "ucan-core",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/ucan.git",
-        "rev": "ad61b53e89fa45f9bf7d313ce14c45de645bf53d",
-        "subDir": "crates/ucan-core",
-        "sha256": "0bsvwzjgpfij2yq32fx3hbxn1ha9h64mh041xgd0i05z213qm2qh"
-      },
-      "features": [],
-      "dependencies": [],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "license": "AGPL-3.0-or-later"
-    },
-    "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ucan@0.1.0": {
-      "crateName": "ucan",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/ucan.git",
-        "rev": "ad61b53e89fa45f9bf7d313ce14c45de645bf53d",
-        "sha256": "0bsvwzjgpfij2yq32fx3hbxn1ha9h64mh041xgd0i05z213qm2qh"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#base64@0.22.1",
-          "externCrateName": "base64"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
-          "externCrateName": "serde_json"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#snafu@0.8.9",
-          "externCrateName": "snafu"
-        },
-        {
-          "packageId": "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#ucan-core@0.1.0",
-          "externCrateName": "ucan_core"
-        },
-        {
-          "packageId": "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#verified-logic@0.1.0",
-          "externCrateName": "verified_logic"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "license": "AGPL-3.0-or-later"
-    },
-    "git+ssh://git@github.com/OnixResearch/ucan.git?rev=ad61b53e89fa45f9bf7d313ce14c45de645bf53d#verified-logic@0.1.0": {
-      "crateName": "verified-logic",
-      "version": "0.1.0",
-      "edition": "2024",
-      "sha256": null,
-      "source": {
-        "type": "git",
-        "url": "ssh://git@github.com/OnixResearch/ucan.git",
-        "rev": "ad61b53e89fa45f9bf7d313ce14c45de645bf53d",
-        "subDir": "vendor/verified-logic",
-        "sha256": "0bsvwzjgpfij2yq32fx3hbxn1ha9h64mh041xgd0i05z213qm2qh"
-      },
-      "features": [
-        "default"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
-          "externCrateName": "anyhow"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#blake3@1.8.5",
-          "externCrateName": "blake3"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bs58@0.5.1",
-          "externCrateName": "bs58"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ed25519-dalek@2.2.0",
-          "externCrateName": "ed25519_dalek"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redb@2.6.3",
-          "externCrateName": "redb"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex@1.12.3",
-          "externCrateName": "regex"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
-          "externCrateName": "serde"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.150",
-          "externCrateName": "serde_json"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#vstd@0.0.0-2026-01-25-0057",
-          "externCrateName": "vstd"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Verified logic building blocks — machine-checked with Verus",
       "license": "AGPL-3.0-or-later"
     },
     "path+file:///home/brittonr/git/aspen#molten@0.1.0": {
@@ -573,7 +508,7 @@
           "externCrateName": "octet"
         },
         {
-          "packageId": "git+ssh://git@github.com/OnixResearch/trellis.git#verified-logic@0.2.0",
+          "packageId": "git+ssh://git@github.com/OnixResearch/ucan.git?rev=2aad993027d48ff148028c537cdaf91f6e5285ca#verified-logic@0.2.0",
           "externCrateName": "trellis"
         },
         {
@@ -5219,7 +5154,7 @@
           "externCrateName": "data_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@1.0.109",
           "externCrateName": "syn"
         }
       ],
@@ -19926,7 +19861,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.4.1",
           "externCrateName": "heck"
         },
         {
