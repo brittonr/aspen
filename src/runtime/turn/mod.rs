@@ -6,12 +6,30 @@ use preserves::IOValue;
 use super::AdmissionDecision;
 use super::AdmissionRequest;
 use crate::error::Result;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
+
+fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn content_ref_from_bytes(bytes: &[u8]) -> String {
+    crate::preserves_rail::content_ref_from_bytes(bytes)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
 
 #[derive(Clone)]
 pub struct RuntimeValue {
