@@ -9,7 +9,6 @@ use crate::preserves_rail::NODE_ADAPTER_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONFIG_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_CONTROL_REQUEST_SCHEMA;
-use crate::preserves_rail::NODE_SHUTDOWN_RECEIPT_SCHEMA;
 use crate::preserves_rail::NODE_STARTUP_RECEIPT_SCHEMA;
 use crate::preserves_rail::canonical_hash;
 use crate::preserves_rail::record;
@@ -767,7 +766,7 @@ pub fn node_shutdown_receipt_value(input: &ShutdownReceiptValueInput<'_>) -> Res
     let is_graceful_shutdown =
         input.diagnostics.is_empty() && !input.adapter_receipts.is_empty() && !input.index_receipt_refs.is_empty();
     Ok(record("node-shutdown-receipt-v1", vec![
-        string(NODE_SHUTDOWN_RECEIPT_SCHEMA),
+        string(crate::preserves_rail::NODE_SHUTDOWN_RECEIPT_SCHEMA),
         record("decision", vec![string(input.decision)]),
         record("startup", vec![string(input.startup_receipt_ref)]),
         record("adapters", vec![sequence(
@@ -791,7 +790,7 @@ pub fn parse_node_shutdown_receipt(value: &IOValue) -> Result<NodeShutdownReceip
     let fields = value
         .collect_simple_record("node-shutdown-receipt-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-shutdown-receipt-v1 ...>"))?;
-    require_schema(&fields[0], NODE_SHUTDOWN_RECEIPT_SCHEMA, "node shutdown receipt")?;
+    require_schema(&fields[0], crate::preserves_rail::NODE_SHUTDOWN_RECEIPT_SCHEMA, "node shutdown receipt")?;
     let checks = parse_checks(&fields[7])?;
     require_check(&checks, "canonical-receipt", "node shutdown receipt")?;
     Ok(NodeShutdownReceipt {
