@@ -1,35 +1,59 @@
-use preserves::IOValue;
-use wasmparser::ExternalKind;
-use wasmparser::Parser;
-use wasmparser::Payload;
-use wasmtime::Caller;
-use wasmtime::Config;
-use wasmtime::Engine;
-use wasmtime::Linker;
-use wasmtime::Memory;
-use wasmtime::Module;
-use wasmtime::Store;
-use wasmtime::StoreLimits;
-use wasmtime::StoreLimitsBuilder;
-use wasmtime::format_err;
+type PreservesValue = preserves::IOValue;
+type ExternalKind = wasmparser::ExternalKind;
+type Parser = wasmparser::Parser;
+type Payload<'a> = wasmparser::Payload<'a>;
+type Caller<'a, T> = wasmtime::Caller<'a, T>;
+type Config = wasmtime::Config;
+type Engine = wasmtime::Engine;
+type Linker<T> = wasmtime::Linker<T>;
+type Memory = wasmtime::Memory;
+type Module = wasmtime::Module;
+type Store<T> = wasmtime::Store<T>;
+type StoreLimits = wasmtime::StoreLimits;
+type StoreLimitsBuilder = wasmtime::StoreLimitsBuilder;
 
-use super::core::AdmissionRequest;
-use super::core::CoreStep;
-use super::schema::ActorExecutorConfig;
-use super::schema::ActorKind;
-use super::schema::HarnessSuite;
-use super::schema::WasmAbiReceiptInput;
-use super::schema::WasmExecutionReceiptInput;
-use super::schema::validate_hostcall_effect_binding_request;
-use super::schema::wasm_execution_receipt_value;
-use super::schema::wasm_executor_export_name;
-use super::schema::wasm_module_bytes;
-use super::schema::wasm_module_ref;
-use crate::error::MoltenError;
-use crate::error::Result;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::parse_canonical_bytes;
+type AdmissionRequest = super::core::AdmissionRequest;
+type CoreStep = super::core::CoreStep;
+type ActorConfig = super::schema::ActorExecutorConfig;
+type ActorMode = super::schema::ActorKind;
+type Suite = super::schema::HarnessSuite;
+type AbiReceipt = super::schema::WasmAbiReceiptInput;
+type ExecReceipt<'a> = super::schema::WasmExecutionReceiptInput<'a>;
+type ModuleConfig = super::schema::WasmExecutorConfig;
+type MoltenError = crate::error::MoltenError;
+type Result<T> = crate::error::Result<T>;
+
+fn validate_bound_request(hostcall_request: &PreservesValue, operation: &str) -> Result<()> {
+    super::schema::validate_hostcall_effect_binding_request(hostcall_request, operation)
+}
+
+fn execution_receipt_value(input: ExecReceipt<'_>) -> PreservesValue {
+    super::schema::wasm_execution_receipt_value(input)
+}
+
+fn export_name(operation: &str) -> String {
+    super::schema::wasm_executor_export_name(operation)
+}
+
+fn module_bytes(config: &ModuleConfig) -> Result<Vec<u8>> {
+    super::schema::wasm_module_bytes(config)
+}
+
+fn module_ref(config: &ModuleConfig) -> Result<String> {
+    super::schema::wasm_module_ref(config)
+}
+
+fn canonical_bytes(value: &PreservesValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn canonical_hash(value: &PreservesValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<PreservesValue> {
+    crate::preserves_rail::parse_canonical_bytes(bytes)
+}
 
 const WASM_FUEL_LIMIT: u64 = 10_000;
 const WASM_MEMORY_LIMIT_BYTES: usize = 64 * 1024;
@@ -49,16 +73,16 @@ struct WasmExecutionState {
 }
 
 pub struct WasmActorStepInput<'a> {
-    pub suite: &'a HarnessSuite,
+    pub suite: &'a Suite,
     pub step: &'a CoreStep,
     pub sequence: u64,
     pub step_ref: &'a str,
-    pub actor_input: &'a IOValue,
-    pub hostcall_request: &'a IOValue,
-    pub hostcall_decision: &'a IOValue,
+    pub actor_input: &'a PreservesValue,
+    pub hostcall_request: &'a PreservesValue,
+    pub hostcall_decision: &'a PreservesValue,
 }
 
-pub fn execute_wasm_actor_step(input: &WasmActorStepInput<'_>) -> Result<Option<IOValue>> {
+pub fn execute_wasm_actor_step(input: &WasmActorStepInput<'_>) -> Result<Option<PreservesValue>> {
     let Some(prepared) = prepare(input)? else {
         return Ok(None);
     };
@@ -112,7 +136,7 @@ pub fn execute_wasm_actor_step(input: &WasmActorStepInput<'_>) -> Result<Option<
     let hostcalls = store.data().hostcalls.clone();
     require_single_call(&hostcalls, &prepared, input.sequence, input.step_ref)?;
 
-    Ok(Some(wasm_execution_receipt_value(WasmExecutionReceiptInput {
+    Ok(Some(execution_receipt_value(ExecReceipt {
         actor_id: prepared.actor_id,
         module_ref: &prepared.module_ref,
         export: &prepared.export,
@@ -152,23 +176,23 @@ fn prepare<'a>(input: &WasmActorStepInput<'a>) -> Result<Option<Prepared<'a>>> {
     let Some(actor) = input.suite.actors.iter().find(|actor| actor.id == actor_id) else {
         return Err(MoltenError::invalid_harness(format!("actor {actor_id} missing from executor registry")));
     };
-    if actor.kind != ActorKind::Wasm {
+    if actor.kind != ActorMode::Wasm {
         return Ok(None);
     }
-    let Some(ActorExecutorConfig::Wasm(config)) = actor.executor.as_ref() else {
+    let Some(ActorConfig::Wasm(config)) = actor.executor.as_ref() else {
         return Err(MoltenError::invalid_harness(format!(
             "wasm actor {actor_id} missing Wasm executor preflight fixture"
         )));
     };
 
     let operation = AdmissionRequest::from_step(input.step).action.as_str().to_string();
-    validate_hostcall_effect_binding_request(input.hostcall_request, &operation)?;
-    let export = wasm_executor_export_name(&operation);
-    let bytes = wasm_module_bytes(config)?;
+    validate_bound_request(input.hostcall_request, &operation)?;
+    let export = export_name(&operation);
+    let bytes = module_bytes(config)?;
     let has_preserves_abi = module_exports(&bytes)?
         .iter()
         .any(|(name, kind)| name == "molten_alloc" && *kind == ExternalKind::Func);
-    let module_ref = wasm_module_ref(config)?;
+    let module_ref = module_ref(config)?;
 
     Ok(Some(Prepared {
         actor_id,
@@ -275,8 +299,8 @@ fn execute_preserves_abi(
     instance: &wasmtime::Instance,
     store: &mut Store<WasmExecutionState>,
     export: &str,
-    actor_input: &IOValue,
-) -> Result<WasmAbiReceiptInput> {
+    actor_input: &PreservesValue,
+) -> Result<AbiReceipt> {
     let parts = parts(actor_id, instance, store, export)?;
     let written = write_input(InputWrite {
         actor_id,
@@ -301,7 +325,7 @@ fn execute_preserves_abi(
         descriptor,
     })?;
     let input_ref = canonical_hash(actor_input)?;
-    Ok(WasmAbiReceiptInput {
+    Ok(AbiReceipt {
         input_ref,
         output_ref: output.output_ref,
         output_bytes: output.bytes,
@@ -330,7 +354,7 @@ struct InputWrite<'a, 'b> {
     memory: &'a Memory,
     store: &'b mut Store<WasmExecutionState>,
     alloc: &'a wasmtime::TypedFunc<i32, i32>,
-    actor_input: &'a IOValue,
+    actor_input: &'a PreservesValue,
 }
 
 struct OutputRead<'a, 'b> {
@@ -440,13 +464,13 @@ fn validate_hostcall_preserves_bytes(
     let memory = caller
         .get_export("memory")
         .and_then(|export| export.into_memory())
-        .ok_or_else(|| format_err!("molten.wasm.abi.v1 hostcall missing exported memory"))?;
-    let bytes = read_memory_raw(&memory, &mut *caller, ptr, len).map_err(|error| format_err!("{error}"))?;
+        .ok_or_else(|| wasmtime::format_err!("molten.wasm.abi.v1 hostcall missing exported memory"))?;
+    let bytes = read_memory_raw(&memory, &mut *caller, ptr, len).map_err(|error| wasmtime::format_err!("{error}"))?;
     if bytes.len() > WASM_ABI_MAX_HOSTCALL_BYTES {
-        return Err(format_err!("molten.wasm.abi.v1 hostcall request exceeds byte limit"));
+        return Err(wasmtime::format_err!("molten.wasm.abi.v1 hostcall request exceeds byte limit"));
     }
     parse_canonical_bytes(&bytes)
-        .map_err(|error| format_err!("invalid canonical Preserves hostcall bytes: {error}"))?;
+        .map_err(|error| wasmtime::format_err!("invalid canonical Preserves hostcall bytes: {error}"))?;
     Ok(())
 }
 
@@ -457,10 +481,10 @@ fn write_hostcall_response_bytes(
     let memory = caller
         .get_export("memory")
         .and_then(|export| export.into_memory())
-        .ok_or_else(|| format_err!("molten.wasm.abi.v1 hostcall missing exported memory"))?;
+        .ok_or_else(|| wasmtime::format_err!("molten.wasm.abi.v1 hostcall missing exported memory"))?;
     memory
         .write(caller, WASM_ABI_HOSTCALL_RESPONSE_PTR, response_bytes)
-        .map_err(|_| format_err!("molten.wasm.abi.v1 hostcall response pointer out of guest memory bounds"))
+        .map_err(|_| wasmtime::format_err!("molten.wasm.abi.v1 hostcall response pointer out of guest memory bounds"))
 }
 
 fn module_exports(bytes: &[u8]) -> Result<Vec<(String, ExternalKind)>> {
