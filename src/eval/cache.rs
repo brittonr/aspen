@@ -13,22 +13,50 @@ use redb::ReadableTableMetadata;
 use redb::TableDefinition;
 
 use crate::chunk_store;
-use crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::EVAL_CACHE_KEY_SCHEMA;
-use crate::preserves_rail::EVAL_CACHE_RECEIPT_SCHEMA;
-use crate::preserves_rail::EVAL_CACHE_VALUE_SCHEMA;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::parse_canonical_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 use crate::retention;
+
+const DEFAULT_FIXED_V1_CHUNK_SIZE: u64 = crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
+const EVAL_CACHE_KEY_SCHEMA: &str = crate::preserves_rail::EVAL_CACHE_KEY_SCHEMA;
+const EVAL_CACHE_RECEIPT_SCHEMA: &str = crate::preserves_rail::EVAL_CACHE_RECEIPT_SCHEMA;
+const EVAL_CACHE_VALUE_SCHEMA: &str = crate::preserves_rail::EVAL_CACHE_VALUE_SCHEMA;
+
+fn canonical_bytes(value: &IOValue) -> Result<Vec<u8>> {
+    crate::preserves_rail::canonical_bytes(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn parse_canonical_bytes(bytes: &[u8]) -> Result<IOValue> {
+    crate::preserves_rail::parse_canonical_bytes(bytes)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const INLINE_OUTPUT_LIMIT: usize = 4096;
 
