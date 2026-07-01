@@ -17,49 +17,7 @@ use crate::ledger;
 use crate::node_identity;
 use crate::node_runtime;
 use crate::octet_gate;
-use crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_EXPORT_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_IMPORT_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LOCK_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_LOOP_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_OPERATION_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_SERVICE_HEARTBEAT_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_SERVICE_LOCK_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA;
-use crate::preserves_rail::NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_bytes;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::parse_canonical_bytes;
-use crate::preserves_rail::parse_text;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
-use crate::preserves_rail::validate_content_ref;
+use crate::preserves_rail;
 use crate::protocol_session;
 use crate::provenance;
 
@@ -1444,25 +1402,45 @@ pub fn node_control_authority_grant_value(input: &NodeControlAuthorityGrantInput
     validate_ingress_refs(input.policy_refs, "node control authority grant policy ref")?;
     validate_ingress_refs(input.revocation_refs, "node control authority grant revocation ref")?;
     validate_ingress_refs(input.evidence_refs, "node control authority grant evidence ref")?;
-    Ok(record("node-control-authority-grant-v1", vec![
-        string(NODE_CONTROL_AUTHORITY_GRANT_SCHEMA),
-        record("peer", vec![string(input.peer_id)]),
-        record("node", vec![string(input.node_id)]),
-        record("operations", vec![sequence(input.operations.iter().map(string).collect())]),
-        record("target-scope", vec![string(input.target_scope)]),
-        record("resource-scope", vec![string(input.resource_scope)]),
-        record("epoch", vec![string(input.epoch.to_string())]),
-        record("expires-at", vec![optional_string(
+    Ok(preserves_rail::record("node-control-authority-grant-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_SCHEMA),
+        preserves_rail::record("peer", vec![preserves_rail::string(input.peer_id)]),
+        preserves_rail::record("node", vec![preserves_rail::string(input.node_id)]),
+        preserves_rail::record("operations", vec![preserves_rail::sequence(
+            input.operations.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("target-scope", vec![preserves_rail::string(input.target_scope)]),
+        preserves_rail::record("resource-scope", vec![preserves_rail::string(input.resource_scope)]),
+        preserves_rail::record("epoch", vec![preserves_rail::string(input.epoch.to_string())]),
+        preserves_rail::record("expires-at", vec![optional_string(
             input.expires_at.map(|value| value.to_string()).as_deref(),
         )]),
-        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
-        record("revocations", vec![sequence(input.revocation_refs.iter().map(string).collect())]),
-        record("evidence", vec![sequence(input.evidence_refs.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("peer-node-bound"), string("pass")]),
-            record("check", vec![string("operation-scope-bound"), string("pass")]),
-            record("check", vec![string("revocation-checked-at-ingress"), string("pass")]),
-            record("check", vec![string("transport-is-not-authority"), string("pass")]),
+        preserves_rail::record("policy", vec![preserves_rail::sequence(
+            input.policy_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("revocations", vec![preserves_rail::sequence(
+            input.revocation_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("evidence", vec![preserves_rail::sequence(
+            input.evidence_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("peer-node-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("operation-scope-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("revocation-checked-at-ingress"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("transport-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -1471,13 +1449,13 @@ pub fn parse_node_control_authority_grant(value: &IOValue) -> Result<NodeControl
     let fields = value
         .collect_simple_record("node-control-authority-grant-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-authority-grant-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_AUTHORITY_GRANT_SCHEMA, "node control authority grant")?;
+    require_schema(&fields[0], preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_SCHEMA, "node control authority grant")?;
     let operations = record_strings(&fields[3], "operations")?;
     if operations.is_empty() {
         return Err(MoltenError::invalid_harness("node control authority grant operations missing"));
     }
     Ok(NodeControlAuthorityGrant {
-        grant_ref: canonical_hash(value)?,
+        grant_ref: preserves_rail::canonical_hash(value)?,
         peer_id: record_string(&fields[1], "peer")?,
         node_id: record_string(&fields[2], "node")?,
         operations,
@@ -1511,25 +1489,43 @@ pub fn node_control_live_ticket_value(input: &NodeControlLiveTicketInput<'_>) ->
     validate_node_id(input.topic)?;
     validate_ingress_refs(input.policy_refs, "node control live ticket policy ref")?;
     validate_ingress_refs(input.evidence_refs, "node control live ticket evidence ref")?;
-    Ok(record("node-control-live-ticket-v1", vec![
-        string(NODE_CONTROL_LIVE_TICKET_SCHEMA),
-        record("node", vec![
-            record("id", vec![string(input.node_id)]),
-            record("identity", vec![string(input.node_identity_ref)]),
-            record("logical-endpoint", vec![string(input.logical_endpoint_id)]),
+    Ok(preserves_rail::record("node-control-live-ticket-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA),
+        preserves_rail::record("node", vec![
+            preserves_rail::record("id", vec![preserves_rail::string(input.node_id)]),
+            preserves_rail::record("identity", vec![preserves_rail::string(input.node_identity_ref)]),
+            preserves_rail::record("logical-endpoint", vec![preserves_rail::string(input.logical_endpoint_id)]),
         ]),
-        record("live", vec![
-            record("endpoint-id", vec![string(input.live_endpoint_id)]),
-            record("topic", vec![string(input.topic)]),
-            record("addresses", vec![sequence(input.address_refs.iter().map(string).collect())]),
+        preserves_rail::record("live", vec![
+            preserves_rail::record("endpoint-id", vec![preserves_rail::string(input.live_endpoint_id)]),
+            preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
+            preserves_rail::record("addresses", vec![preserves_rail::sequence(
+                input.address_refs.iter().map(preserves_rail::string).collect(),
+            )]),
         ]),
-        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
-        record("evidence", vec![sequence(input.evidence_refs.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("node-identity-bound"), string("pass")]),
-            record("check", vec![string("live-endpoint-bound"), string("pass")]),
-            record("check", vec![string("ticket-is-bootstrap-not-authority"), string("pass")]),
-            record("check", vec![string("authority-grant-still-required"), string("pass")]),
+        preserves_rail::record("policy", vec![preserves_rail::sequence(
+            input.policy_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("evidence", vec![preserves_rail::sequence(
+            input.evidence_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("node-identity-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("live-endpoint-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ticket-is-bootstrap-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("authority-grant-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -1538,7 +1534,7 @@ pub fn parse_node_control_live_ticket(value: &IOValue) -> Result<NodeControlLive
     let fields = value
         .collect_simple_record("node-control-live-ticket-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-ticket-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_LIVE_TICKET_SCHEMA, "node control live ticket")?;
+    require_schema(&fields[0], preserves_rail::NODE_CONTROL_LIVE_TICKET_SCHEMA, "node control live ticket")?;
     let node = crate::preserves_rail::value_to_iovalue(&fields[1]);
     let node_fields = node
         .collect_simple_record("node", Some(3))
@@ -1548,7 +1544,7 @@ pub fn parse_node_control_live_ticket(value: &IOValue) -> Result<NodeControlLive
         .collect_simple_record("live", Some(3))
         .ok_or_else(|| MoltenError::invalid_harness("node control live ticket missing live endpoint"))?;
     Ok(NodeControlLiveTicket {
-        ticket_ref: canonical_hash(value)?,
+        ticket_ref: preserves_rail::canonical_hash(value)?,
         node_id: record_string(&node_fields[0], "id")?,
         node_identity_ref: record_ref_string(&node_fields[1], "identity")?,
         logical_endpoint_id: record_string(&node_fields[2], "logical-endpoint")?,
@@ -1626,31 +1622,43 @@ pub fn admit_node_control_live_peer(input: &NodeControlLivePeerAdmitInput<'_>) -
 
 fn node_control_live_peer_admission_value(input: &LivePeerAdmissionValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    Ok(record("node-control-live-peer-admission-v1", vec![
-        string(NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("peer", vec![string(input.peer_id)]),
-        record("ticket", vec![string(&input.ticket.ticket_ref)]),
-        record("node", vec![string(&input.ticket.node_id)]),
-        record("topic", vec![string(&input.ticket.topic)]),
-        record("sequence", vec![string(input.admission_sequence.to_string())]),
-        record("expires-at", vec![optional_string(
+    Ok(preserves_rail::record("node-control-live-peer-admission-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("peer", vec![preserves_rail::string(input.peer_id)]),
+        preserves_rail::record("ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
+        preserves_rail::record("node", vec![preserves_rail::string(&input.ticket.node_id)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(&input.ticket.topic)]),
+        preserves_rail::record("sequence", vec![preserves_rail::string(input.admission_sequence.to_string())]),
+        preserves_rail::record("expires-at", vec![optional_string(
             input.expires_at.map(|value| value.to_string()).as_deref(),
         )]),
-        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
-        record("evidence", vec![sequence(input.evidence_refs.iter().map(string).collect())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![
-                string("ticket-bound"),
-                string(if input.decision == "pass" { "pass" } else { "fail" }),
+        preserves_rail::record("policy", vec![preserves_rail::sequence(
+            input.policy_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("evidence", vec![preserves_rail::sequence(
+            input.evidence_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ticket-bound"),
+                preserves_rail::string(if input.decision == "pass" { "pass" } else { "fail" }),
             ]),
-            record("check", vec![
-                string("peer-topic-bound"),
-                string(if input.decision == "pass" { "pass" } else { "fail" }),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("peer-topic-bound"),
+                preserves_rail::string(if input.decision == "pass" { "pass" } else { "fail" }),
             ]),
-            record("check", vec![string("bootstrap-not-authority"), string("pass")]),
-            record("check", vec![string("authority-grant-still-required"), string("pass")]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bootstrap-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("authority-grant-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -1659,9 +1667,13 @@ pub fn parse_node_control_live_peer_admission(value: &IOValue) -> Result<NodeCon
     let fields = value
         .collect_simple_record("node-control-live-peer-admission-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-peer-admission-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA, "node control live peer admission")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::NODE_CONTROL_LIVE_PEER_ADMISSION_SCHEMA,
+        "node control live peer admission",
+    )?;
     Ok(NodeControlLivePeerAdmission {
-        admission_ref: canonical_hash(value)?,
+        admission_ref: preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         peer_id: record_string(&fields[2], "peer")?,
         ticket_ref: record_ref_string(&fields[3], "ticket")?,
@@ -1718,7 +1730,7 @@ pub fn import_node_control_live_ticket(
         imported_refs: &imported_refs,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlLiveTicketImport {
         decision: decision.to_string(),
@@ -1766,7 +1778,7 @@ pub fn import_node_control_authority_grant_checked(
         imported_refs: &imported_refs,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlAuthorityGrantImport {
         decision: decision.to_string(),
@@ -1797,7 +1809,7 @@ pub fn export_node_control_live_workflow_bundle(
         receipt_values: input.receipt_values,
         diagnostics: &diagnostics,
     })?;
-    let bundle_ref = canonical_hash(&bundle_value)?;
+    let bundle_ref = preserves_rail::canonical_hash(&bundle_value)?;
     let bundle = NodeControlLiveWorkflowBundle {
         bundle_ref,
         bundle_value,
@@ -1816,7 +1828,7 @@ pub fn export_node_control_live_workflow_bundle(
         bundle: &bundle,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleExport {
         bundle,
         receipt_ref,
@@ -1830,7 +1842,7 @@ pub fn verify_node_control_live_workflow_bundle(
     input: &NodeControlLiveWorkflowBundleVerifyInput<'_>,
 ) -> Result<NodeControlLiveWorkflowBundleVerify> {
     validate_live_workflow_bundle_verify_input(input)?;
-    let bundle_ref = canonical_hash(input.bundle_value)?;
+    let bundle_ref = preserves_rail::canonical_hash(input.bundle_value)?;
     let expected = live_workflow_bundle_expected_input_from_verify(input);
     let parsed = parse_node_control_live_workflow_bundle(input.bundle_value);
     let (ticket_ref, peer_admission_ref, authority_grant_ref, receipt_refs, diagnostics) = match parsed {
@@ -1864,7 +1876,7 @@ pub fn verify_node_control_live_workflow_bundle(
         expected: &expected,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleVerify {
         bundle_ref,
         ticket_ref,
@@ -1897,7 +1909,7 @@ pub fn gate_node_control_live_workflow_bundle(
                 Some(receipt.receipt_ref)
             }
             Err(error) => {
-                let receipt_ref = canonical_hash(value)?;
+                let receipt_ref = preserves_rail::canonical_hash(value)?;
                 diagnostics
                     .push(format!("node control live workflow bundle gate verify receipt parse failed: {error}"));
                 Some(receipt_ref)
@@ -1924,7 +1936,7 @@ pub fn gate_node_control_live_workflow_bundle(
         expected: &expected,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleGate {
         bundle_ref: verified.bundle_ref,
         verify_receipt_ref,
@@ -2005,7 +2017,7 @@ fn apply_gate_check(
                 Some(receipt.receipt_ref)
             }
             Err(error) => {
-                let receipt_ref = canonical_hash(value)?;
+                let receipt_ref = preserves_rail::canonical_hash(value)?;
                 diagnostics.push(format!("node control live workflow bundle apply gate receipt parse failed: {error}"));
                 Some(receipt_ref)
             }
@@ -2130,7 +2142,7 @@ fn finish_apply(input: FinishInput<'_>) -> Result<NodeControlLiveWorkflowBundleA
         expected: &input.expected,
         diagnostics: &input.diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     import_node_artifact(input.input.state_root, &receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleApply {
         bundle_ref: input.verified.bundle_ref,
@@ -2235,7 +2247,7 @@ pub fn reconcile_node_control_live_workflow_bundle(
         request_ref: bindings.request_ref,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     diagnostics.shrink_to_fit();
     Ok(NodeControlLiveWorkflowBundleReconcile {
         bundle_ref: apply.bundle_ref.clone(),
@@ -2297,7 +2309,7 @@ pub fn export_node_control_live_workflow_bundle_ack(
         ack: &ack,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     diagnostics.shrink_to_fit();
     Ok(NodeControlLiveWorkflowBundleAckExport {
         receiver_decision: ack.receiver_decision.clone(),
@@ -2328,7 +2340,7 @@ pub fn import_node_control_live_workflow_bundle_ack(
         imported_refs: &imported_refs,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     diagnostics.shrink_to_fit();
     Ok(NodeControlLiveWorkflowBundleAckImport {
@@ -2749,11 +2761,11 @@ fn live_workflow_protocol_evidence(
     input: &NodeControlLiveWorkflowProtocolGateInput<'_>,
 ) -> Result<(LiveWorkflowProtocolEvidence, Vec<String>)> {
     let mut diagnostics = Vec::with_capacity(16);
-    let bundle_ref = canonical_hash(input.bundle_value)?;
-    let gate_receipt_ref = canonical_hash(input.gate_receipt_value)?;
-    let apply_receipt_ref = canonical_hash(input.apply_receipt_value)?;
-    let reconcile_receipt_ref = canonical_hash(input.reconcile_receipt_value)?;
-    let ack_ref = canonical_hash(input.ack_value)?;
+    let bundle_ref = preserves_rail::canonical_hash(input.bundle_value)?;
+    let gate_receipt_ref = preserves_rail::canonical_hash(input.gate_receipt_value)?;
+    let apply_receipt_ref = preserves_rail::canonical_hash(input.apply_receipt_value)?;
+    let reconcile_receipt_ref = preserves_rail::canonical_hash(input.reconcile_receipt_value)?;
+    let ack_ref = preserves_rail::canonical_hash(input.ack_value)?;
     let bundle = parsed_or_note(&mut diagnostics, "node control live workflow protocol bundle", || {
         parse_node_control_live_workflow_bundle(input.bundle_value)
     });
@@ -3268,7 +3280,7 @@ pub fn parse_node_control_live_workflow_bundle_apply_receipt(
         })?;
     require_schema(
         &fields[0],
-        NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
+        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
         "node control live workflow bundle apply receipt",
     )?;
     let gate_receipt_ref = record_optional_ref_string(&fields[4], "gate-receipt")?;
@@ -3281,7 +3293,7 @@ pub fn parse_node_control_live_workflow_bundle_apply_receipt(
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlLiveWorkflowBundleApplyReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision,
         bundle_ref: record_ref_string(&fields[3], "bundle")?,
         gate_receipt_ref,
@@ -3306,7 +3318,7 @@ pub fn parse_node_control_live_workflow_bundle_reconcile_receipt(
         })?;
     require_schema(
         &fields[0],
-        NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
+        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
         "node control live workflow bundle reconcile receipt",
     )?;
     let send_receipt_ref = record_optional_ref_string(&fields[4], "send-receipt")?;
@@ -3320,7 +3332,7 @@ pub fn parse_node_control_live_workflow_bundle_reconcile_receipt(
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlLiveWorkflowBundleReconcileReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision,
         apply_receipt_ref: record_ref_string(&fields[2], "apply-receipt")?,
         bundle_ref: record_ref_string(&fields[3], "bundle")?,
@@ -3339,14 +3351,14 @@ pub fn parse_node_control_ingress_receipt(value: &IOValue) -> Result<NodeControl
     let fields = value
         .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_INGRESS_RECEIPT_SCHEMA, "node control ingress receipt")?;
+    require_schema(&fields[0], preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA, "node control ingress receipt")?;
     let idempotency_receipt_ref = record_optional_ref_string(&fields[11], "idempotency")?;
     let queue_receipt_ref = record_optional_ref_string(&fields[12], "queue")?;
     let _checks = record_sequence_len(&fields[14], "checks")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlIngressReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision,
         phase: record_string(&fields[2], "phase")?,
         transport: record_string(&fields[3], "transport")?,
@@ -3367,12 +3379,12 @@ pub fn parse_node_control_queue_receipt(value: &IOValue) -> Result<NodeControlQu
     let fields = value
         .collect_simple_record("node-control-queue-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-queue-receipt-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_QUEUE_RECEIPT_SCHEMA, "node control queue receipt")?;
+    require_schema(&fields[0], preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA, "node control queue receipt")?;
     let _checks = record_sequence_len(&fields[8], "checks")?;
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlQueueReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision,
         phase: record_string(&fields[2], "phase")?,
         operation: record_string(&fields[3], "operation")?,
@@ -3392,7 +3404,7 @@ pub fn parse_node_control_live_workflow_bundle_verify_receipt(
         })?;
     require_schema(
         &fields[0],
-        NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA,
+        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA,
         "node control live workflow bundle verify receipt",
     )?;
     let ticket_ref = record_optional_string(&fields[3], "ticket")?;
@@ -3412,7 +3424,7 @@ pub fn parse_node_control_live_workflow_bundle_verify_receipt(
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlLiveWorkflowBundleVerifyReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision,
         bundle_ref: record_ref_string(&fields[2], "bundle")?,
         ticket_ref,
@@ -3433,7 +3445,7 @@ pub fn parse_node_control_live_workflow_bundle_gate_receipt(
         })?;
     require_schema(
         &fields[0],
-        NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA,
+        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA,
         "node control live workflow bundle gate receipt",
     )?;
     let verify_receipt_ref = record_optional_string(&fields[3], "verify-receipt")?;
@@ -3455,7 +3467,7 @@ pub fn parse_node_control_live_workflow_bundle_gate_receipt(
     let decision = record_string(&fields[1], "decision")?;
     validate_decision(&decision)?;
     Ok(NodeControlLiveWorkflowBundleGateReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision,
         bundle_ref: record_ref_string(&fields[2], "bundle")?,
         verify_receipt_ref,
@@ -3472,7 +3484,11 @@ pub fn parse_node_control_live_workflow_bundle(value: &IOValue) -> Result<NodeCo
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA, "node control live workflow bundle")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
+        "node control live workflow bundle",
+    )?;
     let ticket_value = record_value(&fields[1], "ticket")?;
     let peer_admission_value = record_value(&fields[2], "peer-admission")?;
     let authority_grant_value = record_value(&fields[3], "authority-grant")?;
@@ -3498,7 +3514,7 @@ pub fn parse_node_control_live_workflow_bundle(value: &IOValue) -> Result<NodeCo
         return Err(MoltenError::invalid_harness("node control live workflow bundle receipt refs mismatch"));
     }
     Ok(NodeControlLiveWorkflowBundle {
-        bundle_ref: canonical_hash(value)?,
+        bundle_ref: preserves_rail::canonical_hash(value)?,
         bundle_value: value.clone(),
         ticket_ref,
         peer_admission_ref,
@@ -3536,7 +3552,7 @@ struct AckParts {
 impl AckParts {
     fn into_ack(self, value: &IOValue) -> Result<NodeControlLiveWorkflowBundleAck> {
         Ok(NodeControlLiveWorkflowBundleAck {
-            ack_ref: canonical_hash(value)?,
+            ack_ref: preserves_rail::canonical_hash(value)?,
             ack_value: value.clone(),
             apply_receipt_ref: self.apply_receipt_ref,
             send_receipt_ref: self.send_receipt_ref,
@@ -3644,7 +3660,11 @@ pub fn parse_node_control_live_workflow_bundle_ack(value: &IOValue) -> Result<No
     let fields = value
         .collect_simple_record("node-control-live-workflow-bundle-ack-v1", Some(22))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-workflow-bundle-ack-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA, "node control live workflow bundle ack")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA,
+        "node control live workflow bundle ack",
+    )?;
     let receiver_decision = record_string(&fields[17], "receiver-decision")?;
     validate_decision(&receiver_decision)?;
     let _checks = record_sequence_len(&fields[20], "checks")?;
@@ -3725,7 +3745,7 @@ pub fn import_node_control_live_workflow_bundle(
         imported_refs: &parts.imported_refs,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlLiveWorkflowBundleImport {
         bundle_ref: bundle.bundle_ref,
@@ -4025,7 +4045,7 @@ fn live_workflow_bundle_receipt_refs(values: &[&IOValue]) -> Result<Vec<String>>
 fn live_workflow_bundle_receipt_refs_from_values(values: &[IOValue]) -> Result<Vec<String>> {
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
-        refs.push(canonical_hash(value)?);
+        refs.push(preserves_rail::canonical_hash(value)?);
     }
     Ok(refs)
 }
@@ -4210,25 +4230,44 @@ fn authority_grant_import_diagnostics(
 fn live_ticket_import_receipt_value(input: &LiveTicketImportReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("node-control-live-ticket-import-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("state-root", vec![string(&state_root_profile_ref(input.state_root)?)]),
-        record("ticket", vec![string(&input.ticket.ticket_ref)]),
-        record("node", vec![string(&input.ticket.node_id)]),
-        record("topic", vec![string(&input.ticket.topic)]),
-        record("endpoint", vec![string(&input.ticket.live_endpoint_id)]),
-        record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
-        record("peer", vec![optional_string(input.peer_id)]),
-        record("as-of-sequence", vec![string(input.as_of_sequence.to_string())]),
-        record("imported", vec![sequence(input.imported_refs.iter().map(string).collect())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("ticket-kind-version"), string("pass")]),
-            record("check", vec![string("ticket-topic-endpoint-bound"), string(binding_status)]),
-            record("check", vec![string("peer-admission-kind-version"), string(binding_status)]),
-            record("check", vec![string("import-receipt-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-ticket-import-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(input.state_root)?)]),
+        preserves_rail::record("ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
+        preserves_rail::record("node", vec![preserves_rail::string(&input.ticket.node_id)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(&input.ticket.topic)]),
+        preserves_rail::record("endpoint", vec![preserves_rail::string(&input.ticket.live_endpoint_id)]),
+        preserves_rail::record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
+        preserves_rail::record("peer", vec![optional_string(input.peer_id)]),
+        preserves_rail::record("as-of-sequence", vec![preserves_rail::string(input.as_of_sequence.to_string())]),
+        preserves_rail::record("imported", vec![preserves_rail::sequence(
+            input.imported_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ticket-kind-version"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ticket-topic-endpoint-bound"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("peer-admission-kind-version"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("import-receipt-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -4236,25 +4275,46 @@ fn live_ticket_import_receipt_value(input: &LiveTicketImportReceiptValueInput<'_
 fn authority_grant_import_receipt_value(input: &AuthorityGrantImportReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("node-control-authority-grant-import-receipt-v1", vec![
-        string(NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("state-root", vec![string(&state_root_profile_ref(input.state_root)?)]),
-        record("grant", vec![string(&input.grant.grant_ref)]),
-        record("peer", vec![string(&input.grant.peer_id)]),
-        record("node", vec![string(&input.grant.node_id)]),
-        record("operations", vec![sequence(input.grant.operations.iter().map(string).collect())]),
-        record("target-scope", vec![string(&input.grant.target_scope)]),
-        record("resource-scope", vec![string(&input.grant.resource_scope)]),
-        record("as-of-epoch", vec![string(input.as_of_epoch.to_string())]),
-        record("imported", vec![sequence(input.imported_refs.iter().map(string).collect())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("grant-kind-version"), string("pass")]),
-            record("check", vec![string("peer-node-operation-scope-bound"), string(binding_status)]),
-            record("check", vec![string("grant-fresh-and-unrevoked"), string(binding_status)]),
-            record("check", vec![string("import-receipt-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-authority-grant-import-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(input.state_root)?)]),
+        preserves_rail::record("grant", vec![preserves_rail::string(&input.grant.grant_ref)]),
+        preserves_rail::record("peer", vec![preserves_rail::string(&input.grant.peer_id)]),
+        preserves_rail::record("node", vec![preserves_rail::string(&input.grant.node_id)]),
+        preserves_rail::record("operations", vec![preserves_rail::sequence(
+            input.grant.operations.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("target-scope", vec![preserves_rail::string(&input.grant.target_scope)]),
+        preserves_rail::record("resource-scope", vec![preserves_rail::string(&input.grant.resource_scope)]),
+        preserves_rail::record("as-of-epoch", vec![preserves_rail::string(input.as_of_epoch.to_string())]),
+        preserves_rail::record("imported", vec![preserves_rail::sequence(
+            input.imported_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("grant-kind-version"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("peer-node-operation-scope-bound"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("grant-fresh-and-unrevoked"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("import-receipt-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -4262,26 +4322,49 @@ fn authority_grant_import_receipt_value(input: &AuthorityGrantImportReceiptValue
 fn live_workflow_bundle_value(input: &LiveWorkflowBundleValueInput<'_>) -> Result<IOValue> {
     let binding_status = if input.diagnostics.is_empty() { "pass" } else { "fail" };
     let receipt_refs = live_workflow_bundle_receipt_refs(input.receipt_values)?;
-    Ok(record("node-control-live-workflow-bundle-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA),
-        record("ticket", vec![(*input.ticket_value).clone()]),
-        record("peer-admission", vec![(*input.admission_value).clone()]),
-        record("authority-grant", vec![(*input.authority_value).clone()]),
-        record("receipts", vec![sequence(
+    Ok(preserves_rail::record("node-control-live-workflow-bundle-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA),
+        preserves_rail::record("ticket", vec![(*input.ticket_value).clone()]),
+        preserves_rail::record("peer-admission", vec![(*input.admission_value).clone()]),
+        preserves_rail::record("authority-grant", vec![(*input.authority_value).clone()]),
+        preserves_rail::record("receipts", vec![preserves_rail::sequence(
             input.receipt_values.iter().map(|value| (**value).clone()).collect(),
         )]),
-        record("ticket-ref", vec![string(&input.ticket.ticket_ref)]),
-        record("peer-admission-ref", vec![string(&input.admission.admission_ref)]),
-        record("authority-grant-ref", vec![string(&input.authority.grant_ref)]),
-        record("receipt-refs", vec![sequence(receipt_refs.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("ticket-kind-version"), string("pass")]),
-            record("check", vec![string("peer-admission-kind-version"), string("pass")]),
-            record("check", vec![string("authority-grant-kind-version"), string("pass")]),
-            record("check", vec![string("ticket-admission-bound"), string(binding_status)]),
-            record("check", vec![string("authority-grant-bound"), string(binding_status)]),
-            record("check", vec![string("bundle-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+        preserves_rail::record("ticket-ref", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
+        preserves_rail::record("peer-admission-ref", vec![preserves_rail::string(&input.admission.admission_ref)]),
+        preserves_rail::record("authority-grant-ref", vec![preserves_rail::string(&input.authority.grant_ref)]),
+        preserves_rail::record("receipt-refs", vec![preserves_rail::sequence(
+            receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ticket-kind-version"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("peer-admission-kind-version"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("authority-grant-kind-version"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ticket-admission-bound"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("authority-grant-bound"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -4289,21 +4372,40 @@ fn live_workflow_bundle_value(input: &LiveWorkflowBundleValueInput<'_>) -> Resul
 fn live_workflow_bundle_export_receipt_value(input: &LiveWorkflowBundleExportReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("node-control-live-workflow-bundle-export-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("bundle", vec![string(&input.bundle.bundle_ref)]),
-        record("ticket", vec![string(&input.bundle.ticket_ref)]),
-        record("peer-admission", vec![string(&input.bundle.peer_admission_ref)]),
-        record("authority-grant", vec![string(&input.bundle.authority_grant_ref)]),
-        record("receipts", vec![sequence(input.bundle.receipt_refs.iter().map(string).collect())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("bundle-kind-version"), string("pass")]),
-            record("check", vec![string("bundle-member-bindings"), string(binding_status)]),
-            record("check", vec![string("bundle-receipt-kinds"), string(binding_status)]),
-            record("check", vec![string("bundle-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-workflow-bundle-export-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(&input.bundle.bundle_ref)]),
+        preserves_rail::record("ticket", vec![preserves_rail::string(&input.bundle.ticket_ref)]),
+        preserves_rail::record("peer-admission", vec![preserves_rail::string(&input.bundle.peer_admission_ref)]),
+        preserves_rail::record("authority-grant", vec![preserves_rail::string(&input.bundle.authority_grant_ref)]),
+        preserves_rail::record("receipts", vec![preserves_rail::sequence(
+            input.bundle.receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-kind-version"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-member-bindings"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-receipt-kinds"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -4311,23 +4413,45 @@ fn live_workflow_bundle_export_receipt_value(input: &LiveWorkflowBundleExportRec
 fn live_workflow_bundle_verify_receipt_value(input: &LiveWorkflowBundleVerifyReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("node-control-live-workflow-bundle-verify-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("bundle", vec![string(input.bundle_ref)]),
-        record("ticket", vec![optional_string(input.ticket_ref)]),
-        record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
-        record("authority-grant", vec![optional_string(input.authority_grant_ref)]),
-        record("receipts", vec![sequence(input.receipt_refs.iter().map(string).collect())]),
-        record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("bundle-kind-version"), string(binding_status)]),
-            record("check", vec![string("bundle-member-bindings"), string(binding_status)]),
-            record("check", vec![string("bundle-receipt-kinds"), string(binding_status)]),
-            record("check", vec![string("expected-bindings"), string(binding_status)]),
-            record("check", vec![string("verify-receipt-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-workflow-bundle-verify-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
+        preserves_rail::record("ticket", vec![optional_string(input.ticket_ref)]),
+        preserves_rail::record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
+        preserves_rail::record("authority-grant", vec![optional_string(input.authority_grant_ref)]),
+        preserves_rail::record("receipts", vec![preserves_rail::sequence(
+            input.receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-kind-version"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-member-bindings"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-receipt-kinds"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("expected-bindings"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("verify-receipt-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -4335,25 +4459,47 @@ fn live_workflow_bundle_verify_receipt_value(input: &LiveWorkflowBundleVerifyRec
 fn live_workflow_bundle_gate_receipt_value(input: &LiveWorkflowBundleGateReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let gate_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("node-control-live-workflow-bundle-gate-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("bundle", vec![string(input.bundle_ref)]),
-        record("verify-receipt", vec![optional_string(input.verify_receipt_ref)]),
-        record("recomputed-verify", vec![string(input.recomputed_verify_receipt_ref)]),
-        record("ticket", vec![optional_string(input.ticket_ref)]),
-        record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
-        record("authority-grant", vec![optional_string(input.authority_grant_ref)]),
-        record("receipts", vec![sequence(input.receipt_refs.iter().map(string).collect())]),
-        record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("bundle-verification"), string(gate_status)]),
-            record("check", vec![string("verify-receipt-current"), string(gate_status)]),
-            record("check", vec![string("expected-bindings"), string(gate_status)]),
-            record("check", vec![string("gate-receipt-is-not-authority"), string("pass")]),
-            record("check", vec![string("bundle-import-still-required"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-workflow-bundle-gate-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
+        preserves_rail::record("verify-receipt", vec![optional_string(input.verify_receipt_ref)]),
+        preserves_rail::record("recomputed-verify", vec![preserves_rail::string(input.recomputed_verify_receipt_ref)]),
+        preserves_rail::record("ticket", vec![optional_string(input.ticket_ref)]),
+        preserves_rail::record("peer-admission", vec![optional_string(input.peer_admission_ref)]),
+        preserves_rail::record("authority-grant", vec![optional_string(input.authority_grant_ref)]),
+        preserves_rail::record("receipts", vec![preserves_rail::sequence(
+            input.receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-verification"),
+                preserves_rail::string(gate_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("verify-receipt-current"),
+                preserves_rail::string(gate_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("expected-bindings"),
+                preserves_rail::string(gate_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("gate-receipt-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-import-still-required"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -4361,28 +4507,50 @@ fn live_workflow_bundle_gate_receipt_value(input: &LiveWorkflowBundleGateReceipt
 fn live_workflow_bundle_apply_receipt_value(input: &LiveWorkflowBundleApplyReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let apply_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("node-control-live-workflow-bundle-apply-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("state-root", vec![string(input.state_root.display().to_string())]),
-        record("bundle", vec![string(input.bundle_ref)]),
-        record("gate-receipt", vec![optional_string(input.gate_receipt_ref)]),
-        record("recomputed-verify", vec![string(input.recomputed_verify_receipt_ref)]),
-        record("import-receipt", vec![optional_string(input.import_receipt_ref)]),
-        record("imported", vec![sequence(input.imported_refs.iter().map(string).collect())]),
-        record("mode", vec![string(input.mode)]),
-        record("envelope", vec![optional_string(input.envelope_ref)]),
-        record("operation", vec![optional_string(input.operation_ref)]),
-        record("send-receipt", vec![optional_string(input.send_receipt_ref)]),
-        record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("bundle-verification"), string(apply_status)]),
-            record("check", vec![string("gate-receipt-current"), string(apply_status)]),
-            record("check", vec![string("bundle-imported"), string(apply_status)]),
-            record("check", vec![string("send-preflight-or-dispatch"), string(apply_status)]),
-            record("check", vec![string("apply-receipt-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-workflow-bundle-apply-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("state-root", vec![preserves_rail::string(input.state_root.display().to_string())]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
+        preserves_rail::record("gate-receipt", vec![optional_string(input.gate_receipt_ref)]),
+        preserves_rail::record("recomputed-verify", vec![preserves_rail::string(input.recomputed_verify_receipt_ref)]),
+        preserves_rail::record("import-receipt", vec![optional_string(input.import_receipt_ref)]),
+        preserves_rail::record("imported", vec![preserves_rail::sequence(
+            input.imported_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("mode", vec![preserves_rail::string(input.mode)]),
+        preserves_rail::record("envelope", vec![optional_string(input.envelope_ref)]),
+        preserves_rail::record("operation", vec![optional_string(input.operation_ref)]),
+        preserves_rail::record("send-receipt", vec![optional_string(input.send_receipt_ref)]),
+        preserves_rail::record("expected", vec![live_workflow_bundle_expected_value(input.expected)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-verification"),
+                preserves_rail::string(apply_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("gate-receipt-current"),
+                preserves_rail::string(apply_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-imported"),
+                preserves_rail::string(apply_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("send-preflight-or-dispatch"),
+                preserves_rail::string(apply_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("apply-receipt-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -4392,61 +4560,100 @@ fn live_workflow_bundle_reconcile_receipt_value(
 ) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let reconcile_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("node-control-live-workflow-bundle-reconcile-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("apply-receipt", vec![string(input.apply_receipt_ref)]),
-        record("bundle", vec![string(input.bundle_ref)]),
-        record("send-receipt", vec![optional_string(input.send_receipt_ref)]),
-        record("ingress-receipt", vec![optional_string(input.ingress_receipt_ref)]),
-        record("queue-receipt", vec![optional_string(input.queue_receipt_ref)]),
-        record("control-receipt", vec![optional_string(input.control_receipt_ref)]),
-        record("envelope", vec![optional_string(input.envelope_ref)]),
-        record("operation", vec![optional_string(input.operation_ref)]),
-        record("request", vec![optional_string(input.request_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("apply-receipt-bound"), string(reconcile_status)]),
-            record("check", vec![string("send-receipt-current"), string(reconcile_status)]),
-            record("check", vec![string("receiver-ingress-bound"), string(reconcile_status)]),
-            record("check", vec![string("durable-enqueue-or-deny"), string(reconcile_status)]),
-            record("check", vec![string("control-dispatch-bound"), string(reconcile_status)]),
-            record("check", vec![string("reconcile-receipt-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-workflow-bundle-reconcile-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("apply-receipt", vec![preserves_rail::string(input.apply_receipt_ref)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
+        preserves_rail::record("send-receipt", vec![optional_string(input.send_receipt_ref)]),
+        preserves_rail::record("ingress-receipt", vec![optional_string(input.ingress_receipt_ref)]),
+        preserves_rail::record("queue-receipt", vec![optional_string(input.queue_receipt_ref)]),
+        preserves_rail::record("control-receipt", vec![optional_string(input.control_receipt_ref)]),
+        preserves_rail::record("envelope", vec![optional_string(input.envelope_ref)]),
+        preserves_rail::record("operation", vec![optional_string(input.operation_ref)]),
+        preserves_rail::record("request", vec![optional_string(input.request_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("apply-receipt-bound"),
+                preserves_rail::string(reconcile_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("send-receipt-current"),
+                preserves_rail::string(reconcile_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("receiver-ingress-bound"),
+                preserves_rail::string(reconcile_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("durable-enqueue-or-deny"),
+                preserves_rail::string(reconcile_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("control-dispatch-bound"),
+                preserves_rail::string(reconcile_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("reconcile-receipt-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn live_workflow_bundle_ack_value(input: &LiveWorkflowBundleAckValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.receiver_decision)?;
-    Ok(record("node-control-live-workflow-bundle-ack-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA),
-        record("apply-receipt", vec![input.apply_receipt_value.clone()]),
-        record("send-receipt", vec![optional_value(input.send_receipt_value)]),
-        record("ingress-receipt", vec![optional_value(input.ingress_receipt_value)]),
-        record("queue-receipt", vec![optional_value(input.queue_receipt_value)]),
-        record("control-receipt", vec![optional_value(input.control_receipt_value)]),
-        record("reconcile-receipt", vec![input.reconcile_receipt_value.clone()]),
-        record("apply-ref", vec![string(input.apply_receipt_ref)]),
-        record("send-ref", vec![optional_string(input.send_receipt_ref)]),
-        record("ingress-ref", vec![optional_string(input.ingress_receipt_ref)]),
-        record("queue-ref", vec![optional_string(input.queue_receipt_ref)]),
-        record("control-ref", vec![optional_string(input.control_receipt_ref)]),
-        record("reconcile-ref", vec![string(input.reconcile_receipt_ref)]),
-        record("bundle", vec![string(input.bundle_ref)]),
-        record("envelope", vec![optional_string(input.envelope_ref)]),
-        record("operation", vec![optional_string(input.operation_ref)]),
-        record("request", vec![optional_string(input.request_ref)]),
-        record("receiver-decision", vec![string(input.receiver_decision)]),
-        record("receiver-diagnostics", vec![sequence(input.receiver_diagnostics.iter().map(string).collect())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("ack-member-refs-bound"), string("pass")]),
-            record("check", vec![string("receiver-outcome-recorded"), string("pass")]),
-            record("check", vec![string("ack-bundle-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-workflow-bundle-ack-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_SCHEMA),
+        preserves_rail::record("apply-receipt", vec![input.apply_receipt_value.clone()]),
+        preserves_rail::record("send-receipt", vec![optional_value(input.send_receipt_value)]),
+        preserves_rail::record("ingress-receipt", vec![optional_value(input.ingress_receipt_value)]),
+        preserves_rail::record("queue-receipt", vec![optional_value(input.queue_receipt_value)]),
+        preserves_rail::record("control-receipt", vec![optional_value(input.control_receipt_value)]),
+        preserves_rail::record("reconcile-receipt", vec![input.reconcile_receipt_value.clone()]),
+        preserves_rail::record("apply-ref", vec![preserves_rail::string(input.apply_receipt_ref)]),
+        preserves_rail::record("send-ref", vec![optional_string(input.send_receipt_ref)]),
+        preserves_rail::record("ingress-ref", vec![optional_string(input.ingress_receipt_ref)]),
+        preserves_rail::record("queue-ref", vec![optional_string(input.queue_receipt_ref)]),
+        preserves_rail::record("control-ref", vec![optional_string(input.control_receipt_ref)]),
+        preserves_rail::record("reconcile-ref", vec![preserves_rail::string(input.reconcile_receipt_ref)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(input.bundle_ref)]),
+        preserves_rail::record("envelope", vec![optional_string(input.envelope_ref)]),
+        preserves_rail::record("operation", vec![optional_string(input.operation_ref)]),
+        preserves_rail::record("request", vec![optional_string(input.request_ref)]),
+        preserves_rail::record("receiver-decision", vec![preserves_rail::string(input.receiver_decision)]),
+        preserves_rail::record("receiver-diagnostics", vec![preserves_rail::sequence(
+            input.receiver_diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ack-member-refs-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("receiver-outcome-recorded"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ack-bundle-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
-        record("member-refs", vec![sequence(
+        preserves_rail::record("member-refs", vec![preserves_rail::sequence(
             [
                 Some(input.apply_receipt_ref),
                 input.send_receipt_ref,
@@ -4457,7 +4664,7 @@ fn live_workflow_bundle_ack_value(input: &LiveWorkflowBundleAckValueInput<'_>) -
             ]
             .into_iter()
             .flatten()
-            .map(string)
+            .map(preserves_rail::string)
             .collect(),
         )]),
     ]))
@@ -4468,29 +4675,48 @@ fn live_workflow_bundle_ack_export_receipt_value(
 ) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let ack_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("node-control-live-workflow-bundle-ack-export-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_EXPORT_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("ack", vec![string(&input.ack.ack_ref)]),
-        record("bundle", vec![string(&input.ack.bundle_ref)]),
-        record("apply-receipt", vec![string(&input.ack.apply_receipt_ref)]),
-        record("send-receipt", vec![optional_string(input.ack.send_receipt_ref.as_deref())]),
-        record("ingress-receipt", vec![optional_string(input.ack.ingress_receipt_ref.as_deref())]),
-        record("queue-receipt", vec![optional_string(input.ack.queue_receipt_ref.as_deref())]),
-        record("control-receipt", vec![optional_string(input.ack.control_receipt_ref.as_deref())]),
-        record("reconcile-receipt", vec![string(&input.ack.reconcile_receipt_ref)]),
-        record("envelope", vec![optional_string(input.ack.envelope_ref.as_deref())]),
-        record("operation", vec![optional_string(input.ack.operation_ref.as_deref())]),
-        record("request", vec![optional_string(input.ack.request_ref.as_deref())]),
-        record("receiver-decision", vec![string(&input.ack.receiver_decision)]),
-        record("receiver-diagnostics", vec![sequence(input.ack.receiver_diagnostics.iter().map(string).collect())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("ack-bundle-kind-version"), string("pass")]),
-            record("check", vec![string("receiver-evidence-packaged"), string(ack_status)]),
-            record("check", vec![string("reconcile-receipt-current"), string(ack_status)]),
-            record("check", vec![string("ack-export-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-workflow-bundle-ack-export-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_EXPORT_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("ack", vec![preserves_rail::string(&input.ack.ack_ref)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(&input.ack.bundle_ref)]),
+        preserves_rail::record("apply-receipt", vec![preserves_rail::string(&input.ack.apply_receipt_ref)]),
+        preserves_rail::record("send-receipt", vec![optional_string(input.ack.send_receipt_ref.as_deref())]),
+        preserves_rail::record("ingress-receipt", vec![optional_string(input.ack.ingress_receipt_ref.as_deref())]),
+        preserves_rail::record("queue-receipt", vec![optional_string(input.ack.queue_receipt_ref.as_deref())]),
+        preserves_rail::record("control-receipt", vec![optional_string(input.ack.control_receipt_ref.as_deref())]),
+        preserves_rail::record("reconcile-receipt", vec![preserves_rail::string(&input.ack.reconcile_receipt_ref)]),
+        preserves_rail::record("envelope", vec![optional_string(input.ack.envelope_ref.as_deref())]),
+        preserves_rail::record("operation", vec![optional_string(input.ack.operation_ref.as_deref())]),
+        preserves_rail::record("request", vec![optional_string(input.ack.request_ref.as_deref())]),
+        preserves_rail::record("receiver-decision", vec![preserves_rail::string(&input.ack.receiver_decision)]),
+        preserves_rail::record("receiver-diagnostics", vec![preserves_rail::sequence(
+            input.ack.receiver_diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ack-bundle-kind-version"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("receiver-evidence-packaged"),
+                preserves_rail::string(ack_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("reconcile-receipt-current"),
+                preserves_rail::string(ack_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ack-export-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -4500,62 +4726,107 @@ fn live_workflow_bundle_ack_import_receipt_value(
 ) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let ack_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("node-control-live-workflow-bundle-ack-import-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_IMPORT_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("state-root", vec![string(input.state_root.display().to_string())]),
-        record("ack", vec![string(&input.ack.ack_ref)]),
-        record("bundle", vec![string(&input.ack.bundle_ref)]),
-        record("imported", vec![sequence(input.imported_refs.iter().map(string).collect())]),
-        record("receiver-decision", vec![string(&input.ack.receiver_decision)]),
-        record("receiver-diagnostics", vec![sequence(input.ack.receiver_diagnostics.iter().map(string).collect())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("ack-bundle-kind-version"), string("pass")]),
-            record("check", vec![string("ack-member-bindings"), string(ack_status)]),
-            record("check", vec![string("sender-ledger-imported"), string(ack_status)]),
-            record("check", vec![string("ack-import-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-workflow-bundle-ack-import-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_ACK_IMPORT_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("state-root", vec![preserves_rail::string(input.state_root.display().to_string())]),
+        preserves_rail::record("ack", vec![preserves_rail::string(&input.ack.ack_ref)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(&input.ack.bundle_ref)]),
+        preserves_rail::record("imported", vec![preserves_rail::sequence(
+            input.imported_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("receiver-decision", vec![preserves_rail::string(&input.ack.receiver_decision)]),
+        preserves_rail::record("receiver-diagnostics", vec![preserves_rail::sequence(
+            input.ack.receiver_diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ack-bundle-kind-version"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ack-member-bindings"),
+                preserves_rail::string(ack_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("sender-ledger-imported"),
+                preserves_rail::string(ack_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ack-import-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn live_workflow_bundle_expected_value(input: &LiveWorkflowBundleExpectedInput<'_>) -> IOValue {
-    record("expected", vec![sequence(vec![
-        record("node", vec![optional_string(input.expected_node)]),
-        record("topic", vec![optional_string(input.expected_topic)]),
-        record("endpoint", vec![optional_string(input.expected_endpoint)]),
-        record("peer", vec![optional_string(input.expected_peer)]),
-        record("operations", vec![sequence(input.expected_operations.iter().map(string).collect())]),
-        record("target-scope", vec![optional_string(input.expected_target_scope)]),
-        record("resource-scope", vec![optional_string(input.expected_resource_scope)]),
-        record("as-of-sequence", vec![string(input.as_of_sequence.to_string())]),
-        record("as-of-epoch", vec![string(input.as_of_epoch.to_string())]),
+    preserves_rail::record("expected", vec![preserves_rail::sequence(vec![
+        preserves_rail::record("node", vec![optional_string(input.expected_node)]),
+        preserves_rail::record("topic", vec![optional_string(input.expected_topic)]),
+        preserves_rail::record("endpoint", vec![optional_string(input.expected_endpoint)]),
+        preserves_rail::record("peer", vec![optional_string(input.expected_peer)]),
+        preserves_rail::record("operations", vec![preserves_rail::sequence(
+            input.expected_operations.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("target-scope", vec![optional_string(input.expected_target_scope)]),
+        preserves_rail::record("resource-scope", vec![optional_string(input.expected_resource_scope)]),
+        preserves_rail::record("as-of-sequence", vec![preserves_rail::string(input.as_of_sequence.to_string())]),
+        preserves_rail::record("as-of-epoch", vec![preserves_rail::string(input.as_of_epoch.to_string())]),
     ])])
 }
 
 fn live_workflow_bundle_import_receipt_value(input: &LiveWorkflowBundleImportReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let binding_status = if input.decision == "pass" { "pass" } else { "fail" };
-    Ok(record("node-control-live-workflow-bundle-import-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("state-root", vec![string(&state_root_profile_ref(input.state_root)?)]),
-        record("bundle", vec![string(&input.bundle.bundle_ref)]),
-        record("ticket", vec![string(&input.bundle.ticket_ref)]),
-        record("peer-admission", vec![string(&input.bundle.peer_admission_ref)]),
-        record("authority-grant", vec![string(&input.bundle.authority_grant_ref)]),
-        record("ticket-import", vec![optional_string(input.ticket_import_ref)]),
-        record("authority-import", vec![optional_string(input.authority_import_ref)]),
-        record("imported", vec![sequence(input.imported_refs.iter().map(string).collect())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("bundle-kind-version"), string("pass")]),
-            record("check", vec![string("ticket-admission-imported"), string(binding_status)]),
-            record("check", vec![string("authority-grant-imported"), string(binding_status)]),
-            record("check", vec![string("bundle-receipt-imported"), string(binding_status)]),
-            record("check", vec![string("bundle-import-is-not-authority"), string("pass")]),
-            record("check", vec![string("provenance-still-required"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-workflow-bundle-import-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(input.state_root)?)]),
+        preserves_rail::record("bundle", vec![preserves_rail::string(&input.bundle.bundle_ref)]),
+        preserves_rail::record("ticket", vec![preserves_rail::string(&input.bundle.ticket_ref)]),
+        preserves_rail::record("peer-admission", vec![preserves_rail::string(&input.bundle.peer_admission_ref)]),
+        preserves_rail::record("authority-grant", vec![preserves_rail::string(&input.bundle.authority_grant_ref)]),
+        preserves_rail::record("ticket-import", vec![optional_string(input.ticket_import_ref)]),
+        preserves_rail::record("authority-import", vec![optional_string(input.authority_import_ref)]),
+        preserves_rail::record("imported", vec![preserves_rail::sequence(
+            input.imported_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-kind-version"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ticket-admission-imported"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("authority-grant-imported"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-receipt-imported"),
+                preserves_rail::string(binding_status),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bundle-import-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("provenance-still-required"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -4567,20 +4838,46 @@ pub fn node_control_supervisor_policy_value(input: &NodeControlSupervisorPolicyI
     validate_supervisor_policy_bounds(input.shutdown_drain_ticks, "shutdown drain ticks")?;
     validate_ingress_refs(input.policy_refs, "node control supervisor policy ref")?;
     validate_ingress_refs(input.evidence_refs, "node control supervisor evidence ref")?;
-    Ok(record("node-control-supervisor-policy-v1", vec![
-        string(NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA),
-        record("max-restarts", vec![string(input.max_restarts.to_string())]),
-        record("restart-window-ticks", vec![string(input.restart_window_ticks.to_string())]),
-        record("heartbeat-timeout-ticks", vec![string(input.heartbeat_timeout_ticks.to_string())]),
-        record("shutdown-drain-ticks", vec![string(input.shutdown_drain_ticks.to_string())]),
-        record("stale-lock-recovery", vec![string(if input.stale_lock_recovery { "allow" } else { "deny" })]),
-        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
-        record("evidence", vec![sequence(input.evidence_refs.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("bounded-restarts"), string("pass")]),
-            record("check", vec![string("bounded-heartbeat-timeout"), string("pass")]),
-            record("check", vec![string("explicit-stale-lock-policy"), string("pass")]),
-            record("check", vec![string("shutdown-drain-bound"), string("pass")]),
+    Ok(preserves_rail::record("node-control-supervisor-policy-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA),
+        preserves_rail::record("max-restarts", vec![preserves_rail::string(input.max_restarts.to_string())]),
+        preserves_rail::record("restart-window-ticks", vec![preserves_rail::string(
+            input.restart_window_ticks.to_string(),
+        )]),
+        preserves_rail::record("heartbeat-timeout-ticks", vec![preserves_rail::string(
+            input.heartbeat_timeout_ticks.to_string(),
+        )]),
+        preserves_rail::record("shutdown-drain-ticks", vec![preserves_rail::string(
+            input.shutdown_drain_ticks.to_string(),
+        )]),
+        preserves_rail::record("stale-lock-recovery", vec![preserves_rail::string(if input.stale_lock_recovery {
+            "allow"
+        } else {
+            "deny"
+        })]),
+        preserves_rail::record("policy", vec![preserves_rail::sequence(
+            input.policy_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("evidence", vec![preserves_rail::sequence(
+            input.evidence_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bounded-restarts"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bounded-heartbeat-timeout"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("explicit-stale-lock-policy"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("shutdown-drain-bound"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -4589,7 +4886,11 @@ pub fn parse_node_control_supervisor_policy(value: &IOValue) -> Result<NodeContr
     let fields = value
         .collect_simple_record("node-control-supervisor-policy-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-policy-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA, "node control supervisor policy")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::NODE_CONTROL_SUPERVISOR_POLICY_SCHEMA,
+        "node control supervisor policy",
+    )?;
     let has_stale_lock_recovery = match record_string(&fields[5], "stale-lock-recovery")?.as_str() {
         "allow" => true,
         "deny" => false,
@@ -4608,7 +4909,7 @@ pub fn parse_node_control_supervisor_policy(value: &IOValue) -> Result<NodeContr
     validate_supervisor_policy_bounds(heartbeat_timeout_ticks, "heartbeat timeout ticks")?;
     validate_supervisor_policy_bounds(shutdown_drain_ticks, "shutdown drain ticks")?;
     Ok(NodeControlSupervisorPolicy {
-        policy_ref: canonical_hash(value)?,
+        policy_ref: preserves_rail::canonical_hash(value)?,
         max_restarts,
         restart_window_ticks,
         heartbeat_timeout_ticks,
@@ -4635,9 +4936,13 @@ fn parse_node_control_supervisor_receipt(value: &IOValue) -> Result<NodeControlS
     let fields = value
         .collect_simple_record("node-control-supervisor-receipt-v1", Some(9))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-supervisor-receipt-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA, "node control supervisor receipt")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA,
+        "node control supervisor receipt",
+    )?;
     Ok(NodeControlSupervisorReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         operation: record_string(&fields[2], "operation")?,
         supervisor_policy_ref: record_optional_string(&fields[5], "policy")?,
@@ -4717,7 +5022,7 @@ pub fn init_local_node(input: &NodeDaemonInitInput<'_>) -> Result<NodeDaemonInit
     write_preserves(&input.state_root.join(IDENTITY_RECEIPT_FILE), &identity_resolution.receipt_value)?;
     write_preserves(&input.state_root.join(IDENTITY_FILE), &identity.value)?;
     Ok(NodeDaemonInit {
-        config_ref: canonical_hash(&config_value)?,
+        config_ref: preserves_rail::canonical_hash(&config_value)?,
         identity_ref: identity.identity_ref,
         identity_receipt_ref: identity_resolution.receipt_ref,
         config_value,
@@ -4730,13 +5035,13 @@ pub fn run_local_node(input: &NodeDaemonRunInput<'_>) -> Result<NodeDaemonRun> {
     verify_restart_state(input.state_root)?;
     let config_value = read_preserves(&input.state_root.join(CONFIG_FILE))?;
     let identity_receipt = read_preserves(&input.state_root.join(IDENTITY_RECEIPT_FILE))?;
-    let identity_receipt_ref = canonical_hash(&identity_receipt)?;
+    let identity_receipt_ref = preserves_rail::canonical_hash(&identity_receipt)?;
     let index_receipt_refs = index_receipt_refs(input.state_root)?;
     let resource_receipt_refs = resource_receipt_refs(input.state_root)?;
     let capability_receipt_refs = capability_receipt_refs(input.state_root)?;
     let version_refs = vec![local_ref("molten-binary-version", env!("CARGO_PKG_VERSION"))?];
     let source_gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests()?;
-    let source_gate_ref = canonical_hash(&source_gate_value)?;
+    let source_gate_ref = preserves_rail::canonical_hash(&source_gate_value)?;
     let run = node_runtime::start_node_runtime(&node_runtime::NodeRuntimeStartInput {
         config_value,
         identity_receipt_ref,
@@ -4782,7 +5087,7 @@ fn status_local_node_with_request(
     let startup_value = read_preserves(&input.state_root.join(STARTUP_FILE))?;
     let startup = node_runtime::parse_node_startup_receipt(&startup_value)?;
     let shutdown_ref = if input.state_root.join(SHUTDOWN_FILE).exists() {
-        Some(canonical_hash(&read_preserves(&input.state_root.join(SHUTDOWN_FILE))?)?)
+        Some(preserves_rail::canonical_hash(&read_preserves(&input.state_root.join(SHUTDOWN_FILE))?)?)
     } else {
         None
     };
@@ -4798,7 +5103,7 @@ fn status_local_node_with_request(
         replay_is_eligible: shutdown_ref.is_some(),
         diagnostics: &[],
     })?;
-    let health_ref = canonical_hash(&health_value)?;
+    let health_ref = preserves_rail::canonical_hash(&health_value)?;
     write_preserves(&input.state_root.join(HEALTH_FILE), &health_value)?;
     import_node_artifact(input.state_root, &health_value)?;
     let control_receipt_value = control_receipt_for_request(
@@ -4808,7 +5113,7 @@ fn status_local_node_with_request(
         std::slice::from_ref(&health_ref),
         &[],
     )?;
-    let control_receipt_ref = canonical_hash(&control_receipt_value)?;
+    let control_receipt_ref = preserves_rail::canonical_hash(&control_receipt_value)?;
     write_preserves(&input.state_root.join(CONTROL_STATUS_FILE), &control_receipt_value)?;
     import_node_artifact(input.state_root, &control_receipt_value)?;
     Ok(NodeDaemonStatus {
@@ -4842,7 +5147,7 @@ fn stop_local_node_with_request(
             resource_receipt_refs: &resource_receipt_refs(input.state_root)?,
             diagnostics: &[],
         })?;
-        let receipt_ref = canonical_hash(&value)?;
+        let receipt_ref = preserves_rail::canonical_hash(&value)?;
         write_preserves(
             &input.state_root.join("receipts").join(format!("adapter-shutdown-{}.preserves", adapter.name)),
             &value,
@@ -4862,7 +5167,7 @@ fn stop_local_node_with_request(
         index_receipt_refs: &index_refs,
         diagnostics: &[],
     })?;
-    let shutdown_ref = canonical_hash(&shutdown_value)?;
+    let shutdown_ref = preserves_rail::canonical_hash(&shutdown_value)?;
     write_preserves(&input.state_root.join(SHUTDOWN_FILE), &shutdown_value)?;
     import_node_artifact(input.state_root, &shutdown_value)?;
     let control_receipt_value = control_receipt_for_request(
@@ -4872,7 +5177,7 @@ fn stop_local_node_with_request(
         std::slice::from_ref(&shutdown_ref),
         &[],
     )?;
-    let control_receipt_ref = canonical_hash(&control_receipt_value)?;
+    let control_receipt_ref = preserves_rail::canonical_hash(&control_receipt_value)?;
     write_preserves(&input.state_root.join(CONTROL_STOP_FILE), &control_receipt_value)?;
     import_node_artifact(input.state_root, &control_receipt_value)?;
     remove_active_lock(input.state_root)?;
@@ -4900,7 +5205,7 @@ pub fn submit_control_request(input: &NodeControlSubmitInput<'_>) -> Result<Node
         location_ref: &location_ref,
         diagnostics: &[],
     })?;
-    let queue_receipt_ref = canonical_hash(&receipt_value)?;
+    let queue_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&queue_receipt_path(input.state_root, &request.request_ref), &receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlSubmit {
@@ -4949,7 +5254,7 @@ pub fn run_control_loop(input: &NodeControlLoopInput<'_>) -> Result<NodeControlL
     require_active_lock(input.state_root)?;
     let startup = current_startup_receipt(input.state_root)?;
     let lock_value = read_preserves(&input.state_root.join(CONTROL_LOCK_FILE))?;
-    let lock_ref = canonical_hash(&lock_value)?;
+    let lock_ref = preserves_rail::canonical_hash(&lock_value)?;
     let initial_diagnostics = Vec::new();
     let heartbeat_value = heartbeat_receipt_value(&HeartbeatReceiptValueInput {
         startup_receipt_ref: &startup.receipt_ref,
@@ -4958,7 +5263,7 @@ pub fn run_control_loop(input: &NodeControlLoopInput<'_>) -> Result<NodeControlL
         processed_count: 0,
         diagnostics: &initial_diagnostics,
     })?;
-    let heartbeat_receipt_ref = canonical_hash(&heartbeat_value)?;
+    let heartbeat_receipt_ref = preserves_rail::canonical_hash(&heartbeat_value)?;
     write_preserves(&control_heartbeat_receipt_path(input.state_root, &heartbeat_receipt_ref), &heartbeat_value)?;
     import_node_artifact(input.state_root, &heartbeat_value)?;
 
@@ -4996,7 +5301,7 @@ pub fn run_control_loop(input: &NodeControlLoopInput<'_>) -> Result<NodeControlL
         has_stopped,
         diagnostics: &diagnostics,
     })?;
-    let loop_receipt_ref = canonical_hash(&loop_value)?;
+    let loop_receipt_ref = preserves_rail::canonical_hash(&loop_value)?;
     write_preserves(&control_loop_receipt_path(input.state_root, &loop_receipt_ref), &loop_value)?;
     import_node_artifact(input.state_root, &loop_value)?;
     Ok(NodeControlLoop {
@@ -5142,7 +5447,7 @@ fn handle_existing_service_lock(
         && policy.stale_lock_recovery
     {
         let lock_value = read_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE))?;
-        let stale_lock_ref = canonical_hash(&lock_value)?;
+        let stale_lock_ref = preserves_rail::canonical_hash(&lock_value)?;
         let diagnostics = vec!["node control stale service lock recovered by supervisor policy".to_string()];
         let receipt_ref = write_supervisor_receipt(input.state_root, &SupervisorReceiptValueInput {
             decision: "pass",
@@ -5206,7 +5511,7 @@ fn denied_restart_attempt(
         supervisor_receipt_refs: &supervisor_receipt_refs,
         diagnostics: &diagnostics,
     })?;
-    let service_receipt_ref = canonical_hash(&receipt_value)?;
+    let service_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlServe {
@@ -5245,7 +5550,7 @@ fn start_service_run(
         max_requests_per_tick: input.max_requests_per_tick,
         service_run_ref: &service_run_id,
     })?;
-    let service_lock_ref = canonical_hash(&lock_value)?;
+    let service_lock_ref = preserves_rail::canonical_hash(&lock_value)?;
     write_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE), &lock_value)?;
     import_node_artifact(input.state_root, &lock_value)?;
     if let Some(policy) = supervisor_policy {
@@ -5310,7 +5615,7 @@ fn write_service_heartbeat(input: &ServiceTickInput<'_>, run: &mut ServiceRunPar
         processed_count: run.processed_request_refs.len() as u64,
         diagnostics: &run.diagnostics,
     })?;
-    let heartbeat_ref = canonical_hash(&heartbeat_value)?;
+    let heartbeat_ref = preserves_rail::canonical_hash(&heartbeat_value)?;
     write_preserves(&control_service_heartbeat_path(input.state_root, &heartbeat_ref), &heartbeat_value)?;
     import_node_artifact(input.state_root, &heartbeat_value)?;
     run.heartbeat_receipt_refs.push(heartbeat_ref);
@@ -5431,7 +5736,7 @@ fn finish_service_run(input: FinishServiceInput<'_>) -> Result<NodeControlServe>
         supervisor_receipt_refs: &input.supervisor_receipt_refs,
         diagnostics: &input.run.diagnostics,
     })?;
-    let service_receipt_ref = canonical_hash(&receipt_value)?;
+    let service_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlServe {
@@ -5457,7 +5762,7 @@ fn denied_duplicate_service_run(
     inherited_supervisor_receipt_refs: &[String],
 ) -> Result<NodeControlServe> {
     let lock_value = read_preserves(&input.state_root.join(CONTROL_SERVICE_LOCK_FILE))?;
-    let service_lock_ref = canonical_hash(&lock_value)?;
+    let service_lock_ref = preserves_rail::canonical_hash(&lock_value)?;
     let diagnostics = vec!["node control service runner already active".to_string()];
     let mut supervisor_receipt_refs = inherited_supervisor_receipt_refs.to_vec();
     if let Some(policy) = supervisor_policy {
@@ -5489,7 +5794,7 @@ fn denied_duplicate_service_run(
         supervisor_receipt_refs: &supervisor_receipt_refs,
         diagnostics: &diagnostics,
     })?;
-    let service_receipt_ref = canonical_hash(&receipt_value)?;
+    let service_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_service_run_receipt_path(input.state_root, &service_receipt_ref), &receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlServe {
@@ -5548,7 +5853,7 @@ fn remove_service_lock(state_root: &Path, service_lock_ref: &str) -> Result<()> 
     if !path.exists() {
         return Ok(());
     }
-    let current_ref = canonical_hash(&read_preserves(&path)?)?;
+    let current_ref = preserves_rail::canonical_hash(&read_preserves(&path)?)?;
     if current_ref != service_lock_ref {
         return Err(MoltenError::invalid_harness("node control service lock changed during serve"));
     }
@@ -5559,7 +5864,7 @@ fn node_ingress_receipt_decision(value: &IOValue) -> Result<String> {
     let fields = value
         .collect_simple_record("node-control-ingress-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-receipt-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_INGRESS_RECEIPT_SCHEMA, "node control ingress receipt")?;
+    require_schema(&fields[0], preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA, "node control ingress receipt")?;
     record_string(&fields[1], "decision")
 }
 
@@ -5620,7 +5925,7 @@ pub async fn publish_node_control_live_ingress(
     if diagnostics.is_empty() {
         input
             .sender
-            .broadcast(canonical_bytes(&envelope.value)?.into())
+            .broadcast(preserves_rail::canonical_bytes(&envelope.value)?.into())
             .await
             .map_err(|error| MoltenError::invalid_harness(format!("live Iroh node control publish failed: {error}")))?;
     }
@@ -5633,7 +5938,7 @@ pub async fn publish_node_control_live_ingress(
         ingress_receipt_ref: None,
         diagnostics: &diagnostics,
     })?;
-    let transport_receipt_ref = canonical_hash(&receipt_value)?;
+    let transport_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     Ok(NodeControlLiveIngressPublish {
         envelope_ref: envelope.envelope_ref,
         transport_receipt_ref,
@@ -5672,7 +5977,7 @@ pub fn receive_node_control_live_ingress_bytes(
     validate_node_id(input.receiver_node)?;
     validate_node_id(input.delivered_from)?;
     ensure_state_layout(input.state_root)?;
-    let value = parse_canonical_bytes(input.bytes)?;
+    let value = preserves_rail::parse_canonical_bytes(input.bytes)?;
     let envelope = parse_node_control_ingress_envelope(&value)?;
     let mut diagnostics = live_receive_diagnostics(input, &envelope);
     write_ingress_envelope_and_verify(input.state_root, input.topic, &envelope)?;
@@ -5700,7 +6005,7 @@ pub fn receive_node_control_live_ingress_bytes(
         ingress_receipt_ref: Some(&delivered.ingress_receipt_ref),
         diagnostics: &diagnostics,
     })?;
-    let transport_receipt_ref = canonical_hash(&receipt_value)?;
+    let transport_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(
         &control_live_transport_receipt_path(input.state_root, &envelope.envelope_ref, "receive"),
         &receipt_value,
@@ -6042,7 +6347,7 @@ async fn publish_with_retries(
                     envelope,
                     diagnostics: &attempt_diagnostics,
                 })?;
-                let retry_ref = canonical_hash(&retry_value)?;
+                let retry_ref = preserves_rail::canonical_hash(&retry_value)?;
                 if let Some(state_root) = input.state_root {
                     write_preserves(&control_live_send_retry_receipt_path(state_root, &retry_ref), &retry_value)?;
                     import_node_artifact(state_root, &retry_value)?;
@@ -6069,7 +6374,7 @@ fn finish_send(input: FinishSendInput<'_>) -> Result<NodeControlLiveSend> {
         transport_receipt_ref: Some(&input.published.transport_receipt_ref),
         diagnostics: &[],
     })?;
-    let send_receipt_ref = canonical_hash(&send_receipt_value)?;
+    let send_receipt_ref = preserves_rail::canonical_hash(&send_receipt_value)?;
     if let Some(state_root) = input.input.state_root {
         import_node_artifact(state_root, input.input.receiver_ticket_value)?;
         write_ingress_envelope_and_verify(state_root, &input.ticket.topic, &input.envelope)?;
@@ -6167,7 +6472,7 @@ fn duplicate_node_control_live_send(
         ingress_receipt_ref: None,
         diagnostics: &[],
     })?;
-    let transport_receipt_ref = canonical_hash(&transport_receipt_value)?;
+    let transport_receipt_ref = preserves_rail::canonical_hash(&transport_receipt_value)?;
     let send_receipt_value = live_send_receipt_value(&LiveSendReceiptValueInput {
         decision: "pass",
         from_peer: input.from_peer,
@@ -6176,7 +6481,7 @@ fn duplicate_node_control_live_send(
         transport_receipt_ref: Some(&transport_receipt_ref),
         diagnostics: &[],
     })?;
-    let send_receipt_ref = canonical_hash(&send_receipt_value)?;
+    let send_receipt_ref = preserves_rail::canonical_hash(&send_receipt_value)?;
     let send_path = control_live_send_receipt_path(state_root, &send_receipt_ref);
     if !send_path.exists() {
         return Ok(None);
@@ -6200,7 +6505,7 @@ fn duplicate_node_control_live_send(
         prior_send_receipt_ref: &send_receipt_ref,
         diagnostics: &diagnostics,
     })?;
-    let duplicate_receipt_ref = canonical_hash(&duplicate_receipt_value)?;
+    let duplicate_receipt_ref = preserves_rail::canonical_hash(&duplicate_receipt_value)?;
     write_preserves(
         &control_live_send_duplicate_receipt_path(state_root, &duplicate_receipt_ref),
         &duplicate_receipt_value,
@@ -6232,7 +6537,7 @@ fn denied_node_control_live_send_with_diagnostics(denied: DeniedLiveSendInput<'_
         transport_receipt_ref: None,
         diagnostics: &denied.diagnostics,
     })?;
-    let send_receipt_ref = canonical_hash(&send_receipt_value)?;
+    let send_receipt_ref = preserves_rail::canonical_hash(&send_receipt_value)?;
     if let Some(state_root) = denied.input.state_root {
         import_node_artifact(state_root, denied.input.receiver_ticket_value)?;
         write_ingress_envelope_and_verify(state_root, &denied.ticket.topic, &denied.envelope)?;
@@ -6261,13 +6566,17 @@ pub fn parse_node_control_live_send_receipt(value: &IOValue) -> Result<NodeContr
     let fields = value
         .collect_simple_record("node-control-live-send-receipt-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-send-receipt-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA, "node control live send receipt")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA,
+        "node control live send receipt",
+    )?;
     let transport_receipt_ref = record_optional_string(&fields[10], "transport-receipt")?;
     if let Some(reference) = transport_receipt_ref.as_ref() {
         validate_ingress_ref(reference, "node control live send transport receipt ref")?;
     }
     Ok(NodeControlLiveSendReceipt {
-        receipt_ref: canonical_hash(value)?,
+        receipt_ref: preserves_rail::canonical_hash(value)?,
         decision: record_string(&fields[1], "decision")?,
         topic: record_string(&fields[3], "topic")?,
         from_peer: record_string(&fields[4], "from-peer")?,
@@ -6427,7 +6736,7 @@ pub fn node_control_live_workflow_receipt(
         service_receipt_ref: &service_receipt_ref,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     if let Some(state_root) = input.state_root {
         import_flow_values(state_root, input, &receipt_ref, &receipt_value)?;
     }
@@ -6441,12 +6750,20 @@ pub fn node_control_live_workflow_receipt(
 
 fn service_run_receipt_ref(value: &IOValue) -> Result<String> {
     if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(17)) {
-        require_schema(&fields[0], NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA, "node control service run receipt")?;
-        return canonical_hash(value);
+        require_schema(
+            &fields[0],
+            preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA,
+            "node control service run receipt",
+        )?;
+        return preserves_rail::canonical_hash(value);
     }
     if let Some(fields) = value.collect_simple_record("node-control-service-run-receipt-v1", Some(15)) {
-        require_schema(&fields[0], NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA, "node control service run receipt")?;
-        return canonical_hash(value);
+        require_schema(
+            &fields[0],
+            preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA,
+            "node control service run receipt",
+        )?;
+        return preserves_rail::canonical_hash(value);
     }
     Err(MoltenError::invalid_harness("expected <node-control-service-run-receipt-v1 ...>"))
 }
@@ -6455,9 +6772,13 @@ fn live_transport_receipt_ref(value: &IOValue) -> Result<(String, String, String
     let fields = value
         .collect_simple_record("node-control-live-transport-receipt-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-transport-receipt-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA, "node control live transport receipt")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA,
+        "node control live transport receipt",
+    )?;
     Ok((
-        canonical_hash(value)?,
+        preserves_rail::canonical_hash(value)?,
         record_string(&fields[1], "operation")?,
         record_ref_string(&fields[7], "envelope")?,
     ))
@@ -6467,9 +6788,13 @@ fn live_listener_receipt_refs(value: &IOValue) -> Result<(String, Vec<String>, S
     let fields = value
         .collect_simple_record("node-control-live-listener-receipt-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-live-listener-receipt-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA, "node control live listener receipt")?;
+    require_schema(
+        &fields[0],
+        preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA,
+        "node control live listener receipt",
+    )?;
     Ok((
-        canonical_hash(value)?,
+        preserves_rail::canonical_hash(value)?,
         record_ref_strings(&fields[9], "transport-receipts")?,
         record_ref_string(&fields[11], "service-run")?,
     ))
@@ -6726,7 +7051,7 @@ async fn serve_node_control_live_listener_with_topic(
         service_receipt_ref: &service.service_receipt_ref,
         diagnostics: &scan.diagnostics,
     })?;
-    let listener_receipt_ref = canonical_hash(&receipt_value)?;
+    let listener_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_live_listener_receipt_path(input.state_root, &listener_receipt_ref), &receipt_value)?;
     import_node_artifact(input.state_root, &receipt_value)?;
     Ok(NodeControlLiveServe {
@@ -6974,7 +7299,7 @@ fn denied_live_ingress_delivery(
         queue_receipt_ref: None,
         diagnostics,
     })?;
-    let ingress_receipt_ref = canonical_hash(&receipt_value)?;
+    let ingress_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_ingress_receipt_path(state_root, &envelope.envelope_ref, "deliver"), &receipt_value)?;
     import_node_artifact(state_root, &receipt_value)?;
     Ok(NodeControlIngressDeliver {
@@ -7021,7 +7346,7 @@ pub fn parse_node_control_ingress_envelope(value: &IOValue) -> Result<NodeContro
     let fields = value
         .collect_simple_record("node-control-ingress-envelope-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-ingress-envelope-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA, "node control ingress envelope")?;
+    require_schema(&fields[0], preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA, "node control ingress envelope")?;
     let transport = record_string(&fields[1], "transport")?;
     let topic = record_string(&fields[2], "topic")?;
     let from_peer = record_string(&fields[3], "from-peer")?;
@@ -7053,7 +7378,7 @@ pub fn parse_node_control_ingress_envelope(value: &IOValue) -> Result<NodeContro
         return Err(MoltenError::invalid_harness("node control ingress operation ref mismatch"));
     }
     Ok(NodeControlIngressEnvelope {
-        envelope_ref: canonical_hash(value)?,
+        envelope_ref: preserves_rail::canonical_hash(value)?,
         transport,
         topic,
         from_peer,
@@ -7087,7 +7412,7 @@ pub fn publish_node_control_ingress(input: &NodeControlIngressPublishInput<'_>) 
         queue_receipt_ref: None,
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(
         &control_ingress_receipt_path(input.state_root, &envelope.envelope_ref, "publish"),
         &receipt_value,
@@ -7192,7 +7517,7 @@ pub fn deliver_node_control_ingress(input: &NodeControlIngressDeliverInput<'_>) 
         queue_receipt_ref: enqueue.queue_receipt_ref.as_deref(),
         diagnostics: &diagnostics,
     })?;
-    let ingress_receipt_ref = canonical_hash(&receipt_value)?;
+    let ingress_receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(
         &control_ingress_receipt_path(input.state_root, &envelope.envelope_ref, "deliver"),
         &receipt_value,
@@ -7379,7 +7704,7 @@ fn evaluate_live_authority_delegation(state_root: &Path, envelope: &NodeControlI
         grant_ref: admitted_grant_ref.as_deref(),
         diagnostics: &diagnostics,
     })?;
-    let receipt_ref = canonical_hash(&receipt_value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&receipt_value)?;
     write_preserves(&control_authority_receipt_path(state_root, &envelope.envelope_ref), &receipt_value)?;
     import_node_artifact(state_root, &receipt_value)?;
     if decision == "deny" {
@@ -7474,7 +7799,7 @@ fn ingress_idempotency_evidence_refs(envelope: &NodeControlIngressEnvelope) -> V
 
 fn prior_queue_receipt_ref(state_root: &Path, request_ref: &str) -> Result<String> {
     let receipt = read_preserves(&queue_receipt_path(state_root, request_ref))?;
-    canonical_hash(&receipt)
+    preserves_rail::canonical_hash(&receipt)
 }
 
 fn prior_dispatch_for_request(
@@ -7488,7 +7813,7 @@ fn prior_dispatch_for_request(
     let archived_path = control_outbox_request_path(state_root, &request.request_ref);
     if archived_path.exists() {
         let archived_value = read_preserves(&archived_path)?;
-        let archived_ref = canonical_hash(&archived_value)?;
+        let archived_ref = preserves_rail::canonical_hash(&archived_value)?;
         if archived_ref != request.request_ref {
             return Err(MoltenError::invalid_harness(
                 "node control duplicate request conflicts with archived request evidence",
@@ -7527,7 +7852,7 @@ fn write_dispatch_queue_receipt(
         location_ref: &location_ref,
         diagnostics: &diagnostics,
     })?;
-    let queue_receipt_ref = canonical_hash(&queue_receipt)?;
+    let queue_receipt_ref = preserves_rail::canonical_hash(&queue_receipt)?;
     write_preserves(&dispatch_receipt_path(state_root, &request.request_ref), &queue_receipt)?;
     import_node_artifact(state_root, &queue_receipt)?;
     Ok(queue_receipt_ref)
@@ -7694,7 +8019,7 @@ fn finish_install(input: InstallFinishInput<'_>) -> Result<NodeControlDispatch> 
                 );
             }
         };
-    let install_receipt_ref = canonical_hash(&install.receipt_value)?;
+    let install_receipt_ref = preserves_rail::canonical_hash(&install.receipt_value)?;
     write_preserves(
         &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "artifact-install"),
         &install.receipt_value,
@@ -7900,7 +8225,7 @@ fn complete_run(input: CompleteRunInput<'_>) -> Result<NodeControlDispatch> {
     subreceipt_refs.push(input.provenance.receipt_ref);
     subreceipt_refs.push(execution.receipt_ref.clone());
     if let Some(run) = execution.run.as_ref() {
-        let run_ref = canonical_hash(&run.receipt_value)?;
+        let run_ref = preserves_rail::canonical_hash(&run.receipt_value)?;
         write_preserves(
             &control_operation_subreceipt_path(input.state_root, &input.request.request_ref, "job-run"),
             &run.receipt_value,
@@ -8032,7 +8357,7 @@ fn finalize_operation_dispatch(input: &OperationFinalizeInput<'_>) -> Result<Nod
         request: input.request,
         diagnostics: input.diagnostics,
     })?;
-    let operation_receipt_ref = canonical_hash(&operation_receipt)?;
+    let operation_receipt_ref = preserves_rail::canonical_hash(&operation_receipt)?;
     write_preserves(&control_operation_receipt_path(input.state_root, &input.request.request_ref), &operation_receipt)?;
     import_node_artifact(input.state_root, &operation_receipt)?;
     let mut all_subreceipt_refs = Vec::with_capacity(input.subreceipt_refs.len() + 1);
@@ -8045,7 +8370,7 @@ fn finalize_operation_dispatch(input: &OperationFinalizeInput<'_>) -> Result<Nod
         &all_subreceipt_refs,
         input.diagnostics,
     )?;
-    let control_receipt_ref = canonical_hash(&control_receipt)?;
+    let control_receipt_ref = preserves_rail::canonical_hash(&control_receipt)?;
     write_preserves(&control_outbox_receipt_path(input.state_root, &input.request.request_ref), &control_receipt)?;
     import_node_artifact(input.state_root, &control_receipt)?;
     Ok(NodeControlDispatch {
@@ -8130,53 +8455,82 @@ fn control_receipt_for_request(
 
 fn authority_receipt_value(input: &AuthorityReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    Ok(record("node-control-authority-receipt-v1", vec![
-        string(NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("envelope", vec![string(&input.envelope.envelope_ref)]),
-        record("request", vec![string(&input.envelope.request.request_ref)]),
-        record("from-peer", vec![string(&input.envelope.from_peer)]),
-        record("to-node", vec![string(&input.envelope.to_node)]),
-        record("operation", vec![string(&input.envelope.request.operation)]),
-        record("grant", vec![optional_string(input.grant_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![
-                string("peer-node-bound"),
-                string(if input.grant_ref.is_some() { "pass" } else { "fail" }),
+    Ok(preserves_rail::record("node-control-authority-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&input.envelope.request.request_ref)]),
+        preserves_rail::record("from-peer", vec![preserves_rail::string(&input.envelope.from_peer)]),
+        preserves_rail::record("to-node", vec![preserves_rail::string(&input.envelope.to_node)]),
+        preserves_rail::record("operation", vec![preserves_rail::string(&input.envelope.request.operation)]),
+        preserves_rail::record("grant", vec![optional_string(input.grant_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("peer-node-bound"),
+                preserves_rail::string(if input.grant_ref.is_some() { "pass" } else { "fail" }),
             ]),
-            record("check", vec![
-                string("operation-scope-bound"),
-                string(if input.grant_ref.is_some() { "pass" } else { "fail" }),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("operation-scope-bound"),
+                preserves_rail::string(if input.grant_ref.is_some() { "pass" } else { "fail" }),
             ]),
-            record("check", vec![string("revocation-checked-at-ingress"), string("pass")]),
-            record("check", vec![string("transport-is-not-authority"), string("pass")]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("revocation-checked-at-ingress"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("transport-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn live_listener_receipt_value(input: &ListenerReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    Ok(record("node-control-live-listener-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("startup", vec![string(input.startup_receipt_ref)]),
-        record("node", vec![string(input.node_id)]),
-        record("logical-endpoint", vec![string(input.logical_endpoint_id)]),
-        record("bound-endpoint", vec![string(input.bound_endpoint_id)]),
-        record("topic", vec![string(input.topic)]),
-        record("max-events", vec![string(input.max_events.to_string())]),
-        record("observed-events", vec![string(input.observed_events.to_string())]),
-        record("transport-receipts", vec![sequence(input.transport_receipt_refs.iter().map(string).collect())]),
-        record("neighbor-events", vec![sequence(input.neighbor_events.iter().map(string).collect())]),
-        record("service-run", vec![string(input.service_receipt_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("live-iroh-listener"), string("pass")]),
-            record("check", vec![string("receive-before-drain"), string("pass")]),
-            record("check", vec![string("session-evidence-not-authority"), string("pass")]),
-            record("check", vec![string("bounded-listener"), string("pass")]),
-            record("check", vec![string("durable-inbox-boundary"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-listener-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
+        preserves_rail::record("node", vec![preserves_rail::string(input.node_id)]),
+        preserves_rail::record("logical-endpoint", vec![preserves_rail::string(input.logical_endpoint_id)]),
+        preserves_rail::record("bound-endpoint", vec![preserves_rail::string(input.bound_endpoint_id)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
+        preserves_rail::record("max-events", vec![preserves_rail::string(input.max_events.to_string())]),
+        preserves_rail::record("observed-events", vec![preserves_rail::string(input.observed_events.to_string())]),
+        preserves_rail::record("transport-receipts", vec![preserves_rail::sequence(
+            input.transport_receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("neighbor-events", vec![preserves_rail::sequence(
+            input.neighbor_events.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("service-run", vec![preserves_rail::string(input.service_receipt_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("live-iroh-listener"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("receive-before-drain"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("session-evidence-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bounded-listener"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("durable-inbox-boundary"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -8184,58 +8538,76 @@ fn live_listener_receipt_value(input: &ListenerReceiptValueInput<'_>) -> Result<
 fn live_transport_receipt_value(input: &LiveTransportReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
     let has_peer_bootstrap = !input.envelope.peer_bootstrap_refs.is_empty();
-    Ok(record("node-control-live-transport-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA),
-        record("operation", vec![string(input.operation)]),
-        record("decision", vec![string(input.decision)]),
-        record("transport", vec![string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
-        record("topic", vec![string(&input.envelope.topic)]),
-        record("node", vec![string(input.node_id)]),
-        record("delivered-from", vec![optional_string(input.delivered_from)]),
-        record("envelope", vec![string(&input.envelope.envelope_ref)]),
-        record("ingress-receipt", vec![optional_string(input.ingress_receipt_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("canonical-envelope-ref"), string("pass")]),
-            record("check", vec![string("live-iroh-gossip"), string("pass")]),
-            record("check", vec![
-                string("peer-bootstrap-before-enqueue"),
-                string(if has_peer_bootstrap { "pass" } else { "fail" }),
+    Ok(preserves_rail::record("node-control-live-transport-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA),
+        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("transport", vec![preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(&input.envelope.topic)]),
+        preserves_rail::record("node", vec![preserves_rail::string(input.node_id)]),
+        preserves_rail::record("delivered-from", vec![optional_string(input.delivered_from)]),
+        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
+        preserves_rail::record("ingress-receipt", vec![optional_string(input.ingress_receipt_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("canonical-envelope-ref"),
+                preserves_rail::string("pass"),
             ]),
-            record("check", vec![string("transport-is-not-authority"), string("pass")]),
-            record("check", vec![string("durable-inbox-boundary"), string("pass")]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("live-iroh-gossip"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("peer-bootstrap-before-enqueue"),
+                preserves_rail::string(if has_peer_bootstrap { "pass" } else { "fail" }),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("transport-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("durable-inbox-boundary"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn live_workflow_receipt_value(input: &LiveWorkflowReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    Ok(record("node-control-live-workflow-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("topic", vec![string(&input.ticket.topic)]),
-        record("peer", vec![string(&input.admission.peer_id)]),
-        record("node", vec![string(&input.ticket.node_id)]),
-        record("receiver-ticket", vec![string(&input.ticket.ticket_ref)]),
-        record("peer-admission", vec![string(&input.admission.admission_ref)]),
-        record("authority-grant", vec![string(&input.authority.grant_ref)]),
-        record("send-receipt", vec![string(&input.send.receipt_ref)]),
-        record("receive-receipts", vec![sequence(input.receive_receipt_refs.iter().map(string).collect())]),
-        record("listener-receipt", vec![optional_string(input.listener_receipt_ref)]),
-        record("service-run", vec![string(input.service_receipt_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![
-                string("ticket-admission-bound"),
-                string(if input.admission.ticket_ref == input.ticket.ticket_ref {
+    Ok(preserves_rail::record("node-control-live-workflow-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(&input.ticket.topic)]),
+        preserves_rail::record("peer", vec![preserves_rail::string(&input.admission.peer_id)]),
+        preserves_rail::record("node", vec![preserves_rail::string(&input.ticket.node_id)]),
+        preserves_rail::record("receiver-ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
+        preserves_rail::record("peer-admission", vec![preserves_rail::string(&input.admission.admission_ref)]),
+        preserves_rail::record("authority-grant", vec![preserves_rail::string(&input.authority.grant_ref)]),
+        preserves_rail::record("send-receipt", vec![preserves_rail::string(&input.send.receipt_ref)]),
+        preserves_rail::record("receive-receipts", vec![preserves_rail::sequence(
+            input.receive_receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("listener-receipt", vec![optional_string(input.listener_receipt_ref)]),
+        preserves_rail::record("service-run", vec![preserves_rail::string(input.service_receipt_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("ticket-admission-bound"),
+                preserves_rail::string(if input.admission.ticket_ref == input.ticket.ticket_ref {
                     "pass"
                 } else {
                     "fail"
                 }),
             ]),
-            record("check", vec![
-                string("authority-grant-bound"),
-                string(
+            preserves_rail::record("check", vec![
+                preserves_rail::string("authority-grant-bound"),
+                preserves_rail::string(
                     if input.authority.peer_id == input.admission.peer_id
                         && input.authority.node_id == input.ticket.node_id
                     {
@@ -8245,244 +8617,343 @@ fn live_workflow_receipt_value(input: &LiveWorkflowReceiptValueInput<'_>) -> Res
                     },
                 ),
             ]),
-            record("check", vec![
-                string("send-ticket-bound"),
-                string(if input.send.receiver_ticket_ref == input.ticket.ticket_ref {
+            preserves_rail::record("check", vec![
+                preserves_rail::string("send-ticket-bound"),
+                preserves_rail::string(if input.send.receiver_ticket_ref == input.ticket.ticket_ref {
                     "pass"
                 } else {
                     "fail"
                 }),
             ]),
-            record("check", vec![
-                string("receive-before-service"),
-                string(if input.receive_receipt_refs.is_empty() {
+            preserves_rail::record("check", vec![
+                preserves_rail::string("receive-before-service"),
+                preserves_rail::string(if input.receive_receipt_refs.is_empty() {
                     "fail"
                 } else {
                     "pass"
                 }),
             ]),
-            record("check", vec![string("transport-is-not-authority"), string("pass")]),
-            record("check", vec![string("durable-inbox-boundary"), string("pass")]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("transport-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("durable-inbox-boundary"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
+struct LiveSendReceiptChecks {
+    has_addresses: bool,
+    has_supported_addresses: bool,
+    has_expected_ticket_binding: bool,
+    has_operation_mismatch: bool,
+    has_state_root_evidence: bool,
+    has_transport_success: bool,
+}
+
+fn pass_if(condition: bool) -> &'static str {
+    if condition { "pass" } else { "fail" }
+}
+
+fn fail_if(condition: bool) -> &'static str {
+    if condition { "fail" } else { "pass" }
+}
+
+fn receipt_check_value(name: &str, status: &str) -> IOValue {
+    preserves_rail::record("check", vec![preserves_rail::string(name), preserves_rail::string(status)])
+}
+
+fn live_send_receipt_checks(input: &LiveSendReceiptValueInput<'_>) -> LiveSendReceiptChecks {
+    let has_addresses = !input.ticket.address_refs.is_empty();
+    LiveSendReceiptChecks {
+        has_addresses,
+        has_operation_mismatch: diagnostics_include(input.diagnostics, "operation-id"),
+        has_supported_addresses: has_addresses
+            && !diagnostics_include(input.diagnostics, "unsupported transport address")
+            && !diagnostics_include(input.diagnostics, "address unsupported or malformed")
+            && !diagnostics_include(input.diagnostics, "address parse failed")
+            && !diagnostics_include(input.diagnostics, "endpoint parse failed"),
+        has_expected_ticket_binding: !diagnostics_include(input.diagnostics, "ticket node")
+            && !diagnostics_include(input.diagnostics, "ticket topic")
+            && !diagnostics_include(input.diagnostics, "ticket endpoint"),
+        has_state_root_evidence: !diagnostics_include(input.diagnostics, "sender state root")
+            && !diagnostics_include(input.diagnostics, "peer admission refs missing")
+            && !diagnostics_include(input.diagnostics, "authority grant refs missing"),
+        has_transport_success: input.transport_receipt_ref.is_some(),
+    }
+}
+
+fn live_send_check_sequence(checks: &LiveSendReceiptChecks) -> IOValue {
+    preserves_rail::sequence(vec![
+        receipt_check_value("receiver-ticket-bound", "pass"),
+        receipt_check_value("receiver-address-bound", pass_if(checks.has_addresses)),
+        receipt_check_value("receiver-address-supported", pass_if(checks.has_supported_addresses)),
+        receipt_check_value("receiver-ticket-expected", pass_if(checks.has_expected_ticket_binding)),
+        receipt_check_value("operation-id-bound", fail_if(checks.has_operation_mismatch)),
+        receipt_check_value("sender-state-root-evidence", pass_if(checks.has_state_root_evidence)),
+        receipt_check_value("join-or-publish-succeeded", pass_if(checks.has_transport_success)),
+        receipt_check_value("canonical-envelope-ref", "pass"),
+        receipt_check_value("live-iroh-gossip", "pass"),
+        receipt_check_value("transport-is-not-authority", "pass"),
+        receipt_check_value("durable-inbox-boundary", "pass"),
+    ])
+}
+
 fn live_send_receipt_value(input: &LiveSendReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    let has_addresses = !input.ticket.address_refs.is_empty();
-    let has_operation_mismatch = diagnostics_include(input.diagnostics, "operation-id");
-    let has_supported_addresses = has_addresses
-        && !diagnostics_include(input.diagnostics, "unsupported transport address")
-        && !diagnostics_include(input.diagnostics, "address unsupported or malformed")
-        && !diagnostics_include(input.diagnostics, "address parse failed")
-        && !diagnostics_include(input.diagnostics, "endpoint parse failed");
-    let has_expected_ticket_binding = !diagnostics_include(input.diagnostics, "ticket node")
-        && !diagnostics_include(input.diagnostics, "ticket topic")
-        && !diagnostics_include(input.diagnostics, "ticket endpoint");
-    let has_state_root_evidence = !diagnostics_include(input.diagnostics, "sender state root")
-        && !diagnostics_include(input.diagnostics, "peer admission refs missing")
-        && !diagnostics_include(input.diagnostics, "authority grant refs missing");
-    let has_transport_success = input.transport_receipt_ref.is_some();
-    Ok(record("node-control-live-send-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("transport", vec![string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
-        record("topic", vec![string(&input.envelope.topic)]),
-        record("from-peer", vec![string(input.from_peer)]),
-        record("to-node", vec![string(&input.ticket.node_id)]),
-        record("receiver-ticket", vec![string(&input.ticket.ticket_ref)]),
-        record("receiver-endpoint", vec![string(&input.ticket.live_endpoint_id)]),
-        record("receiver-addresses", vec![sequence(input.ticket.address_refs.iter().map(string).collect())]),
-        record("envelope", vec![string(&input.envelope.envelope_ref)]),
-        record("transport-receipt", vec![optional_string(input.transport_receipt_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("receiver-ticket-bound"), string("pass")]),
-            record("check", vec![
-                string("receiver-address-bound"),
-                string(if has_addresses { "pass" } else { "fail" }),
-            ]),
-            record("check", vec![
-                string("receiver-address-supported"),
-                string(if has_supported_addresses { "pass" } else { "fail" }),
-            ]),
-            record("check", vec![
-                string("receiver-ticket-expected"),
-                string(if has_expected_ticket_binding { "pass" } else { "fail" }),
-            ]),
-            record("check", vec![
-                string("operation-id-bound"),
-                string(if has_operation_mismatch { "fail" } else { "pass" }),
-            ]),
-            record("check", vec![
-                string("sender-state-root-evidence"),
-                string(if has_state_root_evidence { "pass" } else { "fail" }),
-            ]),
-            record("check", vec![
-                string("join-or-publish-succeeded"),
-                string(if has_transport_success { "pass" } else { "fail" }),
-            ]),
-            record("check", vec![string("canonical-envelope-ref"), string("pass")]),
-            record("check", vec![string("live-iroh-gossip"), string("pass")]),
-            record("check", vec![string("transport-is-not-authority"), string("pass")]),
-            record("check", vec![string("durable-inbox-boundary"), string("pass")]),
-        ])]),
+    let checks = live_send_receipt_checks(input);
+    Ok(preserves_rail::record("node-control-live-send-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("transport", vec![preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(&input.envelope.topic)]),
+        preserves_rail::record("from-peer", vec![preserves_rail::string(input.from_peer)]),
+        preserves_rail::record("to-node", vec![preserves_rail::string(&input.ticket.node_id)]),
+        preserves_rail::record("receiver-ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
+        preserves_rail::record("receiver-endpoint", vec![preserves_rail::string(&input.ticket.live_endpoint_id)]),
+        preserves_rail::record("receiver-addresses", vec![preserves_rail::sequence(
+            input.ticket.address_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
+        preserves_rail::record("transport-receipt", vec![optional_string(input.transport_receipt_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![live_send_check_sequence(&checks)]),
     ]))
 }
 
 fn live_send_retry_receipt_value(input: &LiveSendRetryReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    Ok(record("node-control-live-send-retry-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("attempt", vec![string(input.attempt.to_string())]),
-        record("max-attempts", vec![string(input.max_attempts.to_string())]),
-        record("transport", vec![string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
-        record("topic", vec![string(&input.envelope.topic)]),
-        record("from-peer", vec![string(input.from_peer)]),
-        record("to-node", vec![string(&input.ticket.node_id)]),
-        record("receiver-ticket", vec![string(&input.ticket.ticket_ref)]),
-        record("receiver-endpoint", vec![string(&input.ticket.live_endpoint_id)]),
-        record("envelope", vec![string(&input.envelope.envelope_ref)]),
-        record("operation", vec![string(&input.envelope.operation_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("bounded-retry"), string("pass")]),
-            record("check", vec![string("operation-id-bound"), string("pass")]),
-            record("check", vec![string("transport-is-not-authority"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-send-retry-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("attempt", vec![preserves_rail::string(input.attempt.to_string())]),
+        preserves_rail::record("max-attempts", vec![preserves_rail::string(input.max_attempts.to_string())]),
+        preserves_rail::record("transport", vec![preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(&input.envelope.topic)]),
+        preserves_rail::record("from-peer", vec![preserves_rail::string(input.from_peer)]),
+        preserves_rail::record("to-node", vec![preserves_rail::string(&input.ticket.node_id)]),
+        preserves_rail::record("receiver-ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
+        preserves_rail::record("receiver-endpoint", vec![preserves_rail::string(&input.ticket.live_endpoint_id)]),
+        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
+        preserves_rail::record("operation", vec![preserves_rail::string(&input.envelope.operation_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bounded-retry"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("operation-id-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("transport-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn live_send_duplicate_receipt_value(input: &LiveSendDuplicateReceiptValueInput<'_>) -> Result<IOValue> {
-    Ok(record("node-control-live-send-duplicate-receipt-v1", vec![
-        string(NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA),
-        record("decision", vec![string("pass")]),
-        record("transport", vec![string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
-        record("topic", vec![string(&input.envelope.topic)]),
-        record("from-peer", vec![string(input.from_peer)]),
-        record("to-node", vec![string(&input.ticket.node_id)]),
-        record("receiver-ticket", vec![string(&input.ticket.ticket_ref)]),
-        record("receiver-endpoint", vec![string(&input.ticket.live_endpoint_id)]),
-        record("envelope", vec![string(&input.envelope.envelope_ref)]),
-        record("operation", vec![string(&input.envelope.operation_ref)]),
-        record("prior-send-receipt", vec![string(input.prior_send_receipt_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("duplicate-side-effect-suppressed"), string("pass")]),
-            record("check", vec![string("operation-id-bound"), string("pass")]),
-            record("check", vec![string("prior-send-receipt-bound"), string("pass")]),
-            record("check", vec![string("transport-is-not-authority"), string("pass")]),
+    Ok(preserves_rail::record("node-control-live-send-duplicate-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string("pass")]),
+        preserves_rail::record("transport", vec![preserves_rail::string(LIVE_CONTROL_INGRESS_TRANSPORT)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(&input.envelope.topic)]),
+        preserves_rail::record("from-peer", vec![preserves_rail::string(input.from_peer)]),
+        preserves_rail::record("to-node", vec![preserves_rail::string(&input.ticket.node_id)]),
+        preserves_rail::record("receiver-ticket", vec![preserves_rail::string(&input.ticket.ticket_ref)]),
+        preserves_rail::record("receiver-endpoint", vec![preserves_rail::string(&input.ticket.live_endpoint_id)]),
+        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
+        preserves_rail::record("operation", vec![preserves_rail::string(&input.envelope.operation_ref)]),
+        preserves_rail::record("prior-send-receipt", vec![preserves_rail::string(input.prior_send_receipt_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("duplicate-side-effect-suppressed"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("operation-id-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("prior-send-receipt-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("transport-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn service_lock_value(input: &ServiceLockValueInput<'_>) -> Result<IOValue> {
-    Ok(record("node-control-service-lock-v1", vec![
-        string(NODE_CONTROL_SERVICE_LOCK_SCHEMA),
-        record("state-root", vec![string(&state_root_profile_ref(input.state_root)?)]),
-        record("startup", vec![string(input.startup_receipt_ref)]),
-        record("node", vec![string(input.node_id)]),
-        record("topic", vec![string(input.topic)]),
-        record("max-ticks", vec![string(input.max_ticks.to_string())]),
-        record("max-requests-per-tick", vec![string(input.max_requests_per_tick.to_string())]),
-        record("service-run", vec![string(input.service_run_ref)]),
-        record("profile", vec![string("local-supervised-node-control-v1")]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("startup-bound"), string("pass")]),
-            record("check", vec![string("single-active-service"), string("pass")]),
-            record("check", vec![string("bounded-ticks"), string("pass")]),
-            record("check", vec![string("not-authority-token"), string("pass")]),
+    Ok(preserves_rail::record("node-control-service-lock-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_SERVICE_LOCK_SCHEMA),
+        preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(input.state_root)?)]),
+        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
+        preserves_rail::record("node", vec![preserves_rail::string(input.node_id)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
+        preserves_rail::record("max-ticks", vec![preserves_rail::string(input.max_ticks.to_string())]),
+        preserves_rail::record("max-requests-per-tick", vec![preserves_rail::string(
+            input.max_requests_per_tick.to_string(),
+        )]),
+        preserves_rail::record("service-run", vec![preserves_rail::string(input.service_run_ref)]),
+        preserves_rail::record("profile", vec![preserves_rail::string("local-supervised-node-control-v1")]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("startup-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("single-active-service"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bounded-ticks"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("not-authority-token"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn service_heartbeat_receipt_value(input: &ServiceHeartbeatValueInput<'_>) -> Result<IOValue> {
-    Ok(record("node-control-service-heartbeat-receipt-v1", vec![
-        string(NODE_CONTROL_SERVICE_HEARTBEAT_RECEIPT_SCHEMA),
-        record("decision", vec![string(if input.diagnostics.is_empty() { "pass" } else { "deny" })]),
-        record("startup", vec![string(input.startup_receipt_ref)]),
-        record("service-lock", vec![string(input.service_lock_ref)]),
-        record("tick", vec![string(input.tick.to_string())]),
-        record("delivered-count", vec![string(input.delivered_count.to_string())]),
-        record("processed-count", vec![string(input.processed_count.to_string())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("service-lock-bound"), string("pass")]),
-            record("check", vec![string("startup-bound"), string("pass")]),
-            record("check", vec![string("monotonic-tick"), string("pass")]),
+    Ok(preserves_rail::record("node-control-service-heartbeat-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_SERVICE_HEARTBEAT_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(if input.diagnostics.is_empty() {
+            "pass"
+        } else {
+            "deny"
+        })]),
+        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
+        preserves_rail::record("service-lock", vec![preserves_rail::string(input.service_lock_ref)]),
+        preserves_rail::record("tick", vec![preserves_rail::string(input.tick.to_string())]),
+        preserves_rail::record("delivered-count", vec![preserves_rail::string(input.delivered_count.to_string())]),
+        preserves_rail::record("processed-count", vec![preserves_rail::string(input.processed_count.to_string())]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("service-lock-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("startup-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("monotonic-tick"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn supervisor_receipt_value(input: &SupervisorReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    Ok(record("node-control-supervisor-receipt-v1", vec![
-        string(NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("operation", vec![string(input.operation)]),
-        record("startup", vec![string(input.startup_receipt_ref)]),
-        record("service-lock", vec![optional_string(input.service_lock_ref)]),
-        record("policy", vec![optional_string(input.supervisor_policy_ref)]),
-        record("topic", vec![string(input.topic)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![
-                string("supervisor-policy-bound"),
-                string(if input.supervisor_policy_ref.is_some() {
+    Ok(preserves_rail::record("node-control-supervisor-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_SUPERVISOR_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
+        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
+        preserves_rail::record("service-lock", vec![optional_string(input.service_lock_ref)]),
+        preserves_rail::record("policy", vec![optional_string(input.supervisor_policy_ref)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("supervisor-policy-bound"),
+                preserves_rail::string(if input.supervisor_policy_ref.is_some() {
                     "pass"
                 } else {
                     "fail"
                 }),
             ]),
-            record("check", vec![string("single-active-service"), string("pass")]),
-            record("check", vec![string("bounded-restart-policy"), string("pass")]),
-            record("check", vec![string("shutdown-drain-bound"), string("pass")]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("single-active-service"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bounded-restart-policy"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("shutdown-drain-bound"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
+fn service_run_check_sequence(input: &ServiceRunReceiptValueInput<'_>) -> IOValue {
+    let has_supervisor_policy_binding =
+        input.supervisor_policy_ref.is_none() || !input.supervisor_receipt_refs.is_empty();
+    preserves_rail::sequence(vec![
+        receipt_check_value("single-active-service", pass_if(input.service_lock_ref.is_some())),
+        receipt_check_value("ingress-before-loop", "pass"),
+        receipt_check_value("loop-reuse", "pass"),
+        receipt_check_value("shutdown-stop-semantics", "pass"),
+        receipt_check_value("bounded-ticks", "pass"),
+        receipt_check_value("supervisor-policy-bound", pass_if(has_supervisor_policy_binding)),
+    ])
+}
+
 fn service_run_receipt_value(input: &ServiceRunReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    Ok(record("node-control-service-run-receipt-v1", vec![
-        string(NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("startup", vec![string(input.startup_receipt_ref)]),
-        record("service-lock", vec![optional_string(input.service_lock_ref)]),
-        record("topic", vec![string(input.topic)]),
-        record("max-ticks", vec![string(input.max_ticks.to_string())]),
-        record("max-requests-per-tick", vec![string(input.max_requests_per_tick.to_string())]),
-        record("ticks", vec![string(input.ticks.to_string())]),
-        record("heartbeats", vec![sequence(input.heartbeat_receipt_refs.iter().map(string).collect())]),
-        record("ingress-receipts", vec![sequence(input.ingress_receipt_refs.iter().map(string).collect())]),
-        record("loop-receipts", vec![sequence(input.loop_receipt_refs.iter().map(string).collect())]),
-        record("processed-requests", vec![sequence(input.processed_request_refs.iter().map(string).collect())]),
-        record("stopped", vec![string(if input.has_stopped { "true" } else { "false" })]),
-        record("supervisor-policy", vec![optional_string(input.supervisor_policy_ref)]),
-        record("supervisor-receipts", vec![sequence(input.supervisor_receipt_refs.iter().map(string).collect())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![
-                string("single-active-service"),
-                string(if input.service_lock_ref.is_some() {
-                    "pass"
-                } else {
-                    "fail"
-                }),
-            ]),
-            record("check", vec![string("ingress-before-loop"), string("pass")]),
-            record("check", vec![string("loop-reuse"), string("pass")]),
-            record("check", vec![string("shutdown-stop-semantics"), string("pass")]),
-            record("check", vec![string("bounded-ticks"), string("pass")]),
-            record("check", vec![
-                string("supervisor-policy-bound"),
-                string(if input.supervisor_policy_ref.is_none() || !input.supervisor_receipt_refs.is_empty() {
-                    "pass"
-                } else {
-                    "fail"
-                }),
-            ]),
-        ])]),
+    Ok(preserves_rail::record("node-control-service-run-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_SERVICE_RUN_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
+        preserves_rail::record("service-lock", vec![optional_string(input.service_lock_ref)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
+        preserves_rail::record("max-ticks", vec![preserves_rail::string(input.max_ticks.to_string())]),
+        preserves_rail::record("max-requests-per-tick", vec![preserves_rail::string(
+            input.max_requests_per_tick.to_string(),
+        )]),
+        preserves_rail::record("ticks", vec![preserves_rail::string(input.ticks.to_string())]),
+        preserves_rail::record("heartbeats", vec![preserves_rail::sequence(
+            input.heartbeat_receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("ingress-receipts", vec![preserves_rail::sequence(
+            input.ingress_receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("loop-receipts", vec![preserves_rail::sequence(
+            input.loop_receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("processed-requests", vec![preserves_rail::sequence(
+            input.processed_request_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("stopped", vec![preserves_rail::string(if input.has_stopped {
+            "true"
+        } else {
+            "false"
+        })]),
+        preserves_rail::record("supervisor-policy", vec![optional_string(input.supervisor_policy_ref)]),
+        preserves_rail::record("supervisor-receipts", vec![preserves_rail::sequence(
+            input.supervisor_receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![service_run_check_sequence(input)]),
     ]))
 }
 
@@ -8493,26 +8964,48 @@ fn ingress_envelope_value(
     transport: &str,
     transport_check: &str,
 ) -> Result<IOValue> {
-    Ok(record("node-control-ingress-envelope-v1", vec![
-        string(NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA),
-        record("transport", vec![string(transport)]),
-        record("topic", vec![string(input.topic)]),
-        record("from-peer", vec![string(input.from_peer)]),
-        record("to-node", vec![string(input.to_node)]),
-        record("sequence", vec![string(input.sequence.to_string())]),
-        record("operation", vec![string(operation_ref)]),
-        record("request-ref", vec![string(&request.request_ref)]),
-        record("request", vec![request.value.clone()]),
-        record("peer-bootstrap", vec![sequence(input.peer_bootstrap_refs.iter().map(string).collect())]),
-        record("authority", vec![sequence(input.authority_refs.iter().map(string).collect())]),
-        record("policy", vec![sequence(input.policy_refs.iter().map(string).collect())]),
-        record("resource", vec![sequence(input.resource_refs.iter().map(string).collect())]),
-        record("evidence", vec![sequence(input.evidence_refs.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("canonical-request-ref"), string("pass")]),
-            record("check", vec![string("operation-id-bound"), string("pass")]),
-            record("check", vec![string(transport_check), string("pass")]),
-            record("check", vec![string("transport-is-not-authority"), string("pass")]),
+    Ok(preserves_rail::record("node-control-ingress-envelope-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_INGRESS_ENVELOPE_SCHEMA),
+        preserves_rail::record("transport", vec![preserves_rail::string(transport)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(input.topic)]),
+        preserves_rail::record("from-peer", vec![preserves_rail::string(input.from_peer)]),
+        preserves_rail::record("to-node", vec![preserves_rail::string(input.to_node)]),
+        preserves_rail::record("sequence", vec![preserves_rail::string(input.sequence.to_string())]),
+        preserves_rail::record("operation", vec![preserves_rail::string(operation_ref)]),
+        preserves_rail::record("request-ref", vec![preserves_rail::string(&request.request_ref)]),
+        preserves_rail::record("request", vec![request.value.clone()]),
+        preserves_rail::record("peer-bootstrap", vec![preserves_rail::sequence(
+            input.peer_bootstrap_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("authority", vec![preserves_rail::sequence(
+            input.authority_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("policy", vec![preserves_rail::sequence(
+            input.policy_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("resource", vec![preserves_rail::sequence(
+            input.resource_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("evidence", vec![preserves_rail::sequence(
+            input.evidence_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("canonical-request-ref"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("operation-id-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string(transport_check),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("transport-is-not-authority"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -8523,49 +9016,53 @@ fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IOValue
     let has_authority = !input.envelope.authority_refs.is_empty() && !input.envelope.request.authority_refs.is_empty();
     let has_policy = !input.envelope.policy_refs.is_empty() && !input.envelope.request.policy_refs.is_empty();
     let has_resource = !input.envelope.resource_refs.is_empty() && !input.envelope.request.resource_refs.is_empty();
-    Ok(record("node-control-ingress-receipt-v1", vec![
-        string(NODE_CONTROL_INGRESS_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("phase", vec![string(input.phase)]),
-        record("transport", vec![string(input.transport)]),
-        record("topic", vec![string(&input.envelope.topic)]),
-        record("from-peer", vec![string(&input.envelope.from_peer)]),
-        record("to-node", vec![string(&input.envelope.to_node)]),
-        record("sequence", vec![string(input.envelope.sequence.to_string())]),
-        record("envelope", vec![string(&input.envelope.envelope_ref)]),
-        record("operation", vec![string(&input.envelope.operation_ref)]),
-        record("request", vec![string(&input.envelope.request.request_ref)]),
-        record("idempotency", vec![optional_string(input.idempotency_receipt_ref)]),
-        record("queue", vec![optional_string(input.queue_receipt_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![
-                string("peer-bootstrap-bound"),
-                string(if has_peer_bootstrap { "pass" } else { "fail" }),
+    Ok(preserves_rail::record("node-control-ingress-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("phase", vec![preserves_rail::string(input.phase)]),
+        preserves_rail::record("transport", vec![preserves_rail::string(input.transport)]),
+        preserves_rail::record("topic", vec![preserves_rail::string(&input.envelope.topic)]),
+        preserves_rail::record("from-peer", vec![preserves_rail::string(&input.envelope.from_peer)]),
+        preserves_rail::record("to-node", vec![preserves_rail::string(&input.envelope.to_node)]),
+        preserves_rail::record("sequence", vec![preserves_rail::string(input.envelope.sequence.to_string())]),
+        preserves_rail::record("envelope", vec![preserves_rail::string(&input.envelope.envelope_ref)]),
+        preserves_rail::record("operation", vec![preserves_rail::string(&input.envelope.operation_ref)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&input.envelope.request.request_ref)]),
+        preserves_rail::record("idempotency", vec![optional_string(input.idempotency_receipt_ref)]),
+        preserves_rail::record("queue", vec![optional_string(input.queue_receipt_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("peer-bootstrap-bound"),
+                preserves_rail::string(if has_peer_bootstrap { "pass" } else { "fail" }),
             ]),
-            record("check", vec![
-                string("authority-before-enqueue"),
-                string(if has_authority { "pass" } else { "fail" }),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("authority-before-enqueue"),
+                preserves_rail::string(if has_authority { "pass" } else { "fail" }),
             ]),
-            record("check", vec![
-                string("authority-delegation-before-enqueue"),
-                string(if input.envelope.transport != LIVE_CONTROL_INGRESS_TRANSPORT || input.decision == "pass" {
-                    "pass"
-                } else {
-                    "fail"
-                }),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("authority-delegation-before-enqueue"),
+                preserves_rail::string(
+                    if input.envelope.transport != LIVE_CONTROL_INGRESS_TRANSPORT || input.decision == "pass" {
+                        "pass"
+                    } else {
+                        "fail"
+                    },
+                ),
             ]),
-            record("check", vec![
-                string("policy-before-enqueue"),
-                string(if has_policy { "pass" } else { "fail" }),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("policy-before-enqueue"),
+                preserves_rail::string(if has_policy { "pass" } else { "fail" }),
             ]),
-            record("check", vec![
-                string("resource-before-enqueue"),
-                string(if has_resource { "pass" } else { "fail" }),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("resource-before-enqueue"),
+                preserves_rail::string(if has_resource { "pass" } else { "fail" }),
             ]),
-            record("check", vec![
-                string("delivery-idempotency-before-enqueue"),
-                string(
+            preserves_rail::record("check", vec![
+                preserves_rail::string("delivery-idempotency-before-enqueue"),
+                preserves_rail::string(
                     if input.phase == "publish" || input.idempotency_receipt_ref.is_some() || input.decision == "deny" {
                         "pass"
                     } else {
@@ -8573,84 +9070,142 @@ fn ingress_receipt_value(input: &IngressReceiptValueInput<'_>) -> Result<IOValue
                     },
                 ),
             ]),
-            record("check", vec![string("durable-inbox-boundary"), string("pass")]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("durable-inbox-boundary"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn queue_receipt_value(input: &QueueReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    Ok(record("node-control-queue-receipt-v1", vec![
-        string(NODE_CONTROL_QUEUE_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("phase", vec![string(input.phase)]),
-        record("operation", vec![string(input.operation)]),
-        record("request", vec![string(input.request_ref)]),
-        record("profile", vec![string("local-preserves-control-file-v1")]),
-        record("location", vec![string(input.location_ref)]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("canonical-request-ref"), string("pass")]),
-            record("check", vec![string("durable-control-profile"), string("pass")]),
-            record("check", vec![string("explicit-state-root"), string("pass")]),
+    Ok(preserves_rail::record("node-control-queue-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_QUEUE_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("phase", vec![preserves_rail::string(input.phase)]),
+        preserves_rail::record("operation", vec![preserves_rail::string(input.operation)]),
+        preserves_rail::record("request", vec![preserves_rail::string(input.request_ref)]),
+        preserves_rail::record("profile", vec![preserves_rail::string("local-preserves-control-file-v1")]),
+        preserves_rail::record("location", vec![preserves_rail::string(input.location_ref)]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("canonical-request-ref"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("durable-control-profile"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("explicit-state-root"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn operation_receipt_value(input: &OperationReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    Ok(record("node-control-operation-receipt-v1", vec![
-        string(NODE_CONTROL_OPERATION_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("operation", vec![string(&input.request.operation)]),
-        record("request", vec![string(&input.request.request_ref)]),
-        record("target", vec![optional_string(input.request.target_ref.as_deref())]),
-        record("payload", vec![optional_string(input.request.payload_ref.as_deref())]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("operation-dispatch-explicit"), string("pass")]),
-            record("check", vec![string("side-effects-receipted"), string("pass")]),
-            record("check", vec![string("canonical-receipt"), string("pass")]),
+    Ok(preserves_rail::record("node-control-operation-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_OPERATION_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("operation", vec![preserves_rail::string(&input.request.operation)]),
+        preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
+        preserves_rail::record("target", vec![optional_string(input.request.target_ref.as_deref())]),
+        preserves_rail::record("payload", vec![optional_string(input.request.payload_ref.as_deref())]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("operation-dispatch-explicit"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("side-effects-receipted"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("canonical-receipt"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn heartbeat_receipt_value(input: &HeartbeatReceiptValueInput<'_>) -> Result<IOValue> {
-    Ok(record("node-control-heartbeat-receipt-v1", vec![
-        string(NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA),
-        record("decision", vec![string(if input.diagnostics.is_empty() { "pass" } else { "deny" })]),
-        record("startup", vec![string(input.startup_receipt_ref)]),
-        record("lock", vec![string(input.lock_ref)]),
-        record("loop-sequence", vec![string(input.loop_sequence.to_string())]),
-        record("processed-count", vec![string(input.processed_count.to_string())]),
-        record("profile", vec![string("local-preserves-control-loop-v1")]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("active-lock-bound"), string("pass")]),
-            record("check", vec![string("heartbeat-is-receipted"), string("pass")]),
-            record("check", vec![string("no-ambient-socket-authority"), string("pass")]),
+    Ok(preserves_rail::record("node-control-heartbeat-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_HEARTBEAT_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(if input.diagnostics.is_empty() {
+            "pass"
+        } else {
+            "deny"
+        })]),
+        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
+        preserves_rail::record("lock", vec![preserves_rail::string(input.lock_ref)]),
+        preserves_rail::record("loop-sequence", vec![preserves_rail::string(input.loop_sequence.to_string())]),
+        preserves_rail::record("processed-count", vec![preserves_rail::string(input.processed_count.to_string())]),
+        preserves_rail::record("profile", vec![preserves_rail::string("local-preserves-control-loop-v1")]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("active-lock-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("heartbeat-is-receipted"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("no-ambient-socket-authority"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
 
 fn loop_receipt_value(input: &LoopReceiptValueInput<'_>) -> Result<IOValue> {
     validate_decision(input.decision)?;
-    Ok(record("node-control-loop-receipt-v1", vec![
-        string(NODE_CONTROL_LOOP_RECEIPT_SCHEMA),
-        record("decision", vec![string(input.decision)]),
-        record("startup", vec![string(input.startup_receipt_ref)]),
-        record("heartbeat", vec![string(input.heartbeat_receipt_ref)]),
-        record("max-requests", vec![string(input.max_requests.to_string())]),
-        record("processed-requests", vec![sequence(input.processed_request_refs.iter().map(string).collect())]),
-        record("dispatch-receipts", vec![sequence(input.dispatch_receipt_refs.iter().map(string).collect())]),
-        record("stopped", vec![string(if input.has_stopped { "yes" } else { "no" })]),
-        record("profile", vec![string("local-preserves-control-loop-v1")]),
-        record("diagnostics", vec![sequence(input.diagnostics.iter().map(string).collect())]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("bounded-request-loop"), string("pass")]),
-            record("check", vec![string("deterministic-inbox-order"), string("pass")]),
-            record("check", vec![string("idempotent-request-dispatch"), string("pass")]),
-            record("check", vec![string("shutdown-stops-loop"), string("pass")]),
+    Ok(preserves_rail::record("node-control-loop-receipt-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LOOP_RECEIPT_SCHEMA),
+        preserves_rail::record("decision", vec![preserves_rail::string(input.decision)]),
+        preserves_rail::record("startup", vec![preserves_rail::string(input.startup_receipt_ref)]),
+        preserves_rail::record("heartbeat", vec![preserves_rail::string(input.heartbeat_receipt_ref)]),
+        preserves_rail::record("max-requests", vec![preserves_rail::string(input.max_requests.to_string())]),
+        preserves_rail::record("processed-requests", vec![preserves_rail::sequence(
+            input.processed_request_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("dispatch-receipts", vec![preserves_rail::sequence(
+            input.dispatch_receipt_refs.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("stopped", vec![preserves_rail::string(if input.has_stopped { "yes" } else { "no" })]),
+        preserves_rail::record("profile", vec![preserves_rail::string("local-preserves-control-loop-v1")]),
+        preserves_rail::record("diagnostics", vec![preserves_rail::sequence(
+            input.diagnostics.iter().map(preserves_rail::string).collect(),
+        )]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("bounded-request-loop"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("deterministic-inbox-order"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("idempotent-request-dispatch"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("shutdown-stops-loop"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -8728,7 +9283,11 @@ fn runtime_summary(value: &IOValue) -> Result<Option<String>> {
         )));
     }
     if let Some(fields) = value.collect_simple_record("node-control-ingress-receipt-v1", Some(15)) {
-        require_schema(&fields[0], NODE_CONTROL_INGRESS_RECEIPT_SCHEMA, "node control ingress receipt")?;
+        require_schema(
+            &fields[0],
+            preserves_rail::NODE_CONTROL_INGRESS_RECEIPT_SCHEMA,
+            "node control ingress receipt",
+        )?;
         return Ok(Some(format!(
             "node control ingress decision={} phase={} envelope={} request={}",
             record_string(&fields[1], "decision")?,
@@ -8744,7 +9303,7 @@ fn import_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-ticket-import-receipt-v1", Some(13)) {
         require_schema(
             &fields[0],
-            NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA,
+            preserves_rail::NODE_CONTROL_LIVE_TICKET_IMPORT_RECEIPT_SCHEMA,
             "node control live ticket import receipt",
         )?;
         return Ok(Some(format!(
@@ -8757,7 +9316,7 @@ fn import_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-authority-grant-import-receipt-v1", Some(13)) {
         require_schema(
             &fields[0],
-            NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA,
+            preserves_rail::NODE_CONTROL_AUTHORITY_GRANT_IMPORT_RECEIPT_SCHEMA,
             "node control authority grant import receipt",
         )?;
         return Ok(Some(format!(
@@ -8793,7 +9352,11 @@ fn access_summary(value: &IOValue) -> Result<Option<String>> {
         )));
     }
     if let Some(fields) = value.collect_simple_record("node-control-authority-receipt-v1", Some(10)) {
-        require_schema(&fields[0], NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA, "node control authority receipt")?;
+        require_schema(
+            &fields[0],
+            preserves_rail::NODE_CONTROL_AUTHORITY_RECEIPT_SCHEMA,
+            "node control authority receipt",
+        )?;
         return Ok(Some(format!(
             "node control authority decision={} envelope={} operation={} grant={}",
             record_string(&fields[1], "decision")?,
@@ -8807,7 +9370,11 @@ fn access_summary(value: &IOValue) -> Result<Option<String>> {
 
 fn flow_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-listener-receipt-v1", Some(14)) {
-        require_schema(&fields[0], NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA, "node control live listener receipt")?;
+        require_schema(
+            &fields[0],
+            preserves_rail::NODE_CONTROL_LIVE_LISTENER_RECEIPT_SCHEMA,
+            "node control live listener receipt",
+        )?;
         return Ok(Some(format!(
             "node control live listener decision={} topic={} events={} service={}",
             record_string(&fields[1], "decision")?,
@@ -8817,7 +9384,11 @@ fn flow_summary(value: &IOValue) -> Result<Option<String>> {
         )));
     }
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-receipt-v1", Some(14)) {
-        require_schema(&fields[0], NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA, "node control live workflow receipt")?;
+        require_schema(
+            &fields[0],
+            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_RECEIPT_SCHEMA,
+            "node control live workflow receipt",
+        )?;
         return Ok(Some(format!(
             "node control live workflow decision={} peer={} node={} send={} service={}",
             record_string(&fields[1], "decision")?,
@@ -8832,7 +9403,11 @@ fn flow_summary(value: &IOValue) -> Result<Option<String>> {
 
 fn bundle_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-v1", Some(10)) {
-        require_schema(&fields[0], NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA, "node control live workflow bundle")?;
+        require_schema(
+            &fields[0],
+            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
+            "node control live workflow bundle",
+        )?;
         return Ok(Some(format!(
             "node control live workflow bundle ticket={} admission={} grant={} receipts={}",
             record_string(&fields[5], "ticket-ref")?,
@@ -8844,7 +9419,7 @@ fn bundle_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-export-receipt-v1", Some(9)) {
         require_schema(
             &fields[0],
-            NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA,
+            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_EXPORT_RECEIPT_SCHEMA,
             "node control live workflow bundle export receipt",
         )?;
         return Ok(Some(format!(
@@ -8857,7 +9432,7 @@ fn bundle_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-import-receipt-v1", Some(12)) {
         require_schema(
             &fields[0],
-            NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA,
+            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_IMPORT_RECEIPT_SCHEMA,
             "node control live workflow bundle import receipt",
         )?;
         return Ok(Some(format!(
@@ -8874,7 +9449,7 @@ fn gate_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-verify-receipt-v1", Some(10)) {
         require_schema(
             &fields[0],
-            NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA,
+            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_VERIFY_RECEIPT_SCHEMA,
             "node control live workflow bundle verify receipt",
         )?;
         return Ok(Some(format!(
@@ -8887,7 +9462,7 @@ fn gate_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-gate-receipt-v1", Some(12)) {
         require_schema(
             &fields[0],
-            NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA,
+            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_GATE_RECEIPT_SCHEMA,
             "node control live workflow bundle gate receipt",
         )?;
         return Ok(Some(format!(
@@ -8904,7 +9479,7 @@ fn apply_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-workflow-bundle-apply-receipt-v1", Some(15)) {
         require_schema(
             &fields[0],
-            NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
+            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_APPLY_RECEIPT_SCHEMA,
             "node control live workflow bundle apply receipt",
         )?;
         return Ok(Some(format!(
@@ -8920,7 +9495,7 @@ fn apply_summary(value: &IOValue) -> Result<Option<String>> {
     {
         require_schema(
             &fields[0],
-            NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
+            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_RECONCILE_RECEIPT_SCHEMA,
             "node control live workflow bundle reconcile receipt",
         )?;
         return Ok(Some(format!(
@@ -8938,7 +9513,7 @@ fn send_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-send-retry-receipt-v1", Some(14)) {
         require_schema(
             &fields[0],
-            NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA,
+            preserves_rail::NODE_CONTROL_LIVE_SEND_RETRY_RECEIPT_SCHEMA,
             "node control live send retry receipt",
         )?;
         return Ok(Some(format!(
@@ -8952,7 +9527,7 @@ fn send_summary(value: &IOValue) -> Result<Option<String>> {
     if let Some(fields) = value.collect_simple_record("node-control-live-send-duplicate-receipt-v1", Some(13)) {
         require_schema(
             &fields[0],
-            NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA,
+            preserves_rail::NODE_CONTROL_LIVE_SEND_DUPLICATE_RECEIPT_SCHEMA,
             "node control live send duplicate receipt",
         )?;
         return Ok(Some(format!(
@@ -8962,7 +9537,11 @@ fn send_summary(value: &IOValue) -> Result<Option<String>> {
         )));
     }
     if let Some(fields) = value.collect_simple_record("node-control-live-send-receipt-v1", Some(13)) {
-        require_schema(&fields[0], NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA, "node control live send receipt")?;
+        require_schema(
+            &fields[0],
+            preserves_rail::NODE_CONTROL_LIVE_SEND_RECEIPT_SCHEMA,
+            "node control live send receipt",
+        )?;
         return Ok(Some(format!(
             "node control live send decision={} from={} to={} ticket={} envelope={}",
             record_string(&fields[1], "decision")?,
@@ -8973,7 +9552,11 @@ fn send_summary(value: &IOValue) -> Result<Option<String>> {
         )));
     }
     if let Some(fields) = value.collect_simple_record("node-control-live-transport-receipt-v1", Some(11)) {
-        require_schema(&fields[0], NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA, "node control live transport receipt")?;
+        require_schema(
+            &fields[0],
+            preserves_rail::NODE_CONTROL_LIVE_TRANSPORT_RECEIPT_SCHEMA,
+            "node control live transport receipt",
+        )?;
         return Ok(Some(format!(
             "node control live transport operation={} decision={} envelope={} ingress={}",
             record_string(&fields[1], "operation")?,
@@ -9120,7 +9703,7 @@ fn require_active_lock(state_root: &Path) -> Result<()> {
     let fields = lock_value
         .collect_simple_record("node-control-lock-v1", Some(6))
         .ok_or_else(|| MoltenError::invalid_harness("expected <node-control-lock-v1 ...>"))?;
-    require_schema(&fields[0], NODE_CONTROL_LOCK_SCHEMA, "node control lock")?;
+    require_schema(&fields[0], preserves_rail::NODE_CONTROL_LOCK_SCHEMA, "node control lock")?;
     let locked_startup = record_string(&fields[2], "startup")?;
     let startup = current_startup_receipt(state_root)?;
     if locked_startup != startup.receipt_ref {
@@ -9138,16 +9721,28 @@ fn remove_active_lock(state_root: &Path) -> Result<()> {
 }
 
 fn active_lock_value(state_root: &Path, startup_receipt_ref: &str) -> Result<IOValue> {
-    Ok(record("node-control-lock-v1", vec![
-        string(NODE_CONTROL_LOCK_SCHEMA),
-        record("state-root", vec![string(&state_root_profile_ref(state_root)?)]),
-        record("startup", vec![string(startup_receipt_ref)]),
-        record("owner", vec![string(&local_ref("node-control-owner", startup_receipt_ref)?)]),
-        record("profile", vec![string("local-preserves-control-file-v1")]),
-        record("checks", vec![sequence(vec![
-            record("check", vec![string("startup-bound"), string("pass")]),
-            record("check", vec![string("not-authority-token"), string("pass")]),
-            record("check", vec![string("explicit-state-root"), string("pass")]),
+    Ok(preserves_rail::record("node-control-lock-v1", vec![
+        preserves_rail::string(preserves_rail::NODE_CONTROL_LOCK_SCHEMA),
+        preserves_rail::record("state-root", vec![preserves_rail::string(&state_root_profile_ref(state_root)?)]),
+        preserves_rail::record("startup", vec![preserves_rail::string(startup_receipt_ref)]),
+        preserves_rail::record("owner", vec![preserves_rail::string(&local_ref(
+            "node-control-owner",
+            startup_receipt_ref,
+        )?)]),
+        preserves_rail::record("profile", vec![preserves_rail::string("local-preserves-control-file-v1")]),
+        preserves_rail::record("checks", vec![preserves_rail::sequence(vec![
+            preserves_rail::record("check", vec![
+                preserves_rail::string("startup-bound"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("not-authority-token"),
+                preserves_rail::string("pass"),
+            ]),
+            preserves_rail::record("check", vec![
+                preserves_rail::string("explicit-state-root"),
+                preserves_rail::string("pass"),
+            ]),
         ])]),
     ]))
 }
@@ -9190,7 +9785,7 @@ fn pending_control_request_paths(state_root: &Path) -> Result<Vec<PathBuf>> {
 }
 
 fn archive_dispatched_request(state_root: &Path, request_path: &Path, request_value: &IOValue) -> Result<()> {
-    let request_ref = canonical_hash(request_value)?;
+    let request_ref = preserves_rail::canonical_hash(request_value)?;
     let archived = control_outbox_request_path(state_root, &request_ref);
     write_preserves(&archived, request_value)?;
     if request_path.starts_with(state_root.join(CONTROL_INBOX_DIR)) && request_path.exists() {
@@ -9271,7 +9866,7 @@ fn control_supervisor_receipt_path(state_root: &Path, receipt_ref: &str) -> Path
 
 fn write_supervisor_receipt(state_root: &Path, input: &SupervisorReceiptValueInput<'_>) -> Result<String> {
     let value = supervisor_receipt_value(input)?;
-    let receipt_ref = canonical_hash(&value)?;
+    let receipt_ref = preserves_rail::canonical_hash(&value)?;
     write_preserves(&control_supervisor_receipt_path(state_root, &receipt_ref), &value)?;
     import_node_artifact(state_root, &value)?;
     Ok(receipt_ref)
@@ -9365,15 +9960,15 @@ fn ref_file_stem(value_ref: &str) -> String {
 
 fn optional_string(value: Option<&str>) -> IOValue {
     match value {
-        Some(value) => record("some", vec![string(value)]),
-        None => record("none", Vec::new()),
+        Some(value) => preserves_rail::record("some", vec![preserves_rail::string(value)]),
+        None => preserves_rail::record("none", Vec::new()),
     }
 }
 
 fn optional_value(value: Option<&IOValue>) -> IOValue {
     match value {
-        Some(value) => record("some", vec![value.clone()]),
-        None => record("none", Vec::new()),
+        Some(value) => preserves_rail::record("some", vec![value.clone()]),
+        None => preserves_rail::record("none", Vec::new()),
     }
 }
 
@@ -9609,7 +10204,7 @@ fn validate_ingress_refs(refs: &[String], label: &str) -> Result<()> {
 }
 
 fn validate_ingress_ref(reference: &str, label: &str) -> Result<()> {
-    validate_content_ref(reference).map_err(|error| {
+    preserves_rail::validate_content_ref(reference).map_err(|error| {
         MoltenError::invalid_harness(format!("{label} must be a canonical blake3 content ref: {error}"))
     })
 }
@@ -9624,7 +10219,7 @@ fn validate_member_ref(actual: &str, expected: &str, label: &str) -> Result<()> 
 
 fn validate_optional_member_ref(value: Option<&IOValue>, expected_ref: Option<&str>, label: &str) -> Result<()> {
     match (value, expected_ref) {
-        (Some(value), Some(expected)) => validate_member_ref(&canonical_hash(value)?, expected, label),
+        (Some(value), Some(expected)) => validate_member_ref(&preserves_rail::canonical_hash(value)?, expected, label),
         (Some(_), None) => Err(MoltenError::invalid_harness(format!("{label} value present without ref"))),
         (None, Some(expected)) => {
             Err(MoltenError::invalid_harness(format!("{label} ref {expected} present without value")))
@@ -9657,7 +10252,7 @@ fn verify_restart_state(state_root: &Path) -> Result<()> {
         }
         let startup_value = read_preserves(&startup_path)?;
         let startup = node_runtime::parse_node_startup_receipt(&startup_value)?;
-        let shutdown_ref = canonical_hash(&read_preserves(&shutdown_path)?)?;
+        let shutdown_ref = preserves_rail::canonical_hash(&read_preserves(&shutdown_path)?)?;
         let head_refs = vec![startup.receipt_ref.clone()];
         let health_value =
             node_runtime::node_restart_health_receipt_value(&node_runtime::RestartHealthReceiptValueInput {
@@ -9793,7 +10388,10 @@ fn state_root_profile_ref(state_root: &Path) -> Result<String> {
 }
 
 fn local_ref(kind: &str, label: &str) -> Result<String> {
-    canonical_hash(&record("node-daemon-local-ref-v1", vec![string(kind), string(label)]))
+    preserves_rail::canonical_hash(&preserves_rail::record("node-daemon-local-ref-v1", vec![
+        preserves_rail::string(kind),
+        preserves_rail::string(label),
+    ]))
 }
 
 fn ensure_state_layout(state_root: &Path) -> Result<()> {
@@ -9846,12 +10444,12 @@ fn write_preserves(path: &Path, value: &IOValue) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(MoltenError::from)?;
     }
-    fs::write(path, to_text(value)?).map_err(MoltenError::from)
+    fs::write(path, preserves_rail::to_text(value)?).map_err(MoltenError::from)
 }
 
 fn read_preserves(path: &Path) -> Result<IOValue> {
     let text = fs::read_to_string(path).map_err(MoltenError::from)?;
-    parse_text(&text)
+    preserves_rail::parse_text(&text)
 }
 
 pub fn config_path(state_root: &Path) -> PathBuf {
@@ -10148,7 +10746,7 @@ mod tests {
         .expect("dispatch status");
         write_preserves(
             &control_outbox_request_path(&root, &status_request.request_ref),
-            &record("tampered-node-control-request", vec![string("conflict")]),
+            &preserves_rail::record("tampered-node-control-request", vec![preserves_rail::string("conflict")]),
         )
         .expect("tamper archived request");
         let duplicate = submit_control_request(&NodeControlSubmitInput {
@@ -10210,7 +10808,8 @@ mod tests {
     }
 
     fn assert_missing_case(root: &Path, refs: &CaseRefs) {
-        let payload_value = record("node-control-install-payload", vec![string("missing-provenance")]);
+        let payload_value =
+            preserves_rail::record("node-control-install-payload", vec![preserves_rail::string("missing-provenance")]);
         let payload_ref = import_node_artifact(root, &payload_value).expect("import payload");
         let request = request_value(&payload_ref, refs, &[]);
         let dispatch = submit_and_dispatch(root, &request);
@@ -10228,7 +10827,9 @@ mod tests {
     }
 
     fn assert_queued_case(root: &Path, refs: &CaseRefs) {
-        let payload = record("node-control-install-payload", vec![string("queued-missing-provenance")]);
+        let payload = preserves_rail::record("node-control-install-payload", vec![preserves_rail::string(
+            "queued-missing-provenance",
+        )]);
         let payload_ref = import_node_artifact(root, &payload).expect("import queued payload");
         let request = request_value(&payload_ref, refs, &[]);
         let queued = node_runtime::parse_node_control_request(&request).expect("queued request parse");
@@ -10251,7 +10852,8 @@ mod tests {
     }
 
     fn assert_tampered_case(root: &Path, refs: &CaseRefs) {
-        let payload = record("node-control-install-payload", vec![string("tampered-provenance")]);
+        let payload =
+            preserves_rail::record("node-control-install-payload", vec![preserves_rail::string("tampered-provenance")]);
         let payload_ref = import_node_artifact(root, &payload).expect("import tampered payload");
         let wrong_artifact_ref = local_ref("node-control-wrong-provenance-artifact", "tampered").expect("wrong ref");
         let wrong_provenance =
@@ -10307,7 +10909,9 @@ mod tests {
     }
 
     fn build_material(root: &Path) -> BuildMaterial {
-        let payload_value = record("node-control-install-payload", vec![string("reproducible-provenance")]);
+        let payload_value = preserves_rail::record("node-control-install-payload", vec![preserves_rail::string(
+            "reproducible-provenance",
+        )]);
         BuildMaterial {
             authority_refs: vec![local_ref("node-control-authority", "reproducible").expect("authority ref")],
             policy_refs: vec![local_ref("node-control-policy", "reproducible").expect("policy ref")],
@@ -10419,7 +11023,8 @@ mod tests {
         let resource_refs = vec![local_ref("node-control-resource", "ingress").expect("resource ref")];
         let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:operator").expect("bootstrap ref")];
 
-        let payload_value = record("node-control-ingress-payload", vec![string("missing-provenance")]);
+        let payload_value =
+            preserves_rail::record("node-control-ingress-payload", vec![preserves_rail::string("missing-provenance")]);
         let payload_ref = import_node_artifact(&root, &payload_value).expect("import payload");
         let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "install",
@@ -10487,6 +11092,54 @@ mod tests {
 
     #[test]
     fn node_control_ingress_denies_tampered_materialized_envelope_ref() {
+        let pair = materialized_ingress_pair();
+        publish_node_control_ingress(&NodeControlIngressPublishInput {
+            state_root: &pair.root,
+            envelope_value: &pair.first.value,
+        })
+        .expect("publish first");
+        write_preserves(
+            &control_ingress_envelope_path(&pair.root, DEFAULT_CONTROL_INGRESS_TOPIC, &pair.first.envelope_ref),
+            &pair.second.value,
+        )
+        .expect("tamper materialized envelope");
+        let denied = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
+            state_root: &pair.root,
+            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
+            envelope_ref: &pair.first.envelope_ref,
+        })
+        .expect_err("materialized ref mismatch denied");
+        assert!(denied.to_string().contains("materialized envelope ref"));
+    }
+
+    struct MaterializedIngressPair {
+        root: PathBuf,
+        first: NodeControlIngressEnvelope,
+        second: NodeControlIngressEnvelope,
+    }
+
+    struct MaterializedIngressRefs {
+        authority_refs: Vec<String>,
+        policy_refs: Vec<String>,
+        resource_refs: Vec<String>,
+        peer_bootstrap_refs: Vec<String>,
+    }
+
+    const FIRST_MATERIALIZED_ENVELOPE_SEQUENCE: u64 = 1;
+    const SECOND_MATERIALIZED_ENVELOPE_SEQUENCE: u64 = 2;
+
+    fn materialized_ingress_pair() -> MaterializedIngressPair {
+        let root = initialized_materialized_ingress_root();
+        let refs = materialized_ingress_refs();
+        let request_value = materialized_request_value(&root, &refs);
+        MaterializedIngressPair {
+            first: materialized_envelope(&request_value, &refs, FIRST_MATERIALIZED_ENVELOPE_SEQUENCE),
+            second: materialized_envelope(&request_value, &refs, SECOND_MATERIALIZED_ENVELOPE_SEQUENCE),
+            root,
+        }
+    }
+
+    fn initialized_materialized_ingress_root() -> PathBuf {
         let root = temp_dir("node-control-ingress-materialized-ref");
         init_local_node(&NodeDaemonInitInput {
             state_root: &root,
@@ -10494,66 +11147,52 @@ mod tests {
         })
         .expect("init node");
         run_local_node(&NodeDaemonRunInput { state_root: &root }).expect("run node");
-        let authority_refs = vec![local_ref("node-control-authority", "materialized").expect("authority ref")];
-        let policy_refs = vec![local_ref("node-control-policy", "materialized").expect("policy ref")];
-        let resource_refs = vec![local_ref("node-control-resource", "materialized").expect("resource ref")];
-        let peer_bootstrap_refs = vec![local_ref("peer-bootstrap", "peer:materialized").expect("bootstrap ref")];
-        let payload_ref =
-            import_node_artifact(&root, &record("node-control-ingress-payload", vec![string("materialized")]))
-                .expect("import payload");
-        let request_value = node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
+        root
+    }
+
+    fn materialized_ingress_refs() -> MaterializedIngressRefs {
+        MaterializedIngressRefs {
+            authority_refs: vec![local_ref("node-control-authority", "materialized").expect("authority ref")],
+            policy_refs: vec![local_ref("node-control-policy", "materialized").expect("policy ref")],
+            resource_refs: vec![local_ref("node-control-resource", "materialized").expect("resource ref")],
+            peer_bootstrap_refs: vec![local_ref("peer-bootstrap", "peer:materialized").expect("bootstrap ref")],
+        }
+    }
+
+    fn materialized_request_value(root: &Path, refs: &MaterializedIngressRefs) -> IOValue {
+        let payload_value =
+            preserves_rail::record("node-control-ingress-payload", vec![preserves_rail::string("materialized")]);
+        let payload_ref = import_node_artifact(root, &payload_value).expect("import payload");
+        node_runtime::node_control_request_value(&node_runtime::ControlRequestValueInput {
             operation: "install",
             target_ref: None,
             payload_ref: Some(&payload_ref),
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
+            authority_refs: &refs.authority_refs,
+            policy_refs: &refs.policy_refs,
+            resource_refs: &refs.resource_refs,
             evidence_refs: &[],
         })
-        .expect("request");
-        let first = node_control_ingress_envelope(&NodeControlIngressEnvelopeInput {
-            request_value: &request_value,
+        .expect("request")
+    }
+
+    fn materialized_envelope(
+        request_value: &IOValue,
+        refs: &MaterializedIngressRefs,
+        sequence: u64,
+    ) -> NodeControlIngressEnvelope {
+        node_control_ingress_envelope(&NodeControlIngressEnvelopeInput {
+            request_value,
             from_peer: "peer:materialized",
             to_node: "node:ingress-materialized",
             topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            sequence: 1,
-            peer_bootstrap_refs: &peer_bootstrap_refs,
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
+            sequence,
+            peer_bootstrap_refs: &refs.peer_bootstrap_refs,
+            authority_refs: &refs.authority_refs,
+            policy_refs: &refs.policy_refs,
+            resource_refs: &refs.resource_refs,
             evidence_refs: &[],
         })
-        .expect("first envelope");
-        let second = node_control_ingress_envelope(&NodeControlIngressEnvelopeInput {
-            request_value: &request_value,
-            from_peer: "peer:materialized",
-            to_node: "node:ingress-materialized",
-            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            sequence: 2,
-            peer_bootstrap_refs: &peer_bootstrap_refs,
-            authority_refs: &authority_refs,
-            policy_refs: &policy_refs,
-            resource_refs: &resource_refs,
-            evidence_refs: &[],
-        })
-        .expect("second envelope");
-        publish_node_control_ingress(&NodeControlIngressPublishInput {
-            state_root: &root,
-            envelope_value: &first.value,
-        })
-        .expect("publish first");
-        write_preserves(
-            &control_ingress_envelope_path(&root, DEFAULT_CONTROL_INGRESS_TOPIC, &first.envelope_ref),
-            &second.value,
-        )
-        .expect("tamper materialized envelope");
-        let denied = deliver_node_control_ingress(&NodeControlIngressDeliverInput {
-            state_root: &root,
-            topic: DEFAULT_CONTROL_INGRESS_TOPIC,
-            envelope_ref: &first.envelope_ref,
-        })
-        .expect_err("materialized ref mismatch denied");
-        assert!(denied.to_string().contains("materialized envelope ref"));
+        .expect("materialized envelope")
     }
 
     #[test]
@@ -10688,7 +11327,7 @@ mod tests {
         assert!(
             delivered.has_enqueued,
             "{}",
-            to_text(&delivered.ingress_receipt_value).expect("ingress receipt text")
+            preserves_rail::to_text(&delivered.ingress_receipt_value).expect("ingress receipt text")
         );
         (envelope, delivered)
     }
@@ -10869,7 +11508,7 @@ mod tests {
         assert_eq!(reconciled.control_receipt_ref.as_deref(), Some(delivery.control_receipt_ref.as_str()));
         assert!(parse_node_control_authority_grant(&reconciled.receipt_value).is_err());
         assert!(
-            to_text(&reconciled.receipt_value)
+            preserves_rail::to_text(&reconciled.receipt_value)
                 .expect("reconcile text")
                 .contains("reconcile-receipt-is-not-authority")
         );
@@ -11004,7 +11643,11 @@ mod tests {
             "node-control-live-workflow-bundle-ack-export-receipt"
         );
         assert!(parse_node_control_authority_grant(&ack_export.ack.ack_value).is_err());
-        assert!(to_text(&ack_export.ack.ack_value).expect("ack text").contains("ack-bundle-is-not-authority"));
+        assert!(
+            preserves_rail::to_text(&ack_export.ack.ack_value)
+                .expect("ack text")
+                .contains("ack-bundle-is-not-authority")
+        );
         let import_root = temp_dir("node-control-live-workflow-ack-import");
         init_local_node(&NodeDaemonInitInput {
             state_root: &import_root,
@@ -11026,7 +11669,11 @@ mod tests {
             ledger::artifact_kind(&ack_import.receipt_value),
             "node-control-live-workflow-bundle-ack-import-receipt"
         );
-        assert!(to_text(&ack_import.receipt_value).expect("ack import text").contains("ack-import-is-not-authority"));
+        assert!(
+            preserves_rail::to_text(&ack_import.receipt_value)
+                .expect("ack import text")
+                .contains("ack-import-is-not-authority")
+        );
         read_node_ledger_artifact(&import_root, &ack_export.ack.ack_ref).expect("ack imported");
         read_node_ledger_artifact(&import_root, &reconciled.receipt_ref).expect("reconcile imported");
         assert_protocol_pass(case, reconciled, &ack_export.ack.ack_value);
@@ -11179,7 +11826,7 @@ mod tests {
         })
         .expect("deliver denied ingress");
         assert!(!delivered.has_enqueued);
-        let receipt_text = to_text(&delivered.ingress_receipt_value).expect("receipt text");
+        let receipt_text = preserves_rail::to_text(&delivered.ingress_receipt_value).expect("receipt text");
         assert!(receipt_text.contains("authority refs missing"));
         assert!(next_pending_control_request(&root).expect("pending request scan").is_none());
     }
@@ -11224,7 +11871,7 @@ mod tests {
         .expect("deliver envelope");
         assert_eq!(delivered.has_enqueued, input.is_expected_enqueued);
         if let Some(expected_note) = input.expected_note {
-            let receipt_text = to_text(&delivered.ingress_receipt_value).expect("receipt text");
+            let receipt_text = preserves_rail::to_text(&delivered.ingress_receipt_value).expect("receipt text");
             assert!(receipt_text.contains(expected_note));
         }
     }
@@ -11630,7 +12277,7 @@ mod tests {
         assert_eq!(ledger::artifact_kind(&verified.receipt_value), "node-control-live-workflow-bundle-verify-receipt");
         assert!(parse_node_control_authority_grant(&verified.receipt_value).is_err());
         assert!(
-            to_text(&verified.receipt_value)
+            preserves_rail::to_text(&verified.receipt_value)
                 .expect("verify receipt text")
                 .contains("verify-receipt-is-not-authority")
         );
@@ -11639,7 +12286,11 @@ mod tests {
         assert_eq!(ledger::artifact_kind(&gated.receipt_value), "node-control-live-workflow-bundle-gate-receipt");
         assert_eq!(gated.verify_receipt_ref.as_deref(), Some(verified.receipt_ref.as_str()));
         assert!(parse_node_control_authority_grant(&gated.receipt_value).is_err());
-        assert!(to_text(&gated.receipt_value).expect("gate receipt text").contains("gate-receipt-is-not-authority"));
+        assert!(
+            preserves_rail::to_text(&gated.receipt_value)
+                .expect("gate receipt text")
+                .contains("gate-receipt-is-not-authority")
+        );
         FlowCase {
             bundle_sender: seed.bundle_sender,
             operations: seed.operations,
@@ -11748,7 +12399,7 @@ mod tests {
         assert!(applied.imported_refs.iter().any(|reference| reference == &case.exported.bundle.bundle_ref));
         assert!(parse_node_control_authority_grant(&applied.receipt_value).is_err());
         assert!(
-            to_text(&applied.receipt_value)
+            preserves_rail::to_text(&applied.receipt_value)
                 .expect("apply receipt text")
                 .contains("apply-receipt-is-not-authority")
         );
@@ -11827,7 +12478,7 @@ mod tests {
         read_node_ledger_artifact(&case.bundle_sender, &case.authority_import_ref).expect("bundle imported authority");
         assert!(parse_node_control_authority_grant(&imported.receipt_value).is_err());
         assert!(
-            to_text(&imported.receipt_value)
+            preserves_rail::to_text(&imported.receipt_value)
                 .expect("import receipt text")
                 .contains("bundle-import-is-not-authority")
         );
@@ -11985,17 +12636,23 @@ mod tests {
 
     fn assert_flow_wrong_grant(case: &FlowCase) {
         let wrong_grant_ref = local_ref("authority-grant", "wrong-live-bundle").expect("wrong grant ref");
-        let wrong_bundle = record("node-control-live-workflow-bundle-v1", vec![
-            string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA),
-            record("ticket", vec![case.exported.bundle.ticket_value.clone()]),
-            record("peer-admission", vec![case.exported.bundle.peer_admission_value.clone()]),
-            record("authority-grant", vec![case.exported.bundle.authority_grant_value.clone()]),
-            record("receipts", vec![sequence(case.exported.bundle.receipt_values.clone())]),
-            record("ticket-ref", vec![string(&case.exported.bundle.ticket_ref)]),
-            record("peer-admission-ref", vec![string(&case.exported.bundle.peer_admission_ref)]),
-            record("authority-grant-ref", vec![string(&wrong_grant_ref)]),
-            record("receipt-refs", vec![sequence(case.exported.bundle.receipt_refs.iter().map(string).collect())]),
-            record("checks", vec![sequence(Vec::<IOValue>::new())]),
+        let wrong_bundle = preserves_rail::record("node-control-live-workflow-bundle-v1", vec![
+            preserves_rail::string(preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA),
+            preserves_rail::record("ticket", vec![case.exported.bundle.ticket_value.clone()]),
+            preserves_rail::record("peer-admission", vec![case.exported.bundle.peer_admission_value.clone()]),
+            preserves_rail::record("authority-grant", vec![case.exported.bundle.authority_grant_value.clone()]),
+            preserves_rail::record("receipts", vec![preserves_rail::sequence(
+                case.exported.bundle.receipt_values.clone(),
+            )]),
+            preserves_rail::record("ticket-ref", vec![preserves_rail::string(&case.exported.bundle.ticket_ref)]),
+            preserves_rail::record("peer-admission-ref", vec![preserves_rail::string(
+                &case.exported.bundle.peer_admission_ref,
+            )]),
+            preserves_rail::record("authority-grant-ref", vec![preserves_rail::string(&wrong_grant_ref)]),
+            preserves_rail::record("receipt-refs", vec![preserves_rail::sequence(
+                case.exported.bundle.receipt_refs.iter().map(preserves_rail::string).collect(),
+            )]),
+            preserves_rail::record("checks", vec![preserves_rail::sequence(Vec::<IOValue>::new())]),
         ]);
         let wrong_verify = verify_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleVerifyInput {
             bundle_value: &wrong_bundle,
@@ -12054,8 +12711,9 @@ mod tests {
 
     fn assert_flow_malformed(case: &FlowCase) {
         let root = init_flow_root("node-control-live-workflow-bundle-malformed", "node:live-bundle-malformed");
-        let malformed =
-            record("node-control-live-workflow-bundle-v1", vec![string(NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA)]);
+        let malformed = preserves_rail::record("node-control-live-workflow-bundle-v1", vec![preserves_rail::string(
+            preserves_rail::NODE_CONTROL_LIVE_WORKFLOW_BUNDLE_SCHEMA,
+        )]);
         assert!(
             import_node_control_live_workflow_bundle(&NodeControlLiveWorkflowBundleImportInput {
                 state_root: &root,
@@ -12530,7 +13188,7 @@ mod tests {
         })
         .expect("deliver live envelope");
         assert!(!delivered.has_enqueued, "{} enqueued", case.name);
-        let receipt_text = to_text(&delivered.ingress_receipt_value).expect("receipt text");
+        let receipt_text = preserves_rail::to_text(&delivered.ingress_receipt_value).expect("receipt text");
         assert!(receipt_text.contains(case.expected), "{} receipt: {receipt_text}", case.name);
         assert!(next_pending_control_request(&root).expect("pending request scan").is_none());
     }
@@ -12760,7 +13418,7 @@ mod tests {
         assert_eq!(served.ticks, 0);
         assert!(served.processed_request_refs.is_empty());
         assert!(next_pending_control_request(&root).expect("pending scan").is_some());
-        let text = to_text(&served.service_receipt_value).expect("service receipt text");
+        let text = preserves_rail::to_text(&served.service_receipt_value).expect("service receipt text");
         assert!(text.contains("already active"));
     }
 
@@ -12802,7 +13460,8 @@ mod tests {
         .expect("bounded restart denial");
         assert_eq!(restart_denied.decision, "deny");
         assert_eq!(restart_denied.ticks, 0);
-        let restart_denied_text = to_text(&restart_denied.service_receipt_value).expect("restart denial receipt text");
+        let restart_denied_text =
+            preserves_rail::to_text(&restart_denied.service_receipt_value).expect("restart denial receipt text");
         assert!(restart_denied_text.contains("restart attempts"));
 
         let shutdown = shutdown_request().expect("shutdown request");
@@ -12823,7 +13482,7 @@ mod tests {
         assert_eq!(stopped.decision, "deny");
         assert!(stopped.has_stopped);
         assert_eq!(stopped.supervisor_receipt_refs.len(), 2);
-        let text = to_text(&stopped.service_receipt_value).expect("service receipt text");
+        let text = preserves_rail::to_text(&stopped.service_receipt_value).expect("service receipt text");
         assert!(text.contains("exceeded supervisor bound"));
     }
 
@@ -12962,7 +13621,8 @@ mod tests {
     }
 
     fn assert_install(case: &OpCase) {
-        let payload_value = record("node-control-install-payload", vec![string("payload")]);
+        let payload_value =
+            preserves_rail::record("node-control-install-payload", vec![preserves_rail::string("payload")]);
         let payload_ref = import_node_artifact(&case.root, &payload_value).expect("import payload");
         let payload_provenance =
             provenance::synthetic_reviewed_provenance_record(&payload_ref).expect("payload provenance");
@@ -13125,7 +13785,9 @@ mod tests {
             stage_artifact_ref: Some(stage_ref),
             input_ports: &[],
             output_ports: &["out".to_string()],
-            config: record("source", vec![record("values", vec![sequence(vec![string("node-job")])])]),
+            config: preserves_rail::record("source", vec![preserves_rail::record("values", vec![
+                preserves_rail::sequence(vec![preserves_rail::string("node-job")]),
+            ])]),
             effect_manifest_refs: &[],
             policy_refs: &[],
             evidence_refs: &[],
@@ -13140,7 +13802,7 @@ mod tests {
             stage_artifact_ref: Some(stage_ref),
             input_ports: &["in".to_string()],
             output_ports: &["out".to_string()],
-            config: record("op", vec![string("identity")]),
+            config: preserves_rail::record("op", vec![preserves_rail::string("identity")]),
             effect_manifest_refs: &[],
             policy_refs: &[],
             evidence_refs: &[],
@@ -13199,7 +13861,7 @@ mod tests {
         let admission = job_dag::admission_loopback(registry, &admission_request).expect("admission loopback");
         assert_eq!(admission.plan.decision, "pass");
         AdmissionParts {
-            receipt_ref: canonical_hash(&admission.receipt_value).expect("admission ref"),
+            receipt_ref: preserves_rail::canonical_hash(&admission.receipt_value).expect("admission ref"),
             receipt_value: admission.receipt_value,
             stage_order: admission.plan.stage_order,
             policy_refs,
@@ -13244,7 +13906,7 @@ mod tests {
             evidence_refs: std::slice::from_ref(&evidence_ref),
         })
         .expect("authority context");
-        let context_ref = canonical_hash(&context_value).expect("authority context ref");
+        let context_ref = preserves_rail::canonical_hash(&context_value).expect("authority context ref");
         let install = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
             kind: "authority-context".to_string(),
             payload: context_value,
@@ -13263,7 +13925,7 @@ mod tests {
 
     fn install_node_clean_gate(registry: &Path) -> String {
         let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean gate");
-        let gate_ref = canonical_hash(&gate_value).expect("gate ref");
+        let gate_ref = preserves_rail::canonical_hash(&gate_value).expect("gate ref");
         let install = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
             kind: "octet-gate-receipt".to_string(),
             payload: gate_value,
