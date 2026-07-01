@@ -1,18 +1,6 @@
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::fs;
-use std::path::Path;
-
-use preserves::IOValue;
-use preserves::Record;
-use preserves::Value;
-
 use crate::artifacts;
 use crate::authority;
 use crate::chunk_store;
-use crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
-use crate::error::MoltenError;
-use crate::error::Result;
 use crate::eval_cache;
 use crate::ledger;
 use crate::octet_gate;
@@ -20,6 +8,17 @@ use crate::preserves_rail;
 use crate::remote_dataspace;
 use crate::resources;
 use crate::typed_storage;
+
+type FilePath = std::path::Path;
+type IoValue = preserves::IOValue;
+type MoltenError = crate::error::MoltenError;
+type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
+type OrderedSet<T> = std::collections::BTreeSet<T>;
+type Record<T> = preserves::Record<T>;
+type Result<T> = crate::error::Result<T>;
+type Value<T> = preserves::Value<T>;
+
+const DEFAULT_FIXED_V1_CHUNK_SIZE: u64 = crate::chunk_store::DEFAULT_FIXED_V1_CHUNK_SIZE;
 
 pub const JOB_ARTIFACT_KIND: &str = "job-dag";
 pub const JOB_CACHE_OPERATION: &str = "job-stage";
@@ -50,7 +49,7 @@ pub struct JobDag {
     pub effect_manifest_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,7 +59,7 @@ pub struct JobNode {
     pub stage_artifact_ref: Option<String>,
     pub input_ports: Vec<String>,
     pub output_ports: Vec<String>,
-    pub config: IOValue,
+    pub config: IoValue,
     pub effect_manifest_refs: Vec<String>,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -87,7 +86,7 @@ pub struct JobOutputRequest {
     pub policy_refs: Vec<String>,
     pub handler_profile_ref: Option<String>,
     pub seed_config_ref: Option<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,18 +94,18 @@ pub struct JobInstall {
     pub job_ref: String,
     pub artifact_ref: String,
     pub decision: String,
-    pub receipt_value: IOValue,
-    pub artifact_receipt_value: IOValue,
+    pub receipt_value: IoValue,
+    pub artifact_receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobRunOptions<'a> {
-    pub registry_root: &'a Path,
-    pub storage_root: &'a Path,
-    pub cache_root: &'a Path,
-    pub chunk_root: &'a Path,
-    pub ledger_root: Option<&'a Path>,
-    pub output_request: Option<IOValue>,
+    pub registry_root: &'a FilePath,
+    pub storage_root: &'a FilePath,
+    pub cache_root: &'a FilePath,
+    pub chunk_root: &'a FilePath,
+    pub ledger_root: Option<&'a FilePath>,
+    pub output_request: Option<IoValue>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,28 +114,28 @@ pub struct JobRun {
     pub request_ref: String,
     pub stage_receipt_refs: Vec<String>,
     pub output_refs: Vec<String>,
-    pub output_value: IOValue,
-    pub receipt_value: IOValue,
+    pub output_value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobStageRun {
     pub node_id: String,
-    pub output_values: Vec<IOValue>,
+    pub output_values: Vec<IoValue>,
     pub output_refs: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct TrellisExecutionPlan {
     order_ids: Vec<String>,
-    node_index: BTreeMap<String, usize>,
-    dependency_indices: BTreeMap<String, Vec<u64>>,
+    node_index: OrderedMap<String, usize>,
+    dependency_indices: OrderedMap<String, Vec<u64>>,
 }
 
 struct PlanMapping {
     node_ids: Vec<String>,
-    node_index: BTreeMap<String, usize>,
+    node_index: OrderedMap<String, usize>,
     edges: Vec<(usize, usize)>,
 }
 
@@ -152,7 +151,7 @@ pub struct JobReceipt {
     pub output_refs: Vec<String>,
     pub cache_ref: Option<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -161,8 +160,8 @@ pub struct JobPlan {
     pub job_ref: String,
     pub request_ref: String,
     pub stage_order: Vec<String>,
-    pub value: IOValue,
-    pub receipt_value: IOValue,
+    pub value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -173,8 +172,8 @@ pub struct JobProfile {
     pub stage_count: u64,
     pub edge_count: u64,
     pub materialization_boundaries: u64,
-    pub value: IOValue,
-    pub receipt_value: IOValue,
+    pub value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,8 +182,8 @@ pub struct JobFusionPreview {
     pub job_ref: String,
     pub request_ref: String,
     pub chains: Vec<Vec<String>>,
-    pub value: IOValue,
-    pub receipt_value: IOValue,
+    pub value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,7 +195,7 @@ pub struct JobSyncRequest {
     pub policy_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -206,17 +205,17 @@ pub struct JobSyncPlan {
     pub root_refs: Vec<String>,
     pub closure_refs: Vec<String>,
     pub missing_refs: Vec<String>,
-    pub value: IOValue,
-    pub receipt_value: IOValue,
+    pub value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct SyncLoopbackInput<'a> {
-    pub source_registry: &'a Path,
-    pub target_registry: &'a Path,
-    pub request_value: &'a IOValue,
-    pub provenance_values: &'a [IOValue],
-    pub build_verification_values: &'a [IOValue],
+    pub source_registry: &'a FilePath,
+    pub target_registry: &'a FilePath,
+    pub request_value: &'a IoValue,
+    pub provenance_values: &'a [IoValue],
+    pub build_verification_values: &'a [IoValue],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -228,7 +227,7 @@ pub struct JobSyncLoopback {
     pub already_present_refs: Vec<String>,
     pub provenance_receipt_refs: Vec<String>,
     pub diagnostics: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -242,7 +241,7 @@ pub struct JobAdmissionRequest {
     pub capability_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
     pub resource_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -264,15 +263,15 @@ pub struct JobAdmissionPlan {
     pub resource_verdict: String,
     pub decision: String,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
-    pub receipt_value: IOValue,
+    pub value: IoValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobAdmissionLoopback {
     pub receipt_ref: String,
     pub plan: JobAdmissionPlan,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -293,7 +292,7 @@ pub struct JobAdmissionReceipt {
     pub diagnostics: Vec<String>,
     pub refs: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -309,7 +308,7 @@ pub struct JobExecutionRequest {
     pub policy_refs: Vec<String>,
     pub capability_refs: Vec<String>,
     pub resource_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -320,7 +319,7 @@ pub struct JobExecutionLoopback {
     pub run: Option<JobRun>,
     pub decision: String,
     pub diagnostics: Vec<String>,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -347,17 +346,17 @@ pub struct BlobRefJobSubmission {
     pub policy_refs: Vec<String>,
     pub provenance_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlobRefJobExecution {
     pub submission: BlobRefJobSubmission,
     pub decision: String,
-    pub status_values: Vec<IOValue>,
+    pub status_values: Vec<IoValue>,
     pub output_manifest_ref: Option<String>,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub diagnostics: Vec<String>,
 }
 
@@ -380,9 +379,9 @@ pub struct BlobRefJobSubmissionValueInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct BlobRefJobExecuteInput<'a> {
-    pub chunk_root: &'a Path,
-    pub submission_value: &'a IOValue,
-    pub ledger_root: Option<&'a Path>,
+    pub chunk_root: &'a FilePath,
+    pub submission_value: &'a IoValue,
+    pub ledger_root: Option<&'a FilePath>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -399,7 +398,7 @@ pub struct JobWorkerRequest {
     pub peer_bootstrap_refs: Vec<String>,
     pub node_identity_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -415,7 +414,7 @@ pub struct JobWorkerResult {
     pub delivery_log_ref: Option<String>,
     pub diagnostics: Vec<String>,
     pub checks: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -430,7 +429,7 @@ pub struct JobWorkerReceipt {
     pub execution_receipt_ref: Option<String>,
     pub delivery_log_ref: Option<String>,
     pub diagnostics: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -449,17 +448,17 @@ pub struct JobWorkerScheduleReceipt {
     pub result_ref: Option<String>,
     pub diagnostics: Vec<String>,
     pub refs: Vec<String>,
-    pub value: IOValue,
+    pub value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobWorkerExecution {
     pub request: Option<JobWorkerRequest>,
-    pub assignment_value: IOValue,
-    pub status_values: Vec<IOValue>,
+    pub assignment_value: IoValue,
+    pub status_values: Vec<IoValue>,
     pub result: JobWorkerResult,
     pub receipt_ref: String,
-    pub receipt_value: IOValue,
+    pub receipt_value: IoValue,
     pub execution: Option<JobExecutionLoopback>,
 }
 
@@ -507,20 +506,20 @@ pub struct JobWorkerEnvelopeInput<'a> {
     pub from_actor: &'a str,
     pub to_peer: &'a str,
     pub topic: &'a str,
-    pub request_value: &'a IOValue,
+    pub request_value: &'a IoValue,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct JobWorkerExecuteInput<'a> {
-    pub target_registry: &'a Path,
-    pub storage_root: &'a Path,
-    pub cache_root: &'a Path,
-    pub chunk_root: &'a Path,
+    pub target_registry: &'a FilePath,
+    pub storage_root: &'a FilePath,
+    pub cache_root: &'a FilePath,
+    pub chunk_root: &'a FilePath,
     pub delivery: &'a remote_dataspace::RemoteDataspaceDelivery,
     pub delivery_log: Option<&'a remote_dataspace::RemoteDeliveryLog>,
-    pub admission_receipt_value: &'a IOValue,
-    pub execution_request_value: &'a IOValue,
-    pub ledger_root: Option<&'a Path>,
+    pub admission_receipt_value: &'a IoValue,
+    pub execution_request_value: &'a IoValue,
+    pub ledger_root: Option<&'a FilePath>,
 }
 
 #[derive(Debug, Clone)]
@@ -530,7 +529,7 @@ pub struct NodeValueInput<'a> {
     pub stage_artifact_ref: Option<&'a str>,
     pub input_ports: &'a [String],
     pub output_ports: &'a [String],
-    pub config: IOValue,
+    pub config: IoValue,
     pub effect_manifest_refs: &'a [String],
     pub policy_refs: &'a [String],
     pub evidence_refs: &'a [String],
@@ -549,8 +548,8 @@ pub struct EdgeValueInput<'a> {
 
 #[derive(Debug, Clone)]
 pub struct DagValueInput<'a> {
-    pub nodes: Vec<IOValue>,
-    pub edges: Vec<IOValue>,
+    pub nodes: Vec<IoValue>,
+    pub edges: Vec<IoValue>,
     pub output_roots: &'a [String],
     pub schema_refs: &'a [String],
     pub effect_manifest_refs: &'a [String],
@@ -606,12 +605,12 @@ pub struct ExecutionRequestValueInput<'a> {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ExecutionLoopbackInput<'a> {
-    pub target_registry: &'a Path,
-    pub storage_root: &'a Path,
-    pub cache_root: &'a Path,
-    pub chunk_root: &'a Path,
-    pub admission_receipt_value: &'a IOValue,
-    pub request_value: &'a IOValue,
+    pub target_registry: &'a FilePath,
+    pub storage_root: &'a FilePath,
+    pub cache_root: &'a FilePath,
+    pub chunk_root: &'a FilePath,
+    pub admission_receipt_value: &'a IoValue,
+    pub request_value: &'a IoValue,
 }
 
 struct ExecutionReceiptValueInput<'a> {
@@ -663,13 +662,13 @@ struct OutputOutcome {
     output_put_ref: String,
     verify_ref: String,
     pin_ref: String,
-    status_values: Vec<IOValue>,
+    status_values: Vec<IoValue>,
 }
 
 struct FinishInput<'a> {
-    ledger_root: Option<&'a Path>,
+    ledger_root: Option<&'a FilePath>,
     submission: BlobRefJobSubmission,
-    status_values: Vec<IOValue>,
+    status_values: Vec<IoValue>,
     verify_refs: Vec<String>,
     fetch_refs: Vec<String>,
     pin_refs: Vec<String>,
@@ -726,7 +725,7 @@ struct AnalysisReceiptValueInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-pub fn job_node_value(input: NodeValueInput<'_>) -> Result<IOValue> {
+pub fn job_node_value(input: NodeValueInput<'_>) -> Result<IoValue> {
     validate_node_id(input.id)?;
     validate_stage_kind(input.kind)?;
     if let Some(stage_artifact_ref) = input.stage_artifact_ref {
@@ -755,7 +754,7 @@ pub fn job_node_value(input: NodeValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn job_edge_value(input: EdgeValueInput<'_>) -> Result<IOValue> {
+pub fn job_edge_value(input: EdgeValueInput<'_>) -> Result<IoValue> {
     validate_node_id(input.from_node)?;
     validate_node_id(input.to_node)?;
     validate_non_empty(input.from_port, "job edge from port")?;
@@ -782,7 +781,7 @@ pub fn job_edge_value(input: EdgeValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn job_dag_value(input: DagValueInput<'_>) -> Result<IOValue> {
+pub fn job_dag_value(input: DagValueInput<'_>) -> Result<IoValue> {
     validate_refs(input.schema_refs, "job schema ref")?;
     validate_refs(input.effect_manifest_refs, "job effect manifest ref")?;
     validate_refs(input.policy_refs, "job policy ref")?;
@@ -808,7 +807,7 @@ pub fn job_dag_value(input: DagValueInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-pub fn job_output_request_value(input: OutputRequestValueInput<'_>) -> Result<IOValue> {
+pub fn job_output_request_value(input: OutputRequestValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.dag_ref, "job output request dag ref")?;
     for root in input.roots {
         validate_node_id(root)?;
@@ -835,7 +834,7 @@ pub fn job_output_request_value(input: OutputRequestValueInput<'_>) -> Result<IO
     ]))
 }
 
-pub fn builtin_stage_operation_value(operation: &str) -> Result<IOValue> {
+pub fn builtin_stage_operation_value(operation: &str) -> Result<IoValue> {
     validate_stage_operation(operation)?;
     Ok(preserves_rail::record("job-stage-operation-v1", vec![
         preserves_rail::string(preserves_rail::JOB_STAGE_OPERATION_SCHEMA),
@@ -848,7 +847,7 @@ pub fn builtin_stage_operation_ref(operation: &str) -> Result<String> {
     preserves_rail::canonical_hash(&builtin_stage_operation_value(operation)?)
 }
 
-pub fn job_sync_request_value(input: SyncRequestValueInput<'_>) -> Result<IOValue> {
+pub fn job_sync_request_value(input: SyncRequestValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.job_ref, "job sync request job ref")?;
     for stage_id in input.stage_ids {
         validate_node_id(stage_id)?;
@@ -871,7 +870,7 @@ pub fn job_sync_request_value(input: SyncRequestValueInput<'_>) -> Result<IOValu
     ]))
 }
 
-pub fn parse_job_sync_request_value(value: &IOValue) -> Result<JobSyncRequest> {
+pub fn parse_job_sync_request_value(value: &IoValue) -> Result<JobSyncRequest> {
     let fields = value
         .collect_simple_record("job-sync-request-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-sync-request-v1 ...>"))?;
@@ -890,7 +889,7 @@ pub fn parse_job_sync_request_value(value: &IOValue) -> Result<JobSyncRequest> {
     })
 }
 
-pub fn job_admission_request_value(input: AdmissionRequestValueInput<'_>) -> Result<IOValue> {
+pub fn job_admission_request_value(input: AdmissionRequestValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.job_ref, "job admission request job ref")?;
     validate_ref(input.sync_ref, "job admission request sync ref")?;
     for stage_id in input.stage_ids {
@@ -917,7 +916,7 @@ pub fn job_admission_request_value(input: AdmissionRequestValueInput<'_>) -> Res
     ]))
 }
 
-pub fn parse_job_admission_request_value(value: &IOValue) -> Result<JobAdmissionRequest> {
+pub fn parse_job_admission_request_value(value: &IoValue) -> Result<JobAdmissionRequest> {
     let fields = value
         .collect_simple_record("job-admission-request-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-admission-request-v1 ...>"))?;
@@ -938,7 +937,7 @@ pub fn parse_job_admission_request_value(value: &IOValue) -> Result<JobAdmission
     })
 }
 
-pub fn job_execution_request_value(input: ExecutionRequestValueInput<'_>) -> Result<IOValue> {
+pub fn job_execution_request_value(input: ExecutionRequestValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.job_ref, "job execution request job ref")?;
     validate_ref(input.admission_ref, "job execution admission receipt ref")?;
     for stage_id in input.stage_ids {
@@ -974,7 +973,7 @@ pub fn job_execution_request_value(input: ExecutionRequestValueInput<'_>) -> Res
     ]))
 }
 
-pub fn parse_job_execution_request_value(value: &IOValue) -> Result<JobExecutionRequest> {
+pub fn parse_job_execution_request_value(value: &IoValue) -> Result<JobExecutionRequest> {
     let fields = value
         .collect_simple_record("job-execution-request-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-execution-request-v1 ...>"))?;
@@ -999,7 +998,7 @@ pub fn parse_job_execution_request_value(value: &IOValue) -> Result<JobExecution
     })
 }
 
-pub fn job_content_ref_value(content: &JobContentRef) -> Result<IOValue> {
+pub fn job_content_ref_value(content: &JobContentRef) -> Result<IoValue> {
     validate_job_content_ref(content, "job content ref")?;
     Ok(preserves_rail::record("job-content-ref", vec![
         preserves_rail::record("content-ref", vec![preserves_rail::string(&content.content_ref)]),
@@ -1009,7 +1008,7 @@ pub fn job_content_ref_value(content: &JobContentRef) -> Result<IOValue> {
     ]))
 }
 
-pub fn job_ref_submission_value(input: BlobRefJobSubmissionValueInput<'_>) -> Result<IOValue> {
+pub fn job_ref_submission_value(input: BlobRefJobSubmissionValueInput<'_>) -> Result<IoValue> {
     validate_blob_ref_submission_input(&input)?;
     let input_values = input.inputs.iter().map(job_content_ref_value).collect::<Result<Vec<_>>>()?;
     Ok(preserves_rail::record("job-ref-submission-v1", vec![
@@ -1037,7 +1036,7 @@ pub fn job_ref_submission_value(input: BlobRefJobSubmissionValueInput<'_>) -> Re
     ]))
 }
 
-pub fn parse_job_ref_submission_value(value: &IOValue) -> Result<BlobRefJobSubmission> {
+pub fn parse_job_ref_submission_value(value: &IoValue) -> Result<BlobRefJobSubmission> {
     reject_blob_ref_job_inline_tokens(value)?;
     let fields = value
         .collect_simple_record("job-ref-submission-v1", Some(15))
@@ -1138,7 +1137,7 @@ pub fn execute_blob_ref_job(input: BlobRefJobExecuteInput<'_>) -> Result<BlobRef
     })
 }
 
-pub fn job_worker_request_value(input: JobWorkerRequestValueInput<'_>) -> Result<IOValue> {
+pub fn job_worker_request_value(input: JobWorkerRequestValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.job_ref, "job worker request job ref")?;
     validate_non_empty(input.target_peer, "job worker target peer")?;
     for stage_id in input.stage_ids {
@@ -1179,7 +1178,7 @@ pub fn job_worker_request_value(input: JobWorkerRequestValueInput<'_>) -> Result
     ]))
 }
 
-pub fn parse_job_worker_request_value(value: &IOValue) -> Result<JobWorkerRequest> {
+pub fn parse_job_worker_request_value(value: &IoValue) -> Result<JobWorkerRequest> {
     reject_worker_ambient_tokens(value)?;
     let fields = value
         .collect_simple_record("job-worker-request-v1", Some(13))
@@ -1254,7 +1253,7 @@ pub fn live_unrecorded_worker_result(input: JobWorkerExecuteInput<'_>) -> Result
     execute_worker_delivery(without_log)
 }
 
-pub fn parse_job_worker_result_value(value: &IOValue) -> Result<JobWorkerResult> {
+pub fn parse_job_worker_result_value(value: &IoValue) -> Result<JobWorkerResult> {
     let fields = value
         .collect_simple_record("job-worker-result-v1", Some(12))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-result-v1 ...>"))?;
@@ -1279,7 +1278,7 @@ pub fn parse_job_worker_result_value(value: &IOValue) -> Result<JobWorkerResult>
     })
 }
 
-pub fn parse_job_worker_receipt_value(value: &IOValue) -> Result<JobWorkerReceipt> {
+pub fn parse_job_worker_receipt_value(value: &IoValue) -> Result<JobWorkerReceipt> {
     let fields = value
         .collect_simple_record("job-worker-receipt-v1", Some(13))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-receipt-v1 ...>"))?;
@@ -1306,7 +1305,7 @@ pub fn parse_job_worker_receipt_value(value: &IOValue) -> Result<JobWorkerReceip
     })
 }
 
-pub fn parse_job_worker_schedule_receipt_value(value: &IOValue) -> Result<JobWorkerScheduleReceipt> {
+pub fn parse_job_worker_schedule_receipt_value(value: &IoValue) -> Result<JobWorkerScheduleReceipt> {
     let fields = value
         .collect_simple_record("job-worker-schedule-receipt-v1", Some(20))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-worker-schedule-receipt-v1 ...>"))?;
@@ -1337,7 +1336,7 @@ pub fn parse_job_worker_schedule_receipt_value(value: &IOValue) -> Result<JobWor
     })
 }
 
-pub fn parse_blob_ref_job_receipt_value(value: &IOValue) -> Result<JobReceipt> {
+pub fn parse_blob_ref_job_receipt_value(value: &IoValue) -> Result<JobReceipt> {
     let fields = value
         .collect_simple_record("job-ref-receipt-v1", Some(18))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-ref-receipt-v1 ...>"))?;
@@ -1360,7 +1359,7 @@ pub fn parse_blob_ref_job_receipt_value(value: &IOValue) -> Result<JobReceipt> {
     })
 }
 
-pub fn parse_job_dag_value(value: &IOValue) -> Result<JobDag> {
+pub fn parse_job_dag_value(value: &IoValue) -> Result<JobDag> {
     let fields = value
         .collect_simple_record("job-dag-v1", Some(10))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-dag-v1 ...>"))?;
@@ -1373,7 +1372,7 @@ pub fn parse_job_dag_value(value: &IOValue) -> Result<JobDag> {
     if nodes.is_empty() {
         return Err(MoltenError::invalid_harness("job dag requires at least one node"));
     }
-    let mut node_ids = BTreeSet::new();
+    let mut node_ids = OrderedSet::new();
     for node in &nodes {
         if !node_ids.insert(node.id.clone()) {
             return Err(MoltenError::invalid_harness(format!("duplicate job node id {}", node.id)));
@@ -1412,7 +1411,7 @@ pub fn parse_job_dag_value(value: &IOValue) -> Result<JobDag> {
     })
 }
 
-pub fn parse_job_output_request_value(value: &IOValue, expected_dag_ref: &str) -> Result<JobOutputRequest> {
+pub fn parse_job_output_request_value(value: &IoValue, expected_dag_ref: &str) -> Result<JobOutputRequest> {
     let fields = value
         .collect_simple_record("job-output-request-v1", Some(8))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-output-request-v1 ...>"))?;
@@ -1440,7 +1439,7 @@ pub fn parse_job_output_request_value(value: &IOValue, expected_dag_ref: &str) -
     })
 }
 
-pub fn parse_job_receipt(value: &IOValue) -> Result<JobReceipt> {
+pub fn parse_job_receipt(value: &IoValue) -> Result<JobReceipt> {
     let fields = value
         .collect_simple_record("job-dag-receipt-v1", Some(14))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-dag-receipt-v1 ...>"))?;
@@ -1462,7 +1461,7 @@ pub fn parse_job_receipt(value: &IOValue) -> Result<JobReceipt> {
     })
 }
 
-pub fn parse_job_admission_receipt_value(value: &IOValue) -> Result<JobAdmissionReceipt> {
+pub fn parse_job_admission_receipt_value(value: &IoValue) -> Result<JobAdmissionReceipt> {
     let fields = value
         .collect_simple_record("job-admission-receipt-v1", Some(15))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-admission-receipt-v1 ...>"))?;
@@ -1490,7 +1489,7 @@ pub fn parse_job_admission_receipt_value(value: &IOValue) -> Result<JobAdmission
     })
 }
 
-pub fn install_job_dag(registry_root: &Path, value: &IOValue) -> Result<JobInstall> {
+pub fn install_job_dag(registry_root: &FilePath, value: &IoValue) -> Result<JobInstall> {
     let dag = parse_job_dag_value(value)?;
     let stage_deps = dag.nodes.iter().filter_map(|node| node.stage_artifact_ref.clone()).collect::<Vec<_>>();
     let install = artifacts::install_artifact(registry_root, &artifacts::ArtifactInstallInput {
@@ -1547,7 +1546,7 @@ pub fn install_job_dag(registry_root: &Path, value: &IOValue) -> Result<JobInsta
     })
 }
 
-pub fn job_artifact_ref(registry_root: &Path, job_ref: &str) -> Result<String> {
+pub fn job_artifact_ref(registry_root: &FilePath, job_ref: &str) -> Result<String> {
     validate_ref(job_ref, "job artifact lookup ref")?;
     for artifact in artifacts::list_artifacts(registry_root, Some(JOB_ARTIFACT_KIND))? {
         let payload = artifacts::read_payload(registry_root, &artifact.artifact_ref)?;
@@ -1559,7 +1558,7 @@ pub fn job_artifact_ref(registry_root: &Path, job_ref: &str) -> Result<String> {
     Err(MoltenError::invalid_harness(format!("job artifact {job_ref} not found in registry")))
 }
 
-pub fn read_job_dag(registry_root: &Path, reference: &str) -> Result<JobDag> {
+pub fn read_job_dag(registry_root: &FilePath, reference: &str) -> Result<JobDag> {
     if validate_ref(reference, "job ref").is_ok() {
         if let Ok(payload) = artifacts::read_payload(registry_root, reference)
             && let Ok(dag) = parse_job_dag_value(&payload)
@@ -1577,10 +1576,10 @@ pub fn read_job_dag(registry_root: &Path, reference: &str) -> Result<JobDag> {
     Err(MoltenError::invalid_harness(format!("job dag {reference} not found in registry")))
 }
 
-pub fn read_job_dag_file_or_registry(registry_root: &Path, spec: &str) -> Result<JobDag> {
-    let path = Path::new(spec);
+pub fn read_job_dag_file_or_registry(registry_root: &FilePath, spec: &str) -> Result<JobDag> {
+    let path = FilePath::new(spec);
     if path.exists() {
-        let text = fs::read_to_string(path).map_err(MoltenError::from)?;
+        let text = std::fs::read_to_string(path).map_err(MoltenError::from)?;
         let value = preserves_rail::parse_text(&text)?;
         parse_job_dag_value(&value)
     } else {
@@ -1588,7 +1587,7 @@ pub fn read_job_dag_file_or_registry(registry_root: &Path, spec: &str) -> Result
     }
 }
 
-pub fn run_job_dag_value(value: &IOValue, options: &JobRunOptions<'_>) -> Result<JobRun> {
+pub fn run_job_dag_value(value: &IoValue, options: &JobRunOptions<'_>) -> Result<JobRun> {
     let dag = parse_job_dag_value(value)?;
     run_job_dag(&dag, options)
 }
@@ -1626,7 +1625,7 @@ pub fn run_job_dag(dag: &JobDag, options: &JobRunOptions<'_>) -> Result<JobRun> 
 
 struct RunStages {
     receipt_refs: Vec<String>,
-    outputs_by_index: Vec<Option<Vec<IOValue>>>,
+    outputs_by_index: Vec<Option<Vec<IoValue>>>,
     output_refs_by_index: Vec<Option<Vec<String>>>,
 }
 
@@ -1637,7 +1636,7 @@ fn run_stages(
     options: &JobRunOptions<'_>,
 ) -> Result<RunStages> {
     let mut completed_indices = Vec::with_capacity(plan.order_ids.len());
-    let mut outputs_by_index: Vec<Option<Vec<IOValue>>> = vec![None; dag.nodes.len()];
+    let mut outputs_by_index: Vec<Option<Vec<IoValue>>> = vec![None; dag.nodes.len()];
     let mut output_refs_by_index: Vec<Option<Vec<String>>> = vec![None; dag.nodes.len()];
     let mut receipt_refs = Vec::with_capacity(plan.order_ids.len());
     for node_id in &plan.order_ids {
@@ -1687,15 +1686,15 @@ fn run_stages(
 
 struct RunFinish {
     output_refs: Vec<String>,
-    output_value: IOValue,
-    receipt_value: IOValue,
+    output_value: IoValue,
+    receipt_value: IoValue,
 }
 
 struct CompleteInput<'a> {
     dag: &'a JobDag,
     request: &'a JobOutputRequest,
     plan: &'a TrellisExecutionPlan,
-    outputs_by_index: &'a [Option<Vec<IOValue>>],
+    outputs_by_index: &'a [Option<Vec<IoValue>>],
     output_refs_by_index: &'a [Option<Vec<String>>],
     stage_receipt_refs: &'a [String],
 }
@@ -1768,8 +1767,8 @@ fn complete_run(input: CompleteInput<'_>) -> Result<RunFinish> {
     })
 }
 
-fn stage_plan_values(dag: &JobDag, plan: &TrellisExecutionPlan) -> Result<Vec<IOValue>> {
-    let mut node_map = BTreeMap::new();
+fn stage_plan_values(dag: &JobDag, plan: &TrellisExecutionPlan) -> Result<Vec<IoValue>> {
+    let mut node_map = OrderedMap::new();
     for node in &dag.nodes {
         insert_bounded(&mut node_map, node.id.clone(), node, MAX_JOB_NODES, "job plan node map")?;
     }
@@ -1813,7 +1812,7 @@ fn stage_plan_values(dag: &JobDag, plan: &TrellisExecutionPlan) -> Result<Vec<IO
     Ok(stage_values)
 }
 
-pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<JobPlan> {
+pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IoValue>) -> Result<JobPlan> {
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
     let stage_values = stage_plan_values(dag, &plan)?;
@@ -1860,7 +1859,7 @@ pub fn plan_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<Jo
 
 struct StageProfiles {
     config_bytes: u64,
-    values: Vec<IOValue>,
+    values: Vec<IoValue>,
 }
 
 fn stage_profile_values(dag: &JobDag, plan: &TrellisExecutionPlan, cache_entries: usize) -> Result<StageProfiles> {
@@ -1902,8 +1901,8 @@ fn stage_profile_values(dag: &JobDag, plan: &TrellisExecutionPlan, cache_entries
 
 pub fn profile_job_dag(
     dag: &JobDag,
-    output_request: Option<&IOValue>,
-    cache_root: Option<&Path>,
+    output_request: Option<&IoValue>,
+    cache_root: Option<&FilePath>,
 ) -> Result<JobProfile> {
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
@@ -1975,7 +1974,11 @@ pub fn profile_job_dag(
     })
 }
 
-pub fn sync_plan_value(source_registry: &Path, target_registry: &Path, request_value: &IOValue) -> Result<JobSyncPlan> {
+pub fn sync_plan_value(
+    source_registry: &FilePath,
+    target_registry: &FilePath,
+    request_value: &IoValue,
+) -> Result<JobSyncPlan> {
     let request = parse_job_sync_request_value(request_value)?;
     let dag = read_job_dag(source_registry, &request.job_ref)?;
     let roots = sync_roots(source_registry, &dag, &request)?;
@@ -2041,7 +2044,7 @@ pub fn sync_plan_value(source_registry: &Path, target_registry: &Path, request_v
 struct SyncInstallCandidate {
     artifact_ref: String,
     source: artifacts::ArtifactRecord,
-    payload: IOValue,
+    payload: IoValue,
 }
 
 struct CandidateSelection {
@@ -2065,7 +2068,7 @@ fn collect_candidates(
     plan: &JobSyncPlan,
     ordered_refs: Vec<String>,
 ) -> Result<CandidateSelection> {
-    let missing = plan.missing_refs.iter().cloned().collect::<BTreeSet<_>>();
+    let missing = plan.missing_refs.iter().cloned().collect::<OrderedSet<_>>();
     let mut install_candidates = Vec::new();
     let mut already_present_refs = Vec::new();
     let mut provenance_receipt_refs = Vec::new();
@@ -2123,7 +2126,7 @@ fn collect_candidates(
 }
 
 fn apply_candidates(
-    target_registry: &Path,
+    target_registry: &FilePath,
     request: &JobSyncRequest,
     candidates: Vec<SyncInstallCandidate>,
 ) -> Result<Vec<String>> {
@@ -2162,7 +2165,7 @@ fn apply_candidates(
     Ok(installed_refs)
 }
 
-fn loopback_receipt(input: ReceiptInput<'_>) -> Result<IOValue> {
+fn loopback_receipt(input: ReceiptInput<'_>) -> Result<IoValue> {
     let mut refs = input.plan.closure_refs.clone();
     extend_cloned_bounded(&mut refs, input.installed_refs, MAX_JOB_REFS, "job sync refs")?;
     extend_cloned_bounded(&mut refs, input.already_present_refs, MAX_JOB_REFS, "job sync refs")?;
@@ -2231,7 +2234,7 @@ pub fn sync_loopback(input: SyncLoopbackInput<'_>) -> Result<JobSyncLoopback> {
     })
 }
 
-pub fn admission_plan_value(target_registry: &Path, request_value: &IOValue) -> Result<JobAdmissionPlan> {
+pub fn admission_plan_value(target_registry: &FilePath, request_value: &IoValue) -> Result<JobAdmissionPlan> {
     let request = parse_job_admission_request_value(request_value)?;
     let mut diagnostics = Vec::new();
     let has_explicit_authority = explicit_admission_authority(&request, &mut diagnostics);
@@ -2291,12 +2294,12 @@ struct RecordInput<'a> {
 struct StageScanInput<'a> {
     node_id: &'a str,
     plan: &'a TrellisExecutionPlan,
-    node_map: &'a BTreeMap<String, &'a JobNode>,
+    node_map: &'a OrderedMap<String, &'a JobNode>,
     completed_indices: &'a [u64],
 }
 
 fn scan_target(
-    target_registry: &Path,
+    target_registry: &FilePath,
     request: &JobAdmissionRequest,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<Readiness> {
@@ -2332,7 +2335,7 @@ fn scan_target(
 
 fn scan_topology(
     dag: &JobDag,
-    selected: &BTreeSet<String>,
+    selected: &OrderedSet<String>,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
     readiness: &mut Readiness,
 ) -> Result<()> {
@@ -2344,7 +2347,7 @@ fn scan_topology(
             return Ok(());
         }
     };
-    let node_map = dag.nodes.iter().map(|node| (node.id.clone(), node)).collect::<BTreeMap<_, _>>();
+    let node_map = dag.nodes.iter().map(|node| (node.id.clone(), node)).collect::<OrderedMap<_, _>>();
     let mut completed_indices = Vec::new();
     for node_id in &plan.order_ids {
         if !selected.contains(node_id) {
@@ -2485,7 +2488,7 @@ fn plan_checks(input: &PlanOutcomeInput) -> [(&'static str, &'static str); 9] {
     ]
 }
 
-fn plan_record(input: RecordInput<'_>) -> IOValue {
+fn plan_record(input: RecordInput<'_>) -> IoValue {
     preserves_rail::record("job-admission-plan-v1", vec![
         preserves_rail::string(preserves_rail::JOB_ADMISSION_PLAN_SCHEMA),
         preserves_rail::record("request", vec![preserves_rail::string(&input.request.request_ref)]),
@@ -2512,7 +2515,7 @@ fn plan_record(input: RecordInput<'_>) -> IOValue {
     ])
 }
 
-fn verdict_values(verdicts: &[JobAdmissionStageVerdict]) -> Vec<IOValue> {
+fn verdict_values(verdicts: &[JobAdmissionStageVerdict]) -> Vec<IoValue> {
     verdicts
         .iter()
         .map(|verdict| {
@@ -2527,7 +2530,7 @@ fn verdict_values(verdicts: &[JobAdmissionStageVerdict]) -> Vec<IOValue> {
         .collect()
 }
 
-pub fn admission_loopback(target_registry: &Path, request_value: &IOValue) -> Result<JobAdmissionLoopback> {
+pub fn admission_loopback(target_registry: &FilePath, request_value: &IoValue) -> Result<JobAdmissionLoopback> {
     let plan = admission_plan_value(target_registry, request_value)?;
     let checks = [
         ("target-closure-present", status(plan.decision == "pass" || !plan.closure_refs.is_empty())),
@@ -2577,7 +2580,7 @@ pub fn admission_loopback(target_registry: &Path, request_value: &IOValue) -> Re
     })
 }
 
-pub fn missing_admission_execution_receipt_value(request_value: &IOValue, diagnostic: &str) -> Result<IOValue> {
+pub fn missing_admission_execution_receipt_value(request_value: &IoValue, diagnostic: &str) -> Result<IoValue> {
     let request = parse_job_execution_request_value(request_value)?;
     let sync_ref = local_ref("missing-execution-sync", &request.admission_ref)?;
     let mut refs = vec![
@@ -2753,7 +2756,7 @@ fn check_admission_readiness(
 }
 
 struct SelectionInput<'a> {
-    target_registry: &'a Path,
+    target_registry: &'a FilePath,
     request: &'a JobExecutionRequest,
     admission: &'a JobAdmissionReceipt,
     dag: &'a JobDag,
@@ -2877,7 +2880,7 @@ fn pass_result(input: PassInput) -> Result<JobExecutionLoopback> {
     })
 }
 
-pub fn fusion_preview_job_dag(dag: &JobDag, output_request: Option<&IOValue>) -> Result<JobFusionPreview> {
+pub fn fusion_preview_job_dag(dag: &JobDag, output_request: Option<&IoValue>) -> Result<JobFusionPreview> {
     let request = request_for_analysis(dag, output_request)?;
     let plan = trellis_execution_plan(&dag.nodes, &dag.edges)?;
     let (chain_values, chains) = adjacent_chains(dag, &plan.order_ids)?;
@@ -2918,13 +2921,13 @@ pub fn fusion_preview_job_dag(dag: &JobDag, output_request: Option<&IOValue>) ->
     })
 }
 
-fn adjacent_chains(dag: &JobDag, order_ids: &[String]) -> Result<(Vec<IOValue>, Vec<Vec<String>>)> {
+fn adjacent_chains(dag: &JobDag, order_ids: &[String]) -> Result<(Vec<IoValue>, Vec<Vec<String>>)> {
     let positions = order_ids
         .iter()
         .enumerate()
         .map(|(index, node_id)| (node_id.clone(), index))
-        .collect::<BTreeMap<_, _>>();
-    let node_map = dag.nodes.iter().map(|node| (node.id.clone(), node)).collect::<BTreeMap<_, _>>();
+        .collect::<OrderedMap<_, _>>();
+    let node_map = dag.nodes.iter().map(|node| (node.id.clone(), node)).collect::<OrderedMap<_, _>>();
     let mut edges = dag.edges.iter().collect::<Vec<_>>();
     edges.sort_by(|left, right| fusion_edge_sort_key(&positions, left).cmp(&fusion_edge_sort_key(&positions, right)));
 
@@ -2946,7 +2949,7 @@ fn adjacent_chains(dag: &JobDag, order_ids: &[String]) -> Result<(Vec<IOValue>, 
     Ok((chain_values, chains))
 }
 
-fn adjacent_chain_value(chain: &[String]) -> IOValue {
+fn adjacent_chain_value(chain: &[String]) -> IoValue {
     preserves_rail::record("job-fusion-chain-v1", vec![
         preserves_rail::record("stages", vec![preserves_rail::sequence(
             chain.iter().map(preserves_rail::string).collect(),
@@ -2966,12 +2969,12 @@ fn selected_stage_set(
     requested: &[String],
     diagnostics: &mut impl crate::bounded::VecSink<String>,
     stage_verdicts: &mut impl crate::bounded::VecSink<JobAdmissionStageVerdict>,
-) -> Result<BTreeSet<String>> {
-    let known = dag.nodes.iter().map(|node| node.id.clone()).collect::<BTreeSet<_>>();
+) -> Result<OrderedSet<String>> {
+    let known = dag.nodes.iter().map(|node| node.id.clone()).collect::<OrderedSet<_>>();
     if requested.is_empty() {
         return Ok(known);
     }
-    let mut selected = BTreeSet::new();
+    let mut selected = OrderedSet::new();
     for stage_id in requested {
         if known.contains(stage_id) {
             selected.insert(stage_id.clone());
@@ -2993,7 +2996,7 @@ fn selected_stage_set(
     Ok(selected)
 }
 
-fn admission_roots(target_registry: &Path, dag: &JobDag, selected: &BTreeSet<String>) -> Result<Vec<String>> {
+fn admission_roots(target_registry: &FilePath, dag: &JobDag, selected: &OrderedSet<String>) -> Result<Vec<String>> {
     let mut roots = vec![job_artifact_ref(target_registry, &dag.job_ref)?];
     for node in &dag.nodes {
         if selected.contains(&node.id)
@@ -3008,9 +3011,9 @@ fn admission_roots(target_registry: &Path, dag: &JobDag, selected: &BTreeSet<Str
 }
 
 fn target_closure_state(
-    target_registry: &Path,
+    target_registry: &FilePath,
     dag: &JobDag,
-    selected: &BTreeSet<String>,
+    selected: &OrderedSet<String>,
 ) -> Result<(bool, Vec<String>, Vec<String>)> {
     let roots = match admission_roots(target_registry, dag, selected) {
         Ok(roots) => roots,
@@ -3038,7 +3041,7 @@ fn target_closure_state(
     Ok((has_target_closure, closure_refs, diagnostics))
 }
 
-fn target_closure_artifact_diagnostic(target_registry: &Path, artifact_ref: &str) -> Option<String> {
+fn target_closure_artifact_diagnostic(target_registry: &FilePath, artifact_ref: &str) -> Option<String> {
     match artifacts::read_artifact(target_registry, artifact_ref) {
         Ok(artifact) if artifact.artifact_ref == artifact_ref => None,
         Ok(artifact) => Some(format!("target artifact key {artifact_ref} contains envelope {}", artifact.artifact_ref)),
@@ -3071,7 +3074,7 @@ fn explicit_admission_authority(
 }
 
 fn capability_contexts_admit(
-    target_registry: &Path,
+    target_registry: &FilePath,
     request: &JobAdmissionRequest,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<(bool, Vec<String>)> {
@@ -3110,7 +3113,7 @@ fn capability_contexts_admit(
     Ok((has_passing_authority, receipt_refs))
 }
 
-fn authority_context_value_for_ref(target_registry: &Path, context_ref: &str) -> Result<Option<IOValue>> {
+fn authority_context_value_for_ref(target_registry: &FilePath, context_ref: &str) -> Result<Option<IoValue>> {
     validate_ref(context_ref, "job admission authority context ref")?;
     for artifact in artifacts::list_artifacts(target_registry, None)? {
         let payload = artifacts::read_payload(target_registry, &artifact.artifact_ref)?;
@@ -3133,7 +3136,7 @@ fn sync_evidence_bound(request: &JobAdmissionRequest, diagnostics: &mut impl cra
 }
 
 fn source_gate_evidence_bound(
-    target_registry: &Path,
+    target_registry: &FilePath,
     request: &JobAdmissionRequest,
     diagnostics: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<(bool, Vec<String>)> {
@@ -3184,7 +3187,7 @@ fn source_gate_evidence_bound(
     Ok((has_passing_source_gate, validation_refs))
 }
 
-fn source_gate_value_for_ref(target_registry: &Path, gate_ref: &str) -> Result<Option<IOValue>> {
+fn source_gate_value_for_ref(target_registry: &FilePath, gate_ref: &str) -> Result<Option<IoValue>> {
     validate_ref(gate_ref, "job admission source gate ref")?;
     if let Ok(value) = artifacts::read_payload(target_registry, gate_ref) {
         return Ok(Some(value));
@@ -3234,7 +3237,7 @@ struct JobAdmissionReceiptValueInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-fn job_admission_receipt_value(input: JobAdmissionReceiptValueInput<'_>) -> Result<IOValue> {
+fn job_admission_receipt_value(input: JobAdmissionReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "job admission receipt operation")?;
     validate_decision(input.decision)?;
     validate_ref(input.plan_ref, "job admission receipt plan ref")?;
@@ -3283,7 +3286,7 @@ fn job_admission_receipt_value(input: JobAdmissionReceiptValueInput<'_>) -> Resu
     ]))
 }
 
-fn job_execution_receipt_value(input: ExecutionReceiptValueInput<'_>) -> Result<IOValue> {
+fn job_execution_receipt_value(input: ExecutionReceiptValueInput<'_>) -> Result<IoValue> {
     validate_decision(input.decision)?;
     validate_refs(input.stage_receipt_refs, "job execution stage receipt ref")?;
     validate_refs(input.output_refs, "job execution output ref")?;
@@ -3342,7 +3345,7 @@ fn job_execution_receipt_value(input: ExecutionReceiptValueInput<'_>) -> Result<
 fn job_worker_assignment_value(
     request: &JobWorkerRequest,
     delivery: &remote_dataspace::RemoteDataspaceDelivery,
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     Ok(preserves_rail::record("job-worker-assignment-v1", vec![
         preserves_rail::string(preserves_rail::JOB_WORKER_ASSIGNMENT_SCHEMA),
         preserves_rail::record("request", vec![preserves_rail::string(&request.request_ref)]),
@@ -3364,7 +3367,7 @@ fn job_worker_assignment_value(
     ]))
 }
 
-fn job_worker_status_value(input: WorkerStatusValueInput<'_>) -> Result<IOValue> {
+fn job_worker_status_value(input: WorkerStatusValueInput<'_>) -> Result<IoValue> {
     validate_worker_state(input.state)?;
     let mut refs = vec![
         input.request.request_ref.clone(),
@@ -3396,7 +3399,7 @@ fn job_worker_status_value(input: WorkerStatusValueInput<'_>) -> Result<IOValue>
     ]))
 }
 
-fn job_worker_result_value(input: WorkerResultValueInput<'_>) -> Result<IOValue> {
+fn job_worker_result_value(input: WorkerResultValueInput<'_>) -> Result<IoValue> {
     validate_worker_decision(input.decision)?;
     validate_refs(input.output_refs, "job worker output ref")?;
     validate_stage_receipt_refs(input.stage_receipt_refs)?;
@@ -3449,7 +3452,7 @@ fn job_worker_result_value(input: WorkerResultValueInput<'_>) -> Result<IOValue>
     ]))
 }
 
-fn job_worker_receipt_value(input: WorkerReceiptValueInput<'_>) -> Result<IOValue> {
+fn job_worker_receipt_value(input: WorkerReceiptValueInput<'_>) -> Result<IoValue> {
     validate_worker_decision(input.decision)?;
     validate_ref(input.assignment_ref, "job worker assignment ref")?;
     validate_refs(input.status_refs, "job worker status ref")?;
@@ -3495,7 +3498,7 @@ fn job_worker_receipt_value(input: WorkerReceiptValueInput<'_>) -> Result<IOValu
     ]))
 }
 
-pub fn job_worker_schedule_receipt_value(input: JobWorkerScheduleReceiptValueInput<'_>) -> Result<IOValue> {
+pub fn job_worker_schedule_receipt_value(input: JobWorkerScheduleReceiptValueInput<'_>) -> Result<IoValue> {
     validate_non_empty(input.operation, "job worker schedule operation")?;
     validate_decision(input.decision)?;
     validate_ref(input.job_ref, "job worker schedule job ref")?;
@@ -3633,7 +3636,7 @@ fn preflight(submission: &BlobRefJobSubmission) -> Result<(Preflight, Vec<String
     Ok((preflight, diagnostics))
 }
 
-fn fetch_content(chunk_root: &Path, submission: &BlobRefJobSubmission) -> Result<FetchOutcome> {
+fn fetch_content(chunk_root: &FilePath, submission: &BlobRefJobSubmission) -> Result<FetchOutcome> {
     let mut content_refs = vec![submission.executable.clone()];
     extend_cloned_bounded(&mut content_refs, &submission.inputs, MAX_JOB_REFS, "job ref content refs")?;
     let mut input_bytes = Vec::new();
@@ -3667,7 +3670,11 @@ fn fetch_content(chunk_root: &Path, submission: &BlobRefJobSubmission) -> Result
     })
 }
 
-fn run_output(chunk_root: &Path, submission: &BlobRefJobSubmission, input_bytes: &[Vec<u8>]) -> Result<OutputOutcome> {
+fn run_output(
+    chunk_root: &FilePath,
+    submission: &BlobRefJobSubmission,
+    input_bytes: &[Vec<u8>],
+) -> Result<OutputOutcome> {
     let mut status_values = Vec::new();
     push_bounded(
         &mut status_values,
@@ -3701,7 +3708,7 @@ fn run_output(chunk_root: &Path, submission: &BlobRefJobSubmission, input_bytes:
     })
 }
 
-fn cleanup_content(chunk_root: &Path, content_refs: &[JobContentRef]) -> Result<Vec<String>> {
+fn cleanup_content(chunk_root: &FilePath, content_refs: &[JobContentRef]) -> Result<Vec<String>> {
     let mut cleanup_refs = Vec::new();
     for content in content_refs {
         if let Ok(unpin) = chunk_store::unpin_manifest(chunk_root, &content.content_ref) {
@@ -3805,7 +3812,7 @@ fn blob_ref_job_status_value(
     state: &str,
     output_refs: &[String],
     checks: &[(&str, &str)],
-) -> Result<IOValue> {
+) -> Result<IoValue> {
     validate_blob_ref_state(state)?;
     validate_refs(output_refs, "job ref status output ref")?;
     let mut refs = vec![submission.submission_ref.clone(), submission.operation_id.clone()];
@@ -3825,7 +3832,7 @@ fn blob_ref_job_status_value(
     ]))
 }
 
-fn blob_ref_job_receipt_value(input: BlobRefReceiptValueInput<'_>) -> Result<IOValue> {
+fn blob_ref_job_receipt_value(input: BlobRefReceiptValueInput<'_>) -> Result<IoValue> {
     validate_worker_decision(input.decision)?;
     validate_refs(input.status_refs, "job ref receipt status ref")?;
     validate_refs(input.verify_refs, "job ref receipt verify ref")?;
@@ -3890,7 +3897,7 @@ fn blob_ref_job_receipt_value(input: BlobRefReceiptValueInput<'_>) -> Result<IOV
 }
 
 fn fetch_blob_ref_job_content(
-    chunk_root: &Path,
+    chunk_root: &FilePath,
     content: &JobContentRef,
     verify_refs: &mut impl crate::bounded::VecSink<String>,
     fetch_refs: &mut impl crate::bounded::VecSink<String>,
@@ -3933,7 +3940,7 @@ fn run_blob_ref_job_handler(submission: &BlobRefJobSubmission, input_bytes: &[Ve
     }
 }
 
-fn import_blob_ref_job_artifacts(ledger_root: &Path, statuses: &[IOValue], receipt_value: &IOValue) -> Result<()> {
+fn import_blob_ref_job_artifacts(ledger_root: &FilePath, statuses: &[IoValue], receipt_value: &IoValue) -> Result<()> {
     for status_value in statuses {
         ledger::import_artifact(ledger_root, status_value)?;
     }
@@ -3963,7 +3970,7 @@ struct DeliveryChecks {
 }
 
 struct WorkerRun {
-    status_values: Vec<IOValue>,
+    status_values: Vec<IoValue>,
     execution: Option<JobExecutionLoopback>,
 }
 
@@ -3978,7 +3985,7 @@ struct WorkerOutputs {
 struct FinishDeliveryInput<'a> {
     input: JobWorkerExecuteInput<'a>,
     request: JobWorkerRequest,
-    assignment_value: IOValue,
+    assignment_value: IoValue,
     assignment_ref: String,
     delivery: DeliveryChecks,
     run: WorkerRun,
@@ -4157,7 +4164,7 @@ fn final_worker_decision(is_execution_pass: bool, has_recorded_delivery: bool) -
     }
 }
 
-fn final_worker_status(input: FinalStatusInput<'_>) -> Result<IOValue> {
+fn final_worker_status(input: FinalStatusInput<'_>) -> Result<IoValue> {
     let final_state = match input.final_decision {
         "pass" => "completed",
         "non-replayable" => "non-replayable",
@@ -4178,7 +4185,7 @@ fn final_worker_status(input: FinalStatusInput<'_>) -> Result<IOValue> {
 
 struct WorkerReceipt {
     receipt_ref: String,
-    receipt_value: IOValue,
+    receipt_value: IoValue,
 }
 
 struct FinalStatusInput<'a> {
@@ -4192,7 +4199,7 @@ struct FinalStatusInput<'a> {
 
 struct WorkerReceiptInput<'a> {
     input: &'a FinishDeliveryInput<'a>,
-    status_values: &'a [IOValue],
+    status_values: &'a [IoValue],
     outputs: &'a WorkerOutputs,
     diagnostics: &'a [String],
     result: &'a JobWorkerResult,
@@ -4402,8 +4409,12 @@ fn refs_are_bound_in_admission(refs: &[String], admission_refs: &[String]) -> bo
     refs.iter().all(|reference| admission_refs.iter().any(|admission_ref| admission_ref == reference))
 }
 
-fn recompute_execution_closure(target_registry: &Path, dag: &JobDag, stage_order: &[String]) -> Result<Vec<String>> {
-    let selected = stage_order.iter().cloned().collect::<BTreeSet<_>>();
+fn recompute_execution_closure(
+    target_registry: &FilePath,
+    dag: &JobDag,
+    stage_order: &[String],
+) -> Result<Vec<String>> {
+    let selected = stage_order.iter().cloned().collect::<OrderedSet<_>>();
     let roots = admission_roots(target_registry, dag, &selected)?;
     let closure = artifacts::dependency_closure(target_registry, &roots)?;
     if !closure.missing_refs.is_empty() {
@@ -4419,9 +4430,9 @@ fn status(ok: bool) -> &'static str {
     if ok { "pass" } else { "fail" }
 }
 
-fn sync_roots(source_registry: &Path, dag: &JobDag, request: &JobSyncRequest) -> Result<Vec<String>> {
+fn sync_roots(source_registry: &FilePath, dag: &JobDag, request: &JobSyncRequest) -> Result<Vec<String>> {
     let mut roots = vec![job_artifact_ref(source_registry, &dag.job_ref)?];
-    let selected = request.stage_ids.iter().cloned().collect::<BTreeSet<_>>();
+    let selected = request.stage_ids.iter().cloned().collect::<OrderedSet<_>>();
     for node in &dag.nodes {
         if (selected.is_empty() || selected.contains(&node.id))
             && let Some(stage_artifact_ref) = node.stage_artifact_ref.as_ref()
@@ -4434,8 +4445,8 @@ fn sync_roots(source_registry: &Path, dag: &JobDag, request: &JobSyncRequest) ->
     Ok(roots)
 }
 
-fn sync_install_order(source_registry: &Path, roots: &[String]) -> Result<Vec<String>> {
-    let mut visited = BTreeSet::new();
+fn sync_install_order(source_registry: &FilePath, roots: &[String]) -> Result<Vec<String>> {
+    let mut visited = OrderedSet::new();
     let mut order = Vec::new();
     for root in roots {
         sync_install_order_visit(source_registry, root, &mut visited, &mut order)?;
@@ -4444,9 +4455,9 @@ fn sync_install_order(source_registry: &Path, roots: &[String]) -> Result<Vec<St
 }
 
 fn sync_install_order_visit(
-    source_registry: &Path,
+    source_registry: &FilePath,
     artifact_ref: &str,
-    visited: &mut BTreeSet<String>,
+    visited: &mut OrderedSet<String>,
     order: &mut impl crate::bounded::VecSink<String>,
 ) -> Result<()> {
     validate_ref(artifact_ref, "job sync artifact ref")?;
@@ -4475,7 +4486,7 @@ fn sync_install_order_visit(
     Ok(())
 }
 
-fn request_for_analysis(dag: &JobDag, output_request: Option<&IOValue>) -> Result<JobOutputRequest> {
+fn request_for_analysis(dag: &JobDag, output_request: Option<&IoValue>) -> Result<JobOutputRequest> {
     if let Some(output_request) = output_request {
         parse_job_output_request_value(output_request, &dag.job_ref)
     } else {
@@ -4502,7 +4513,7 @@ fn dependency_ids(plan: &TrellisExecutionPlan, node_id: &str) -> Result<Vec<Stri
 }
 
 fn fusion_edge_sort_key<'a>(
-    positions: &BTreeMap<String, usize>,
+    positions: &OrderedMap<String, usize>,
     edge: &'a JobEdge,
 ) -> (bool, usize, &'a String, &'a String) {
     match positions.get(&edge.from_node) {
@@ -4522,7 +4533,7 @@ fn fusion_edge_safe(from: &JobNode, to: &JobNode, edge: &JobEdge) -> bool {
         && to.policy_refs.is_empty()
 }
 
-fn analysis_receipt_value(input: AnalysisReceiptValueInput<'_>) -> Result<IOValue> {
+fn analysis_receipt_value(input: AnalysisReceiptValueInput<'_>) -> Result<IoValue> {
     validate_ref(input.job_ref, "job analysis receipt job ref")?;
     validate_ref(input.request_ref, "job analysis receipt request ref")?;
     validate_ref(input.artifact_ref, "job analysis receipt artifact ref")?;
@@ -4542,7 +4553,7 @@ fn analysis_receipt_value(input: AnalysisReceiptValueInput<'_>) -> Result<IOValu
     ]))
 }
 
-pub fn receipt_summary(value: &IOValue) -> Result<String> {
+pub fn receipt_summary(value: &IoValue) -> Result<String> {
     if let Ok(receipt) = parse_job_worker_schedule_receipt_value(value) {
         return Ok(format!(
             "job worker schedule decision={} job={} request={} queue={} lease={} token={} worker={} result={} diagnostics={}",
@@ -4605,8 +4616,8 @@ struct StageMemo<'a> {
     dag: &'a JobDag,
     request: &'a JobOutputRequest,
     node: &'a JobNode,
-    inputs: &'a [IOValue],
-    cache_root: &'a Path,
+    inputs: &'a [IoValue],
+    cache_root: &'a FilePath,
     key_input: &'a eval_cache::EvalCacheKeyInput,
     key_ref: &'a str,
 }
@@ -4615,7 +4626,7 @@ fn run_stage_with_cache(
     dag: &JobDag,
     request: &JobOutputRequest,
     node: &JobNode,
-    inputs: &[IOValue],
+    inputs: &[IoValue],
     options: &JobRunOptions<'_>,
 ) -> Result<JobStageRun> {
     let is_cacheable = node.kind != "materialize";
@@ -4729,7 +4740,7 @@ fn execute_stage(
     dag: &JobDag,
     request: &JobOutputRequest,
     node: &JobNode,
-    inputs: &[IOValue],
+    inputs: &[IoValue],
     options: &JobRunOptions<'_>,
 ) -> Result<JobStageRun> {
     let mut effects = Vec::new();
@@ -4777,7 +4788,7 @@ fn execute_source(
     node: &JobNode,
     options: &JobRunOptions<'_>,
     effects: &mut impl crate::bounded::VecSink<String>,
-) -> Result<Vec<IOValue>> {
+) -> Result<Vec<IoValue>> {
     let source = simple_record(&node.config, "source", 1)?;
     let payload = preserves_rail::value_to_iovalue(&source[0]);
     if let Some(values) = payload.collect_simple_record("values", Some(1)) {
@@ -4820,7 +4831,7 @@ fn execute_source(
     ))
 }
 
-fn execute_map(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
+fn execute_map(node: &JobNode, inputs: &[IoValue]) -> Result<Vec<IoValue>> {
     let op = stage_operation(&node.config)?;
     ensure_count_at_most(inputs.len(), MAX_JOB_STAGE_VALUES, "map input values")?;
     let mut output = Vec::with_capacity(inputs.len());
@@ -4830,7 +4841,7 @@ fn execute_map(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
     Ok(output)
 }
 
-fn execute_filter(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
+fn execute_filter(node: &JobNode, inputs: &[IoValue]) -> Result<Vec<IoValue>> {
     let op = stage_operation(&node.config)?;
     let mut output = Vec::new();
     for value in inputs {
@@ -4841,7 +4852,7 @@ fn execute_filter(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
     Ok(output)
 }
 
-fn execute_reduce(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
+fn execute_reduce(node: &JobNode, inputs: &[IoValue]) -> Result<Vec<IoValue>> {
     let op = stage_operation(&node.config)?;
     match op.name.as_str() {
         "count" => Ok(vec![preserves_rail::u64_value(inputs.len() as u64)]),
@@ -4878,10 +4889,10 @@ fn execute_reduce(node: &JobNode, inputs: &[IOValue]) -> Result<Vec<IOValue>> {
 
 fn execute_materialize(
     node: &JobNode,
-    inputs: &[IOValue],
+    inputs: &[IoValue],
     options: &JobRunOptions<'_>,
     effects: &mut impl crate::bounded::VecSink<String>,
-) -> Result<Vec<IOValue>> {
+) -> Result<Vec<IoValue>> {
     let config = materialize_config(&node.config)?;
     let value = preserves_rail::sequence(inputs.to_vec());
     match config.kind.as_str() {
@@ -4923,10 +4934,10 @@ fn execute_materialize(
 #[derive(Debug, Clone)]
 struct StageOperation {
     name: String,
-    argument: Option<IOValue>,
+    argument: Option<IoValue>,
 }
 
-fn stage_operation(config: &IOValue) -> Result<StageOperation> {
+fn stage_operation(config: &IoValue) -> Result<StageOperation> {
     if let Ok(fields) = simple_record(config, "op", 2) {
         let name = required_string(&fields[0], "stage operation")?;
         validate_stage_operation(&name)?;
@@ -4941,7 +4952,7 @@ fn stage_operation(config: &IOValue) -> Result<StageOperation> {
     Ok(StageOperation { name, argument: None })
 }
 
-fn apply_map_op(op: &StageOperation, value: &IOValue) -> Result<IOValue> {
+fn apply_map_op(op: &StageOperation, value: &IoValue) -> Result<IoValue> {
     match op.name.as_str() {
         "identity" => Ok(value.clone()),
         "wrap" | "tag-record" => {
@@ -4972,7 +4983,7 @@ fn apply_map_op(op: &StageOperation, value: &IOValue) -> Result<IOValue> {
     }
 }
 
-fn apply_filter_op(op: &StageOperation, value: &IOValue) -> Result<bool> {
+fn apply_filter_op(op: &StageOperation, value: &IoValue) -> Result<bool> {
     match op.name.as_str() {
         "keep-all" => Ok(true),
         "drop-all" => Ok(false),
@@ -4998,7 +5009,7 @@ struct MaterializeConfig {
     key: Option<String>,
 }
 
-fn materialize_config(config: &IOValue) -> Result<MaterializeConfig> {
+fn materialize_config(config: &IoValue) -> Result<MaterializeConfig> {
     if let Ok(fields) = simple_record(config, "materialize", 3) {
         let kind = required_string(&fields[0], "materialize kind")?;
         validate_request_materialization(&kind)?;
@@ -5039,7 +5050,7 @@ fn stage_cache_key_input(
     dag: &JobDag,
     request: &JobOutputRequest,
     node: &JobNode,
-    inputs: &[IOValue],
+    inputs: &[IoValue],
 ) -> Result<eval_cache::EvalCacheKeyInput> {
     let input_refs = refs_for_values(inputs)?;
     let stage_artifact_ref = stage_artifact_or_builtin_ref(node)?;
@@ -5135,7 +5146,7 @@ struct JobReceiptInput<'a> {
     checks: &'a [(&'a str, &'a str)],
 }
 
-fn job_receipt_value(input: JobReceiptInput<'_>) -> Result<IOValue> {
+fn job_receipt_value(input: JobReceiptInput<'_>) -> Result<IoValue> {
     validate_receipt_operation(input.operation)?;
     validate_decision(input.decision)?;
     if let Some(job_ref) = input.job_ref {
@@ -5177,7 +5188,7 @@ fn job_receipt_value(input: JobReceiptInput<'_>) -> Result<IOValue> {
     ]))
 }
 
-fn parse_node_sequence(value: &Value<IOValue>) -> Result<Vec<JobNode>> {
+fn parse_node_sequence(value: &Value<IoValue>) -> Result<Vec<JobNode>> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, "nodes", 1)?;
     let items = required_sequence(&record[0], "job nodes")?;
@@ -5194,7 +5205,7 @@ fn parse_node_sequence(value: &Value<IOValue>) -> Result<Vec<JobNode>> {
     Ok(nodes)
 }
 
-fn parse_job_node_value(value: &IOValue) -> Result<JobNode> {
+fn parse_job_node_value(value: &IoValue) -> Result<JobNode> {
     let fields = value
         .collect_simple_record("job-node-v1", Some(11))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-node-v1 ...>"))?;
@@ -5224,7 +5235,7 @@ fn parse_job_node_value(value: &IOValue) -> Result<JobNode> {
     })
 }
 
-fn parse_edge_sequence(value: &Value<IOValue>) -> Result<Vec<JobEdge>> {
+fn parse_edge_sequence(value: &Value<IoValue>) -> Result<Vec<JobEdge>> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, "edges", 1)?;
     let items = required_sequence(&record[0], "job edges")?;
@@ -5241,7 +5252,7 @@ fn parse_edge_sequence(value: &Value<IOValue>) -> Result<Vec<JobEdge>> {
     Ok(edges)
 }
 
-fn parse_job_edge_value(value: &IOValue) -> Result<JobEdge> {
+fn parse_job_edge_value(value: &IoValue) -> Result<JobEdge> {
     let fields = value
         .collect_simple_record("job-edge-v1", Some(7))
         .ok_or_else(|| MoltenError::invalid_harness("expected <job-edge-v1 ...>"))?;
@@ -5299,7 +5310,7 @@ fn plan_mapping(nodes: &[JobNode], edges: &[JobEdge]) -> Result<PlanMapping> {
     if node_ids.len() != nodes.len() {
         return Err(MoltenError::invalid_harness("job dag has duplicate node ids before trellis mapping"));
     }
-    let mut node_index = BTreeMap::new();
+    let mut node_index = OrderedMap::new();
     for (index, node) in node_ids.iter().enumerate() {
         insert_bounded(&mut node_index, node.clone(), index, MAX_JOB_NODES, "trellis node index")?;
     }
@@ -5338,9 +5349,9 @@ fn plan_order_ids(edges: &[(usize, usize)], node_ids: &[String]) -> Result<Vec<S
     Ok(order_ids)
 }
 
-fn plan_dependency_indices(edges: &[(usize, usize)], node_ids: &[String]) -> Result<BTreeMap<String, Vec<u64>>> {
+fn plan_dependency_indices(edges: &[(usize, usize)], node_ids: &[String]) -> Result<OrderedMap<String, Vec<u64>>> {
     let incoming_counts = trellis_incoming_counts(edges, node_ids.len())?;
-    let mut dependency_indices = BTreeMap::new();
+    let mut dependency_indices = OrderedMap::new();
     for (index, node_id) in node_ids.iter().enumerate() {
         insert_bounded(
             &mut dependency_indices,
@@ -5398,9 +5409,9 @@ fn find_job_node<'a>(nodes: &'a [JobNode], node_id: &str) -> Result<&'a JobNode>
 fn gather_inputs(
     node: &JobNode,
     edges: &[JobEdge],
-    outputs_by_index: &[Option<Vec<IOValue>>],
-    node_index: &BTreeMap<String, usize>,
-) -> Result<Vec<IOValue>> {
+    outputs_by_index: &[Option<Vec<IoValue>>],
+    node_index: &OrderedMap<String, usize>,
+) -> Result<Vec<IoValue>> {
     ensure_count_at_most(edges.len(), MAX_JOB_EDGES, "job input edges")?;
     let mut incoming = Vec::with_capacity(edges.len());
     for edge in edges {
@@ -5425,10 +5436,10 @@ fn gather_inputs(
 }
 
 fn indexed_stage_outputs<'a>(
-    outputs_by_index: &'a [Option<Vec<IOValue>>],
-    node_index: &BTreeMap<String, usize>,
+    outputs_by_index: &'a [Option<Vec<IoValue>>],
+    node_index: &OrderedMap<String, usize>,
     node_id: &str,
-) -> Result<&'a Vec<IOValue>> {
+) -> Result<&'a Vec<IoValue>> {
     let from_index = *node_index
         .get(node_id)
         .ok_or_else(|| MoltenError::invalid_harness(format!("job edge input from {node_id} lacks node index")))?;
@@ -5441,7 +5452,7 @@ fn indexed_stage_outputs<'a>(
 fn sink_nodes(dag: &JobDag) -> Result<Vec<String>> {
     ensure_count_at_most(dag.nodes.len(), MAX_JOB_NODES, "job sink nodes")?;
     ensure_count_at_most(dag.edges.len(), MAX_JOB_EDGES, "job sink edges")?;
-    let mut from = BTreeSet::new();
+    let mut from = OrderedSet::new();
     for edge in &dag.edges {
         from.insert(edge.from_node.clone());
     }
@@ -5460,7 +5471,7 @@ fn sink_nodes(dag: &JobDag) -> Result<Vec<String>> {
     Ok(sinks)
 }
 
-fn refs_for_values(values: &[IOValue]) -> Result<Vec<String>> {
+fn refs_for_values(values: &[IoValue]) -> Result<Vec<String>> {
     ensure_count_at_most(values.len(), MAX_JOB_STAGE_VALUES, "job values to hash")?;
     let mut refs = Vec::with_capacity(values.len());
     for value in values {
@@ -5469,7 +5480,7 @@ fn refs_for_values(values: &[IOValue]) -> Result<Vec<String>> {
     Ok(refs)
 }
 
-fn parse_cached_stage_output(value: &IOValue) -> Result<Vec<IOValue>> {
+fn parse_cached_stage_output(value: &IoValue) -> Result<Vec<IoValue>> {
     if let Some(items) = value.collect_sequence() {
         ensure_count_at_most(items.len(), MAX_JOB_STAGE_VALUES, "cached job stage output")?;
         let mut values = Vec::with_capacity(items.len());
@@ -5504,43 +5515,43 @@ fn combined_policy_refs(dag: &JobDag, request: &JobOutputRequest, node: Option<&
     sorted_unique(&refs)
 }
 
-fn record_string(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_string(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_string(&record[0], label)
 }
 
-fn record_ref(value: &Value<IOValue>, label: &str) -> Result<String> {
+fn record_ref(value: &Value<IoValue>, label: &str) -> Result<String> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     required_ref(&record[0], label)
 }
 
-fn record_optional_ref(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_ref(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_ref_value(&record[0])
 }
 
-fn record_optional_string(value: &Value<IOValue>, label: &str) -> Result<Option<String>> {
+fn record_optional_string(value: &Value<IoValue>, label: &str) -> Result<Option<String>> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_optional_string_value(&record[0])
 }
 
-fn record_iovalue(value: &Value<IOValue>, label: &str) -> Result<IOValue> {
+fn record_iovalue(value: &Value<IoValue>, label: &str) -> Result<IoValue> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     Ok(preserves_rail::value_to_iovalue(&record[0]))
 }
 
-fn record_ref_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_ref_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     parse_ref_sequence_value(&record[0], label)
 }
 
-fn record_node_id_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_node_id_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
@@ -5554,7 +5565,7 @@ fn record_node_id_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<St
     Ok(ids)
 }
 
-fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_string_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
@@ -5566,7 +5577,7 @@ fn record_string_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Str
     Ok(strings)
 }
 
-fn record_port_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn record_port_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
@@ -5582,7 +5593,7 @@ fn record_port_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<Strin
     Ok(ports)
 }
 
-fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<String>> {
+fn parse_ref_sequence_value(value: &Value<IoValue>, label: &str) -> Result<Vec<String>> {
     let items = required_sequence(value, label)?;
     ensure_count_at_most(items.len(), MAX_JOB_REFS, label)?;
     let mut refs = Vec::with_capacity(items.len());
@@ -5592,7 +5603,7 @@ fn parse_ref_sequence_value(value: &Value<IOValue>, label: &str) -> Result<Vec<S
     Ok(refs)
 }
 
-fn sequence_items(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
+fn sequence_items(value: &Value<IoValue>, label: &str) -> Result<Vec<IoValue>> {
     let items = required_sequence(value, label)?;
     ensure_count_at_most(items.len(), MAX_JOB_STAGE_VALUES, label)?;
     let mut values = Vec::with_capacity(items.len());
@@ -5603,36 +5614,36 @@ fn sequence_items(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
 }
 
 fn simple_record<'a>(
-    value: &'a IOValue,
+    value: &'a IoValue,
     label: &str,
     arity: usize,
-) -> Result<std::borrow::Cow<'a, Record<Value<IOValue>>>> {
+) -> Result<std::borrow::Cow<'a, Record<Value<IoValue>>>> {
     value
         .collect_simple_record(label, Some(arity))
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected <{label} ...> with arity {arity}")))
 }
 
 #[allow(clippy::owned_cow)]
-fn required_sequence<'a>(value: &'a Value<IOValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IOValue>>>> {
+fn required_sequence<'a>(value: &'a Value<IoValue>, field: &str) -> Result<std::borrow::Cow<'a, Vec<Value<IoValue>>>> {
     value
         .collect_sequence()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected sequence for {field}")))
 }
 
-fn required_string(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_string(value: &Value<IoValue>, field: &str) -> Result<String> {
     value
         .as_string()
         .map(|value| value.into_owned())
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected string for {field}")))
 }
 
-fn required_ref(value: &Value<IOValue>, field: &str) -> Result<String> {
+fn required_ref(value: &Value<IoValue>, field: &str) -> Result<String> {
     let value = required_string(value, field)?;
     validate_ref(&value, field)?;
     Ok(value)
 }
 
-fn required_u64_value(value: &IOValue, field: &str) -> Result<u64> {
+fn required_u64_value(value: &IoValue, field: &str) -> Result<u64> {
     value
         .as_u64()
         .ok_or_else(|| MoltenError::invalid_harness(format!("expected u64 for {field}")))?
@@ -5677,7 +5688,7 @@ fn extend_cloned_bounded<T: Clone>(
 }
 
 fn insert_bounded<K: Ord, V>(
-    values: &mut BTreeMap<K, V>,
+    values: &mut OrderedMap<K, V>,
     key: K,
     value: V,
     maximum: usize,
@@ -5689,21 +5700,21 @@ fn insert_bounded<K: Ord, V>(
     Ok(values.insert(key, value))
 }
 
-fn optional_ref_value(value: Option<&str>) -> IOValue {
+fn optional_ref_value(value: Option<&str>) -> IoValue {
     value.map_or_else(
         || preserves_rail::record("none", Vec::new()),
         |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
     )
 }
 
-fn optional_string_value(value: Option<&str>) -> IOValue {
+fn optional_string_value(value: Option<&str>) -> IoValue {
     value.map_or_else(
         || preserves_rail::record("none", Vec::new()),
         |value| preserves_rail::record("some", vec![preserves_rail::string(value)]),
     )
 }
 
-fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_ref_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -5713,7 +5724,7 @@ fn parse_optional_ref_value(value: &Value<IOValue>) -> Result<Option<String>> {
     required_ref(value, "optional ref").map(Some)
 }
 
-fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>> {
+fn parse_optional_string_value(value: &Value<IoValue>) -> Result<Option<String>> {
     if value.collect_simple_record("none", Some(0)).is_some() {
         return Ok(None);
     }
@@ -5723,11 +5734,11 @@ fn parse_optional_string_value(value: &Value<IOValue>) -> Result<Option<String>>
     required_string(value, "optional string").map(Some)
 }
 
-fn refs_sequence(refs: &[String]) -> IOValue {
+fn refs_sequence(refs: &[String]) -> IoValue {
     preserves_rail::sequence(refs.iter().map(preserves_rail::string).collect())
 }
 
-fn ports_sequence(ports: &[String]) -> IOValue {
+fn ports_sequence(ports: &[String]) -> IoValue {
     preserves_rail::sequence(
         ports
             .iter()
@@ -5741,11 +5752,11 @@ fn ports_sequence(ports: &[String]) -> IOValue {
     )
 }
 
-fn checks_value(names: &[&str]) -> IOValue {
+fn checks_value(names: &[&str]) -> IoValue {
     checks_value_from_pairs(&names.iter().map(|name| (*name, "pass")).collect::<Vec<_>>())
 }
 
-fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
+fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IoValue {
     preserves_rail::record("checks", vec![preserves_rail::sequence(
         checks
             .iter()
@@ -5756,7 +5767,7 @@ fn checks_value_from_pairs(checks: &[(&str, &str)]) -> IOValue {
     )])
 }
 
-fn parse_checks(value: &Value<IOValue>) -> Result<Vec<String>> {
+fn parse_checks(value: &Value<IoValue>) -> Result<Vec<String>> {
     let value = preserves_rail::value_to_iovalue(value);
     let checks = simple_record(&value, "checks", 1)?;
     let items = required_sequence(&checks[0], "checks")?;
@@ -5783,7 +5794,7 @@ fn require_check(checks: &[String], expected: &str, context: &str) -> Result<()>
     }
 }
 
-fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Result<()> {
+fn require_schema(value: &Value<IoValue>, expected: &str, context: &str) -> Result<()> {
     let actual = required_string(value, context)?;
     if actual == expected {
         Ok(())
@@ -5792,7 +5803,7 @@ fn require_schema(value: &Value<IOValue>, expected: &str, context: &str) -> Resu
     }
 }
 
-fn record_sequence_values(value: &Value<IOValue>, label: &str) -> Result<Vec<IOValue>> {
+fn record_sequence_values(value: &Value<IoValue>, label: &str) -> Result<Vec<IoValue>> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
@@ -5804,11 +5815,11 @@ fn record_sequence_values(value: &Value<IOValue>, label: &str) -> Result<Vec<IOV
     Ok(values)
 }
 
-fn parse_job_content_ref_record(value: &Value<IOValue>, label: &str) -> Result<JobContentRef> {
+fn parse_job_content_ref_record(value: &Value<IoValue>, label: &str) -> Result<JobContentRef> {
     parse_job_content_ref_value(&record_iovalue(value, label)?)
 }
 
-fn parse_job_content_ref_value(value: &IOValue) -> Result<JobContentRef> {
+fn parse_job_content_ref_value(value: &IoValue) -> Result<JobContentRef> {
     let fields = simple_record(value, "job-content-ref", 4)?;
     let size_value = record_iovalue(&fields[1], "size")?;
     let content = JobContentRef {
@@ -5897,7 +5908,7 @@ fn validate_blob_ref_state(state: &str) -> Result<()> {
     }
 }
 
-fn reject_blob_ref_job_inline_tokens(value: &IOValue) -> Result<()> {
+fn reject_blob_ref_job_inline_tokens(value: &IoValue) -> Result<()> {
     let text = preserves_rail::to_text(value)?;
     for token in ["inline-bytes", "inline-executable", "inline-dataset"] {
         if text.contains(token) {
@@ -5983,7 +5994,7 @@ fn validate_stage_receipt_refs(stage_receipts: &[(String, String)]) -> Result<()
     Ok(())
 }
 
-fn record_stage_receipt_sequence(value: &Value<IOValue>, label: &str) -> Result<Vec<(String, String)>> {
+fn record_stage_receipt_sequence(value: &Value<IoValue>, label: &str) -> Result<Vec<(String, String)>> {
     let value = preserves_rail::value_to_iovalue(value);
     let record = simple_record(&value, label, 1)?;
     let items = required_sequence(&record[0], label)?;
@@ -6001,11 +6012,11 @@ fn record_stage_receipt_sequence(value: &Value<IOValue>, label: &str) -> Result<
 }
 
 fn import_worker_artifacts(
-    ledger_root: &Path,
-    assignment_value: &IOValue,
-    status_values: &[IOValue],
-    result_value: &IOValue,
-    receipt_value: &IOValue,
+    ledger_root: &FilePath,
+    assignment_value: &IoValue,
+    status_values: &[IoValue],
+    result_value: &IoValue,
+    receipt_value: &IoValue,
 ) -> Result<()> {
     ledger::import_artifact(ledger_root, assignment_value)?;
     for status_value in status_values {
@@ -6016,7 +6027,7 @@ fn import_worker_artifacts(
     Ok(())
 }
 
-fn reject_worker_ambient_tokens(value: &IOValue) -> Result<()> {
+fn reject_worker_ambient_tokens(value: &IoValue) -> Result<()> {
     let text = preserves_rail::to_text(value)?;
     let banned = [
         "<raw-closure",
@@ -6110,7 +6121,7 @@ fn validate_non_empty(value: &str, field: &str) -> Result<()> {
     }
 }
 
-fn reject_mobile_closure_config(config: &IOValue) -> Result<()> {
+fn reject_mobile_closure_config(config: &IoValue) -> Result<()> {
     let text = preserves_rail::to_text(config)?;
     let banned = [
         "<closure",
@@ -6137,7 +6148,7 @@ fn local_ref(kind: &str, label: &str) -> Result<String> {
 }
 
 fn sorted_unique(refs: &[String]) -> Vec<String> {
-    refs.iter().cloned().collect::<BTreeSet<_>>().into_iter().collect()
+    refs.iter().cloned().collect::<OrderedSet<_>>().into_iter().collect()
 }
 
 #[cfg(test)]
@@ -6156,8 +6167,8 @@ mod tests {
         kind: &str,
         input_ports: &[String],
         output_ports: &[String],
-        config: IOValue,
-    ) -> Result<IOValue> {
+        config: IoValue,
+    ) -> Result<IoValue> {
         job_node_value(NodeValueInput {
             id,
             kind,
@@ -6171,7 +6182,7 @@ mod tests {
         })
     }
 
-    fn stream_edge_value(from_node: &str, to_node: &str) -> Result<IOValue> {
+    fn stream_edge_value(from_node: &str, to_node: &str) -> Result<IoValue> {
         job_edge_value(EdgeValueInput {
             from_node,
             from_port: "out",
@@ -6183,7 +6194,7 @@ mod tests {
         })
     }
 
-    fn test_dag_value(nodes: Vec<IOValue>, edges: Vec<IOValue>, output_roots: &[String]) -> Result<IOValue> {
+    fn test_dag_value(nodes: Vec<IoValue>, edges: Vec<IoValue>, output_roots: &[String]) -> Result<IoValue> {
         job_dag_value(DagValueInput {
             nodes,
             edges,
@@ -6516,7 +6527,7 @@ mod tests {
         source_stage: artifacts::ArtifactInstall,
         stage: artifacts::ArtifactInstall,
         installed_job: JobInstall,
-        request: IOValue,
+        request: IoValue,
     }
 
     struct CopyFlow {
@@ -6528,9 +6539,9 @@ mod tests {
     }
 
     fn install_case_artifact(
-        registry: &Path,
+        registry: &FilePath,
         kind: &str,
-        payload: IOValue,
+        payload: IoValue,
         dependency_refs: Vec<String>,
         label: &str,
     ) -> artifacts::ArtifactInstall {
@@ -6548,7 +6559,7 @@ mod tests {
         .expect(label)
     }
 
-    fn copy_artifacts(source: &Path) -> CopyArtifacts {
+    fn copy_artifacts(source: &FilePath) -> CopyArtifacts {
         let base = install_case_artifact(
             source,
             "schema",
@@ -6718,7 +6729,7 @@ mod tests {
         }
     }
 
-    fn passing_execution(case: &CopyCase, flow: &CopyFlow) -> (IOValue, JobExecutionLoopback) {
+    fn passing_execution(case: &CopyCase, flow: &CopyFlow) -> (IoValue, JobExecutionLoopback) {
         let request = job_execution_request_value(ExecutionRequestValueInput {
             job_ref: &case.installed_job.job_ref,
             admission_ref: &flow.admission_ref,
@@ -6980,7 +6991,7 @@ mod tests {
             .expect("worker ledger")
             .into_iter()
             .map(|entry| entry.artifact_kind)
-            .collect::<BTreeSet<_>>();
+            .collect::<OrderedSet<_>>();
         assert!(kinds.contains("job-worker-assignment"));
         assert!(kinds.contains("job-worker-status"));
         assert!(kinds.contains("job-worker-result"));
@@ -7513,7 +7524,7 @@ mod tests {
         );
     }
 
-    fn pipeline_value() -> Result<IOValue> {
+    fn pipeline_value() -> Result<IoValue> {
         let source = test_node_value(
             "source",
             "source",
@@ -7554,7 +7565,7 @@ mod tests {
         test_dag_value(vec![source, filter, map, materialize], vec![e1, e2, e3], &["out".to_string()])
     }
 
-    fn fixture_value(operation: &str) -> IOValue {
+    fn fixture_value(operation: &str) -> IoValue {
         let source = test_node_value(
             "source",
             "source",
@@ -7583,7 +7594,7 @@ mod tests {
             .expect("test ref")
     }
 
-    fn reviewed_provenance_values(artifact_refs: &[String]) -> Vec<IOValue> {
+    fn reviewed_provenance_values(artifact_refs: &[String]) -> Vec<IoValue> {
         artifact_refs
             .iter()
             .map(|artifact_ref| {
@@ -7592,7 +7603,7 @@ mod tests {
             .collect()
     }
 
-    fn install_clean_octet_gate(registry: &Path) -> String {
+    fn install_clean_octet_gate(registry: &FilePath) -> String {
         let gate_value = octet_gate::synthetic_clean_octet_gate_receipt_for_tests().expect("clean octet gate fixture");
         let gate_ref = preserves_rail::canonical_hash(&gate_value).expect("octet gate ref");
         let install = artifacts::install_artifact(registry, &artifacts::ArtifactInstallInput {
@@ -7611,7 +7622,7 @@ mod tests {
         gate_ref
     }
 
-    fn install_job_execute_authority_context(registry: &Path, job_ref: &str) -> String {
+    fn install_job_execute_authority_context(registry: &FilePath, job_ref: &str) -> String {
         let subject_ref = test_ref("target-peer-subject");
         let context_value = authority::authority_context_value(authority::ContextValueInput {
             subject_ref: &subject_ref,
@@ -7656,13 +7667,13 @@ mod tests {
         sync_ref: String,
         admission_ref: String,
         execution_request_ref: String,
-        execution_request: IOValue,
+        execution_request: IoValue,
         authority_context_ref: String,
         resource_refs: Vec<String>,
         peer_bootstrap_ref: String,
         node_identity_ref: String,
         evidence_refs: Vec<String>,
-        worker_request: IOValue,
+        worker_request: IoValue,
         delivery: crate::remote_dataspace::RemoteDataspaceDelivery,
         delivery_log: crate::remote_dataspace::RemoteDeliveryLog,
     }
@@ -7678,7 +7689,7 @@ mod tests {
         resource_refs: Vec<String>,
         admission: JobAdmissionLoopback,
         admission_ref: String,
-        execution_request: IOValue,
+        execution_request: IoValue,
         execution_request_ref: String,
     }
 
@@ -7686,10 +7697,10 @@ mod tests {
         peer_bootstrap_ref: String,
         node_identity_ref: String,
         evidence_refs: Vec<String>,
-        worker_request: IOValue,
+        worker_request: IoValue,
     }
 
-    fn seed_artifacts(source: &Path) -> SeedArtifacts {
+    fn seed_artifacts(source: &FilePath) -> SeedArtifacts {
         let base = artifacts::install_artifact(source, &artifacts::ArtifactInstallInput {
             kind: "schema".to_string(),
             payload: preserves_rail::record("schema", vec![preserves_rail::string("worker-base")]),
@@ -7733,7 +7744,7 @@ mod tests {
         }
     }
 
-    fn seed_graph(source: &Path, seed: &SeedArtifacts) -> JobInstall {
+    fn seed_graph(source: &FilePath, seed: &SeedArtifacts) -> JobInstall {
         let source_node = job_node_value(NodeValueInput {
             id: "source",
             kind: "source",
@@ -7766,7 +7777,7 @@ mod tests {
         install_job_dag(source, &dag_value).expect("install worker job")
     }
 
-    fn synced_ref(source: &Path, target: &Path, installed: &JobInstall, seed: &SeedArtifacts) -> String {
+    fn synced_ref(source: &FilePath, target: &FilePath, installed: &JobInstall, seed: &SeedArtifacts) -> String {
         let sync_request = job_sync_request_value(SyncRequestValueInput {
             job_ref: &installed.job_ref,
             stage_ids: &[],
@@ -7793,7 +7804,7 @@ mod tests {
         preserves_rail::canonical_hash(&synced.receipt_value).expect("worker sync ref")
     }
 
-    fn flow_parts(target: &Path, installed: &JobInstall, sync_ref: &str) -> FlowParts {
+    fn flow_parts(target: &FilePath, installed: &JobInstall, sync_ref: &str) -> FlowParts {
         let authority_context_ref = install_job_execute_authority_context(target, &installed.job_ref);
         let source_gate_ref = install_clean_octet_gate(target);
         let resource_refs = vec![test_ref("worker-resource-a"), test_ref("worker-resource-b")];
@@ -7917,8 +7928,8 @@ mod tests {
     }
 
     fn deliver_worker_request(
-        transport_root: &Path,
-        request_value: &IOValue,
+        transport_root: &FilePath,
+        request_value: &IoValue,
         target_peer: &str,
         replayable: bool,
     ) -> (crate::remote_dataspace::RemoteDataspaceDelivery, crate::remote_dataspace::RemoteDeliveryLog) {
@@ -7950,9 +7961,9 @@ mod tests {
         let nonce = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir().join(format!("molten-{name}-{}-{nonce}", std::process::id()));
         if dir.exists() {
-            fs::remove_dir_all(&dir).expect("remove stale temp dir");
+            std::fs::remove_dir_all(&dir).expect("remove stale temp dir");
         }
-        fs::create_dir_all(&dir).expect("create temp dir");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
         dir
     }
 }
