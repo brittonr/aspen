@@ -6,17 +6,39 @@ use preserves::Value;
 
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::RESOURCE_CONSUMPTION_SCHEMA;
-use crate::preserves_rail::RESOURCE_GRANT_SCHEMA;
-use crate::preserves_rail::RESOURCE_RECEIPT_SCHEMA;
-use crate::preserves_rail::RESOURCE_SCHEDULER_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::u64_value;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
+
+const RESOURCE_CONSUMPTION_SCHEMA: &str = crate::preserves_rail::RESOURCE_CONSUMPTION_SCHEMA;
+const RESOURCE_GRANT_SCHEMA: &str = crate::preserves_rail::RESOURCE_GRANT_SCHEMA;
+const RESOURCE_RECEIPT_SCHEMA: &str = crate::preserves_rail::RESOURCE_RECEIPT_SCHEMA;
+const RESOURCE_SCHEDULER_SCHEMA: &str = crate::preserves_rail::RESOURCE_SCHEDULER_SCHEMA;
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(fields)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn u64_value(value: u64) -> IOValue {
+    crate::preserves_rail::u64_value(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 pub const KIND_TURNS: &str = "turns";
 pub const KIND_CPU_FUEL: &str = "cpu-fuel";
@@ -667,9 +689,6 @@ fn required_u64(value: &Value<IOValue>, field: &str) -> Result<u64> {
 
 #[cfg(test)]
 mod tests {
-    use hegel::TestCase;
-    use hegel::generators;
-
     use super::*;
 
     #[test]
@@ -823,9 +842,9 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_budget_monotonicity_queue_bounds_and_no_silent_drop(tc: TestCase) {
-        let amount = tc.draw(generators::integers::<u64>().min_value(1).max_value(16));
-        let request = tc.draw(generators::integers::<u64>().min_value(1).max_value(20));
+    fn hegel_budget_monotonicity_queue_bounds_and_no_silent_drop(tc: hegel::TestCase) {
+        let amount = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(16));
+        let request = tc.draw(hegel::generators::integers::<u64>().min_value(1).max_value(20));
         let grant_value = sample_grant(KIND_TRACE_BYTES, amount, None).expect("grant");
         let decision = consume_resource(&ConsumeInput {
             grant_value: &grant_value,
@@ -842,7 +861,7 @@ mod tests {
             assert_eq!(decision.decision, "throttle");
             assert_eq!(decision.consumed, 0);
         }
-        let max_slots = tc.draw(generators::integers::<u64>().min_value(0).max_value(4));
+        let max_slots = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(4));
         let max_slots_usize = usize::try_from(max_slots).expect("bounded max slots");
         let queue = (0..max_slots_usize).map(|index| ref_for(&format!("queued-{index}"))).collect::<Vec<_>>();
         let mailbox = apply_mailbox_backpressure(&queue, &ref_for("new-message"), max_slots).expect("mailbox");
