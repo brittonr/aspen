@@ -9,25 +9,60 @@ use preserves::Value;
 use crate::bounded::VecSink;
 use crate::error::MoltenError;
 use crate::error::Result;
-use crate::preserves_rail::CONFIDENTIAL_LABEL_SCHEMA;
-use crate::preserves_rail::ENCRYPTED_REF_SCHEMA;
-use crate::preserves_rail::PRIVATE_BUNDLE_PROFILE_SCHEMA;
-use crate::preserves_rail::SECRET_CLEANUP_RECEIPT_SCHEMA;
-use crate::preserves_rail::SECRET_COMMITMENT_REPLAY_RECEIPT_SCHEMA;
-use crate::preserves_rail::SECRET_DECRYPT_RECEIPT_SCHEMA;
-use crate::preserves_rail::SECRET_REDACTION_MARKER_SCHEMA;
-use crate::preserves_rail::SECRET_REDACTION_TRANSFORM_RECEIPT_SCHEMA;
-use crate::preserves_rail::SECRET_REF_SCHEMA;
-use crate::preserves_rail::SECRET_REVEAL_RECEIPT_SCHEMA;
-use crate::preserves_rail::canonical_hash;
-use crate::preserves_rail::content_ref_from_bytes;
-use crate::preserves_rail::record;
-use crate::preserves_rail::sequence;
-use crate::preserves_rail::string;
-use crate::preserves_rail::to_text;
-use crate::preserves_rail::validate_content_ref;
-use crate::preserves_rail::value_to_iovalue;
 use crate::retention;
+
+const CONFIDENTIAL_LABEL_SCHEMA: &str = crate::preserves_rail::CONFIDENTIAL_LABEL_SCHEMA;
+const ENCRYPTED_REF_SCHEMA: &str = crate::preserves_rail::ENCRYPTED_REF_SCHEMA;
+const PRIVATE_BUNDLE_PROFILE_SCHEMA: &str = crate::preserves_rail::PRIVATE_BUNDLE_PROFILE_SCHEMA;
+const SECRET_CLEANUP_RECEIPT_SCHEMA: &str = crate::preserves_rail::SECRET_CLEANUP_RECEIPT_SCHEMA;
+const SECRET_COMMITMENT_REPLAY_RECEIPT_SCHEMA: &str = crate::preserves_rail::SECRET_COMMITMENT_REPLAY_RECEIPT_SCHEMA;
+const SECRET_DECRYPT_RECEIPT_SCHEMA: &str = crate::preserves_rail::SECRET_DECRYPT_RECEIPT_SCHEMA;
+const SECRET_REDACTION_MARKER_SCHEMA: &str = crate::preserves_rail::SECRET_REDACTION_MARKER_SCHEMA;
+const SECRET_REDACTION_TRANSFORM_RECEIPT_SCHEMA: &str =
+    crate::preserves_rail::SECRET_REDACTION_TRANSFORM_RECEIPT_SCHEMA;
+const SECRET_REF_SCHEMA: &str = crate::preserves_rail::SECRET_REF_SCHEMA;
+const SECRET_REVEAL_RECEIPT_SCHEMA: &str = crate::preserves_rail::SECRET_REVEAL_RECEIPT_SCHEMA;
+
+fn bool_value(value: bool) -> IOValue {
+    crate::preserves_rail::bool_value(value)
+}
+
+fn canonical_hash(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::canonical_hash(value)
+}
+
+fn content_ref_from_bytes(bytes: &[u8]) -> String {
+    crate::preserves_rail::content_ref_from_bytes(bytes)
+}
+
+#[cfg(test)]
+fn parse_text(source: &str) -> Result<IOValue> {
+    crate::preserves_rail::parse_text(source)
+}
+
+fn record(label: &'static str, fields: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::record(label, fields)
+}
+
+fn sequence(values: Vec<IOValue>) -> IOValue {
+    crate::preserves_rail::sequence(values)
+}
+
+fn string(value: impl AsRef<str>) -> IOValue {
+    crate::preserves_rail::string(value)
+}
+
+fn to_text(value: &IOValue) -> Result<String> {
+    crate::preserves_rail::to_text(value)
+}
+
+fn validate_content_ref(value: &str) -> Result<()> {
+    crate::preserves_rail::validate_content_ref(value)
+}
+
+fn value_to_iovalue(value: &Value<IOValue>) -> IOValue {
+    crate::preserves_rail::value_to_iovalue(value)
+}
 
 const MAX_SECRET_REFS: usize = 32;
 const MAX_SECRET_USES: usize = 16;
@@ -725,7 +760,7 @@ pub fn redaction_transform_receipt_value(input: &RedactionTransformInput) -> Res
         record("policy", vec![refs_sequence(&input.policy_refs)]),
         record("profile", vec![string(&input.profile_ref)]),
         record("markers", vec![refs_sequence(&input.marker_refs)]),
-        record("gate-preserving", vec![crate::preserves_rail::bool_value(input.is_gate_preserving)]),
+        record("gate-preserving", vec![bool_value(input.is_gate_preserving)]),
         diagnostics_value(&input.diagnostics),
         checks_value(&redaction_transform_checks(decision, input.is_gate_preserving)),
     ]))
@@ -795,7 +830,7 @@ pub fn commitment_replay_receipt_value(input: &CommitmentReplayInput) -> Result<
         record("expected", vec![string(&input.expected_commitment_ref)]),
         record("actual", vec![string(&input.actual_commitment_ref)]),
         record("reveal-receipt", vec![optional_ref_value(input.reveal_receipt_ref.as_deref())]),
-        record("plaintext-required", vec![crate::preserves_rail::bool_value(input.is_plaintext_required)]),
+        record("plaintext-required", vec![bool_value(input.is_plaintext_required)]),
         diagnostics_value(&diagnostics),
         checks_value(&commitment_replay_checks(decision, input.is_plaintext_required)),
     ]))
@@ -988,7 +1023,7 @@ pub fn private_bundle_profile_value(input: &PrivateBundleProfileInput) -> Result
         record("encrypted-refs", vec![refs_sequence(&input.encrypted_refs)]),
         record("reveal-receipts", vec![refs_sequence(&input.reveal_receipt_refs)]),
         record("transform-receipt", vec![string(&input.transform_receipt_ref)]),
-        record("gate-preserving", vec![crate::preserves_rail::bool_value(input.is_gate_preserving)]),
+        record("gate-preserving", vec![bool_value(input.is_gate_preserving)]),
         checks_value(&checks),
     ]))
 }
@@ -1974,7 +2009,6 @@ mod tests {
     use crate::catalog;
     use crate::catalog_mcp;
     use crate::ledger;
-    use crate::preserves_rail::parse_text;
 
     fn temp_dir(label: &str) -> std::path::PathBuf {
         crate::test_support::cleanup_stale_molten_temp_dirs();
@@ -2053,7 +2087,7 @@ mod tests {
         assert!(!text.contains("do-not-render"));
         let request = catalog_mcp::mcp_request_value("catalog.view", vec![
             record("reference", vec![string(&artifact.artifact_ref)]),
-            record("payload", vec![crate::preserves_rail::bool_value(true)]),
+            record("payload", vec![bool_value(true)]),
         ])
         .expect("mcp request");
         let response = catalog_mcp::call(&registry, None, &request).expect("mcp call");
