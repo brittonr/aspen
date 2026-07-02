@@ -8,9 +8,6 @@
 type IoValue = preserves::IOValue;
 
 use crate::bounded::VecSink;
-use crate::delivery_idempotency;
-use crate::raft_control_plane;
-
 type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type OrderedSet<T> = std::collections::BTreeSet<T>;
 type Record<T> = preserves::Record<T>;
@@ -709,8 +706,8 @@ pub fn parse_coordination_receipt(value: &IoValue) -> Result<CoordinationReceipt
 
 pub fn new_coordination_runtime(manifest_value: &IoValue) -> Result<CoordinationRuntime> {
     let manifest = parse_coordination_service_manifest(manifest_value)?;
-    let raft_manifest = raft_control_plane::control_registry_fixture_manifest_value()?;
-    let raft = raft_control_plane::new_control_registry_runtime(&raft_manifest)?;
+    let raft_manifest = crate::raft_control_plane::control_registry_fixture_manifest_value()?;
+    let raft = crate::raft_control_plane::new_control_registry_runtime(&raft_manifest)?;
     Ok(CoordinationRuntime {
         manifest,
         raft,
@@ -756,7 +753,7 @@ pub fn apply_coordination_request(
 }
 
 pub fn coordination_fixture_manifest_value() -> Result<IoValue> {
-    let group_ref = canonical_hash(&raft_control_plane::control_registry_fixture_manifest_value()?)?;
+    let group_ref = canonical_hash(&crate::raft_control_plane::control_registry_fixture_manifest_value()?)?;
     coordination_service_manifest_value(&CoordinationServiceManifestInput {
         service_id: DEFAULT_COORDINATION_SERVICE_ID.to_string(),
         services: supported_services(),
@@ -980,17 +977,18 @@ fn apply_coordination_read(
     runtime: &mut CoordinationRuntime,
     request: CoordinationRequest,
 ) -> Result<CoordinationApplyResult> {
-    let read = raft_control_plane::read_control_registry(&raft_control_plane::ControlRegistryReadInput {
-        state: runtime.raft.state.value.clone(),
-        group_ref: runtime.raft.manifest.manifest_ref.clone(),
-        committed_term: runtime.raft.term,
-        committed_index: runtime.raft.committed_index,
-        read_index: runtime.raft.committed_index,
-        namespace: coordination_namespace(&request.service),
-        name: request.key.clone(),
-        authority_refs: request.authority_refs.clone(),
-        resource_refs: request.resource_refs.clone(),
-    })?;
+    let read =
+        crate::raft_control_plane::read_control_registry(&crate::raft_control_plane::ControlRegistryReadInput {
+            state: runtime.raft.state.value.clone(),
+            group_ref: runtime.raft.manifest.manifest_ref.clone(),
+            committed_term: runtime.raft.term,
+            committed_index: runtime.raft.committed_index,
+            read_index: runtime.raft.committed_index,
+            namespace: coordination_namespace(&request.service),
+            name: request.key.clone(),
+            authority_refs: request.authority_refs.clone(),
+            resource_refs: request.resource_refs.clone(),
+        })?;
     let snapshot = snapshot_from_state(&runtime.state)?;
     let decision = if read.decision == "pass" { "pass" } else { "deny" };
     let fact = status_fact_for(&runtime.state, &runtime.manifest, &request.service, &request.key)?;
@@ -1088,7 +1086,7 @@ fn corrected_read_assertions(
 struct ReadFinishInput<'a> {
     runtime: &'a mut CoordinationRuntime,
     request: CoordinationRequest,
-    read: raft_control_plane::RaftReadReceipt,
+    read: crate::raft_control_plane::RaftReadReceipt,
     snapshot: CoordinationStateSnapshot,
     receipt: CoordinationReceipt,
     assertions: Vec<CoordinationStatusAssertion>,
@@ -1127,7 +1125,7 @@ fn finish_read(input: ReadFinishInput<'_>) -> CoordinationApplyResult {
     result
 }
 
-type Proposal = raft_control_plane::ControlRegistryProposal;
+type Proposal = crate::raft_control_plane::ControlRegistryProposal;
 
 struct ChangeInput<'a> {
     runtime: &'a mut CoordinationRuntime,
@@ -1181,29 +1179,31 @@ fn propose_change(input: ChangeInput<'_>) -> Result<Proposal> {
         request,
         snapshot,
     } = input;
-    let command =
-        raft_control_plane::control_registry_command_value(&raft_control_plane::ControlRegistryCommandInput {
+    let command = crate::raft_control_plane::control_registry_command_value(
+        &crate::raft_control_plane::ControlRegistryCommandInput {
             operation: "set-coordination-state".to_string(),
             namespace: coordination_namespace(&request.service),
             name: request.key.clone(),
             target_ref: Some(snapshot.state_ref.clone()),
-        })?;
+        },
+    )?;
     let evidence_refs = vec![
         request.request_ref.clone(),
         request.operation_id_ref.clone(),
         snapshot.state_ref.clone(),
     ];
-    let envelope = raft_control_plane::raft_command_envelope_value(&raft_control_plane::RaftCommandEnvelopeInput {
-        group_ref: runtime.raft.manifest.manifest_ref.clone(),
-        client_session: request.client_session.clone(),
-        sequence: runtime.next_sequence,
-        command,
-        authority_refs: request.authority_refs.clone(),
-        policy_refs: request.policy_refs.clone(),
-        resource_refs: request.resource_refs.clone(),
-        evidence_refs,
-    })?;
-    raft_control_plane::propose_control_registry_command(&mut runtime.raft, &envelope)
+    let envelope =
+        crate::raft_control_plane::raft_command_envelope_value(&crate::raft_control_plane::RaftCommandEnvelopeInput {
+            group_ref: runtime.raft.manifest.manifest_ref.clone(),
+            client_session: request.client_session.clone(),
+            sequence: runtime.next_sequence,
+            command,
+            authority_refs: request.authority_refs.clone(),
+            policy_refs: request.policy_refs.clone(),
+            resource_refs: request.resource_refs.clone(),
+            evidence_refs,
+        })?;
+    crate::raft_control_plane::propose_control_registry_command(&mut runtime.raft, &envelope)
 }
 
 fn fact_for(
@@ -1978,21 +1978,24 @@ struct FixtureRequestInput<'a> {
 }
 
 fn fixture_request(input: FixtureRequestInput<'_>) -> Result<IoValue> {
-    let scope =
-        delivery_idempotency::control_command_scope_ref(&fixture_ref("coordination-group"), input.client_session)?;
+    let scope = crate::delivery_idempotency::control_command_scope_ref(
+        &fixture_ref("coordination-group"),
+        input.client_session,
+    )?;
     let payload_ref = input.payload.as_ref().map_or_else(
         || fixture_ref("coordination-empty-payload"),
         |value| canonical_hash(value).unwrap_or_else(|_| fixture_ref("coordination-payload-error")),
     );
-    let operation_id = delivery_idempotency::derive_operation_id(delivery_idempotency::OperationIdInput {
-        scope_ref: scope,
-        producer: input.client_session.to_string(),
-        consumer: format!("coordination:{}:{}", input.service, input.key),
-        sequence: input.sequence,
-        intent: format!("{}:{}", input.service, input.operation),
-        payload_ref,
-        policy_refs: input.refs.policy_refs.to_vec(),
-    })?;
+    let operation_id =
+        crate::delivery_idempotency::derive_operation_id(crate::delivery_idempotency::OperationIdInput {
+            scope_ref: scope,
+            producer: input.client_session.to_string(),
+            consumer: format!("coordination:{}:{}", input.service, input.key),
+            sequence: input.sequence,
+            intent: format!("{}:{}", input.service, input.operation),
+            payload_ref,
+            policy_refs: input.refs.policy_refs.to_vec(),
+        })?;
     coordination_request_value(&CoordinationRequestInput {
         service: input.service.to_string(),
         operation: input.operation.to_string(),
