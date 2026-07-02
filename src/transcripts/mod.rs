@@ -840,9 +840,8 @@ fn execute_storage_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<
                 .last_output
                 .clone()
                 .ok_or_else(|| MoltenError::invalid_harness("storage put requires prior preserves output"))?;
-            let admission =
-                crate::typed_storage::TypedStorageAdmission::local_fixture(&format!("transcript:{namespace}:{key}"));
-            let put = crate::typed_storage::put_value(&state.storage, &crate::typed_storage::TypedStoragePutInput {
+            let admission = crate::typed_storage::Admission::local_fixture(&format!("transcript:{namespace}:{key}"));
+            let put = crate::typed_storage::put_value(&state.storage, &crate::typed_storage::PutInput {
                 namespace,
                 key,
                 schema_ref,
@@ -858,8 +857,7 @@ fn execute_storage_cli(state: &mut RunnerState, args: &[&str]) -> Result<Option<
             let namespace = option_value(args, "--namespace").unwrap_or("transcript");
             let key = option_value(args, "--key").unwrap_or("value");
             let schema_ref = option_value(args, "--schema-ref");
-            let admission =
-                crate::typed_storage::TypedStorageAdmission::local_fixture(&format!("transcript:{namespace}:{key}"));
+            let admission = crate::typed_storage::Admission::local_fixture(&format!("transcript:{namespace}:{key}"));
             let get = crate::typed_storage::get_value(&state.storage, namespace, key, schema_ref, &admission)?;
             Ok(Some(get.value))
         }

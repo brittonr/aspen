@@ -72,7 +72,7 @@ const INDEX_INLINE_VALUES: redb::TableDefinition<&str, &[u8]> =
 const INDEX_RECEIPTS: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("typed_storage_receipts_v1");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypedStorageAdmission {
+pub struct Admission {
     pub actor_ref: String,
     pub capability_ref: String,
     pub policy_ref: String,
@@ -80,7 +80,7 @@ pub struct TypedStorageAdmission {
     pub evidence_refs: Vec<String>,
 }
 
-impl TypedStorageAdmission {
+impl Admission {
     pub fn local_fixture(label: &str) -> Self {
         Self {
             actor_ref: local_ref("storage-actor", label),
@@ -93,7 +93,7 @@ impl TypedStorageAdmission {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypedStoragePutInput {
+pub struct PutInput {
     pub namespace: String,
     pub key: String,
     pub schema_ref: Option<String>,
@@ -101,11 +101,11 @@ pub struct TypedStoragePutInput {
     pub producer_ref: String,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
-    pub admission: TypedStorageAdmission,
+    pub admission: Admission,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypedStoragePut {
+pub struct Put {
     pub storage_ref: String,
     pub typed_ref_value: IoValue,
     pub schema_ref: String,
@@ -114,22 +114,22 @@ pub struct TypedStoragePut {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypedStorageGet {
+pub struct Get {
     pub storage_ref: String,
-    pub typed_ref: TypedStorageRef,
+    pub typed_ref: EntryRef,
     pub value: IoValue,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypedStorageVerify {
+pub struct Verify {
     pub storage_ref: String,
-    pub typed_ref: TypedStorageRef,
+    pub typed_ref: EntryRef,
     pub receipt_value: IoValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypedStorageMigrate {
+pub struct Migrate {
     pub old_storage_ref: String,
     pub new_storage_ref: String,
     pub old_value_ref: String,
@@ -140,7 +140,7 @@ pub struct TypedStorageMigrate {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StorageMigrationRecipeInput {
+pub struct MigrationRecipeInput {
     pub source_schema_ref: String,
     pub target_schema_ref: String,
     pub transformer_ref: String,
@@ -151,7 +151,7 @@ pub struct StorageMigrationRecipeInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StorageMigrationRecipe {
+pub struct MigrationRecipe {
     pub recipe_ref: String,
     pub source_schema_ref: String,
     pub target_schema_ref: String,
@@ -165,7 +165,7 @@ pub struct StorageMigrationRecipe {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypedStorageReceipt {
+pub struct Receipt {
     pub receipt_ref: String,
     pub operation: String,
     pub decision: String,
@@ -179,19 +179,19 @@ pub struct TypedStorageReceipt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypedStoragePayload {
+pub enum Payload {
     Inline { length: u64 },
     ContentRef { manifest_ref: String, length: u64 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TypedStorageRef {
+pub struct EntryRef {
     pub storage_ref: String,
     pub namespace: String,
     pub key: String,
     pub schema_ref: String,
     pub value_ref: String,
-    pub payload: TypedStoragePayload,
+    pub payload: Payload,
     pub producer_ref: String,
     pub policy_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -204,7 +204,7 @@ pub struct TypedStorageRef {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct StorageEffectEvidence {
+struct EffectEvidence {
     manifest_ref: String,
     handler_binding_ref: String,
     handle_ref: String,
@@ -216,7 +216,7 @@ pub struct SchemaCompatibilityGetInput<'a> {
     pub key: &'a str,
     pub expected_schema_ref: &'a str,
     pub schema_compatibility_value: &'a IoValue,
-    pub admission: &'a TypedStorageAdmission,
+    pub admission: &'a Admission,
 }
 
 pub struct MigrationGetInput<'a> {
@@ -225,7 +225,7 @@ pub struct MigrationGetInput<'a> {
     pub key: &'a str,
     pub expected_schema_ref: &'a str,
     pub migration_recipe_value: &'a IoValue,
-    pub admission: &'a TypedStorageAdmission,
+    pub admission: &'a Admission,
 }
 
 struct GetValueInnerInput<'a> {
@@ -233,18 +233,18 @@ struct GetValueInnerInput<'a> {
     namespace: &'a str,
     key: &'a str,
     expected_schema_ref: Option<&'a str>,
-    admission: &'a TypedStorageAdmission,
+    admission: &'a Admission,
     migration_receipt_value: Option<&'a IoValue>,
     schema_compatibility_value: Option<&'a IoValue>,
 }
 
-struct StorageEffectEvidenceInput<'a> {
+struct EffectEvidenceInput<'a> {
     operation: &'a str,
     namespace: &'a str,
     key: &'a str,
     schema_ref: &'a str,
     producer_ref: &'a str,
-    admission: &'a TypedStorageAdmission,
+    admission: &'a Admission,
     remote_use: bool,
 }
 
@@ -256,7 +256,7 @@ struct ReceiptValueInput<'a> {
     key: Option<&'a str>,
     schema_ref: Option<&'a str>,
     value_ref: Option<&'a str>,
-    effect: &'a StorageEffectEvidence,
+    effect: &'a EffectEvidence,
     checks: Vec<(&'a str, &'a str)>,
     details: Vec<IoValue>,
 }
@@ -289,7 +289,7 @@ struct PersistInput<'a> {
 }
 
 struct EntryInput<'a> {
-    input: &'a TypedStoragePutInput,
+    input: &'a PutInput,
     schema_ref: &'a str,
     value_ref: &'a str,
     payload: &'a IoValue,
@@ -298,11 +298,11 @@ struct EntryInput<'a> {
 }
 
 struct PassInput<'a> {
-    input: &'a TypedStoragePutInput,
+    input: &'a PutInput,
     storage_ref: &'a str,
     schema_ref: &'a str,
     value_ref: &'a str,
-    effect: &'a StorageEffectEvidence,
+    effect: &'a EffectEvidence,
     details: Vec<IoValue>,
 }
 
@@ -311,11 +311,11 @@ struct SourceInput<'a> {
     storage_key: &'a str,
     namespace: &'a str,
     key: &'a str,
-    recipe: &'a StorageMigrationRecipe,
+    recipe: &'a MigrationRecipe,
 }
 
 struct SourceData {
-    typed_ref: TypedStorageRef,
+    typed_ref: EntryRef,
     value: IoValue,
 }
 
@@ -327,27 +327,27 @@ struct EntryRefs {
 struct NextInput<'a> {
     namespace: &'a str,
     key: &'a str,
-    recipe: &'a StorageMigrationRecipe,
+    recipe: &'a MigrationRecipe,
     value_ref: &'a str,
     payload: &'a IoValue,
     refs: &'a EntryRefs,
     revision: u64,
-    admission: &'a TypedStorageAdmission,
+    admission: &'a Admission,
     effect_handle_ref: &'a str,
 }
 
 struct StepInput<'a> {
     namespace: &'a str,
     key: &'a str,
-    recipe: &'a StorageMigrationRecipe,
-    source: &'a TypedStorageRef,
+    recipe: &'a MigrationRecipe,
+    source: &'a EntryRef,
     storage_ref: &'a str,
     value_ref: &'a str,
-    effect: &'a StorageEffectEvidence,
+    effect: &'a EffectEvidence,
     details: Vec<IoValue>,
 }
 
-pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStoragePut> {
+pub fn put_value(root: &Path, input: &PutInput) -> Result<Put> {
     ensure_dirs(root)?;
     validate_namespace_key(&input.namespace, &input.key)?;
     require_ref(&input.producer_ref, "typed storage producer ref")?;
@@ -357,7 +357,7 @@ pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStora
 
     let inferred_schema_ref = inferred_schema_ref(&input.value)?;
     let schema_ref = accepted_schema(root, input, &inferred_schema_ref)?;
-    let effect = storage_effect_evidence(StorageEffectEvidenceInput {
+    let effect = effect_evidence(EffectEvidenceInput {
         operation: "put",
         namespace: &input.namespace,
         key: &input.key,
@@ -397,7 +397,7 @@ pub fn put_value(root: &Path, input: &TypedStoragePutInput) -> Result<TypedStora
         value_bytes: &value_bytes,
         receipt_value: &receipt_value,
     })?;
-    Ok(TypedStoragePut {
+    Ok(Put {
         storage_ref,
         typed_ref_value,
         schema_ref,
@@ -447,7 +447,7 @@ fn pass_receipt(input: PassInput<'_>) -> IoValue {
     })
 }
 
-fn accepted_schema(root: &Path, input: &TypedStoragePutInput, inferred_schema_ref: &str) -> Result<String> {
+fn accepted_schema(root: &Path, input: &PutInput, inferred_schema_ref: &str) -> Result<String> {
     let schema_ref = input.schema_ref.clone().unwrap_or_else(|| inferred_schema_ref.to_string());
     if schema_ref == inferred_schema_ref {
         return Ok(schema_ref);
@@ -521,8 +521,8 @@ pub fn get_value(
     namespace: &str,
     key: &str,
     expected_schema_ref: Option<&str>,
-    admission: &TypedStorageAdmission,
-) -> Result<TypedStorageGet> {
+    admission: &Admission,
+) -> Result<Get> {
     get_value_inner(GetValueInnerInput {
         root,
         namespace,
@@ -534,7 +534,7 @@ pub fn get_value(
     })
 }
 
-pub fn get_value_with_schema_compatibility(input: SchemaCompatibilityGetInput<'_>) -> Result<TypedStorageGet> {
+pub fn get_value_with_schema_compatibility(input: SchemaCompatibilityGetInput<'_>) -> Result<Get> {
     get_value_inner(GetValueInnerInput {
         root: input.root,
         namespace: input.namespace,
@@ -546,7 +546,7 @@ pub fn get_value_with_schema_compatibility(input: SchemaCompatibilityGetInput<'_
     })
 }
 
-pub fn get_value_with_migration(input: MigrationGetInput<'_>) -> Result<TypedStorageGet> {
+pub fn get_value_with_migration(input: MigrationGetInput<'_>) -> Result<Get> {
     match get_value_inner(GetValueInnerInput {
         root: input.root,
         namespace: input.namespace,
@@ -590,15 +590,15 @@ pub fn get_value_with_migration(input: MigrationGetInput<'_>) -> Result<TypedSto
     }
 }
 
-fn get_value_inner(input: GetValueInnerInput<'_>) -> Result<TypedStorageGet> {
+fn get_value_inner(input: GetValueInnerInput<'_>) -> Result<Get> {
     ensure_dirs(input.root)?;
     validate_namespace_key(input.namespace, input.key)?;
     validate_admission(input.admission)?;
     let storage_key = storage_key_ref(input.namespace, input.key)?;
     let typed_ref_value = stored_binding(&input, storage_key.as_str())?;
-    let typed_ref = parse_typed_ref_value(&typed_ref_value)?;
+    let typed_ref = parse_entry_ref_value(&typed_ref_value)?;
     require_binding(&input, &typed_ref)?;
-    let effect = storage_effect_evidence(StorageEffectEvidenceInput {
+    let effect = effect_evidence(EffectEvidenceInput {
         operation: "get",
         namespace: input.namespace,
         key: input.key,
@@ -628,7 +628,7 @@ fn get_value_inner(input: GetValueInnerInput<'_>) -> Result<TypedStorageGet> {
         details: get_details(&input, typed_ref.revision)?,
     });
     store_receipt(input.root, &receipt_value)?;
-    Ok(TypedStorageGet {
+    Ok(Get {
         storage_ref: typed_ref.storage_ref.clone(),
         typed_ref,
         value,
@@ -661,7 +661,7 @@ fn stored_binding(input: &GetValueInnerInput<'_>, storage_key: &str) -> Result<I
     parse_canonical_bytes(bytes.value())
 }
 
-fn require_binding(input: &GetValueInnerInput<'_>, typed_ref: &TypedStorageRef) -> Result<()> {
+fn require_binding(input: &GetValueInnerInput<'_>, typed_ref: &EntryRef) -> Result<()> {
     let Some(expected_schema_ref) = input.expected_schema_ref else {
         return Ok(());
     };
@@ -688,7 +688,7 @@ fn require_binding(input: &GetValueInnerInput<'_>, typed_ref: &TypedStorageRef) 
     ))
 }
 
-fn is_binding_admitted(input: &GetValueInnerInput<'_>, typed_ref: &TypedStorageRef) -> Result<bool> {
+fn is_binding_admitted(input: &GetValueInnerInput<'_>, typed_ref: &EntryRef) -> Result<bool> {
     let Some(expected_schema_ref) = input.expected_schema_ref else {
         return Ok(true);
     };
@@ -705,7 +705,7 @@ fn is_binding_admitted(input: &GetValueInnerInput<'_>, typed_ref: &TypedStorageR
     )
 }
 
-fn checked_value(input: &GetValueInnerInput<'_>, typed_ref: &TypedStorageRef) -> Result<IoValue> {
+fn checked_value(input: &GetValueInnerInput<'_>, typed_ref: &EntryRef) -> Result<IoValue> {
     let value_bytes = read_payload_bytes(input.root, typed_ref)?;
     let value = parse_canonical_bytes(&value_bytes)?;
     let actual_value_ref = canonical_hash(&value)?;
@@ -740,11 +740,11 @@ fn get_details(input: &GetValueInnerInput<'_>, revision: u64) -> Result<Vec<IoVa
     Ok(details)
 }
 
-pub fn verify_ref(root: &Path, storage_ref: &str, expected_schema_ref: Option<&str>) -> Result<TypedStorageVerify> {
+pub fn verify_ref(root: &Path, storage_ref: &str, expected_schema_ref: Option<&str>) -> Result<Verify> {
     ensure_dirs(root)?;
     require_ref(storage_ref, "typed storage ref")?;
-    let typed_ref_value = read_typed_ref(root, storage_ref)?;
-    let typed_ref = parse_typed_ref_value(&typed_ref_value)?;
+    let typed_ref_value = read_entry_ref(root, storage_ref)?;
+    let typed_ref = parse_entry_ref_value(&typed_ref_value)?;
     if let Some(expected_schema_ref) = expected_schema_ref
         && typed_ref.schema_ref != expected_schema_ref
     {
@@ -756,7 +756,7 @@ pub fn verify_ref(root: &Path, storage_ref: &str, expected_schema_ref: Option<&s
     if actual_value_ref != typed_ref.value_ref {
         return content_mismatch(root, storage_ref, &typed_ref);
     }
-    let effect = StorageEffectEvidence {
+    let effect = EffectEvidence {
         manifest_ref: typed_ref.effect_handle_ref.clone(),
         handler_binding_ref: typed_ref.effect_handle_ref.clone(),
         handle_ref: typed_ref.effect_handle_ref.clone(),
@@ -779,19 +779,14 @@ pub fn verify_ref(root: &Path, storage_ref: &str, expected_schema_ref: Option<&s
         details: Vec::new(),
     });
     store_receipt(root, &receipt_value)?;
-    Ok(TypedStorageVerify {
+    Ok(Verify {
         storage_ref: typed_ref.storage_ref.clone(),
         typed_ref,
         receipt_value,
     })
 }
 
-fn schema_mismatch(
-    root: &Path,
-    storage_ref: &str,
-    typed_ref: &TypedStorageRef,
-    expected_schema_ref: &str,
-) -> Result<TypedStorageVerify> {
+fn schema_mismatch(root: &Path, storage_ref: &str, typed_ref: &EntryRef, expected_schema_ref: &str) -> Result<Verify> {
     let receipt_value = denial_receipt_value(DenialReceiptValueInput {
         operation: "verify",
         storage_ref: Some(storage_ref),
@@ -809,7 +804,7 @@ fn schema_mismatch(
     ))
 }
 
-fn content_mismatch(root: &Path, storage_ref: &str, typed_ref: &TypedStorageRef) -> Result<TypedStorageVerify> {
+fn content_mismatch(root: &Path, storage_ref: &str, typed_ref: &EntryRef) -> Result<Verify> {
     let receipt_value = denial_receipt_value(DenialReceiptValueInput {
         operation: "verify",
         storage_ref: Some(storage_ref),
@@ -830,8 +825,8 @@ pub fn migrate_value(
     namespace: &str,
     key: &str,
     migration_recipe_value: &IoValue,
-    admission: &TypedStorageAdmission,
-) -> Result<TypedStorageMigrate> {
+    admission: &Admission,
+) -> Result<Migrate> {
     ensure_dirs(root)?;
     validate_namespace_key(namespace, key)?;
     validate_admission(admission)?;
@@ -849,7 +844,7 @@ pub fn migrate_value(
     let new_value_bytes = canonical_bytes(&new_value)?;
     let new_value_ref = canonical_hash(&new_value)?;
     let (payload, payload_details) = store_payload(root, &new_value_bytes)?;
-    let effect = storage_effect_evidence(StorageEffectEvidenceInput {
+    let effect = effect_evidence(EffectEvidenceInput {
         operation: "migrate",
         namespace,
         key,
@@ -891,7 +886,7 @@ pub fn migrate_value(
         value_bytes: &new_value_bytes,
         receipt_value: &receipt_value,
     })?;
-    Ok(TypedStorageMigrate {
+    Ok(Migrate {
         old_storage_ref: source.typed_ref.storage_ref,
         new_storage_ref,
         old_value_ref: source.typed_ref.value_ref,
@@ -904,7 +899,7 @@ pub fn migrate_value(
 
 fn source_data(input: SourceInput<'_>) -> Result<SourceData> {
     let typed_ref_value = stored_entry(&input)?;
-    let typed_ref = parse_typed_ref_value(&typed_ref_value)?;
+    let typed_ref = parse_entry_ref_value(&typed_ref_value)?;
     require_match(&input, &typed_ref)?;
     let value = source_value(&input, &typed_ref)?;
     Ok(SourceData { typed_ref, value })
@@ -935,7 +930,7 @@ fn stored_entry(input: &SourceInput<'_>) -> Result<IoValue> {
     parse_canonical_bytes(bytes.value())
 }
 
-fn require_match(input: &SourceInput<'_>, typed_ref: &TypedStorageRef) -> Result<()> {
+fn require_match(input: &SourceInput<'_>, typed_ref: &EntryRef) -> Result<()> {
     if typed_ref.schema_ref == input.recipe.source_schema_ref {
         return Ok(());
     }
@@ -956,7 +951,7 @@ fn require_match(input: &SourceInput<'_>, typed_ref: &TypedStorageRef) -> Result
     ))
 }
 
-fn source_value(input: &SourceInput<'_>, typed_ref: &TypedStorageRef) -> Result<IoValue> {
+fn source_value(input: &SourceInput<'_>, typed_ref: &EntryRef) -> Result<IoValue> {
     let value_bytes = read_payload_bytes(input.root, typed_ref)?;
     let value = parse_canonical_bytes(&value_bytes)?;
     if canonical_hash(&value)? == typed_ref.value_ref {
@@ -977,7 +972,7 @@ fn source_value(input: &SourceInput<'_>, typed_ref: &TypedStorageRef) -> Result<
     Err(MoltenError::invalid_harness("typed storage migration source content integrity failed"))
 }
 
-fn entry_refs(typed_ref: &TypedStorageRef, recipe: &StorageMigrationRecipe) -> EntryRefs {
+fn entry_refs(typed_ref: &EntryRef, recipe: &MigrationRecipe) -> EntryRefs {
     let mut policy = typed_ref.policy_refs.clone();
     policy.extend(recipe.policy_refs.clone());
     policy.sort();
@@ -1063,7 +1058,7 @@ pub fn list_receipt_refs(root: &Path) -> Result<Vec<String>> {
     Ok(refs)
 }
 
-pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<TypedStorageReceipt> {
+pub fn read_receipt(root: &Path, receipt_ref: &str) -> Result<Receipt> {
     ensure_dirs(root)?;
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
@@ -1123,7 +1118,7 @@ pub fn effect_manifest_value(
     ]))
 }
 
-pub fn migration_recipe_value(input: &StorageMigrationRecipeInput) -> Result<IoValue> {
+pub fn migration_recipe_value(input: &MigrationRecipeInput) -> Result<IoValue> {
     require_ref(&input.source_schema_ref, "migration source schema ref")?;
     require_ref(&input.target_schema_ref, "migration target schema ref")?;
     require_ref(&input.transformer_ref, "migration transformer ref")?;
@@ -1150,7 +1145,7 @@ pub fn migration_recipe_value(input: &StorageMigrationRecipeInput) -> Result<IoV
     ]))
 }
 
-pub fn parse_migration_recipe_value(value: &IoValue) -> Result<StorageMigrationRecipe> {
+pub fn parse_migration_recipe_value(value: &IoValue) -> Result<MigrationRecipe> {
     let recipe = simple_record(value, "storage-migration-recipe-v1", 8)?;
     require_schema(
         &recipe[0],
@@ -1166,7 +1161,7 @@ pub fn parse_migration_recipe_value(value: &IoValue) -> Result<StorageMigrationR
     let checks = parse_checks(&recipe[7])?;
     require_check(&checks, "migration-recipe-artifact", "storage migration recipe")?;
     require_check(&checks, "migration-trace-required", "storage migration recipe")?;
-    Ok(StorageMigrationRecipe {
+    Ok(MigrationRecipe {
         recipe_ref: canonical_hash(value)?,
         source_schema_ref: record_ref(&recipe[1], "source-schema-ref")?,
         target_schema_ref: record_ref(&recipe[2], "target-schema-ref")?,
@@ -1180,7 +1175,7 @@ pub fn parse_migration_recipe_value(value: &IoValue) -> Result<StorageMigrationR
     })
 }
 
-pub fn parse_typed_ref_value(value: &IoValue) -> Result<TypedStorageRef> {
+pub fn parse_entry_ref_value(value: &IoValue) -> Result<EntryRef> {
     let fields = simple_record(value, "typed-storage-ref-v1", 12)?;
     require_schema(&fields[0], crate::preserves_rail::TYPED_STORAGE_REF_SCHEMA, "typed storage ref")?;
     let namespace = record_string(&fields[1], "namespace")?;
@@ -1201,7 +1196,7 @@ pub fn parse_typed_ref_value(value: &IoValue) -> Result<TypedStorageRef> {
     require_check(&checks, "typed-durable-ref", "typed storage ref")?;
     require_check(&checks, "handle-not-authority", "typed storage ref")?;
     let storage_ref = canonical_hash(value)?;
-    Ok(TypedStorageRef {
+    Ok(EntryRef {
         storage_ref,
         namespace,
         key,
@@ -1220,7 +1215,7 @@ pub fn parse_typed_ref_value(value: &IoValue) -> Result<TypedStorageRef> {
     })
 }
 
-pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) -> Result<TypedStorageReceipt> {
+pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) -> Result<Receipt> {
     let fields = simple_record(value, "typed-storage-receipt-v1", 9)?;
     require_schema(&fields[0], crate::preserves_rail::TYPED_STORAGE_RECEIPT_SCHEMA, "typed storage receipt")?;
     let operation = record_string(&fields[1], "operation")?;
@@ -1242,7 +1237,7 @@ pub fn parse_receipt_value(value: &IoValue, expected_receipt_ref: Option<&str>) 
             "typed storage receipt hash mismatch: got {receipt_ref}, expected {expected}"
         )));
     }
-    Ok(TypedStorageReceipt {
+    Ok(Receipt {
         receipt_ref,
         operation,
         decision,
@@ -1308,7 +1303,7 @@ struct ScopeParts {
     evidence: Vec<String>,
 }
 
-fn storage_effect_evidence(input: StorageEffectEvidenceInput<'_>) -> Result<StorageEffectEvidence> {
+fn effect_evidence(input: EffectEvidenceInput<'_>) -> Result<EffectEvidence> {
     validate_operation(input.operation)?;
     let parts = scope_parts(&input)?;
     let handler = binding(&input, &parts)?;
@@ -1333,14 +1328,14 @@ fn storage_effect_evidence(input: StorageEffectEvidenceInput<'_>) -> Result<Stor
     if validation.handler_binding_ref != handler_binding_ref || validation.handle_ref != handle_ref {
         return Err(MoltenError::invalid_harness("typed storage handle validation ref mismatch"));
     }
-    Ok(StorageEffectEvidence {
+    Ok(EffectEvidence {
         manifest_ref: parts.manifest,
         handler_binding_ref,
         handle_ref,
     })
 }
 
-fn scope_parts(input: &StorageEffectEvidenceInput<'_>) -> Result<ScopeParts> {
+fn scope_parts(input: &EffectEvidenceInput<'_>) -> Result<ScopeParts> {
     let manifest =
         effect_manifest_value(input.producer_ref, input.namespace, input.schema_ref, &[input.operation.to_string()])?;
     let manifest = canonical_hash(&manifest)?;
@@ -1374,7 +1369,7 @@ fn scope_parts(input: &StorageEffectEvidenceInput<'_>) -> Result<ScopeParts> {
     })
 }
 
-fn binding(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts) -> Result<IoValue> {
+fn binding(input: &EffectEvidenceInput<'_>, parts: &ScopeParts) -> Result<IoValue> {
     let adapter_ref =
         canonical_hash(&record("typed-storage-redb-adapter", vec![string(input.namespace), string(input.schema_ref)]))?;
     handler_binding_value(&crate::effects::HandlerBindingInput {
@@ -1392,7 +1387,7 @@ fn binding(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts) -> Result
     })
 }
 
-fn handle(input: &StorageEffectEvidenceInput<'_>, parts: &ScopeParts, handler_binding_ref: &str) -> Result<IoValue> {
+fn handle(input: &EffectEvidenceInput<'_>, parts: &ScopeParts, handler_binding_ref: &str) -> Result<IoValue> {
     effect_handle_value(&crate::effects::EffectHandleInput {
         kind: ADAPTER_KIND_STORAGE.to_string(),
         scope: parts.scope.clone(),
@@ -1430,7 +1425,7 @@ fn store_payload(root: &Path, value_bytes: &[u8]) -> Result<(IoValue, Vec<IoValu
     }
 }
 
-fn apply_migration_transform(recipe: &StorageMigrationRecipe, old_value: &IoValue) -> Result<IoValue> {
+fn apply_migration_transform(recipe: &MigrationRecipe, old_value: &IoValue) -> Result<IoValue> {
     match recipe.transformer_kind.as_str() {
         "identity" | "schema-rename" => Ok(old_value.clone()),
         other => Err(MoltenError::invalid_harness(format!(
@@ -1439,9 +1434,9 @@ fn apply_migration_transform(recipe: &StorageMigrationRecipe, old_value: &IoValu
     }
 }
 
-fn read_payload_bytes(root: &Path, typed_ref: &TypedStorageRef) -> Result<Vec<u8>> {
+fn read_payload_bytes(root: &Path, typed_ref: &EntryRef) -> Result<Vec<u8>> {
     match &typed_ref.payload {
-        TypedStoragePayload::Inline { length } => {
+        Payload::Inline { length } => {
             let db = ensure_index_tables(root)?;
             let read_txn = db.begin_read().map_err(index_error)?;
             let table = read_txn.open_table(INDEX_INLINE_VALUES).map_err(index_error)?;
@@ -1460,7 +1455,7 @@ fn read_payload_bytes(root: &Path, typed_ref: &TypedStorageRef) -> Result<Vec<u8
             }
             Ok(bytes)
         }
-        TypedStoragePayload::ContentRef { manifest_ref, length } => {
+        Payload::ContentRef { manifest_ref, length } => {
             let read = crate::chunk_store::read_object(&chunk_root(root), manifest_ref)?;
             if read.bytes.len() as u64 != *length {
                 return Err(MoltenError::invalid_harness(format!(
@@ -1473,7 +1468,7 @@ fn read_payload_bytes(root: &Path, typed_ref: &TypedStorageRef) -> Result<Vec<u8
     }
 }
 
-fn read_typed_ref(root: &Path, storage_ref: &str) -> Result<IoValue> {
+fn read_entry_ref(root: &Path, storage_ref: &str) -> Result<IoValue> {
     let db = ensure_index_tables(root)?;
     let read_txn = db.begin_read().map_err(index_error)?;
     let refs = read_txn.open_table(INDEX_REFS).map_err(index_error)?;
@@ -1491,7 +1486,7 @@ fn next_revision(root: &Path, storage_key: &str) -> Result<u64> {
         return Ok(1);
     };
     let value = parse_canonical_bytes(bytes.value())?;
-    Ok(parse_typed_ref_value(&value)?.revision.saturating_add(1))
+    Ok(parse_entry_ref_value(&value)?.revision.saturating_add(1))
 }
 
 fn receipt_value(input: ReceiptValueInput<'_>) -> IoValue {
@@ -1519,7 +1514,7 @@ fn receipt_value(input: ReceiptValueInput<'_>) -> IoValue {
 
 fn denial_receipt_value(input: DenialReceiptValueInput<'_>) -> IoValue {
     let fallback_ref = local_ref("typed-storage-denial-effect", input.operation);
-    let effect = StorageEffectEvidence {
+    let effect = EffectEvidence {
         manifest_ref: fallback_ref.clone(),
         handler_binding_ref: fallback_ref.clone(),
         handle_ref: fallback_ref,
@@ -1540,17 +1535,17 @@ fn denial_receipt_value(input: DenialReceiptValueInput<'_>) -> IoValue {
     })
 }
 
-fn parse_payload(value: &Value<IoValue>) -> Result<TypedStoragePayload> {
+fn parse_payload(value: &Value<IoValue>) -> Result<Payload> {
     let value = value_to_iovalue(value);
     let payload = simple_record(&value, "payload", 1)?;
     let payload_value = value_to_iovalue(&payload[0]);
     if let Some(inline) = payload_value.collect_simple_record("inline", Some(1)) {
-        return Ok(TypedStoragePayload::Inline {
+        return Ok(Payload::Inline {
             length: required_u64(&inline[0], "inline payload length")?,
         });
     }
     if let Some(content) = payload_value.collect_simple_record("content-ref", Some(2)) {
-        return Ok(TypedStoragePayload::ContentRef {
+        return Ok(Payload::ContentRef {
             manifest_ref: required_ref(&content[0], "payload manifest ref")?,
             length: required_u64(&content[1], "content payload length")?,
         });
@@ -1627,7 +1622,7 @@ fn index_error(error: impl std::fmt::Display) -> MoltenError {
     MoltenError::invalid_harness(format!("typed storage redb index error: {error}"))
 }
 
-fn validate_admission(admission: &TypedStorageAdmission) -> Result<()> {
+fn validate_admission(admission: &Admission) -> Result<()> {
     require_ref(&admission.actor_ref, "typed storage actor ref")?;
     require_ref(&admission.capability_ref, "typed storage capability ref")?;
     require_ref(&admission.policy_ref, "typed storage policy ref")?;
@@ -1887,11 +1882,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn typed_storage_roundtrip_schema_tagged_preserves_value() {
+    fn roundtrip_schema_tagged_preserves_value() {
         let root = temp_dir("typed-storage-roundtrip");
         let value = crate::preserves_rail::parse_text("<profile \"alice\" 7>").expect("parse value");
         let producer_ref = test_ref("producer");
-        let put = put_value(&root, &TypedStoragePutInput {
+        let put = put_value(&root, &PutInput {
             namespace: "profiles".to_string(),
             key: "alice".to_string(),
             schema_ref: None,
@@ -1899,17 +1894,11 @@ mod tests {
             producer_ref: producer_ref.clone(),
             policy_refs: vec![test_ref("policy")],
             evidence_refs: vec![test_ref("evidence")],
-            admission: TypedStorageAdmission::local_fixture("roundtrip"),
+            admission: Admission::local_fixture("roundtrip"),
         })
         .expect("put value");
-        let get = get_value(
-            &root,
-            "profiles",
-            "alice",
-            Some(&put.schema_ref),
-            &TypedStorageAdmission::local_fixture("roundtrip"),
-        )
-        .expect("get value");
+        let get = get_value(&root, "profiles", "alice", Some(&put.schema_ref), &Admission::local_fixture("roundtrip"))
+            .expect("get value");
         assert_eq!(get.value, value);
         assert_eq!(get.storage_ref, put.storage_ref);
         let verify = verify_ref(&root, &put.storage_ref, Some(&put.schema_ref)).expect("verify ref");
@@ -1925,11 +1914,11 @@ mod tests {
     }
 
     #[test]
-    fn typed_storage_schema_mismatch_is_denied_before_write_or_load() {
+    fn schema_mismatch_is_denied_before_write_or_load() {
         let root = temp_dir("typed-storage-schema-mismatch");
         let value = crate::preserves_rail::parse_text("\"alice\"").expect("parse value");
         let wrong_schema_ref = test_ref("wrong-schema");
-        let error = put_value(&root, &TypedStoragePutInput {
+        let error = put_value(&root, &PutInput {
             namespace: "profiles".to_string(),
             key: "alice".to_string(),
             schema_ref: Some(wrong_schema_ref),
@@ -1937,13 +1926,13 @@ mod tests {
             producer_ref: test_ref("producer"),
             policy_refs: vec![test_ref("policy")],
             evidence_refs: vec![test_ref("evidence")],
-            admission: TypedStorageAdmission::local_fixture("schema-mismatch"),
+            admission: Admission::local_fixture("schema-mismatch"),
         })
         .expect_err("wrong write schema denied");
         assert!(error.to_string().contains("schema ref"));
         assert_eq!(list_receipt_refs(&root).expect("receipt refs").len(), 1);
 
-        let put = put_value(&root, &TypedStoragePutInput {
+        let put = put_value(&root, &PutInput {
             namespace: "profiles".to_string(),
             key: "alice".to_string(),
             schema_ref: None,
@@ -1951,7 +1940,7 @@ mod tests {
             producer_ref: test_ref("producer"),
             policy_refs: vec![test_ref("policy")],
             evidence_refs: vec![test_ref("evidence")],
-            admission: TypedStorageAdmission::local_fixture("schema-mismatch"),
+            admission: Admission::local_fixture("schema-mismatch"),
         })
         .expect("put inferred");
         let load_error = get_value(
@@ -1959,7 +1948,7 @@ mod tests {
             "profiles",
             "alice",
             Some(&test_ref("other-schema")),
-            &TypedStorageAdmission::local_fixture("schema-mismatch"),
+            &Admission::local_fixture("schema-mismatch"),
         )
         .expect_err("wrong load schema denied");
         assert!(load_error.to_string().contains("schema ref"));
@@ -1970,8 +1959,8 @@ mod tests {
     fn explicit_and_lazy_migrations_preserve_value_hash_and_trace_refs() {
         let root = temp_dir("typed-storage-migration");
         let value = crate::preserves_rail::parse_text("<profile \"alice\" 7>").expect("parse value");
-        let admission = TypedStorageAdmission::local_fixture("migration");
-        let put = put_value(&root, &TypedStoragePutInput {
+        let admission = Admission::local_fixture("migration");
+        let put = put_value(&root, &PutInput {
             namespace: "profiles".to_string(),
             key: "alice".to_string(),
             schema_ref: None,
@@ -1983,7 +1972,7 @@ mod tests {
         })
         .expect("put source");
         let target_schema_ref = test_ref("profile-v2-schema");
-        let recipe = migration_recipe_value(&StorageMigrationRecipeInput {
+        let recipe = migration_recipe_value(&MigrationRecipeInput {
             source_schema_ref: put.schema_ref.clone(),
             target_schema_ref: target_schema_ref.clone(),
             transformer_ref: test_ref("schema-rename-transformer"),
@@ -2011,9 +2000,9 @@ mod tests {
         assert_lazy_load(&root, &admission);
     }
 
-    fn assert_lazy_load(root: &Path, admission: &TypedStorageAdmission) {
+    fn assert_lazy_load(root: &Path, admission: &Admission) {
         let lazy_value = crate::preserves_rail::parse_text("<profile \"bob\" 9>").expect("parse lazy value");
-        let lazy_put = put_value(root, &TypedStoragePutInput {
+        let lazy_put = put_value(root, &PutInput {
             namespace: "profiles".to_string(),
             key: "bob".to_string(),
             schema_ref: None,
@@ -2025,7 +2014,7 @@ mod tests {
         })
         .expect("put lazy source");
         let lazy_target_schema_ref = test_ref("profile-v3-schema");
-        let lazy_recipe = migration_recipe_value(&StorageMigrationRecipeInput {
+        let lazy_recipe = migration_recipe_value(&MigrationRecipeInput {
             source_schema_ref: lazy_put.schema_ref,
             target_schema_ref: lazy_target_schema_ref.clone(),
             transformer_ref: test_ref("lazy-transformer"),
@@ -2052,8 +2041,8 @@ mod tests {
     fn migration_requires_matching_source_schema_and_admitted_recipe() {
         let root = temp_dir("typed-storage-migration-deny");
         let value = crate::preserves_rail::parse_text("\"alice\"").expect("parse value");
-        let admission = TypedStorageAdmission::local_fixture("migration-deny");
-        let put = put_value(&root, &TypedStoragePutInput {
+        let admission = Admission::local_fixture("migration-deny");
+        let put = put_value(&root, &PutInput {
             namespace: "profiles".to_string(),
             key: "alice".to_string(),
             schema_ref: None,
@@ -2064,7 +2053,7 @@ mod tests {
             admission: admission.clone(),
         })
         .expect("put source");
-        let wrong_source_recipe = migration_recipe_value(&StorageMigrationRecipeInput {
+        let wrong_source_recipe = migration_recipe_value(&MigrationRecipeInput {
             source_schema_ref: test_ref("wrong-source"),
             target_schema_ref: test_ref("target"),
             transformer_ref: test_ref("transformer"),
@@ -2103,8 +2092,8 @@ mod tests {
     fn schema_identity_structural_alias_and_migration_available_integrate_with_loads() {
         let root = temp_dir("typed-storage-schema-identity");
         let value = crate::preserves_rail::parse_text("<profile \"alice\" 7>").expect("parse value");
-        let admission = TypedStorageAdmission::local_fixture("schema-identity");
-        let put = put_value(&root, &TypedStoragePutInput {
+        let admission = Admission::local_fixture("schema-identity");
+        let put = put_value(&root, &PutInput {
             namespace: "profiles".to_string(),
             key: "alice".to_string(),
             schema_ref: None,
@@ -2158,7 +2147,7 @@ mod tests {
         assert_alternate_case(&root, &put, shape, &admission);
     }
 
-    fn assert_alternate_case(root: &Path, put: &TypedStoragePut, shape: IoValue, admission: &TypedStorageAdmission) {
+    fn assert_alternate_case(root: &Path, put: &Put, shape: IoValue, admission: &Admission) {
         let unique_expected_schema_ref = test_ref("unique-expected-schema");
         let actual = parsed_id(
             crate::schema_identity::MODE_UNIQUE,
@@ -2254,7 +2243,7 @@ mod tests {
         let root = temp_dir("typed-storage-large");
         let large = "x".repeat(INLINE_VALUE_LIMIT + 128);
         let value = IoValue::new(large.clone());
-        let put = put_value(&root, &TypedStoragePutInput {
+        let put = put_value(&root, &PutInput {
             namespace: "large".to_string(),
             key: "payload".to_string(),
             schema_ref: None,
@@ -2262,27 +2251,25 @@ mod tests {
             producer_ref: test_ref("producer"),
             policy_refs: vec![test_ref("policy")],
             evidence_refs: vec![test_ref("evidence")],
-            admission: TypedStorageAdmission::local_fixture("large"),
+            admission: Admission::local_fixture("large"),
         })
         .expect("put large");
-        let parsed = parse_typed_ref_value(&put.typed_ref_value).expect("parse typed ref");
-        let TypedStoragePayload::ContentRef { manifest_ref, .. } = &parsed.payload else {
+        let parsed = parse_entry_ref_value(&put.typed_ref_value).expect("parse typed ref");
+        let Payload::ContentRef { manifest_ref, .. } = &parsed.payload else {
             panic!("large typed storage value must use chunk manifest ref");
         };
         let manifest = crate::chunk_store::read_manifest(&chunk_root(&root), manifest_ref)
             .expect("read typed storage chunk manifest");
         assert_eq!(manifest.object_kind, "typed-storage-value");
-        let get =
-            get_value(&root, "large", "payload", Some(&put.schema_ref), &TypedStorageAdmission::local_fixture("large"))
-                .expect("get large");
+        let get = get_value(&root, "large", "payload", Some(&put.schema_ref), &Admission::local_fixture("large"))
+            .expect("get large");
         assert_eq!(get.value.as_string().expect("string").as_ref(), large);
 
         let chunk_hex = crate::preserves_rail::content_ref_hex(&manifest.chunks[0].chunk_ref).expect("chunk hex");
         std::fs::write(chunk_root(&root).join("chunks").join(format!("blake3_{chunk_hex}.bin")), b"tampered")
             .expect("tamper typed storage chunk");
-        let error =
-            get_value(&root, "large", "payload", Some(&put.schema_ref), &TypedStorageAdmission::local_fixture("large"))
-                .expect_err("tampered chunk denies before typed storage load");
+        let error = get_value(&root, "large", "payload", Some(&put.schema_ref), &Admission::local_fixture("large"))
+            .expect_err("tampered chunk denies before typed storage load");
         let message = error.to_string();
         let is_integrity_boundary_mentioned = message.contains("chunk") || message.contains("hash");
         assert!(is_integrity_boundary_mentioned, "{message}");
@@ -2292,7 +2279,7 @@ mod tests {
     fn storage_refs_do_not_mint_authority_from_snapshots() {
         let root = temp_dir("typed-storage-authority");
         let value = crate::preserves_rail::parse_text("<snapshot [\"state\"]>").expect("parse snapshot");
-        let put = put_value(&root, &TypedStoragePutInput {
+        let put = put_value(&root, &PutInput {
             namespace: "snapshots".to_string(),
             key: "actor".to_string(),
             schema_ref: None,
@@ -2300,10 +2287,10 @@ mod tests {
             producer_ref: test_ref("producer"),
             policy_refs: vec![test_ref("policy")],
             evidence_refs: vec![test_ref("evidence")],
-            admission: TypedStorageAdmission::local_fixture("authority"),
+            admission: Admission::local_fixture("authority"),
         })
         .expect("put snapshot");
-        let missing_authority = TypedStorageAdmission {
+        let missing_authority = Admission {
             actor_ref: test_ref("actor"),
             capability_ref: "not-a-ref".to_string(),
             policy_ref: test_ref("policy"),
@@ -2316,11 +2303,11 @@ mod tests {
     }
 
     #[hegel::test(test_cases = 16)]
-    fn hegel_typed_ref_hashes_schema_and_revision_are_stable(tc: hegel::TestCase) {
+    fn hegel_entry_ref_hashes_schema_and_revision_are_stable(tc: hegel::TestCase) {
         let salt = tc.draw(hegel::generators::integers::<u64>().min_value(0).max_value(1_000_000));
         let root = temp_dir("typed-storage-hegel");
         let value = IoValue::new(format!("value-{salt}"));
-        let input = TypedStoragePutInput {
+        let input = PutInput {
             namespace: format!("ns-{salt}"),
             key: format!("key-{salt}"),
             schema_ref: None,
@@ -2328,23 +2315,23 @@ mod tests {
             producer_ref: test_ref(&format!("producer-{salt}")),
             policy_refs: vec![test_ref(&format!("policy-{salt}"))],
             evidence_refs: vec![test_ref(&format!("evidence-{salt}"))],
-            admission: TypedStorageAdmission::local_fixture(&format!("hegel-{salt}")),
+            admission: Admission::local_fixture(&format!("hegel-{salt}")),
         };
         let first = put_value(&root, &input).expect("first put");
-        let first_ref = parse_typed_ref_value(&first.typed_ref_value).expect("first ref");
+        let first_ref = parse_entry_ref_value(&first.typed_ref_value).expect("first ref");
         assert_eq!(first.schema_ref, inferred_schema_ref(&value).expect("schema ref"));
         assert_eq!(first_ref.revision, 1);
         let loaded = get_value(&root, &input.namespace, &input.key, Some(&first.schema_ref), &input.admission)
             .expect("load first");
         assert_eq!(canonical_hash(&loaded.value).expect("loaded value ref"), first.value_ref);
         let second = put_value(&root, &input).expect("second put");
-        let second_ref = parse_typed_ref_value(&second.typed_ref_value).expect("second ref");
+        let second_ref = parse_entry_ref_value(&second.typed_ref_value).expect("second ref");
         assert_eq!(second_ref.revision, 2);
         assert_ne!(first.storage_ref, second.storage_ref);
         assert_eq!(first.value_ref, second.value_ref);
 
         let target_schema_ref = test_ref(&format!("target-schema-{salt}"));
-        let recipe = migration_recipe_value(&StorageMigrationRecipeInput {
+        let recipe = migration_recipe_value(&MigrationRecipeInput {
             source_schema_ref: second.schema_ref.clone(),
             target_schema_ref: target_schema_ref.clone(),
             transformer_ref: test_ref(&format!("transformer-{salt}")),
@@ -2357,7 +2344,7 @@ mod tests {
         let migrated = migrate_value(&root, &input.namespace, &input.key, &recipe, &input.admission).expect("migrate");
         assert_eq!(migrated.old_value_ref, second.value_ref);
         assert_eq!(migrated.new_value_ref, second.value_ref);
-        let migrated_ref = parse_typed_ref_value(&migrated.typed_ref_value).expect("migrated ref");
+        let migrated_ref = parse_entry_ref_value(&migrated.typed_ref_value).expect("migrated ref");
         assert_eq!(migrated_ref.schema_ref, target_schema_ref);
         assert_eq!(migrated_ref.revision, 3);
         let receipt = parse_receipt_value(&migrated.receipt_value, None).expect("migration receipt");

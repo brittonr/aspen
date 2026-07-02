@@ -4923,8 +4923,7 @@ fn execute_source(
         let namespace = required_string(&typed[0], "source typed storage namespace")?;
         let key = required_string(&typed[1], "source typed storage key")?;
         let schema_ref = parse_optional_ref_value(&typed[2])?;
-        let admission =
-            crate::typed_storage::TypedStorageAdmission::local_fixture(&format!("job:{}:{}", namespace, key));
+        let admission = crate::typed_storage::Admission::local_fixture(&format!("job:{}:{}", namespace, key));
         let get =
             crate::typed_storage::get_value(options.storage_root, &namespace, &key, schema_ref.as_deref(), &admission)?;
         effects.push_item(crate::preserves_rail::canonical_hash(&get.receipt_value)?);
@@ -5028,19 +5027,17 @@ fn execute_materialize(
             let key = config
                 .key
                 .ok_or_else(|| MoltenError::invalid_harness("typed-storage materialization requires key"))?;
-            let admission =
-                crate::typed_storage::TypedStorageAdmission::local_fixture(&format!("job:{namespace}:{key}"));
-            let put =
-                crate::typed_storage::put_value(options.storage_root, &crate::typed_storage::TypedStoragePutInput {
-                    namespace,
-                    key,
-                    schema_ref: None,
-                    value,
-                    producer_ref: local_ref("job-materialize-producer", &node.id)?,
-                    policy_refs: node.policy_refs.clone(),
-                    evidence_refs: node.evidence_refs.clone(),
-                    admission,
-                })?;
+            let admission = crate::typed_storage::Admission::local_fixture(&format!("job:{namespace}:{key}"));
+            let put = crate::typed_storage::put_value(options.storage_root, &crate::typed_storage::PutInput {
+                namespace,
+                key,
+                schema_ref: None,
+                value,
+                producer_ref: local_ref("job-materialize-producer", &node.id)?,
+                policy_refs: node.policy_refs.clone(),
+                evidence_refs: node.evidence_refs.clone(),
+                admission,
+            })?;
             effects.push_item(crate::preserves_rail::canonical_hash(&put.receipt_value)?);
             Ok(vec![put.typed_ref_value])
         }

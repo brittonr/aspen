@@ -17,8 +17,8 @@ pub(super) fn put(command: super::Command) -> molten::error::Result<()> {
         Some(producer_ref) => producer_ref,
         None => super::io::local_ref("producer", &namespace, &key)?,
     };
-    let admission = molten::typed_storage::TypedStorageAdmission::local_fixture(&format!("cli:{namespace}:{key}"));
-    let put = molten::typed_storage::put_value(&store, &molten::typed_storage::TypedStoragePutInput {
+    let admission = molten::typed_storage::Admission::local_fixture(&format!("cli:{namespace}:{key}"));
+    let put = molten::typed_storage::put_value(&store, &molten::typed_storage::PutInput {
         namespace: namespace.clone(),
         key: key.clone(),
         schema_ref,
@@ -57,7 +57,7 @@ pub(super) fn get(command: super::Command) -> molten::error::Result<()> {
     else {
         return dispatch_mismatch("get");
     };
-    let admission = molten::typed_storage::TypedStorageAdmission::local_fixture(&format!("cli:{namespace}:{key}"));
+    let admission = molten::typed_storage::Admission::local_fixture(&format!("cli:{namespace}:{key}"));
     let get = if let Some(migration_recipe) = migration_recipe.as_ref() {
         let expected_schema_ref = schema_ref.as_deref().ok_or_else(|| {
             molten::error::MoltenError::invalid_harness("storage get --migration-recipe requires --schema-ref target")
@@ -104,7 +104,7 @@ pub(super) fn recipe(command: super::Command) -> molten::error::Result<()> {
     else {
         return dispatch_mismatch("recipe");
     };
-    let recipe = molten::typed_storage::migration_recipe_value(&molten::typed_storage::StorageMigrationRecipeInput {
+    let recipe = molten::typed_storage::migration_recipe_value(&molten::typed_storage::MigrationRecipeInput {
         source_schema_ref,
         target_schema_ref,
         transformer_ref,
@@ -135,7 +135,7 @@ pub(super) fn migrate(command: super::Command) -> molten::error::Result<()> {
         return dispatch_mismatch("migrate");
     };
     let recipe = super::io::read_preserves_file(&recipe)?;
-    let admission = molten::typed_storage::TypedStorageAdmission::local_fixture(&format!("cli:{namespace}:{key}"));
+    let admission = molten::typed_storage::Admission::local_fixture(&format!("cli:{namespace}:{key}"));
     let migrated = molten::typed_storage::migrate_value(&store, &namespace, &key, &recipe, &admission)?;
     if let Some(path) = ref_out.as_ref() {
         super::io::write_file(path, &molten::preserves_rail::to_text(&migrated.typed_ref_value)?)?;
