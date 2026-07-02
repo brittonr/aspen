@@ -6,8 +6,8 @@
 //! authority. A link's identity is only the Blake3 hash of its canonical
 //! Preserves bytes; linking names payload refs without rewriting the payloads.
 
-type BTreeMap<K, V> = std::collections::BTreeMap<K, V>;
-type BTreeSet<T> = std::collections::BTreeSet<T>;
+type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
+type OrderedSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
 type Path = std::path::Path;
 
@@ -268,23 +268,23 @@ pub struct ChainLink {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ChainIndex {
-    pub links_by_ref: BTreeMap<String, ChainLink>,
-    pub links_by_chain: BTreeMap<ChainScope, BTreeSet<String>>,
-    pub children_by_parent: BTreeMap<String, BTreeSet<String>>,
-    pub links_by_sequence: BTreeMap<(ChainScope, u64), BTreeSet<String>>,
-    pub links_by_payload: BTreeMap<String, BTreeSet<String>>,
-    pub heads_by_chain: BTreeMap<ChainScope, BTreeSet<String>>,
-    pub predicate_receipts_by_ref: BTreeMap<String, ChainPredicateReceipt>,
-    pub predicate_receipts_by_predicate: BTreeMap<String, BTreeSet<String>>,
-    pub fork_evidence_by_ref: BTreeMap<String, ChainForkEvidence>,
-    pub fork_evidence_by_chain: BTreeMap<ChainScope, BTreeSet<String>>,
-    pub fork_evidence_by_parent: BTreeMap<String, BTreeSet<String>>,
-    pub anchors_by_ref: BTreeMap<String, ChainAnchor>,
-    pub anchors_by_chain: BTreeMap<ChainScope, BTreeSet<String>>,
-    pub anchor_links_by_chain: BTreeMap<ChainScope, BTreeSet<String>>,
-    pub checkpoints_by_ref: BTreeMap<String, ChainCheckpoint>,
-    pub checkpoints_by_chain: BTreeMap<ChainScope, BTreeSet<String>>,
-    pub checkpoint_heads_by_chain: BTreeMap<ChainScope, BTreeSet<String>>,
+    pub links_by_ref: OrderedMap<String, ChainLink>,
+    pub links_by_chain: OrderedMap<ChainScope, OrderedSet<String>>,
+    pub children_by_parent: OrderedMap<String, OrderedSet<String>>,
+    pub links_by_sequence: OrderedMap<(ChainScope, u64), OrderedSet<String>>,
+    pub links_by_payload: OrderedMap<String, OrderedSet<String>>,
+    pub heads_by_chain: OrderedMap<ChainScope, OrderedSet<String>>,
+    pub predicate_receipts_by_ref: OrderedMap<String, ChainPredicateReceipt>,
+    pub predicate_receipts_by_predicate: OrderedMap<String, OrderedSet<String>>,
+    pub fork_evidence_by_ref: OrderedMap<String, ChainForkEvidence>,
+    pub fork_evidence_by_chain: OrderedMap<ChainScope, OrderedSet<String>>,
+    pub fork_evidence_by_parent: OrderedMap<String, OrderedSet<String>>,
+    pub anchors_by_ref: OrderedMap<String, ChainAnchor>,
+    pub anchors_by_chain: OrderedMap<ChainScope, OrderedSet<String>>,
+    pub anchor_links_by_chain: OrderedMap<ChainScope, OrderedSet<String>>,
+    pub checkpoints_by_ref: OrderedMap<String, ChainCheckpoint>,
+    pub checkpoints_by_chain: OrderedMap<ChainScope, OrderedSet<String>>,
+    pub checkpoint_heads_by_chain: OrderedMap<ChainScope, OrderedSet<String>>,
 }
 
 impl ChainIndex {
@@ -548,8 +548,8 @@ struct LinkWalkInput<'a> {
 #[derive(Debug, Default)]
 struct WalkState {
     reverse_segment: Vec<String>,
-    payload_refs: BTreeSet<String>,
-    seen_refs: BTreeSet<String>,
+    payload_refs: OrderedSet<String>,
+    seen_refs: OrderedSet<String>,
 }
 
 struct WalkOutput {
@@ -2120,7 +2120,7 @@ fn ensure_sequence_unoccupied(index: &ChainIndex, link: &ChainLink) -> Result<()
     }
 }
 
-fn sorted_refs(refs: Option<&BTreeSet<String>>) -> Vec<String> {
+fn sorted_refs(refs: Option<&OrderedSet<String>>) -> Vec<String> {
     refs.map_or_else(Vec::new, |refs| refs.iter().cloned().collect())
 }
 

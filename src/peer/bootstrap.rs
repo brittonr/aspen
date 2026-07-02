@@ -1,4 +1,4 @@
-type BTreeSet<T> = std::collections::BTreeSet<T>;
+type OrderedSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
@@ -436,12 +436,12 @@ fn select_required(local: &[String], remote: &[String], required: &str) -> Vec<S
 }
 
 fn intersection_highest(left: &[String], right: &[String]) -> Vec<String> {
-    let right = right.iter().collect::<BTreeSet<_>>();
+    let right = right.iter().collect::<OrderedSet<_>>();
     left.iter().filter(|value| right.contains(value)).max().cloned().into_iter().collect()
 }
 
 fn intersection_all(left: &[String], right: &[String]) -> Vec<String> {
-    let right = right.iter().collect::<BTreeSet<_>>();
+    let right = right.iter().collect::<OrderedSet<_>>();
     let mut values = left.iter().filter(|value| right.contains(value)).cloned().collect::<Vec<_>>();
     values.sort();
     values.dedup();

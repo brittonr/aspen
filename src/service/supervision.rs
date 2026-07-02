@@ -1,4 +1,4 @@
-type BTreeSet<T> = std::collections::BTreeSet<T>;
+type OrderedSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
@@ -1027,7 +1027,7 @@ fn cleanup_targets(owned_state: &ServiceOwnedState) -> Result<Vec<CleanupTarget>
         .and_then(|total| total.checked_add(owned_state.pending_effect_refs.len()))
         .ok_or_else(|| MoltenError::invalid_harness("service cleanup target count overflow"))?;
     ensure_count_at_most(total, "service cleanup targets")?;
-    let mut targets = BTreeSet::new();
+    let mut targets = OrderedSet::new();
     insert_targets(&mut targets, "owned-assertion", &owned_state.owned_assertion_refs);
     insert_targets(&mut targets, "observer", &owned_state.observer_refs);
     insert_targets(&mut targets, "live-ref", &owned_state.live_ref_refs);
@@ -1036,7 +1036,7 @@ fn cleanup_targets(owned_state: &ServiceOwnedState) -> Result<Vec<CleanupTarget>
     Ok(targets.into_iter().collect())
 }
 
-fn insert_targets(targets: &mut BTreeSet<CleanupTarget>, kind: &str, refs: &[String]) {
+fn insert_targets(targets: &mut OrderedSet<CleanupTarget>, kind: &str, refs: &[String]) {
     for target_ref in refs {
         targets.insert(CleanupTarget {
             kind: kind.to_string(),

@@ -1,5 +1,5 @@
-type BTreeMap<K, V> = std::collections::BTreeMap<K, V>;
-type BTreeSet<T> = std::collections::BTreeSet<T>;
+type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
+type OrderedSet<T> = std::collections::BTreeSet<T>;
 type IoValue = preserves::IOValue;
 use redb::ReadableDatabase;
 use redb::ReadableTable;
@@ -1428,12 +1428,12 @@ fn received_manifest(iroh_root: &Path, dest_root: &Path, parsed_ticket: &IrohChu
     parse_manifest_value(&manifest_value, Some(&manifest_ref))
 }
 
-fn ticket_parts(parsed_ticket: &IrohChunkTicket) -> BTreeMap<String, IrohChunkBlob> {
+fn ticket_parts(parsed_ticket: &IrohChunkTicket) -> OrderedMap<String, IrohChunkBlob> {
     parsed_ticket.chunks.iter().map(|chunk| (chunk.chunk_ref.clone(), chunk.clone())).collect()
 }
 
 fn require_part(
-    parts: &BTreeMap<String, IrohChunkBlob>,
+    parts: &OrderedMap<String, IrohChunkBlob>,
     dest_root: &Path,
     manifest: &ChunkManifest,
     refs: &[String],
@@ -1480,7 +1480,7 @@ fn plan_incoming(
     dest_root: &Path,
     manifest: &ChunkManifest,
     refs: &[String],
-    parts: &BTreeMap<String, IrohChunkBlob>,
+    parts: &OrderedMap<String, IrohChunkBlob>,
     part_size: usize,
 ) -> Result<Scan> {
     let mut missing_before = Vec::new();
@@ -1517,7 +1517,7 @@ fn part_for<'a>(manifest: &'a ChunkManifest, part_ref: &str) -> Result<&'a Chunk
         .ok_or_else(|| MoltenError::invalid_harness(format!("manifest missing expected chunk {part_ref}")))
 }
 
-fn blob_for<'a>(parts: &'a BTreeMap<String, IrohChunkBlob>, part_ref: &str) -> Result<&'a IrohChunkBlob> {
+fn blob_for<'a>(parts: &'a OrderedMap<String, IrohChunkBlob>, part_ref: &str) -> Result<&'a IrohChunkBlob> {
     parts
         .get(part_ref)
         .ok_or_else(|| MoltenError::invalid_harness(format!("Iroh ticket lacks blob mapping for chunk {part_ref}")))
@@ -1586,7 +1586,7 @@ struct IncomingInput<'a> {
     dest_root: &'a Path,
     manifest: &'a ChunkManifest,
     refs: &'a [String],
-    parts: &'a BTreeMap<String, IrohChunkBlob>,
+    parts: &'a OrderedMap<String, IrohChunkBlob>,
     missing_before: &'a [String],
     part_size: usize,
 }
@@ -3181,14 +3181,14 @@ pub fn rebuild_index(root: &Path) -> Result<ChunkStoreIndexRebuild> {
 
 struct IndexInputs {
     manifest_entries: Vec<(String, Vec<u8>, ChunkManifest)>,
-    chunk_entries: BTreeMap<String, (ChunkRef, String)>,
+    chunk_entries: OrderedMap<String, (ChunkRef, String)>,
     pinned_manifests: Vec<String>,
     pinned_chunks: Vec<String>,
 }
 
 fn scan_inputs(root: &Path) -> Result<IndexInputs> {
     let mut manifest_entries = Vec::new();
-    let mut chunk_entries: BTreeMap<String, (ChunkRef, String)> = BTreeMap::new();
+    let mut chunk_entries: OrderedMap<String, (ChunkRef, String)> = OrderedMap::new();
     for manifest_ref in list_manifest_refs(root)? {
         let bytes = fs::read(manifest_path(root, &manifest_ref)?).map_err(MoltenError::from)?;
         let value = parse_canonical_bytes(&bytes)?;
@@ -3212,7 +3212,7 @@ fn scan_inputs(root: &Path) -> Result<IndexInputs> {
 fn scan_manifest_chunks(
     root: &Path,
     manifest: &ChunkManifest,
-    chunk_entries: &mut BTreeMap<String, (ChunkRef, String)>,
+    chunk_entries: &mut OrderedMap<String, (ChunkRef, String)>,
 ) -> Result<()> {
     let chunk_size = chunk_size_to_usize(manifest.chunk_size, "manifest chunk size")?;
     for chunk in &manifest.chunks {
@@ -3259,7 +3259,7 @@ fn write_manifest_entries(
     Ok(())
 }
 
-fn write_entries(write_txn: &redb::WriteTransaction, entries: &BTreeMap<String, (ChunkRef, String)>) -> Result<()> {
+fn write_entries(write_txn: &redb::WriteTransaction, entries: &OrderedMap<String, (ChunkRef, String)>) -> Result<()> {
     let mut chunks = write_txn.open_table(INDEX_CHUNKS).map_err(index_error)?;
     let mut availability = write_txn.open_table(INDEX_AVAILABILITY).map_err(index_error)?;
     for (chunk_ref, (chunk, status)) in entries {
@@ -3683,7 +3683,7 @@ fn parse_iroh_ticket_value(value: &IoValue) -> Result<IrohChunkTicket> {
     filename_for_ref(&manifest_blob_ref)?;
     let chunk_values = record_sequence(&fields[4], "chunks")?;
     let mut chunks = Vec::new();
-    let mut seen = BTreeSet::new();
+    let mut seen = OrderedSet::new();
     for chunk_value in &chunk_values {
         let chunk_blob = simple_record(chunk_value, "chunk-blob", 3)?;
         let chunk_ref = required_string(&chunk_blob[0], "chunk ref")?;
@@ -3756,8 +3756,8 @@ fn index_set_manifest_chunk_availability(
     missing: &[String],
     receipt_value: Option<&IoValue>,
 ) -> Result<()> {
-    let available = available.iter().cloned().collect::<BTreeSet<_>>();
-    let missing = missing.iter().cloned().collect::<BTreeSet<_>>();
+    let available = available.iter().cloned().collect::<OrderedSet<_>>();
+    let missing = missing.iter().cloned().collect::<OrderedSet<_>>();
     let manifest_bytes = canonical_bytes(&manifest.value)?;
     let db = ensure_index_tables(root)?;
     let write_txn = db.begin_write().map_err(index_error)?;
@@ -3999,7 +3999,7 @@ fn extend_bytes_bounded(
     Ok(())
 }
 
-fn insert_set_bounded<T: Ord>(values: &mut BTreeSet<T>, value: T, maximum: usize, label: &str) -> Result<bool> {
+fn insert_set_bounded<T: Ord>(values: &mut OrderedSet<T>, value: T, maximum: usize, label: &str) -> Result<bool> {
     if !values.contains(&value) {
         checked_count_sum(values.len(), 1, maximum, label)?;
     }
@@ -4704,7 +4704,7 @@ mod tests {
             assert_eq!(canonical_hash(&receipt.value).expect("receipt ref"), receipt.receipt_ref);
             parse_receipt_value(&receipt.value, Some(&receipt.receipt_ref)).expect("validate receipt");
         }
-        let operations = receipts.iter().map(|receipt| receipt.operation.as_str()).collect::<BTreeSet<_>>();
+        let operations = receipts.iter().map(|receipt| receipt.operation.as_str()).collect::<OrderedSet<_>>();
         for expected in [
             "manifest-create",
             "dedup-hit",

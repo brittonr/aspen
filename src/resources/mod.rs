@@ -1,4 +1,4 @@
-type BTreeMap<K, V> = std::collections::BTreeMap<K, V>;
+type OrderedMap<K, V> = std::collections::BTreeMap<K, V>;
 type IoValue = preserves::IOValue;
 type MoltenError = crate::error::MoltenError;
 type Result<T> = crate::error::Result<T>;
@@ -349,7 +349,7 @@ pub fn enforce_assertion_bound(current: u64, limit: u64, assertion_ref: &str) ->
 pub fn deterministic_schedule(tasks: &[SchedulerTask], quantum: u64) -> Result<IoValue> {
     ensure_count_at_most(tasks.len(), MAX_RESOURCE_SEQUENCE_ITEMS, "scheduler tasks")?;
     let quantum_steps = bounded_positive_count(quantum, MAX_RESOURCE_SEQUENCE_ITEMS_U64, "scheduler quantum")?;
-    let mut queues = BTreeMap::<(u64, String), VecDeque<&SchedulerTask>>::new();
+    let mut queues = OrderedMap::<(u64, String), VecDeque<&SchedulerTask>>::new();
     for task in tasks {
         validate_non_empty(&task.actor, "scheduler task actor")?;
         validate_non_empty(&task.budget_class, "scheduler budget class")?;
